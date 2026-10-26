@@ -24,10 +24,13 @@ import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { invoiceTitle } from '../lib/invoiceNumber';
 import { localToday } from '../lib/businessDays';
+import { useEntitlements } from '../lib/entitlements';
+import { UsageHint } from '../components/UsageHint';
 
 export const Invoices: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
+  const { entitlements } = useEntitlements();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('sales.invoices.create');
@@ -291,6 +294,7 @@ export const Invoices: React.FC = () => {
         }
       />
       <SalesTabs orgSlug={currentOrg.slug} />
+      <UsageHint entitlements={entitlements} resource="salesDocuments" />
 
       {/* Success & Error Banners */}
       {successBanner && (

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType } from '../types/auth';
+import { announceEntitlementDenial } from '../lib/entitlementEvents';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -279,6 +280,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let res = shouldRetry503
         ? await fetchWith503Retry(url, { ...init, headers, credentials: 'include' })
         : await fetch(url, { ...init, headers, credentials: 'include' });
+
+      // Plan denials (limits, modules, plans) get one shared explanation; callers still handle the response.
+      void announceEntitlementDenial(res);
 
       // Handle 401 with silent refresh & request retry
       if (res.status === 401) {

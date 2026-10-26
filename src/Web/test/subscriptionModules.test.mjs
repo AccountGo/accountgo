@@ -14,9 +14,9 @@ const { AuthProvider } = await server.ssrLoadModule('/src/auth/AuthContext.tsx')
 // Shape of GET /api/Subscription/plans. The plan → module matrix itself is tested server-side
 // (SubscriptionPlanTests, CompanyModulesTests); the SPA only renders what the server returns.
 const CATALOG = [
-  { key: 'invoicing', name: 'Invoicing', description: 'Invoices and bills.', includedModules: ['sales', 'purchases'], requiredModules: ['sales', 'purchases'], monthlyPrice: 15 },
-  { key: 'accounting', name: 'Accounting', description: 'Full bookkeeping.', includedModules: ['sales', 'financials', 'purchases', 'reports'], requiredModules: ['sales'], monthlyPrice: 39 },
-  { key: 'enterprise', name: 'Enterprise', description: 'Everything.', includedModules: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'], requiredModules: ['sales'], monthlyPrice: 99 },
+  { key: 'invoicing', name: 'Invoicing', description: 'Invoices and bills.', includedModules: ['sales', 'purchases'], requiredModules: ['sales', 'purchases'], selfService: true, monthlyPrice: 15 },
+  { key: 'accounting', name: 'Accounting', description: 'Full bookkeeping.', includedModules: ['sales', 'financials', 'purchases', 'reports'], requiredModules: ['sales'], selfService: true, monthlyPrice: 39 },
+  { key: 'enterprise', name: 'Enterprise', description: 'Everything.', includedModules: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'], requiredModules: ['sales'], selfService: true, monthlyPrice: 99 },
 ];
 
 const render = (planId, activeModules) => renderToStaticMarkup(createElement(AuthProvider, null,

@@ -11,6 +11,8 @@ import { Bill, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
+import { useEntitlements } from '../lib/entitlements';
+import { UsageHint } from '../components/UsageHint';
 
 type StatusFilter = 'all' | 'unpaid' | 'overdue' | 'paid' | 'draft' | 'void';
 
@@ -18,6 +20,7 @@ type StatusFilter = 'all' | 'unpaid' | 'overdue' | 'paid' | 'draft' | 'void';
 export const Bills: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
+  const { entitlements } = useEntitlements();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('purchases.bills.create');
@@ -148,6 +151,7 @@ export const Bills: React.FC = () => {
         }
       />
       <PurchasesTabs orgSlug={currentOrg.slug} />
+      <UsageHint entitlements={entitlements} resource="bills" />
 
       {notice && (
         <div role="status" className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm flex items-center justify-between">

@@ -9,6 +9,8 @@ export interface PlanCatalogEntry {
   description: string;
   includedModules: ModuleKey[];
   requiredModules: ModuleKey[];
+  /** False when the operator assigns this plan (e.g. Enterprise on hosted). */
+  selfService: boolean;
   monthlyPrice: number;
 }
 

@@ -11,11 +11,12 @@ import {
   Boxes,
   BarChart3,
   HeartHandshake,
-  Calendar,
   Lock,
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
+import { useEntitlements } from '../lib/entitlements';
+import { UsageHint } from './UsageHint';
 
 interface SubscriptionSettingsTabProps {
   tenantContext: TenantContextType;
@@ -101,7 +102,15 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
 }) => {
   const { subscription, updateSubscription } = tenantContext;
   const catalog = usePlanCatalog();
+  const { entitlements, reload: reloadEntitlements } = useEntitlements();
   const currentPlan = subscription?.planId || 'accounting';
+  const tierBadge = !entitlements?.enabled
+    ? 'Active'
+    : entitlements.tier === 'comp'
+      ? 'Managed'
+      : entitlements.tier === 'free' ? 'Free' : entitlements.tier;
+  // Only self-service plans can be picked; an operator-assigned current plan stays visible.
+  const visiblePlans = (catalog.plans || []).filter((plan) => plan.selfService || plan.key === currentPlan);
   const planModules = catalog.includedModules(currentPlan);
   // Plan-required cores always show as on; the server enforces the same rule.
   const activeModules = planModules.filter(
@@ -142,6 +151,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     try {
       // No module list: the server resets to that plan's included modules.
       await updateSubscription(planKey);
+      void reloadEntitlements();
       setSuccessMessage(`Switched to the ${planKey.toUpperCase()} plan.`);
       setTimeout(() => setSuccessMessage(null), 2500);
     } catch (error) {
@@ -165,7 +175,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                   {subscription?.planName || 'Accounting'} Plan
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
-                  Active
+                  {tierBadge}
                 </span>
               </div>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">
@@ -181,12 +191,23 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                 <strong>{activeModules.length}</strong> of {planModules.length} plan modules active
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-[var(--text-muted)]" />
-              <span>Renews Dec 31, 2027</span>
-            </div>
           </div>
         </div>
+
+        {entitlements?.limited && (
+          <div className="pt-2 space-y-2" aria-label="Free plan usage">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Free plan usage</h3>
+            {(['salesDocuments', 'bills', 'seats', 'bankAccounts'] as const).map((resource) => (
+              <UsageHint key={resource} entitlements={entitlements} resource={resource} />
+            ))}
+            <p className="text-xs text-[var(--text-muted)]">
+              Paid plans are coming soon.
+              {entitlements.upgrade.contact && (
+                <> Need more now? <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${entitlements.upgrade.contact}`}>Contact support</a>.</>
+              )}
+            </p>
+          </div>
+        )}
 
         {successMessage && (
           <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-fade-in">
@@ -305,9 +326,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
 
       <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
         <div>
-          <h3 className="text-base font-bold text-[var(--text-main)]">Compare Plans &amp; Upgrade</h3>
+          <h3 className="text-base font-bold text-[var(--text-main)]">Compare Plans</h3>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Switch plans anytime. Upgrading instantly provisions that tier&apos;s modules; modules outside the plan stay locked.
+            Switch products anytime. Switching provisions that plan&apos;s modules; modules outside the plan stay locked.
           </p>
         </div>
 
@@ -316,8 +337,8 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             {catalog.error}
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          {(catalog.plans || []).map((plan) => {
+        <div className={`grid grid-cols-1 ${visiblePlans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 pt-2`}>
+          {visiblePlans.map((plan) => {
             const isCurrent = currentPlan === plan.key;
             const includedModules = plan.includedModules;
             const badge = PLAN_BADGES[plan.key];
@@ -340,10 +361,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                 <div>
                   <div className="flex items-baseline justify-between mb-2">
                     <h4 className="text-sm font-bold text-[var(--text-main)]">{plan.name}</h4>
-                    <span className="text-lg font-extrabold text-[var(--text-main)]">
-                      ${plan.monthlyPrice}
-                      <span className="text-xs font-normal text-[var(--text-muted)]">/mo</span>
-                    </span>
+                    {entitlements?.limited && (
+                      <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Free</span>
+                    )}
                   </div>
 
                   <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
