@@ -276,7 +276,8 @@ public class SessionService : ISessionService
             roles,
             permissions,
             user.PhoneNumber,
-            !string.IsNullOrEmpty(user.PasswordHash));
+            !string.IsNullOrEmpty(user.PasswordHash),
+            user.MfaReEnrollRequired);
     }
 
     private static string ComputeSha256(string input)
