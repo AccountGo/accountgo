@@ -44,7 +44,7 @@ let nextKey = 1;
  * can't be changed, only voided. Lines are booked to an expense or asset account each.
  */
 export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => {
-  const { currentOrg, hasModule } = useOutletContext<TenantContextType>();
+  const { currentOrg, hasModule, subscription } = useOutletContext<TenantContextType>();
   const { billId } = useParams<{ billId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -57,6 +57,9 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const listPath = `/org/${orgSlug}/purchases`;
   const duplicateOf = isEdit ? null : searchParams.get('from');
   const presetVendor = isEdit ? null : Number(searchParams.get('vendor')) || null;
+
+  const planKey = (currentOrg.plan || subscription?.planId || 'accounting').toLowerCase();
+  const isAccountingPlan = planKey === 'accounting' || planKey === 'enterprise';
 
   const [vendors, setVendors] = useState<CustomerOption[]>([]);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
@@ -484,21 +487,24 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              Lines
+              Line Items
             </h3>
-            <span className="hidden sm:inline text-xs text-[var(--text-muted)]">Each line is booked to the account you pick: an expense, or an asset such as equipment.</span>
+            {catalog.length > 0 && (
+              <span className="text-xs text-[var(--text-muted)]">
+                Type a description, or pick an item with <Package className="inline w-3.5 h-3.5 -mt-0.5" />
+              </span>
+            )}
           </div>
 
           <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-surface)]">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[var(--bg-subtle)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">
-                  <th className="py-3 px-4 min-w-[220px]">Description</th>
-                  <th className="py-3 px-3 min-w-[190px]">Account</th>
+                  <th className="py-3 px-4 min-w-[260px]">Item & Description</th>
                   <th className="py-3 px-3 w-20 text-right">Qty</th>
                   <th className="py-3 px-3 w-28 text-right">Unit cost</th>
                   <th className="py-3 px-3 w-20 text-right">Disc %</th>
-                  <th className="py-3 px-3 min-w-[130px] text-right">
+                  <th className="py-3 px-3 w-40 text-right">
                     <span className="inline-flex items-center justify-end gap-2">
                       Tax
                       {selectableTaxCount === 0 && hasPermission('admin.taxes.manage') && (
@@ -506,33 +512,31 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                       )}
                     </span>
                   </th>
-                  <th className="py-3 px-4 w-28 text-right">Amount</th>
-                  <th className="py-3 px-2 w-12">
-                    <span className="sr-only">Remove</span>
-                  </th>
+                  <th className="py-3 px-4 w-28 text-right">Line Total</th>
+                  <th className="py-3 px-2 w-12 text-center"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
                 {lines.map((line, idx) => {
                   const linked = line.itemId ? catalog.find((c) => c.id === line.itemId) : undefined;
                   return (
-                    <tr key={line.key} className="align-middle">
+                    <tr key={line.key} className="align-middle hover:bg-[var(--bg-surface-hover)]/40 transition">
                       <td className="py-2.5 px-4">
                         <div className="relative">
                           <input
                             type="text"
                             aria-label={`Line ${idx + 1} description`}
-                            placeholder="e.g. Office rent, Printer paper"
+                            placeholder="Description (e.g. Office rent, Printer paper)"
                             value={line.description}
                             onChange={(e) => updateLine(idx, { description: e.target.value })}
-                            className={`${cellClass} ${linked ? 'pr-[4.25rem]' : catalog.length > 0 ? 'pr-10' : ''}`}
+                            className={`w-full h-9 pl-3 ${linked ? 'pr-[4.25rem]' : catalog.length > 0 ? 'pr-10' : 'pr-3'} text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition`}
                           />
                           {catalog.length > 0 && (
                             <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
                               <button
                                 type="button"
                                 onClick={() => setPickerLine(idx)}
-                                title={linked ? `Catalog item: ${linked.description}` : 'Pick from catalog'}
+                                title={linked ? `Catalog item: ${linked.code ? `${linked.code} · ` : ''}${linked.description}` : 'Pick from catalog'}
                                 aria-label={linked ? `Line ${idx + 1} is catalog item ${linked.description}; change it` : `Pick line ${idx + 1} from catalog`}
                                 className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
                                   linked ? 'text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
@@ -550,7 +554,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                                   })}
                                   title="Unlink from catalog"
                                   aria-label={`Unlink line ${idx + 1} from the catalog`}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
                                 >
                                   <Unlink className="w-4 h-4" />
                                 </button>
@@ -558,32 +562,44 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                             </div>
                           )}
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <select
-                          aria-label={`Line ${idx + 1} account`}
-                          value={line.accountId}
-                          onChange={(e) => updateLine(idx, { accountId: e.target.value ? Number(e.target.value) : '' })}
-                          disabled={line.isStockItem}
-                          className={`${cellClass} disabled:opacity-60 disabled:cursor-not-allowed`}
-                        >
-                          <option value="">Vendor's default</option>
-                          <optgroup label="Expenses">
-                            {expenseAccounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.code} · {a.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                          <optgroup label="Assets">
-                            {assetAccounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.code} · {a.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        </select>
-                        {line.isStockItem && <p className="mt-1 text-[10px] text-[var(--text-muted)]">Stock is always booked to Inventory.</p>}
+                        {isAccountingPlan && (
+                          line.isStockItem ? (
+                            <p className="mt-1 text-[11px] text-[var(--text-muted)] truncate">
+                              Stock is booked to Inventory
+                            </p>
+                          ) : (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <span className="text-[11px] text-[var(--text-muted)] whitespace-nowrap">Account:</span>
+                              <select
+                                aria-label={`Line ${idx + 1} account`}
+                                value={line.accountId}
+                                onChange={(e) => updateLine(idx, { accountId: e.target.value ? Number(e.target.value) : '' })}
+                                className="h-6 px-1.5 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-muted)] hover:text-[var(--text-main)] focus:text-[var(--text-main)] focus:ring-1 focus:ring-[var(--brand-ring)] focus:outline-none transition max-w-[220px]"
+                              >
+                                <option value="">Default (50200 · Purchase A/C)</option>
+                                {line.accountId && !accounts.some((a) => a.id === line.accountId) && (
+                                  <option value={line.accountId}>
+                                    Account #{line.accountId}
+                                  </option>
+                                )}
+                                <optgroup label="Expenses">
+                                  {expenseAccounts.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                      {a.code} · {a.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                                <optgroup label="Assets">
+                                  {assetAccounts.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                      {a.code} · {a.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              </select>
+                            </div>
+                          )
+                        )}
                       </td>
                       <td className="py-2.5 px-3">
                         <input

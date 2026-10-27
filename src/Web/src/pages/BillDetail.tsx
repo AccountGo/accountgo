@@ -13,7 +13,7 @@ import { BillTitle, billTitle } from '../lib/billTitle';
 
 /** One bill: who it is from, its lines and the accounts they are booked to, what is still owed, and its payments. */
 export const BillDetail: React.FC = () => {
-  const { currentOrg } = useOutletContext<TenantContextType>();
+  const { currentOrg, subscription } = useOutletContext<TenantContextType>();
   const { billId } = useParams<{ billId: string }>();
   const { authFetch } = useAuth();
   const navigate = useNavigate();
@@ -24,6 +24,9 @@ export const BillDetail: React.FC = () => {
   const canSeeVendors = hasPermission('purchases.vendors.view');
   const orgSlug = currentOrg.slug;
   const listPath = `/org/${orgSlug}/purchases`;
+
+  const planKey = (currentOrg.plan || subscription?.planId || 'accounting').toLowerCase();
+  const isAccountingPlan = planKey === 'accounting' || planKey === 'enterprise';
 
   const [bill, setBill] = useState<Bill | null>(null);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
@@ -254,7 +257,7 @@ export const BillDetail: React.FC = () => {
             <thead>
               <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-muted)]/50 text-[var(--text-secondary)] font-medium">
                 <th className="py-3 px-4">Description</th>
-                <th className="hidden sm:table-cell py-3 px-4">Account</th>
+                {isAccountingPlan && <th className="hidden sm:table-cell py-3 px-4">Account</th>}
                 <th className="py-3 px-4 text-right">Qty</th>
                 <th className="hidden sm:table-cell py-3 px-4 text-right">Unit cost</th>
                 {hasTax && <th className="hidden md:table-cell py-3 px-4 text-right">Tax</th>}
@@ -266,10 +269,10 @@ export const BillDetail: React.FC = () => {
                 <tr key={line.id}>
                   <td className="py-3 px-4 text-[var(--text-main)]">
                     <div>{line.description}</div>
-                    <div className="sm:hidden text-[10px] text-[var(--text-secondary)]">{line.accountName ?? '—'}</div>
+                    {isAccountingPlan && line.accountName && <div className="sm:hidden text-[10px] text-[var(--text-secondary)]">{line.accountName}</div>}
                     {line.discount ? <div className="text-[10px] text-[var(--text-secondary)]">{line.discount}% off</div> : null}
                   </td>
-                  <td className="hidden sm:table-cell py-3 px-4 text-[var(--text-secondary)]">{line.accountName ?? '—'}</td>
+                  {isAccountingPlan && <td className="hidden sm:table-cell py-3 px-4 text-[var(--text-secondary)]">{line.accountName ?? '—'}</td>}
                   <td className="py-3 px-4 text-right text-[var(--text-secondary)] whitespace-nowrap">{line.quantity}</td>
                   <td className="hidden sm:table-cell py-3 px-4 text-right text-[var(--text-secondary)] whitespace-nowrap">{formatCurrency(line.amount)}</td>
                   {hasTax && <td className="hidden md:table-cell py-3 px-4 text-right text-[var(--text-secondary)] whitespace-nowrap">{formatCurrency(line.taxAmount)}</td>}

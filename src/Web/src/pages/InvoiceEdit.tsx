@@ -63,7 +63,7 @@ interface SalesAccountOption {
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
-  const { currentOrg, hasModule } = useOutletContext<TenantContextType>();
+  const { currentOrg, hasModule, subscription } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId?: string }>();
@@ -72,6 +72,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [searchParams] = useSearchParams();
   const duplicateOf = isEdit ? null : searchParams.get('from');
   const [duplicatedTitle, setDuplicatedTitle] = useState<string | null>(null);
+
+  const planKey = (currentOrg.plan || subscription?.planId || 'accounting').toLowerCase();
+  const isAccountingPlan = planKey === 'accounting' || planKey === 'enterprise';
 
   // Reference data
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
@@ -910,45 +913,47 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                             Only {linked.quantityOnHand?.toLocaleString(undefined, { maximumFractionDigits: 4 })} in stock. You can still issue this invoice.
                           </p>
                         )}
-                        {isCatalogLinked ? (
-                          <p className="mt-1 text-[11px] text-[var(--text-muted)] truncate" title={linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}>
-                            Books to {linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}
-                          </p>
-                        ) : (
-                          <div className="mt-1.5 flex items-center gap-1.5">
-                            <span className="text-[11px] text-[var(--text-muted)] whitespace-nowrap">Income account:</span>
-                            <select
-                              aria-label={`Line ${idx + 1} income account`}
-                              value={line.salesAccountId ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value ? Number(e.target.value) : null;
-                                const acc = salesAccounts.find((a) => a.id === val);
-                                setLines((prev) => {
-                                  const updated = [...prev];
-                                  updated[idx] = {
-                                    ...updated[idx],
-                                    salesAccountId: val,
-                                    salesAccountCode: acc?.code ?? null,
-                                    salesAccountName: acc?.name ?? null,
-                                  };
-                                  return updated;
-                                });
-                              }}
-                              className="h-6 px-1.5 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-muted)] hover:text-[var(--text-main)] focus:text-[var(--text-main)] focus:ring-1 focus:ring-[var(--brand-ring)] focus:outline-none transition max-w-[220px]"
-                            >
-                              <option value="">Default (40100 · Sales)</option>
-                              {line.salesAccountId && !salesAccounts.some((a) => a.id === line.salesAccountId) && (
-                                <option value={line.salesAccountId}>
-                                  {line.salesAccountCode ? `${line.salesAccountCode} · ${line.salesAccountName}` : `Account #${line.salesAccountId}`}
-                                </option>
-                              )}
-                              {salesAccounts.map((acc) => (
-                                <option key={acc.id} value={acc.id}>
-                                  {acc.code} · {acc.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                        {isAccountingPlan && (
+                          isCatalogLinked ? (
+                            <p className="mt-1 text-[11px] text-[var(--text-muted)] truncate" title={linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}>
+                              Books to {linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}
+                            </p>
+                          ) : (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <span className="text-[11px] text-[var(--text-muted)] whitespace-nowrap">Income account:</span>
+                              <select
+                                aria-label={`Line ${idx + 1} income account`}
+                                value={line.salesAccountId ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value ? Number(e.target.value) : null;
+                                  const acc = salesAccounts.find((a) => a.id === val);
+                                  setLines((prev) => {
+                                    const updated = [...prev];
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      salesAccountId: val,
+                                      salesAccountCode: acc?.code ?? null,
+                                      salesAccountName: acc?.name ?? null,
+                                    };
+                                    return updated;
+                                  });
+                                }}
+                                className="h-6 px-1.5 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-muted)] hover:text-[var(--text-main)] focus:text-[var(--text-main)] focus:ring-1 focus:ring-[var(--brand-ring)] focus:outline-none transition max-w-[220px]"
+                              >
+                                <option value="">Default (40100 · Sales)</option>
+                                {line.salesAccountId && !salesAccounts.some((a) => a.id === line.salesAccountId) && (
+                                  <option value={line.salesAccountId}>
+                                    {line.salesAccountCode ? `${line.salesAccountCode} · ${line.salesAccountName}` : `Account #${line.salesAccountId}`}
+                                  </option>
+                                )}
+                                {salesAccounts.map((acc) => (
+                                  <option key={acc.id} value={acc.id}>
+                                    {acc.code} · {acc.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )
                         )}
                       </td>
 
