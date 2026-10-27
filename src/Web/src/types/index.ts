@@ -9,7 +9,15 @@ export type ModuleKey =
   | 'donations' 
   | 'audit';
 
-export type PlanKey = 'invoicing' | 'accounting' | 'enterprise';
+export type PlanKey =
+  | 'invoicing'
+  | 'accounting'
+  | 'enterprise'
+  | 'invoicing_free'
+  | 'invoicing_pro'
+  | 'accounting_free'
+  | 'accounting_pro'
+  | (string & {});
 
 export interface SubscriptionInfo {
   planId: PlanKey;
@@ -146,7 +154,11 @@ export interface TenantContextType {
   switchOrg: (slug: string) => void;
   updateCurrentOrg: (updates: Partial<OrgDetails>) => void;
   updateOrgWhitelabel?: (config: WhitelabelConfig) => void;
-  updateSubscription?: (plan: PlanKey, activeModules?: ModuleKey[]) => Promise<void>;
+  updateSubscription?: (
+    plan: PlanKey,
+    activeModules?: ModuleKey[],
+    options?: { billingInterval?: 'month' | 'year' },
+  ) => Promise<{ redirectUrl?: string } | void>;
   hasModule: (module: ModuleKey) => boolean;
   hasPermission: (permission: string | string[]) => boolean;
   canAccess: (module: ModuleKey, permission?: string) => boolean;

@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using Core.Billing;
+using Core.Data;
 using Core.Domain;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Http;
@@ -39,6 +41,41 @@ namespace Api.Filters
                     StatusCode = StatusCodes.Status400BadRequest
                 };
                 return;
+            }
+
+            // Optional: lightweight filter tests and non-tenant harnesses may not register IRepository<Company>.
+            var companies = context.HttpContext.RequestServices.GetService<IRepository<Company>>();
+            var company = (companies != null && tenantContext.CompanyId.HasValue)
+                ? companies.GetById(tenantContext.CompanyId.Value)
+                : null;
+            // Inactive paid workspaces keep free-tier modules (sales/purchases); deny only paid-only modules.
+            if (company != null
+                && Company.IsPaidPlan(company.Plan)
+                && SubscriptionAccess.IsInactive(company))
+            {
+                var freeModules = Company.ModulesForPlan(Company.FreePlanFor(company.Plan));
+                var allowedUnderFree = Array.Exists(
+                    _moduleKeys,
+                    m => freeModules.Contains(m, StringComparer.OrdinalIgnoreCase));
+                if (!allowedUnderFree)
+                {
+                    var inactive = new ProblemDetails
+                    {
+                        Type = "https://accountgo.ph/errors/subscription-inactive",
+                        Title = "Subscription Inactive",
+                        Detail = "This workspace's subscription is inactive. Update billing to restore paid modules.",
+                        Status = StatusCodes.Status403Forbidden
+                    };
+                    inactive.Extensions["code"] = "SUBSCRIPTION_INACTIVE";
+                    inactive.Extensions["status"] = company.SubscriptionStatus ?? "canceled";
+                    inactive.Extensions["upgradeAvailable"] = true;
+
+                    context.Result = new ObjectResult(inactive)
+                    {
+                        StatusCode = StatusCodes.Status403Forbidden
+                    };
+                    return;
+                }
             }
 
             var adminService = context.HttpContext.RequestServices.GetRequiredService<IAdministrationService>();

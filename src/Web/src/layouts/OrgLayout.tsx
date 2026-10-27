@@ -9,6 +9,7 @@ import { MobileBottomNav } from '../components/MobileBottomNav';
 import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { AssistantMount, AssistantProvider } from '../assistant';
+import { PastDueBanner } from '../components/PastDueBanner';
 
 export const OrgLayout: React.FC = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -232,15 +233,21 @@ export const OrgLayout: React.FC = () => {
     setTenantWhitelabel(updated.whitelabel);
   };
 
-  const updateSubscription = async (newPlan: PlanKey, newActiveModules?: ModuleKey[]) => {
+  const updateSubscription = async (
+    newPlan: PlanKey,
+    newActiveModules?: ModuleKey[],
+    options?: { billingInterval?: 'month' | 'year' },
+  ) => {
     if (!currentOrg) return;
     // The server owns the plan → module rules: send the request, then apply only what it returns.
+    // Hosted paid upgrades may return { redirectUrl } instead of writing Plan immediately.
     const response = await authFetch('/api/Subscription/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         plan: newPlan,
         activeModules: newActiveModules,
+        billingInterval: options?.billingInterval,
       }),
     });
     if (!response.ok) {
@@ -252,10 +259,20 @@ export const OrgLayout: React.FC = () => {
       } catch { /* keep default */ }
       throw new Error(message);
     }
-    const saved = await response.json() as {
-      plan: PlanKey;
-      subscriptionStatus: SubscriptionInfo['status'];
-      activeModules: ModuleKey[];
+    const payload = await response.json() as {
+      redirectUrl?: string;
+      plan?: PlanKey;
+      subscriptionStatus?: SubscriptionInfo['status'];
+      activeModules?: ModuleKey[];
+    };
+    if (payload.redirectUrl) {
+      window.location.assign(payload.redirectUrl);
+      return { redirectUrl: payload.redirectUrl };
+    }
+    const saved = {
+      plan: payload.plan ?? newPlan,
+      subscriptionStatus: payload.subscriptionStatus ?? 'active',
+      activeModules: payload.activeModules ?? newActiveModules ?? [],
     };
     const newSub: SubscriptionInfo = {
       planId: saved.plan,
@@ -383,6 +400,7 @@ export const OrgLayout: React.FC = () => {
               }`}
             >
               <div className="max-w-7xl mx-auto w-full transition-all duration-300 ease-in-out">
+                <PastDueBanner />
                 <Outlet context={contextValue} />
               </div>
             </main>

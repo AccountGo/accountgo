@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Sparkles,
   Check,
@@ -12,11 +12,52 @@ import {
   BarChart3,
   HeartHandshake,
   Lock,
+  CreditCard,
+  Loader2,
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
 import { useEntitlements } from '../lib/entitlements';
+import { useBilling } from '../lib/useBilling';
 import { UsageHint } from './UsageHint';
+
+/** Safe outside <Router> (unit tests / SSR) — reads checkout return flag from the location bar. */
+function readCheckoutParam(): string | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get('checkout');
+}
+
+function clearCheckoutParam(): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has('checkout')) return;
+  url.searchParams.delete('checkout');
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, '', next);
+}
+
+const HOSTED_PAID_PLANS: Array<{
+  key: 'invoicing_pro' | 'accounting_pro';
+  name: string;
+  description: string;
+  monthly: number;
+  annual: number;
+}> = [
+  {
+    key: 'invoicing_pro',
+    name: 'Invoicing Pro',
+    description: 'Unlimited invoices and bills for solo operators — without full double-entry accounting.',
+    monthly: 15,
+    annual: 150,
+  },
+  {
+    key: 'accounting_pro',
+    name: 'Accounting Pro',
+    description: 'Full ledger, reports, multi-seat access, and hosted security for growing teams.',
+    monthly: 99,
+    annual: 990,
+  },
+];
 
 interface SubscriptionSettingsTabProps {
   tenantContext: TenantContextType;
@@ -103,12 +144,19 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const { subscription, updateSubscription } = tenantContext;
   const catalog = usePlanCatalog();
   const { entitlements, reload: reloadEntitlements } = useEntitlements();
-  const currentPlan = subscription?.planId || 'accounting';
-  const tierBadge = !entitlements?.enabled
-    ? 'Active'
-    : entitlements.tier === 'comp'
-      ? 'Managed'
-      : entitlements.tier === 'free' ? 'Free' : entitlements.tier;
+  const billing = useBilling();
+  const currentPlan = (billing.plan || subscription?.planId || 'accounting') as PlanKey;
+  const tierBadge = billing.billingEnabled
+    ? (billing.status === 'past_due'
+      ? 'Past due'
+      : billing.cancelAtPeriodEnd
+        ? 'Canceling'
+        : (billing.billing?.tier === 'comp' ? 'Managed' : (String(currentPlan).includes('_pro') || String(currentPlan) === 'enterprise' ? 'Pro' : 'Free')))
+    : !entitlements?.enabled
+      ? 'Active'
+      : entitlements.tier === 'comp'
+        ? 'Managed'
+        : entitlements.tier === 'free' ? 'Free' : entitlements.tier;
   // Only self-service plans can be picked; an operator-assigned current plan stays visible.
   const visiblePlans = (catalog.plans || []).filter((plan) => plan.selfService || plan.key === currentPlan);
   const planModules = catalog.includedModules(currentPlan);
@@ -120,6 +168,35 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
+  const [checkoutProcessing, setCheckoutProcessing] = useState(false);
+
+  // After Checkout return: poll billing state until the webhook upgrades the plan.
+  useEffect(() => {
+    const checkout = readCheckoutParam();
+    if (checkout !== 'success' || !billing.billingEnabled) return;
+
+    setCheckoutProcessing(true);
+    const started = Date.now();
+    const planBefore = String(currentPlan);
+    const timer = window.setInterval(() => {
+      void billing.reload().then(() => {
+        const next = String(billing.plan || '');
+        if ((next.includes('_pro') && next !== planBefore) || Date.now() - started > 60_000) {
+          window.clearInterval(timer);
+          setCheckoutProcessing(false);
+          clearCheckoutParam();
+          void reloadEntitlements();
+          if (next.includes('_pro')) {
+            setSuccessMessage('Payment received — your plan is now active.');
+            setTimeout(() => setSuccessMessage(null), 4000);
+          }
+        }
+      });
+    }, 2000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- poll once when checkout=success is present
+  }, [billing.billingEnabled]);
 
   const handleToggleModule = async (moduleKey: ModuleKey) => {
     if (catalog.isRequired(currentPlan, moduleKey)) return;
@@ -161,6 +238,34 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     }
   };
 
+  const handleUpgrade = async (planKey: 'invoicing_pro' | 'accounting_pro') => {
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      await billing.upgradePlan(planKey, billingInterval);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to start upgrade.');
+      setSaving(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      await billing.openPortal();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to open billing portal.');
+      setSaving(false);
+    }
+  };
+
+  const periodEndLabel = billing.currentPeriodEnd
+    ? new Date(billing.currentPeriodEnd).toLocaleDateString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+      })
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
@@ -194,18 +299,49 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
           </div>
         </div>
 
-        {entitlements?.limited && (
-          <div className="pt-2 space-y-2" aria-label="Free plan usage">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Free plan usage</h3>
+        {(entitlements?.limited || (billing.billingEnabled && billing.billing?.tier === 'free')) && entitlements && (
+          <div className="pt-2 space-y-2" aria-label="Plan usage">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Plan usage</h3>
             {(['salesDocuments', 'bills', 'seats', 'bankAccounts'] as const).map((resource) => (
               <UsageHint key={resource} entitlements={entitlements} resource={resource} />
             ))}
-            <p className="text-xs text-[var(--text-muted)]">
-              Paid plans are coming soon.
-              {entitlements.upgrade.contact && (
-                <> Need more now? <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${entitlements.upgrade.contact}`}>Contact support</a>.</>
-              )}
-            </p>
+            {!billing.billingEnabled && (
+              <p className="text-xs text-[var(--text-muted)]">
+                Paid plans are coming soon.
+                {entitlements.upgrade.contact && (
+                  <> Need more now? <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${entitlements.upgrade.contact}`}>Contact support</a>.</>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+
+        {billing.billingEnabled && (
+          <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[var(--text-secondary)]">
+            {periodEndLabel && (
+              <span>
+                {billing.cancelAtPeriodEnd ? 'Access until' : 'Renews'}{' '}
+                <strong className="text-[var(--text-main)]">{periodEndLabel}</strong>
+              </span>
+            )}
+            {billing.portalAvailable && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleManageBilling()}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] font-semibold transition-colors"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                Manage billing
+              </button>
+            )}
+          </div>
+        )}
+
+        {checkoutProcessing && (
+          <div className="p-3 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] text-xs font-semibold flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Processing payment… confirming your plan.</span>
           </div>
         )}
 
@@ -221,6 +357,87 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
           </div>
         )}
       </div>
+
+      {billing.billingEnabled && (
+        <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-[var(--text-main)]">Upgrade</h3>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Choose a paid plan. You will complete payment on the secure checkout page.
+              </p>
+            </div>
+            <div className="inline-flex rounded-xl bg-[var(--bg-subtle)] p-1" role="group" aria-label="Billing interval">
+              <button
+                type="button"
+                onClick={() => setBillingInterval('month')}
+                className={`h-8 px-3 rounded-lg text-xs font-bold transition-colors ${
+                  billingInterval === 'month' ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingInterval('year')}
+                className={`h-8 px-3 rounded-lg text-xs font-bold transition-colors ${
+                  billingInterval === 'year' ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'
+                }`}
+              >
+                Annual
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {HOSTED_PAID_PLANS.map((plan) => {
+              const isCurrent = String(currentPlan) === plan.key;
+              const price = billingInterval === 'year' ? plan.annual : plan.monthly;
+              const priceLabel = billingInterval === 'year' ? `$${price}/yr` : `$${price}/mo`;
+              return (
+                <div
+                  key={plan.key}
+                  className={`p-5 rounded-2xl flex flex-col justify-between transition-all ${
+                    isCurrent
+                      ? 'bg-[var(--brand-subtle)] border-2 border-[var(--brand-primary)] shadow-lg'
+                      : 'bg-[var(--bg-subtle)] border border-transparent'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-baseline justify-between mb-2 gap-2">
+                      <h4 className="text-sm font-bold text-[var(--text-main)]">{plan.name}</h4>
+                      <span className="text-sm font-bold text-[var(--text-main)]">{priceLabel}</span>
+                    </div>
+                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">{plan.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isCurrent || saving || checkoutProcessing}
+                    onClick={() => void handleUpgrade(plan.key)}
+                    className={`w-full h-10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      isCurrent
+                        ? 'bg-[var(--brand-primary)] text-white cursor-default'
+                        : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] hover:text-[var(--brand-primary)]'
+                    }`}
+                  >
+                    {isCurrent ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        Current plan
+                      </>
+                    ) : (
+                      <>
+                        <span>Upgrade</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
         <div>
@@ -324,92 +541,94 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
-        <div>
-          <h3 className="text-base font-bold text-[var(--text-main)]">Compare Plans</h3>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Switch products anytime. Switching provisions that plan&apos;s modules; modules outside the plan stay locked.
-          </p>
-        </div>
-
-        {catalog.error && (
-          <div role="alert" className="p-3 rounded-xl bg-red-500/10 text-red-400 text-xs font-semibold">
-            {catalog.error}
+      {!billing.billingEnabled && (
+        <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
+          <div>
+            <h3 className="text-base font-bold text-[var(--text-main)]">Compare Plans</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              Switch products anytime. Switching provisions that plan&apos;s modules; modules outside the plan stay locked.
+            </p>
           </div>
-        )}
-        <div className={`grid grid-cols-1 ${visiblePlans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 pt-2`}>
-          {visiblePlans.map((plan) => {
-            const isCurrent = currentPlan === plan.key;
-            const includedModules = plan.includedModules;
-            const badge = PLAN_BADGES[plan.key];
 
-            return (
-              <div
-                key={plan.key}
-                className={`p-5 rounded-2xl flex flex-col justify-between transition-all relative ${
-                  isCurrent
-                    ? 'bg-[var(--brand-subtle)] border-2 border-[var(--brand-primary)] shadow-lg'
-                    : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] border border-transparent'
-                }`}
-              >
-                {badge && (
-                  <div className="absolute -top-2.5 right-4 px-2 py-0.5 rounded-full bg-[var(--brand-primary)] text-white text-[10px] font-bold uppercase tracking-wider shadow">
-                    {badge}
-                  </div>
-                )}
+          {catalog.error && (
+            <div role="alert" className="p-3 rounded-xl bg-red-500/10 text-red-400 text-xs font-semibold">
+              {catalog.error}
+            </div>
+          )}
+          <div className={`grid grid-cols-1 ${visiblePlans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 pt-2`}>
+            {visiblePlans.map((plan) => {
+              const isCurrent = currentPlan === plan.key;
+              const includedModules = plan.includedModules;
+              const badge = PLAN_BADGES[plan.key];
 
-                <div>
-                  <div className="flex items-baseline justify-between mb-2">
-                    <h4 className="text-sm font-bold text-[var(--text-main)]">{plan.name}</h4>
-                    {entitlements?.limited && (
-                      <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Free</span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
-                    {plan.description}
-                  </p>
-
-                  <div className="space-y-1.5 mb-6 text-xs text-[var(--text-main)]">
-                    <div className="font-semibold text-[10px] uppercase text-[var(--text-muted)] tracking-wider mb-1">
-                      Included Modules:
-                    </div>
-                    {includedModules.map((m) => (
-                      <div key={m} className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span className="capitalize">{m}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={isCurrent || saving}
-                  onClick={() => handleSelectPlan(plan.key)}
-                  className={`w-full h-10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              return (
+                <div
+                  key={plan.key}
+                  className={`p-5 rounded-2xl flex flex-col justify-between transition-all relative ${
                     isCurrent
-                      ? 'bg-[var(--brand-primary)] text-white cursor-default shadow-sm'
-                      : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] hover:text-[var(--brand-primary)] active:scale-[0.98]'
+                      ? 'bg-[var(--brand-subtle)] border-2 border-[var(--brand-primary)] shadow-lg'
+                      : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] border border-transparent'
                   }`}
                 >
-                  {isCurrent ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      Current Plan
-                    </>
-                  ) : (
-                    <>
-                      <span>Switch to {plan.name}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </>
+                  {badge && (
+                    <div className="absolute -top-2.5 right-4 px-2 py-0.5 rounded-full bg-[var(--brand-primary)] text-white text-[10px] font-bold uppercase tracking-wider shadow">
+                      {badge}
+                    </div>
                   )}
-                </button>
-              </div>
-            );
-          })}
+
+                  <div>
+                    <div className="flex items-baseline justify-between mb-2">
+                      <h4 className="text-sm font-bold text-[var(--text-main)]">{plan.name}</h4>
+                      {entitlements?.limited && (
+                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Free</span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
+                      {plan.description}
+                    </p>
+
+                    <div className="space-y-1.5 mb-6 text-xs text-[var(--text-main)]">
+                      <div className="font-semibold text-[10px] uppercase text-[var(--text-muted)] tracking-wider mb-1">
+                        Included Modules:
+                      </div>
+                      {includedModules.map((m) => (
+                        <div key={m} className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span className="capitalize">{m}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isCurrent || saving}
+                    onClick={() => handleSelectPlan(plan.key)}
+                    className={`w-full h-10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      isCurrent
+                        ? 'bg-[var(--brand-primary)] text-white cursor-default shadow-sm'
+                        : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] hover:text-[var(--brand-primary)] active:scale-[0.98]'
+                    }`}
+                  >
+                    {isCurrent ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        Current Plan
+                      </>
+                    ) : (
+                      <>
+                        <span>Switch to {plan.name}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

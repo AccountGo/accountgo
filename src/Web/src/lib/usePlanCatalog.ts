@@ -51,7 +51,15 @@ export function usePlanCatalog() {
     };
   }, [authFetch]);
 
-  const find = (key: PlanKey) => plans?.find((plan) => plan.key === key);
+  /** Map product×tier keys (invoicing_pro) onto the community catalog entry (invoicing). */
+  const catalogKey = (key: PlanKey): PlanKey => {
+    const raw = String(key || '').toLowerCase();
+    if (raw.startsWith('invoicing')) return 'invoicing';
+    if (raw === 'enterprise' || raw.startsWith('enterprise')) return 'enterprise';
+    if (raw.startsWith('accounting')) return 'accounting';
+    return key;
+  };
+  const find = (key: PlanKey) => plans?.find((plan) => plan.key === catalogKey(key));
   return {
     plans,
     error,

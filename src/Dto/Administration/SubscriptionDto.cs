@@ -20,6 +20,8 @@ namespace Dto.Subscription
         public string? Slug { get; set; }
         public string? Plan { get; set; }
         public List<string>? ActiveModules { get; set; }
+        /// <summary>Billing interval when requesting a paid plan change: "month" or "year". Ignored when billing is off.</summary>
+        public string? BillingInterval { get; set; }
     }
 
     public class PlanDefinitionDto

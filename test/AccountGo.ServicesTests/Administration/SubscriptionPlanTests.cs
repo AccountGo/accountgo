@@ -49,7 +49,7 @@ public class SubscriptionPlanTests
     [Theory]
     [InlineData("foo")]
     [InlineData("pro")]
-    [InlineData("invoicing_free")]
+    [InlineData("starter")]
     public void UpdateSubscription_UnknownPlan_IsRejectedAndNotSaved(string plan)
     {
         var ex = Assert.Throws<ArgumentException>(() => _service.UpdateSubscription(new UpdateSubscriptionDto { Plan = plan }));
@@ -57,6 +57,19 @@ public class SubscriptionPlanTests
         Assert.Contains(plan, ex.Message);
         Assert.Equal("invoicing", _company.Plan);
         _companyRepo.Verify(r => r.Update(It.IsAny<Company>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("invoicing_free")]
+    [InlineData("invoicing_pro")]
+    [InlineData("accounting_free")]
+    [InlineData("accounting_pro")]
+    public void UpdateSubscription_ProductTierPlan_IsAccepted(string plan)
+    {
+        var result = _service.UpdateSubscription(new UpdateSubscriptionDto { Plan = plan });
+
+        Assert.Equal(plan, _company.Plan);
+        Assert.Equal(Company.ModulesForPlan(plan), result.ActiveModules);
     }
 
     [Fact]

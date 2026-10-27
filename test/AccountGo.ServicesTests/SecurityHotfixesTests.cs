@@ -274,7 +274,8 @@ public class SecurityHotfixesTests
 
         var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object);
         var authService = new Mock<IAuthenticationService>();
-        var secService = new Mock<ISecurityService>();
+        var sessionService = new Mock<ISessionService>();
+        var mfaGate = new Mock<IMfaGate>();
 
         var secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -293,7 +294,8 @@ public class SecurityHotfixesTests
             idContext,
             emailSender,
             authService.Object,
-            secService.Object,
+            sessionService.Object,
+            mfaGate.Object,
             config,
             env.Object,
             logger.Object);
@@ -323,7 +325,8 @@ public class SecurityHotfixesTests
 
         var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object);
         var authService = new Mock<IAuthenticationService>();
-        var secService = new Mock<ISecurityService>();
+        var sessionService = new Mock<ISessionService>();
+        var mfaGate = new Mock<IMfaGate>();
 
         var secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -342,7 +345,8 @@ public class SecurityHotfixesTests
             idContext,
             emailSender,
             authService.Object,
-            secService.Object,
+            sessionService.Object,
+            mfaGate.Object,
             config,
             env.Object,
             logger.Object);
@@ -373,7 +377,8 @@ public class SecurityHotfixesTests
 
         var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object);
         var authService = new Mock<IAuthenticationService>();
-        var secService = new Mock<ISecurityService>();
+        var sessionService = new Mock<ISessionService>();
+        var mfaGate = new Mock<IMfaGate>();
 
         var secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -392,7 +397,8 @@ public class SecurityHotfixesTests
             idContext,
             emailSender,
             authService.Object,
-            secService.Object,
+            sessionService.Object,
+            mfaGate.Object,
             config,
             env.Object,
             logger.Object);

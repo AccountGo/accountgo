@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Api.Filters;
+using Core.Billing;
 using Core.Domain;
 using Core.Tenancy;
 using Dto.Subscription;
@@ -16,11 +20,19 @@ namespace Api.Controllers
     {
         private readonly IAdministrationService _adminService;
         private readonly Core.Entitlements.EntitlementsOptions _entitlements;
+        private readonly IBillingProvider _billing;
+        private readonly ITenantContext _tenant;
 
-        public SubscriptionController(IAdministrationService adminService, Core.Entitlements.EntitlementsOptions entitlements)
+        public SubscriptionController(
+            IAdministrationService adminService,
+            Core.Entitlements.EntitlementsOptions entitlements,
+            IBillingProvider billing,
+            ITenantContext tenant)
         {
             _adminService = adminService;
             _entitlements = entitlements;
+            _billing = billing;
+            _tenant = tenant;
         }
 
         // GET /api/Subscription/companies was removed in Phase 2: it listed every workspace.
@@ -40,17 +52,46 @@ namespace Api.Controllers
         [Authorize]
         [RequireWorkspaceRole(CompanyMemberRole.Owner)]
         [HttpPut("update")]
-        public IActionResult UpdateSubscription([FromBody] UpdateSubscriptionDto dto)
+        public async Task<IActionResult> UpdateSubscription([FromBody] UpdateSubscriptionDto dto, CancellationToken ct)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             try
             {
+                // Hosted paid upgrades go through the billing provider; Plan is written only after webhook.
+                if (_billing.Enabled
+                    && !string.IsNullOrWhiteSpace(dto.Plan)
+                    && Company.IsPaidPlan(dto.Plan))
+                {
+                    var current = _adminService.GetCurrentSubscription();
+                    if (!string.Equals(current.Plan, dto.Plan.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        var returnUrl = Request.Headers["Referer"].ToString();
+                        if (string.IsNullOrWhiteSpace(returnUrl))
+                            returnUrl = "/";
+                        if (!string.IsNullOrWhiteSpace(dto.BillingInterval)
+                            && !returnUrl.Contains("interval=", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var sep = returnUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+                            returnUrl = $"{returnUrl}{sep}interval={Uri.EscapeDataString(dto.BillingInterval.Trim())}";
+                        }
+                        var result = await _billing.RequestPlanChangeAsync(
+                            _tenant.RequireCompanyId(),
+                            dto.Plan.Trim().ToLowerInvariant(),
+                            returnUrl,
+                            ct);
+                        if (!string.IsNullOrEmpty(result.ErrorReason))
+                            return BadRequest(new { message = result.ErrorReason });
+                        if (!result.AppliedImmediately)
+                            return Ok(new { redirectUrl = result.RedirectUrl });
+                    }
+                }
+
                 var updated = _adminService.UpdateSubscription(dto);
                 return Ok(updated);
             }
-            catch (System.ArgumentException ex)
+            catch (ArgumentException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }

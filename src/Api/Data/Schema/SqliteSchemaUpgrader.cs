@@ -215,6 +215,13 @@ namespace Api.Data.Schema
                     new[] { "GeneralLedgerHeader", "ReversedGeneralLedgerHeaderId", "INTEGER NULL" },
                     new[] { "CustomerAllocation", "GeneralLedgerHeaderId", "INTEGER NULL" },
                     new[] { "Company", "Tier", "TEXT NULL" },
+                    // D1 0028_company_billing.sql
+                    new[] { "Company", "BillingProvider", "TEXT NULL" },
+                    new[] { "Company", "BillingCustomerId", "TEXT NULL" },
+                    new[] { "Company", "BillingSubscriptionId", "TEXT NULL" },
+                    new[] { "Company", "CurrentPeriodEnd", "TEXT NULL" },
+                    new[] { "Company", "CancelAtPeriodEnd", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "Company", "BillingManagedManually", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "Account", "ArchivedAt", "TEXT NULL" },
                     new[] { "CompanySetting", "MfaPolicy", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "MfaGracePeriodEndsAt", "TEXT NULL" },

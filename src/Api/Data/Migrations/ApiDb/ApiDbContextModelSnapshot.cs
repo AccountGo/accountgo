@@ -141,8 +141,23 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("ActiveModulesJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("BillingCustomerId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("BillingManagedManually")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("BillingProvider")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BillingSubscriptionId")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("CRA")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("CancelAtPeriodEnd")
+                        .HasColumnType("bit");
 
                     b.Property<string>("CompanyCode")
                         .HasColumnType("nvarchar(max)");
@@ -152,6 +167,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<string>("CreatedByUserId")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("CurrentPeriodEnd")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
@@ -191,7 +209,9 @@ namespace Api.Data.Migrations.ApiDb
                         new
                         {
                             Id = 1,
+                            BillingManagedManually = false,
                             CRA = "012345678",
+                            CancelAtPeriodEnd = false,
                             CompanyCode = "100",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Financial Solutions Inc.",

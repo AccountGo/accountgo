@@ -171,6 +171,8 @@ public static class AccountGoApp
         // Free-tier limits: off unless ENTITLEMENTS_ENABLED (hosted values come from the deployment environment).
         builder.Services.AddSingleton(Api.Options.EntitlementsConfiguration.FromConfiguration(builder.Configuration));
         builder.Services.AddScoped<Core.Entitlements.IEntitlementService, Services.Entitlements.CommunityEntitlementService>();
+        // Community default: billing off, immediate plan switches. Hosted BillingModule replaces IBillingProvider.
+        builder.Services.AddScoped<Core.Billing.IBillingProvider, Services.Billing.CommunityBillingProvider>();
         builder.Services.AddMemoryCache();
         builder.Services.AddExceptionHandler<Api.Filters.MultiTenancyExceptionHandler>();
 
