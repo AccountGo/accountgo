@@ -18,6 +18,18 @@
       "constraints": {
         "regions": ["ENAM", "WNAM"]
       }
+    },
+    // Phase 0 side-by-side V2 (durable_object policy). Keep V1 unchanged for rollback.
+    {
+      "name": "accountgo-api-v2",
+      "class_name": "AccountGoApiContainerV2",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "dockerfile": "./Dockerfile",
+          "build_context": "../.."
+        }
+      }
     }
   ],
   "durable_objects": {
@@ -25,6 +37,10 @@
       {
         "name": "CONTAINER",
         "class_name": "AccountGoApiContainer"
+      },
+      {
+        "name": "CONTAINER_V2",
+        "class_name": "AccountGoApiContainerV2"
       }
     ]
   },
@@ -42,11 +58,20 @@
       "new_sqlite_classes": [
         "AccountGoApiContainer"
       ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "AccountGoApiContainerV2"
+      ]
     }
   ],
   "vars": {
     "ENVIRONMENT": "Development",
     "CONTAINER_NAME": "local",
+    // Phase 0: keep false until V2 is validated. Isolation remains one shared writer.
+    "TIERED_CAPACITY_ENABLED": "false",
+    "CONTAINER_INSTANCE_TYPE": "standard-1",
     "DatabaseProvider": "Sqlite",
     "EMAIL_PROVIDER": "Console",
     "PUBLIC_WEB_URL": "http://localhost:3000",

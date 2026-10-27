@@ -18,6 +18,17 @@
       "constraints": {
         "regions": ["ENAM", "WNAM"]
       }
+    },
+    {
+      "name": "accountgo-api-v2",
+      "class_name": "AccountGoApiContainerV2",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "dockerfile": "./Dockerfile",
+          "build_context": "../.."
+        }
+      }
     }
   ],
   "durable_objects": {
@@ -25,6 +36,10 @@
       {
         "name": "CONTAINER",
         "class_name": "AccountGoApiContainer"
+      },
+      {
+        "name": "CONTAINER_V2",
+        "class_name": "AccountGoApiContainerV2"
       }
     ]
   },
@@ -43,11 +58,19 @@
       "new_sqlite_classes": [
         "AccountGoApiContainer"
       ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "AccountGoApiContainerV2"
+      ]
     }
   ],
   "vars": {
     "ENVIRONMENT": "Development",
     "CONTAINER_NAME": "local",
+    "TIERED_CAPACITY_ENABLED": "false",
+    "CONTAINER_INSTANCE_TYPE": "standard-1",
     "DatabaseProvider": "Sqlite",
     "EMAIL_PROVIDER": "Console",
     "PUBLIC_WEB_URL": "http://localhost:3000",
