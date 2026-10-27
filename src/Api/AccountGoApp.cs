@@ -294,16 +294,24 @@ public static class AccountGoApp
                 RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     _ => new FixedWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 
-            // Chained Limiter Level 1: Global IP limiter for auth endpoints (loosened to 30 req/15 min)
+            // Chained Limiter Level 1: IP guard for anonymous Factor-A endpoints only.
+            // Do NOT apply to /api/auth/mfa/* or session routes — MFA enroll/challenge traffic
+            // was exhausting this budget and blocking login OTP sends (HTTP 429).
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
             {
                 var path = ctx.Request.Path.Value ?? string.Empty;
-                if (path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase))
+                var isFactorAAuth =
+                    path.Equals("/api/auth/send-otp", StringComparison.OrdinalIgnoreCase)
+                    || path.Equals("/api/auth/verify-otp", StringComparison.OrdinalIgnoreCase)
+                    || path.Equals("/api/auth/signup", StringComparison.OrdinalIgnoreCase)
+                    || path.Equals("/api/auth/google", StringComparison.OrdinalIgnoreCase);
+
+                if (isFactorAAuth)
                 {
                     var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                     return RateLimitPartition.GetSlidingWindowLimiter($"auth_ip_{ip}", _ => new SlidingWindowRateLimiterOptions
                     {
-                        PermitLimit = builder.Environment.IsDevelopment() ? 1000 : 30,
+                        PermitLimit = builder.Environment.IsDevelopment() ? 1000 : 60,
                         Window = TimeSpan.FromMinutes(15),
                         SegmentsPerWindow = 3,
                         QueueLimit = 0
