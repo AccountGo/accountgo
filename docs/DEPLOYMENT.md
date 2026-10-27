@@ -86,6 +86,12 @@ docker run -d \
 | `RESEND_API_KEY` | Resend API key when `EMAIL_PROVIDER=Resend` |
 | `ANTER_API_KEY` / `ANTER_PROJECT_ID` | Optional AccountGo Assistant; set via secrets / env — do not commit |
 | `JwtSettings__validIssuer` / `validAudience` | Match your public API origin |
+| `ENTITLEMENTS_ENABLED` | Optional. `"true"` turns on free-tier quota checks; unset/`false` = unlimited (self-host default) |
+| `ENTITLEMENTS_SELF_SERVICE_PLANS` | Optional comma list (e.g. `invoicing,accounting`). Empty when entitlements off = all known plans |
+| `ENTITLEMENTS_FREE_*` | Optional per-resource free limits (see `.env.example`). Missing key = unlimited for that resource |
+| `SUPPORT_EMAIL` | Shown when a quota is exceeded |
+
+Hosted AccountGo Cloud billing (payment provider keys, price IDs, `REQUIRED_MODULES`) is configured only in the private ops overlay — not in this public repo.
 
 > [!CAUTION]
 > Never commit real secret keys, D1 database IDs for production SaaS, or Cloudflare API tokens to a public repository.
