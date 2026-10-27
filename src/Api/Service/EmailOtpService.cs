@@ -91,8 +91,17 @@ namespace Api.Service
                         var secondsSinceLastSend = (DateTime.UtcNow - existingPayload.LastSentAt).TotalSeconds;
                         if (secondsSinceLastSend < ResendCooldownSeconds)
                         {
-                            var waitRemaining = (int)Math.Ceiling(ResendCooldownSeconds - secondsSinceLastSend);
-                            return (false, string.Empty, 0, $"Please wait {waitRemaining} seconds before requesting a new code.", null);
+                            // Do not fail the request: a valid code is already in the user's inbox.
+                            // Returning 400 blocked the SPA from advancing to the OTP entry step.
+                            var secondsRemaining = Math.Max(
+                                1,
+                                (int)Math.Ceiling((existingPayload.ExpiresAt - DateTime.UtcNow).TotalSeconds));
+                            return (
+                                true,
+                                "A verification code was already sent. Enter that code to continue, or wait a moment before requesting a new one.",
+                                Math.Min(OtpExpirySeconds, secondsRemaining),
+                                null,
+                                null);
                         }
                     }
                 }

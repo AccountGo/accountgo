@@ -132,6 +132,17 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const goToOtpEntry = (opts?: { expiresInSeconds?: number; notice?: string | null; clearDigits?: boolean }) => {
+    setStep(2);
+    setResendCooldown(30);
+    setExpirySeconds(opts?.expiresInSeconds ?? 300);
+    setDevCode(null);
+    if (opts?.clearDigits !== false) {
+      setOtp(['', '', '', '', '', '']);
+    }
+    setErrorMessage(opts?.notice ?? null);
+  };
+
   // Submit Step 1 (Sign In): Send OTP code
   const handleSendCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -145,21 +156,38 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
 
     try {
       const res = await sendOtp(email);
-      setStep(2);
-      setResendCooldown(30);
-      setExpirySeconds(res.expiresInSeconds || 300);
+      goToOtpEntry({ expiresInSeconds: res.expiresInSeconds || 300, notice: null });
       if (res.devCode) {
         setDevCode(res.devCode);
         setOtp(res.devCode.split(''));
-      } else {
-        setDevCode(null);
-        setOtp(['', '', '', '', '', '']);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to send verification code.');
+      const message = String(err?.message || 'Failed to send verification code.');
+      // Rate-limit / cooldown: a code may already be in the inbox — still open the entry step.
+      const alreadyHaveCode =
+        /too many|wait .* (second|minute)|already (been )?sent|try again/i.test(message);
+      if (alreadyHaveCode) {
+        goToOtpEntry({
+          expiresInSeconds: 300,
+          notice: `${message} If you already received a code, enter it below.`,
+        });
+      } else {
+        setErrorMessage(message);
+      }
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleEnterExistingCode = () => {
+    if (!email || !email.includes('@')) {
+      setErrorMessage('Enter your work email first, then open the code entry step.');
+      return;
+    }
+    goToOtpEntry({
+      expiresInSeconds: 300,
+      notice: 'Enter the 6-digit code from your email. Request a new code only if this one has expired.',
+    });
   };
 
   // Submit Step 1 (Sign Up): Register account & Send Welcome OTP
@@ -471,7 +499,14 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   )}
                 </button>
 
-                <div className="text-center pt-2">
+                <div className="flex flex-col items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleEnterExistingCode}
+                    className="text-xs text-[var(--text-secondary)] hover:text-[var(--brand-primary)] transition-colors cursor-pointer"
+                  >
+                    Already have a code? <span className="font-semibold text-[var(--brand-primary)] underline">Enter it here</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
