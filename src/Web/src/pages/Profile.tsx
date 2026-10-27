@@ -983,14 +983,14 @@ export const Profile: React.FC = () => {
 
               <span
                 className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${
-                  mfaMethods?.mfaEnabled
+                  mfaMethods?.totpConfigured
                     ? 'bg-emerald-500/10 text-emerald-400'
                     : 'bg-zinc-500/10 text-zinc-400'
                 }`}
               >
                 {isLoadingMfa
                   ? 'Checking...'
-                  : mfaMethods?.mfaEnabled
+                  : mfaMethods?.totpConfigured
                   ? 'Enabled'
                   : 'Disabled'}
               </span>
@@ -1010,7 +1010,7 @@ export const Profile: React.FC = () => {
               </div>
             )}
 
-            {mfaMethods?.mfaEnabled && mfaMethods.recoveryCodesRemaining <= 2 && (
+            {mfaMethods?.totpConfigured && mfaMethods.recoveryCodesRemaining <= 2 && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>
@@ -1019,7 +1019,7 @@ export const Profile: React.FC = () => {
               </div>
             )}
 
-            {mfaMethods?.mfaEnabled ? (
+            {mfaMethods?.totpConfigured ? (
               <div className="space-y-4">
                 <div className="p-4 rounded-xl bg-[var(--bg-subtle)] space-y-2">
                   <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-main)]">
