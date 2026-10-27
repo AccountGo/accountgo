@@ -17,6 +17,8 @@ export interface Env {
   SECRET_KEY?: string;
   SECRET__key?: string;
   BUILD_SHA?: string;
+  TURNSTILE_SECRET?: string;
+  TURNSTILE_HOSTNAMES?: string;
   CF_VERSION_METADATA?: {
     id: string;
     tag: string;

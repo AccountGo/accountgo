@@ -5,12 +5,14 @@ using System.ComponentModel.DataAnnotations;
 namespace Dto.Security
 {
     public record SendOtpRequest(
-        [Required, EmailAddress] string Email
+        [Required, EmailAddress] string Email,
+        [property: System.Text.Json.Serialization.JsonPropertyName("cf-turnstile-response")] string? TurnstileResponse = null
     );
 
     public record VerifyOtpRequest(
         [Required, EmailAddress] string Email,
-        [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "OTP must be exactly 6 digits.")] string Otp
+        [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "OTP must be exactly 6 digits.")] string Otp,
+        [property: System.Text.Json.Serialization.JsonPropertyName("cf-turnstile-response")] string? TurnstileResponse = null
     );
 
     public record GoogleSignInRequest(
@@ -86,6 +88,8 @@ namespace Dto.Security
     {
         #nullable disable
         public string InvitationToken { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("cf-turnstile-response")]
+        public string TurnstileResponse { get; set; }
         #nullable restore
     }
 

@@ -5,6 +5,7 @@ import { getPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
 import { clearInvitationToken, getInvitationToken, storeInvitationToken } from '../lib/invitationStorage';
 import { MfaChallenge } from '../components/mfa/MfaChallenge';
 import { MfaEnrollWizard } from '../components/mfa/MfaEnrollWizard';
+import { TurnstileWidget, TurnstileWidgetHandle } from '../components/TurnstileWidget';
 import { MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
 import {
   Mail,
@@ -60,6 +61,13 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Turnstile verification tokens and widget refs
+  const [turnstileToken, setTurnstileToken] = useState<string>('');
+  const [verifyTurnstileToken, setVerifyTurnstileToken] = useState<string>('');
+  const signInTurnstileRef = useRef<TurnstileWidgetHandle>(null);
+  const signUpTurnstileRef = useRef<TurnstileWidgetHandle>(null);
+  const verifyTurnstileRef = useRef<TurnstileWidgetHandle>(null);
 
   // Timers
   const [resendCooldown, setResendCooldown] = useState<number>(0);
@@ -155,13 +163,15 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     setIsSending(true);
 
     try {
-      const res = await sendOtp(email);
+      const res = await sendOtp(email, turnstileToken);
       goToOtpEntry({ expiresInSeconds: res.expiresInSeconds || 300, notice: null });
       if (res.devCode) {
         setDevCode(res.devCode);
         setOtp(res.devCode.split(''));
       }
     } catch (err: any) {
+      signInTurnstileRef.current?.reset();
+      setTurnstileToken('');
       const message = String(err?.message || 'Failed to send verification code.');
       // Rate-limit / cooldown: a code may already be in the inbox — still open the entry step.
       const alreadyHaveCode =
@@ -215,6 +225,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
         lastName: lastName.trim(),
         email: email.trim(),
         invitationToken: invitationToken || undefined,
+        'cf-turnstile-response': turnstileToken,
       });
 
       if (res.orgSlug) {
@@ -232,6 +243,8 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
         setOtp(['', '', '', '', '', '']);
       }
     } catch (err: any) {
+      signUpTurnstileRef.current?.reset();
+      setTurnstileToken('');
       setErrorMessage(err.message || 'Registration failed. Please try again.');
     } finally {
       setIsSending(false);
@@ -302,7 +315,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     let verified = false;
 
     try {
-      const result = await verifyOtp(email, code);
+      const result = await verifyOtp(email, code, verifyTurnstileToken);
 
       if (result.type === 'mfa_required') {
         setMfaChallengeData(result.data);
@@ -321,6 +334,8 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       verified = true;
       await handlePostAuthSuccess();
     } catch (err: any) {
+      verifyTurnstileRef.current?.reset();
+      setVerifyTurnstileToken('');
       setErrorMessage(err.message || 'Invalid or expired verification code.');
     } finally {
       // After verification, keep ownership so auth redirects cannot replace acceptance errors or navigation.
@@ -479,6 +494,16 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   </div>
                 )}
 
+                {/* Turnstile Bot Protection */}
+                <div className="flex justify-center pt-1">
+                  <TurnstileWidget
+                    ref={signInTurnstileRef}
+                    action="login"
+                    onVerify={(token) => setTurnstileToken(token)}
+                    onExpire={() => setTurnstileToken('')}
+                  />
+                </div>
+
                 {/* Submit Button */}
                 <button
                   type="submit"
@@ -622,6 +647,16 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                     )}
                   </div>
                 )}
+
+                {/* Turnstile Bot Protection */}
+                <div className="flex justify-center pt-1">
+                  <TurnstileWidget
+                    ref={signUpTurnstileRef}
+                    action="signup"
+                    onVerify={(token) => setTurnstileToken(token)}
+                    onExpire={() => setTurnstileToken('')}
+                  />
+                </div>
 
                 {/* Submit Sign Up */}
                 <button
@@ -769,6 +804,16 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   />
                 ))}
               </div>
+            </div>
+
+            {/* Turnstile Bot Protection */}
+            <div className="flex justify-center pt-1">
+              <TurnstileWidget
+                ref={verifyTurnstileRef}
+                action="verify_otp"
+                onVerify={(token) => setVerifyTurnstileToken(token)}
+                onExpire={() => setVerifyTurnstileToken('')}
+              />
             </div>
 
             {/* Verify Action Button */}

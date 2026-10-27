@@ -60,6 +60,7 @@ export interface SignUpPayload {
   organizationSlug?: string;
   currency?: string;
   invitationToken?: string;
+  'cf-turnstile-response'?: string;
 }
 
 export interface SignUpResponse {
@@ -122,9 +123,9 @@ export interface AuthContextType {
   isLoading: boolean;
   /** The API is starting up (after an update or a quiet spell); the session is kept while it does. */
   isStarting: boolean;
-  sendOtp: (email: string) => Promise<OtpSendResponse>;
+  sendOtp: (email: string, turnstileToken?: string) => Promise<OtpSendResponse>;
   signUp: (payload: SignUpPayload) => Promise<SignUpResponse>;
-  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpResult>;
+  verifyOtp: (email: string, otp: string, turnstileToken?: string) => Promise<VerifyOtpResult>;
   completeSession: (authData: AuthResponse) => void;
   completeStepUp: (newToken: string) => void;
   logout: () => Promise<void>;

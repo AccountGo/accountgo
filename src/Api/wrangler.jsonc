@@ -86,7 +86,8 @@
     "Cors__AllowedOrigins__0": "http://localhost:3000",
     "Cors__AllowedOrigins__1": "http://localhost:5173",
     "ANTER_BASE_URL": "https://agents.anter.ai",
-    "ANTER_AGENT_SLUG": "accountgo-assistant"
+    "ANTER_AGENT_SLUG": "accountgo-assistant",
+    "TURNSTILE_HOSTNAMES": "localhost, 127.0.0.1, accountgo.dev, app.accountgo.dev"
   },
   "observability": {
     "enabled": true,

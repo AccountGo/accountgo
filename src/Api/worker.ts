@@ -351,6 +351,73 @@ export class AccountGoApiContainer extends Container<Env> {
 
 let loggedContainerName = false;
 
+interface TurnstileVerifyResponse {
+  success: boolean;
+  action?: string;
+  hostname?: string;
+  "error-codes"?: string[];
+}
+
+async function verifyTurnstile(
+  token: unknown,
+  expectedAction: string,
+  secret: string | undefined,
+  hostnamesConfig: string | undefined,
+  clientIp: string | null
+): Promise<boolean> {
+  // If no secret configured, skip gating (allows running when Turnstile is disabled)
+  if (!secret) return true;
+
+  const expectedHostnames = new Set(
+    (hostnamesConfig ?? "localhost, 127.0.0.1, accountgo.dev, app.accountgo.dev")
+      .split(",")
+      .map((hostname) => hostname.trim())
+      .filter(Boolean)
+  );
+
+  if (
+    typeof token !== "string" ||
+    token.length === 0 ||
+    token.length > 2048 ||
+    expectedHostnames.size === 0
+  ) {
+    return false;
+  }
+
+  let result: TurnstileVerifyResponse;
+  try {
+    const body = new URLSearchParams({
+      secret,
+      response: token,
+    });
+    if (clientIp) {
+      body.set("remoteip", clientIp);
+    }
+
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      signal: AbortSignal.timeout(10_000),
+      body,
+    });
+    if (!r.ok) throw new Error(`siteverify ${r.status}`);
+    result = (await r.json()) as TurnstileVerifyResponse;
+  } catch {
+    return false;
+  }
+
+  if (
+    !result.success ||
+    result.action !== expectedAction ||
+    !result.hostname ||
+    !expectedHostnames.has(result.hostname)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -363,6 +430,56 @@ export default {
           headers: { "Content-Type": "application/json" },
         }
       );
+    }
+
+    const authActions: Record<string, string> = {
+      "/api/auth/send-otp": "login",
+      "/api/auth/signup": "signup",
+      "/api/auth/verify-otp": "verify_otp",
+    };
+
+    if (request.method === "POST" && authActions[url.pathname]) {
+      const expectedAction = authActions[url.pathname];
+      let bodyText = "";
+      let token: string | null = request.headers.get("cf-turnstile-response");
+
+      try {
+        bodyText = await request.text();
+        if (bodyText) {
+          const parsed = JSON.parse(bodyText);
+          if (parsed && typeof parsed["cf-turnstile-response"] === "string") {
+            token = parsed["cf-turnstile-response"];
+          }
+        }
+      } catch {
+        // Fall back to header
+      }
+
+      const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for");
+      const isValid = await verifyTurnstile(
+        token,
+        expectedAction,
+        env.TURNSTILE_SECRET,
+        env.TURNSTILE_HOSTNAMES,
+        clientIp
+      );
+
+      if (!isValid) {
+        return new Response(
+          JSON.stringify({
+            title: "Forbidden",
+            status: 403,
+            detail: "Turnstile verification failed",
+          }),
+          { status: 403, headers: { "content-type": "application/problem+json" } }
+        );
+      }
+
+      request = new Request(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: bodyText,
+      });
     }
 
     const isAdminRequest =

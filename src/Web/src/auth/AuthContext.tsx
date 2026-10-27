@@ -138,11 +138,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [performRefresh]);
 
   // Request 6-digit OTP code
-  const sendOtp = useCallback(async (email: string): Promise<OtpSendResponse> => {
+  const sendOtp = useCallback(async (email: string, turnstileToken?: string): Promise<OtpSendResponse> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (turnstileToken) {
+      headers['cf-turnstile-response'] = turnstileToken;
+    }
     const res = await fetchWith503Retry('/api/auth/send-otp', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim() }),
+      headers,
+      body: JSON.stringify({
+        email: email.trim(),
+        ...(turnstileToken ? { 'cf-turnstile-response': turnstileToken } : {}),
+      }),
     });
 
     const data = await res.json().catch(() => null);
@@ -167,9 +174,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Register a new user & request activation code
   const signUp = useCallback(async (payload: SignUpPayload): Promise<SignUpResponse> => {
+    const turnstileToken = payload['cf-turnstile-response'];
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (turnstileToken) {
+      headers['cf-turnstile-response'] = turnstileToken;
+    }
     const res = await fetch('/api/auth/signup', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         email: payload.email.trim(),
         firstName: payload.firstName.trim(),
@@ -178,6 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         organizationSlug: payload.organizationSlug?.trim() || undefined,
         currency: payload.currency || 'USD',
         invitationToken: payload.invitationToken || undefined,
+        ...(turnstileToken ? { 'cf-turnstile-response': turnstileToken } : {}),
       }),
     });
 
@@ -205,13 +218,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Verify OTP code & establish session (or return MFA challenge)
-  const verifyOtp = useCallback(async (email: string, otp: string): Promise<VerifyOtpResult> => {
+  const verifyOtp = useCallback(async (email: string, otp: string, turnstileToken?: string): Promise<VerifyOtpResult> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (turnstileToken) {
+      headers['cf-turnstile-response'] = turnstileToken;
+    }
     const res = await fetchWith503Retry('/api/auth/verify-otp', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         email: email.trim(),
         otp: otp.trim(),
+        ...(turnstileToken ? { 'cf-turnstile-response': turnstileToken } : {}),
       }),
       credentials: 'include',
     });
