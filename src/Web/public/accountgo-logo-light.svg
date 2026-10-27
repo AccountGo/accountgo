@@ -1,49 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 52" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 248 64" fill="none">
+  <title>AccountGo</title>
   <defs>
-    <linearGradient id="lightMarkLeft" x1="0%" y1="100%" x2="50%" y2="0%">
-      <stop offset="0%" stop-color="#1e40af" />
-      <stop offset="40%" stop-color="#2563eb" />
-      <stop offset="100%" stop-color="#38bdf8" />
+    <linearGradient id="aglArch" x1="13" y1="0" x2="99" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="0.5" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#6366F1"/>
     </linearGradient>
-
-    <linearGradient id="lightMarkRight" x1="50%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="60%" stop-color="#2563eb" />
-      <stop offset="100%" stop-color="#1d4ed8" />
+    <linearGradient id="aglArrow" x1="27" y1="89" x2="120" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.55" stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#C084FC"/>
     </linearGradient>
-
-    <linearGradient id="lightArrowGo" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0284c7" />
-      <stop offset="45%" stop-color="#06b6d4" />
-      <stop offset="100%" stop-color="#059669" />
+    <mask id="aglGap" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="#fff"/>
+      <path d="M51.6 77.1C66.2 68.9 81.8 56.2 101 37" stroke="#000" stroke-width="30"/>
+    </mask>
+    <linearGradient id="aglGo" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#A855F7"/>
     </linearGradient>
-
-    <linearGradient id="lightTextGo" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#2563eb" />
-      <stop offset="100%" stop-color="#0284c7" />
-    </linearGradient>
-
-    <filter id="lightDropShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.12"/>
-    </filter>
   </defs>
-
-  <!-- Left Icon Mark -->
-  <g transform="translate(4, 4) scale(0.38)" filter="url(#lightDropShadow)">
-    <path d="M 28 94 L 54 22 C 55.5 18 58.5 16 62 16 C 65.5 16 68.5 18 70 22 L 78 43 L 64 43 L 58 27 L 38 90 C 37 93 34 95 30.5 95 C 27.5 95 25 93 25 90.5 C 25 89.5 25.5 88.5 28 94 Z"
-          fill="url(#lightMarkLeft)" />
-
-    <path d="M 66 32 L 92 90 C 93.5 93 92.5 96 89.5 96 C 87 96 84.5 94.5 83.5 92 L 67 56 L 77 32 Z"
-          fill="url(#lightMarkRight)" />
-
-    <path d="M 22 61 C 22 58.5 24 56.5 26.5 56.5 L 82 56.5 L 75 49 C 73.5 47.5 73.5 45 75 43.5 C 76.5 42 79 42 80.5 43.5 L 94.5 57.5 C 96 59 96 61.5 94.5 63 L 80.5 77 C 79 78.5 76.5 78.5 75 77 C 73.5 75.5 73.5 73 75 71.5 L 82 64.5 L 26.5 64.5 C 24 64.5 22 62.5 22 61 Z"
-          fill="url(#lightArrowGo)" />
-
-    <circle cx="94" cy="91" r="5" fill="#38bdf8" />
+  <g transform="scale(0.5)">
+      <path d="M23 88C47 83 69 69 99 39" stroke="url(#aglArrow)" stroke-width="18" stroke-linecap="round"/>
+      <path d="M120.2 17.8L113.1 53.1L84.9 24.9Z" fill="url(#aglArrow)" stroke="url(#aglArrow)" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M17 107C27 59 37 23 55 23C73 23 83 59 93 107" stroke="url(#aglArch)" stroke-width="18" stroke-linecap="round" mask="url(#aglGap)"/>
   </g>
-
-  <!-- Typographic Wordmark -->
-  <text x="54" y="34" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif" font-size="25" font-weight="600" letter-spacing="-0.5" fill="#0f172a">
-    Account<tspan font-weight="800" fill="url(#lightTextGo)">Go</tspan>
-  </text>
+  <text x="72" y="43" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="30" font-weight="650" letter-spacing="-0.6" fill="#0F172A">Account<tspan font-weight="800" fill="url(#aglGo)">Go</tspan></text>
 </svg>

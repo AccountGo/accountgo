@@ -1,47 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <title>AccountGo</title>
   <defs>
-    <linearGradient id="favBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e293b"/>
+    <linearGradient id="agiBg" x1="64" y1="0" x2="64" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1A2138"/>
+      <stop offset="1" stop-color="#090C16"/>
     </linearGradient>
-
-    <linearGradient id="favAscend" x1="0%" y1="100%" x2="50%" y2="0%">
-      <stop offset="0%" stop-color="#1d4ed8" />
-      <stop offset="50%" stop-color="#2563eb" />
-      <stop offset="100%" stop-color="#38bdf8" />
+    <linearGradient id="agiEdge" x1="64" y1="0" x2="64" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.03"/>
     </linearGradient>
-
-    <linearGradient id="favDescend" x1="50%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="50%" stop-color="#2563eb" />
-      <stop offset="100%" stop-color="#1e40af" />
+    <radialGradient id="agiGlow" cx="64" cy="68" r="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#3B82F6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="agiArch" x1="13" y1="0" x2="99" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="0.5" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#6366F1"/>
     </linearGradient>
-
-    <linearGradient id="favGo" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0284c7" />
-      <stop offset="45%" stop-color="#06b6d4" />
-      <stop offset="100%" stop-color="#10b981" />
+    <linearGradient id="agiArrow" x1="27" y1="89" x2="120" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.55" stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#C084FC"/>
     </linearGradient>
+    <mask id="agiGap" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="#fff"/>
+      <path d="M51.6 77.1C66.2 68.9 81.8 56.2 101 37" stroke="#000" stroke-width="30"/>
+    </mask>
   </defs>
-
-  <!-- Squircle Base -->
-  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#favBg)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
-
-  <!-- Centered Scaled 'A' + 'Go' Chevron -->
-  <g transform="translate(2, 2) scale(0.5)">
-    <!-- Left Ascending Stem -->
-    <path d="M 28 94 L 54 22 C 55.5 18 58.5 16 62 16 C 65.5 16 68.5 18 70 22 L 78 43 L 64 43 L 58 27 L 38 90 C 37 93 34 95 30.5 95 C 27.5 95 25 93 25 90.5 C 25 89.5 25.5 88.5 28 94 Z"
-          fill="url(#favAscend)" />
-
-    <!-- Right Descending Stem -->
-    <path d="M 66 32 L 92 90 C 93.5 93 92.5 96 89.5 96 C 87 96 84.5 94.5 83.5 92 L 67 56 L 77 32 Z"
-          fill="url(#favDescend)" />
-
-    <!-- Forward 'Go' Arrow & Ledger Beam -->
-    <path d="M 22 61 C 22 58.5 24 56.5 26.5 56.5 L 82 56.5 L 75 49 C 73.5 47.5 73.5 45 75 43.5 C 76.5 42 79 42 80.5 43.5 L 94.5 57.5 C 96 59 96 61.5 94.5 63 L 80.5 77 C 79 78.5 76.5 78.5 75 77 C 73.5 75.5 73.5 73 75 71.5 L 82 64.5 L 26.5 64.5 C 24 64.5 22 62.5 22 61 Z"
-          fill="url(#favGo)" />
-
-    <!-- Accent Dot -->
-    <circle cx="94" cy="91" r="5" fill="#38bdf8" />
+  <rect x="2" y="2" width="124" height="124" rx="30" fill="url(#agiBg)"/>
+  <rect x="2.75" y="2.75" width="122.5" height="122.5" rx="29.25" stroke="url(#agiEdge)" stroke-width="1.5"/>
+  <circle cx="64" cy="68" r="52" fill="url(#agiGlow)"/>
+  <g transform="translate(16.64 16.64) scale(0.74)">
+      <path d="M23 88C47 83 69 69 99 39" stroke="url(#agiArrow)" stroke-width="18" stroke-linecap="round"/>
+      <path d="M120.2 17.8L113.1 53.1L84.9 24.9Z" fill="url(#agiArrow)" stroke="url(#agiArrow)" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M17 107C27 59 37 23 55 23C73 23 83 59 93 107" stroke="url(#agiArch)" stroke-width="18" stroke-linecap="round" mask="url(#agiGap)"/>
   </g>
 </svg>

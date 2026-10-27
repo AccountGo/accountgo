@@ -1,71 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <title>AccountGo</title>
   <defs>
-    <!-- Dark Polished Slate Squircle Background -->
-    <linearGradient id="tileBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0b1120"/>
-      <stop offset="50%" stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e293b"/>
+    <linearGradient id="agsBg" x1="64" y1="0" x2="64" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1A2138"/>
+      <stop offset="1" stop-color="#090C16"/>
     </linearGradient>
-
-    <!-- Top Border Highlight for 3D Depth -->
-    <linearGradient id="borderGleam" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="rgba(255, 255, 255, 0.25)"/>
-      <stop offset="40%" stop-color="rgba(56, 189, 248, 0.2)"/>
-      <stop offset="100%" stop-color="rgba(255, 255, 255, 0.03)"/>
+    <linearGradient id="agsEdge" x1="64" y1="0" x2="64" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.03"/>
     </linearGradient>
-
-    <!-- Mark Gradients -->
-    <linearGradient id="sqLegLeft" x1="0%" y1="100%" x2="50%" y2="0%">
-      <stop offset="0%" stop-color="#1d4ed8" />
-      <stop offset="40%" stop-color="#2563eb" />
-      <stop offset="100%" stop-color="#38bdf8" />
+    <radialGradient id="agsGlow" cx="64" cy="68" r="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#3B82F6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="agsArch" x1="13" y1="0" x2="99" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="0.5" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#6366F1"/>
     </linearGradient>
-
-    <linearGradient id="sqLegRight" x1="50%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="60%" stop-color="#2563eb" />
-      <stop offset="100%" stop-color="#1e40af" />
+    <linearGradient id="agsArrow" x1="27" y1="89" x2="120" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.55" stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#C084FC"/>
     </linearGradient>
-
-    <linearGradient id="sqArrowGo" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0284c7" />
-      <stop offset="45%" stop-color="#06b6d4" />
-      <stop offset="100%" stop-color="#10b981" />
-    </linearGradient>
-
-    <filter id="tileGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="3" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
-
-    <filter id="markShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.45"/>
-    </filter>
+    <mask id="agsGap" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="#fff"/>
+      <path d="M51.6 77.1C66.2 68.9 81.8 56.2 101 37" stroke="#000" stroke-width="30"/>
+    </mask>
   </defs>
-
-  <!-- Background Squircle -->
-  <rect x="4" y="4" width="120" height="120" rx="30" fill="url(#tileBg)" />
-  <rect x="4" y="4" width="120" height="120" rx="30" fill="none" stroke="url(#borderGleam)" stroke-width="1.5" />
-
-  <!-- Ambient Under-Glow behind the Mark -->
-  <circle cx="64" cy="64" r="34" fill="#2563eb" opacity="0.18" filter="url(#tileGlow)" />
-
-  <!-- Centered Scaled Logo Mark -->
-  <g transform="translate(4, 4)" filter="url(#markShadow)">
-    <!-- Left Ascending Stem -->
-    <path d="M 30 94 L 56 22 C 57.5 18 60.5 16 64 16 C 67.5 16 70.5 18 72 22 L 80 43 L 66 43 L 60 27 L 40 90 C 39 93 36 95 32.5 95 C 29.5 95 27 93 27 90.5 C 27 89.5 27.5 88.5 30 94 Z"
-          fill="url(#sqLegLeft)" />
-
-    <!-- Right Descending Stem -->
-    <path d="M 68 32 L 94 90 C 95.5 93 94.5 96 91.5 96 C 89 96 86.5 94.5 85.5 92 L 69 56 L 79 32 Z"
-          fill="url(#sqLegRight)" />
-
-    <!-- Forward 'Go' Arrow & Ledger Beam -->
-    <path d="M 24 61 C 24 58.5 26 56.5 28.5 56.5 L 84 56.5 L 77 49 C 75.5 47.5 75.5 45 77 43.5 C 78.5 42 81 42 82.5 43.5 L 96.5 57.5 C 98 59 98 61.5 96.5 63 L 82.5 77 C 81 78.5 78.5 78.5 77 77 C 75.5 75.5 75.5 73 77 71.5 L 84 64.5 L 28.5 64.5 C 26 64.5 24 62.5 24 61 Z"
-          fill="url(#sqArrowGo)"
-          filter="url(#tileGlow)" />
-
-    <!-- Foundation Dot -->
-    <circle cx="96" cy="91" r="5" fill="#38bdf8" />
+  <rect x="2" y="2" width="124" height="124" rx="30" fill="url(#agsBg)"/>
+  <rect x="2.75" y="2.75" width="122.5" height="122.5" rx="29.25" stroke="url(#agsEdge)" stroke-width="1.5"/>
+  <circle cx="64" cy="68" r="52" fill="url(#agsGlow)"/>
+  <g transform="translate(16.64 16.64) scale(0.74)">
+      <path d="M23 88C47 83 69 69 99 39" stroke="url(#agsArrow)" stroke-width="18" stroke-linecap="round"/>
+      <path d="M120.2 17.8L113.1 53.1L84.9 24.9Z" fill="url(#agsArrow)" stroke="url(#agsArrow)" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M17 107C27 59 37 23 55 23C73 23 83 59 93 107" stroke="url(#agsArch)" stroke-width="18" stroke-linecap="round" mask="url(#agsGap)"/>
   </g>
 </svg>
