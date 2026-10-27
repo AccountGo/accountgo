@@ -41,7 +41,7 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
     setErrorMessage(null);
 
     try {
-      const beginRes = await fetch('/api/auth/mfa/webauthn/assertion/begin', {
+      const beginRes = await fetch('/api/auth/mfa/webauthn/assertion/options', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

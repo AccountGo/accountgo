@@ -19,6 +19,8 @@ import { createPasskeyCredential, isWebAuthnSupported } from '../../lib/webauthn
 interface MfaEnrollWizardProps {
   /** If provided, enrollment is forced via this enroll-only token */
   enrollToken?: string;
+  /** Session-authenticated fetch (Profile enroll). Required when enrollToken is absent. */
+  authFetch?: (url: string, init?: RequestInit) => Promise<Response>;
   onSuccess?: (authResponse: AuthResponse) => void;
   onComplete?: () => void;
   onCancel?: () => void;
@@ -26,6 +28,7 @@ interface MfaEnrollWizardProps {
 
 export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
   enrollToken,
+  authFetch,
   onSuccess,
   onComplete,
   onCancel,
@@ -45,23 +48,34 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
   const [acknowledgedCodes, setAcknowledgedCodes] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const mfaFetch = async (url: string, init?: RequestInit): Promise<Response> => {
+    if (enrollToken) {
+      const headers = new Headers(init?.headers);
+      headers.set('Authorization', `Bearer ${enrollToken}`);
+      if (!headers.has('Content-Type') && init?.body) {
+        headers.set('Content-Type', 'application/json');
+      }
+      return fetch(url, { ...init, headers, credentials: 'include' });
+    }
+    if (authFetch) {
+      return authFetch(url, init);
+    }
+    throw new Error('Missing authentication for MFA enrollment.');
+  };
+
   // Load TOTP key and URI on mount
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (enrollToken) {
-          headers['Authorization'] = `Bearer ${enrollToken}`;
-        }
-        const res = await fetch('/api/auth/mfa/totp/begin', {
+        const res = await mfaFetch('/api/auth/mfa/totp/enroll/begin', {
           method: 'POST',
-          headers,
-          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
         });
 
         if (!res.ok) {
-          throw new Error('Failed to initiate authenticator enrollment.');
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.detail || err?.message || 'Failed to initiate authenticator enrollment.');
         }
 
         const data: TotpBeginResponse = await res.json();
@@ -81,6 +95,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- begin once per enroll token / session
   }, [enrollToken]);
 
   const copyKey = async () => {
@@ -120,16 +135,10 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
     setErrorMessage(null);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (enrollToken) {
-        headers['Authorization'] = `Bearer ${enrollToken}`;
-      }
-
-      const res = await fetch('/api/auth/mfa/totp/confirm', {
+      const res = await mfaFetch('/api/auth/mfa/totp/enroll/complete', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: confirmCode.trim() }),
-        credentials: 'include',
       });
 
       const data: TotpConfirmResponse = await res.json().catch(() => null);
@@ -138,7 +147,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
         throw new Error((data as any)?.detail || (data as any)?.title || 'Invalid verification code.');
       }
 
-      setRecoveryCodes(data.recoveryCodes);
+      setRecoveryCodes(data.recoveryCodes || []);
       if (data.authResponse) {
         setFullAuthResponse(data.authResponse);
       }
@@ -155,15 +164,9 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
     setErrorMessage(null);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (enrollToken) {
-        headers['Authorization'] = `Bearer ${enrollToken}`;
-      }
-
-      const beginRes = await fetch('/api/auth/mfa/webauthn/register/begin', {
+      const beginRes = await mfaFetch('/api/auth/mfa/webauthn/register/options', {
         method: 'POST',
-        headers,
-        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
       });
 
       const options = await beginRes.json().catch(() => null);
@@ -173,14 +176,13 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
 
       const attestation = await createPasskeyCredential(options);
 
-      const completeRes = await fetch('/api/auth/mfa/webauthn/register/complete', {
+      const completeRes = await mfaFetch('/api/auth/mfa/webauthn/register/complete', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           attestation,
           nickname: 'Passkey',
         }),
-        credentials: 'include',
       });
 
       const data = await completeRes.json().catch(() => null);

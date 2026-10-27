@@ -57,13 +57,14 @@ export async function createPasskeyCredential(options: any): Promise<any> {
   const response = credential.response as AuthenticatorAttestationResponse;
   const transports = typeof (response as any).getTransports === 'function' ? (response as any).getTransports() : [];
 
+  // Fido2NetLib expects clientDataJSON (exact casing) on AuthenticatorAttestationRawResponse.
   return {
     id: credential.id,
     rawId: bufferToBase64Url(credential.rawId),
     type: credential.type,
     response: {
       attestationObject: bufferToBase64Url(response.attestationObject),
-      clientDataJson: bufferToBase64Url(response.clientDataJSON),
+      clientDataJSON: bufferToBase64Url(response.clientDataJSON),
       transports
     }
   };
@@ -96,7 +97,7 @@ export async function getPasskeyAssertion(options: any): Promise<any> {
     type: assertion.type,
     response: {
       authenticatorData: bufferToBase64Url(response.authenticatorData),
-      clientDataJson: bufferToBase64Url(response.clientDataJSON),
+      clientDataJSON: bufferToBase64Url(response.clientDataJSON),
       signature: bufferToBase64Url(response.signature),
       userHandle: response.userHandle ? bufferToBase64Url(response.userHandle) : null
     }

@@ -156,7 +156,7 @@ export const Profile: React.FC = () => {
     setIsLoadingDevices(true);
     setDevicesError(null);
     try {
-      const res = await authFetch('/api/auth/mfa/trusted-devices');
+      const res = await authFetch('/api/auth/mfa/devices');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -213,7 +213,7 @@ export const Profile: React.FC = () => {
   const handleRevokeDevice = async (id: number) => {
     setIsRevokingDevice(id);
     try {
-      const res = await authFetch(`/api/auth/mfa/trusted-devices/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/auth/mfa/devices/${id}`, { method: 'DELETE' });
       if (res.ok) {
         await loadTrustedDevices();
       }
@@ -230,7 +230,7 @@ export const Profile: React.FC = () => {
     }
     setIsRevokingAllDevices(true);
     try {
-      const res = await authFetch('/api/auth/mfa/trusted-devices/revoke-all', { method: 'POST' });
+      const res = await authFetch('/api/auth/mfa/devices/revoke-all', { method: 'POST' });
       if (res.ok) {
         await loadTrustedDevices();
       }
@@ -250,26 +250,22 @@ export const Profile: React.FC = () => {
     setIsRegisteringPasskey(true);
     setPasskeyError(null);
     try {
-      const beginRes = await authFetch('/api/auth/mfa/webauthn/register/begin', {
+      const beginRes = await authFetch('/api/auth/mfa/webauthn/register/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nickname }),
       });
       if (!beginRes.ok) {
         const err = await beginRes.json().catch(() => null);
         throw new Error(err?.detail || 'Failed to begin passkey registration.');
       }
       const creationOptions = await beginRes.json();
-      const credential = await createPasskeyCredential(creationOptions);
+      const attestation = await createPasskeyCredential(creationOptions);
 
       const completeRes = await authFetch('/api/auth/mfa/webauthn/register/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          credentialId: credential.id,
-          rawId: credential.rawId,
-          response: credential.response,
-          type: credential.type,
+          attestation,
           nickname,
         }),
       });
@@ -321,7 +317,7 @@ export const Profile: React.FC = () => {
     setIsRegeneratingCodes(true);
     setMfaError(null);
     try {
-      const res = await authFetch('/api/auth/mfa/recovery/regenerate', { method: 'POST' });
+      const res = await authFetch('/api/auth/mfa/recovery/generate', { method: 'POST' });
       if (res.status === 403) {
         const err = await res.clone().json().catch(() => null);
         if (err?.code === 'mfa_step_up_required') {
@@ -337,8 +333,9 @@ export const Profile: React.FC = () => {
         throw new Error(err?.detail || 'Failed to regenerate recovery codes.');
       }
       const data = await res.json();
-      if (data.recoveryCodes) {
-        setNewRecoveryCodes(data.recoveryCodes);
+      const codes = data.recoveryCodes || data.codes;
+      if (codes) {
+        setNewRecoveryCodes(codes);
       }
       await loadMfaMethods();
     } catch (err: any) {
@@ -364,7 +361,7 @@ export const Profile: React.FC = () => {
     setIsSteppingUp(true);
     setStepUpError(null);
     try {
-      const beginRes = await authFetch('/api/auth/mfa/step-up/webauthn/begin', { method: 'POST' });
+      const beginRes = await authFetch('/api/auth/mfa/step-up/webauthn/options', { method: 'POST' });
       if (!beginRes.ok) {
         const err = await beginRes.json().catch(() => null);
         throw new Error(err?.detail || 'Failed to initiate passkey step-up.');
@@ -375,12 +372,7 @@ export const Profile: React.FC = () => {
       const completeRes = await authFetch('/api/auth/mfa/step-up/webauthn/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          credentialId: assertion.id,
-          rawId: assertion.rawId,
-          response: assertion.response,
-          type: assertion.type,
-        }),
+        body: JSON.stringify({ assertion }),
       });
 
       if (!completeRes.ok) {
@@ -397,7 +389,11 @@ export const Profile: React.FC = () => {
         setPendingStepUpAction(null);
         await action();
       } else {
-        const disableRes = await authFetch('/api/auth/mfa/disable', { method: 'POST' });
+        const disableRes = await authFetch('/api/auth/mfa/disable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
         if (!disableRes.ok) {
           const err = await disableRes.json().catch(() => null);
           throw new Error(err?.detail || 'Failed to disable MFA.');
@@ -449,7 +445,11 @@ export const Profile: React.FC = () => {
       }
 
       // Step 2: disable MFA with fresh mfa_ts token
-      const disableRes = await authFetch('/api/auth/mfa/disable', { method: 'POST' });
+      const disableRes = await authFetch('/api/auth/mfa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
       if (!disableRes.ok) {
         const err = await disableRes.json().catch(() => null);
         throw new Error(err?.detail || 'Failed to disable MFA.');
@@ -1747,10 +1747,12 @@ export const Profile: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-lg my-8">
             <MfaEnrollWizard
+              authFetch={authFetch}
               onComplete={() => {
                 setMfaEnrollOpen(false);
                 loadMfaMethods();
                 loadPasskeys();
+                if (refreshUser) refreshUser();
                 setMfaSuccess('MFA method successfully configured!');
                 setTimeout(() => setMfaSuccess(null), 4000);
               }}
