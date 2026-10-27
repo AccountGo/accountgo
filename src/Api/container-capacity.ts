@@ -21,7 +21,11 @@ export function isTieredCapacityEnabled(
   return (value ?? "").trim().toLowerCase() === "true";
 }
 
-/** Resolve V2 start() instance from ops/env. Unknown values fall back to standard-1. */
+/**
+ * Resolve V2 start() instance from ops/env.
+ * durable_object policy accepts lite | standard-1…4 only (not "basic").
+ * "basic" / "dev" / "standard" aliases map to the nearest supported size.
+ */
 export function resolveContainerInstanceType(
   value: string | undefined | null
 ): NamedContainerInstance {
@@ -31,6 +35,9 @@ export function resolveContainerInstanceType(
   ) {
     return normalized as NamedContainerInstance;
   }
+  // Legacy / default-policy names — not accepted by durable_object start().
+  if (normalized === "dev") return "lite";
+  if (normalized === "basic" || normalized === "standard") return "standard-1";
   return DEFAULT_INSTANCE;
 }
 

@@ -21,6 +21,8 @@ test("resolveContainerInstanceType maps known sizes and falls back", () => {
   assert.equal(resolveContainerInstanceType("standard-2"), "standard-2");
   assert.equal(resolveContainerInstanceType(" STANDARD-1 "), "standard-1");
   assert.equal(resolveContainerInstanceType("basic"), "standard-1");
+  assert.equal(resolveContainerInstanceType("dev"), "lite");
+  assert.equal(resolveContainerInstanceType("standard"), "standard-1");
   assert.equal(resolveContainerInstanceType(""), "standard-1");
   assert.equal(resolveContainerInstanceType(undefined), "standard-1");
 });
