@@ -57,7 +57,8 @@ export async function createPasskeyCredential(options: any): Promise<any> {
   const response = credential.response as AuthenticatorAttestationResponse;
   const transports = typeof (response as any).getTransports === 'function' ? (response as any).getTransports() : [];
 
-  // Fido2NetLib expects clientDataJSON (exact casing) on AuthenticatorAttestationRawResponse.
+  // Fido2NetLib AuthenticatorAttestationRawResponse marks clientExtensionResults + transports [Required].
+  // Omitting them makes [ApiController] return 400 before the credential is persisted.
   return {
     id: credential.id,
     rawId: bufferToBase64Url(credential.rawId),
@@ -65,8 +66,9 @@ export async function createPasskeyCredential(options: any): Promise<any> {
     response: {
       attestationObject: bufferToBase64Url(response.attestationObject),
       clientDataJSON: bufferToBase64Url(response.clientDataJSON),
-      transports
-    }
+      transports: Array.isArray(transports) ? transports : [],
+    },
+    clientExtensionResults: credential.getClientExtensionResults?.() ?? {},
   };
 }
 
@@ -99,7 +101,8 @@ export async function getPasskeyAssertion(options: any): Promise<any> {
       authenticatorData: bufferToBase64Url(response.authenticatorData),
       clientDataJSON: bufferToBase64Url(response.clientDataJSON),
       signature: bufferToBase64Url(response.signature),
-      userHandle: response.userHandle ? bufferToBase64Url(response.userHandle) : null
-    }
+      userHandle: response.userHandle ? bufferToBase64Url(response.userHandle) : null,
+    },
+    clientExtensionResults: assertion.getClientExtensionResults?.() ?? {},
   };
 }

@@ -272,7 +272,10 @@ export const Profile: React.FC = () => {
 
       if (!completeRes.ok) {
         const err = await completeRes.json().catch(() => null);
-        throw new Error(err?.detail || 'Failed to register passkey.');
+        const validation = err?.errors
+          ? Object.values(err.errors as Record<string, string[]>).flat().filter(Boolean).join(' ')
+          : '';
+        throw new Error(err?.detail || validation || err?.title || 'Failed to register passkey.');
       }
 
       await loadPasskeys();
