@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AuthResponse, TotpBeginResponse, TotpConfirmResponse } from '../../types/auth';
 import { QrCodeSvg } from './QrCodeSvg';
 import {
@@ -16,11 +16,18 @@ import {
 } from 'lucide-react';
 import { createPasskeyCredential, isWebAuthnSupported } from '../../lib/webauthn';
 
+export type MfaEnrollMethod = 'totp' | 'passkey';
+
 interface MfaEnrollWizardProps {
   /** If provided, enrollment is forced via this enroll-only token */
   enrollToken?: string;
   /** Session-authenticated fetch (Profile enroll). Required when enrollToken is absent. */
   authFetch?: (url: string, init?: RequestInit) => Promise<Response>;
+  /**
+   * Which Factor B methods this wizard may offer.
+   * Profile typically passes `['totp']`; login forced-enroll omits this (defaults to both).
+   */
+  allowedMethods?: MfaEnrollMethod[];
   onSuccess?: (authResponse: AuthResponse) => void;
   onComplete?: () => void;
   onCancel?: () => void;
@@ -29,11 +36,22 @@ interface MfaEnrollWizardProps {
 export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
   enrollToken,
   authFetch,
+  allowedMethods,
   onSuccess,
   onComplete,
   onCancel,
 }) => {
-  const [enrollMethod, setEnrollMethod] = useState<'totp' | 'passkey'>('totp');
+  const methods = useMemo<MfaEnrollMethod[]>(() => {
+    const requested = allowedMethods?.length
+      ? allowedMethods
+      : (['totp', 'passkey'] as MfaEnrollMethod[]);
+    return requested.filter((method) => method !== 'passkey' || isWebAuthnSupported());
+  }, [allowedMethods]);
+
+  const totpAllowed = methods.includes('totp');
+  const passkeyAllowed = methods.includes('passkey');
+  const showMethodTabs = totpAllowed && passkeyAllowed;
+  const [enrollMethod, setEnrollMethod] = useState<MfaEnrollMethod>(methods[0] ?? 'totp');
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1 = QR/Key or Passkey, 2 = Verify code, 3 = Recovery codes
   const [sharedKey, setSharedKey] = useState<string>('');
   const [otpauthUrl, setOtpauthUrl] = useState<string>('');
@@ -41,12 +59,18 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [fullAuthResponse, setFullAuthResponse] = useState<AuthResponse | null>(null);
 
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(totpAllowed);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [copiedCodes, setCopiedCodes] = useState<boolean>(false);
   const [acknowledgedCodes, setAcknowledgedCodes] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!methods.includes(enrollMethod)) {
+      setEnrollMethod(methods[0] ?? 'totp');
+    }
+  }, [methods, enrollMethod]);
 
   const mfaFetch = async (url: string, init?: RequestInit): Promise<Response> => {
     if (enrollToken) {
@@ -63,9 +87,15 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
     throw new Error('Missing authentication for MFA enrollment.');
   };
 
-  // Load TOTP key and URI on mount
+  // Load TOTP key and URI when TOTP is an allowed method
   useEffect(() => {
+    if (!totpAllowed) {
+      setIsLoading(false);
+      return;
+    }
+
     let mounted = true;
+    setIsLoading(true);
     (async () => {
       try {
         const res = await mfaFetch('/api/auth/mfa/totp/enroll/begin', {
@@ -96,7 +126,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
       mounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- begin once per enroll token / session
-  }, [enrollToken]);
+  }, [enrollToken, totpAllowed]);
 
   const copyKey = async () => {
     try {
@@ -225,6 +255,9 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
     );
   }
 
+  const progressInactive = 'bg-[var(--bg-subtle)]';
+  const progressActive = 'bg-[var(--brand-primary)]';
+
   return (
     <div className="space-y-6 animate-fade-in max-w-md mx-auto">
       {/* Header */}
@@ -247,9 +280,9 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
 
       {/* Progress Indicators */}
       <div className="flex items-center gap-2">
-        <div className={`h-1.5 flex-1 rounded-full ${step >= 1 ? 'bg-[var(--brand-primary)]' : 'bg-white/10'}`} />
-        <div className={`h-1.5 flex-1 rounded-full ${step >= 2 ? 'bg-[var(--brand-primary)]' : 'bg-white/10'}`} />
-        <div className={`h-1.5 flex-1 rounded-full ${step >= 3 ? 'bg-[var(--brand-primary)]' : 'bg-white/10'}`} />
+        <div className={`h-1.5 flex-1 rounded-full ${step >= 1 ? progressActive : progressInactive}`} />
+        <div className={`h-1.5 flex-1 rounded-full ${step >= 2 ? progressActive : progressInactive}`} />
+        <div className={`h-1.5 flex-1 rounded-full ${step >= 3 ? progressActive : progressInactive}`} />
       </div>
 
       {/* Error Alert */}
@@ -257,7 +290,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
         <div
           role="alert"
           aria-live="assertive"
-          className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20 animate-fade-in"
+          className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-500/10 text-rose-600 text-xs font-medium ring-1 ring-rose-500/20 animate-fade-in"
         >
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span className="flex-1">{errorMessage}</span>
@@ -267,9 +300,9 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
       {/* STEP 1: Method selection & Setup */}
       {step === 1 && (
         <div className="space-y-5">
-          {/* Method selector tabs */}
-          {isWebAuthnSupported() && (
-            <div className="grid grid-cols-2 p-1 rounded-xl bg-[var(--bg-canvas)] border border-white/10 text-xs font-semibold">
+          {/* Method selector tabs — only when both methods are allowed (login forced enroll) */}
+          {showMethodTabs && (
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setEnrollMethod('totp')}
@@ -297,7 +330,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
             </div>
           )}
 
-          {enrollMethod === 'passkey' ? (
+          {enrollMethod === 'passkey' && passkeyAllowed ? (
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--text-main)]">
@@ -308,7 +341,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
                 </p>
               </div>
 
-              <div className="p-6 rounded-2xl bg-[var(--bg-canvas)] border border-white/10 flex flex-col items-center justify-center text-center space-y-4 shadow-inner">
+              <div className="p-6 rounded-2xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] flex flex-col items-center justify-center text-center space-y-4 shadow-inner">
                 <div className="w-16 h-16 rounded-full bg-[var(--brand-primary)]/10 flex items-center justify-center text-[var(--brand-primary)] ring-1 ring-[var(--brand-ring)]/30">
                   <Fingerprint className="w-9 h-9" />
                 </div>
@@ -365,7 +398,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
                     type="text"
                     readOnly
                     value={sharedKey}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-canvas)] text-xs font-mono font-medium text-[var(--text-main)] ring-1 ring-white/10 focus:outline-none select-all"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-canvas)] text-xs font-mono font-medium text-[var(--text-main)] ring-1 ring-[var(--border-subtle)] focus:outline-none select-all"
                   />
                   <button
                     type="button"
@@ -421,7 +454,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
               value={confirmCode}
               onChange={(e) => setConfirmCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="123456"
-              className="w-full py-3 text-center text-2xl font-bold font-mono tracking-widest rounded-xl bg-[var(--bg-canvas)] text-[var(--text-main)] ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--brand-primary)] focus:outline-none transition-all shadow-inner"
+              className="w-full py-3 text-center text-2xl font-bold font-mono tracking-widest rounded-xl bg-[var(--bg-canvas)] text-[var(--text-main)] ring-1 ring-[var(--border-subtle)] focus:ring-2 focus:ring-[var(--brand-primary)] focus:outline-none transition-all shadow-inner"
             />
           </div>
 
@@ -429,7 +462,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-[var(--text-secondary)] transition-colors cursor-pointer"
+              className="py-3 px-4 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-xs font-semibold text-[var(--text-secondary)] transition-colors cursor-pointer"
             >
               Back
             </button>
@@ -466,17 +499,17 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
             </p>
           </div>
 
-          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-400" />
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 text-xs flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
             <span>
-              Each recovery code can only be used once. They will <strong className="text-amber-200">not</strong> be shown again after this step.
+              Each recovery code can only be used once. They will <strong className="text-[var(--text-main)]">not</strong> be shown again after this step.
             </span>
           </div>
 
           {/* 10 codes in 2 columns */}
-          <div className="p-4 rounded-2xl bg-[var(--bg-canvas)] border border-white/10 grid grid-cols-2 gap-2 text-center font-mono text-sm font-semibold tracking-wider text-[var(--brand-primary)]">
+          <div className="p-4 rounded-2xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] grid grid-cols-2 gap-2 text-center font-mono text-sm font-semibold tracking-wider text-[var(--brand-primary)]">
             {recoveryCodes.map((code, idx) => (
-              <div key={idx} className="p-1.5 rounded-lg bg-white/5 select-all">
+              <div key={idx} className="p-1.5 rounded-lg bg-[var(--bg-subtle)] select-all">
                 {code}
               </div>
             ))}
@@ -486,15 +519,15 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
             <button
               type="button"
               onClick={copyAllCodes}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-[var(--text-main)] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className="flex-1 py-2.5 px-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-xs font-semibold text-[var(--text-main)] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
-              {copiedCodes ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedCodes ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedCodes ? 'Copied All' : 'Copy All Codes'}</span>
             </button>
             <button
               type="button"
               onClick={downloadCodes}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-[var(--text-main)] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className="flex-1 py-2.5 px-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-xs font-semibold text-[var(--text-main)] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download .txt</span>
@@ -506,7 +539,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
               type="checkbox"
               checked={acknowledgedCodes}
               onChange={(e) => setAcknowledgedCodes(e.target.checked)}
-              className="mt-0.5 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0"
+              className="mt-0.5 rounded bg-[var(--bg-canvas)] border-[var(--border-subtle)] text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0"
             />
             <span>I have downloaded or stored these 10 recovery codes in a secure location.</span>
           </label>

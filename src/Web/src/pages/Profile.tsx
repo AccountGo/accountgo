@@ -26,6 +26,7 @@ import { useAuth } from '../auth/AuthContext';
 import { UserSession, TrustedDevice, MfaMethodsResponse, WebAuthnCredential, SecurityCapabilities } from '../types/auth';
 import { clearPersistedOrgSlug } from '../lib/storage';
 import { MfaEnrollWizard } from '../components/mfa/MfaEnrollWizard';
+import { ModalShell } from '../components/ModalShell';
 import { createPasskeyCredential, getPasskeyAssertion, isWebAuthnSupported } from '../lib/webauthn';
 
 type DeletionBlockers = {
@@ -1745,25 +1746,22 @@ export const Profile: React.FC = () => {
         </div>
       )}
 
-      {/* MFA Enrollment Modal Dialog */}
-      {mfaEnrollOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-lg my-8">
-            <MfaEnrollWizard
-              authFetch={authFetch}
-              onComplete={() => {
-                setMfaEnrollOpen(false);
-                loadMfaMethods();
-                loadPasskeys();
-                if (refreshUser) refreshUser();
-                setMfaSuccess('MFA method successfully configured!');
-                setTimeout(() => setMfaSuccess(null), 4000);
-              }}
-              onCancel={() => setMfaEnrollOpen(false)}
-            />
-          </div>
-        </div>
-      )}
+      {/* MFA Enrollment Modal Dialog — portaled so overlay covers sidebar */}
+      <ModalShell open={mfaEnrollOpen} onClose={() => setMfaEnrollOpen(false)} maxWidthClassName="max-w-lg">
+        <MfaEnrollWizard
+          authFetch={authFetch}
+          allowedMethods={['totp']}
+          onComplete={() => {
+            setMfaEnrollOpen(false);
+            loadMfaMethods();
+            loadPasskeys();
+            if (refreshUser) refreshUser();
+            setMfaSuccess('MFA method successfully configured!');
+            setTimeout(() => setMfaSuccess(null), 4000);
+          }}
+          onCancel={() => setMfaEnrollOpen(false)}
+        />
+      </ModalShell>
     </div>
   );
 };
