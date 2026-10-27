@@ -54,6 +54,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   const [orgName, setOrgName] = useState<string>('');
   const [orgSlug, setOrgSlug] = useState<string>('');
   const [targetOrgSlug, setTargetOrgSlug] = useState<string | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState<boolean>(false);
 
   // OTP inputs
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
@@ -158,6 +159,10 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       setErrorMessage('Please enter a valid work email address.');
       return;
     }
+    if (!acceptedTerms) {
+      setErrorMessage('Please accept the privacy and terms to continue.');
+      return;
+    }
 
     setErrorMessage(null);
     setIsSending(true);
@@ -213,6 +218,10 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     }
     if (!email || !email.includes('@')) {
       setErrorMessage('Please enter a valid work email address.');
+      return;
+    }
+    if (!acceptedTerms) {
+      setErrorMessage('Please accept the privacy and terms to continue.');
       return;
     }
 
@@ -504,10 +513,28 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   />
                 </div>
 
+                {/* Privacy and Terms Acceptance Checkbox */}
+                <label
+                  htmlFor="signin-accept-terms"
+                  className="flex items-start gap-2.5 text-xs text-[var(--text-secondary)] pt-1 cursor-pointer select-none"
+                >
+                  <input
+                    id="signin-accept-terms"
+                    type="checkbox"
+                    required
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="mt-0.5 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0 accent-[var(--brand-primary)] cursor-pointer"
+                  />
+                  <span className="leading-relaxed">
+                    By signing in, you accept the <span className="underline underline-offset-2">Privacy and Terms</span>.
+                  </span>
+                </label>
+
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isSending || !email}
+                  disabled={isSending || !email || !acceptedTerms}
                   aria-busy={isSending}
                   className="w-full py-3.5 px-4 rounded-xl bg-[var(--brand-primary)] text-[var(--brand-text)] font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[var(--brand-primary)]/25 hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
                 >
@@ -658,10 +685,28 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   />
                 </div>
 
+                {/* Privacy and Terms Acceptance Checkbox */}
+                <label
+                  htmlFor="signup-accept-terms"
+                  className="flex items-start gap-2.5 text-xs text-[var(--text-secondary)] pt-1 cursor-pointer select-none"
+                >
+                  <input
+                    id="signup-accept-terms"
+                    type="checkbox"
+                    required
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="mt-0.5 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0 accent-[var(--brand-primary)] cursor-pointer"
+                  />
+                  <span className="leading-relaxed">
+                    By signing up, you accept the <span className="underline underline-offset-2">Privacy and Terms</span>.
+                  </span>
+                </label>
+
                 {/* Submit Sign Up */}
                 <button
                   type="submit"
-                  disabled={isSending || !email || !firstName || !lastName}
+                  disabled={isSending || !email || !firstName || !lastName || !acceptedTerms}
                   aria-busy={isSending}
                   className="w-full py-3.5 px-4 rounded-xl bg-[var(--brand-primary)] text-[var(--brand-text)] font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[var(--brand-primary)]/25 hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer mt-2"
                 >
@@ -692,13 +737,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                 </div>
               </form>
             )}
-
-            {/* Bottom Security Note */}
-            <div className="text-center pt-1">
-              <span className="text-[11px] text-[var(--text-muted)]">
-                Enterprise Multi-Tenant Isolation & Cloudflare Edge Resilience.
-              </span>
-            </div>
           </div>
         )}
 

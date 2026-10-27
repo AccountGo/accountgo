@@ -170,7 +170,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     };
   }, [open, closeOnEscape]);
 
-  if (!open || typeof document === 'undefined') return null;
+  if (!open) return null;
 
   const overlayAlign =
     align === 'bottom-sheet'
@@ -205,7 +205,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     </div>
   );
 
-  return createPortal(
+  const content = (
     <div
       className={`fixed inset-0 ${zClassName} flex overflow-hidden bg-black/60 backdrop-blur-sm ${overlayAlign} ${overlayClassName}`}
       role="presentation"
@@ -215,9 +215,14 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       }}
     >
       {panel}
-    </div>,
-    document.body
+    </div>
   );
+
+  if (typeof document === 'undefined') {
+    return content;
+  }
+
+  return createPortal(content, document.body);
 };
 
 export default ModalShell;
