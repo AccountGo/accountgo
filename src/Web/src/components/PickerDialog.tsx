@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, Search, X, type LucideIcon } from 'lucide-react';
+import { ModalShell } from './ModalShell';
 
 export interface PickerColumn<T> {
   header: string;
@@ -75,10 +76,7 @@ export function PickerDialog<T extends { id: number }>({
   }, [active]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
-    } else if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActive((a) => Math.min(a + 1, matches.length - 1));
     } else if (e.key === 'ArrowUp') {
@@ -88,19 +86,6 @@ export function PickerDialog<T extends { id: number }>({
       e.preventDefault();
       const item = matches[active];
       if (item) onPick(item);
-    } else if (e.key === 'Tab') {
-      // Only the search box and the dialog's buttons take focus; keep it inside the dialog.
-      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('input, button');
-      if (!focusable?.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
     }
   };
 
@@ -109,20 +94,15 @@ export function PickerDialog<T extends { id: number }>({
   const FooterIcon = footerAction?.icon;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-start justify-center bg-black/60 backdrop-blur-sm sm:p-4 sm:pt-[12vh]"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <ModalShell
+      open
+      onClose={onClose}
+      bare
+      align="bottom-sheet"
+      aria-labelledby={titleId}
+      panelClassName="flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl sm:max-h-[70vh] sm:max-w-xl sm:rounded-2xl"
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onKeyDown={onKeyDown}
-        className="flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl sm:max-h-[70vh] sm:max-w-xl sm:rounded-2xl"
-      >
+      <div ref={dialogRef} onKeyDown={onKeyDown} className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
           <h2 id={titleId} className="flex items-center gap-2 text-base font-bold text-[var(--text-main)]">
             <Icon className="h-4 w-4 text-[var(--brand-primary)]" />
@@ -227,6 +207,6 @@ export function PickerDialog<T extends { id: number }>({
           <span className="hidden sm:inline">↑ ↓ to move · Enter to choose · Esc to close</span>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

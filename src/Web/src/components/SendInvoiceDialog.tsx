@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Mail, Paperclip, Send } from 'lucide-react';
+import { ModalShell } from './ModalShell';
 
 interface SendInvoiceDialogProps {
   /** 'issue' asks whether to email while issuing a draft; 'send' emails an invoice that is already issued. */
@@ -55,7 +56,6 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   const [markAsFollowUp, setMarkAsFollowUp] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [attachPdf, setAttachPdf] = useState(false);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const inputId = useId();
@@ -66,32 +66,8 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   const asFollowUp = followUpFromHistory || markAsFollowUp;
 
   useEffect(() => {
-    const trigger = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
-    return () => trigger?.focus();
   }, []);
-
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === 'Escape' && !busy) {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'input:not(:disabled), button:not(:disabled)',
-    );
-    if (!focusable?.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -113,15 +89,18 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
         : 'Send this invoice to the customer by email.';
 
   return (
-    <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onKeyDown={handleKeyDown}
-        className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl"
-      >
+    <ModalShell
+      open
+      onClose={() => {
+        if (!busy) onCancel();
+      }}
+      closeOnEscape={!busy}
+      closeOnBackdrop={!busy}
+      bare
+      aria-labelledby={titleId}
+      overlayClassName="no-print"
+      panelClassName="no-print w-full max-w-md max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl"
+    >
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div className="flex items-start gap-3">
             <span className="flex items-center justify-center w-10 h-10 shrink-0 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)]">
@@ -284,8 +263,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

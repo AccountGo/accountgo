@@ -1489,37 +1489,23 @@ export const Profile: React.FC = () => {
         </button>
       </section>
 
-      {deleteDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <ModalShell
+        open={deleteDialogOpen}
+        onClose={() => {
+          if (!deletingAccount) setDeleteDialogOpen(false);
+        }}
+        closeOnEscape={!deletingAccount}
+        closeOnBackdrop={!deletingAccount}
+        bare
+        role="alertdialog"
+        aria-labelledby="delete-account-title"
+        aria-describedby="delete-account-description"
+        panelClassName="w-full max-w-md"
+      >
           <form
             ref={deleteDialogRef}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-account-title"
-            aria-describedby="delete-account-description"
             onSubmit={handleDeleteAccount}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && !deletingAccount) {
-                event.preventDefault();
-                setDeleteDialogOpen(false);
-                return;
-              }
-              if (event.key !== 'Tab') return;
-              const focusable = deleteDialogRef.current?.querySelectorAll<HTMLElement>(
-                'input:not(:disabled), button:not(:disabled)',
-              );
-              if (!focusable?.length) return;
-              const first = focusable[0];
-              const last = focusable[focusable.length - 1];
-              if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-              } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-              }
-            }}
-            className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4"
+            className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4"
           >
             <div>
               <h2 id="delete-account-title" className="text-base font-bold text-[var(--text-main)]">
@@ -1581,15 +1567,24 @@ export const Profile: React.FC = () => {
               </button>
             </div>
           </form>
-        </div>
-      )}
+      </ModalShell>
 
       {/* MFA Step-Up Dialog for sensitive actions */}
-      {stepUpDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <ModalShell
+        open={stepUpDialogOpen}
+        onClose={() => {
+          if (isSteppingUp) return;
+          setStepUpDialogOpen(false);
+          setPendingStepUpAction(null);
+        }}
+        closeOnEscape={!isSteppingUp}
+        closeOnBackdrop={!isSteppingUp}
+        bare
+        panelClassName="w-full max-w-md"
+      >
           <form
             onSubmit={handleConfirmStepUpDisable}
-            className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4"
+            className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
@@ -1673,19 +1668,23 @@ export const Profile: React.FC = () => {
               </button>
             </div>
           </form>
-        </div>
-      )}
+      </ModalShell>
 
       {/* Newly Regenerated Recovery Codes Modal */}
-      {newRecoveryCodes && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4">
+      <ModalShell
+        open={!!newRecoveryCodes}
+        onClose={() => setNewRecoveryCodes(null)}
+        closeOnBackdrop={false}
+        maxWidthClassName="max-w-md"
+        panelClassName="p-6 sm:p-6 space-y-4"
+        aria-labelledby="new-recovery-codes-title"
+      >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
                 <Key className="w-5 h-5 text-purple-400" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-[var(--text-main)]">New Emergency Recovery Codes</h2>
+                <h2 id="new-recovery-codes-title" className="text-base font-bold text-[var(--text-main)]">New Emergency Recovery Codes</h2>
                 <p className="text-xs text-[var(--text-muted)]">
                   Save these codes now. They will not be shown again!
                 </p>
@@ -1694,7 +1693,7 @@ export const Profile: React.FC = () => {
 
             <div className="p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
               <div className="grid grid-cols-2 gap-2 font-mono text-xs text-[var(--text-main)]">
-                {newRecoveryCodes.map((c, i) => (
+                {(newRecoveryCodes || []).map((c, i) => (
                   <div key={i} className="py-1 px-2 rounded bg-[var(--bg-surface)] text-center tracking-wider">
                     {c}
                   </div>
@@ -1706,6 +1705,7 @@ export const Profile: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  if (!newRecoveryCodes) return;
                   navigator.clipboard.writeText(newRecoveryCodes.join('\n'));
                   setCopiedNewCodes(true);
                   setTimeout(() => setCopiedNewCodes(false), 2000);
@@ -1718,6 +1718,7 @@ export const Profile: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  if (!newRecoveryCodes) return;
                   const blob = new Blob([newRecoveryCodes.join('\n')], { type: 'text/plain' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -1742,9 +1743,7 @@ export const Profile: React.FC = () => {
                 I have saved these codes
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </ModalShell>
 
       {/* MFA Enrollment Modal Dialog — portaled so overlay covers sidebar */}
       <ModalShell open={mfaEnrollOpen} onClose={() => setMfaEnrollOpen(false)} maxWidthClassName="max-w-lg">

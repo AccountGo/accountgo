@@ -3,6 +3,7 @@ import { Building2, Loader2, X } from 'lucide-react';
 import { PartyBase, PaymentTermOption } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { PartyRole, partyRoles } from '../lib/partyRoles';
+import { ModalShell } from './ModalShell';
 
 const inputClass =
   'w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition';
@@ -90,21 +91,17 @@ export function PartyFormDialog<T extends PartyBase>({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && !isSaving) {
-          e.preventDefault();
-          onClose();
-        }
+    <ModalShell
+      open
+      onClose={() => {
+        if (!isSaving) onClose();
       }}
+      closeOnEscape={!isSaving}
+      closeOnBackdrop={!isSaving}
+      bare
+      aria-labelledby={titleId}
+      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl"
-      >
         <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-[var(--brand-primary)]" />
@@ -276,7 +273,6 @@ export function PartyFormDialog<T extends PartyBase>({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

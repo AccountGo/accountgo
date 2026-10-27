@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Archive, ArchiveRestore, Pencil, Percent, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { ModalShell } from './ModalShell';
 
 interface TaxRow {
   id: number;
@@ -317,9 +318,19 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
         {!canManage && <p className="text-[11px] text-[var(--text-muted)]">You can view tax rates. Managing them takes the Manage Taxes permission.</p>}
       </div>
 
-      {draft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onKeyDown={(event) => { if (event.key === 'Escape') setDraft(null); }}>
-          <form role="dialog" aria-modal="true" aria-labelledby="tax-dialog-title" onSubmit={save} className="w-full max-w-lg p-5 rounded-2xl bg-[var(--bg-surface)] shadow-xl space-y-4">
+      <ModalShell
+        open={!!draft}
+        onClose={() => {
+          if (!saving) setDraft(null);
+        }}
+        closeOnEscape={!saving}
+        closeOnBackdrop={!saving}
+        bare
+        aria-labelledby="tax-dialog-title"
+        panelClassName="w-full max-w-lg"
+      >
+          {draft && (
+          <form onSubmit={save} className="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-xl space-y-4">
             <h3 id="tax-dialog-title" className="text-base font-bold text-[var(--text-main)]">{draft.id ? 'Edit tax' : 'Add tax'}</h3>
             <label className="block text-xs font-semibold text-[var(--text-secondary)]">Name
               <input ref={nameInputRef} id="tax-name" autoFocus value={draft.taxName} onChange={(event) => setDraft({ ...draft, taxName: event.target.value })} maxLength={50} className={`${fieldClass} mt-1`} required />
@@ -354,24 +365,31 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
               <button type="submit" disabled={saving} className="btn-primary !h-10 !px-4 text-xs">{saving ? 'Saving…' : 'Save tax'}</button>
             </div>
           </form>
-        </div>
-      )}
+          )}
+      </ModalShell>
 
-      {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div role="alertdialog" aria-modal="true" aria-labelledby="delete-tax-title" className="w-full max-w-md p-5 rounded-2xl bg-[var(--bg-surface)] shadow-xl space-y-4">
-            <h3 id="delete-tax-title" className="text-base font-bold text-[var(--text-main)]">Delete {pendingDelete.taxName}?</h3>
-            <p className="text-sm text-[var(--text-secondary)]">This removes the rate. It can’t be deleted once an invoice or bill uses it.</p>
-            {deleteError && <p role="alert" className="text-sm text-rose-400">{deleteError}</p>}
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setPendingDelete(null)} className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)]">Cancel</button>
-              <button type="button" onClick={() => void remove()} disabled={deleting} className="h-10 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold disabled:opacity-50">
-                {deleting ? 'Deleting…' : 'Delete tax'}
-              </button>
-            </div>
-          </div>
+      <ModalShell
+        open={!!pendingDelete}
+        onClose={() => {
+          if (!deleting) setPendingDelete(null);
+        }}
+        closeOnEscape={!deleting}
+        closeOnBackdrop={!deleting}
+        maxWidthClassName="max-w-md"
+        role="alertdialog"
+        aria-labelledby="delete-tax-title"
+        panelClassName="p-5 sm:p-5 space-y-4 shadow-xl"
+      >
+        <h3 id="delete-tax-title" className="text-base font-bold text-[var(--text-main)]">Delete {pendingDelete?.taxName}?</h3>
+        <p className="text-sm text-[var(--text-secondary)]">This removes the rate. It can’t be deleted once an invoice or bill uses it.</p>
+        {deleteError && <p role="alert" className="text-sm text-rose-400">{deleteError}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setPendingDelete(null)} disabled={deleting} className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)]">Cancel</button>
+          <button type="button" onClick={() => void remove()} disabled={deleting} className="h-10 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold disabled:opacity-50">
+            {deleting ? 'Deleting…' : 'Delete tax'}
+          </button>
         </div>
-      )}
+      </ModalShell>
     </div>
   );
 };

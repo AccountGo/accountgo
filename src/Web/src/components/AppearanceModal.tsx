@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import {
   Sun,
   Moon,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { THEMES, SCHEMES, ThemeId, SchemeId } from '../themes';
 import { useTheme } from '../themes/ThemeContext';
+import { ModalShell } from './ModalShell';
 
 interface AppearanceModalProps {
   isOpen: boolean;
@@ -23,34 +24,16 @@ export const AppearanceModal: React.FC<AppearanceModalProps> = ({
   tenantName,
 }) => {
   const { theme, scheme, resolvedScheme, setTheme, setScheme } = useTheme();
-  const modalRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
-      onClick={onClose}
+    <ModalShell
+      open={isOpen}
+      onClose={onClose}
+      maxWidthClassName="max-w-lg"
+      aria-labelledby="appearance-modal-title"
+      panelClassName="rounded-3xl p-6 space-y-6 shadow-black/80"
+      overlayClassName="backdrop-blur-md"
     >
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="appearance-modal-title"
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-3xl bg-[var(--bg-surface)] text-[var(--text-main)] shadow-2xl shadow-black/80 p-6 space-y-6 max-h-[90vh] overflow-y-auto smooth-scroll animate-in zoom-in-95 duration-150"
-      >
         {/* Header */}
         <div className="flex items-center justify-between pb-2">
           <div className="flex items-center gap-3">
@@ -207,8 +190,7 @@ export const AppearanceModal: React.FC<AppearanceModalProps> = ({
             Apply & Close
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

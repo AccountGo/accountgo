@@ -7,6 +7,7 @@ import { ItemsTabs } from '../components/ItemsTabs';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
 import { currencySymbol } from '../lib/currency';
+import { ModalShell } from '../components/ModalShell';
 
 interface StockItem {
   id: number;
@@ -278,28 +279,28 @@ export const Inventory: React.FC = () => {
         </>
       )}
 
-      {showAdjust && (
-        <AdjustStockDialog
-          items={adjustmentItems}
-          initialItemId={selectedItem && !selectedItem.archived ? selectedItem.id : adjustmentItems[0]?.id}
-          currencySymbol={currencySymbol(currentOrg.currency)}
-          formatMoney={money}
-          onClose={() => setShowAdjust(false)}
-          onSubmit={postAdjustment}
-        />
-      )}
+      <AdjustStockDialog
+        open={showAdjust}
+        items={adjustmentItems}
+        initialItemId={selectedItem && !selectedItem.archived ? selectedItem.id : adjustmentItems[0]?.id}
+        currencySymbol={currencySymbol(currentOrg.currency)}
+        formatMoney={money}
+        onClose={() => setShowAdjust(false)}
+        onSubmit={postAdjustment}
+      />
     </div>
   );
 };
 
 const AdjustStockDialog: React.FC<{
+  open: boolean;
   items: StockItem[];
   initialItemId?: number;
   currencySymbol: string;
   formatMoney: (amount: number) => string;
   onClose: () => void;
   onSubmit: (payload: AdjustmentPayload) => Promise<void>;
-}> = ({ items, initialItemId, currencySymbol, formatMoney, onClose, onSubmit }) => {
+}> = ({ open, items, initialItemId, currencySymbol, formatMoney, onClose, onSubmit }) => {
   const [itemId, setItemId] = useState(initialItemId ? String(initialItemId) : '');
   const [direction, setDirection] = useState<'add' | 'remove'>('add');
   const [quantityValue, setQuantityValue] = useState('');
@@ -349,13 +350,18 @@ const AdjustStockDialog: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onKeyDown={event => {
-        if (event.key === 'Escape' && !busy) onClose();
+    <ModalShell
+      open={open}
+      onClose={() => {
+        if (!busy) onClose();
       }}
+      closeOnEscape={!busy}
+      closeOnBackdrop={!busy}
+      bare
+      aria-labelledby="adjust-stock-title"
+      panelClassName="max-h-[min(90vh,calc(100dvh-2rem))] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="adjust-stock-title" className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl">
+      <div>
         <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-6 py-4">
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-[var(--brand-primary)]" />
@@ -430,7 +436,7 @@ const AdjustStockDialog: React.FC<{
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   );
 };
 

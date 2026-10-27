@@ -36,6 +36,7 @@ import { InvoiceSettingsTab } from '../components/InvoiceSettingsTab';
 import { TaxSettingsTab } from '../components/TaxSettingsTab';
 import { AccountingPolicyCard } from '../components/AccountingPolicyCard';
 import { SettingsNav, SettingsNavGroup } from '../components/SettingsNav';
+import { ModalShell } from '../components/ModalShell';
 
 interface LiveFinancialYear {
   id: number;
@@ -132,7 +133,6 @@ export const Settings: React.FC = () => {
   const [deletingWorkspace, setDeletingWorkspace] = useState(false);
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const deleteConfirmRef = useRef<HTMLInputElement>(null);
-  const deleteDialogRef = useRef<HTMLFormElement>(null);
 
   // 2. Financial & Accounting Rules State
   const [fiscalYears, setFiscalYears] = useState<LiveFinancialYear[]>([]);
@@ -703,39 +703,22 @@ export const Settings: React.FC = () => {
             </div>
           )}
 
-          {deleteDialogOpen && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-            >
+          <ModalShell
+            open={deleteDialogOpen}
+            onClose={() => {
+              if (!deletingWorkspace) setDeleteDialogOpen(false);
+            }}
+            closeOnEscape={!deletingWorkspace}
+            closeOnBackdrop={!deletingWorkspace}
+            bare
+            role="alertdialog"
+            aria-labelledby="delete-workspace-title"
+            aria-describedby="delete-workspace-description"
+            panelClassName="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4 max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
+          >
               <form
-                ref={deleteDialogRef}
-                role="alertdialog"
-                aria-modal="true"
-                aria-labelledby="delete-workspace-title"
-                aria-describedby="delete-workspace-description"
                 onSubmit={handleDeleteWorkspace}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape' && !deletingWorkspace) {
-                    event.preventDefault();
-                    setDeleteDialogOpen(false);
-                    return;
-                  }
-                  if (event.key !== 'Tab') return;
-                  const focusable = deleteDialogRef.current?.querySelectorAll<HTMLElement>(
-                    'input:not(:disabled), button:not(:disabled)',
-                  );
-                  if (!focusable?.length) return;
-                  const first = focusable[0];
-                  const last = focusable[focusable.length - 1];
-                  if (event.shiftKey && document.activeElement === first) {
-                    event.preventDefault();
-                    last.focus();
-                  } else if (!event.shiftKey && document.activeElement === last) {
-                    event.preventDefault();
-                    first.focus();
-                  }
-                }}
-                className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4"
+                className="space-y-4"
               >
                 <div>
                   <h2 id="delete-workspace-title" className="text-base font-bold text-[var(--text-main)]">
@@ -774,8 +757,7 @@ export const Settings: React.FC = () => {
                   </button>
                 </div>
               </form>
-            </div>
-          )}
+          </ModalShell>
 
           {currentTab === 'invoices' && (
             <div

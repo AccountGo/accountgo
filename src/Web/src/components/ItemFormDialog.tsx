@@ -3,6 +3,7 @@ import { Archive, ArchiveRestore, Loader2, Package, Trash2, X } from 'lucide-rea
 import { CatalogItem } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ModalShell } from './ModalShell';
 
 const inputClass =
   'w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition';
@@ -154,21 +155,18 @@ export const ItemFormDialog: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && !busy && !isConfirmingDelete) {
-          e.preventDefault();
-          onClose();
-        }
+    <>
+    <ModalShell
+      open
+      onClose={() => {
+        if (!busy && !isConfirmingDelete) onClose();
       }}
+      closeOnEscape={!busy && !isConfirmingDelete}
+      closeOnBackdrop={!busy && !isConfirmingDelete}
+      bare
+      aria-labelledby={titleId}
+      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl"
-      >
         <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-[var(--brand-primary)]" />
@@ -413,7 +411,7 @@ export const ItemFormDialog: React.FC<{
             </div>
           </div>
         </form>
-      </div>
+    </ModalShell>
 
       {isConfirmingDelete && item && (
         <ConfirmDialog
@@ -426,6 +424,6 @@ export const ItemFormDialog: React.FC<{
           onCancel={() => setIsConfirmingDelete(false)}
         />
       )}
-    </div>
+    </>
   );
 };

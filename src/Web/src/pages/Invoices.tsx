@@ -26,6 +26,7 @@ import { invoiceTitle } from '../lib/invoiceNumber';
 import { localToday } from '../lib/businessDays';
 import { useEntitlements } from '../lib/entitlements';
 import { UsageHint } from '../components/UsageHint';
+import { ModalShell } from '../components/ModalShell';
 
 export const Invoices: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
@@ -593,9 +594,18 @@ export const Invoices: React.FC = () => {
       </div>
 
       {/* Record Payment Modal */}
-      {paymentModalInvoice && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <ModalShell
+        open={!!paymentModalInvoice}
+        onClose={() => {
+          if (!isSubmittingPayment) setPaymentModalInvoice(null);
+        }}
+        closeOnEscape={!isSubmittingPayment}
+        closeOnBackdrop={!isSubmittingPayment}
+        bare
+        panelClassName="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
+      >
+          {paymentModalInvoice && (
+          <div>
             <div className="p-5 border-b border-[var(--border-subtle)] flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-[var(--text-primary)]">Record Payment</h3>
@@ -604,7 +614,9 @@ export const Invoices: React.FC = () => {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setPaymentModalInvoice(null)}
+                disabled={isSubmittingPayment}
                 className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -720,20 +732,31 @@ export const Invoices: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
-      )}
+          )}
+      </ModalShell>
 
       {/* Void Modal */}
-      {voidModalInvoice && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <ModalShell
+        open={!!voidModalInvoice}
+        onClose={() => {
+          if (!isSubmittingVoid) setVoidModalInvoice(null);
+        }}
+        closeOnEscape={!isSubmittingVoid}
+        closeOnBackdrop={!isSubmittingVoid}
+        bare
+        panelClassName="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
+      >
+          {voidModalInvoice && (
+          <div>
             <div className="p-5 border-b border-[var(--border-subtle)] flex items-center justify-between">
               <div className="flex items-center gap-2 text-rose-500">
                 <AlertTriangle className="w-5 h-5 shrink-0" />
                 <h3 className="text-base font-bold text-[var(--text-primary)]">Void Invoice</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setVoidModalInvoice(null)}
+                disabled={isSubmittingVoid}
                 className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -778,8 +801,8 @@ export const Invoices: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
-      )}
+          )}
+      </ModalShell>
     </div>
   );
 };

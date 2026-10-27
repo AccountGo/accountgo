@@ -28,6 +28,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
+import { ModalShell } from '../components/ModalShell';
 import { invoiceTitle } from '../lib/invoiceNumber';
 import { localToday } from '../lib/businessDays';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
@@ -913,9 +914,18 @@ export const InvoiceDetail: React.FC = () => {
       )}
 
       {/* Record Payment Modal */}
-      {isPaymentModalOpen && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full border border-[var(--border-subtle)] shadow-2xl overflow-hidden">
+      <ModalShell
+        open={isPaymentModalOpen}
+        onClose={() => {
+          if (!isSubmittingPayment) setIsPaymentModalOpen(false);
+        }}
+        closeOnEscape={!isSubmittingPayment}
+        closeOnBackdrop={!isSubmittingPayment}
+        bare
+        overlayClassName="no-print"
+        panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full border border-[var(--border-subtle)] shadow-2xl overflow-hidden max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
+      >
+          <div>
             <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-emerald-500" />
@@ -926,6 +936,7 @@ export const InvoiceDetail: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsPaymentModalOpen(false)}
+                disabled={isSubmittingPayment}
                 className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
@@ -1040,8 +1051,7 @@ export const InvoiceDetail: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </ModalShell>
 
       {/* Issue / Email Invoice Modal */}
       {sendDialogMode && invoice.recipientEmail && (
@@ -1062,9 +1072,18 @@ export const InvoiceDetail: React.FC = () => {
       )}
 
       {/* Void Invoice Confirmation Modal */}
-      {isVoidModalOpen && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full border border-[var(--border-subtle)] shadow-2xl p-6 space-y-4">
+      <ModalShell
+        open={isVoidModalOpen}
+        onClose={() => {
+          if (!isSubmittingVoid) setIsVoidModalOpen(false);
+        }}
+        closeOnEscape={!isSubmittingVoid}
+        closeOnBackdrop={!isSubmittingVoid}
+        bare
+        overlayClassName="no-print"
+        panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full border border-[var(--border-subtle)] shadow-2xl p-6 space-y-4 max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
+      >
+          <div className="space-y-4">
             <div className="flex items-center gap-3 text-rose-500">
               <Ban className="w-6 h-6 shrink-0" />
               <h3 className="font-bold text-lg text-[var(--text-main)]">
@@ -1089,6 +1108,7 @@ export const InvoiceDetail: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsVoidModalOpen(false)}
+                disabled={isSubmittingVoid}
                 className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
               >
                 Cancel
@@ -1104,8 +1124,7 @@ export const InvoiceDetail: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </ModalShell>
     </div>
   );
 };

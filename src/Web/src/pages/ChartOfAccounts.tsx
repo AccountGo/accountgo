@@ -28,6 +28,7 @@ import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { ModalShell } from '../components/ModalShell';
 
 export interface ChartOfAccountsStatus {
   isEmptyBooks: boolean;
@@ -1052,9 +1053,17 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
       </div>
 
       {/* Add / Edit Account Modal Dialog */}
-      {editorOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl max-w-lg w-full border border-[var(--border-subtle)] p-6 space-y-4">
+      <ModalShell
+        open={editorOpen}
+        onClose={() => {
+          if (!saving) setEditorOpen(false);
+        }}
+        closeOnEscape={!saving}
+        closeOnBackdrop={!saving}
+        bare
+        panelClassName="bg-[var(--bg-surface)] rounded-2xl shadow-2xl max-w-lg w-full border border-[var(--border-subtle)] p-6 space-y-4 max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
+      >
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-[var(--text-main)]">
                 {editingAccount ? `Edit Account (${editingAccount.accountCode})` : 'Add New Account'}
@@ -1192,13 +1201,17 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </ModalShell>
 
       {/* Action Blocked Dialog */}
-      {actionBlocked && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl max-w-md w-full border border-[var(--border-subtle)] p-6 space-y-4">
+      <ModalShell
+        open={!!actionBlocked}
+        onClose={() => setActionBlocked(null)}
+        maxWidthClassName="max-w-md"
+        panelClassName="p-6 sm:p-6 space-y-4 shadow-2xl"
+      >
+          {actionBlocked && (
+          <div className="space-y-4">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
                 <Shield className="w-5 h-5" />
@@ -1218,13 +1231,18 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
               </button>
             </div>
           </div>
-        </div>
-      )}
+          )}
+      </ModalShell>
 
       {/* Safe Delete vs Archive Confirmation Modal (§5.4) */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl max-w-md w-full border border-[var(--border-subtle)] p-6 space-y-4">
+      <ModalShell
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        maxWidthClassName="max-w-md"
+        panelClassName="p-6 sm:p-6 space-y-4 shadow-2xl"
+      >
+          {deleteConfirm && (
+          <div className="space-y-4">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">
                 <Trash2 className="w-5 h-5" />
@@ -1269,13 +1287,17 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
               </button>
             </div>
           </div>
-        </div>
-      )}
+          )}
+      </ModalShell>
 
       {/* Import Wizard Modal (§7, §9, §12 P2) */}
-      {importModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl max-w-3xl w-full border border-[var(--border-subtle)] overflow-hidden my-8 flex flex-col max-h-[90vh]">
+      <ModalShell
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        bare
+        panelClassName="bg-[var(--bg-surface)] rounded-2xl shadow-2xl max-w-3xl w-full border border-[var(--border-subtle)] overflow-hidden flex flex-col max-h-[min(90vh,calc(100dvh-2rem))]"
+      >
+          <div className="flex flex-col min-h-0 flex-1">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1894,8 +1916,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
               )}
             </div>
           </div>
-        </div>
-      )}
+      </ModalShell>
     </div>
   );
 };

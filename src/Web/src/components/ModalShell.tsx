@@ -4,18 +4,70 @@ import { createPortal } from 'react-dom';
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Nested modals share one lock so unlock only runs when the last one closes. */
+let scrollLockCount = 0;
+let previousBodyOverflow = '';
+let previousHtmlOverflow = '';
+let previousMainOverflow: string | null = null;
+let previousBodyPaddingRight = '';
+
+function acquireScrollLock() {
+  if (scrollLockCount === 0) {
+    const scrollbarGap = window.innerWidth - document.documentElement.clientWidth;
+    previousBodyOverflow = document.body.style.overflow;
+    previousHtmlOverflow = document.documentElement.style.overflow;
+    previousBodyPaddingRight = document.body.style.paddingRight;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    if (scrollbarGap > 0) {
+      document.body.style.paddingRight = `${scrollbarGap}px`;
+    }
+    const main = document.getElementById('main-content');
+    if (main) {
+      previousMainOverflow = main.style.overflow;
+      main.style.overflow = 'hidden';
+    } else {
+      previousMainOverflow = null;
+    }
+  }
+  scrollLockCount += 1;
+}
+
+function releaseScrollLock() {
+  scrollLockCount = Math.max(0, scrollLockCount - 1);
+  if (scrollLockCount > 0) return;
+  document.body.style.overflow = previousBodyOverflow;
+  document.documentElement.style.overflow = previousHtmlOverflow;
+  document.body.style.paddingRight = previousBodyPaddingRight;
+  const main = document.getElementById('main-content');
+  if (main && previousMainOverflow !== null) {
+    main.style.overflow = previousMainOverflow;
+  }
+}
+
 export interface ModalShellProps {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
-  /** max-w-* Tailwind class for the panel (default max-w-lg) */
+  /** max-w-* Tailwind class for the panel (default max-w-lg). Ignored when bare. */
   maxWidthClassName?: string;
   /** Close when clicking the backdrop (default true) */
   closeOnBackdrop?: boolean;
   /** Close on Escape (default true) */
   closeOnEscape?: boolean;
-  /** Extra classes on the surface panel */
+  /** Extra classes on the surface panel (ignored when bare) */
   panelClassName?: string;
+  /**
+   * When true, children are the full panel (caller owns surface chrome).
+   * ModalShell still portals the overlay and locks page scroll.
+   */
+  bare?: boolean;
+  /** Centered card (default) or bottom sheet on small screens. */
+  align?: 'center' | 'bottom-sheet';
+  role?: 'dialog' | 'alertdialog';
+  /** Stacking class for the overlay (default z-[100]). */
+  zClassName?: string;
+  overlayClassName?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
 }
@@ -23,6 +75,7 @@ export interface ModalShellProps {
 /**
  * Full-viewport modal portaled to document.body so overlays are not clipped by
  * OrgLayout's main column (overflow-hidden + relative z-10).
+ * Page scroll is locked while open; only the panel content may scroll.
  */
 export const ModalShell: React.FC<ModalShellProps> = ({
   open,
@@ -32,6 +85,11 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   closeOnBackdrop = true,
   closeOnEscape = true,
   panelClassName = '',
+  bare = false,
+  align = 'center',
+  role = 'dialog',
+  zClassName = 'z-[100]',
+  overlayClassName = '',
   'aria-labelledby': ariaLabelledBy,
   'aria-describedby': ariaDescribedBy,
 }) => {
@@ -44,8 +102,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     if (!open) return;
 
     previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    acquireScrollLock();
 
     const focusFirst = () => {
       const panel = panelRef.current;
@@ -53,7 +110,6 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
       (focusable[0] ?? panel).focus();
     };
-    // Defer so portal content is mounted
     const frame = requestAnimationFrame(focusFirst);
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -84,38 +140,81 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       }
     };
 
+    // Block background scroll via wheel/touch outside the panel (iOS / nested overflow).
+    const isInsidePanel = (target: EventTarget | null) => {
+      const panel = panelRef.current;
+      return !!(panel && target instanceof Node && panel.contains(target));
+    };
+
+    const handleWheel = (event: WheelEvent) => {
+      if (isInsidePanel(event.target)) return;
+      event.preventDefault();
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (isInsidePanel(event.target)) return;
+      event.preventDefault();
+    };
+
     document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('wheel', handleWheel);
+      document.removeEventListener('touchmove', handleTouchMove);
+      releaseScrollLock();
       previouslyFocusedRef.current?.focus?.();
     };
   }, [open, closeOnEscape]);
 
   if (!open || typeof document === 'undefined') return null;
 
+  const overlayAlign =
+    align === 'bottom-sheet'
+      ? 'items-end sm:items-start justify-center sm:pt-[12vh]'
+      : 'items-center justify-center p-4';
+
+  const panel = bare ? (
+    <div
+      ref={panelRef}
+      role={role}
+      aria-modal="true"
+      aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
+      tabIndex={-1}
+      className={`focus:outline-none overscroll-contain ${panelClassName}`}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {children}
+    </div>
+  ) : (
+    <div
+      ref={panelRef}
+      role={role}
+      aria-modal="true"
+      aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
+      tabIndex={-1}
+      className={`w-full ${maxWidthClassName} max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] shadow-2xl p-6 sm:p-8 focus:outline-none ${panelClassName}`}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
+
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto"
+      className={`fixed inset-0 ${zClassName} flex overflow-hidden bg-black/60 backdrop-blur-sm ${overlayAlign} ${overlayClassName}`}
       role="presentation"
       onMouseDown={(event) => {
         if (!closeOnBackdrop) return;
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={ariaLabelledBy}
-        aria-describedby={ariaDescribedBy}
-        tabIndex={-1}
-        className={`w-full ${maxWidthClassName} my-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] shadow-2xl p-6 sm:p-8 focus:outline-none ${panelClassName}`}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        {children}
-      </div>
+      {panel}
     </div>,
     document.body
   );
