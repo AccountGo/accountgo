@@ -41,6 +41,10 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidget
   ({ siteKey, action, onVerify, onExpire, onError, className = '' }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetIdRef = useRef<string | null>(null);
+    // Keep latest callbacks in a ref so parent re-renders (new inline fns / setState
+    // after verify) do not tear down and re-create the Turnstile widget.
+    const callbacksRef = useRef({ onVerify, onExpire, onError });
+    callbacksRef.current = { onVerify, onExpire, onError };
 
     const key = siteKey || import.meta.env.VITE_TURNSTILE_SITE_KEY || '0x4AAAAAAFnojelGMzCnEVtr';
 
@@ -73,13 +77,13 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidget
             sitekey: key,
             action,
             callback: (token: string) => {
-              if (isMounted) onVerify(token);
+              if (isMounted) callbacksRef.current.onVerify(token);
             },
             'expired-callback': () => {
-              if (isMounted) onExpire?.();
+              if (isMounted) callbacksRef.current.onExpire?.();
             },
             'error-callback': (err: any) => {
-              if (isMounted) onError?.(err);
+              if (isMounted) callbacksRef.current.onError?.(err);
             },
             theme: 'auto',
           });
@@ -112,7 +116,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidget
           widgetIdRef.current = null;
         }
       };
-    }, [key, action, onVerify, onExpire, onError]);
+    }, [key, action]);
 
     return (
       <div
