@@ -21,8 +21,22 @@ namespace Core.Entitlements
 
     public static class MeteredResources
     {
+        /// <summary>Resource → billing period wire value (<c>month</c>) or null when not period-metered.</summary>
+        private static readonly IReadOnlyDictionary<MeteredResource, string?> PeriodByResource =
+            new Dictionary<MeteredResource, string?>
+            {
+                [MeteredResource.SalesDocuments] = "month",
+                [MeteredResource.Bills] = "month",
+                [MeteredResource.Seats] = null,
+                [MeteredResource.BankAccounts] = null,
+                [MeteredResource.OwnedWorkspaces] = null,
+            };
+
         public static bool IsMonthly(MeteredResource resource) =>
-            resource is MeteredResource.SalesDocuments or MeteredResource.Bills;
+            PeriodOf(resource) == "month";
+
+        public static string? PeriodOf(MeteredResource resource) =>
+            PeriodByResource.TryGetValue(resource, out var period) ? period : null;
 
         /// <summary>Stable wire / storage name, e.g. "salesDocuments".</summary>
         public static string Key(MeteredResource resource)
@@ -59,7 +73,16 @@ namespace Core.Entitlements
     /// </summary>
     public class EntitlementsOptions
     {
+        /// <summary>
+        /// When false, quotas are unlimited and every plan is self-service (self-host default).
+        /// Does not change modules, lifecycle, ReadOnlyModules, or features (§8.1).
+        /// </summary>
         public bool Enabled { get; set; }
+        /// <summary>
+        /// When false, <see cref="EntitlementSnapshot.Features"/> is empty. Quotas unaffected (§8.1).
+        /// Default true; community still emits no feature keys.
+        /// </summary>
+        public bool FeaturesEnabled { get; set; } = true;
         /// <summary>Plans users may pick themselves. Empty = all known plans.</summary>
         public List<string> SelfServicePlans { get; set; } = new();
         /// <summary>Free-tier limits; a missing resource is unlimited.</summary>
@@ -134,7 +157,7 @@ namespace Core.Entitlements
         Write = 1
     }
 
-    /// <summary>Gate request for <see cref="IEntitlementService.Evaluate"/>. Feature/Create arrive in E2.</summary>
+    /// <summary>Gate request for <see cref="IEntitlementService.Evaluate"/>.</summary>
     public abstract record EntitlementAction
     {
         private EntitlementAction() { }
@@ -156,6 +179,41 @@ namespace Core.Entitlements
             public Module(IReadOnlyList<string> anyOf, ModuleAccess access = ModuleAccess.Write)
                 : this(access, anyOf?.ToArray() ?? Array.Empty<string>()) { }
         }
+
+        /// <summary>Commercial feature key (e.g. <c>mfa</c>). Community emits none.</summary>
+        public sealed record Feature : EntitlementAction
+        {
+            public string Key { get; }
+            public Feature(string key) => Key = key ?? string.Empty;
+        }
+
+        /// <summary>Quota create / capacity check (same path as <see cref="IEntitlementService.EnsureCanCreate"/>).</summary>
+        public sealed record Create : EntitlementAction
+        {
+            public MeteredResource Resource { get; }
+            public int Count { get; }
+            public Create(MeteredResource resource, int count = 1)
+            {
+                Resource = resource;
+                Count = count;
+            }
+        }
+    }
+
+    /// <summary>User-scoped questions (§6.3.1). Must not use <see cref="ITenantContext"/>.</summary>
+    public abstract record UserAction
+    {
+        private UserAction() { }
+
+        /// <summary>May the user own another workspace under free owned-workspace quota?</summary>
+        public sealed record OwnAnotherWorkspace : UserAction;
+
+        /// <summary>True if any active membership's snapshot has the feature key (e.g. <c>mfa</c> / <c>mfa_policy</c>).</summary>
+        public sealed record FeatureAmongMemberships : UserAction
+        {
+            public string FeatureKey { get; }
+            public FeatureAmongMemberships(string featureKey) => FeatureKey = featureKey ?? string.Empty;
+        }
     }
 
     /// <summary>Allow/deny result from <see cref="IEntitlementService.Evaluate"/> (no throw).</summary>
@@ -170,7 +228,8 @@ namespace Core.Entitlements
         int? Used = null,
         string? Period = null,
         bool UpgradeAvailable = false,
-        string? SubscriptionStatus = null);
+        string? SubscriptionStatus = null,
+        string? EffectivePlan = null);
 
     /// <summary>Central entitlement gate: what a workspace may use and how much of it.</summary>
     public interface IEntitlementService
@@ -181,12 +240,28 @@ namespace Core.Entitlements
         EntitlementSnapshot Get(int companyId);
 
         /// <summary>
-        /// Policy decision without throwing (E1a: Module actions; Feature/Create in E2).
+        /// Policy decision without throwing.
         /// Default throws so out-of-repo implementers (accountgo-commercial) keep compiling until they opt in.
         /// </summary>
         EntitlementDecision Evaluate(int companyId, EntitlementAction action) =>
             throw new NotSupportedException(
                 "IEntitlementService.Evaluate is not implemented by this entitlement service.");
+
+        /// <summary>
+        /// Same as <see cref="Evaluate"/> but throws a typed <see cref="EntitlementException"/> on deny.
+        /// Default throws so commercial implementers keep compiling until they opt in.
+        /// </summary>
+        void Ensure(int companyId, EntitlementAction action) =>
+            throw new NotSupportedException(
+                "IEntitlementService.Ensure is not implemented by this entitlement service.");
+
+        /// <summary>
+        /// User-scoped decision (own-another-workspace, MFA any-membership). Must not use <see cref="ITenantContext"/>.
+        /// Default throws so commercial implementers keep compiling until they opt in.
+        /// </summary>
+        EntitlementDecision EvaluateForUser(string userId, UserAction action) =>
+            throw new NotSupportedException(
+                "IEntitlementService.EvaluateForUser is not implemented by this entitlement service.");
 
         /// <summary>
         /// Drops the per-request policy memo for <paramref name="companyId"/> after Plan / modules / status writes.
@@ -217,6 +292,13 @@ namespace Core.Entitlements
         /// <summary>Records one creation of a monthly resource in the active workspace.</summary>
         void Record(MeteredResource resource, int? entityId);
 
+        /// <summary>
+        /// Records one creation for an explicit company. Default throws so commercial keep compiling until they opt in.
+        /// </summary>
+        void Record(int companyId, MeteredResource resource, int? entityId) =>
+            throw new NotSupportedException(
+                "IEntitlementService.Record(companyId, …) is not implemented by this entitlement service.");
+
         /// <summary>Throws <see cref="QuotaExceededException"/> when the user may not own another workspace.</summary>
         void EnsureCanOwnAnotherWorkspace(string userId);
 
@@ -232,6 +314,13 @@ namespace Core.Entitlements
     public abstract class EntitlementException : TenantException
     {
         protected EntitlementException(string message) : base(message) { }
+
+        public abstract string Code { get; }
+        public string? EffectivePlan { get; init; }
+        public bool UpgradeAvailable { get; init; }
+        public string? RequiredModule { get; init; }
+        public string? RequiredFeature { get; init; }
+        public string? SubscriptionStatus { get; init; }
     }
 
     public class QuotaExceededException : EntitlementException
@@ -240,9 +329,10 @@ namespace Core.Entitlements
         public int Limit { get; }
         public int Used { get; }
         public bool Monthly { get; }
+        public override string Code => "QUOTA_EXCEEDED";
 
-        public QuotaExceededException(MeteredResource resource, int limit, int used)
-            : base(Describe(resource, limit))
+        public QuotaExceededException(MeteredResource resource, int limit, int used, string detail)
+            : base(detail)
         {
             Resource = resource;
             Limit = limit;
@@ -250,24 +340,54 @@ namespace Core.Entitlements
             Monthly = MeteredResources.IsMonthly(resource);
         }
 
-        private static string Describe(MeteredResource resource, int limit) => resource switch
+        /// <summary>Legacy ctor; prefer the overload that takes a plan-display detail from the service.</summary>
+        public QuotaExceededException(MeteredResource resource, int limit, int used)
+            : this(resource, limit, used, LegacyDescribe(resource, limit))
         {
-            MeteredResource.SalesDocuments => $"The Free plan includes {limit} invoices and quotes per month.",
-            MeteredResource.Bills => $"The Free plan includes {limit} bills per month.",
+        }
+
+        private static string LegacyDescribe(MeteredResource resource, int limit) => resource switch
+        {
+            MeteredResource.SalesDocuments => $"The plan includes {limit} invoices and quotes per month.",
+            MeteredResource.Bills => $"The plan includes {limit} bills per month.",
             MeteredResource.Seats => limit == 1
-                ? "The Free plan includes 1 user per workspace."
-                : $"The Free plan includes {limit} users per workspace.",
-            MeteredResource.BankAccounts => $"The Free plan includes {limit} bank and cash accounts.",
+                ? "The plan includes 1 user per workspace."
+                : $"The plan includes {limit} users per workspace.",
+            MeteredResource.BankAccounts => $"The plan includes {limit} bank and cash accounts.",
             MeteredResource.OwnedWorkspaces => limit == 1
-                ? "The Free plan includes 1 workspace per owner."
-                : $"The Free plan includes {limit} workspaces per owner.",
-            _ => "This workspace has reached a Free plan limit."
+                ? "The plan includes 1 workspace per owner."
+                : $"The plan includes {limit} workspaces per owner.",
+            _ => "This workspace has reached a plan limit."
         };
+    }
+
+    public class FeatureNotEntitledException : EntitlementException
+    {
+        public override string Code => "FEATURE_NOT_ENTITLED";
+
+        public FeatureNotEntitledException(string feature, string detail)
+            : base(detail)
+        {
+            RequiredFeature = feature;
+        }
+    }
+
+    public class ModuleNotSubscribedException : EntitlementException
+    {
+        public override string Code { get; }
+
+        public ModuleNotSubscribedException(string code, string detail, string? requiredModule)
+            : base(detail)
+        {
+            Code = code;
+            RequiredModule = requiredModule;
+        }
     }
 
     public class PlanNotAvailableException : EntitlementException
     {
         public string Plan { get; }
+        public override string Code => "PLAN_NOT_AVAILABLE";
 
         public PlanNotAvailableException(string plan)
             : base($"The {plan} plan is not available to choose here.")

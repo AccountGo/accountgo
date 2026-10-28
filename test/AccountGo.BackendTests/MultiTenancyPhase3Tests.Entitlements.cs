@@ -64,8 +64,13 @@ namespace AccountGo.BackendTests
             Assert.Equal("QUOTA_EXCEEDED", problem.GetProperty("code").GetString());
             Assert.Equal(resource, problem.GetProperty("resource").GetString());
             Assert.Equal(limit, problem.GetProperty("limit").GetInt32());
-            Assert.False(problem.GetProperty("upgradeAvailable").GetBoolean());
+            // E2: upgradeAvailable is true when AllowedTransitions includes a paid plan that lifts quotas
+            // (was hard-coded false). Self-host (Enabled=false) still yields false.
+            Assert.True(problem.GetProperty("upgradeAvailable").GetBoolean());
             Assert.Equal("support@example.com", problem.GetProperty("contact").GetString());
+            Assert.True(problem.TryGetProperty("canManageBilling", out _));
+            Assert.True(problem.TryGetProperty("monthly", out _));
+            Assert.True(problem.TryGetProperty("effectivePlan", out _));
         }
 
         private async Task<HttpResponseMessage> SaveQuote()

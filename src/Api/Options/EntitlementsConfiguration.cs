@@ -14,6 +14,7 @@ namespace Api.Options
     /// Reads free-tier settings from flat environment-style keys. None of them set = limits off (self-host default).
     /// <code>
     /// ENTITLEMENTS_ENABLED=true
+    /// ENTITLEMENT_FEATURES_ENABLED=true
     /// ENTITLEMENTS_SELF_SERVICE_PLANS=invoicing,accounting
     /// ENTITLEMENTS_FREE_SALES_DOCUMENTS_PER_MONTH=5
     /// ENTITLEMENTS_FREE_BILLS_PER_MONTH=5
@@ -21,6 +22,11 @@ namespace Api.Options
     /// ENTITLEMENTS_FREE_BANK_ACCOUNTS=2
     /// ENTITLEMENTS_FREE_OWNED_WORKSPACES=1
     /// </code>
+    /// <para>
+    /// Kill switches (§8.1): <c>ENTITLEMENTS_ENABLED=false</c> makes quotas unlimited and keeps every plan
+    /// self-service (self-host depends on this); it does not change modules, lifecycle, ReadOnlyModules, or features.
+    /// <c>ENTITLEMENT_FEATURES_ENABLED=false</c> empties Features only.
+    /// </para>
     /// </summary>
     public static class EntitlementsConfiguration
     {
@@ -38,6 +44,8 @@ namespace Api.Options
             var options = new EntitlementsOptions
             {
                 Enabled = bool.TryParse(configuration["ENTITLEMENTS_ENABLED"], out var enabled) && enabled,
+                // Default on: missing or non-false keeps feature emission enabled (community still emits none).
+                FeaturesEnabled = !string.Equals(configuration["ENTITLEMENT_FEATURES_ENABLED"], "false", StringComparison.OrdinalIgnoreCase),
                 SupportEmail = configuration["SUPPORT_EMAIL"] ?? configuration["Email:SupportAddress"],
                 // Default on: missing or non-false keeps shadow mode when LegacyModuleGate is true.
                 EngineShadow = !string.Equals(configuration["ENTITLEMENTS_ENGINE_SHADOW"], "false", StringComparison.OrdinalIgnoreCase),
