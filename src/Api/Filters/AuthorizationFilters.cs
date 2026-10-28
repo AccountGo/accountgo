@@ -49,76 +49,55 @@ namespace Api.Filters
             var entitlements = context.HttpContext.RequestServices.GetRequiredService<IEntitlementService>();
             var access = ResolveAccess(context);
 
-            bool allowed;
-            string? denyCode = null;
-            string? requiredModule = null;
-            string? subscriptionStatus = null;
-
+            EntitlementDecision decision;
             if (entitlements.Options.LegacyModuleGate)
             {
                 var companies = context.HttpContext.RequestServices.GetRequiredService<IRepository<Company>>();
                 var company = companies.GetById(companyId)
                     ?? throw new TenantEntityNotFoundException(nameof(Company), companyId);
-                allowed = Array.Exists(_moduleKeys, m => SubscriptionAccess.IsModuleAvailable(company, m));
+                var allowed = Array.Exists(_moduleKeys, m => SubscriptionAccess.IsModuleAvailable(company, m));
                 string? lapsedModule = null;
                 if (!allowed && Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company))
                     lapsedModule = Array.Find(_moduleKeys, company.HasModule);
-                denyCode = !allowed
+                var denyCode = !allowed
                     ? (lapsedModule != null ? "SUBSCRIPTION_INACTIVE" : "MODULE_NOT_SUBSCRIBED")
                     : null;
-                requiredModule = lapsedModule ?? _moduleKeys[0];
-                subscriptionStatus = company.SubscriptionStatus ?? "canceled";
+                var requiredModule = lapsedModule ?? _moduleKeys[0];
+                var subscriptionStatus = company.SubscriptionStatus ?? "canceled";
 
                 var logger = context.HttpContext.RequestServices.GetService<ILoggerFactory>()
                     ?.CreateLogger(typeof(RequireModuleAttribute));
                 EntitlementEngineShadow.CompareModuleGate(
                     entitlements, logger, company.Id, _moduleKeys, allowed, denyCode);
+
+                decision = allowed
+                    ? new EntitlementDecision(true, null, null, RequiredModule: requiredModule,
+                        SubscriptionStatus: subscriptionStatus)
+                    : new EntitlementDecision(
+                        Allowed: false,
+                        Code: denyCode ?? "MODULE_NOT_SUBSCRIBED",
+                        Detail: string.Equals(denyCode, "SUBSCRIPTION_INACTIVE", StringComparison.Ordinal)
+                            ? "This workspace's subscription is inactive. Update billing to restore paid modules."
+                            : (_moduleKeys.Length == 1
+                                ? $"The '{_moduleKeys[0]}' module is not included in this organization's active plan."
+                                : $"None of the '{string.Join("', '", _moduleKeys)}' modules is included in this organization's active plan."),
+                        RequiredModule: requiredModule,
+                        // Legacy path kept prior hard-coded true; engine path computes via AllowedTransitions.
+                        UpgradeAvailable: true,
+                        SubscriptionStatus: subscriptionStatus);
             }
             else
             {
-                var decision = entitlements.Evaluate(companyId, new EntitlementAction.Module(access, _moduleKeys));
-                allowed = decision.Allowed;
-                denyCode = decision.Code;
-                requiredModule = decision.RequiredModule ?? _moduleKeys[0];
-                subscriptionStatus = decision.SubscriptionStatus;
+                decision = entitlements.Evaluate(companyId, new EntitlementAction.Module(access, _moduleKeys));
             }
 
-            if (!allowed)
+            if (!decision.Allowed)
             {
-                if (string.Equals(denyCode, "SUBSCRIPTION_INACTIVE", StringComparison.Ordinal))
-                {
-                    var inactive = new ProblemDetails
-                    {
-                        Type = "https://accountgo.ph/errors/subscription-inactive",
-                        Title = "Subscription Inactive",
-                        Detail = "This workspace's subscription is inactive. Update billing to restore paid modules.",
-                        Status = StatusCodes.Status403Forbidden
-                    };
-                    inactive.Extensions["code"] = "SUBSCRIPTION_INACTIVE";
-                    inactive.Extensions["status"] = subscriptionStatus ?? "canceled";
-                    inactive.Extensions["requiredModule"] = requiredModule;
-                    inactive.Extensions["upgradeAvailable"] = true;
-
-                    context.Result = new ObjectResult(inactive)
-                    {
-                        StatusCode = StatusCodes.Status403Forbidden
-                    };
-                    return;
-                }
-
-                var problem = new ProblemDetails
-                {
-                    Type = "https://accountgo.ph/errors/module-not-subscribed",
-                    Title = "Module Not Subscribed",
-                    Detail = _moduleKeys.Length == 1
-                        ? $"The '{_moduleKeys[0]}' module is not included in this organization's active plan."
-                        : $"None of the '{string.Join("', '", _moduleKeys)}' modules is included in this organization's active plan.",
-                    Status = StatusCodes.Status403Forbidden
-                };
-                problem.Extensions["code"] = denyCode ?? "MODULE_NOT_SUBSCRIBED";
-                problem.Extensions["requiredModule"] = requiredModule ?? _moduleKeys[0];
-                problem.Extensions["upgradeAvailable"] = true;
-
+                var problem = EntitlementProblemFactory.FromDecision(
+                    decision,
+                    tenantContext,
+                    entitlements.Options.SupportEmail,
+                    requiredModules: _moduleKeys);
                 context.Result = new ObjectResult(problem)
                 {
                     StatusCode = StatusCodes.Status403Forbidden

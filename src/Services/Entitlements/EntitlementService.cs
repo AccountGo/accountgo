@@ -4,6 +4,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,11 +20,14 @@ namespace Services.Entitlements
     /// <summary>
     /// Configuration-driven entitlements. Quotas apply when Enabled and the effective plan is free
     /// (or Tier=comp overrides to unlimited). Module <see cref="Evaluate"/> runs pipeline steps 1–6.
+    /// Feature / EvaluateForUser arrive in E2. Community never emits commercial feature keys;
+    /// subclasses may override <see cref="ResolveFeatures"/> for tests.
     /// </summary>
     public class EntitlementService : IEntitlementService
     {
         private static readonly MeteredResource[] AllResources = (MeteredResource[])Enum.GetValues(typeof(MeteredResource));
         private static readonly TimeSpan PastDueGrace = TimeSpan.FromDays(14);
+        private static readonly IReadOnlySet<string> NoFeatures = ImmutableHashSet<string>.Empty;
 
         private readonly EntitlementsOptions _options;
         private readonly IRepository<Company> _companies;
@@ -79,9 +83,7 @@ namespace Services.Entitlements
                 .ToList();
 
             var selfService = ResolveSelfServicePlans();
-            var transitions = Company.KnownPlans
-                .Where(p => Company.IsAllowedSelfServicePlanChange(policy.StoredPlan, p))
-                .ToList();
+            var transitions = AllowedTransitionsFor(policy.StoredPlan);
 
             return new EntitlementSnapshot(
                 _options.Enabled,
@@ -92,7 +94,7 @@ namespace Services.Entitlements
                 selfService,
                 usage,
                 _options.SupportEmail,
-                Features: null,
+                Features: policy.Features,
                 EffectivePlan: policy.EffectivePlan,
                 ReadOnlyModules: policy.ReadOnlyModules.ToList(),
                 Lifecycle: policy.Lifecycle,
@@ -106,7 +108,39 @@ namespace Services.Entitlements
             return action switch
             {
                 EntitlementAction.Module module => EvaluateModule(companyId, module.AnyOf, module.Access),
-                _ => throw new NotSupportedException($"Entitlement action '{action.GetType().Name}' is not implemented until a later phase.")
+                EntitlementAction.Feature feature => EvaluateFeature(companyId, feature.Key),
+                EntitlementAction.Create create => EvaluateCreate(companyId, create.Resource, create.Count),
+                _ => throw new NotSupportedException($"Entitlement action '{action.GetType().Name}' is not supported.")
+            };
+        }
+
+        public void Ensure(int companyId, EntitlementAction action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            switch (action)
+            {
+                case EntitlementAction.Create create:
+                    EnsureCanCreate(companyId, create.Resource, create.Count);
+                    return;
+                default:
+                    var decision = Evaluate(companyId, action);
+                    if (!decision.Allowed)
+                        throw ToException(decision);
+                    return;
+            }
+        }
+
+        public EntitlementDecision EvaluateForUser(string userId, UserAction action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new ArgumentException("A user id is required.", nameof(userId));
+
+            return action switch
+            {
+                UserAction.OwnAnotherWorkspace => EvaluateOwnAnotherWorkspace(userId),
+                UserAction.FeatureAmongMemberships feature => EvaluateFeatureAmongMemberships(userId, feature.FeatureKey),
+                _ => throw new NotSupportedException($"User action '{action.GetType().Name}' is not supported.")
             };
         }
 
@@ -115,26 +149,21 @@ namespace Services.Entitlements
 
         public void EnsureCanCreate(int companyId, MeteredResource resource, int count = 1)
         {
-            if (!_options.Enabled || _bypassDepth > 0 || resource == MeteredResource.OwnedWorkspaces)
-                return;
-            var policy = ResolvePolicy(companyId);
-            if (!policy.Limited)
-                return;
-            var limit = LimitOf(resource);
-            if (limit == null)
-                return;
-            var used = CountUsed(companyId, resource, policy);
-            if (used + count > limit.Value)
-                throw new QuotaExceededException(resource, limit.Value, used);
+            var decision = EvaluateCreate(companyId, resource, count);
+            if (!decision.Allowed)
+                throw ToException(decision);
         }
 
-        public void Record(MeteredResource resource, int? entityId)
+        public void Record(MeteredResource resource, int? entityId) =>
+            Record(_tenant.RequireCompanyId(), resource, entityId);
+
+        public void Record(int companyId, MeteredResource resource, int? entityId)
         {
             if (!_options.Enabled || !MeteredResources.IsMonthly(resource))
                 return;
             _usage.Insert(new EntitlementUsage
             {
-                CompanyId = _tenant.RequireCompanyId(),
+                CompanyId = companyId,
                 Resource = MeteredResources.Key(resource),
                 EntityId = entityId,
                 OccurredAt = DateTime.UtcNow
@@ -143,22 +172,15 @@ namespace Services.Entitlements
 
         public void EnsureCanOwnAnotherWorkspace(string userId)
         {
-            if (!_options.Enabled || _bypassDepth > 0)
-                return;
-            if (!_options.FreeLimits.TryGetValue(MeteredResource.OwnedWorkspaces, out var limit))
-                return;
-
-            var owned = OwnedWorkspaces(userId);
-            if (owned.Any(c => !IsCompanyLimited(c)))
-                return;
-            if (owned.Count + 1 > limit)
-                throw new QuotaExceededException(MeteredResource.OwnedWorkspaces, limit, owned.Count);
+            var decision = EvaluateForUser(userId, new UserAction.OwnAnotherWorkspace());
+            if (!decision.Allowed)
+                throw ToException(decision);
         }
 
         public void EnsureSelfServicePlan(string plan)
         {
             if (!_options.IsSelfServicePlan(plan))
-                throw new PlanNotAvailableException(plan);
+                throw new PlanNotAvailableException(plan) { UpgradeAvailable = false };
         }
 
         public IDisposable Bypass()
@@ -180,6 +202,162 @@ namespace Services.Entitlements
             return false;
         }
 
+        /// <summary>
+        /// Community emits no commercial features. Test subclasses may override to inject keys
+        /// when verifying <see cref="EntitlementsOptions.FeaturesEnabled"/> kill-switch behaviour.
+        /// </summary>
+        protected virtual IReadOnlySet<string> ResolveFeatures(PolicyMemo policy)
+        {
+            _ = policy;
+            return NoFeatures;
+        }
+
+        private EntitlementDecision EvaluateFeature(int companyId, string featureKey)
+        {
+            var key = (featureKey ?? string.Empty).Trim();
+            if (key.Length == 0)
+            {
+                return new EntitlementDecision(
+                    Allowed: false,
+                    Code: "FEATURE_NOT_ENTITLED",
+                    Detail: "No feature key was supplied.",
+                    RequiredFeature: featureKey,
+                    UpgradeAvailable: false);
+            }
+
+            var policy = ResolvePolicy(companyId);
+            if (policy.Features.Contains(key))
+            {
+                return new EntitlementDecision(
+                    Allowed: true,
+                    Code: null,
+                    Detail: null,
+                    RequiredFeature: key,
+                    EffectivePlan: policy.EffectivePlan,
+                    SubscriptionStatus: policy.Lifecycle.Status);
+            }
+
+            return new EntitlementDecision(
+                Allowed: false,
+                Code: "FEATURE_NOT_ENTITLED",
+                Detail: $"The '{key}' feature is not included in this organization's plan.",
+                RequiredFeature: key,
+                EffectivePlan: policy.EffectivePlan,
+                UpgradeAvailable: ComputeUpgradeAvailable("FEATURE_NOT_ENTITLED", policy, requiredFeature: key),
+                SubscriptionStatus: policy.Lifecycle.Status);
+        }
+
+        private EntitlementDecision EvaluateCreate(int companyId, MeteredResource resource, int count)
+        {
+            if (!_options.Enabled || _bypassDepth > 0 || resource == MeteredResource.OwnedWorkspaces)
+            {
+                return new EntitlementDecision(true, null, null, Resource: resource, UpgradeAvailable: false);
+            }
+
+            var policy = ResolvePolicy(companyId);
+            if (!policy.Limited)
+            {
+                return new EntitlementDecision(
+                    true, null, null,
+                    Resource: resource,
+                    EffectivePlan: policy.EffectivePlan,
+                    UpgradeAvailable: false);
+            }
+
+            var limit = LimitOf(resource);
+            if (limit == null)
+            {
+                return new EntitlementDecision(
+                    true, null, null,
+                    Resource: resource,
+                    EffectivePlan: policy.EffectivePlan,
+                    UpgradeAvailable: false);
+            }
+
+            var used = CountUsed(companyId, resource, policy);
+            if (used + count <= limit.Value)
+            {
+                return new EntitlementDecision(
+                    true, null, null,
+                    Resource: resource,
+                    Limit: limit,
+                    Used: used,
+                    Period: MeteredResources.PeriodOf(resource),
+                    EffectivePlan: policy.EffectivePlan,
+                    UpgradeAvailable: false);
+            }
+
+            var planName = Company.PlanDisplayName(policy.EffectivePlan);
+            return new EntitlementDecision(
+                Allowed: false,
+                Code: "QUOTA_EXCEEDED",
+                Detail: DescribeQuota(planName, resource, limit.Value),
+                Resource: resource,
+                Limit: limit,
+                Used: used,
+                Period: MeteredResources.PeriodOf(resource),
+                EffectivePlan: policy.EffectivePlan,
+                UpgradeAvailable: ComputeUpgradeAvailable("QUOTA_EXCEEDED", policy, resource: resource),
+                SubscriptionStatus: policy.Lifecycle.Status);
+        }
+
+        private EntitlementDecision EvaluateOwnAnotherWorkspace(string userId)
+        {
+            if (!_options.Enabled || _bypassDepth > 0)
+                return new EntitlementDecision(true, null, null, UpgradeAvailable: false);
+
+            if (!_options.FreeLimits.TryGetValue(MeteredResource.OwnedWorkspaces, out var limit))
+                return new EntitlementDecision(true, null, null, UpgradeAvailable: false);
+
+            var owned = OwnedWorkspaces(userId);
+            if (owned.Any(c => !IsCompanyLimited(c)))
+                return new EntitlementDecision(true, null, null, UpgradeAvailable: false);
+
+            if (owned.Count + 1 <= limit)
+            {
+                return new EntitlementDecision(
+                    true, null, null,
+                    Resource: MeteredResource.OwnedWorkspaces,
+                    Limit: limit,
+                    Used: owned.Count,
+                    UpgradeAvailable: false);
+            }
+
+            return new EntitlementDecision(
+                Allowed: false,
+                Code: "QUOTA_EXCEEDED",
+                Detail: DescribeQuota(planDisplayName: null, MeteredResource.OwnedWorkspaces, limit),
+                Resource: MeteredResource.OwnedWorkspaces,
+                Limit: limit,
+                Used: owned.Count,
+                Period: MeteredResources.PeriodOf(MeteredResource.OwnedWorkspaces),
+                UpgradeAvailable: _options.Enabled);
+        }
+
+        private EntitlementDecision EvaluateFeatureAmongMemberships(string userId, string featureKey)
+        {
+            var key = (featureKey ?? string.Empty).Trim();
+            var companyIds = _members.Table
+                .Where(m => m.UserId == userId && m.Status == CompanyMemberStatus.Active)
+                .Select(m => m.CompanyId)
+                .Distinct()
+                .ToList();
+
+            foreach (var companyId in companyIds)
+            {
+                var decision = EvaluateFeature(companyId, key);
+                if (decision.Allowed)
+                    return decision;
+            }
+
+            return new EntitlementDecision(
+                Allowed: false,
+                Code: "FEATURE_NOT_ENTITLED",
+                Detail: $"The '{key}' feature is not available on any of this user's workspaces.",
+                RequiredFeature: key,
+                UpgradeAvailable: false);
+        }
+
         private EntitlementDecision EvaluateModule(int companyId, IReadOnlyList<string> anyOf, ModuleAccess access)
         {
             var keys = (anyOf ?? Array.Empty<string>())
@@ -192,7 +370,7 @@ namespace Services.Entitlements
                     Allowed: false,
                     Code: "MODULE_NOT_SUBSCRIBED",
                     Detail: "No module key was supplied.",
-                    UpgradeAvailable: true);
+                    UpgradeAvailable: false);
             }
 
             var policy = ResolvePolicy(companyId);
@@ -206,6 +384,7 @@ namespace Services.Entitlements
                     Code: null,
                     Detail: null,
                     RequiredModule: fullKey,
+                    EffectivePlan: policy.EffectivePlan,
                     SubscriptionStatus: policy.Lifecycle.Status);
             }
 
@@ -220,6 +399,7 @@ namespace Services.Entitlements
                         Code: null,
                         Detail: null,
                         RequiredModule: readOnlyKey,
+                        EffectivePlan: policy.EffectivePlan,
                         SubscriptionStatus: policy.Lifecycle.Status);
                 }
             }
@@ -234,7 +414,8 @@ namespace Services.Entitlements
                     Code: "SUBSCRIPTION_INACTIVE",
                     Detail: "This workspace's subscription is inactive. Update billing to restore paid modules.",
                     RequiredModule: lapsedKey,
-                    UpgradeAvailable: true,
+                    EffectivePlan: policy.EffectivePlan,
+                    UpgradeAvailable: ComputeUpgradeAvailable("SUBSCRIPTION_INACTIVE", policy, requiredModule: lapsedKey),
                     SubscriptionStatus: policy.Lifecycle.Status);
             }
 
@@ -245,8 +426,124 @@ namespace Services.Entitlements
                     ? $"The '{keys[0]}' module is not included in this organization's active plan."
                     : $"None of the '{string.Join("', '", keys)}' modules is included in this organization's active plan.",
                 RequiredModule: keys[0],
-                UpgradeAvailable: true,
+                EffectivePlan: policy.EffectivePlan,
+                UpgradeAvailable: ComputeUpgradeAvailable("MODULE_NOT_SUBSCRIBED", policy, requiredModule: keys[0]),
                 SubscriptionStatus: policy.Lifecycle.Status);
+        }
+
+        /// <summary>
+        /// upgradeAvailable: true for SUBSCRIPTION_INACTIVE when entitlements are on;
+        /// otherwise true only when AllowedTransitions contains a plan that would lift the deny;
+        /// always false when Enabled=false (self-host).
+        /// </summary>
+        private bool ComputeUpgradeAvailable(
+            string code,
+            PolicyMemo policy,
+            string? requiredModule = null,
+            string? requiredFeature = null,
+            MeteredResource? resource = null)
+        {
+            if (!_options.Enabled)
+                return false;
+
+            if (string.Equals(code, "SUBSCRIPTION_INACTIVE", StringComparison.Ordinal))
+                return true;
+
+            foreach (var toPlan in AllowedTransitionsFor(policy.StoredPlan))
+            {
+                if (WouldLiftDeny(code, policy, toPlan, requiredModule, requiredFeature, resource))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool WouldLiftDeny(
+            string code,
+            PolicyMemo policy,
+            string toPlan,
+            string? requiredModule,
+            string? requiredFeature,
+            MeteredResource? resource)
+        {
+            if (string.Equals(code, "QUOTA_EXCEEDED", StringComparison.Ordinal))
+            {
+                // Paid / enterprise plans are unlimited until E4; free→paid lifts quotas.
+                return Company.IsPaidPlan(toPlan);
+            }
+
+            if (string.Equals(code, "MODULE_NOT_SUBSCRIBED", StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(requiredModule))
+            {
+                return Company.ModulesForPlan(toPlan)
+                    .Contains(requiredModule, StringComparer.OrdinalIgnoreCase);
+            }
+
+            if (string.Equals(code, "FEATURE_NOT_ENTITLED", StringComparison.Ordinal))
+            {
+                // Community emits no features; no self-serve transition lifts a feature deny here.
+                _ = requiredFeature;
+                _ = policy;
+                return false;
+            }
+
+            return false;
+        }
+
+        private static List<string> AllowedTransitionsFor(string storedPlan) =>
+            Company.KnownPlans
+                .Where(p => Company.IsAllowedSelfServicePlanChange(storedPlan, p))
+                .ToList();
+
+        private static string DescribeQuota(string? planDisplayName, MeteredResource resource, int limit) => resource switch
+        {
+            MeteredResource.SalesDocuments => $"The {planDisplayName} plan includes {limit} invoices and quotes per month.",
+            MeteredResource.Bills => $"The {planDisplayName} plan includes {limit} bills per month.",
+            MeteredResource.Seats => limit == 1
+                ? $"The {planDisplayName} plan includes 1 user per workspace."
+                : $"The {planDisplayName} plan includes {limit} users per workspace.",
+            MeteredResource.BankAccounts => $"The {planDisplayName} plan includes {limit} bank and cash accounts.",
+            // User-scoped: no single workspace plan name.
+            MeteredResource.OwnedWorkspaces => limit == 1
+                ? "Free plans include 1 workspace per owner."
+                : $"Free plans include {limit} workspaces per owner.",
+            _ => $"The {planDisplayName} plan has reached a limit."
+        };
+
+        private static EntitlementException ToException(EntitlementDecision decision)
+        {
+            if (decision.Code == "QUOTA_EXCEEDED" && decision.Resource is { } resource
+                && decision.Limit is { } limit && decision.Used is { } used)
+            {
+                return new QuotaExceededException(resource, limit, used, decision.Detail ?? "Quota exceeded")
+                {
+                    EffectivePlan = decision.EffectivePlan,
+                    UpgradeAvailable = decision.UpgradeAvailable,
+                    SubscriptionStatus = decision.SubscriptionStatus
+                };
+            }
+
+            if (decision.Code == "FEATURE_NOT_ENTITLED")
+            {
+                return new FeatureNotEntitledException(
+                    decision.RequiredFeature ?? "",
+                    decision.Detail ?? "Feature not entitled")
+                {
+                    EffectivePlan = decision.EffectivePlan,
+                    UpgradeAvailable = decision.UpgradeAvailable,
+                    SubscriptionStatus = decision.SubscriptionStatus
+                };
+            }
+
+            return new ModuleNotSubscribedException(
+                decision.Code ?? "MODULE_NOT_SUBSCRIBED",
+                decision.Detail ?? "Not entitled",
+                decision.RequiredModule)
+            {
+                EffectivePlan = decision.EffectivePlan,
+                UpgradeAvailable = decision.UpgradeAvailable,
+                SubscriptionStatus = decision.SubscriptionStatus
+            };
         }
 
         private PolicyMemo ResolvePolicy(int companyId)
@@ -277,26 +574,33 @@ namespace Services.Entitlements
                 : company.SubscriptionStatus.Trim().ToLowerInvariant();
             var periodEnd = company.CurrentPeriodEnd ?? company.SubscriptionValidUntil;
             var tier = CompanyTiers.Derive(company.Tier, effectivePlan);
+            // ENTITLEMENTS_ENABLED=false ⇒ quotas unlimited only; modules/lifecycle unchanged.
             var limited = _options.Enabled
                 && !string.Equals(tier, CompanyTiers.Comp, StringComparison.Ordinal)
                 && !IsPaidStoredPlan(effectivePlan);
 
+            var draft = new PolicyMemo(
+                company, storedPlan, effectivePlan, tier, limited, modules, readOnly,
+                lifecycle: new EntitlementLifecycle(
+                    Status: status,
+                    GraceEndsAt: graceEndsAt,
+                    CancelAtPeriodEnd: company.CancelAtPeriodEnd,
+                    PeriodEnd: periodEnd,
+                    ReducedBy: reducedBy),
+                version: "",
+                paidAccessEndedAt: company.PaidAccessEndedAt,
+                features: NoFeatures);
+
+            var features = _options.FeaturesEnabled ? ResolveFeatures(draft) : NoFeatures;
+            draft = draft.WithFeatures(features);
+
             var limitsFingerprint = string.Join(',',
                 AllResources.Select(r => $"{MeteredResources.Key(r)}={(limited ? LimitOf(r)?.ToString() ?? "-" : "-")}"));
-            var version = HashPolicy(effectivePlan, modules, readOnly, features: Array.Empty<string>(), limitsFingerprint);
+            var version = HashPolicy(effectivePlan, modules, readOnly, features.ToList(), limitsFingerprint);
+            draft = draft.WithVersion(version);
 
-            var lifecycle = new EntitlementLifecycle(
-                Status: status,
-                GraceEndsAt: graceEndsAt,
-                CancelAtPeriodEnd: company.CancelAtPeriodEnd,
-                PeriodEnd: periodEnd,
-                ReducedBy: reducedBy);
-
-            var memo = new PolicyMemo(
-                company, storedPlan, effectivePlan, tier, limited, modules, readOnly, lifecycle, version,
-                paidAccessEndedAt: company.PaidAccessEndedAt);
-            _policyMemo[companyId] = memo;
-            return memo;
+            _policyMemo[companyId] = draft;
+            return draft;
         }
 
         private (string EffectivePlan, DateTime? GraceEndsAt, string? ReducedBy) ResolveEffectivePlan(
@@ -479,7 +783,8 @@ namespace Services.Entitlements
             return _companies.Table.Where(c => companyIds.Contains(c.Id)).ToList();
         }
 
-        private sealed class PolicyMemo
+        /// <summary>Per-request policy memo; features may be swapped after ResolveFeatures.</summary>
+        protected sealed class PolicyMemo
         {
             public PolicyMemo(
                 Company company,
@@ -491,7 +796,8 @@ namespace Services.Entitlements
                 IReadOnlyList<string> readOnlyModules,
                 EntitlementLifecycle lifecycle,
                 string version,
-                DateTime? paidAccessEndedAt)
+                DateTime? paidAccessEndedAt,
+                IReadOnlySet<string> features)
             {
                 Company = company;
                 StoredPlan = storedPlan;
@@ -504,6 +810,7 @@ namespace Services.Entitlements
                 Lifecycle = lifecycle;
                 Version = version;
                 PaidAccessEndedAt = paidAccessEndedAt;
+                Features = features;
             }
 
             public Company Company { get; }
@@ -515,8 +822,17 @@ namespace Services.Entitlements
             public HashSet<string> ReadOnlyModules { get; }
             public HashSet<string> StoredActive { get; }
             public EntitlementLifecycle Lifecycle { get; }
-            public string Version { get; }
+            public string Version { get; private set; }
             public DateTime? PaidAccessEndedAt { get; }
+            public IReadOnlySet<string> Features { get; private set; }
+
+            public PolicyMemo WithFeatures(IReadOnlySet<string> features) =>
+                new(Company, StoredPlan, EffectivePlan, Tier, Limited, Modules.ToList(), ReadOnlyModules.ToList(),
+                    Lifecycle, Version, PaidAccessEndedAt, features);
+
+            public PolicyMemo WithVersion(string version) =>
+                new(Company, StoredPlan, EffectivePlan, Tier, Limited, Modules.ToList(), ReadOnlyModules.ToList(),
+                    Lifecycle, version, PaidAccessEndedAt, Features);
 
             public bool HasModuleUnderStoredPlan(string moduleKey) => StoredActive.Contains(moduleKey);
             public bool IsModuleAvailable(string moduleKey) => Modules.Contains(moduleKey);

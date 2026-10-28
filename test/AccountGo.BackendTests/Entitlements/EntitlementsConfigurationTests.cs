@@ -40,6 +40,14 @@ namespace AccountGo.BackendTests.Entitlements
         }
 
         [Fact]
+        public void FeaturesEnabled_DefaultsTrue_UnlessExplicitlyFalse()
+        {
+            Assert.True(Read(new()).FeaturesEnabled);
+            Assert.True(Read(new() { ["ENTITLEMENT_FEATURES_ENABLED"] = "true" }).FeaturesEnabled);
+            Assert.False(Read(new() { ["ENTITLEMENT_FEATURES_ENABLED"] = "false" }).FeaturesEnabled);
+        }
+
+        [Fact]
         public void HostedValues_AreReadFromFlatKeys()
         {
             var options = Read(new()

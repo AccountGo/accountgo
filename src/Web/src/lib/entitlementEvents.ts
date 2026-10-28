@@ -4,6 +4,7 @@ export const ENTITLEMENT_CODES = [
   'MODULE_NOT_SUBSCRIBED',
   'PLAN_NOT_AVAILABLE',
   'SUBSCRIPTION_INACTIVE',
+  'FEATURE_NOT_ENTITLED',
 ] as const;
 export type EntitlementCode = (typeof ENTITLEMENT_CODES)[number];
 
@@ -17,6 +18,10 @@ export interface EntitlementProblem {
   period?: string | null;
   contact?: string | null;
   requiredModule?: string;
+  requiredFeature?: string;
+  effectivePlan?: string;
+  canManageBilling?: boolean;
+  monthly?: boolean;
   status?: string;
 }
 

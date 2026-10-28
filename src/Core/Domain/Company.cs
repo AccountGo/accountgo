@@ -173,6 +173,21 @@ namespace Core.Domain
             };
         }
 
+        /// <summary>Human-readable plan name for quota / deny copy (matches catalog display names).</summary>
+        public static string PlanDisplayName(string? plan)
+        {
+            var key = NormalizePlanKey(plan ?? "accounting_free");
+            return key switch
+            {
+                "invoicing_free" => "Invoicing Free",
+                "invoicing_pro" => "Invoicing Pro",
+                "accounting_free" => "Accounting Free",
+                "accounting_pro" => "Accounting Pro",
+                "enterprise" => "Enterprise",
+                _ => string.IsNullOrWhiteSpace(plan) ? "Accounting Free" : plan.Trim()
+            };
+        }
+
         /// <summary>Maps a product×tier plan key to the free key of the same product (e.g. accounting_pro → accounting_free).</summary>
         public static string FreePlanFor(string? plan)
         {

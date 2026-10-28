@@ -9,6 +9,7 @@ const TITLES: Record<EntitlementProblem['code'], string> = {
   MODULE_NOT_SUBSCRIBED: 'Not included in your plan',
   PLAN_NOT_AVAILABLE: 'Plan not available',
   SUBSCRIPTION_INACTIVE: 'Subscription inactive',
+  FEATURE_NOT_ENTITLED: 'Feature not included in your plan',
 };
 
 /**
