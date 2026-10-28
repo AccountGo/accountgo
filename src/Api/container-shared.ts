@@ -1,4 +1,5 @@
 import { errorText, isTransientContainerError } from "./container-errors";
+import { scrubPathForLog } from "./server-timing";
 
 export class BuildMismatchError extends Error {
   constructor(message: string) {
@@ -217,8 +218,9 @@ export async function applyD1SyncFromResponse(options: {
     await db.batch(prepared);
   } catch (syncErr: unknown) {
     const message = syncErr instanceof Error ? syncErr.message : String(syncErr);
+    const scrubbedPath = scrubPathForLog(pathname);
     console.error(
-      `[worker] D1 sync batch failed: method=${method} path=${pathname} error=${message} statementCount=${syncStatements.length}`
+      `[worker] D1 sync batch failed: method=${method} path=${scrubbedPath} error=${message} statementCount=${syncStatements.length}`
     );
     throw syncErr;
   }

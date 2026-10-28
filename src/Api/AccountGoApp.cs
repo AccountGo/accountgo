@@ -88,6 +88,8 @@ public static class AccountGoApp
         }
 
         // Add database context and provide builder environment information to the extended method for debugging purpose
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSingleton<Api.Observability.ServerTimingDbCommandInterceptor>();
         builder.Services.ConfigureSqlContext(builder.Configuration, builder.Environment);
 
         builder.AddServiceDefaults();
@@ -381,6 +383,9 @@ public static class AccountGoApp
 
     public static void ConfigureApp(WebApplication app, IReadOnlyList<IAccountGoModule> modules)
     {
+        // Outermost: Server-Timing app;dur = time to response headers.
+        app.UseMiddleware<Api.Middleware.ServerTimingMiddleware>();
+
         app.UseForwardedHeaders();
         app.UseExceptionHandler();
         app.UseStatusCodePages();

@@ -19,6 +19,8 @@ export interface Env {
   BUILD_SHA?: string;
   TURNSTILE_SECRET?: string;
   TURNSTILE_HOSTNAMES?: string;
+  /** Observability: emit Server-Timing (default on when unset). */
+  SERVER_TIMING_ENABLED?: string;
   CF_VERSION_METADATA?: {
     id: string;
     tag: string;
