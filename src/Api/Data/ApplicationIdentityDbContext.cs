@@ -58,8 +58,11 @@ namespace Api.Data
             {
                 entity.ToTable("RefreshTokens");
                 entity.HasKey(e => e.Id);
+                entity.Property(e => e.FamilyId).IsRequired();
+                entity.Property(e => e.GraceReuseCount).IsRequired();
                 entity.HasIndex(e => e.TokenHash);
                 entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.FamilyId);
             });
 
             builder.Entity<DataProtectionKeyEntity>(entity =>

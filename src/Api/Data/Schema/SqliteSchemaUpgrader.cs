@@ -235,7 +235,10 @@ namespace Api.Data.Schema
                     new[] { "AspNetUsers", "MfaReEnrollRequired", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "RefreshTokens", "MfaMethod", "TEXT NULL" },
                     new[] { "RefreshTokens", "Amr", "TEXT NULL" },
-                    new[] { "RefreshTokens", "TrustedDeviceId", "INTEGER NULL" }
+                    new[] { "RefreshTokens", "TrustedDeviceId", "INTEGER NULL" },
+                    // D1 0031_refresh_token_family.sql
+                    new[] { "RefreshTokens", "FamilyId", "TEXT NOT NULL DEFAULT ''" },
+                    new[] { "RefreshTokens", "GraceReuseCount", "INTEGER NOT NULL DEFAULT 0" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -251,6 +254,11 @@ namespace Api.Data.Schema
                         added.Add($"{column[0]}.{column[1]}");
                     }
                 }
+                if (added.Contains("RefreshTokens.FamilyId"))
+                {
+                    BackfillRefreshTokenFamilyIds(connection, tx);
+                }
+
                 // Filled once, when the column arrives, so later invoices only ever get what was recorded at the time.
                 if (added.Contains("Item.StockValue"))
                 {
@@ -328,6 +336,29 @@ namespace Api.Data.Schema
                 cmd.ExecuteNonQuery();
             }
         }
+
+        /// <summary>
+        /// One-statement FamilyId backfill (D1 0031). Safe under SQLITE_LIMIT_COMPOUND_SELECT=1.
+        /// </summary>
+        public static void BackfillRefreshTokenFamilyIds(DbConnection connection, DbTransaction? tx = null)
+        {
+            if (!TableExists(connection, "RefreshTokens", tx) || !ColumnExists(connection, "RefreshTokens", "FamilyId", tx))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = RefreshTokenFamilyBackfillSql;
+            cmd.ExecuteNonQuery();
+
+            using var indexCmd = connection.CreateCommand();
+            indexCmd.Transaction = tx;
+            indexCmd.CommandText =
+                @"CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_FamilyId"" ON ""RefreshTokens"" (""FamilyId"");";
+            indexCmd.ExecuteNonQuery();
+        }
+
+        private const string RefreshTokenFamilyBackfillSql =
+            @"UPDATE ""RefreshTokens"" SET ""FamilyId"" = CAST(""Id"" AS TEXT) WHERE ""FamilyId"" IS NULL OR ""FamilyId"" = '';";
 
         public static void NormalizeCompanyPlanKeysAndTier(DbConnection connection, DbTransaction? tx = null)
         {
@@ -535,6 +566,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE TABLE IF NOT EXISTS ""RefreshTokens"" (
                 ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RefreshTokens"" PRIMARY KEY AUTOINCREMENT,
                 ""UserId"" TEXT NOT NULL,
+                ""FamilyId"" TEXT NOT NULL DEFAULT '',
                 ""TokenHash"" TEXT NOT NULL,
                 ""ExpiresAt"" TEXT NOT NULL,
                 ""CreatedAt"" TEXT NOT NULL,
@@ -542,12 +574,14 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""RevokedAt"" TEXT NULL,
                 ""ReplacedByTokenHash"" TEXT NULL,
                 ""UserAgent"" TEXT NULL,
+                ""GraceReuseCount"" INTEGER NOT NULL DEFAULT 0,
                 ""MfaMethod"" TEXT NULL,
                 ""Amr"" TEXT NULL,
                 ""TrustedDeviceId"" INTEGER NULL
             );
             CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_TokenHash"" ON ""RefreshTokens"" (""TokenHash"");
             CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_UserId"" ON ""RefreshTokens"" (""UserId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_FamilyId"" ON ""RefreshTokens"" (""FamilyId"");
 
             CREATE TABLE IF NOT EXISTS ""DataProtectionKeys"" (
                 ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_DataProtectionKeys"" PRIMARY KEY AUTOINCREMENT,

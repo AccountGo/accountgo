@@ -104,6 +104,9 @@ namespace Api.Data.Migrations.IdentityDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Amr")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -112,6 +115,16 @@ namespace Api.Data.Migrations.IdentityDb
 
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("FamilyId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("GraceReuseCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MfaMethod")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ReplacedByTokenHash")
                         .HasColumnType("nvarchar(max)");
@@ -123,6 +136,9 @@ namespace Api.Data.Migrations.IdentityDb
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<int?>("TrustedDeviceId")
+                        .HasColumnType("int");
+
                     b.Property<string>("UserAgent")
                         .HasColumnType("nvarchar(max)");
 
@@ -131,6 +147,8 @@ namespace Api.Data.Migrations.IdentityDb
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FamilyId");
 
                     b.HasIndex("TokenHash");
 

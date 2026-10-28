@@ -43,11 +43,15 @@ async function fetchWith503Retry(
 // smallest container can take several minutes.
 const REFRESH_STARTUP_DEADLINE_MS = 15 * 60 * 1000;
 
+/** Lock name shared across bundle versions — do not rename (old/new tabs must coordinate during rollout). */
+export const SESSION_REFRESH_LOCK_NAME = 'accountgo-session-refresh';
+
 // Only one tab refreshes at a time. Refresh tokens are single-use and every tab shares the cookie, so two tabs
-// refreshing together would present the same token twice.
-function withRefreshLock<T>(work: () => Promise<T>): Promise<T> {
+// refreshing together would present the same token twice. After the lock, the next tab sends the already-rotated
+// cookie and does a normal rotation (tokens stay in memory only — never localStorage / BroadcastChannel).
+export function withRefreshLock<T>(work: () => Promise<T>): Promise<T> {
   const locks = typeof navigator !== 'undefined' ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
-  return locks ? locks.request('accountgo-session-refresh', work) : work();
+  return locks ? locks.request(SESSION_REFRESH_LOCK_NAME, work) : work();
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
