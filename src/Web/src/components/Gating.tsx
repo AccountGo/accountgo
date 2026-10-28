@@ -18,6 +18,28 @@ export function useSubscription() {
   };
 }
 
+/** Shown on list/detail pages when the module is visible but writes are blocked (read-only grace). */
+export const ReadOnlyModuleBanner: React.FC<{ module: ModuleKey; orgSlug?: string }> = ({ module, orgSlug }) => {
+  const { canWrite, hasModule, hasPermission } = useTenantContext();
+  if (!hasModule(module) || canWrite(module)) return null;
+  const canManageBilling = hasPermission('admin.subscription.manage');
+  const href = orgSlug ? `/org/${encodeURIComponent(orgSlug)}/settings?tab=subscription` : null;
+  return (
+    <div
+      role="status"
+      className="p-3 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs font-semibold flex flex-wrap items-center justify-between gap-2"
+      data-testid={`readonly-${module}`}
+    >
+      <span>This module is read-only until billing is updated.</span>
+      {href && canManageBilling ? (
+        <Link to={href} className="underline hover:no-underline">Update billing</Link>
+      ) : (
+        <span>Ask your workspace owner to update billing.</span>
+      )}
+    </div>
+  );
+};
+
 export function usePermissions() {
   const { userPermissions, hasPermission, canAccess } = useTenantContext();
   return {

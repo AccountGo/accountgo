@@ -40,6 +40,8 @@ function renderPage(Component, permissions, path = '/org/ws-one/financials') {
         path: '/org/:orgSlug', element: createElement(Outlet, { context: {
           currentOrg: { slug: 'ws-one', name: 'WS One', currency: 'PHP' },
           hasPermission: permission => permissions.includes(permission),
+          canWrite: () => true,
+          hasModule: () => true,
         } }),
       }, createElement(Route, { path: 'financials/*', element: createElement(Component) }))))));
 }

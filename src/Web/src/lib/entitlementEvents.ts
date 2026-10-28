@@ -21,6 +21,7 @@ export interface EntitlementProblem {
   requiredFeature?: string;
   effectivePlan?: string;
   canManageBilling?: boolean;
+  upgradeAvailable?: boolean;
   monthly?: boolean;
   status?: string;
 }

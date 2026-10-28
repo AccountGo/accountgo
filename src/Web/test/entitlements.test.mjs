@@ -40,11 +40,12 @@ test('usage hint shows used of limit for limited workspaces only', () => {
   assert.equal(renderToStaticMarkup(createElement(UsageHint, { entitlements: null, resource: 'bills' })), '');
 });
 
-test('plan limit dialog explains the denial and offers support', () => {
+test('plan limit dialog explains the denial and offers support when manager cannot upgrade', () => {
   const html = renderToStaticMarkup(createElement(PlanLimitDialogView, {
     problem: {
       code: 'QUOTA_EXCEEDED', detail: 'The Free plan includes 5 invoices and quotes per month.',
       limit: 5, used: 5, period: 'month', contact: 'support@example.com',
+      canManageBilling: true, upgradeAvailable: false,
     },
     onClose: () => {},
   }));
@@ -53,21 +54,22 @@ test('plan limit dialog explains the denial and offers support', () => {
   assert.ok(html.includes('5 of 5 used this month.'));
   assert.ok(html.includes('Paid plans are coming soon.'));
   assert.ok(html.includes('href="mailto:support@example.com"'));
+  assert.ok(html.includes('View plan usage'));
 });
 
-test('subscription inactive dialog uses update billing CTA', () => {
+test('subscription inactive dialog uses update billing CTA for billing managers', () => {
   assert.equal(isEntitlementProblem({ code: 'SUBSCRIPTION_INACTIVE' }), true);
   const html = renderToStaticMarkup(createElement(PlanLimitDialogView, {
     problem: {
       code: 'SUBSCRIPTION_INACTIVE',
       detail: "This workspace's subscription is inactive. Update billing to restore paid modules.",
+      canManageBilling: true, upgradeAvailable: true,
     },
     onClose: () => {},
   }));
   assert.ok(html.includes('Subscription inactive'));
   assert.ok(html.includes('Update billing'));
   assert.ok(!html.includes('Paid plans are coming soon.'));
-  assert.ok(!html.includes('upgrade'));
 });
 
 test('only plan denials are announced, without consuming the response', async () => {

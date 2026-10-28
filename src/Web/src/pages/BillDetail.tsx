@@ -5,22 +5,26 @@ import { PageHeader, HeaderButton, HeaderMenu } from '../components/PageHeader';
 import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { PayBillDialog } from '../components/PayBillDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { usePermissions } from '../components/Gating';
+import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
 import { Bill, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
+import { useCapabilities } from '../lib/entitlements';
 
 /** One bill: who it is from, its lines and the accounts they are booked to, what is still owed, and its payments. */
 export const BillDetail: React.FC = () => {
-  const { currentOrg, subscription } = useOutletContext<TenantContextType>();
+  const { currentOrg, subscription, canWrite } = useOutletContext<TenantContextType>();
   const { billId } = useParams<{ billId: string }>();
   const { authFetch } = useAuth();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('purchases.bills.create');
-  const canApprove = hasPermission('purchases.bills.post');
-  const canPay = hasPermission('purchases.payments.create');
+  const { canCreate: canCreateResource } = useCapabilities();
+  const purchasesWritable = canWrite('purchases');
+  const canCreate = hasPermission('purchases.bills.create') && purchasesWritable && canCreateResource('bills');
+  const canEdit = hasPermission('purchases.bills.create') && purchasesWritable;
+  const canApprove = hasPermission('purchases.bills.post') && purchasesWritable;
+  const canPay = hasPermission('purchases.payments.create') && purchasesWritable;
   const canSeeVendors = hasPermission('purchases.vendors.view');
   const orgSlug = currentOrg.slug;
   const listPath = `/org/${orgSlug}/purchases`;
@@ -143,6 +147,7 @@ export const BillDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <ReadOnlyModuleBanner module="purchases" orgSlug={orgSlug} />
       <PageHeader
         back={{ to: listPath, label: 'Back to bills' }}
         eyebrow={bill.no ? `Bill #${bill.no}` : 'Bill'}
@@ -159,15 +164,15 @@ export const BillDetail: React.FC = () => {
         }
         actions={
           <>
-            {isDraft && canCreate && <HeaderButton label="Edit" icon={Pencil} compact to={`/org/${orgSlug}/purchases/${bill.id}/edit`} />}
-            {(canCreate || canVoid) && (
+            {isDraft && canEdit && <HeaderButton label="Edit" icon={Pencil} compact to={`/org/${orgSlug}/purchases/${bill.id}/edit`} />}
+            {(canCreate || canEdit || canVoid) && (
               <HeaderMenu
                 items={[
                   canCreate && { label: 'Duplicate', icon: Copy, onSelect: () => navigate(duplicatePath) },
                   canVoid && 'separator',
                   canVoid && { label: 'Void bill', icon: Ban, danger: true, onSelect: () => setConfirm('void') },
-                  isDraft && canCreate && 'separator',
-                  isDraft && canCreate && { label: 'Delete draft', icon: Trash2, danger: true, onSelect: () => setConfirm('delete') },
+                  isDraft && canEdit && 'separator',
+                  isDraft && canEdit && { label: 'Delete draft', icon: Trash2, danger: true, onSelect: () => setConfirm('delete') },
                 ]}
               />
             )}

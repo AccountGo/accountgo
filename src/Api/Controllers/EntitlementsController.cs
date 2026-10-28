@@ -44,6 +44,7 @@ namespace Api.Controllers
                 limited = snapshot.Limited,
                 modules = snapshot.Modules,
                 readOnlyModules = snapshot.ReadOnlyModules,
+                features = snapshot.Features.OrderBy(f => f, StringComparer.Ordinal).ToArray(),
                 lifecycle = snapshot.Lifecycle == null ? null : new
                 {
                     status = snapshot.Lifecycle.Status,

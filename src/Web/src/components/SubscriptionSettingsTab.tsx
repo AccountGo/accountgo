@@ -18,7 +18,7 @@ import {
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
 import { normalizePlanKey } from '../lib/plans';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
-import { useEntitlements } from '../lib/entitlements';
+import { useCapabilities } from '../lib/entitlements';
 import { useBilling } from '../lib/useBilling';
 import { UsageHint } from './UsageHint';
 
@@ -91,37 +91,52 @@ function isAllowedSelfServicePlanChange(fromPlan: string, toPlan: string): boole
 
 type PlanCardRole = 'current' | 'landing' | 'upgrade' | 'switch';
 
-function planCardsFor(currentPlan: string): Array<{ key: HostedPlanKey; role: PlanCardRole }> {
+function planCardsFor(
+  currentPlan: string,
+  allowedTransitions: string[],
+): Array<{ key: HostedPlanKey; role: PlanCardRole }> {
   const current = normalizePlanKey(currentPlan) as HostedPlanKey;
+  let cards: Array<{ key: HostedPlanKey; role: PlanCardRole }>;
   switch (current) {
     case 'accounting_pro':
-      return [
+      cards = [
         { key: 'accounting_pro', role: 'current' },
         { key: 'accounting_free', role: 'landing' },
       ];
+      break;
     case 'invoicing_pro':
-      return [
+      cards = [
         { key: 'invoicing_pro', role: 'current' },
         { key: 'invoicing_free', role: 'landing' },
         { key: 'accounting_pro', role: 'upgrade' },
       ];
+      break;
     case 'accounting_free':
-      return [
+      cards = [
         { key: 'accounting_free', role: 'current' },
         { key: 'accounting_pro', role: 'upgrade' },
         { key: 'invoicing_free', role: 'switch' },
       ];
+      break;
     case 'invoicing_free':
-      return [
+      cards = [
         { key: 'invoicing_free', role: 'current' },
         { key: 'invoicing_pro', role: 'upgrade' },
         { key: 'accounting_free', role: 'switch' },
       ];
+      break;
     default:
-      return isAllowedSelfServicePlanChange(current, 'accounting_pro')
+      cards = isAllowedSelfServicePlanChange(current, 'accounting_pro')
         ? [{ key: current as HostedPlanKey, role: 'current' }]
         : [{ key: 'accounting_free', role: 'current' }, { key: 'accounting_pro', role: 'upgrade' }];
   }
+  // Engine allowedTransitions is authoritative for upgrade/switch; current + cancel landing stay visible.
+  if (allowedTransitions.length === 0) {
+    return cards.filter((card) => card.role === 'current' || card.role === 'landing');
+  }
+  return cards.filter(
+    (card) => card.role === 'current' || card.role === 'landing' || allowedTransitions.includes(card.key),
+  );
 }
 
 function actionLabel(role: PlanCardRole): string {
@@ -214,15 +229,23 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
 }) => {
   const { subscription, updateSubscription } = tenantContext;
   const catalog = usePlanCatalog();
-  const { entitlements, reload: reloadEntitlements } = useEntitlements();
+  const {
+    entitlements,
+    reload: reloadEntitlements,
+    allowedTransitions,
+    startBillingReturnPoll,
+    version: entitlementsVersion,
+  } = useCapabilities();
   const billing = useBilling();
-  const currentPlan = (billing.plan || subscription?.planId || 'accounting') as PlanKey;
+  const currentPlan = (billing.plan || entitlements?.effectivePlan || entitlements?.plan || subscription?.planId || 'accounting') as PlanKey;
+  const effectiveTier = entitlements?.tier || billing.billing?.tier;
+  const isProTier = effectiveTier === 'pro' || effectiveTier === 'enterprise';
   const tierBadge = billing.billingEnabled
     ? (billing.status === 'past_due'
       ? 'Past due'
       : billing.cancelAtPeriodEnd
         ? 'Canceling'
-        : (billing.billing?.tier === 'comp' ? 'Managed' : (String(currentPlan).includes('_pro') || String(currentPlan) === 'enterprise' ? 'Pro' : 'Free')))
+        : (effectiveTier === 'comp' ? 'Managed' : isProTier ? 'Pro' : 'Free'))
     : !entitlements?.enabled
       ? 'Active'
       : entitlements.tier === 'comp'
@@ -241,33 +264,39 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [checkoutProcessing, setCheckoutProcessing] = useState(false);
+  const planBeforeCheckoutRef = React.useRef<string | null>(null);
+  const versionBeforeCheckoutRef = React.useRef<string | null>(null);
 
-  // After Checkout return: poll billing state until the webhook upgrades the plan.
+  // After Checkout/Portal return: poll capabilities (and billing state) until the webhook lands —
+  // every 5s for up to 2 min, stopping as soon as version or effectivePlan changes.
   useEffect(() => {
     const checkout = readCheckoutParam();
     if (checkout !== 'success' || !billing.billingEnabled) return;
 
     setCheckoutProcessing(true);
-    const started = Date.now();
-    const planBefore = String(currentPlan);
-    const timer = window.setInterval(() => {
-      void billing.reload().then(() => {
-        const next = String(billing.plan || '');
-        if ((next.includes('_pro') && next !== planBefore) || Date.now() - started > 60_000) {
-          window.clearInterval(timer);
-          setCheckoutProcessing(false);
-          clearCheckoutParam();
-          void reloadEntitlements();
-          if (next.includes('_pro')) {
-            setSuccessMessage('Payment received — your plan is now active.');
-            setTimeout(() => setSuccessMessage(null), 4000);
-          }
-        }
-      });
-    }, 2000);
-    return () => window.clearInterval(timer);
+    planBeforeCheckoutRef.current = String(currentPlan);
+    versionBeforeCheckoutRef.current = entitlementsVersion;
+    startBillingReturnPoll();
+    void billing.reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- poll once when checkout=success is present
   }, [billing.billingEnabled]);
+
+  useEffect(() => {
+    if (!checkoutProcessing) return;
+    const planBefore = planBeforeCheckoutRef.current;
+    const versionBefore = versionBeforeCheckoutRef.current;
+    const planNow = String(entitlements?.effectivePlan ?? entitlements?.plan ?? billing.plan ?? '');
+    const versionChanged = entitlementsVersion != null && entitlementsVersion !== versionBefore;
+    const planChanged = planBefore != null && planNow !== planBefore;
+    if (!versionChanged && !planChanged) return;
+    setCheckoutProcessing(false);
+    clearCheckoutParam();
+    void billing.reload();
+    if (planChanged || versionChanged) {
+      setSuccessMessage('Payment received — your plan is now active.');
+      setTimeout(() => setSuccessMessage(null), 4000);
+    }
+  }, [checkoutProcessing, entitlementsVersion, entitlements?.effectivePlan, entitlements?.plan, billing.plan, billing]);
 
   const handleToggleModule = async (moduleKey: ModuleKey) => {
     if (catalog.isRequired(currentPlan, moduleKey)) return;
@@ -381,7 +410,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
           </div>
         </div>
 
-        {(entitlements?.limited || (billing.billingEnabled && billing.billing?.tier === 'free')) && entitlements && (
+        {(entitlements?.limited || (billing.billingEnabled && effectiveTier === 'free')) && entitlements && (
           <div className="pt-2 space-y-2" aria-label="Plan usage">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Plan usage</h3>
             {(['salesDocuments', 'bills', 'seats', 'bankAccounts'] as const).map((resource) => (
@@ -441,7 +470,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
       </div>
 
       {billing.billingEnabled && (() => {
-        const cards = planCardsFor(String(currentPlan));
+        const cards = planCardsFor(String(currentPlan), allowedTransitions);
         const showInterval = cards.some((c) => c.role === 'upgrade');
         const landingKey = cancelLandingPlan(String(currentPlan));
         return (
@@ -520,7 +549,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                           <Check className="w-3.5 h-3.5" />
                           Current plan
                         </div>
-                        {String(normalizePlanKey(String(currentPlan))).endsWith('_pro') && (
+                        {isProTier && (
                           <button
                             type="button"
                             disabled={saving || checkoutProcessing || !billing.portalAvailable}

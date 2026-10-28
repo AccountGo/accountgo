@@ -14,14 +14,17 @@ interface MobileBottomNavProps {
   currentOrg: OrgDetails;
   onOpenMenu: () => void;
   hasPermission: (permission: string | string[]) => boolean;
+  hasModule?: (module: ModuleKey) => boolean;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   currentOrg,
   onOpenMenu,
   hasPermission,
+  hasModule,
 }) => {
-  const activeModules = currentOrg.subscription?.activeModules || [];
+  const moduleAllowed = hasModule
+    ?? ((moduleKey: ModuleKey) => (currentOrg.subscription?.activeModules || []).includes(moduleKey));
 
   const allNavItems: Array<{
     name: string;
@@ -68,7 +71,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   ];
 
   const navItems = allNavItems.filter((item) =>
-    (!item.module || activeModules.includes(item.module)) &&
+    (!item.module || moduleAllowed(item.module)) &&
     (!item.permission || hasPermission(item.permission)) &&
     (!item.adminOnly || currentOrg.role === 'Owner' || currentOrg.role === 'Admin')
   );

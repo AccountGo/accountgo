@@ -5,6 +5,7 @@ import { RoleItem, TenantContextType, WorkspaceInvitation, WorkspaceMember, Work
 import { useAuth } from '../auth/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { useCapabilities } from '../lib/entitlements';
 
 interface PendingConfirm {
   title: string;
@@ -49,7 +50,10 @@ export const Members: React.FC = () => {
   const [role, setRole] = useState<'Admin' | 'Member'>('Member');
   const [roleIds, setRoleIds] = useState<number[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const { canCreate: canCreateResource } = useCapabilities();
   const canManage = currentRole === 'Owner' || currentRole === 'Admin';
+  // Seats have no module — invite UI is permission ∧ canCreate(seats).
+  const canInvite = canManage && canCreateResource('seats');
   const isOwner = currentRole === 'Owner';
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -143,7 +147,7 @@ export const Members: React.FC = () => {
         actions={
           <>
             <HeaderButton label="Refresh" icon={RefreshCw} iconOnly busy={loading} disabled={busy} onClick={() => void load()} />
-            {canManage && (
+            {canInvite && (
               <HeaderButton label="Invite member" icon={UserPlus} variant="primary" disabled={busy || loading} onClick={() => openForm('invite')} />
             )}
           </>
@@ -152,7 +156,7 @@ export const Members: React.FC = () => {
       {error && <div role="alert" className="p-4 rounded-xl bg-red-500/10 text-red-400">{error}</div>}
       {notice && <div role="status" className="p-4 rounded-xl bg-emerald-500/10 text-emerald-400">{notice}</div>}
 
-      {form && canManage && (
+      {form && (form === 'invite' ? canInvite : canManage) && (
         <form onSubmit={submit} className="p-5 rounded-xl bg-[var(--bg-surface)] space-y-4">
           <h2 className="font-semibold">{form === 'invite' ? 'Invite to this workspace' : `Edit access for ${form.email}`}</h2>
           {form === 'invite' && <label className="block">Email

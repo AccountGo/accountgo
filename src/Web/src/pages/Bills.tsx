@@ -6,26 +6,27 @@ import { PurchasesTabs } from '../components/PurchasesTabs';
 import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { PayBillDialog } from '../components/PayBillDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { usePermissions } from '../components/Gating';
+import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
 import { Bill, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
-import { useEntitlements } from '../lib/entitlements';
+import { useCapabilities } from '../lib/entitlements';
 import { UsageHint } from '../components/UsageHint';
 
 type StatusFilter = 'all' | 'unpaid' | 'overdue' | 'paid' | 'draft' | 'void';
 
 /** The bills a workspace has to pay: what it owes, what is overdue, and the drafts waiting to be approved. */
 export const Bills: React.FC = () => {
-  const { currentOrg } = useOutletContext<TenantContextType>();
+  const { currentOrg, canWrite } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
-  const { entitlements } = useEntitlements();
+  const { entitlements, canCreate: canCreateResource } = useCapabilities();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('purchases.bills.create');
-  const canPay = hasPermission('purchases.payments.create');
-  const canVoid = hasPermission('purchases.bills.post');
+  const purchasesWritable = canWrite('purchases');
+  const canCreate = hasPermission('purchases.bills.create') && purchasesWritable && canCreateResource('bills');
+  const canPay = hasPermission('purchases.payments.create') && purchasesWritable;
+  const canVoid = hasPermission('purchases.bills.post') && purchasesWritable;
 
   const [bills, setBills] = useState<Bill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -151,6 +152,7 @@ export const Bills: React.FC = () => {
         }
       />
       <PurchasesTabs orgSlug={currentOrg.slug} />
+      <ReadOnlyModuleBanner module="purchases" orgSlug={currentOrg.slug} />
       <UsageHint entitlements={entitlements} resource="bills" />
 
       {notice && (

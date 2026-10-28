@@ -1,16 +1,66 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { getOrgSlugFromLocation } from '../auth/AuthContext';
-import { ENTITLEMENT_DENIED_EVENT, type EntitlementProblem } from '../lib/entitlementEvents';
+import { ENTITLEMENT_DENIED_EVENT, type EntitlementCode, type EntitlementProblem } from '../lib/entitlementEvents';
 import { ModalShell } from './ModalShell';
 
-const TITLES: Record<EntitlementProblem['code'], string> = {
+const TITLES: Record<EntitlementCode, string> = {
   QUOTA_EXCEEDED: 'Free plan limit reached',
   MODULE_NOT_SUBSCRIBED: 'Not included in your plan',
   PLAN_NOT_AVAILABLE: 'Plan not available',
   SUBSCRIPTION_INACTIVE: 'Subscription inactive',
   FEATURE_NOT_ENTITLED: 'Feature not included in your plan',
 };
+
+export type PlanLimitCta = {
+  label: string;
+  href: string | null;
+  primary: boolean;
+};
+
+/**
+ * CTA matrix from the problem body only (code × canManageBilling × upgradeAvailable).
+ * Ignores the entitlements payload's hard-coded upgrade.available.
+ */
+export function planLimitCta(problem: EntitlementProblem, subscriptionHref: string | null): PlanLimitCta {
+  const canManage = !!problem.canManageBilling;
+  const upgradeAvailable = !!problem.upgradeAvailable;
+
+  if (!canManage) {
+    return { label: 'Ask your workspace owner', href: null, primary: true };
+  }
+
+  if (problem.code === 'SUBSCRIPTION_INACTIVE') {
+    return { label: 'Update billing', href: subscriptionHref, primary: true };
+  }
+
+  if (upgradeAvailable) {
+    return { label: 'Upgrade plan', href: subscriptionHref, primary: true };
+  }
+
+  return { label: 'View plan usage', href: subscriptionHref, primary: false };
+}
+
+export function planLimitSupportCopy(problem: EntitlementProblem): string | null {
+  if (problem.code === 'SUBSCRIPTION_INACTIVE') {
+    return 'Update billing to restore paid modules and features.';
+  }
+  if (problem.code === 'FEATURE_NOT_ENTITLED') {
+    return problem.requiredFeature
+      ? `The “${problem.requiredFeature}” feature is not included in your current plan.`
+      : 'This feature is not included in your current plan.';
+  }
+  if (!problem.canManageBilling) {
+    return 'Ask your workspace owner to update the subscription if you need more capacity.';
+  }
+  if (problem.upgradeAvailable) {
+    return 'Upgrade your plan to unlock this capability.';
+  }
+  if (problem.contact) {
+    return null; // contact link rendered separately
+  }
+  return 'Paid plans are coming soon.';
+}
 
 /**
  * One explanation for every plan denial (limits, modules, plans), wherever the request came from.
@@ -32,10 +82,11 @@ export const PlanLimitDialog: React.FC = () => {
 export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClose: () => void }> = ({ problem, onClose }) => {
   const closeRef = useRef<HTMLButtonElement>(null);
   const slug = typeof window === 'undefined' ? null : getOrgSlugFromLocation();
-  const isInactive = problem.code === 'SUBSCRIPTION_INACTIVE';
   const subscriptionHref = slug
     ? `/org/${encodeURIComponent(slug)}/settings?tab=subscription`
     : null;
+  const cta = planLimitCta(problem, subscriptionHref);
+  const supportCopy = planLimitSupportCopy(problem);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -66,43 +117,40 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
       <div id="plan-limit-detail" className="space-y-2 text-sm text-[var(--text-secondary)]">
         {problem.detail && <p>{problem.detail}</p>}
         {usage && <p>{usage}</p>}
-        {isInactive ? (
-          <p>Update billing to restore paid modules and features.</p>
-        ) : (
+        {supportCopy && <p>{supportCopy}</p>}
+        {!supportCopy && problem.canManageBilling && !problem.upgradeAvailable && problem.contact ? (
           <p>
-            Paid plans are coming soon.
-            {problem.contact ? (
-              <>
-                {' '}
-                Need more now?{' '}
-                <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${problem.contact}`}>
-                  Contact support
-                </a>
-                .
-              </>
-            ) : null}
+            Paid plans are coming soon. Need more now?{' '}
+            <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${problem.contact}`}>
+              Contact support
+            </a>
+            .
           </p>
-        )}
+        ) : null}
       </div>
       <div className="flex justify-end gap-2">
-        {subscriptionHref && (
+        {cta.href ? (
           <a
-            href={subscriptionHref}
+            href={cta.href}
             className={
-              isInactive
+              cta.primary
                 ? 'h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)] inline-flex items-center'
                 : 'h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] inline-flex items-center'
             }
           >
-            {isInactive ? 'Update billing' : 'View plan usage'}
+            {cta.label}
           </a>
+        ) : (
+          <span className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] inline-flex items-center">
+            {cta.label}
+          </span>
         )}
         <button
           type="button"
           ref={closeRef}
           onClick={onClose}
           className={
-            isInactive
+            cta.primary && cta.href
               ? 'h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
               : 'h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)]'
           }

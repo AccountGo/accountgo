@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Api.Data;
 using Core.Domain;
@@ -97,6 +98,8 @@ namespace AccountGo.BackendTests
             Assert.False(state.GetProperty("limited").GetBoolean());
             Assert.Equal(Core.Domain.Company.KnownPlans.Count, state.GetProperty("selfServicePlans").GetArrayLength());
             Assert.Equal(JsonValueKindNull, state.GetProperty("limits").GetProperty("salesDocuments").GetProperty("limit").ValueKind);
+            Assert.Equal(JsonValueKind.Array, state.GetProperty("features").ValueKind);
+            Assert.Equal(0, state.GetProperty("features").GetArrayLength());
 
             using var scope = _factory.Services.CreateScope();
             using (scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))

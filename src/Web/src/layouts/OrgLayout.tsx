@@ -11,6 +11,7 @@ import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { AssistantMount, AssistantProvider } from '../assistant';
 import { PastDueBanner } from '../components/PastDueBanner';
+import { CapabilitiesProvider, useCapabilities } from '../lib/entitlements';
 
 export const OrgLayout: React.FC = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -181,13 +182,6 @@ export const OrgLayout: React.FC = () => {
     return currentOrg?.permissions || [];
   }, [currentOrg]);
 
-  const hasModule = useCallback(
-    (moduleKey: ModuleKey): boolean => {
-      return subscription.activeModules.includes(moduleKey);
-    },
-    [subscription]
-  );
-
   const hasPermission = useCallback(
     (permission: string | string[]): boolean => {
       if (currentOrg?.role === 'Owner' || currentOrg?.role === 'Admin') {
@@ -197,15 +191,6 @@ export const OrgLayout: React.FC = () => {
       return perms.some((p) => userPermissions.includes(p));
     },
     [currentOrg, userPermissions]
-  );
-
-  const canAccess = useCallback(
-    (moduleKey: ModuleKey, permission?: string): boolean => {
-      if (!hasModule(moduleKey)) return false;
-      if (permission && !hasPermission(permission)) return false;
-      return true;
-    },
-    [hasModule, hasPermission]
   );
 
   const switchOrg = (newSlug: string) => {
@@ -339,7 +324,85 @@ export const OrgLayout: React.FC = () => {
     );
   }
 
-  // 3. Render Scoped Workspace Shell
+  // 3. Render Scoped Workspace Shell — capabilities own modules after the first /api/entitlements response.
+  return (
+    <CapabilitiesProvider
+      orgSlug={currentOrg.slug}
+      bootstrapModules={subscription.activeModules}
+      hasPermission={hasPermission}
+    >
+      <OrgWorkspaceShell
+        currentOrg={currentOrg}
+        availableOrgs={availableOrgs}
+        userProfile={userProfile}
+        subscription={subscription}
+        userPermissions={userPermissions}
+        hasPermission={hasPermission}
+        switchOrg={switchOrg}
+        updateCurrentOrg={updateCurrentOrg}
+        updateOrgWhitelabel={updateOrgWhitelabel}
+        updateSubscription={updateSubscription}
+        sidebarMode={sidebarMode}
+        setSidebarMode={setSidebarMode}
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
+        toggleSidebarCollapse={toggleSidebarCollapse}
+      />
+    </CapabilitiesProvider>
+  );
+};
+
+interface OrgWorkspaceShellProps {
+  currentOrg: OrgDetails;
+  availableOrgs: OrgDetails[];
+  userProfile: UserProfile;
+  subscription: SubscriptionInfo;
+  userPermissions: string[];
+  hasPermission: (permission: string | string[]) => boolean;
+  switchOrg: (slug: string) => void;
+  updateCurrentOrg: (updates: Partial<OrgDetails>) => void;
+  updateOrgWhitelabel: (config: WhitelabelConfig) => void;
+  updateSubscription: (
+    newPlan: PlanKey,
+    newActiveModules?: ModuleKey[],
+    options?: { billingInterval?: 'month' | 'year' },
+  ) => Promise<{ redirectUrl?: string } | void>;
+  sidebarMode: SidebarMode;
+  setSidebarMode: (mode: SidebarMode) => void;
+  isMobileOpen: boolean;
+  setIsMobileOpen: (open: boolean) => void;
+  toggleSidebarCollapse: () => void;
+}
+
+const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
+  currentOrg,
+  availableOrgs,
+  userProfile,
+  subscription,
+  userPermissions,
+  hasPermission,
+  switchOrg,
+  updateCurrentOrg,
+  updateOrgWhitelabel,
+  updateSubscription,
+  sidebarMode,
+  setSidebarMode,
+  isMobileOpen,
+  setIsMobileOpen,
+  toggleSidebarCollapse,
+}) => {
+  const caps = useCapabilities();
+  const hasModule = caps.canModule;
+  const canWrite = caps.canWrite;
+  const canAccess = useCallback(
+    (moduleKey: ModuleKey, permission?: string): boolean => {
+      if (!hasModule(moduleKey)) return false;
+      if (permission && !hasPermission(permission)) return false;
+      return true;
+    },
+    [hasModule, hasPermission],
+  );
+
   const contextValue: TenantContextType = {
     currentOrg,
     availableOrgs,
@@ -351,6 +414,7 @@ export const OrgLayout: React.FC = () => {
     updateOrgWhitelabel,
     updateSubscription,
     hasModule,
+    canWrite,
     hasPermission,
     canAccess,
     sidebarMode,
@@ -411,6 +475,7 @@ export const OrgLayout: React.FC = () => {
               currentOrg={currentOrg}
               onOpenMenu={() => setIsMobileOpen(true)}
               hasPermission={hasPermission}
+              hasModule={hasModule}
             />
           </div>
         </AssistantMount>
