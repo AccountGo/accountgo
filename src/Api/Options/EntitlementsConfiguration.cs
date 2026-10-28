@@ -39,6 +39,8 @@ namespace Api.Options
             {
                 Enabled = bool.TryParse(configuration["ENTITLEMENTS_ENABLED"], out var enabled) && enabled,
                 SupportEmail = configuration["SUPPORT_EMAIL"] ?? configuration["Email:SupportAddress"],
+                // Default on: missing or non-false keeps shadow mode (E1a).
+                EngineShadow = !string.Equals(configuration["ENTITLEMENTS_ENGINE_SHADOW"], "false", StringComparison.OrdinalIgnoreCase),
             };
 
             var plans = configuration["ENTITLEMENTS_SELF_SERVICE_PLANS"];

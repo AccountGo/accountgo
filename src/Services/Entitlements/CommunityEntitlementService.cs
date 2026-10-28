@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #nullable enable
+using System;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
 using Core.Entitlements;
 using Core.Tenancy;
+using Microsoft.Extensions.Logging;
 
 namespace Services.Entitlements;
 
@@ -22,8 +24,10 @@ public class CommunityEntitlementService : EntitlementService
         IRepository<CompanyInvitation> invitations,
         IRepository<EntitlementUsage> usage,
         IRepository<Bank> banks,
-        ITenantContext tenant)
-        : base(options, companies, members, invitations, usage, banks, tenant)
+        ITenantContext tenant,
+        TimeProvider? time = null,
+        ILogger<EntitlementService>? logger = null)
+        : base(options, companies, members, invitations, usage, banks, tenant, time, logger)
     {
     }
 }

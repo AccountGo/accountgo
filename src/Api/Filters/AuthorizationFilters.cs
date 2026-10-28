@@ -3,12 +3,15 @@ using System.Threading.Tasks;
 using Core.Billing;
 using Core.Data;
 using Core.Domain;
+using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Services.Administration;
+using Services.Entitlements;
 
 namespace Api.Filters
 {
@@ -50,6 +53,7 @@ namespace Api.Filters
                 : null;
 
             bool allowed;
+            string? denyCode = null;
             string? lapsedModule = null;
             if (company != null)
             {
@@ -59,6 +63,15 @@ namespace Api.Filters
                 // never-included modules stay MODULE_NOT_SUBSCRIBED because paying would not unlock them.
                 if (!allowed && Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company))
                     lapsedModule = Array.Find(_moduleKeys, company.HasModule);
+                denyCode = !allowed
+                    ? (lapsedModule != null ? "SUBSCRIPTION_INACTIVE" : "MODULE_NOT_SUBSCRIBED")
+                    : null;
+
+                var entitlements = context.HttpContext.RequestServices.GetService<IEntitlementService>();
+                var logger = context.HttpContext.RequestServices.GetService<ILoggerFactory>()
+                    ?.CreateLogger(typeof(RequireModuleAttribute));
+                EntitlementEngineShadow.CompareModuleGate(
+                    entitlements, logger, company.Id, _moduleKeys, allowed, denyCode);
             }
             else
             {
