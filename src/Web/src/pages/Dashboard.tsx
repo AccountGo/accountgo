@@ -58,7 +58,7 @@ interface DashboardSummary {
 }
 
 export const Dashboard: React.FC = () => {
-  const { currentOrg, user } = useOutletContext<TenantContextType>();
+  const { currentOrg, user, hasModule } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -157,7 +157,7 @@ export const Dashboard: React.FC = () => {
 
       <OnboardingChecklist
         orgSlug={currentOrg.slug}
-        plan={currentOrg.plan}
+        hasFinancialsModule={hasModule('financials')}
         canManage={currentOrg.role === 'Owner' || currentOrg.role === 'Admin'}
       />
 

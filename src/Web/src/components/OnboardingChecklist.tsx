@@ -6,12 +6,12 @@ import { buildChecklist, ChecklistItem } from '../lib/onboardingChecklist';
 
 interface Props {
   orgSlug: string;
-  plan?: string;
+  hasFinancialsModule: boolean;
   canManage: boolean;
 }
 
 /** "Get books ready" card shown on the dashboard until an admin dismisses it. */
-export const OnboardingChecklist: React.FC<Props> = ({ orgSlug, plan, canManage }) => {
+export const OnboardingChecklist: React.FC<Props> = ({ orgSlug, hasFinancialsModule, canManage }) => {
   const { authFetch } = useAuth();
   const [items, setItems] = useState<ChecklistItem[] | null>(null);
 
@@ -28,13 +28,17 @@ export const OnboardingChecklist: React.FC<Props> = ({ orgSlug, plan, canManage 
         const policy = await policyRes.json();
         if (policy.onboardingChecklistDismissedAt) return;
         const profile = profileRes.ok ? await profileRes.json() : null;
-        setItems(buildChecklist({ plan, taxRegime: policy.taxRegime, hasLegalName: Boolean(profile?.legalName) }));
+        setItems(buildChecklist({
+          hasFinancialsModule,
+          taxRegime: policy.taxRegime,
+          hasLegalName: Boolean(profile?.legalName),
+        }));
       } catch (err) {
         console.error('Failed to load onboarding checklist:', err);
       }
     })();
     return () => { cancelled = true; };
-  }, [authFetch, canManage, plan]);
+  }, [authFetch, canManage, hasFinancialsModule]);
 
   const dismiss = useCallback(async () => {
     setItems(null);

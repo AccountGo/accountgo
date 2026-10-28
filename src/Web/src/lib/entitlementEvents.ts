@@ -1,5 +1,10 @@
 /** Problem codes the server returns when the plan, not the user's role, blocks an action. */
-export const ENTITLEMENT_CODES = ['QUOTA_EXCEEDED', 'MODULE_NOT_SUBSCRIBED', 'PLAN_NOT_AVAILABLE'] as const;
+export const ENTITLEMENT_CODES = [
+  'QUOTA_EXCEEDED',
+  'MODULE_NOT_SUBSCRIBED',
+  'PLAN_NOT_AVAILABLE',
+  'SUBSCRIPTION_INACTIVE',
+] as const;
 export type EntitlementCode = (typeof ENTITLEMENT_CODES)[number];
 
 export interface EntitlementProblem {
@@ -11,6 +16,8 @@ export interface EntitlementProblem {
   used?: number;
   period?: string | null;
   contact?: string | null;
+  requiredModule?: string;
+  status?: string;
 }
 
 export const ENTITLEMENT_DENIED_EVENT = 'accountgo:entitlement-denied';

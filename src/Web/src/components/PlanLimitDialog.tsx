@@ -8,6 +8,7 @@ const TITLES: Record<EntitlementProblem['code'], string> = {
   QUOTA_EXCEEDED: 'Free plan limit reached',
   MODULE_NOT_SUBSCRIBED: 'Not included in your plan',
   PLAN_NOT_AVAILABLE: 'Plan not available',
+  SUBSCRIPTION_INACTIVE: 'Subscription inactive',
 };
 
 /**
@@ -30,6 +31,10 @@ export const PlanLimitDialog: React.FC = () => {
 export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClose: () => void }> = ({ problem, onClose }) => {
   const closeRef = useRef<HTMLButtonElement>(null);
   const slug = typeof window === 'undefined' ? null : getOrgSlugFromLocation();
+  const isInactive = problem.code === 'SUBSCRIPTION_INACTIVE';
+  const subscriptionHref = slug
+    ? `/org/${encodeURIComponent(slug)}/settings?tab=subscription`
+    : null;
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -60,34 +65,46 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
       <div id="plan-limit-detail" className="space-y-2 text-sm text-[var(--text-secondary)]">
         {problem.detail && <p>{problem.detail}</p>}
         {usage && <p>{usage}</p>}
-        <p>
-          Paid plans are coming soon.
-          {problem.contact ? (
-            <>
-              {' '}
-              Need more now?{' '}
-              <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${problem.contact}`}>
-                Contact support
-              </a>
-              .
-            </>
-          ) : null}
-        </p>
+        {isInactive ? (
+          <p>Update billing to restore paid modules and features.</p>
+        ) : (
+          <p>
+            Paid plans are coming soon.
+            {problem.contact ? (
+              <>
+                {' '}
+                Need more now?{' '}
+                <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${problem.contact}`}>
+                  Contact support
+                </a>
+                .
+              </>
+            ) : null}
+          </p>
+        )}
       </div>
       <div className="flex justify-end gap-2">
-        {slug && (
+        {subscriptionHref && (
           <a
-            href={`/org/${encodeURIComponent(slug)}/settings?tab=subscription`}
-            className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] inline-flex items-center"
+            href={subscriptionHref}
+            className={
+              isInactive
+                ? 'h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)] inline-flex items-center'
+                : 'h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] inline-flex items-center'
+            }
           >
-            View plan usage
+            {isInactive ? 'Update billing' : 'View plan usage'}
           </a>
         )}
         <button
           type="button"
           ref={closeRef}
           onClick={onClose}
-          className="h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)]"
+          className={
+            isInactive
+              ? 'h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
+              : 'h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)]'
+          }
         >
           OK
         </button>

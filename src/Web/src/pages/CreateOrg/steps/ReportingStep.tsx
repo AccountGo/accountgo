@@ -10,6 +10,7 @@ import {
   type TaxRegime,
   type WizardState,
 } from '../lib/policyDefaults';
+import { isInvoicingProduct } from '../../../lib/plans';
 import { ChoiceCards, type ChoiceOption } from './ui';
 
 const FRAMEWORKS: ChoiceOption<ReportingFramework>[] = [
@@ -49,7 +50,7 @@ export const ReportingStep: React.FC<{
 
   return (
     <div className="space-y-5">
-      {state.plan === 'invoicing' ? (
+      {isInvoicingProduct(state.plan) ? (
         <details className="rounded-xl bg-[var(--bg-subtle)] p-3.5">
           <summary className="text-sm font-semibold text-[var(--text-main)] cursor-pointer">
             Reporting framework: {FRAMEWORKS.find((item) => item.value === state.reportingFramework)?.title}

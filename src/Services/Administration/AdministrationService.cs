@@ -330,7 +330,8 @@ namespace Services.Administration
 
             var company = _company.GetById(_tenantContext.CompanyId.Value);
             if (company == null) return false;
-            return company.HasModule(moduleKey);
+            // Same lifecycle-aware rule as RequireModule / Catalog / MCP (SubscriptionAccess).
+            return Core.Billing.SubscriptionAccess.IsModuleAvailable(company, moduleKey);
         }
 
         public List<PlanDefinitionDto> GetPlanDefinitions()

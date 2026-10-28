@@ -16,6 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
+import { normalizePlanKey as normalizePlanKeyShared } from '../lib/plans';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
 import { useEntitlements } from '../lib/entitlements';
 import { useBilling } from '../lib/useBilling';
@@ -71,9 +72,7 @@ const HOSTED_PLAN_COPY: Record<HostedPlanKey, {
 };
 
 function normalizePlanKey(planKey: string): HostedPlanKey | string {
-  if (planKey === 'invoicing') return 'invoicing_free';
-  if (planKey === 'accounting') return 'accounting_free';
-  return planKey;
+  return normalizePlanKeyShared(planKey) as HostedPlanKey | string;
 }
 
 function cancelLandingPlan(planKey: string): HostedPlanKey {

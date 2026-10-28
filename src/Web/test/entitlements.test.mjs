@@ -55,6 +55,21 @@ test('plan limit dialog explains the denial and offers support', () => {
   assert.ok(html.includes('href="mailto:support@example.com"'));
 });
 
+test('subscription inactive dialog uses update billing CTA', () => {
+  assert.equal(isEntitlementProblem({ code: 'SUBSCRIPTION_INACTIVE' }), true);
+  const html = renderToStaticMarkup(createElement(PlanLimitDialogView, {
+    problem: {
+      code: 'SUBSCRIPTION_INACTIVE',
+      detail: "This workspace's subscription is inactive. Update billing to restore paid modules.",
+    },
+    onClose: () => {},
+  }));
+  assert.ok(html.includes('Subscription inactive'));
+  assert.ok(html.includes('Update billing'));
+  assert.ok(!html.includes('Paid plans are coming soon.'));
+  assert.ok(!html.includes('upgrade'));
+});
+
 test('only plan denials are announced, without consuming the response', async () => {
   assert.equal(isEntitlementProblem({ code: 'QUOTA_EXCEEDED' }), true);
   assert.equal(isEntitlementProblem({ code: 'PERMISSION_DENIED' }), false);

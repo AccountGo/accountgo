@@ -48,15 +48,15 @@ namespace Api.Filters
             var company = (companies != null && tenantContext.CompanyId.HasValue)
                 ? companies.GetById(tenantContext.CompanyId.Value)
                 : null;
-            // Inactive paid workspaces keep free-tier modules (sales/purchases); deny only paid-only modules.
+            // Inactive paid workspaces keep free-tier modules; deny only modules outside FreePlanFor.
+            // Comp / BillingManagedManually are never inactive (SubscriptionAccess.IsInactive).
             if (company != null
                 && Company.IsPaidPlan(company.Plan)
                 && SubscriptionAccess.IsInactive(company))
             {
-                var freeModules = Company.ModulesForPlan(Company.FreePlanFor(company.Plan));
                 var allowedUnderFree = Array.Exists(
                     _moduleKeys,
-                    m => freeModules.Contains(m, StringComparer.OrdinalIgnoreCase));
+                    m => SubscriptionAccess.IsModuleAvailable(company, m));
                 if (!allowedUnderFree)
                 {
                     var inactive = new ProblemDetails
@@ -68,6 +68,7 @@ namespace Api.Filters
                     };
                     inactive.Extensions["code"] = "SUBSCRIPTION_INACTIVE";
                     inactive.Extensions["status"] = company.SubscriptionStatus ?? "canceled";
+                    inactive.Extensions["requiredModule"] = _moduleKeys[0];
                     inactive.Extensions["upgradeAvailable"] = true;
 
                     context.Result = new ObjectResult(inactive)
