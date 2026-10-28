@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
+import { PermissionDeniedCard, ReadOnlyModuleBanner, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { currencySymbol } from '../lib/currency';
 import { getDateRange } from './Reports';
@@ -112,7 +112,7 @@ export function JournalEditor({ initial, accounts, canCreate, canPost, fetcher, 
 }
 
 export default function JournalEntries() {
-  const { currentOrg, hasPermission } = useTenantContext();
+  const { currentOrg, hasPermission, canWrite } = useTenantContext();
   const { authFetch } = useAuth();
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState('draft');
@@ -120,8 +120,10 @@ export default function JournalEntries() {
   const [result, setResult] = useState<{ key: string; entries: JournalEntry[]; accounts: JournalAccount[] } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const allowed = hasPermission('financials.journal.view');
-  const canCreate = hasPermission('financials.journal.create');
-  const canPost = hasPermission('financials.journal.post');
+  const financialsWritable = canWrite('financials');
+  // Journals are not a metered create resource; gate on canWrite(financials) ∧ permission.
+  const canCreate = hasPermission('financials.journal.create') && financialsWritable;
+  const canPost = hasPermission('financials.journal.post') && financialsWritable;
   const key = JSON.stringify([currentOrg.slug, revision]);
   const data = result?.key === key ? result : null;
   const error = failure?.key === key ? failure.message : null;
@@ -148,6 +150,7 @@ export default function JournalEntries() {
   } : selected;
   const flatten = (accounts: JournalAccount[]): JournalAccount[] => accounts.flatMap(account => [account, ...flatten(account.childAccounts || [])]);
   return <div className="space-y-6 text-[var(--text-main)]">
+    <ReadOnlyModuleBanner module="financials" orgSlug={currentOrg.slug} />
     <PageHeader title="Manual Journal Entries" subtitle="Draft vouchers are separate from the posted General Ledger"
       back={{ to: `/org/${currentOrg.slug}/financials`, label: 'General Ledger' }} actions={<>
         <HeaderButton label="Refresh" icon={RefreshCw} disabled={!data && !error} onClick={() => setRevision(r => r + 1)} />

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType, VerifyOtpResult, MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
 import { announceEntitlementDenial } from '../lib/entitlementEvents';
+import { ENTITLEMENTS_VERSION_HEADER, observeEntitlementsVersionHeader } from '../lib/entitlementVersion';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -321,6 +322,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Plan denials (limits, modules, plans) get one shared explanation; callers still handle the response.
       void announceEntitlementDenial(res);
+      // Hook adopts /api/entitlements versions itself — observing here would duplicate the reload.
+      if (requestPath !== '/api/entitlements') {
+        observeEntitlementsVersionHeader(
+          orgSlug,
+          getOrgSlugFromLocation(),
+          res.headers.get(ENTITLEMENTS_VERSION_HEADER),
+        );
+      }
 
       // Handle 401 with silent refresh & request retry
       if (res.status === 401) {
@@ -334,6 +343,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           res = shouldRetry503
             ? await fetchWith503Retry(url, { ...init, headers: retryHeaders, credentials: 'include' })
             : await fetch(url, { ...init, headers: retryHeaders, credentials: 'include' });
+          if (requestPath !== '/api/entitlements') {
+            observeEntitlementsVersionHeader(
+              orgSlug,
+              getOrgSlugFromLocation(),
+              res.headers.get(ENTITLEMENTS_VERSION_HEADER),
+            );
+          }
         }
       }
 

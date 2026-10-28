@@ -8,6 +8,7 @@ const server = await createServer({ server: { middlewareMode: true, hmr: false, 
 after(() => server.close());
 
 const { SubscriptionSettingsTab } = await server.ssrLoadModule('/src/components/SubscriptionSettingsTab.tsx');
+const { CapabilitiesProvider } = await server.ssrLoadModule('/src/lib/entitlements.ts');
 const { primePlanCatalog } = await server.ssrLoadModule('/src/lib/usePlanCatalog.ts');
 const { AuthProvider } = await server.ssrLoadModule('/src/auth/AuthContext.tsx');
 
@@ -20,12 +21,16 @@ const CATALOG = [
 ];
 
 const render = (planId, activeModules) => renderToStaticMarkup(createElement(AuthProvider, null,
-  createElement(SubscriptionSettingsTab, {
+  createElement(CapabilitiesProvider, {
+    orgSlug: 'test',
+    bootstrapModules: activeModules,
+    hasPermission: () => true,
+  }, createElement(SubscriptionSettingsTab, {
     tenantContext: {
       subscription: { planId, planName: planId, status: 'active', activeModules },
       updateSubscription: async () => {},
     },
-  })));
+  }))));
 
 test('subscription settings locks modules outside the current plan', () => {
   primePlanCatalog(CATALOG);

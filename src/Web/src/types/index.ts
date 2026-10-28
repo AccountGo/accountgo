@@ -160,6 +160,8 @@ export interface TenantContextType {
     options?: { billingInterval?: 'month' | 'year' },
   ) => Promise<{ redirectUrl?: string } | void>;
   hasModule: (module: ModuleKey) => boolean;
+  /** Write path for a module (false when the module is read-only). */
+  canWrite: (module: ModuleKey) => boolean;
   hasPermission: (permission: string | string[]) => boolean;
   canAccess: (module: ModuleKey, permission?: string) => boolean;
   sidebarMode?: SidebarMode;

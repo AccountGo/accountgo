@@ -44,14 +44,15 @@ let nextKey = 1;
  * can't be changed, only voided. Lines are booked to an expense or asset account each.
  */
 export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => {
-  const { currentOrg, hasModule, subscription } = useOutletContext<TenantContextType>();
+  const { currentOrg, hasModule, subscription, canWrite } = useOutletContext<TenantContextType>();
   const { billId } = useParams<{ billId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
-  const canApprove = hasPermission('purchases.bills.post');
-  const canManageVendors = hasPermission('purchases.vendors.manage');
+  const purchasesWritable = canWrite('purchases');
+  const canApprove = hasPermission('purchases.bills.post') && purchasesWritable;
+  const canManageVendors = hasPermission('purchases.vendors.manage') && purchasesWritable;
   const canManageItems = hasPermission('inventory.items.manage');
   const orgSlug = currentOrg.slug;
   const listPath = `/org/${orgSlug}/purchases`;
@@ -324,7 +325,9 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         actions={
           <>
             <HeaderButton label="Cancel" to={isEdit ? `/org/${orgSlug}/purchases/${billId}` : listPath} />
-            <HeaderButton label="Save draft" icon={Save} compact busy={saving === 'draft'} disabled={!!saving} onClick={() => handleSave(false)} />
+            {purchasesWritable && (
+              <HeaderButton label="Save draft" icon={Save} compact busy={saving === 'draft'} disabled={!!saving} onClick={() => handleSave(false)} />
+            )}
             {/* Approving takes its own permission; without it, bills are saved as drafts for someone else to approve. */}
             {canApprove && (
               <HeaderButton label="Save & approve" icon={CheckCircle2} variant="primary" busy={saving === 'approve'} disabled={!!saving} onClick={() => handleSave(true)} />

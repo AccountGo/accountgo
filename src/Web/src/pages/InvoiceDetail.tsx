@@ -32,14 +32,17 @@ import { ModalShell } from '../components/ModalShell';
 import { invoiceTitle } from '../lib/invoiceNumber';
 import { localToday } from '../lib/businessDays';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
-import { usePermissions } from '../components/Gating';
+import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
+import { useCapabilities } from '../lib/entitlements';
 
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 export const InvoiceDetail: React.FC = () => {
-  const { currentOrg } = useOutletContext<TenantContextType>();
+  const { currentOrg, canWrite } = useOutletContext<TenantContextType>();
   const { hasPermission } = usePermissions();
+  const { canCreate: canCreateResource } = useCapabilities();
+  const salesWritable = canWrite('sales');
   const { authFetch, user } = useAuth();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId: string }>();
   const location = useLocation();
@@ -447,15 +450,16 @@ export const InvoiceDetail: React.FC = () => {
   const lastEmail = invoice.emails?.[0] ?? null;
   // Edit and void are only offered before any payment; drafts are issued before taking payments or emails. Each
   // action also needs its permission: drafting, issuing (which voiding undoes), or recording receipts.
-  const canCreate = hasPermission('sales.invoices.create');
-  const canIssue = hasPermission('sales.invoices.post');
-  const canEdit = canCreate && invoice.status !== 'Void' && invoice.paidAmount === 0;
+  // Duplicate also needs remaining quota; edit/issue/void/pay need canWrite(sales).
+  const canCreate = hasPermission('sales.invoices.create') && salesWritable && canCreateResource('salesDocuments');
+  const canIssue = hasPermission('sales.invoices.post') && salesWritable;
+  const canEdit = hasPermission('sales.invoices.create') && salesWritable && invoice.status !== 'Void' && invoice.paidAmount === 0;
   const canVoid = canIssue && invoice.status !== 'Void' && invoice.paidAmount === 0;
-  const canEmail = canCreate && invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.recipientEmail;
+  const canEmail = hasPermission('sales.invoices.create') && salesWritable && invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.recipientEmail;
   // Follow-up copy for unpaid issued invoices (Open / Overdue / Partially Paid). API enforces the same.
   const followUpEligible = canEmail && invoice.balanceDue > 0;
   const canRecordPayment =
-    hasPermission('sales.receipts.create') && invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0;
+    hasPermission('sales.receipts.create') && salesWritable && invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0;
   const dueOn = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : null;
   const balanceSummary =
     invoice.status === 'Void'
@@ -471,6 +475,9 @@ export const InvoiceDetail: React.FC = () => {
 
   return (
     <div className="print-page max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
+      <div className="no-print mb-4">
+        <ReadOnlyModuleBanner module="sales" orgSlug={orgSlug} />
+      </div>
 
       {/* Header & actions (hidden on print) */}
       <PageHeader

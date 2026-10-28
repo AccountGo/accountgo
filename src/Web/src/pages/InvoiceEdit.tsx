@@ -64,9 +64,10 @@ interface SalesAccountOption {
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
-  const { currentOrg, hasModule, subscription } = useOutletContext<TenantContextType>();
+  const { currentOrg, hasModule, subscription, canWrite } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
+  const salesWritable = canWrite('sales');
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId?: string }>();
   const navigate = useNavigate();
   // "Duplicate invoice" opens a new invoice prefilled from another one (?from=<id>).
@@ -652,16 +653,18 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         actions={
           <>
             <HeaderButton label="Cancel" to={`/org/${orgSlug}/sales`} />
-            <HeaderButton
-              label="Save draft"
-              icon={Save}
-              compact
-              busy={isSavingDraft}
-              disabled={isSavingIssue}
-              onClick={() => handleSaveInvoice(true)}
-            />
+            {salesWritable && (
+              <HeaderButton
+                label="Save draft"
+                icon={Save}
+                compact
+                busy={isSavingDraft}
+                disabled={isSavingIssue}
+                onClick={() => handleSaveInvoice(true)}
+              />
+            )}
             {/* Issuing needs its own permission; without it, invoices are saved as drafts for someone else to issue. */}
-            {hasPermission('sales.invoices.post') && (
+            {salesWritable && hasPermission('sales.invoices.post') && (
               <HeaderButton
                 label="Save & issue"
                 icon={Send}

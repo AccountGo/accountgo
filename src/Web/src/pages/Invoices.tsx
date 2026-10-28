@@ -16,7 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
-import { usePermissions } from '../components/Gating';
+import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
 import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { SalesTabs } from '../components/SalesTabs';
 import { TenantContextType, Invoice, InvoicingKPIs, RecordPaymentPayload } from '../types';
@@ -24,19 +24,21 @@ import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { invoiceTitle } from '../lib/invoiceNumber';
 import { localToday } from '../lib/businessDays';
-import { useEntitlements } from '../lib/entitlements';
+import { useCapabilities } from '../lib/entitlements';
 import { UsageHint } from '../components/UsageHint';
 import { ModalShell } from '../components/ModalShell';
 
 export const Invoices: React.FC = () => {
-  const { currentOrg } = useOutletContext<TenantContextType>();
+  const { currentOrg, canWrite } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
-  const { entitlements } = useEntitlements();
+  const { entitlements, canCreate: canCreateResource } = useCapabilities();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('sales.invoices.create');
-  const canRecordPayments = hasPermission('sales.receipts.create');
-  const canVoidInvoices = hasPermission('sales.invoices.post');
+  const salesWritable = canWrite('sales');
+  // Create: permission ∧ canWrite(sales) ∧ canCreate(salesDocuments). Pay/void/edit need canWrite.
+  const canCreate = hasPermission('sales.invoices.create') && salesWritable && canCreateResource('salesDocuments');
+  const canRecordPayments = hasPermission('sales.receipts.create') && salesWritable;
+  const canVoidInvoices = hasPermission('sales.invoices.post') && salesWritable;
 
   // State
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -295,6 +297,7 @@ export const Invoices: React.FC = () => {
         }
       />
       <SalesTabs orgSlug={currentOrg.slug} />
+      <ReadOnlyModuleBanner module="sales" orgSlug={currentOrg.slug} />
       <UsageHint entitlements={entitlements} resource="salesDocuments" />
 
       {/* Success & Error Banners */}

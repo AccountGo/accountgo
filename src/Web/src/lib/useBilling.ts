@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import type { PlanKey } from '../types';
-import type { MeteredResource, ResourceLimit } from './entitlements';
 
+/** Billing-only state. Limits / features / usage live on GET /api/entitlements via useCapabilities. */
 export interface BillingState {
   billingEnabled: boolean;
   plan: PlanKey | string;
@@ -10,8 +10,6 @@ export interface BillingState {
   status: string;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
-  limits: Partial<Record<MeteredResource, ResourceLimit>>;
-  features: string[];
   portalAvailable: boolean;
 }
 
@@ -26,16 +24,6 @@ export function useBilling() {
       const response = await authFetch('/api/billing/state');
       if (!response.ok) throw new Error(`Could not load billing state (HTTP ${response.status}).`);
       const raw = await response.json();
-      const limits: BillingState['limits'] = {};
-      if (raw.limits && typeof raw.limits === 'object') {
-        for (const [key, value] of Object.entries(raw.limits as Record<string, { limit?: number | null; used?: number; period?: string | null }>)) {
-          limits[key as MeteredResource] = {
-            limit: value?.limit ?? null,
-            used: value?.used ?? 0,
-            period: value?.period === 'month' ? 'month' : null,
-          };
-        }
-      }
       setBilling({
         billingEnabled: !!raw.billingEnabled,
         plan: raw.plan,
@@ -43,8 +31,6 @@ export function useBilling() {
         status: raw.status,
         currentPeriodEnd: raw.currentPeriodEnd ?? null,
         cancelAtPeriodEnd: !!raw.cancelAtPeriodEnd,
-        limits,
-        features: Array.isArray(raw.features) ? raw.features : [],
         portalAvailable: !!raw.portalAvailable,
       });
       setError(null);
@@ -109,8 +95,6 @@ export function useBilling() {
     billingEnabled: billing?.billingEnabled ?? false,
     plan: billing?.plan,
     status: billing?.status,
-    limits: billing?.limits,
-    usage: billing?.limits,
     isPastDue,
     portalAvailable: billing?.portalAvailable ?? false,
     currentPeriodEnd: billing?.currentPeriodEnd,
