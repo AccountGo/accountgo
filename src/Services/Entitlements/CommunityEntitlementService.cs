@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace Services.Entitlements;
 
 /// <summary>
-/// Community / self-hosted entitlement service. Never contains commercial features (such as "mfa").
+/// Community / self-hosted entitlement service. Never emits feature keys (such as "mfa").
 /// </summary>
 public class CommunityEntitlementService : EntitlementService
 {

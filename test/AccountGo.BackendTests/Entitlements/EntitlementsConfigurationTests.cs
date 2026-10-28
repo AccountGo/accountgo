@@ -48,7 +48,7 @@ namespace AccountGo.BackendTests.Entitlements
         }
 
         [Fact]
-        public void HostedValues_AreReadFromFlatKeys()
+        public void ConfiguredValues_AreReadFromFlatKeys()
         {
             var options = Read(new()
             {
