@@ -20,6 +20,15 @@ namespace AccountGo.BackendTests.Entitlements
             Assert.False(options.Enabled);
             Assert.Empty(options.FreeLimits);
             Assert.True(options.IsSelfServicePlan("enterprise"));
+            Assert.True(options.EngineShadow);
+        }
+
+        [Fact]
+        public void EngineShadow_DefaultsTrue_UnlessExplicitlyFalse()
+        {
+            Assert.True(Read(new()).EngineShadow);
+            Assert.True(Read(new() { ["ENTITLEMENTS_ENGINE_SHADOW"] = "true" }).EngineShadow);
+            Assert.False(Read(new() { ["ENTITLEMENTS_ENGINE_SHADOW"] = "false" }).EngineShadow);
         }
 
         [Fact]

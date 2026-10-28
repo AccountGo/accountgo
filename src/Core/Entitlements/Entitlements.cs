@@ -55,6 +55,11 @@ namespace Core.Entitlements
         public Dictionary<MeteredResource, int> FreeLimits { get; set; } = new();
         /// <summary>Shown to users when a limit is reached.</summary>
         public string? SupportEmail { get; set; }
+        /// <summary>
+        /// When true (default), module gates also call <see cref="IEntitlementService.Evaluate"/> and log
+        /// divergences; the old path still decides the HTTP outcome (E1a shadow mode).
+        /// </summary>
+        public bool EngineShadow { get; set; } = true;
 
         public bool IsSelfServicePlan(string? plan) =>
             !Enabled || SelfServicePlans.Count == 0
@@ -78,6 +83,31 @@ namespace Core.Entitlements
         public bool HasFeature(string feature) => Features.Contains(feature);
     }
 
+    /// <summary>Gate request for <see cref="IEntitlementService.Evaluate"/>. Feature/Create arrive in E2.</summary>
+    public abstract record EntitlementAction
+    {
+        private EntitlementAction() { }
+
+        /// <summary>Any-of module keys (same semantics as <c>[RequireModule]</c>).</summary>
+        public sealed record Module(params string[] AnyOf) : EntitlementAction
+        {
+            public Module(IReadOnlyList<string> anyOf) : this(anyOf?.ToArray() ?? Array.Empty<string>()) { }
+        }
+    }
+
+    /// <summary>Allow/deny result from <see cref="IEntitlementService.Evaluate"/> (no throw).</summary>
+    public sealed record EntitlementDecision(
+        bool Allowed,
+        string? Code,
+        string? Detail,
+        string? RequiredModule = null,
+        string? RequiredFeature = null,
+        MeteredResource? Resource = null,
+        int? Limit = null,
+        int? Used = null,
+        string? Period = null,
+        bool UpgradeAvailable = false);
+
     /// <summary>Central entitlement gate: what a workspace may use and how much of it.</summary>
     public interface IEntitlementService
     {
@@ -85,6 +115,20 @@ namespace Core.Entitlements
 
         /// <summary>Plan, tier, modules and usage for the workspace.</summary>
         EntitlementSnapshot Get(int companyId);
+
+        /// <summary>
+        /// Policy decision without throwing (E1a: Module actions; Feature/Create in E2).
+        /// Default throws so out-of-repo implementers (accountgo-commercial) keep compiling until they opt in.
+        /// </summary>
+        EntitlementDecision Evaluate(int companyId, EntitlementAction action) =>
+            throw new NotSupportedException(
+                "IEntitlementService.Evaluate is not implemented by this entitlement service.");
+
+        /// <summary>
+        /// Drops the per-request policy memo for <paramref name="companyId"/> after Plan / modules / status writes.
+        /// Default is a no-op for implementers that do not memoize.
+        /// </summary>
+        void ClearPolicyMemo(int companyId) { }
 
         /// <summary>Checks whether the workspace is entitled to the given feature key (e.g. "mfa").</summary>
         bool HasFeature(int companyId, string feature) => Get(companyId).HasFeature(feature);

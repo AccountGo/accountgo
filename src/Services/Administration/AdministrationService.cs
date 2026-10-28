@@ -24,6 +24,8 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Services.Entitlements;
 
 namespace Services.Administration
 {
@@ -45,6 +47,7 @@ namespace Services.Administration
         private readonly IMapper _mapper;
         private readonly Core.Tenancy.ITenantContext? _tenantContext;
         private readonly Core.Entitlements.IEntitlementService? _entitlements;
+        private readonly ILogger<AdministrationService>? _logger;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -61,11 +64,13 @@ namespace Services.Administration
             IMapper mapper,
             IRepository<Company> company = null,
             Core.Tenancy.ITenantContext? tenantContext = null,
-            Core.Entitlements.IEntitlementService? entitlements = null
+            Core.Entitlements.IEntitlementService? entitlements = null,
+            ILogger<AdministrationService>? logger = null
             )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _entitlements = entitlements;
+            _logger = logger;
             _fiscalYearRepo = fiscalYearRepo;
             _taxGroupRepo = taxGroupRepo;
             _itemTaxGroupRepo = itemTaxGroupRepo;
@@ -320,6 +325,7 @@ namespace Services.Administration
             }
 
             _company.Update(company);
+            _entitlements?.ClearPolicyMemo(companyId);
             return GetCurrentSubscription();
         }
 
@@ -328,10 +334,13 @@ namespace Services.Administration
             if (_tenantContext == null || !_tenantContext.CompanyId.HasValue)
                 return false;
 
-            var company = _company.GetById(_tenantContext.CompanyId.Value);
+            var companyId = _tenantContext.CompanyId.Value;
+            var company = _company.GetById(companyId);
             if (company == null) return false;
             // Same lifecycle-aware rule as RequireModule / Catalog / MCP (SubscriptionAccess).
-            return Core.Billing.SubscriptionAccess.IsModuleAvailable(company, moduleKey);
+            var allowed = Core.Billing.SubscriptionAccess.IsModuleAvailable(company, moduleKey);
+            EntitlementEngineShadow.CompareModuleAllow(_entitlements, _logger, companyId, moduleKey, allowed);
+            return allowed;
         }
 
         public List<PlanDefinitionDto> GetPlanDefinitions()
