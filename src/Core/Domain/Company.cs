@@ -83,7 +83,7 @@ namespace Core.Domain
             return planModules;
         }
 
-        /// <summary>Product×tier catalog keys (also used by GetPlanDefinitions). Legacy invoicing/accounting accepted via <see cref="NormalizePlanKey"/>.</summary>
+        /// <summary>Product×tier plan keys. Legacy invoicing/accounting accepted via <see cref="NormalizePlanKey"/>.</summary>
         public static readonly IReadOnlyList<string> KnownPlans = new[]
         {
             "invoicing_free", "invoicing_pro", "accounting_free", "accounting_pro", "enterprise"

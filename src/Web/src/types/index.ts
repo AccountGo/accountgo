@@ -32,7 +32,7 @@ export interface SubscriptionPlanDefinition {
   name: string;
   description: string;
   includedModules: ModuleKey[];
-  monthlyPrice: number;
+  monthlyPrice: number | null;
 }
 
 export interface ModuleDefinition {

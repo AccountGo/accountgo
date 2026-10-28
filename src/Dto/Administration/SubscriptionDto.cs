@@ -34,7 +34,8 @@ namespace Dto.Subscription
         public List<string> RequiredModules { get; set; } = new();
         /// <summary>Whether users may pick this plan themselves (false = assigned by the operator).</summary>
         public bool SelfService { get; set; } = true;
-        public decimal MonthlyPrice { get; set; }
+        /// <summary>Null when the plan has no price.</summary>
+        public decimal? MonthlyPrice { get; set; }
     }
 
     public class ModuleDefinitionDto

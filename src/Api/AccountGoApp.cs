@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 public static class AccountGoApp
 {
@@ -379,6 +380,9 @@ public static class AccountGoApp
             Console.WriteLine($"Configuring module '{module.Name}'...");
             module.ConfigureServices(builder);
         }
+
+        // Community defaults for seams a module may have registered above.
+        builder.Services.TryAddSingleton<Services.Billing.IPlanCatalog, Services.Billing.CommunityPlanCatalog>();
     }
 
     public static void ConfigureApp(WebApplication app, IReadOnlyList<IAccountGoModule> modules)

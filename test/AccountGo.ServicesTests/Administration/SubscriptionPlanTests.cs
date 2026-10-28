@@ -10,6 +10,7 @@ using Core.Tenancy;
 using Dto.Subscription;
 using Moq;
 using Services.Administration;
+using Services.Billing;
 using Services.Security;
 
 namespace AccountGo.ServicesTests.Administration;
@@ -98,17 +99,15 @@ public class SubscriptionPlanTests
     }
 
     [Fact]
-    public void GetPlanDefinitions_ServesRequiredModulesFromTheDomainRule()
+    public void CommunityPlanCatalog_ServesOneUnpricedPlanWithEveryModule()
     {
-        var plans = _service.GetPlanDefinitions().ToDictionary(p => p.Key);
+        var plan = Assert.Single(new CommunityPlanCatalog().GetPlans());
 
-        Assert.Equal(Company.KnownPlans.OrderBy(p => p), plans.Keys.OrderBy(p => p));
-        Assert.Equal(new[] { "sales", "purchases" }, plans["invoicing_free"].RequiredModules);
-        Assert.Equal(new[] { "sales", "purchases" }, plans["invoicing_pro"].RequiredModules);
-        Assert.Equal(new[] { "sales" }, plans["accounting_free"].RequiredModules);
-        Assert.Equal(new[] { "sales" }, plans["accounting_pro"].RequiredModules);
-        Assert.Equal(new[] { "sales" }, plans["enterprise"].RequiredModules);
-        foreach (var plan in plans.Values)
-            Assert.All(plan.RequiredModules, m => Assert.Contains(m, plan.IncludedModules));
+        Assert.Equal("community", plan.Key);
+        Assert.Equal("Community", plan.Name);
+        Assert.Null(plan.MonthlyPrice);
+        Assert.False(plan.SelfService);
+        Assert.Equal(_service.GetModuleDefinitions().Select(m => m.Key), plan.IncludedModules);
+        Assert.Equal(new[] { "sales" }, plan.RequiredModules);
     }
 }
