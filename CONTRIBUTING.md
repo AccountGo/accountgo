@@ -184,6 +184,8 @@ pnpm build
 
 ## License of Contributions
 
-AccountGo is licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (AGPL-3.0-only). By submitting a contribution, you agree that it is licensed under AGPL-3.0-only. Contributors will be asked to sign a Contributor License Agreement (CLA) before their first pull request is merged.
+AccountGo is licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (AGPL-3.0-only). By submitting a contribution, you agree that it is licensed under AGPL-3.0-only.
+
+Every contributor must also sign the [AccountGo Contributor License Agreement](CLA.md) before any pull request can be merged. The CLA lets the project owner license contributions under other terms as well, including commercial terms, while you keep the copyright in your work. When you open your first pull request, the CLA check posts a comment; reply with the exact sentence it asks for to sign. You sign once, and it covers all your later contributions. Pull requests without a signed CLA are not merged. If you contribute on behalf of an employer, contact the maintainers before opening a pull request.
 
 Thank you for helping make AccountGo better for everyone!
