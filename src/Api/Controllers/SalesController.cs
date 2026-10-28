@@ -257,7 +257,7 @@ namespace Api.Controllers
             if (customer == null)
                 return NotFound(new { message = "Client not found." });
 
-            var client = ToClient(customer);
+            var client = ToClient(customer, LoadClientContacts(customer));
             client.CanDelete = !ClientHasRecords(id);
             AddBalances(new[] { client }, customerId: id);
             return Ok(client);
@@ -340,15 +340,188 @@ namespace Api.Controllers
             customer.ModifiedBy = GetUserNameFromRequestHeader();
 
             if (isNew)
+            {
                 _salesService.AddCustomer(customer);
+                EnsurePrimaryContactLinked(customer);
+            }
             else
                 _salesService.UpdateCustomer(customer);
 
-            var saved = ToClient(customer);
+            var saved = ToClient(customer, isNew || clientDto.Id > 0 ? LoadClientContacts(customer) : null);
             saved.CanDelete = isNew || !ClientHasRecords(customer.Id);
             if (!isNew)
                 AddBalances(new[] { saved }, customer.Id);
             return Ok(saved);
+        }
+
+        [HttpPost]
+        [Route("ClientContact")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
+        public IActionResult ClientContact(int clientId, [FromBody] Dto.Common.ContactPersonDto contactDto)
+        {
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientId, nameof(clientId));
+            var customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == clientId);
+            var firstName = Blank(contactDto.FirstName);
+            var lastName = Blank(contactDto.LastName);
+            if (firstName == null || lastName == null)
+                return BadRequest(new { message = "Enter the contact's first and last name." });
+            var email = Blank(contactDto.Email);
+            if (email != null && ValidEmail(email) == null)
+                return BadRequest(new { message = "Enter a valid email address, or leave it blank." });
+
+            Core.Domain.Contact contact;
+            var isNewContact = contactDto.Id <= 0;
+            if (!isNewContact)
+            {
+                _tenantGuard.EnsureOwned<Core.Domain.Contact>(contactDto.Id, nameof(contactDto.Id));
+                if (!_db.Set<Core.Domain.CustomerContact>().Any(cc => cc.CustomerId == clientId && cc.ContactId == contactDto.Id)
+                    && customer.PrimaryContactId != contactDto.Id)
+                    return BadRequest(new { message = "That contact is not linked to this client." });
+                contact = _db.Contacts.Include(c => c.Party).Single(c => c.Id == contactDto.Id);
+            }
+            else
+            {
+                contact = new Core.Domain.Contact
+                {
+                    ContactType = Core.Domain.ContactTypes.Customer,
+                    Party = new Core.Domain.Party { PartyType = Core.Domain.PartyTypes.Contact, IsActive = true },
+                };
+                _db.Contacts.Add(contact);
+                _db.Set<Core.Domain.CustomerContact>().Add(new Core.Domain.CustomerContact
+                {
+                    CustomerId = clientId,
+                    Contact = contact,
+                });
+            }
+
+            contact.FirstName = firstName;
+            contact.LastName = lastName;
+            contact.MiddleName = Blank(contactDto.MiddleName);
+            contact.Party.Name = $"{firstName} {lastName}".Trim();
+            contact.Party.Email = email;
+            contact.Party.Phone = Blank(contactDto.Phone);
+            contact.Party.CompanyStreet = Blank(contactDto.Street);
+            contact.Party.CompanyProvince = Blank(contactDto.City);
+            contact.Party.CompanyPostalCode = Blank(contactDto.PostalCode);
+            contact.Party.CompanyCountry = Blank(contactDto.Country);
+            contact.ModifiedBy = GetUserNameFromRequestHeader();
+
+            if (contactDto.IsPrimary || customer.PrimaryContactId == null)
+                customer.PrimaryContact = contact;
+            if (contactDto.IsBillTo)
+                customer.BillToContact = contact;
+            else if (customer.BillToContactId == contact.Id)
+                customer.BillToContactId = null;
+            customer.ModifiedBy = GetUserNameFromRequestHeader();
+            _db.SaveChanges();
+
+            var client = ToClient(customer, LoadClientContacts(customer));
+            client.CanDelete = !ClientHasRecords(clientId);
+            AddBalances(new[] { client }, clientId);
+            return Ok(client);
+        }
+
+        [HttpPost]
+        [Route("SetClientBillToContact")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
+        public IActionResult SetClientBillToContact(int clientId, int contactId)
+        {
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientId, nameof(clientId));
+            var customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == clientId);
+            if (contactId == 0)
+            {
+                customer.BillToContactId = null;
+            }
+            else
+            {
+                _tenantGuard.EnsureOwned<Core.Domain.Contact>(contactId, nameof(contactId));
+                if (!_db.Set<Core.Domain.CustomerContact>().Any(cc => cc.CustomerId == clientId && cc.ContactId == contactId)
+                    && customer.PrimaryContactId != contactId)
+                    return BadRequest(new { message = "That contact is not linked to this client." });
+                customer.BillToContactId = contactId;
+            }
+            customer.ModifiedBy = GetUserNameFromRequestHeader();
+            _db.SaveChanges();
+
+            var client = ToClient(customer, LoadClientContacts(customer));
+            client.CanDelete = !ClientHasRecords(clientId);
+            AddBalances(new[] { client }, clientId);
+            return Ok(client);
+        }
+
+        [HttpPost]
+        [Route("SetClientPrimaryContact")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
+        public IActionResult SetClientPrimaryContact(int clientId, int contactId)
+        {
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientId, nameof(clientId));
+            _tenantGuard.EnsureOwned<Core.Domain.Contact>(contactId, nameof(contactId));
+            var customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == clientId);
+            if (!_db.Set<Core.Domain.CustomerContact>().Any(cc => cc.CustomerId == clientId && cc.ContactId == contactId)
+                && customer.PrimaryContactId != contactId)
+                return BadRequest(new { message = "That contact is not linked to this client." });
+
+            customer.PrimaryContactId = contactId;
+            customer.ModifiedBy = GetUserNameFromRequestHeader();
+            _db.SaveChanges();
+
+            var client = ToClient(customer, LoadClientContacts(customer));
+            client.CanDelete = !ClientHasRecords(clientId);
+            AddBalances(new[] { client }, clientId);
+            return Ok(client);
+        }
+
+        [HttpDelete]
+        [Route("DeleteClientContact")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
+        public IActionResult DeleteClientContact(int clientId, int contactId)
+        {
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientId, nameof(clientId));
+            _tenantGuard.EnsureOwned<Core.Domain.Contact>(contactId, nameof(contactId));
+            var customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == clientId);
+            if (customer.PrimaryContactId == contactId)
+                return BadRequest(new { message = "Set another contact as primary before removing this one." });
+
+            var links = _db.Set<Core.Domain.CustomerContact>().Where(cc => cc.CustomerId == clientId && cc.ContactId == contactId).ToList();
+            if (links.Count == 0 && customer.PrimaryContactId != contactId)
+                return NotFound(new { message = "Contact not found on this client." });
+
+            using var tx = _db.Database.BeginTransaction();
+            _db.RemoveRange(links);
+            if (customer.BillToContactId == contactId)
+                customer.BillToContactId = null;
+            customer.ModifiedBy = GetUserNameFromRequestHeader();
+            _db.SaveChanges();
+
+            var stillLinked = _db.Set<Core.Domain.CustomerContact>().Any(cc => cc.ContactId == contactId)
+                || _db.Set<Core.Domain.VendorContact>().Any(vc => vc.ContactId == contactId)
+                || _db.Customers.Any(c => c.PrimaryContactId == contactId || c.BillToContactId == contactId)
+                || _db.Vendors.Any(v => v.PrimaryContactId == contactId || v.BillToContactId == contactId);
+            if (!stillLinked)
+            {
+                var contact = _db.Contacts.Include(c => c.Party).FirstOrDefault(c => c.Id == contactId);
+                if (contact != null)
+                {
+                    var partyId = contact.PartyId;
+                    _db.Contacts.Remove(contact);
+                    _db.SaveChanges();
+                    if (!_db.Customers.Any(c => c.PartyId == partyId)
+                        && !_db.Vendors.Any(v => v.PartyId == partyId)
+                        && !_db.Contacts.Any(c => c.PartyId == partyId))
+                    {
+                        var party = _db.Set<Core.Domain.Party>().FirstOrDefault(p => p.Id == partyId);
+                        if (party != null)
+                            _db.Set<Core.Domain.Party>().Remove(party);
+                        _db.SaveChanges();
+                    }
+                }
+            }
+            tx.Commit();
+
+            var client = ToClient(customer, LoadClientContacts(customer));
+            client.CanDelete = !ClientHasRecords(clientId);
+            AddBalances(new[] { client }, clientId);
+            return Ok(client);
         }
 
         [HttpPost]
@@ -362,7 +535,7 @@ namespace Api.Controllers
             customer.ModifiedBy = GetUserNameFromRequestHeader();
             _salesService.UpdateCustomer(customer);
 
-            var client = ToClient(customer);
+            var client = ToClient(customer, LoadClientContacts(customer));
             client.CanDelete = !ClientHasRecords(id);
             AddBalances(new[] { client }, id);
             return Ok(client);
@@ -392,9 +565,14 @@ namespace Api.Controllers
             // Saved in foreign-key order: D1 replays the statements in order and enforces the keys.
             using var tx = _db.Database.BeginTransaction();
             _db.RemoveRange(_db.Set<Core.Domain.CustomerContact>().Where(cc => cc.CustomerId == id));
+            customer.BillToContactId = null;
+            customer.PrimaryContactId = null;
+            _db.SaveChanges();
             _db.Customers.Remove(customer);
             _db.SaveChanges();
-            if (contact != null && !_db.Customers.Any(c => c.PrimaryContactId == contact.Id) && !_db.Vendors.Any(v => v.PrimaryContactId == contact.Id))
+            if (contact != null
+                && !_db.Customers.Any(c => c.PrimaryContactId == contact.Id || c.BillToContactId == contact.Id)
+                && !_db.Vendors.Any(v => v.PrimaryContactId == contact.Id || v.BillToContactId == contact.Id))
             {
                 _db.RemoveRange(_db.Set<Core.Domain.CustomerContact>().Where(cc => cc.ContactId == contact.Id));
                 _db.Contacts.Remove(contact);
@@ -415,7 +593,9 @@ namespace Api.Controllers
 
         private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-        private static Dto.Sales.Client ToClient(Core.Domain.Sales.Customer customer) => new()
+        private static Dto.Sales.Client ToClient(
+            Core.Domain.Sales.Customer customer,
+            List<Dto.Common.ContactPersonDto>? contacts = null) => new()
         {
             Id = customer.Id,
             Name = customer.Party?.Name,
@@ -426,8 +606,64 @@ namespace Api.Controllers
             PostalCode = customer.Party?.CompanyPostalCode,
             Country = customer.Party?.CompanyCountry,
             PaymentTermId = customer.PaymentTermId,
+            BillToContactId = customer.BillToContactId,
+            Contacts = contacts ?? new List<Dto.Common.ContactPersonDto>(),
             Archived = customer.ArchivedAt.HasValue,
         };
+
+        private List<Dto.Common.ContactPersonDto> LoadClientContacts(Core.Domain.Sales.Customer customer)
+        {
+            var contactIds = _db.Set<Core.Domain.CustomerContact>()
+                .Where(cc => cc.CustomerId == customer.Id)
+                .Select(cc => cc.ContactId)
+                .ToList();
+            if (customer.PrimaryContactId is int primaryId && !contactIds.Contains(primaryId))
+                contactIds.Add(primaryId);
+            if (customer.BillToContactId is int billToId && !contactIds.Contains(billToId))
+                contactIds.Add(billToId);
+
+            return _db.Contacts.Include(c => c.Party)
+                .Where(c => contactIds.Contains(c.Id))
+                .AsEnumerable()
+                .Select(c => ToContactPerson(c, customer.PrimaryContactId, customer.BillToContactId))
+                .OrderByDescending(c => c.IsBillTo)
+                .ThenByDescending(c => c.IsPrimary)
+                .ThenBy(c => c.FullName)
+                .ToList();
+        }
+
+        private static Dto.Common.ContactPersonDto ToContactPerson(
+            Core.Domain.Contact contact, int? primaryContactId, int? billToContactId) => new()
+        {
+            Id = contact.Id,
+            FirstName = contact.FirstName ?? "",
+            LastName = contact.LastName ?? "",
+            MiddleName = contact.MiddleName,
+            Email = contact.Party?.Email,
+            Phone = contact.Party?.Phone,
+            Street = contact.Party?.CompanyStreet,
+            City = contact.Party?.CompanyProvince,
+            PostalCode = contact.Party?.CompanyPostalCode,
+            Country = contact.Party?.CompanyCountry,
+            IsPrimary = contact.Id == primaryContactId,
+            IsBillTo = contact.Id == billToContactId,
+        };
+
+        /// <summary>Links the auto-created primary contact into CustomerContact so it appears in the contacts list.</summary>
+        private void EnsurePrimaryContactLinked(Core.Domain.Sales.Customer customer)
+        {
+            if (!customer.PrimaryContactId.HasValue)
+                return;
+            if (!_db.Set<Core.Domain.CustomerContact>().Any(cc => cc.CustomerId == customer.Id && cc.ContactId == customer.PrimaryContactId))
+            {
+                _db.Set<Core.Domain.CustomerContact>().Add(new Core.Domain.CustomerContact
+                {
+                    CustomerId = customer.Id,
+                    ContactId = customer.PrimaryContactId.Value,
+                });
+            }
+            _db.SaveChanges();
+        }
 
         /// <summary>Whether anything has been recorded for the client: invoices (drafts too), orders, quotes, deliveries or payments.</summary>
         private bool ClientHasRecords(int customerId) =>
@@ -621,8 +857,12 @@ namespace Api.Controllers
         [HttpPost]
         [Route("SendSalesInvoiceEmail")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public Task<IActionResult> SendSalesInvoiceEmail(int id, [FromServices] Api.Service.IEmailSender emailSender, bool attachPdf = false) =>
-            SendInvoiceEmailAsync(id, emailSender, followUp: false, attachPdf);
+        public Task<IActionResult> SendSalesInvoiceEmail(
+            int id,
+            [FromServices] Api.Service.IEmailSender emailSender,
+            bool attachPdf = false,
+            [FromQuery] string[]? additionalRecipients = null) =>
+            SendInvoiceEmailAsync(id, emailSender, followUp: false, attachPdf, additionalRecipients);
 
         /// <summary>
         /// Sends a follow-up reminder for an unpaid invoice: same PDF link/BCC as the original send, different copy.
@@ -630,10 +870,19 @@ namespace Api.Controllers
         [HttpPost]
         [Route("SendSalesInvoiceFollowUpEmail")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public Task<IActionResult> SendSalesInvoiceFollowUpEmail(int id, [FromServices] Api.Service.IEmailSender emailSender, bool attachPdf = false) =>
-            SendInvoiceEmailAsync(id, emailSender, followUp: true, attachPdf);
+        public Task<IActionResult> SendSalesInvoiceFollowUpEmail(
+            int id,
+            [FromServices] Api.Service.IEmailSender emailSender,
+            bool attachPdf = false,
+            [FromQuery] string[]? additionalRecipients = null) =>
+            SendInvoiceEmailAsync(id, emailSender, followUp: true, attachPdf, additionalRecipients);
 
-        private async Task<IActionResult> SendInvoiceEmailAsync(int id, Api.Service.IEmailSender emailSender, bool followUp, bool attachPdf)
+        private async Task<IActionResult> SendInvoiceEmailAsync(
+            int id,
+            Api.Service.IEmailSender emailSender,
+            bool followUp,
+            bool attachPdf,
+            string[]? additionalRecipients = null)
         {
             var invoice = BuildSalesInvoiceDto(id);
             if (invoice == null)
@@ -655,6 +904,26 @@ namespace Api.Controllers
             var to = ValidEmail(invoice.RecipientEmail);
             if (to == null)
                 return BadRequest(new { message = "This customer has no valid email address on record." });
+
+            var rawAdditional = (additionalRecipients ?? Array.Empty<string>())
+                .SelectMany(r => r.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Select(r => r.Trim())
+                .Where(r => !string.IsNullOrEmpty(r))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (rawAdditional.Count > 2)
+                return BadRequest(new { message = "A maximum of 3 recipients (including the customer) can be specified." });
+
+            var validAdditional = new List<string>();
+            foreach (var recipient in rawAdditional)
+            {
+                var valid = ValidEmail(recipient);
+                if (valid == null)
+                    return BadRequest(new { message = $"'{recipient}' is not a valid email address." });
+                if (!string.Equals(valid, to, StringComparison.OrdinalIgnoreCase) && !validAdditional.Contains(valid, StringComparer.OrdinalIgnoreCase))
+                    validAdditional.Add(valid);
+            }
 
             // Customer addresses are whatever the workspace typed in, so cap sends to protect our domain's sending reputation.
             // Counted from the audit trail, so the cap holds across restarts and instances.
@@ -691,6 +960,7 @@ namespace Api.Controllers
             var message = new Api.Service.EmailMessage
             {
                 To = to,
+                AdditionalTo = validAdditional,
                 Subject = content.Subject,
                 Html = content.Html,
                 Text = content.Text,
@@ -707,8 +977,12 @@ namespace Api.Controllers
                     Content = pdf
                 });
             }
-            if (senderEmail != null && !string.Equals(senderEmail, to, StringComparison.OrdinalIgnoreCase))
+            if (senderEmail != null
+                && !string.Equals(senderEmail, to, StringComparison.OrdinalIgnoreCase)
+                && !validAdditional.Any(r => string.Equals(senderEmail, r, StringComparison.OrdinalIgnoreCase)))
+            {
                 message.Bcc.Add(senderEmail);
+            }
 
             string? providerMessageId;
             try
@@ -754,7 +1028,7 @@ namespace Api.Controllers
                     ? "Invoice {InvoiceId} follow-up emailed by {Sender} for workspace {CompanyId}"
                     : "Invoice {InvoiceId} emailed by {Sender} for workspace {CompanyId}",
                 id, senderEmail, _tenantContext.CompanyId);
-            return Ok(new { success = true, to, bcc = message.Bcc, email = ToEmailItem(record) });
+            return Ok(new { success = true, to, additionalRecipients = validAdditional, bcc = message.Bcc, email = ToEmailItem(record) });
         }
 
         private const int InvoiceEmailsPerHour = 30;
@@ -820,8 +1094,14 @@ namespace Api.Controllers
         private void CaptureIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice)
         {
             invoice.CaptureSellerIfIssued(CurrentCompany(), _db.CompanySettings.FirstOrDefault());
-            if (invoice.BillToJson == null)
-                invoice.CaptureBillToIfIssued(_db.Customers.Where(c => c.Id == invoice.CustomerId).Select(c => c.Party).FirstOrDefault());
+            if (invoice.BillToJson != null)
+                return;
+
+            var customer = _db.Customers
+                .Include(c => c.Party)
+                .Include(c => c.BillToContact!).ThenInclude(c => c.Party)
+                .FirstOrDefault(c => c.Id == invoice.CustomerId);
+            invoice.CaptureBillToIfIssued(customer?.Party, customer?.BillToContact);
         }
 
         /// <summary>An invoice's totals, balance and status, the same in every view of it.</summary>

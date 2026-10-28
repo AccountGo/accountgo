@@ -1850,6 +1850,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PrimaryContactId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("BillToContactId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Province")
                         .HasColumnType("nvarchar(max)");
 
@@ -1871,6 +1874,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("AccountsPayableAccountId");
+
+                    b.HasIndex("BillToContactId");
 
                     b.HasIndex("PartyId");
 
@@ -1977,6 +1982,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PrimaryContactId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("BillToContactId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PromptPaymentDiscountAccountId")
                         .HasColumnType("int");
 
@@ -1992,6 +2000,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("AccountsReceivableAccountId");
+
+                    b.HasIndex("BillToContactId");
 
                     b.HasIndex("CustomerAdvancesAccountId");
 
@@ -3581,6 +3591,11 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany()
                         .HasForeignKey("PrimaryContactId");
 
+                    b.HasOne("Core.Domain.Contact", "BillToContact")
+                        .WithMany()
+                        .HasForeignKey("BillToContactId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Core.Domain.Financials.Account", "PurchaseAccount")
                         .WithMany()
                         .HasForeignKey("PurchaseAccountId");
@@ -3594,6 +3609,8 @@ namespace Api.Data.Migrations.ApiDb
                         .HasForeignKey("TaxGroupId");
 
                     b.Navigation("AccountsPayableAccount");
+
+                    b.Navigation("BillToContact");
 
                     b.Navigation("Party");
 
@@ -3659,6 +3676,11 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany()
                         .HasForeignKey("PrimaryContactId");
 
+                    b.HasOne("Core.Domain.Contact", "BillToContact")
+                        .WithMany()
+                        .HasForeignKey("BillToContactId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Core.Domain.Financials.Account", "PromptPaymentDiscountAccount")
                         .WithMany()
                         .HasForeignKey("PromptPaymentDiscountAccountId");
@@ -3676,6 +3698,8 @@ namespace Api.Data.Migrations.ApiDb
                         .HasForeignKey("TaxGroupId");
 
                     b.Navigation("AccountsReceivableAccount");
+
+                    b.Navigation("BillToContact");
 
                     b.Navigation("CustomerAdvancesAccount");
 

@@ -89,6 +89,7 @@ docker run -d \
 | `ENTITLEMENTS_ENABLED` | Optional. `"true"` turns on free-tier quota checks; unset/`false` = unlimited (self-host default) |
 | `ENTITLEMENTS_SELF_SERVICE_PLANS` | Optional comma list (e.g. `invoicing,accounting`). Empty when entitlements off = all known plans |
 | `ENTITLEMENTS_FREE_*` | Optional per-resource free limits (see `.env.example`). Missing key = unlimited for that resource |
+| `BILLING_SUBSCRIPTIONS_ENABLED` | Hosted only (with Billing module). `"false"` hides Checkout / Upgrade; portal + webhooks still work when Stripe is configured. Default on when unset |
 | `SUPPORT_EMAIL` | Shown when a quota is exceeded |
 
 Hosted AccountGo Cloud billing (payment provider keys, price IDs, `REQUIRED_MODULES`) is configured only in the private ops overlay — not in this public repo.

@@ -28,6 +28,7 @@ import {
   InvoiceLineItem,
   CustomerOption,
   Client,
+  ContactPerson,
   PaymentTermOption,
   ItemOption,
   SalesInvoiceSettings,
@@ -88,6 +89,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
+  /** Full client with contacts, for the Bill To selector. */
+  const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
+  const [billToContactId, setBillToContactId] = useState<number | ''>('');
   const [invoiceNo, setInvoiceNo] = useState<string>('');
   // Issued invoices keep their number; only drafts (and new invoices) can change it.
   const [isIssued, setIsIssued] = useState<boolean>(false);
@@ -375,11 +379,69 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   const selectedCustomer = customers.find((c) => c.id === Number(selectedCustomerId));
 
+  const loadClientDetail = useCallback(
+    async (customerId: number) => {
+      try {
+        const res = await authFetch(`/api/Sales/Client?id=${customerId}`);
+        if (!res.ok) {
+          setSelectedClientDetail(null);
+          setBillToContactId('');
+          return;
+        }
+        const client = (await res.json()) as Client;
+        setSelectedClientDetail(client);
+        setBillToContactId(client.billToContactId ?? '');
+      } catch {
+        setSelectedClientDetail(null);
+        setBillToContactId('');
+      }
+    },
+    [authFetch],
+  );
+
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setSelectedClientDetail(null);
+      setBillToContactId('');
+      return;
+    }
+    void loadClientDetail(Number(selectedCustomerId));
+  }, [selectedCustomerId, loadClientDetail]);
+
   const handlePickCustomer = (customer: CustomerOption) => {
     setSelectedCustomerId(customer.id);
     if (customer.paymentTermId) applyTerm(customer.paymentTermId);
     setIsCustomerPickerOpen(false);
   };
+
+  const handleBillToChange = async (contactId: number | '') => {
+    setBillToContactId(contactId);
+    if (!selectedCustomerId) return;
+    try {
+      const res = await authFetch(
+        `/api/Sales/SetClientBillToContact?clientId=${Number(selectedCustomerId)}&contactId=${contactId || 0}`,
+        { method: 'POST' },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || 'The Bill To contact could not be updated.');
+      }
+      setSelectedClientDetail(await res.json());
+    } catch (err: any) {
+      setErrorBanner(err.message);
+    }
+  };
+
+  const billToContact: ContactPerson | undefined = selectedClientDetail?.contacts?.find(
+    (c) => c.id === Number(billToContactId),
+  );
+  const billToPreviewEmail = billToContact?.email || selectedCustomer?.email;
+  const billToPreviewPhone = billToContact?.phone || selectedCustomer?.phone;
+  const billToPreviewAddress = billToContact
+    ? [billToContact.street, [billToContact.city, billToContact.postalCode].filter(Boolean).join(' '), billToContact.country]
+        .filter(Boolean)
+        .join(', ')
+    : null;
 
   const handlePickItem = (index: number, catalogItem: ItemOption) => {
     setLines((prev) => {
@@ -556,6 +618,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     if (isNew) {
       setSelectedCustomerId(client.id);
       if (client.paymentTermId) applyTerm(client.paymentTermId);
+    } else if (Number(selectedCustomerId) === client.id) {
+      void loadClientDetail(client.id);
     }
     setClientDialog(null);
   };
@@ -684,25 +748,64 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             </div>
 
             {selectedCustomer ? (
-              <button
-                type="button"
-                onClick={() => setIsCustomerPickerOpen(true)}
-                title="Change client"
-                className="group flex w-full items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-left transition hover:border-[var(--brand-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-subtle)] text-sm font-bold text-[var(--brand-primary)]">
-                  {selectedCustomer.name.trim().charAt(0).toUpperCase() || '?'}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-[var(--text-main)]">{selectedCustomer.name}</span>
-                  <span className="block truncate text-xs text-[var(--text-secondary)]">
-                    {[selectedCustomer.email, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No email or phone on record'}
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomerPickerOpen(true)}
+                  title="Change client"
+                  className="group flex w-full items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-left transition hover:border-[var(--brand-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-subtle)] text-sm font-bold text-[var(--brand-primary)]">
+                    {selectedCustomer.name.trim().charAt(0).toUpperCase() || '?'}
                   </span>
-                </span>
-                <span className="shrink-0 text-xs font-semibold text-[var(--text-muted)] transition group-hover:text-[var(--brand-primary)]">
-                  Change
-                </span>
-              </button>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-[var(--text-main)]">{selectedCustomer.name}</span>
+                    <span className="block truncate text-xs text-[var(--text-secondary)]">
+                      {[billToPreviewEmail, billToPreviewPhone].filter(Boolean).join(' · ') || 'No email or phone on record'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-[var(--text-muted)] transition group-hover:text-[var(--brand-primary)]">
+                    Change
+                  </span>
+                </button>
+
+                {(selectedClientDetail?.contacts?.length ?? 0) > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]" htmlFor="bill-to-contact">
+                      Bill To contact
+                    </label>
+                    <select
+                      id="bill-to-contact"
+                      value={billToContactId}
+                      disabled={isIssued}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        void handleBillToChange(raw ? Number(raw) : '');
+                      }}
+                      className="w-full h-10 px-3 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] disabled:opacity-60"
+                    >
+                      <option value="">Company only</option>
+                      {(selectedClientDetail?.contacts ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.fullName || `${c.firstName} ${c.lastName}`.trim()}
+                          {c.isPrimary ? ' (Primary)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {isIssued && (
+                      <p className="text-xs text-[var(--text-muted)]">Issued invoices keep the Bill To they were issued with.</p>
+                    )}
+                    {(billToContact || billToPreviewAddress) && !isIssued && (
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        {billToContact && (
+                          <span className="block">Attn: {billToContact.fullName || `${billToContact.firstName} ${billToContact.lastName}`.trim()}</span>
+                        )}
+                        {billToPreviewAddress && <span className="block">{billToPreviewAddress}</span>}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
               <button
                 type="button"

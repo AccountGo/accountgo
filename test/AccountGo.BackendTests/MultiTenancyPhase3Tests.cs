@@ -776,6 +776,45 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task SendSalesInvoiceEmail_SupportsUpToTwoAdditionalRecipients_CappedAtThreeTotal()
+        {
+            var invoice = await NewInvoice("billing@customer.example");
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            // > 2 additional recipients (total > 3) is rejected
+            var tooMany = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=one@example.com&additionalRecipients=two@example.com&additionalRecipients=three@example.com");
+            Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
+            Assert.Contains("maximum of 3 recipients", await tooMany.Content.ReadAsStringAsync());
+
+            // Invalid email is rejected
+            var invalid = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=not-an-email");
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            Assert.Contains("not a valid email", await invalid.Content.ReadAsStringAsync());
+
+            // Valid 2 additional recipients (total 3) succeeds and is dispatched on demand
+            var path = $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=ap@customer.example&additionalRecipients=cfo@customer.example";
+            var sent = await Send(HttpMethod.Post, path);
+            Assert.True(sent.IsSuccessStatusCode, await sent.Content.ReadAsStringAsync());
+
+            var message = _emails.Messages.Last().Raw;
+            Assert.Equal("billing@customer.example", message.To);
+            Assert.Equal(new[] { "ap@customer.example", "cfo@customer.example" }, message.AdditionalTo);
+
+            // Resend payload builder includes all 3
+            var payload = ResendEmailSender.BuildPayload("billing@accountgo.dev", message);
+            Assert.Contains("billing@customer.example", payload);
+            Assert.Contains("ap@customer.example", payload);
+            Assert.Contains("cfo@customer.example", payload);
+
+            // Database invoice recipient email is NOT changed (remains on-demand only)
+            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("billing@customer.example", reloaded.GetProperty("recipientEmail").GetString());
+        }
+
+        [Fact]
         public async Task BusinessProfile_FirstSave_TrimsAndValidates_AndIsAdminOnly()
         {
             var empty = await Json(await Send(HttpMethod.Get, Current + "/business-profile"));
@@ -1617,6 +1656,146 @@ namespace AccountGo.BackendTests
             once.CaptureBillToIfIssued(party);
             once.CaptureBillToIfIssued(new Party { Name = "Renamed" });
             Assert.Equal("Acme", InvoiceBillTo.FromJson(once.BillToJson).Name);
+        }
+
+        [Fact]
+        public void InvoiceBillTo_FromParty_UsesBillToContactAttentionAddressAndFallbacks()
+        {
+            var company = new Party
+            {
+                Name = "Acme Corp",
+                Email = "billing@acme.test",
+                Phone = "+1 555 0100",
+                CompanyStreet = "1 Main St",
+                CompanyProvince = "Makati",
+                CompanyPostalCode = "1226",
+                CompanyCountry = "PH",
+            };
+            var contact = new Contact
+            {
+                Id = 42,
+                FirstName = "Jane",
+                LastName = "Doe",
+                Party = new Party
+                {
+                    Email = "jane@acme.test",
+                    Phone = null,
+                    CompanyStreet = "9 Contact Ave",
+                    CompanyProvince = "Quezon City",
+                    CompanyPostalCode = "1100",
+                    CompanyCountry = "PH",
+                },
+            };
+
+            var withContact = InvoiceBillTo.FromParty(company, contact);
+            Assert.Equal("Acme Corp", withContact.Name);
+            Assert.Equal("Attn: Jane Doe", withContact.Attention);
+            Assert.Equal(42, withContact.ContactId);
+            Assert.Equal("jane@acme.test", withContact.Email);
+            Assert.Equal("+1 555 0100", withContact.Phone);
+            Assert.Equal(new[] { "9 Contact Ave", "Quezon City", "1100", "PH" }, withContact.AddressLines);
+
+            var contactWithoutAddress = new Contact
+            {
+                Id = 7,
+                FirstName = "Bob",
+                LastName = "Smith",
+                Party = new Party { Email = null, Phone = "+1 555 0199" },
+            };
+            var fallback = InvoiceBillTo.FromParty(company, contactWithoutAddress);
+            Assert.Equal("Attn: Bob Smith", fallback.Attention);
+            Assert.Equal("billing@acme.test", fallback.Email);
+            Assert.Equal("+1 555 0199", fallback.Phone);
+            Assert.Equal(new[] { "1 Main St", "Makati", "1226", "PH" }, fallback.AddressLines);
+
+            var companyOnly = InvoiceBillTo.FromParty(company);
+            Assert.Null(companyOnly.Attention);
+            Assert.Null(companyOnly.ContactId);
+            Assert.Equal("billing@acme.test", companyOnly.Email);
+
+            var roundTrip = InvoiceBillTo.FromJson(withContact.ToJson());
+            Assert.Equal("Attn: Jane Doe", roundTrip!.Attention);
+            Assert.Equal(42, roundTrip.ContactId);
+
+            var issued = new SalesInvoiceHeader { Status = SalesInvoiceStatus.Open };
+            issued.CaptureBillToIfIssued(company, contact);
+            Assert.Equal("Attn: Jane Doe", InvoiceBillTo.FromJson(issued.BillToJson)!.Attention);
+        }
+
+        [Fact]
+        public async Task ClientContacts_BillToRole_AndIssuedInvoiceSnapshot()
+        {
+            var client = await SaveClient(new Dto.Sales.Client
+            {
+                Name = "Acme Corp",
+                Email = "billing@acme.test",
+                Street = "1 Main St",
+                City = "Makati",
+                Country = "PH",
+            });
+            var loaded = await GetClient(client.Id);
+            Assert.Null(loaded.BillToContactId);
+            Assert.Contains(loaded.Contacts, c => c.IsPrimary);
+
+            var saved = await (await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={client.Id}", new Dto.Common.ContactPersonDto
+            {
+                FirstName = "Jane",
+                LastName = "Doe",
+                Email = "jane@acme.test",
+                Street = "9 Contact Ave",
+                City = "Quezon City",
+                Country = "PH",
+                IsBillTo = true,
+            })).Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            Assert.NotNull(saved.BillToContactId);
+            Assert.Contains(saved.Contacts, c => c.IsBillTo && c.FirstName == "Jane" && c.Email == "jane@acme.test");
+
+            var invoice = await NewInvoice();
+            invoice.CustomerId = client.Id;
+            var issued = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
+            var invoiceId = (await Json(issued)).GetProperty("id").GetInt32();
+            var printed = await GetInvoice(invoiceId);
+            Assert.Equal("Acme Corp", printed.CustomerName);
+            Assert.Equal("Attn: Jane Doe", printed.CustomerAttention);
+            Assert.Equal("jane@acme.test", printed.CustomerEmail);
+            Assert.Contains("9 Contact Ave", printed.CustomerAddress);
+            Assert.Equal("jane@acme.test", printed.RecipientEmail);
+
+            var other = await (await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={client.Id}", new Dto.Common.ContactPersonDto
+            {
+                FirstName = "Bob",
+                LastName = "Smith",
+                Email = "bob@acme.test",
+            })).Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            var bobId = other.Contacts.Single(c => c.FirstName == "Bob").Id;
+            var switched = await (await Send(HttpMethod.Post, $"/api/Sales/SetClientBillToContact?clientId={client.Id}&contactId={bobId}"))
+                .Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            Assert.Equal(bobId, switched.BillToContactId);
+            Assert.Equal("jane@acme.test", (await GetInvoice(invoiceId)).CustomerEmail);
+
+            var janeId = switched.Contacts.Single(c => c.FirstName == "Jane").Id;
+            var afterDelete = await (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClientContact?clientId={client.Id}&contactId={janeId}"))
+                .Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            Assert.DoesNotContain(afterDelete.Contacts, c => c.Id == janeId);
+            Assert.Equal(bobId, afterDelete.BillToContactId);
+
+            var bob = afterDelete.Contacts.Single(c => c.Id == bobId);
+            var cleared = await (await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={client.Id}", new Dto.Common.ContactPersonDto
+            {
+                Id = bob.Id,
+                FirstName = bob.FirstName,
+                LastName = bob.LastName,
+                Email = bob.Email,
+                IsBillTo = false,
+                IsPrimary = bob.IsPrimary,
+            })).Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            Assert.Null(cleared.BillToContactId);
+            Assert.DoesNotContain(cleared.Contacts, c => c.IsBillTo);
+
+            // Issued invoice stays sendable from frozen bill-to email after company email is cleared.
+            await EditCustomer(client.Id, "Acme Corp", email: null, street: "1 Main St");
+            Assert.Equal("jane@acme.test", (await GetInvoice(invoiceId)).RecipientEmail);
         }
 
         [Fact]

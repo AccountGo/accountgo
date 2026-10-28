@@ -33,6 +33,8 @@ namespace Core.Domain.Purchases
         public int? PurchaseAccountId { get; set; }
         public int? PurchaseDiscountAccountId { get; set; }        
         public int? PrimaryContactId { get; set; }
+        /// <summary>Contact person used as Bill From / payee attention on bills; null uses the company party alone.</summary>
+        public int? BillToContactId { get; set; }
         public int? PaymentTermId { get; set; }
         public int? PaymentMethod { get; set; }
         public int? TaxGroupId { get; set; }
@@ -51,6 +53,7 @@ namespace Core.Domain.Purchases
         public virtual Account PurchaseAccount { get; set; }
         public virtual Account PurchaseDiscountAccount { get; set; }
         public virtual Contact PrimaryContact { get; set; }
+        public virtual Contact BillToContact { get; set; }
         public virtual PaymentTerm PaymentTerm { get; set; }
         public virtual TaxGroup TaxGroup { get; set; }
 

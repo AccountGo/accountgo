@@ -59,32 +59,60 @@ namespace Api.Controllers
 
             try
             {
-                // Hosted paid upgrades go through the billing provider; Plan is written only after webhook.
-                if (_billing.Enabled
-                    && !string.IsNullOrWhiteSpace(dto.Plan)
-                    && Company.IsPaidPlan(dto.Plan))
+                // Hosted: Checkout / portal for paid upgrades; free↔free immediate. Cancel is portal-only (not here).
+                if (!string.IsNullOrWhiteSpace(dto.Plan) && _billing.RequiresProviderCheckout)
                 {
                     var current = _adminService.GetCurrentSubscription();
-                    if (!string.Equals(current.Plan, dto.Plan.Trim(), StringComparison.OrdinalIgnoreCase))
+                    var targetPlan = dto.Plan.Trim().ToLowerInvariant();
+                    if (!string.Equals(current.Plan, targetPlan, StringComparison.OrdinalIgnoreCase))
                     {
-                        var returnUrl = Request.Headers["Referer"].ToString();
-                        if (string.IsNullOrWhiteSpace(returnUrl))
-                            returnUrl = "/";
-                        if (!string.IsNullOrWhiteSpace(dto.BillingInterval)
-                            && !returnUrl.Contains("interval=", StringComparison.OrdinalIgnoreCase))
+                        if (!Company.IsAllowedSelfServicePlanChange(current.Plan, targetPlan))
                         {
-                            var sep = returnUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
-                            returnUrl = $"{returnUrl}{sep}interval={Uri.EscapeDataString(dto.BillingInterval.Trim())}";
+                            return BadRequest(new
+                            {
+                                message = $"Cannot change from '{Company.NormalizePlanKey(current.Plan)}' to '{Company.NormalizePlanKey(targetPlan)}'. " +
+                                          "Use Cancel on your Pro plan (billing portal), or switch only along the allowed free / upgrade path."
+                            });
                         }
-                        var result = await _billing.RequestPlanChangeAsync(
-                            _tenant.RequireCompanyId(),
-                            dto.Plan.Trim().ToLowerInvariant(),
-                            returnUrl,
-                            ct);
-                        if (!string.IsNullOrEmpty(result.ErrorReason))
-                            return BadRequest(new { message = result.ErrorReason });
-                        if (!result.AppliedImmediately)
-                            return Ok(new { redirectUrl = result.RedirectUrl });
+
+                        // Paid Checkout requires the kill switch on. Free downgrades / portal still call the provider
+                        // when subscriptions are enabled so Stripe cancel/proration stays consistent.
+                        if (Company.IsPaidPlan(targetPlan) && !_billing.Enabled)
+                            return BadRequest(new { message = "Self-service subscriptions are temporarily disabled." });
+
+                        if (_billing.Enabled || !Company.IsPaidPlan(targetPlan))
+                        {
+                            var returnUrl = Request.Headers["Referer"].ToString();
+                            if (string.IsNullOrWhiteSpace(returnUrl))
+                                returnUrl = "/";
+                            if (!string.IsNullOrWhiteSpace(dto.BillingInterval)
+                                && !returnUrl.Contains("interval=", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var sep = returnUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+                                returnUrl = $"{returnUrl}{sep}interval={Uri.EscapeDataString(dto.BillingInterval.Trim())}";
+                            }
+
+                            // When subscriptions are off, free downgrade with an existing Stripe customer → portal only.
+                            if (!_billing.Enabled)
+                            {
+                                var portal = await _billing.GetPortalUrlAsync(_tenant.RequireCompanyId(), returnUrl, ct);
+                                if (!string.IsNullOrEmpty(portal))
+                                    return Ok(new { redirectUrl = portal });
+                                // No Stripe customer: allow in-app free plan apply below.
+                            }
+                            else
+                            {
+                                var result = await _billing.RequestPlanChangeAsync(
+                                    _tenant.RequireCompanyId(),
+                                    targetPlan,
+                                    returnUrl,
+                                    ct);
+                                if (!string.IsNullOrEmpty(result.ErrorReason))
+                                    return BadRequest(new { message = result.ErrorReason });
+                                if (!result.AppliedImmediately)
+                                    return Ok(new { redirectUrl = result.RedirectUrl });
+                            }
+                        }
                     }
                 }
 

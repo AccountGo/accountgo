@@ -36,9 +36,11 @@ export interface Invoice {
   no: string | null;
   customerId: number;
   customerName: string;
+  /** Attention line under the company name, e.g. "Attn: Jane Doe". */
+  customerAttention?: string;
   /** As printed on the invoice: recorded when it was issued. */
   customerEmail?: string;
-  /** Where emails go: the client's email on file now. */
+  /** Where emails go: Bill To contact email when set, else the company email on file now. */
   recipientEmail?: string;
   customerPhone?: string;
   customerAddress?: string;

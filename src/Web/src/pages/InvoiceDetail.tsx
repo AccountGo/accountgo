@@ -273,12 +273,20 @@ export const InvoiceDetail: React.FC = () => {
     return data?.no || invoice.no || '';
   };
 
-  const emailInvoice = async (followUp = false, attachPdf = false): Promise<string> => {
+  const emailInvoice = async (
+    followUp = false,
+    attachPdf = false,
+    additionalRecipients: string[] = [],
+  ): Promise<string> => {
     if (!invoice) return '';
     const attach = attachPdf ? '&attachPdf=true' : '';
+    const extras = additionalRecipients
+      .filter((r) => r.trim().length > 0)
+      .map((r) => `&additionalRecipients=${encodeURIComponent(r.trim())}`)
+      .join('');
     const path = followUp
-      ? `/api/Sales/SendSalesInvoiceFollowUpEmail?id=${invoice.id}${attach}`
-      : `/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}${attach}`;
+      ? `/api/Sales/SendSalesInvoiceFollowUpEmail?id=${invoice.id}${attach}${extras}`
+      : `/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}${attach}${extras}`;
     const res = await authFetch(path, {
       method: 'POST',
     });
@@ -323,7 +331,11 @@ export const InvoiceDetail: React.FC = () => {
     }
   };
 
-  const handleSendEmail = async (followUp: boolean, attachPdf = false) => {
+  const handleSendEmail = async (
+    followUp: boolean,
+    attachPdf = false,
+    additionalRecipients: string[] = [],
+  ) => {
     if (!invoice || !sendDialogMode) return;
     const issuing = sendDialogMode === 'issue';
     // Issuing always sends the first invoice email, never a follow-up.
@@ -343,13 +355,18 @@ export const InvoiceDetail: React.FC = () => {
     }
 
     try {
-      const to = await emailInvoice(sendAsFollowUp, attachPdf);
+      const to = await emailInvoice(sendAsFollowUp, attachPdf, additionalRecipients);
+      const recipientNotice =
+        additionalRecipients.length > 0
+          ? `${to} and ${additionalRecipients.length} other recipient${additionalRecipients.length > 1 ? 's' : ''}`
+          : to;
+
       setSuccessBanner(
         issuing
-          ? `${label} has been issued and emailed to ${to}.`
+          ? `${label} has been issued and emailed to ${recipientNotice}.`
           : sendAsFollowUp
-            ? `Follow-up for ${label} has been emailed to ${to}.`
-            : `${label} has been emailed to ${to}.`,
+            ? `Follow-up for ${label} has been emailed to ${recipientNotice}.`
+            : `${label} has been emailed to ${recipientNotice}.`,
       );
       setSendDialogMode(null);
       if (!issuing) await fetchInvoice();
@@ -617,6 +634,9 @@ export const InvoiceDetail: React.FC = () => {
             <div className="font-bold text-[var(--text-main)] text-base">
               {invoice.customerName}
             </div>
+            {invoice.customerAttention && (
+              <div className="text-[var(--text-secondary)]">{invoice.customerAttention}</div>
+            )}
             {showCustomerEmail && invoice.customerEmail && (
               <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
                 <Mail className="w-3.5 h-3.5 text-[var(--text-muted)]" />

@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, Mail, Paperclip, Send } from 'lucide-react';
+import { AlertTriangle, Loader2, Mail, Paperclip, Plus, Send, X } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 
 interface SendInvoiceDialogProps {
@@ -22,7 +22,7 @@ interface SendInvoiceDialogProps {
   busy: boolean;
   error: string | null;
   onIssueOnly: () => void;
-  onSend: (followUp: boolean, attachPdf: boolean) => void;
+  onSend: (followUp: boolean, attachPdf: boolean, additionalRecipients?: string[]) => void;
   onCancel: () => void;
 }
 
@@ -56,6 +56,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   const [markAsFollowUp, setMarkAsFollowUp] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [attachPdf, setAttachPdf] = useState(false);
+  const [additionalRecipients, setAdditionalRecipients] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const inputId = useId();
@@ -65,13 +66,52 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   const confirmed = normalise(typed) === normalise(invoiceNumber);
   const asFollowUp = followUpFromHistory || markAsFollowUp;
 
+  const maxRecipients = 3;
+  const canAddRecipient = 1 + additionalRecipients.length < maxRecipients;
+
+  const isValidEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const handleAddRecipient = () => {
+    if (canAddRecipient) {
+      setAdditionalRecipients((prev) => [...prev, '']);
+    }
+  };
+
+  const handleUpdateRecipient = (index: number, value: string) => {
+    setAdditionalRecipients((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const handleRemoveRecipient = (index: number) => {
+    setAdditionalRecipients((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const hasRecipientErrors = additionalRecipients.some((r, idx) => {
+    const trimmed = r.trim();
+    if (!trimmed) return false;
+    if (!isValidEmail(trimmed)) return true;
+    if (trimmed.toLowerCase() === to.toLowerCase()) return true;
+    return additionalRecipients.some(
+      (other, otherIdx) => otherIdx !== idx && other.trim().toLowerCase() === trimmed.toLowerCase(),
+    );
+  });
+
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (confirmed && !busy) onSend(asFollowUp, attachPdf);
+    if (confirmed && !busy && !hasRecipientErrors) {
+      const validExtras = additionalRecipients
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0 && isValidEmail(r) && r.toLowerCase() !== to.toLowerCase());
+      onSend(asFollowUp, attachPdf, validExtras);
+    }
   };
 
   const title =
@@ -150,9 +190,85 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
           )}
 
           <dl className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] divide-y divide-[var(--border-subtle)] text-sm">
-            <div className="flex gap-3 px-4 py-2.5">
-              <dt className="w-12 shrink-0 text-[var(--text-muted)]">To</dt>
-              <dd className="min-w-0 break-all font-medium text-[var(--text-main)]">{to}</dd>
+            <div className="flex items-start gap-3 px-4 py-2.5">
+              <dt className="w-12 shrink-0 text-[var(--text-muted)] pt-0.5">To</dt>
+              <dd className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 break-all font-medium text-[var(--text-main)]">{to}</span>
+                  {canAddRecipient ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={handleAddRecipient}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-lg text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)] transition shrink-0 disabled:opacity-40"
+                      title="Add recipient (max 3 total)"
+                      aria-label="Add recipient"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add</span>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-[var(--text-muted)] shrink-0 font-medium">
+                      Max 3
+                    </span>
+                  )}
+                </div>
+
+                {additionalRecipients.map((recipient, index) => {
+                  const trimmed = recipient.trim();
+                  const isDuplicate =
+                    trimmed.length > 0 &&
+                    (trimmed.toLowerCase() === to.toLowerCase() ||
+                      additionalRecipients.some(
+                        (other, i) => i !== index && other.trim().toLowerCase() === trimmed.toLowerCase(),
+                      ));
+                  const isInvalid = trimmed.length > 0 && !isValidEmail(trimmed);
+
+                  return (
+                    <div key={index} className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="email"
+                          value={recipient}
+                          disabled={busy}
+                          onChange={(e) => handleUpdateRecipient(index, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (canAddRecipient && isValidEmail(recipient)) {
+                                handleAddRecipient();
+                              }
+                            }
+                          }}
+                          placeholder="colleague@example.com"
+                          className={`flex-1 px-2.5 py-1 text-xs rounded-lg bg-[var(--bg-surface)] border text-[var(--text-main)] placeholder:text-[var(--text-muted)]/60 focus:outline-none focus:ring-1 ${
+                            isDuplicate || isInvalid
+                              ? 'border-rose-500 focus:ring-rose-500'
+                              : 'border-[var(--border-subtle)] focus:ring-[var(--brand-primary)]'
+                          }`}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleRemoveRecipient(index)}
+                          className="p-1 rounded-md text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-surface)] transition shrink-0 disabled:opacity-50"
+                          title="Remove recipient"
+                          aria-label="Remove recipient"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {isDuplicate && (
+                        <p className="text-[11px] text-rose-500 pl-0.5">This email address is already included.</p>
+                      )}
+                      {isInvalid && !isDuplicate && (
+                        <p className="text-[11px] text-rose-500 pl-0.5">Please enter a valid email address.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </dd>
             </div>
             {bcc && (
               <div className="flex gap-3 px-4 py-2.5">
@@ -255,7 +371,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
             )}
             <button
               type="submit"
-              disabled={!confirmed || busy}
+              disabled={!confirmed || busy || hasRecipientErrors}
               className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] hover:bg-[var(--brand-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

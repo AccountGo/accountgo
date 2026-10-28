@@ -1,12 +1,28 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { AlertTriangle, Archive, ArchiveRestore, FilePlus, Loader2, Pencil, Receipt, Trash2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Archive,
+  ArchiveRestore,
+  FilePlus,
+  Loader2,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  Plus,
+  Receipt,
+  Trash2,
+  User,
+  X,
+} from 'lucide-react';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 import { PartyFormDialog } from '../components/PartyFormDialog';
+import { ContactFormDialog } from '../components/ContactFormDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { usePermissions } from '../components/Gating';
-import { PartyBase, PaymentTermOption, TenantContextType } from '../types';
+import { ContactPerson, PartyBase, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { PartyDocumentRow, PartyRole, partyRoles } from '../lib/partyRoles';
@@ -30,6 +46,8 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [contactDialog, setContactDialog] = useState<ContactPerson | 'new' | null>(null);
+  const [contactToRemove, setContactToRemove] = useState<ContactPerson | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -108,6 +126,23 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
     }
   };
 
+  const mutateContact = async (url: string, method: 'POST' | 'DELETE' = 'POST') => {
+    if (!party) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await authFetch(url, { method });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || 'The contact could not be updated.');
+      setParty(data);
+      setContactToRemove(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="py-24 flex flex-col items-center justify-center text-[var(--text-secondary)] gap-3">
@@ -133,8 +168,12 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
 
   const term = paymentTerms.find((t) => t.id === party.paymentTermId);
   const address = [party.street, [party.city, party.postalCode].filter(Boolean).join(' '), party.country].filter(Boolean);
+  const contacts = party.contacts ?? [];
   const newDocumentPath = config.newDocumentPath?.(currentOrg.slug, party.id);
   const canStartDocument = canCreateDocument && !!newDocumentPath;
+  const contactName = (c: ContactPerson) => c.fullName || `${c.firstName} ${c.lastName}`.trim();
+  const contactAddress = (c: ContactPerson) =>
+    [c.street, [c.city, c.postalCode].filter(Boolean).join(' '), c.country].filter(Boolean);
 
   return (
     <div className="space-y-6">
@@ -225,6 +264,98 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
         </div>
       </div>
 
+      <section aria-label="Contacts" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-[var(--text-main)]">Contacts</h2>
+            <span className="text-xs font-medium text-[var(--text-muted)] bg-[var(--bg-muted)] px-2 py-0.5 rounded-full">
+              {contacts.length}
+            </span>
+          </div>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setContactDialog('new')}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:underline"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add contact
+            </button>
+          )}
+        </div>
+        {contacts.length === 0 ? (
+          <div className="px-5 pb-6 pt-1 text-center">
+            <div className="w-10 h-10 rounded-full bg-[var(--bg-muted)] text-[var(--text-secondary)] mx-auto flex items-center justify-center mb-2">
+              <User className="w-5 h-5" />
+            </div>
+            <p className="text-xs text-[var(--text-secondary)]">No contact persons yet.</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-[var(--border-subtle)]">
+            {contacts.map((contact) => {
+              const lines = contactAddress(contact);
+              return (
+                <li key={contact.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-start gap-3">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-[var(--text-main)]">{contactName(contact)}</span>
+                      {contact.isBillTo && (
+                        <StatusPill tone="blue">Bill To</StatusPill>
+                      )}
+                      {contact.isPrimary && (
+                        <StatusPill tone="slate">Primary</StatusPill>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]">
+                      {contact.email && (
+                        <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1 hover:underline">
+                          <Mail className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                          {contact.email}
+                        </a>
+                      )}
+                      {contact.phone && (
+                        <span className="inline-flex items-center gap-1">
+                          <Phone className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                          {contact.phone}
+                        </span>
+                      )}
+                    </div>
+                    {lines.length > 0 && (
+                      <div className="flex items-start gap-1 text-xs text-[var(--text-secondary)]">
+                        <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 mt-0.5" />
+                        <span>{lines.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                  {canManage && (
+                    <HeaderMenu
+                      items={[
+                        !contact.isBillTo && {
+                          label: 'Set as Bill To',
+                          onSelect: () => mutateContact(config.api.setBillToContact(party.id, contact.id)),
+                        },
+                        !contact.isPrimary && {
+                          label: 'Set as Primary',
+                          onSelect: () => mutateContact(config.api.setPrimaryContact(party.id, contact.id)),
+                        },
+                        { label: 'Edit', icon: Pencil, onSelect: () => setContactDialog(contact) },
+                        !contact.isPrimary && 'separator',
+                        !contact.isPrimary && {
+                          label: 'Remove',
+                          icon: Trash2,
+                          danger: true,
+                          onSelect: () => setContactToRemove(contact),
+                        },
+                      ]}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       {documentRows && (
         <section aria-label={`${config.Document}s`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden shadow-sm">
           <h2 className="px-5 pt-4 pb-3 text-sm font-semibold text-[var(--text-main)]">{config.Document}s</h2>
@@ -301,9 +432,34 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
           paymentTerms={paymentTerms}
           onClose={() => setIsEditing(false)}
           onSaved={(saved) => {
-            setParty(saved);
+            setParty({ ...party, ...saved, contacts: party.contacts });
             setIsEditing(false);
           }}
+        />
+      )}
+
+      {contactDialog && (
+        <ContactFormDialog
+          role={role}
+          partyId={party.id}
+          contact={contactDialog === 'new' ? undefined : contactDialog}
+          onClose={() => setContactDialog(null)}
+          onSaved={(saved) => {
+            setParty(saved);
+            setContactDialog(null);
+          }}
+        />
+      )}
+
+      {contactToRemove && (
+        <ConfirmDialog
+          title={`Remove ${contactName(contactToRemove)}?`}
+          message="This contact will be unlinked from the party. Issued documents keep the details they were issued with."
+          confirmLabel="Remove contact"
+          destructive
+          busy={busy}
+          onConfirm={() => mutateContact(config.api.removeContact(party.id, contactToRemove.id), 'DELETE')}
+          onCancel={() => setContactToRemove(null)}
         />
       )}
 

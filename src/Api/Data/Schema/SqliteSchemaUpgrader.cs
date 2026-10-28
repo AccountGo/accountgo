@@ -189,6 +189,9 @@ namespace Api.Data.Schema
                     new[] { "SalesInvoiceLine", "TaxAmount", "decimal(18, 2) NOT NULL DEFAULT 0" },
                     new[] { "SalesInvoiceLine", "SalesAccountId", "INTEGER NULL REFERENCES \"Account\" (\"Id\")" },
                     new[] { "Customer", "ArchivedAt", "TEXT NULL" },
+                    // D1 0029_bill_to_contact.sql
+                    new[] { "Customer", "BillToContactId", "INTEGER NULL REFERENCES \"Contact\" (\"Id\") ON DELETE SET NULL" },
+                    new[] { "Vendor", "BillToContactId", "INTEGER NULL REFERENCES \"Contact\" (\"Id\") ON DELETE SET NULL" },
                     new[] { "Item", "ArchivedAt", "TEXT NULL" },
                     new[] { "Item", "QuantityOnHand", "decimal(18, 4) NOT NULL DEFAULT 0" },
                     new[] { "Item", "AverageCost", "decimal(18, 4) NOT NULL DEFAULT 0" },
@@ -263,6 +266,15 @@ namespace Api.Data.Schema
                             ELSE ""QuantityOnHand"" * ""AverageCost"" END, 2);";
                         cmd.ExecuteNonQuery();
                     }
+                }
+                if (added.Contains("Customer.BillToContactId") || added.Contains("Vendor.BillToContactId"))
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
+                        CREATE INDEX IF NOT EXISTS ""IX_Customer_BillToContactId"" ON ""Customer"" (""BillToContactId"");
+                        CREATE INDEX IF NOT EXISTS ""IX_Vendor_BillToContactId"" ON ""Vendor"" (""BillToContactId"");";
+                    cmd.ExecuteNonQuery();
                 }
                 if (added.Contains("SalesInvoiceHeader.BillToJson") && added.Contains("SalesInvoiceLine.Description"))
                 {

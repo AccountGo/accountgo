@@ -31,6 +31,8 @@ public sealed class CommunityBillingProvider : IBillingProvider
 
     public bool Enabled => false;
 
+    public bool RequiresProviderCheckout => false;
+
     public Task<PlanChangeResult> RequestPlanChangeAsync(
         int companyId,
         string planKey,

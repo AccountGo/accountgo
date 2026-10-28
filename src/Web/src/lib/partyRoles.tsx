@@ -37,6 +37,10 @@ export interface PartyRoleConfig {
     archive: (id: number, archived: boolean) => string;
     remove: (id: number) => string;
     documents: (id: string | number) => string;
+    saveContact: (partyId: number) => string;
+    setBillToContact: (partyId: number, contactId: number) => string;
+    setPrimaryContact: (partyId: number, contactId: number) => string;
+    removeContact: (partyId: number, contactId: number) => string;
   };
   viewPermission: string;
   managePermission: string;
@@ -82,6 +86,13 @@ export const partyRoles: Record<PartyRole, PartyRoleConfig> = {
       archive: (id, archived) => `/api/Sales/ArchiveClient?id=${id}&archived=${archived}`,
       remove: (id) => `/api/Sales/DeleteClient?id=${id}`,
       documents: (id) => `/api/Sales/SalesInvoices?customerId=${encodeURIComponent(id)}`,
+      saveContact: (partyId) => `/api/Sales/ClientContact?clientId=${partyId}`,
+      setBillToContact: (partyId, contactId) =>
+        `/api/Sales/SetClientBillToContact?clientId=${partyId}&contactId=${contactId}`,
+      setPrimaryContact: (partyId, contactId) =>
+        `/api/Sales/SetClientPrimaryContact?clientId=${partyId}&contactId=${contactId}`,
+      removeContact: (partyId, contactId) =>
+        `/api/Sales/DeleteClientContact?clientId=${partyId}&contactId=${contactId}`,
     },
     viewPermission: 'sales.customers.view',
     managePermission: 'sales.customers.manage',
@@ -130,6 +141,13 @@ export const partyRoles: Record<PartyRole, PartyRoleConfig> = {
       archive: (id, archived) => `/api/Purchasing/ArchiveVendor?id=${id}&archived=${archived}`,
       remove: (id) => `/api/Purchasing/DeleteVendor?id=${id}`,
       documents: (id) => `/api/Purchasing/Bills?vendorId=${encodeURIComponent(id)}`,
+      saveContact: (partyId) => `/api/Purchasing/VendorContact?vendorId=${partyId}`,
+      setBillToContact: (partyId, contactId) =>
+        `/api/Purchasing/SetVendorBillToContact?vendorId=${partyId}&contactId=${contactId}`,
+      setPrimaryContact: (partyId, contactId) =>
+        `/api/Purchasing/SetVendorPrimaryContact?vendorId=${partyId}&contactId=${contactId}`,
+      removeContact: (partyId, contactId) =>
+        `/api/Purchasing/DeleteVendorContact?vendorId=${partyId}&contactId=${contactId}`,
     },
     viewPermission: 'purchases.vendors.view',
     managePermission: 'purchases.vendors.manage',

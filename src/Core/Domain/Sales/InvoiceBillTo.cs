@@ -28,18 +28,39 @@ namespace Core.Domain.Sales
         };
 
         public string Name { get; set; } = "";
+        /// <summary>Printed attention line, e.g. "Attn: Jane Doe"; null when no Bill To contact.</summary>
+        public string? Attention { get; set; }
+        /// <summary>The Bill To contact frozen with the invoice; null when company-only.</summary>
+        public int? ContactId { get; set; }
         public string? Email { get; set; }
         public string? Phone { get; set; }
         public List<string> AddressLines { get; set; } = new();
 
-        /// <summary>The customer as its party describes it now.</summary>
-        public static InvoiceBillTo FromParty(Party? party) => new()
+        /// <summary>The customer as its party describes it now, optionally with a Bill To contact person.</summary>
+        public static InvoiceBillTo FromParty(Party? party, Contact? billToContact = null)
         {
-            Name = party?.Name ?? "Unknown",
-            Email = party?.Email,
-            Phone = party?.Phone,
-            AddressLines = NonBlank(party?.CompanyStreet, party?.CompanyProvince, party?.CompanyPostalCode, party?.CompanyCountry),
-        };
+            var contactParty = billToContact?.Party;
+            var contactAddress = NonBlank(
+                contactParty?.CompanyStreet,
+                contactParty?.CompanyProvince,
+                contactParty?.CompanyPostalCode,
+                contactParty?.CompanyCountry);
+            var companyAddress = NonBlank(
+                party?.CompanyStreet,
+                party?.CompanyProvince,
+                party?.CompanyPostalCode,
+                party?.CompanyCountry);
+
+            return new InvoiceBillTo
+            {
+                Name = party?.Name ?? "Unknown",
+                Attention = AttentionLine(billToContact),
+                ContactId = billToContact?.Id > 0 ? billToContact.Id : null,
+                Email = Blank(contactParty?.Email) ?? Blank(party?.Email),
+                Phone = Blank(contactParty?.Phone) ?? Blank(party?.Phone),
+                AddressLines = contactAddress.Count > 0 ? contactAddress : companyAddress,
+            };
+        }
 
         /// <summary>Reads a stored bill-to; null when there is none or it can't be read.</summary>
         public static InvoiceBillTo? FromJson(string? json)
@@ -66,6 +87,17 @@ namespace Core.Domain.Sales
         /// <summary>The address on one line, as the invoice prints it; null without one.</summary>
         [JsonIgnore]
         public string? AddressText => AddressLines.Count > 0 ? string.Join(", ", AddressLines) : null;
+
+        private static string? AttentionLine(Contact? contact)
+        {
+            if (contact == null)
+                return null;
+            var name = $"{contact.FirstName} {contact.LastName}".Trim();
+            return string.IsNullOrWhiteSpace(name) ? null : $"Attn: {name}";
+        }
+
+        private static string? Blank(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
         private static List<string> NonBlank(params string?[] parts) =>
             parts.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p!.Trim()).ToList();

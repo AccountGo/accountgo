@@ -46,18 +46,24 @@ namespace Api.Service
                 ?? Core.Domain.Sales.InvoiceSeller.FromWorkspace(defaultCompany, setting);
 
             var party = salesInvoice.Customer?.Party;
+            var billToContact = salesInvoice.Customer?.BillToContact;
             var billTo = Core.Domain.Sales.InvoiceBillTo.FromJson(salesInvoice.BillToJson)
-                ?? Core.Domain.Sales.InvoiceBillTo.FromParty(party);
+                ?? Core.Domain.Sales.InvoiceBillTo.FromParty(party, billToContact);
+
+            // Prefer the live Bill To / company email; fall back to the frozen bill-to so issued invoices stay sendable
+            // after a contact is removed or its email is cleared.
+            var recipientEmail = Blank(billToContact?.Party?.Email) ?? Blank(party?.Email) ?? Blank(billTo.Email);
 
             var dto = new Dto.Sales.SalesInvoice
             {
                 Id = salesInvoice.Id,
                 CustomerId = salesInvoice.CustomerId,
                 CustomerName = billTo.Name,
+                CustomerAttention = billTo.Attention,
                 CustomerEmail = billTo.Email,
                 CustomerPhone = billTo.Phone,
                 CustomerAddress = billTo.AddressText,
-                RecipientEmail = party?.Email,
+                RecipientEmail = recipientEmail,
                 No = salesInvoice.No,
                 InvoiceDate = salesInvoice.Date,
                 DueDate = dueDate,
@@ -147,6 +153,9 @@ namespace Api.Service
         private Core.Domain.Company? CurrentCompany() =>
             (!string.IsNullOrWhiteSpace(_tenant.CompanySlug) ? _admin.GetCompanyBySlug(_tenant.CompanySlug) : null)
             ?? _admin.GetCompanies().FirstOrDefault(c => c.Id == _tenant.CompanyId);
+
+        private static string? Blank(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
         private static (decimal TotalTax, decimal GrandTotal, decimal Allocated, decimal BalanceDue,
             string Status, Core.Domain.SalesInvoiceStatus StatusId) Summarize(

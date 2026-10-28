@@ -86,11 +86,24 @@ namespace Api.Service
             return cleaned.Length == 0 ? null : $"\"{cleaned}\"";
         }
 
-        public static string BuildPayload(string from, EmailMessage message) =>
-            JsonSerializer.Serialize(new ResendEmailRequest
+        public static string BuildPayload(string from, EmailMessage message)
+        {
+            var recipients = new System.Collections.Generic.List<string>();
+            if (!string.IsNullOrWhiteSpace(message.To))
+                recipients.Add(message.To);
+            if (message.AdditionalTo != null)
+            {
+                foreach (var extra in message.AdditionalTo)
+                {
+                    if (!string.IsNullOrWhiteSpace(extra) && !recipients.Contains(extra, StringComparer.OrdinalIgnoreCase))
+                        recipients.Add(extra);
+                }
+            }
+
+            return JsonSerializer.Serialize(new ResendEmailRequest
             {
                 From = from,
-                To = new[] { message.To },
+                To = recipients.ToArray(),
                 Bcc = message.Bcc.Count > 0 ? message.Bcc.ToArray() : null,
                 ReplyTo = string.IsNullOrWhiteSpace(message.ReplyTo) ? null : message.ReplyTo,
                 Subject = message.Subject,
@@ -100,6 +113,7 @@ namespace Api.Service
                     ? message.Attachments.Select(a => new ResendAttachment { Filename = a.FileName, Content = Convert.ToBase64String(a.Content) }).ToArray()
                     : null
             }, PayloadOptions);
+        }
 
         private async Task<string> DispatchEmailAsync(
             string apiKey,

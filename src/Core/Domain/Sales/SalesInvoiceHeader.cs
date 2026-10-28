@@ -63,11 +63,11 @@ namespace Core.Domain.Sales
         }
 
         /// <summary>Records the customer once, when the invoice is first issued; drafts keep following the customer.</summary>
-        public void CaptureBillToIfIssued(Party? customerParty)
+        public void CaptureBillToIfIssued(Party? customerParty, Contact? billToContact = null)
         {
             if (Status is null or SalesInvoiceStatus.Draft or SalesInvoiceStatus.Void || BillToJson != null)
                 return;
-            BillToJson = InvoiceBillTo.FromParty(customerParty).ToJson();
+            BillToJson = InvoiceBillTo.FromParty(customerParty, billToContact).ToJson();
         }
 
         /// <summary>

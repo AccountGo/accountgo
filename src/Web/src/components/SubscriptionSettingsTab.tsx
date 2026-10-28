@@ -36,28 +36,104 @@ function clearCheckoutParam(): void {
   window.history.replaceState({}, '', next);
 }
 
-const HOSTED_PAID_PLANS: Array<{
-  key: 'invoicing_pro' | 'accounting_pro';
+type HostedPlanKey = 'invoicing_free' | 'invoicing_pro' | 'accounting_free' | 'accounting_pro';
+
+const HOSTED_PLAN_COPY: Record<HostedPlanKey, {
   name: string;
   description: string;
-  monthly: number;
-  annual: number;
-}> = [
-  {
-    key: 'invoicing_pro',
+  monthly: number | null;
+  annual: number | null;
+}> = {
+  invoicing_free: {
+    name: 'Invoicing Free',
+    description: 'Core invoicing and bills with free-tier limits — no full ledger.',
+    monthly: null,
+    annual: null,
+  },
+  invoicing_pro: {
     name: 'Invoicing Pro',
     description: 'Unlimited invoices and bills for solo operators — without full double-entry accounting.',
     monthly: 15,
     annual: 150,
   },
-  {
-    key: 'accounting_pro',
+  accounting_free: {
+    name: 'Accounting Free',
+    description: 'Full ledger modules with free-tier limits.',
+    monthly: null,
+    annual: null,
+  },
+  accounting_pro: {
     name: 'Accounting Pro',
     description: 'Full ledger, reports, multi-seat access, and hosted security for growing teams.',
     monthly: 99,
     annual: 990,
   },
-];
+};
+
+function normalizePlanKey(planKey: string): HostedPlanKey | string {
+  if (planKey === 'invoicing') return 'invoicing_free';
+  if (planKey === 'accounting') return 'accounting_free';
+  return planKey;
+}
+
+function cancelLandingPlan(planKey: string): HostedPlanKey {
+  const key = normalizePlanKey(planKey);
+  return key.startsWith('invoicing') ? 'invoicing_free' : 'accounting_free';
+}
+
+/** Mirrors Core Company.IsAllowedSelfServicePlanChange. */
+function isAllowedSelfServicePlanChange(fromPlan: string, toPlan: string): boolean {
+  const from = normalizePlanKey(fromPlan);
+  const to = normalizePlanKey(toPlan);
+  if (!to || from === to) return false;
+  const allowed: Record<string, string[]> = {
+    accounting_free: ['accounting_pro', 'invoicing_free'],
+    invoicing_free: ['invoicing_pro', 'accounting_free'],
+    invoicing_pro: ['accounting_pro'],
+  };
+  return (allowed[from] || []).includes(to);
+}
+
+type PlanCardRole = 'current' | 'landing' | 'upgrade' | 'switch';
+
+function planCardsFor(currentPlan: string): Array<{ key: HostedPlanKey; role: PlanCardRole }> {
+  const current = normalizePlanKey(currentPlan) as HostedPlanKey;
+  switch (current) {
+    case 'accounting_pro':
+      return [
+        { key: 'accounting_pro', role: 'current' },
+        { key: 'accounting_free', role: 'landing' },
+      ];
+    case 'invoicing_pro':
+      return [
+        { key: 'invoicing_pro', role: 'current' },
+        { key: 'invoicing_free', role: 'landing' },
+        { key: 'accounting_pro', role: 'upgrade' },
+      ];
+    case 'accounting_free':
+      return [
+        { key: 'accounting_free', role: 'current' },
+        { key: 'accounting_pro', role: 'upgrade' },
+        { key: 'invoicing_free', role: 'switch' },
+      ];
+    case 'invoicing_free':
+      return [
+        { key: 'invoicing_free', role: 'current' },
+        { key: 'invoicing_pro', role: 'upgrade' },
+        { key: 'accounting_free', role: 'switch' },
+      ];
+    default:
+      return isAllowedSelfServicePlanChange(current, 'accounting_pro')
+        ? [{ key: current as HostedPlanKey, role: 'current' }]
+        : [{ key: 'accounting_free', role: 'current' }, { key: 'accounting_pro', role: 'upgrade' }];
+  }
+}
+
+function actionLabel(role: PlanCardRole): string {
+  if (role === 'upgrade') return 'Upgrade';
+  if (role === 'switch') return 'Switch';
+  return '';
+}
 
 interface SubscriptionSettingsTabProps {
   tenantContext: TenantContextType;
@@ -238,13 +314,24 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     }
   };
 
-  const handleUpgrade = async (planKey: 'invoicing_pro' | 'accounting_pro') => {
+  const handlePlanChange = async (planKey: HostedPlanKey) => {
     setSaving(true);
     setErrorMessage(null);
     try {
       await billing.upgradePlan(planKey, billingInterval);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to start upgrade.');
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to change plan.');
+      setSaving(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      await billing.openPortal();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to open billing portal to cancel.');
       setSaving(false);
     }
   };
@@ -316,7 +403,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
           </div>
         )}
 
-        {billing.billingEnabled && (
+        {(billing.billingEnabled || billing.portalAvailable || periodEndLabel) && (
           <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[var(--text-secondary)]">
             {periodEndLabel && (
               <span>
@@ -358,86 +445,120 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         )}
       </div>
 
-      {billing.billingEnabled && (
-        <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-bold text-[var(--text-main)]">Upgrade</h3>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                Choose a paid plan. You will complete payment on the secure checkout page.
-              </p>
-            </div>
-            <div className="inline-flex rounded-xl bg-[var(--bg-subtle)] p-1" role="group" aria-label="Billing interval">
-              <button
-                type="button"
-                onClick={() => setBillingInterval('month')}
-                className={`h-8 px-3 rounded-lg text-xs font-bold transition-colors ${
-                  billingInterval === 'month' ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingInterval('year')}
-                className={`h-8 px-3 rounded-lg text-xs font-bold transition-colors ${
-                  billingInterval === 'year' ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'
-                }`}
-              >
-                Annual
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {HOSTED_PAID_PLANS.map((plan) => {
-              const isCurrent = String(currentPlan) === plan.key;
-              const price = billingInterval === 'year' ? plan.annual : plan.monthly;
-              const priceLabel = billingInterval === 'year' ? `$${price}/yr` : `$${price}/mo`;
-              return (
-                <div
-                  key={plan.key}
-                  className={`p-5 rounded-2xl flex flex-col justify-between transition-all ${
-                    isCurrent
-                      ? 'bg-[var(--brand-subtle)] border-2 border-[var(--brand-primary)] shadow-lg'
-                      : 'bg-[var(--bg-subtle)] border border-transparent'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-baseline justify-between mb-2 gap-2">
-                      <h4 className="text-sm font-bold text-[var(--text-main)]">{plan.name}</h4>
-                      <span className="text-sm font-bold text-[var(--text-main)]">{priceLabel}</span>
-                    </div>
-                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">{plan.description}</p>
-                  </div>
+      {billing.billingEnabled && (() => {
+        const cards = planCardsFor(String(currentPlan));
+        const showInterval = cards.some((c) => c.role === 'upgrade');
+        const landingKey = cancelLandingPlan(String(currentPlan));
+        return (
+          <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-main)]">Change plan</h3>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  One plan per workspace. Upgrade along the path, switch free products anytime, or cancel a Pro
+                  subscription (access continues until the period ends, then you land on{' '}
+                  {HOSTED_PLAN_COPY[landingKey].name}).
+                </p>
+              </div>
+              {showInterval && (
+                <div className="inline-flex rounded-xl bg-[var(--bg-subtle)] p-1" role="group" aria-label="Billing interval">
                   <button
                     type="button"
-                    disabled={isCurrent || saving || checkoutProcessing}
-                    onClick={() => void handleUpgrade(plan.key)}
-                    className={`w-full h-10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      isCurrent
-                        ? 'bg-[var(--brand-primary)] text-white cursor-default'
-                        : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] hover:text-[var(--brand-primary)]'
+                    onClick={() => setBillingInterval('month')}
+                    className={`h-8 px-3 rounded-lg text-xs font-bold transition-colors ${
+                      billingInterval === 'month' ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'
                     }`}
                   >
-                    {isCurrent ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        Current plan
-                      </>
-                    ) : (
-                      <>
-                        <span>Upgrade</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </>
-                    )}
+                    Monthly
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBillingInterval('year')}
+                    className={`h-8 px-3 rounded-lg text-xs font-bold transition-colors ${
+                      billingInterval === 'year' ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    Annual
                   </button>
                 </div>
-              );
-            })}
+              )}
+            </div>
+
+            <div className={`grid grid-cols-1 ${cards.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
+              {cards.map(({ key, role }) => {
+                const plan = HOSTED_PLAN_COPY[key];
+                const isPaid = plan.monthly != null;
+                const price = isPaid
+                  ? (billingInterval === 'year' ? plan.annual : plan.monthly)
+                  : null;
+                const priceLabel = isPaid
+                  ? (billingInterval === 'year' ? `$${price}/yr` : `$${price}/mo`)
+                  : 'Free';
+                const isCurrent = role === 'current';
+                const isLanding = role === 'landing';
+                const landingCopy = isLanding
+                  ? `You'll land here after cancel — access stays on your Pro plan until ${periodEndLabel || 'the period ends'}.`
+                  : plan.description;
+
+                return (
+                  <div
+                    key={key}
+                    className={`p-5 rounded-2xl flex flex-col justify-between transition-all ${
+                      isCurrent
+                        ? 'bg-[var(--brand-subtle)] border-2 border-[var(--brand-primary)] shadow-lg'
+                        : isLanding
+                          ? 'bg-[var(--bg-subtle)]/60 border border-dashed border-[var(--border-subtle,rgba(255,255,255,0.12))]'
+                          : 'bg-[var(--bg-subtle)] border border-transparent'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-baseline justify-between mb-2 gap-2">
+                        <h4 className="text-sm font-bold text-[var(--text-main)]">{plan.name}</h4>
+                        <span className="text-sm font-bold text-[var(--text-main)]">{priceLabel}</span>
+                      </div>
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">{landingCopy}</p>
+                    </div>
+
+                    {isCurrent ? (
+                      <div className="space-y-2">
+                        <div className="w-full h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-[var(--brand-primary)] text-white">
+                          <Check className="w-3.5 h-3.5" />
+                          Current plan
+                        </div>
+                        {String(normalizePlanKey(String(currentPlan))).endsWith('_pro') && (
+                          <button
+                            type="button"
+                            disabled={saving || checkoutProcessing || !billing.portalAvailable}
+                            onClick={() => void handleCancelSubscription()}
+                            title={!billing.portalAvailable ? 'Billing portal is not available yet for this workspace.' : undefined}
+                            className="w-full h-10 rounded-xl text-xs font-bold transition-all bg-[var(--bg-surface)] hover:bg-red-500/10 text-[var(--text-secondary)] hover:text-red-400 border border-transparent hover:border-red-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {billing.cancelAtPeriodEnd ? 'Cancellation scheduled' : 'Cancel subscription'}
+                          </button>
+                        )}
+                      </div>
+                    ) : isLanding ? (
+                      <div className="w-full h-10 rounded-xl text-xs font-semibold flex items-center justify-center text-[var(--text-muted)] bg-transparent">
+                        After cancel
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={saving || checkoutProcessing}
+                        onClick={() => void handlePlanChange(key)}
+                        className="w-full h-10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] hover:text-[var(--brand-primary)]"
+                      >
+                        <span>{actionLabel(role)}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
         <div>

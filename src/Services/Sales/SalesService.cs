@@ -346,6 +346,10 @@ namespace Services.Sales
         {
             var invoice = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
                 inv => inv.Customer.Party,
+                inv => inv.Customer.BillToContact,
+                inv => inv.Customer.BillToContact.Party,
+                inv => inv.Customer.PrimaryContact,
+                inv => inv.Customer.PrimaryContact.Party,
                 inv => inv.Customer.CustomerAdvancesAccount,
                 inv => inv.Customer.AccountsReceivableAccount,
                 inv => inv.CustomerAllocations,

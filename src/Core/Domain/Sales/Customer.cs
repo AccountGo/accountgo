@@ -29,6 +29,8 @@ namespace Core.Domain.Sales
         public string No { get; set; }
         public int? PartyId { get; set; }
         public int? PrimaryContactId { get; set; }
+        /// <summary>Contact person printed under Bill To on invoices; null uses the company party alone.</summary>
+        public int? BillToContactId { get; set; }
         public int? TaxGroupId { get; set; }
         public int? AccountsReceivableAccountId { get; set; }
         public int? SalesAccountId { get; set; }
@@ -46,6 +48,7 @@ namespace Core.Domain.Sales
         public virtual Account SalesDiscountAccount { get; set; }
         public virtual Account PromptPaymentDiscountAccount { get; set; }
         public virtual Contact PrimaryContact { get; set; }
+        public virtual Contact BillToContact { get; set; }
         public virtual PaymentTerm PaymentTerm { get; set; }
         public virtual Account CustomerAdvancesAccount { get; set; }
         public virtual ICollection<SalesInvoiceHeader> SalesInvoices { get; set; }

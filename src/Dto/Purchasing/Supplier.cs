@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using Dto.Common;
+
 namespace Dto.Purchasing
 {
     /// <summary>
@@ -16,6 +19,10 @@ namespace Dto.Purchasing
         public string? PostalCode { get; set; }
         public string? Country { get; set; }
         public int? PaymentTermId { get; set; }
+        /// <summary>Default Bill To / payee attention contact; null uses the company party alone.</summary>
+        public int? BillToContactId { get; set; }
+        /// <summary>Contact persons linked to this vendor. Populated on a single-vendor read.</summary>
+        public List<ContactPersonDto> Contacts { get; set; } = new();
         public bool Archived { get; set; }
         /// <summary>Unpaid on its approved bills.</summary>
         public decimal Outstanding { get; set; }

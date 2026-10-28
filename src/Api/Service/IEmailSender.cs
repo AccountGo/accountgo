@@ -18,6 +18,7 @@ namespace Api.Service
     public class EmailMessage
     {
         public string To { get; set; } = string.Empty;
+        public List<string> AdditionalTo { get; set; } = new();
         public string Subject { get; set; } = string.Empty;
         public string Html { get; set; } = string.Empty;
         /// <summary>Plain-text alternative for clients that don't render HTML.</summary>

@@ -97,11 +97,11 @@ namespace Core.Domain.Purchases
         }
 
         /// <summary>Records the vendor once, when the bill is approved.</summary>
-        public void CaptureBillFromIfApproved(Party? vendorParty)
+        public void CaptureBillFromIfApproved(Party? vendorParty, Contact? billToContact = null)
         {
             if (!IsPayable || BillFromJson != null)
                 return;
-            BillFromJson = InvoiceBillTo.FromParty(vendorParty).ToJson();
+            BillFromJson = InvoiceBillTo.FromParty(vendorParty, billToContact).ToJson();
         }
     }
 }

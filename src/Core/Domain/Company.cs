@@ -94,10 +94,75 @@ namespace Core.Domain
                 || key.EndsWith("_pro", StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Capability rank for upgrade ordering (higher = more capable).
+        /// Ladder: Invoicing Free → Invoicing Pro → Accounting Free → Accounting Pro → Enterprise.
+        /// Moving to a lower or equal rank is a downgrade / lateral change, not a self-serve upgrade.
+        /// </summary>
+        public static int PlanRank(string? plan)
+        {
+            var key = (plan ?? string.Empty).Trim().ToLowerInvariant();
+            return key switch
+            {
+                "invoicing" or "invoicing_free" => 10,
+                "invoicing_pro" => 20,
+                "accounting" or "accounting_free" => 30,
+                "accounting_pro" => 40,
+                "enterprise" => 50,
+                _ => 0
+            };
+        }
+
+        /// <summary>True when <paramref name="toPlan"/> is strictly higher on the capability ladder than <paramref name="fromPlan"/>.</summary>
+        public static bool IsUpgrade(string? fromPlan, string? toPlan) =>
+            PlanRank(toPlan) > PlanRank(fromPlan);
+
+        /// <summary>
+        /// Self-serve plan changes (one plan at a time). Cancel of *_pro is Stripe Portal, not this method.
+        /// <list type="bullet">
+        /// <item><c>accounting_free</c> → <c>accounting_pro</c> or <c>invoicing_free</c></item>
+        /// <item><c>invoicing_free</c> → <c>invoicing_pro</c> or <c>accounting_free</c></item>
+        /// <item><c>invoicing_pro</c> → <c>accounting_pro</c> (upgrade product; Checkout / portal proration)</item>
+        /// </list>
+        /// Never both Pros, never Accounting Pro → Invoicing *, never free → other product's Pro in one step.
+        /// </summary>
+        public static bool IsAllowedSelfServicePlanChange(string? fromPlan, string? toPlan)
+        {
+            var from = NormalizePlanKey(fromPlan);
+            var to = NormalizePlanKey(toPlan);
+            if (string.IsNullOrEmpty(to) || string.Equals(from, to, StringComparison.Ordinal))
+                return false;
+
+            return (from, to) switch
+            {
+                ("accounting_free", "accounting_pro") => true,
+                ("accounting_free", "invoicing_free") => true,
+                ("invoicing_free", "invoicing_pro") => true,
+                ("invoicing_free", "accounting_free") => true,
+                ("invoicing_pro", "accounting_pro") => true,
+                _ => false
+            };
+        }
+
+        /// <summary>Same-product free landing after cancel (UI read-only; cancel itself is Stripe Portal).</summary>
+        public static string CancelLandingPlan(string? plan) => FreePlanFor(plan);
+
+        /// <summary>Normalize legacy community keys to product×tier keys used for ranking and change rules.</summary>
+        public static string NormalizePlanKey(string? plan)
+        {
+            var key = (plan ?? string.Empty).Trim().ToLowerInvariant();
+            return key switch
+            {
+                "invoicing" => "invoicing_free",
+                "accounting" => "accounting_free",
+                _ => key
+            };
+        }
+
         /// <summary>Maps a product×tier plan key to the free key of the same product (e.g. accounting_pro → accounting_free).</summary>
         public static string FreePlanFor(string? plan)
         {
-            var key = (plan ?? "accounting").Trim().ToLowerInvariant();
+            var key = NormalizePlanKey(plan ?? "accounting");
             if (key.StartsWith("invoicing", StringComparison.Ordinal))
                 return "invoicing_free";
             if (key is "enterprise")

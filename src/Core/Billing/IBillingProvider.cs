@@ -36,7 +36,18 @@ namespace Core.Billing
     /// </summary>
     public interface IBillingProvider
     {
+        /// <summary>
+        /// Self-serve Checkout / Upgrade UI. Hosted Stripe: requires secret key and
+        /// <c>BILLING_SUBSCRIPTIONS_ENABLED</c>. Community: always false (immediate plan switches).
+        /// </summary>
         bool Enabled { get; }
+
+        /// <summary>
+        /// When true, paid plan changes must go through <see cref="RequestPlanChangeAsync"/>
+        /// (never apply immediately). Hosted Stripe is true whenever the provider is composed,
+        /// even if <see cref="Enabled"/> is false due to the subscriptions kill switch.
+        /// </summary>
+        bool RequiresProviderCheckout { get; }
 
         Task<PlanChangeResult> RequestPlanChangeAsync(
             int companyId,

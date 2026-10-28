@@ -269,7 +269,7 @@ namespace Api.Controllers
                 .Where(v => v.Party != null)
                 .OrderBy(v => v.Party.Name)
                 .AsEnumerable()
-                .Select(ToSupplier)
+                .Select(v => ToSupplier(v))
                 .ToList();
             AddBalances(vendors, vendorId: null);
             return Ok(vendors);
@@ -284,7 +284,7 @@ namespace Api.Controllers
             if (vendor == null)
                 return NotFound(new { message = "Vendor not found." });
 
-            var supplier = ToSupplier(vendor);
+            var supplier = ToSupplier(vendor, LoadVendorContacts(vendor));
             supplier.CanDelete = !VendorHasRecords(id);
             AddBalances(new[] { supplier }, id);
             return Ok(supplier);
@@ -342,15 +342,182 @@ namespace Api.Controllers
             vendor.ModifiedBy = GetUserNameFromRequestHeader();
 
             if (isNew)
+            {
                 _purchasingService.AddVendor(vendor);
+                EnsurePrimaryContactLinked(vendor);
+            }
             else
                 _purchasingService.UpdateVendor(vendor);
 
-            var saved = ToSupplier(vendor);
+            var saved = ToSupplier(vendor, LoadVendorContacts(vendor));
             saved.CanDelete = isNew || !VendorHasRecords(vendor.Id);
             if (!isNew)
                 AddBalances(new[] { saved }, vendor.Id);
             return Ok(saved);
+        }
+
+        [HttpPost]
+        [Route("VendorContact")]
+        [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
+        public IActionResult VendorContact(int vendorId, [FromBody] Dto.Common.ContactPersonDto contactDto)
+        {
+            _tenantGuard.EnsureOwned<Vendor>(vendorId, nameof(vendorId));
+            var vendor = _db.Vendors.Include(v => v.Party).Single(v => v.Id == vendorId);
+            var firstName = Blank(contactDto.FirstName);
+            var lastName = Blank(contactDto.LastName);
+            if (firstName == null || lastName == null)
+                return BadRequest(new { message = "Enter the contact's first and last name." });
+            var email = Blank(contactDto.Email);
+            if (email != null && !ValidEmail(email))
+                return BadRequest(new { message = "Enter a valid email address, or leave it blank." });
+
+            Contact contact;
+            var isNewContact = contactDto.Id <= 0;
+            if (!isNewContact)
+            {
+                _tenantGuard.EnsureOwned<Contact>(contactDto.Id, nameof(contactDto.Id));
+                if (!_db.Set<VendorContact>().Any(vc => vc.VendorId == vendorId && vc.ContactId == contactDto.Id)
+                    && vendor.PrimaryContactId != contactDto.Id)
+                    return BadRequest(new { message = "That contact is not linked to this vendor." });
+                contact = _db.Contacts.Include(c => c.Party).Single(c => c.Id == contactDto.Id);
+            }
+            else
+            {
+                contact = new Contact
+                {
+                    ContactType = ContactTypes.Vendor,
+                    Party = new Party { PartyType = PartyTypes.Contact, IsActive = true },
+                };
+                _db.Contacts.Add(contact);
+                _db.Set<VendorContact>().Add(new VendorContact
+                {
+                    VendorId = vendorId,
+                    Contact = contact,
+                });
+            }
+
+            contact.FirstName = firstName;
+            contact.LastName = lastName;
+            contact.MiddleName = Blank(contactDto.MiddleName);
+            contact.Party.Name = $"{firstName} {lastName}".Trim();
+            contact.Party.Email = email;
+            contact.Party.Phone = Blank(contactDto.Phone);
+            contact.Party.CompanyStreet = Blank(contactDto.Street);
+            contact.Party.CompanyProvince = Blank(contactDto.City);
+            contact.Party.CompanyPostalCode = Blank(contactDto.PostalCode);
+            contact.Party.CompanyCountry = Blank(contactDto.Country);
+            contact.ModifiedBy = GetUserNameFromRequestHeader();
+
+            if (contactDto.IsPrimary || vendor.PrimaryContactId == null)
+                vendor.PrimaryContact = contact;
+            if (contactDto.IsBillTo)
+                vendor.BillToContact = contact;
+            else if (vendor.BillToContactId == contact.Id)
+                vendor.BillToContactId = null;
+            vendor.ModifiedBy = GetUserNameFromRequestHeader();
+            _db.SaveChanges();
+
+            var supplier = ToSupplier(vendor, LoadVendorContacts(vendor));
+            supplier.CanDelete = !VendorHasRecords(vendorId);
+            AddBalances(new[] { supplier }, vendorId);
+            return Ok(supplier);
+        }
+
+        [HttpPost]
+        [Route("SetVendorBillToContact")]
+        [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
+        public IActionResult SetVendorBillToContact(int vendorId, int contactId)
+        {
+            _tenantGuard.EnsureOwned<Vendor>(vendorId, nameof(vendorId));
+            _tenantGuard.EnsureOwned<Contact>(contactId, nameof(contactId));
+            var vendor = _db.Vendors.Include(v => v.Party).Single(v => v.Id == vendorId);
+            if (!_db.Set<VendorContact>().Any(vc => vc.VendorId == vendorId && vc.ContactId == contactId)
+                && vendor.PrimaryContactId != contactId)
+                return BadRequest(new { message = "That contact is not linked to this vendor." });
+
+            vendor.BillToContactId = contactId;
+            vendor.ModifiedBy = GetUserNameFromRequestHeader();
+            _db.SaveChanges();
+
+            var supplier = ToSupplier(vendor, LoadVendorContacts(vendor));
+            supplier.CanDelete = !VendorHasRecords(vendorId);
+            AddBalances(new[] { supplier }, vendorId);
+            return Ok(supplier);
+        }
+
+        [HttpPost]
+        [Route("SetVendorPrimaryContact")]
+        [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
+        public IActionResult SetVendorPrimaryContact(int vendorId, int contactId)
+        {
+            _tenantGuard.EnsureOwned<Vendor>(vendorId, nameof(vendorId));
+            _tenantGuard.EnsureOwned<Contact>(contactId, nameof(contactId));
+            var vendor = _db.Vendors.Include(v => v.Party).Single(v => v.Id == vendorId);
+            if (!_db.Set<VendorContact>().Any(vc => vc.VendorId == vendorId && vc.ContactId == contactId)
+                && vendor.PrimaryContactId != contactId)
+                return BadRequest(new { message = "That contact is not linked to this vendor." });
+
+            vendor.PrimaryContactId = contactId;
+            vendor.ModifiedBy = GetUserNameFromRequestHeader();
+            _db.SaveChanges();
+
+            var supplier = ToSupplier(vendor, LoadVendorContacts(vendor));
+            supplier.CanDelete = !VendorHasRecords(vendorId);
+            AddBalances(new[] { supplier }, vendorId);
+            return Ok(supplier);
+        }
+
+        [HttpDelete]
+        [Route("DeleteVendorContact")]
+        [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
+        public IActionResult DeleteVendorContact(int vendorId, int contactId)
+        {
+            _tenantGuard.EnsureOwned<Vendor>(vendorId, nameof(vendorId));
+            _tenantGuard.EnsureOwned<Contact>(contactId, nameof(contactId));
+            var vendor = _db.Vendors.Include(v => v.Party).Single(v => v.Id == vendorId);
+            if (vendor.PrimaryContactId == contactId)
+                return BadRequest(new { message = "Set another contact as primary before removing this one." });
+
+            var links = _db.Set<VendorContact>().Where(vc => vc.VendorId == vendorId && vc.ContactId == contactId).ToList();
+            if (links.Count == 0 && vendor.PrimaryContactId != contactId)
+                return NotFound(new { message = "Contact not found on this vendor." });
+
+            using var tx = _db.Database.BeginTransaction();
+            _db.RemoveRange(links);
+            if (vendor.BillToContactId == contactId)
+                vendor.BillToContactId = null;
+            vendor.ModifiedBy = GetUserNameFromRequestHeader();
+            _db.SaveChanges();
+
+            var stillLinked = _db.Set<VendorContact>().Any(vc => vc.ContactId == contactId)
+                || _db.Set<CustomerContact>().Any(cc => cc.ContactId == contactId)
+                || _db.Vendors.Any(v => v.PrimaryContactId == contactId || v.BillToContactId == contactId)
+                || _db.Customers.Any(c => c.PrimaryContactId == contactId || c.BillToContactId == contactId);
+            if (!stillLinked)
+            {
+                var contact = _db.Contacts.Include(c => c.Party).FirstOrDefault(c => c.Id == contactId);
+                if (contact != null)
+                {
+                    var partyId = contact.PartyId;
+                    _db.Contacts.Remove(contact);
+                    _db.SaveChanges();
+                    if (!_db.Customers.Any(c => c.PartyId == partyId)
+                        && !_db.Vendors.Any(v => v.PartyId == partyId)
+                        && !_db.Contacts.Any(c => c.PartyId == partyId))
+                    {
+                        var party = _db.Set<Party>().FirstOrDefault(p => p.Id == partyId);
+                        if (party != null)
+                            _db.Set<Party>().Remove(party);
+                        _db.SaveChanges();
+                    }
+                }
+            }
+            tx.Commit();
+
+            var supplier = ToSupplier(vendor, LoadVendorContacts(vendor));
+            supplier.CanDelete = !VendorHasRecords(vendorId);
+            AddBalances(new[] { supplier }, vendorId);
+            return Ok(supplier);
         }
 
         [HttpPost]
@@ -364,7 +531,7 @@ namespace Api.Controllers
             vendor.ModifiedBy = GetUserNameFromRequestHeader();
             _purchasingService.UpdateVendor(vendor);
 
-            var supplier = ToSupplier(vendor);
+            var supplier = ToSupplier(vendor, LoadVendorContacts(vendor));
             supplier.CanDelete = !VendorHasRecords(id);
             AddBalances(new[] { supplier }, id);
             return Ok(supplier);
@@ -394,9 +561,14 @@ namespace Api.Controllers
             // Saved in foreign-key order: D1 replays the statements in order and enforces the keys.
             using var tx = _db.Database.BeginTransaction();
             _db.RemoveRange(_db.Set<VendorContact>().Where(vc => vc.VendorId == id));
+            vendor.BillToContactId = null;
+            vendor.PrimaryContactId = null;
+            _db.SaveChanges();
             _db.Vendors.Remove(vendor);
             _db.SaveChanges();
-            if (contact != null && !_db.Vendors.Any(v => v.PrimaryContactId == contact.Id) && !_db.Customers.Any(c => c.PrimaryContactId == contact.Id))
+            if (contact != null
+                && !_db.Vendors.Any(v => v.PrimaryContactId == contact.Id || v.BillToContactId == contact.Id)
+                && !_db.Customers.Any(c => c.PrimaryContactId == contact.Id || c.BillToContactId == contact.Id))
             {
                 _db.RemoveRange(_db.Set<VendorContact>().Where(vc => vc.ContactId == contact.Id));
                 _db.RemoveRange(_db.Set<CustomerContact>().Where(cc => cc.ContactId == contact.Id));
@@ -438,7 +610,9 @@ namespace Api.Controllers
             }
         }
 
-        private static Dto.Purchasing.Supplier ToSupplier(Vendor vendor) => new()
+        private static Dto.Purchasing.Supplier ToSupplier(
+            Vendor vendor,
+            List<Dto.Common.ContactPersonDto>? contacts = null) => new()
         {
             Id = vendor.Id,
             Name = vendor.Party?.Name,
@@ -449,8 +623,63 @@ namespace Api.Controllers
             PostalCode = vendor.Party?.CompanyPostalCode ?? vendor.PostalCode,
             Country = vendor.Party?.CompanyCountry ?? vendor.Country,
             PaymentTermId = vendor.PaymentTermId,
+            BillToContactId = vendor.BillToContactId,
+            Contacts = contacts ?? new List<Dto.Common.ContactPersonDto>(),
             Archived = vendor.ArchivedAt.HasValue,
         };
+
+        private List<Dto.Common.ContactPersonDto> LoadVendorContacts(Vendor vendor)
+        {
+            var contactIds = _db.Set<VendorContact>()
+                .Where(vc => vc.VendorId == vendor.Id)
+                .Select(vc => vc.ContactId)
+                .ToList();
+            if (vendor.PrimaryContactId is int primaryId && !contactIds.Contains(primaryId))
+                contactIds.Add(primaryId);
+            if (vendor.BillToContactId is int billToId && !contactIds.Contains(billToId))
+                contactIds.Add(billToId);
+
+            return _db.Contacts.Include(c => c.Party)
+                .Where(c => contactIds.Contains(c.Id))
+                .AsEnumerable()
+                .Select(c => ToContactPerson(c, vendor.PrimaryContactId, vendor.BillToContactId))
+                .OrderByDescending(c => c.IsBillTo)
+                .ThenByDescending(c => c.IsPrimary)
+                .ThenBy(c => c.FullName)
+                .ToList();
+        }
+
+        private static Dto.Common.ContactPersonDto ToContactPerson(
+            Contact contact, int? primaryContactId, int? billToContactId) => new()
+        {
+            Id = contact.Id,
+            FirstName = contact.FirstName ?? "",
+            LastName = contact.LastName ?? "",
+            MiddleName = contact.MiddleName,
+            Email = contact.Party?.Email,
+            Phone = contact.Party?.Phone,
+            Street = contact.Party?.CompanyStreet,
+            City = contact.Party?.CompanyProvince,
+            PostalCode = contact.Party?.CompanyPostalCode,
+            Country = contact.Party?.CompanyCountry,
+            IsPrimary = contact.Id == primaryContactId,
+            IsBillTo = contact.Id == billToContactId,
+        };
+
+        private void EnsurePrimaryContactLinked(Vendor vendor)
+        {
+            if (!vendor.PrimaryContactId.HasValue)
+                return;
+            if (!_db.Set<VendorContact>().Any(vc => vc.VendorId == vendor.Id && vc.ContactId == vendor.PrimaryContactId))
+            {
+                _db.Set<VendorContact>().Add(new VendorContact
+                {
+                    VendorId = vendor.Id,
+                    ContactId = vendor.PrimaryContactId.Value,
+                });
+            }
+            _db.SaveChanges();
+        }
 
         /// <summary>Whether anything has been recorded for the vendor: bills (drafts too), orders, receipts or payments.</summary>
         private bool VendorHasRecords(int vendorId) =>
@@ -743,6 +972,7 @@ namespace Api.Controllers
 
         private IQueryable<PurchaseInvoiceHeader> BillsQuery() => _db.PurchaseInvoiceHeaders
             .Include(b => b.Vendor).ThenInclude(v => v!.Party)
+            .Include(b => b.Vendor).ThenInclude(v => v!.BillToContact!).ThenInclude(c => c.Party)
             .Include(b => b.PurchaseInvoiceLines).ThenInclude(l => l.Item).ThenInclude(i => i!.ItemCategory)
             .Include(b => b.PurchaseInvoiceLines).ThenInclude(l => l.Account)
             .Include(b => b.VendorPayments).ThenInclude(p => p.Account);
@@ -774,7 +1004,8 @@ namespace Api.Controllers
         {
             var dueDate = bill.ResolveDueDate(terms.FirstOrDefault(t => t.Id == bill.PaymentTermId));
             // Approved bills show the vendor as it was then; drafts, and bills approved before that was recorded, as it is now.
-            var from = Core.Domain.Sales.InvoiceBillTo.FromJson(bill.BillFromJson) ?? Core.Domain.Sales.InvoiceBillTo.FromParty(bill.Vendor?.Party);
+            var from = Core.Domain.Sales.InvoiceBillTo.FromJson(bill.BillFromJson)
+                ?? Core.Domain.Sales.InvoiceBillTo.FromParty(bill.Vendor?.Party, bill.Vendor?.BillToContact);
             return new Dto.Purchasing.Bill
             {
                 Id = bill.Id,

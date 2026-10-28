@@ -20,8 +20,8 @@ const CONTAINER_PORT = 8001;
 const PORT_READY_TIMEOUT_MS = 90_000;
 const CONTAINER_RETRY_ATTEMPTS = 4;
 const CONTAINER_RETRY_BASE_DELAY_MS = 750;
-/** Match V1 sleepAfter ≈ 30m so cold start + D1 restore does not thrash. */
-const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+/** Match V1 sleepAfter = 15m so cold start + D1 restore does not thrash. */
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const PORT_POLL_INTERVAL_MS = 500;
 
 /**

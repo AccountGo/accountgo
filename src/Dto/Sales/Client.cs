@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using Dto.Common;
+
 namespace Dto.Sales
 {
     /// <summary>
@@ -16,6 +19,10 @@ namespace Dto.Sales
         public string? PostalCode { get; set; }
         public string? Country { get; set; }
         public int? PaymentTermId { get; set; }
+        /// <summary>Default Bill To contact for new invoices; null prints the company party alone.</summary>
+        public int? BillToContactId { get; set; }
+        /// <summary>Contact persons linked to this client. Populated on a single-client read.</summary>
+        public List<ContactPersonDto> Contacts { get; set; } = new();
         public bool Archived { get; set; }
         /// <summary>Unpaid on its issued invoices.</summary>
         public decimal Outstanding { get; set; }

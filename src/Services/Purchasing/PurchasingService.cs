@@ -197,6 +197,8 @@ namespace Services.Purchasing
                 v => v.Party,
                 v => v.PrimaryContact,
                 v => v.PrimaryContact.Party,
+                v => v.BillToContact,
+                v => v.BillToContact.Party,
                 v => v.PaymentTerm,
                 v => v.PurchaseAccount,
                 v => v.PurchaseDiscountAccount,
@@ -442,7 +444,7 @@ namespace Services.Purchasing
 
             bill.GeneralLedgerHeader = glHeader;
             bill.Status = PurchaseInvoiceStatus.Open;
-            bill.CaptureBillFromIfApproved(vendor.Party);
+            bill.CaptureBillFromIfApproved(vendor.Party, vendor.BillToContact);
             _purchaseInvoiceRepo.Update(bill);
         }
 

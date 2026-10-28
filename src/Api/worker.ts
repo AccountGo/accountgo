@@ -44,8 +44,8 @@ export class AccountGoApiContainer extends Container<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx as DurableObjectState, env);
     this.defaultPort = CONTAINER_PORT;
-    // Keep warm longer: cold start + D1 restore is 30–80s and was surfacing as 503 on /api/auth/refresh.
-    this.sleepAfter = "30m";
+    // Idle sleep (not forever keep-warm). Cold start + D1 restore is 30–80s; 15m balances cost vs 503 thrash.
+    this.sleepAfter = "15m";
     this.enableInternet = true;
     this.envVars = buildContainerEnvVars(
       this.env as unknown as Record<string, unknown>,
