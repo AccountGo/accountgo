@@ -19,7 +19,9 @@
     }
   ],
   "vars": {
-    "API_HOST": "localhost:8001"
+    "API_HOST": "localhost:8001",
+    // Observability: Server-Timing on proxied /api responses (default on when unset).
+    "SERVER_TIMING_ENABLED": "true"
   },
   "observability": {
     "enabled": true,

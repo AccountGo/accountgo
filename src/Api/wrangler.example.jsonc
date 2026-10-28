@@ -89,6 +89,8 @@
     "ANTER_BASE_URL": "https://agents.anter.ai",
     "ANTER_AGENT_SLUG": "accountgo-assistant",
     // Free-tier entitlements (optional). Leave ENABLED false for local/community (quotas off; all plans self-service).
+    // Observability: Server-Timing on responses (default on when unset). Set "false" to disable.
+    "SERVER_TIMING_ENABLED": "true",
     "ENTITLEMENTS_ENABLED": "false",
     "ENTITLEMENT_FEATURES_ENABLED": "true",
     "ENTITLEMENTS_SELF_SERVICE_PLANS": "invoicing,accounting",

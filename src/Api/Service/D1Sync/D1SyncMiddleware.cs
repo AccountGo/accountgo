@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Api.Observability;
 using Microsoft.AspNetCore.Http;
 
 namespace Api.Service.D1Sync
@@ -28,7 +30,12 @@ namespace Api.Service.D1Sync
                     var statements = syncContext.GetStatements();
                     if (statements.Count > 0)
                     {
+                        var prepSw = Stopwatch.StartNew();
                         var chunks = SplitStatementsIntoChunks(statements);
+                        prepSw.Stop();
+                        if (context.Items[ServerTimingAccumulator.HttpContextItemsKey] is ServerTimingAccumulator timing)
+                            timing.SetD1Prep(prepSw.ElapsedMilliseconds);
+
                         context.Response.Headers["x-d1-sync-encoding"] = "gzip";
                         if (chunks.Count == 1)
                         {

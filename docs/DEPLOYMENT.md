@@ -92,6 +92,7 @@ docker run -d \
 | `ENTITLEMENTS_FREE_*` | Optional per-resource free limits (see `.env.example`). Missing key = unlimited for that resource |
 | `BILLING_SUBSCRIPTIONS_ENABLED` | Hosted only (with Billing module). `"false"` hides Checkout / Upgrade; portal + webhooks still work when Stripe is configured. Default on when unset |
 | `SUPPORT_EMAIL` | Shown when a quota is exceeded |
+| `SERVER_TIMING_ENABLED` | Optional. Default `"true"`. When `"false"`, no `Server-Timing` header from the .NET API, API worker, or web worker |
 
 Hosted AccountGo Cloud billing (payment provider keys, price IDs, `REQUIRED_MODULES`) is configured only in the private ops overlay — not in this public repo.
 
@@ -99,6 +100,32 @@ Hosted AccountGo Cloud billing (payment provider keys, price IDs, `REQUIRED_MODU
 > Never commit real secret keys, D1 database IDs for production SaaS, or Cloudflare API tokens to a public repository.
 
 See `src/Api/.env.example` for local development placeholders.
+
+### Reading Server-Timing (latency)
+
+When `SERVER_TIMING_ENABLED` is on (default), each API response carries a `Server-Timing` header that **appends** a segment per hop (never overwrites earlier hops):
+
+| Segment | Meaning |
+|---|---|
+| `app` | .NET pipeline time to response **headers** |
+| `db` | Summed EF command time; `desc` is the query count |
+| `d1prep` | Time to gzip/chunk D1 sync headers (only when sync statements exist) |
+| `container` | API worker → container fetch (includes DO routing) |
+| `d1` | Worker D1 sync batch; `desc` is statement count |
+| `cold` | Present with `desc="1"` when this request started/woke the container |
+| `worker` | API worker total to header time |
+| `proxy` | Web worker `env.API` / `API_HOST` fetch |
+
+In Chrome/Edge DevTools: **Network** → select the request → **Timing** (or Headers → `Server-Timing`). Durations are milliseconds. Slow requests also emit one structured log line (route **template** only — no ids or query strings).
+
+Unauthenticated bench (never hits `/api/auth/*`):
+
+```bash
+node scripts/latency-bench.mjs 20
+# or: node scripts/latency-bench.mjs 10 https://api.accountgo.dev/health
+```
+
+Streaming responses (SSE): workers wrap `new Response(res.body, { headers })` without reading the body; `101` upgrades pass through untouched. Manual check: open an SSE endpoint and confirm events still arrive incrementally while `Server-Timing` is present on the response headers.
 
 ---
 

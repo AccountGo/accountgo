@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Claims;
 using System.Text;
 using Api.Data;
+using Api.Observability;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -181,9 +182,10 @@ namespace Api.Extensions
 
                 Console.WriteLine("[Database Provider] Using SQLite");
 
-                services.AddDbContext<ApiDbContext>(options =>
+                services.AddDbContext<ApiDbContext>((sp, options) =>
                 {
                     options.UseSqlite(sqliteConnection);
+                    options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
                     if (environment.IsDevelopment())
                     {
                         options.EnableSensitiveDataLogging();
@@ -191,8 +193,11 @@ namespace Api.Extensions
                     }
                 });
 
-                services.AddDbContext<ApplicationIdentityDbContext>(options =>
-                    options.UseSqlite(sqliteConnection));
+                services.AddDbContext<ApplicationIdentityDbContext>((sp, options) =>
+                {
+                    options.UseSqlite(sqliteConnection);
+                    options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
+                });
 
                 return;
             }
@@ -215,33 +220,31 @@ namespace Api.Extensions
 
             Console.WriteLine("[Database Provider] Using SQL Server");
 
-            services.AddDbContext<ApiDbContext>
-            (
-                optionsAction: options =>
-                {
-                    options.UseSqlServer
-                    (
-                        connectionString: connectionString,
-                        sqlServerOptionsAction: options =>
-                        {
-                            options.UseQuerySplittingBehavior(
-                                querySplittingBehavior: QuerySplittingBehavior.SplitQuery);
-
-                            options.EnableRetryOnFailure();
-                        }
-                    );
-
-                    // Only enable sensitive logging for debugging purpose on ApiDbContext in development setting
-                    if (environment.IsDevelopment())
+            services.AddDbContext<ApiDbContext>((sp, options) =>
+            {
+                options.UseSqlServer(
+                    connectionString: connectionString,
+                    sqlServerOptionsAction: sqlOptions =>
                     {
-                        options.EnableSensitiveDataLogging();
-                        options.EnableDetailedErrors();
-                    }
-                }
-            );
+                        sqlOptions.UseQuerySplittingBehavior(
+                            querySplittingBehavior: QuerySplittingBehavior.SplitQuery);
+                        sqlOptions.EnableRetryOnFailure();
+                    });
+                options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
 
-            services.AddDbContext<ApplicationIdentityDbContext>(optionsAction: options =>
-                options.UseSqlServer(connectionString: connectionString));
+                // Only enable sensitive logging for debugging purpose on ApiDbContext in development setting
+                if (environment.IsDevelopment())
+                {
+                    options.EnableSensitiveDataLogging();
+                    options.EnableDetailedErrors();
+                }
+            });
+
+            services.AddDbContext<ApplicationIdentityDbContext>((sp, options) =>
+            {
+                options.UseSqlServer(connectionString: connectionString);
+                options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
+            });
         }
     }
 }

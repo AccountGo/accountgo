@@ -17,6 +17,14 @@ import {
   sleep,
 } from "./container-shared";
 import { constantTimeEqual, parseSyncSqlHeaders } from "./sync-utils";
+import {
+  isServerTimingEnabled,
+  logSlowWorkerRequest,
+  scrubPathForLog,
+  stripD1SyncHeaders,
+  withServerTiming,
+  type TimingSegment,
+} from "./server-timing";
 import type { Env } from "./worker-env";
 import { AccountGoApiContainerV2 } from "./worker-container-v2";
 
@@ -192,19 +200,39 @@ export class AccountGoApiContainer extends Container<Env> {
 
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const timingEnabled = isServerTimingEnabled(this.env);
+    const workerStarted = Date.now();
+    const cold = !this.restored;
+    const scrubbedRoute = scrubPathForLog(url.pathname);
+
+    const finish = (response: Response, extra: TimingSegment[] = []): Response => {
+      const workerMs = Date.now() - workerStarted;
+      const segments: TimingSegment[] = [...extra, { name: "worker", dur: workerMs }];
+      if (cold) segments.push({ name: "cold", desc: "1" });
+      const timed = withServerTiming(response, segments, timingEnabled);
+      logSlowWorkerRequest({
+        route: scrubbedRoute,
+        status: timed.status,
+        segments,
+        workerMs,
+      });
+      return timed;
+    };
 
     // Handle restart endpoint
     if (url.pathname === "/restart-container" || request.headers.get("x-restart-container") === "true") {
       const secret = this.env.SECRET_KEY || this.env.SECRET__key;
       const providedKey = request.headers.get("x-internal-key");
       if (!secret || !providedKey || !constantTimeEqual(secret, providedKey)) {
-        return new Response(
-          JSON.stringify({
-            title: "Not Found",
-            status: 404,
-            detail: "Not Found",
-          }),
-          { status: 404, headers: { "content-type": "application/problem+json" } }
+        return finish(
+          new Response(
+            JSON.stringify({
+              title: "Not Found",
+              status: 404,
+              detail: "Not Found",
+            }),
+            { status: 404, headers: { "content-type": "application/problem+json" } }
+          )
         );
       }
 
@@ -212,22 +240,26 @@ export class AccountGoApiContainer extends Container<Env> {
         await this.destroy();
       } catch (err: unknown) {
         console.error("[worker] Failed to destroy container on restart:", err);
-        return new Response(
-          JSON.stringify({
-            title: "Internal Server Error",
-            status: 500,
-            detail: "Failed to restart container",
-          }),
-          { status: 500, headers: { "content-type": "application/problem+json" } }
+        return finish(
+          new Response(
+            JSON.stringify({
+              title: "Internal Server Error",
+              status: 500,
+              detail: "Failed to restart container",
+            }),
+            { status: 500, headers: { "content-type": "application/problem+json" } }
+          )
         );
       }
       this.restored = false;
       this.initPromise = null;
       this.loggedMismatch = false;
-      return new Response(JSON.stringify({ status: "container restarted" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      return finish(
+        new Response(JSON.stringify({ status: "container restarted" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      );
     }
 
     // 1. Wait for container to be ready (with retries for start races)
@@ -235,7 +267,7 @@ export class AccountGoApiContainer extends Container<Env> {
       await this.ensurePortsReady();
     } catch (err) {
       console.error("[worker] Container startup timed out or failed:", err);
-      return serviceUnavailable("Service is starting up, please retry in a few seconds", 5);
+      return finish(serviceUnavailable("Service is starting up, please retry in a few seconds", 5));
     }
 
     // 2. Build check and D1 restore (single-flight across concurrent requests)
@@ -244,7 +276,7 @@ export class AccountGoApiContainer extends Container<Env> {
         await this.ensureInitialized();
       } catch (prepErr: unknown) {
         if (prepErr instanceof BuildMismatchError) {
-          return serviceUnavailable(prepErr.message, 5);
+          return finish(serviceUnavailable(prepErr.message, 5));
         }
 
         if (prepErr instanceof RestoreError) {
@@ -252,11 +284,11 @@ export class AccountGoApiContainer extends Container<Env> {
             isTransientContainerError(prepErr) || isTransientContainerError(prepErr.message)
               ? 5
               : 8;
-          return serviceUnavailable(prepErr.message, retryAfter);
+          return finish(serviceUnavailable(prepErr.message, retryAfter));
         }
 
         console.error("[worker] Container initialization failed:", prepErr);
-        return serviceUnavailable("Service is starting up, please retry in a few seconds", 5);
+        return finish(serviceUnavailable("Service is starting up, please retry in a few seconds", 5));
       }
     }
 
@@ -276,11 +308,17 @@ export class AccountGoApiContainer extends Container<Env> {
     } as RequestInit);
 
     try {
+      const containerStarted = Date.now();
       const containerRes = await this.containerFetchWithRetry(
         containerReq,
         undefined,
-        `proxy ${request.method} ${url.pathname}`
+        `proxy ${request.method} ${scrubbedRoute}`
       );
+      const containerMs = Date.now() - containerStarted;
+
+      if (containerRes.status === 101) {
+        return containerRes;
+      }
 
       // Handle mutation SQL sync
       let syncStatements: string[] = [];
@@ -289,7 +327,7 @@ export class AccountGoApiContainer extends Container<Env> {
       } catch (headerErr: unknown) {
         const message = headerErr instanceof Error ? headerErr.message : String(headerErr);
         console.error(
-          `[worker] Failed to parse D1 sync headers: method=${request.method} path=${url.pathname} error=${message}`
+          `[worker] Failed to parse D1 sync headers: method=${request.method} path=${scrubbedRoute} error=${message}`
         );
         try {
           await this.destroy();
@@ -298,16 +336,23 @@ export class AccountGoApiContainer extends Container<Env> {
         }
         this.restored = false;
         this.initPromise = null;
-        return serviceUnavailable("Your change could not be saved. Please retry.", 5);
+        return finish(serviceUnavailable("Your change could not be saved. Please retry.", 5), [
+          { name: "container", dur: containerMs },
+        ]);
       }
 
+      let d1Ms: number | undefined;
       try {
+        const d1Started = Date.now();
         await applyD1SyncFromResponse({
           db: this.env.DB,
           syncStatements,
           method: request.method,
           pathname: url.pathname,
         });
+        if (syncStatements.length > 0) {
+          d1Ms = Date.now() - d1Started;
+        }
       } catch {
         try {
           await this.destroy();
@@ -316,34 +361,41 @@ export class AccountGoApiContainer extends Container<Env> {
         }
         this.restored = false;
         this.initPromise = null;
-        return serviceUnavailable("Your change could not be saved. Please retry.", 5);
+        return finish(serviceUnavailable("Your change could not be saved. Please retry.", 5), [
+          { name: "container", dur: containerMs },
+        ]);
       }
 
-      // Strip sync headers before returning response
-      const responseHeaders = new Headers(containerRes.headers);
-      for (const key of Array.from(responseHeaders.keys())) {
-        if (key.startsWith("x-d1-sync-sql") || key === "x-d1-sync-encoding") {
-          responseHeaders.delete(key);
-        }
-      }
-
-      return new Response(containerRes.body, {
+      const responseHeaders = stripD1SyncHeaders(containerRes.headers);
+      const base = new Response(containerRes.body, {
         status: containerRes.status,
         statusText: containerRes.statusText,
         headers: responseHeaders,
       });
+
+      const extra: TimingSegment[] = [{ name: "container", dur: containerMs }];
+      if (d1Ms !== undefined) {
+        extra.push({
+          name: "d1",
+          dur: d1Ms,
+          desc: syncStatements.length === 1 ? "1 stmt" : `${syncStatements.length} stmts`,
+        });
+      }
+      return finish(base, extra);
     } catch (err) {
       // Never rethrow: uncaught DO exceptions become Issues "failed invocation" with no Retry-After.
       console.error(
-        `[worker] Proxy failed method=${request.method} path=${url.pathname}: ${errorText(err)}`
+        `[worker] Proxy failed method=${request.method} path=${scrubbedRoute}: ${errorText(err)}`
       );
       this.restored = false;
       this.initPromise = null;
-      return serviceUnavailable(
-        isTransientContainerError(err)
-          ? "Service is starting up, please retry in a few seconds"
-          : "Upstream container error, please retry",
-        5
+      return finish(
+        serviceUnavailable(
+          isTransientContainerError(err)
+            ? "Service is starting up, please retry in a few seconds"
+            : "Upstream container error, please retry",
+          5
+        )
       );
     }
   }
