@@ -17,8 +17,8 @@ using Xunit;
 namespace AccountGo.BackendTests.Entitlements
 {
     /// <summary>
-    /// Shared contract any <see cref="IEntitlementService"/> must pass (community and hosted).
-    /// Commercial repos compile-link this file and subclass with their implementation.
+    /// Shared contract any <see cref="IEntitlementService"/> must pass.
+    /// Other implementations may link this file and subclass it.
     /// Expectations are hand-written literals — not derived from engine helpers.
     /// </summary>
     public abstract class EntitlementServiceContractTests

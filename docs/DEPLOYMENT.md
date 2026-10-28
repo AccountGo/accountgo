@@ -87,14 +87,11 @@ docker run -d \
 | `ANTER_API_KEY` / `ANTER_PROJECT_ID` | Optional AccountGo Assistant; set via secrets / env — do not commit |
 | `JwtSettings__validIssuer` / `validAudience` | Match your public API origin |
 | `ENTITLEMENTS_ENABLED` | Optional. `"true"` turns on free-tier **quota** checks; unset/`false` = quotas unlimited and **all plans self-service** (self-host default). Does **not** change modules, lifecycle, ReadOnlyModules, or features (§8.1) |
-| `ENTITLEMENT_FEATURES_ENABLED` | Optional. Default on; `"false"` empties commercial Features only (quotas unaffected). Community never emits feature keys either way |
+| `ENTITLEMENT_FEATURES_ENABLED` | Optional. Default on; `"false"` empties Features only (quotas unaffected). Community never emits feature keys either way |
 | `ENTITLEMENTS_SELF_SERVICE_PLANS` | Optional comma list (e.g. `invoicing,accounting`). When `ENTITLEMENTS_ENABLED` is false or this list is empty = all known plans |
 | `ENTITLEMENTS_FREE_*` | Optional per-resource free limits (see `.env.example`). Missing key = unlimited for that resource |
-| `BILLING_SUBSCRIPTIONS_ENABLED` | Hosted only (with Billing module). `"false"` hides Checkout / Upgrade; portal + webhooks still work when Stripe is configured. Default on when unset |
 | `SUPPORT_EMAIL` | Shown when a quota is exceeded |
 | `SERVER_TIMING_ENABLED` | Optional. Default `"true"`. When `"false"`, no `Server-Timing` header from the .NET API, API worker, or web worker |
-
-Hosted AccountGo Cloud billing (payment provider keys, price IDs, `REQUIRED_MODULES`) is configured only in the private ops overlay — not in this public repo.
 
 > [!CAUTION]
 > Never commit real secret keys, D1 database IDs for production SaaS, or Cloudflare API tokens to a public repository.

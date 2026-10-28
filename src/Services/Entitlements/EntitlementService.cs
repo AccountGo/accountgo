@@ -20,7 +20,7 @@ namespace Services.Entitlements
     /// <summary>
     /// Configuration-driven entitlements. Quotas apply when Enabled and the effective plan is free
     /// (or Tier=comp overrides to unlimited). Module <see cref="Evaluate"/> runs pipeline steps 1–6.
-    /// Feature / EvaluateForUser arrive in E2. Community never emits commercial feature keys;
+    /// Feature / EvaluateForUser arrive in E2. Community never emits feature keys;
     /// subclasses may override <see cref="ResolveFeatures"/> for tests.
     /// </summary>
     public class EntitlementService : IEntitlementService
@@ -203,7 +203,7 @@ namespace Services.Entitlements
         }
 
         /// <summary>
-        /// Community emits no commercial features. Test subclasses may override to inject keys
+        /// Community emits no feature keys. Test subclasses may override to inject keys
         /// when verifying <see cref="EntitlementsOptions.FeaturesEnabled"/> kill-switch behaviour.
         /// </summary>
         protected virtual IReadOnlySet<string> ResolveFeatures(PolicyMemo policy)

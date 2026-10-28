@@ -19,7 +19,7 @@ public class MfaStepUpRequirement : IAuthorizationRequirement
 /// <summary>
 /// Community / self-hosted step-up handler.
 /// Since community builds do not enforce Factor B, sensitive actions are never blocked on community builds (F3).
-/// The commercial SecurityModule replaces this handler with HostedStepUpHandler for enrolled users (F2).
+/// A module may replace this handler (F2).
 /// </summary>
 public class CommunityStepUpHandler : AuthorizationHandler<MfaStepUpRequirement>
 {
