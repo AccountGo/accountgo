@@ -48,16 +48,27 @@ namespace Api.Filters
             var company = (companies != null && tenantContext.CompanyId.HasValue)
                 ? companies.GetById(tenantContext.CompanyId.Value)
                 : null;
-            // Inactive paid workspaces keep free-tier modules (sales/purchases); deny only paid-only modules.
-            if (company != null
-                && Company.IsPaidPlan(company.Plan)
-                && SubscriptionAccess.IsInactive(company))
+
+            bool allowed;
+            string? lapsedModule = null;
+            if (company != null)
             {
-                var freeModules = Company.ModulesForPlan(Company.FreePlanFor(company.Plan));
-                var allowedUnderFree = Array.Exists(
-                    _moduleKeys,
-                    m => freeModules.Contains(m, StringComparer.OrdinalIgnoreCase));
-                if (!allowedUnderFree)
+                // One load: IsModuleAvailable already applies lifecycle + owner opt-outs.
+                allowed = Array.Exists(_moduleKeys, m => SubscriptionAccess.IsModuleAvailable(company, m));
+                // SUBSCRIPTION_INACTIVE only when an active subscription would allow a key; opted-out or
+                // never-included modules stay MODULE_NOT_SUBSCRIBED because paying would not unlock them.
+                if (!allowed && Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company))
+                    lapsedModule = Array.Find(_moduleKeys, company.HasModule);
+            }
+            else
+            {
+                var adminService = context.HttpContext.RequestServices.GetRequiredService<IAdministrationService>();
+                allowed = Array.Exists(_moduleKeys, adminService.IsModuleEnabled);
+            }
+
+            if (!allowed)
+            {
+                if (lapsedModule != null)
                 {
                     var inactive = new ProblemDetails
                     {
@@ -67,7 +78,8 @@ namespace Api.Filters
                         Status = StatusCodes.Status403Forbidden
                     };
                     inactive.Extensions["code"] = "SUBSCRIPTION_INACTIVE";
-                    inactive.Extensions["status"] = company.SubscriptionStatus ?? "canceled";
+                    inactive.Extensions["status"] = company!.SubscriptionStatus ?? "canceled";
+                    inactive.Extensions["requiredModule"] = lapsedModule;
                     inactive.Extensions["upgradeAvailable"] = true;
 
                     context.Result = new ObjectResult(inactive)
@@ -76,12 +88,7 @@ namespace Api.Filters
                     };
                     return;
                 }
-            }
 
-            var adminService = context.HttpContext.RequestServices.GetRequiredService<IAdministrationService>();
-
-            if (!Array.Exists(_moduleKeys, adminService.IsModuleEnabled))
-            {
                 var problem = new ProblemDetails
                 {
                     Type = "https://accountgo.ph/errors/module-not-subscribed",

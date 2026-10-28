@@ -12,6 +12,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { setPersistedOrgSlug } from '../lib/storage';
+import { isEnterprisePlan, isInvoicingProduct } from '../lib/plans';
 import { OrgDetails, Organization, PendingInvitation } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
@@ -60,13 +61,13 @@ export const SelectOrg: React.FC = () => {
               slug: organization.slug,
               role: organization.role,
               plan: organization.plan,
-              avatarBg: organization.plan === 'invoicing'
+              avatarBg: isInvoicingProduct(organization.plan)
                 ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600'
-                : organization.plan === 'enterprise'
+                : isEnterprisePlan(organization.plan)
                   ? 'bg-gradient-to-br from-indigo-500 to-blue-600'
                   : 'bg-gradient-to-br from-emerald-500 to-teal-600',
               whitelabel: {
-                themeId: organization.plan === 'invoicing' ? 'tokyo-night' : organization.plan === 'enterprise' ? 'sapphire' : 'accountgo',
+                themeId: isInvoicingProduct(organization.plan) ? 'tokyo-night' : isEnterprisePlan(organization.plan) ? 'sapphire' : 'accountgo',
                 brandName: organization.name,
               },
               subscription: {

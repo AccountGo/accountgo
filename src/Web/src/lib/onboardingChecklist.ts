@@ -7,20 +7,20 @@ export interface ChecklistItem {
 }
 
 export interface ChecklistInput {
-  plan: string | undefined;
+  /** When true, include bank / chart-of-accounts setup (Accounting modules). */
+  hasFinancialsModule: boolean;
   taxRegime: string;
   hasLegalName: boolean;
 }
 
 /** Items S1–S5 from the onboarding requirements; opening balances (S6) wait until that feature exists. */
 export function buildChecklist(input: ChecklistInput): ChecklistItem[] {
-  const plan = (input.plan ?? 'accounting').toLowerCase();
   const items: ChecklistItem[] = [];
 
   if (input.taxRegime !== 'None') {
     items.push({ id: 'tax', label: 'Confirm your tax rates', hint: 'We added a 0% placeholder — set the real rate before your first invoice.', to: 'settings?tab=taxes', done: false });
   }
-  if (plan !== 'invoicing') {
+  if (input.hasFinancialsModule) {
     items.push({ id: 'bank', label: 'Check your bank account', hint: 'Rename the default cash or bank account to match reality.', to: 'financials/accounts', done: false });
     items.push({ id: 'coa', label: 'Skim your chart of accounts', hint: 'Know the control accounts we seeded.', to: 'financials/accounts', done: false });
   }
