@@ -16,6 +16,11 @@ import {
   serviceUnavailable,
   sleep,
 } from "./container-shared";
+import {
+  shouldEnsurePortsReadyOnAttempt,
+  shouldSkipPortsReady,
+  type ReadyTiming,
+} from "./ports-ready";
 import { constantTimeEqual, parseSyncSqlHeaders } from "./sync-utils";
 import {
   isServerTimingEnabled,
@@ -77,16 +82,24 @@ export class AccountGoApiContainer extends Container<Env> {
   /**
    * containerFetch after ensuring the port is listening. Retries transient
    * "not running" / "just exited" races that show up during cold start and D1 restore.
+   * Warm path (running + restored) skips readiness on the first attempt; retries always re-check.
    */
   private async containerFetchWithRetry(
     input: string | Request,
     init: RequestInit | undefined,
-    label: string
+    label: string,
+    readyTiming?: ReadyTiming
   ): Promise<Response> {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= CONTAINER_RETRY_ATTEMPTS; attempt++) {
       try {
-        await this.ensurePortsReady();
+        if (
+          shouldEnsurePortsReadyOnAttempt(attempt, this.container.running, this.restored)
+        ) {
+          const readyStarted = Date.now();
+          await this.ensurePortsReady();
+          if (readyTiming) readyTiming.readyMs += Date.now() - readyStarted;
+        }
         if (typeof input === "string") {
           return await this.containerFetch(input, init);
         }
@@ -106,16 +119,16 @@ export class AccountGoApiContainer extends Container<Env> {
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
 
-  async restoreD1ToContainer(): Promise<void> {
+  async restoreD1ToContainer(readyTiming?: ReadyTiming): Promise<void> {
     await restoreD1ToContainer({
       db: this.env.DB,
       env: this.env,
       containerFetchWithRetry: (input, init, label) =>
-        this.containerFetchWithRetry(input, init, label),
+        this.containerFetchWithRetry(input, init, label, readyTiming),
     });
   }
 
-  private async initialize(): Promise<void> {
+  private async initialize(readyTiming?: ReadyTiming): Promise<void> {
     const syncKey = resolveInternalSyncKey(this.env);
 
     // Build check (1.2.4)
@@ -133,7 +146,8 @@ export class AccountGoApiContainer extends Container<Env> {
           method: "GET",
           headers: { "x-internal-key": syncKey },
         },
-        "build-check"
+        "build-check",
+        readyTiming
       );
 
       if (!buildRes.ok) {
@@ -161,17 +175,17 @@ export class AccountGoApiContainer extends Container<Env> {
     }
 
     // D1 restore (throws RestoreError with detail on failure)
-    await this.restoreD1ToContainer();
+    await this.restoreD1ToContainer(readyTiming);
 
     this.restored = true;
   }
 
   /** Single-flight init with one full retry after a transient container death. */
-  private async ensureInitialized(): Promise<void> {
+  private async ensureInitialized(readyTiming?: ReadyTiming): Promise<void> {
     if (this.restored) return;
 
     const runOnce = async (): Promise<void> => {
-      const p = (this.initPromise ??= this.initialize());
+      const p = (this.initPromise ??= this.initialize(readyTiming));
       try {
         await p;
       } catch (err) {
@@ -193,7 +207,9 @@ export class AccountGoApiContainer extends Container<Env> {
       this.initPromise = null;
       this.restored = false;
       await sleep(CONTAINER_RETRY_BASE_DELAY_MS);
+      const readyStarted = Date.now();
       await this.ensurePortsReady();
+      if (readyTiming) readyTiming.readyMs += Date.now() - readyStarted;
       await runOnce();
     }
   }
@@ -204,10 +220,15 @@ export class AccountGoApiContainer extends Container<Env> {
     const workerStarted = Date.now();
     const cold = !this.restored;
     const scrubbedRoute = scrubPathForLog(url.pathname);
+    const readyTiming: ReadyTiming = { readyMs: 0 };
 
     const finish = (response: Response, extra: TimingSegment[] = []): Response => {
       const workerMs = Date.now() - workerStarted;
-      const segments: TimingSegment[] = [...extra, { name: "worker", dur: workerMs }];
+      const segments: TimingSegment[] = [];
+      if (readyTiming.readyMs > 0) {
+        segments.push({ name: "ready", dur: readyTiming.readyMs });
+      }
+      segments.push(...extra, { name: "worker", dur: workerMs });
       if (cold) segments.push({ name: "cold", desc: "1" });
       const timed = withServerTiming(response, segments, timingEnabled);
       logSlowWorkerRequest({
@@ -262,18 +283,22 @@ export class AccountGoApiContainer extends Container<Env> {
       );
     }
 
-    // 1. Wait for container to be ready (with retries for start races)
-    try {
-      await this.ensurePortsReady();
-    } catch (err) {
-      console.error("[worker] Container startup timed out or failed:", err);
-      return finish(serviceUnavailable("Service is starting up, please retry in a few seconds", 5));
+    // 1. Wait for container to be ready (skip when already running + restored)
+    if (!shouldSkipPortsReady(this.container.running, this.restored)) {
+      try {
+        const readyStarted = Date.now();
+        await this.ensurePortsReady();
+        readyTiming.readyMs += Date.now() - readyStarted;
+      } catch (err) {
+        console.error("[worker] Container startup timed out or failed:", err);
+        return finish(serviceUnavailable("Service is starting up, please retry in a few seconds", 5));
+      }
     }
 
     // 2. Build check and D1 restore (single-flight across concurrent requests)
     if (!this.restored) {
       try {
-        await this.ensureInitialized();
+        await this.ensureInitialized(readyTiming);
       } catch (prepErr: unknown) {
         if (prepErr instanceof BuildMismatchError) {
           return finish(serviceUnavailable(prepErr.message, 5));
@@ -312,7 +337,8 @@ export class AccountGoApiContainer extends Container<Env> {
       const containerRes = await this.containerFetchWithRetry(
         containerReq,
         undefined,
-        `proxy ${request.method} ${scrubbedRoute}`
+        `proxy ${request.method} ${scrubbedRoute}`,
+        readyTiming
       );
       const containerMs = Date.now() - containerStarted;
 

@@ -15,6 +15,11 @@ import {
   sleep,
 } from "./container-shared";
 import {
+  shouldEnsurePortsReadyOnAttempt,
+  shouldSkipPortsReady,
+  type ReadyTiming,
+} from "./ports-ready";
+import {
   isServerTimingEnabled,
   logSlowWorkerRequest,
   scrubPathForLog,
@@ -129,10 +134,19 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     await this.waitForPortReady();
   }
 
+  private isContainerRunning(): boolean {
+    return !!this.ctx.container?.running;
+  }
+
+  /**
+   * Port fetch after ensuring the port is listening. Warm path (running + restored)
+   * skips readiness on the first attempt; retries always re-check.
+   */
   private async containerFetchWithRetry(
     input: string | Request,
     init: RequestInit | undefined,
-    label: string
+    label: string,
+    readyTiming?: ReadyTiming
   ): Promise<Response> {
     const container = this.ctx.container;
     if (!container) {
@@ -142,7 +156,13 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= CONTAINER_RETRY_ATTEMPTS; attempt++) {
       try {
-        await this.ensurePortsReady();
+        if (
+          shouldEnsurePortsReadyOnAttempt(attempt, this.isContainerRunning(), this.restored)
+        ) {
+          const readyStarted = Date.now();
+          await this.ensurePortsReady();
+          if (readyTiming) readyTiming.readyMs += Date.now() - readyStarted;
+        }
         const port = container.getTcpPort(CONTAINER_PORT);
         if (typeof input === "string") {
           return await port.fetch(input, init);
@@ -163,7 +183,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
 
-  private async initialize(): Promise<void> {
+  private async initialize(readyTiming?: ReadyTiming): Promise<void> {
     const syncKey = resolveInternalSyncKey(this.env);
 
     if (this.env.BUILD_SHA) {
@@ -180,7 +200,8 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
           method: "GET",
           headers: { "x-internal-key": syncKey },
         },
-        "build-check"
+        "build-check",
+        readyTiming
       );
 
       if (!buildRes.ok) {
@@ -211,17 +232,17 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       db: this.env.DB,
       env: this.env,
       containerFetchWithRetry: (input, init, label) =>
-        this.containerFetchWithRetry(input, init, label),
+        this.containerFetchWithRetry(input, init, label, readyTiming),
     });
 
     this.restored = true;
   }
 
-  private async ensureInitialized(): Promise<void> {
+  private async ensureInitialized(readyTiming?: ReadyTiming): Promise<void> {
     if (this.restored) return;
 
     const runOnce = async (): Promise<void> => {
-      const p = (this.initPromise ??= this.initialize());
+      const p = (this.initPromise ??= this.initialize(readyTiming));
       try {
         await p;
       } catch (err) {
@@ -243,7 +264,9 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       this.initPromise = null;
       this.restored = false;
       await sleep(CONTAINER_RETRY_BASE_DELAY_MS);
+      const readyStarted = Date.now();
       await this.ensurePortsReady();
+      if (readyTiming) readyTiming.readyMs += Date.now() - readyStarted;
       await runOnce();
     }
   }
@@ -254,10 +277,15 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     const workerStarted = Date.now();
     const cold = !this.restored;
     const scrubbedRoute = scrubPathForLog(url.pathname);
+    const readyTiming: ReadyTiming = { readyMs: 0 };
 
     const finish = (response: Response, extra: TimingSegment[] = []): Response => {
       const workerMs = Date.now() - workerStarted;
-      const segments: TimingSegment[] = [...extra, { name: "worker", dur: workerMs }];
+      const segments: TimingSegment[] = [];
+      if (readyTiming.readyMs > 0) {
+        segments.push({ name: "ready", dur: readyTiming.readyMs });
+      }
+      segments.push(...extra, { name: "worker", dur: workerMs });
       if (cold) segments.push({ name: "cold", desc: "1" });
       const timed = withServerTiming(response, segments, timingEnabled);
       logSlowWorkerRequest({
@@ -308,16 +336,20 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       );
     }
 
-    try {
-      await this.ensurePortsReady();
-    } catch (err) {
-      console.error("[worker-v2] Container startup timed out or failed:", err);
-      return finish(serviceUnavailable("Service is starting up, please retry in a few seconds", 5));
+    if (!shouldSkipPortsReady(this.isContainerRunning(), this.restored)) {
+      try {
+        const readyStarted = Date.now();
+        await this.ensurePortsReady();
+        readyTiming.readyMs += Date.now() - readyStarted;
+      } catch (err) {
+        console.error("[worker-v2] Container startup timed out or failed:", err);
+        return finish(serviceUnavailable("Service is starting up, please retry in a few seconds", 5));
+      }
     }
 
     if (!this.restored) {
       try {
-        await this.ensureInitialized();
+        await this.ensureInitialized(readyTiming);
       } catch (prepErr: unknown) {
         if (prepErr instanceof BuildMismatchError) {
           return finish(serviceUnavailable(prepErr.message, 5));
@@ -355,7 +387,8 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       const containerRes = await this.containerFetchWithRetry(
         containerReq,
         undefined,
-        `proxy ${request.method} ${scrubbedRoute}`
+        `proxy ${request.method} ${scrubbedRoute}`,
+        readyTiming
       );
       const containerMs = Date.now() - containerStarted;
 
