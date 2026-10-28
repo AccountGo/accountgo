@@ -86,7 +86,7 @@ public class SignUpAndOrganizationTests : IDisposable
         Assert.Equal(StatusCodes.Status201Created, createdResult.StatusCode);
 
         var company = _db.Companies.Single(c => c.Slug == "pacific-rim-trading");
-        Assert.Equal("accounting", company.Plan);
+        Assert.Equal("accounting_free", company.Plan);
 
         var member = _db.CompanyMembers.Single(m => m.CompanyId == company.Id);
         Assert.Equal(CallerId, member.UserId);

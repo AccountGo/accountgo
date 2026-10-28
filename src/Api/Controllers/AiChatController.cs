@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Api.Service.Ai;
+using Core.Domain;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -345,7 +346,7 @@ namespace Api.Controllers
             out string companyRole,
             out string subscriptionStatus)
         {
-            companyPlan = "accounting";
+            companyPlan = "accounting_free";
             activeModules = string.Empty;
             companyRole = _tenantContext.Role?.ToString() ?? "Member";
             subscriptionStatus = "active";
@@ -354,8 +355,8 @@ namespace Api.Controllers
             {
                 var subscription = _administrationService.GetCurrentSubscription();
                 companyPlan = string.IsNullOrWhiteSpace(subscription.Plan)
-                    ? "accounting"
-                    : subscription.Plan.Trim().ToLowerInvariant();
+                    ? "accounting_free"
+                    : Company.NormalizePlanKey(subscription.Plan);
                 activeModules = string.Join(
                     ",",
                     subscription.ActiveModules ?? new List<string>());

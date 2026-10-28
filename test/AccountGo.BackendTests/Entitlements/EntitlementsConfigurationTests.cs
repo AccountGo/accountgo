@@ -32,6 +32,14 @@ namespace AccountGo.BackendTests.Entitlements
         }
 
         [Fact]
+        public void LegacyModuleGate_DefaultsFalse_UnlessExplicitlyTrue()
+        {
+            Assert.False(Read(new()).LegacyModuleGate);
+            Assert.False(Read(new() { ["ENTITLEMENTS_LEGACY_MODULE_GATE"] = "false" }).LegacyModuleGate);
+            Assert.True(Read(new() { ["ENTITLEMENTS_LEGACY_MODULE_GATE"] = "true" }).LegacyModuleGate);
+        }
+
+        [Fact]
         public void HostedValues_AreReadFromFlatKeys()
         {
             var options = Read(new()

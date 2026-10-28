@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Api.Mcp.Models;
 using Core.Domain;
 using Core.Domain.Security;
+using Core.Entitlements;
 using Core.Tenancy;
 using Dto.Subscription;
 using Microsoft.Extensions.Logging;
@@ -25,17 +26,20 @@ namespace Api.Mcp.Tools
 
         private readonly IFinancialService _financialService;
         private readonly IAdministrationService _adminService;
+        private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenantContext;
         private readonly ILogger<FinancialMcpTools> _logger;
 
         public FinancialMcpTools(
             IFinancialService financialService,
             IAdministrationService adminService,
+            IEntitlementService entitlements,
             ITenantContext tenantContext,
             ILogger<FinancialMcpTools>? logger = null)
         {
             _financialService = financialService ?? throw new ArgumentNullException(nameof(financialService));
             _adminService = adminService ?? throw new ArgumentNullException(nameof(adminService));
+            _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
             _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
             _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<FinancialMcpTools>.Instance;
         }
@@ -511,7 +515,11 @@ namespace Api.Mcp.Tools
 
         private bool TryAuthorizeModules(out EntitlementDenial denial)
         {
-            if (Array.Exists(FinancialOrReportsModules, _adminService.IsModuleEnabled))
+            var companyId = _tenantContext.RequireCompanyId();
+            var decision = _entitlements.Evaluate(
+                companyId,
+                new EntitlementAction.Module(ModuleAccess.Read, FinancialOrReportsModules));
+            if (decision.Allowed)
             {
                 denial = default;
                 return true;
@@ -555,13 +563,13 @@ namespace Api.Mcp.Tools
                 _logger.LogDebug(ex, "Could not load subscription while building PlanRestricted message");
             }
 
-            var planKey = (subscription?.Plan ?? "unknown").Trim().ToLowerInvariant();
+            var planKey = Company.NormalizePlanKey(subscription?.Plan ?? "unknown");
             var planDisplay = PlanDisplayName(planKey);
             var org = OrgLabel();
             var modulesLabel = string.Join("' or '", requiredModules);
 
             string message;
-            if (string.Equals(planKey, "invoicing", StringComparison.OrdinalIgnoreCase))
+            if (planKey.StartsWith("invoicing", StringComparison.Ordinal))
             {
                 message =
                     $"The active workspace '{org}' is on the {planDisplay} plan, which includes quotes, invoicing, and expenses, but does not include double-entry accounting or financial statements. Upgrade to the Accounting or Enterprise plan under Settings > Subscription to access financial reports and statements.";
@@ -576,7 +584,9 @@ namespace Api.Mcp.Tools
                 FinancialMcpStatus.PlanRestricted,
                 message,
                 RequiredModules: requiredModules,
-                UpgradePlanHint: planKey is "invoicing" or "unknown" ? "accounting" : null);
+                UpgradePlanHint: planKey.StartsWith("invoicing", StringComparison.Ordinal) || planKey == "unknown"
+                    ? "accounting_free"
+                    : null);
         }
 
         private T Denied<T>(EntitlementDenial denial) where T : FinancialMcpBaseResponse, new()
@@ -599,13 +609,14 @@ namespace Api.Mcp.Tools
         private string OrgLabel() =>
             _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}";
 
-        private static string PlanDisplayName(string planKey) => planKey switch
+        private static string PlanDisplayName(string planKey)
         {
-            "invoicing" => "Invoicing",
-            "accounting" => "Accounting",
-            "enterprise" => "Enterprise",
-            _ => string.IsNullOrWhiteSpace(planKey) ? "unknown" : planKey
-        };
+            var key = Company.NormalizePlanKey(planKey);
+            if (key.StartsWith("invoicing", StringComparison.Ordinal)) return "Invoicing";
+            if (key.StartsWith("accounting", StringComparison.Ordinal)) return "Accounting";
+            if (key is "enterprise") return "Enterprise";
+            return string.IsNullOrWhiteSpace(planKey) ? "unknown" : planKey;
+        }
 
         private readonly record struct EntitlementDenial(
             string Status,

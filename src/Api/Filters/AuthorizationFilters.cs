@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Services.Administration;
 using Services.Entitlements;
 
 namespace Api.Filters
@@ -46,28 +45,30 @@ namespace Api.Filters
                 return;
             }
 
-            // Optional: lightweight filter tests and non-tenant harnesses may not register IRepository<Company>.
-            var companies = context.HttpContext.RequestServices.GetService<IRepository<Company>>();
-            var company = (companies != null && tenantContext.CompanyId.HasValue)
-                ? companies.GetById(tenantContext.CompanyId.Value)
-                : null;
+            var companyId = tenantContext.RequireCompanyId();
+            var entitlements = context.HttpContext.RequestServices.GetRequiredService<IEntitlementService>();
+            var access = ResolveAccess(context);
 
             bool allowed;
             string? denyCode = null;
-            string? lapsedModule = null;
-            if (company != null)
+            string? requiredModule = null;
+            string? subscriptionStatus = null;
+
+            if (entitlements.Options.LegacyModuleGate)
             {
-                // One load: IsModuleAvailable already applies lifecycle + owner opt-outs.
+                var companies = context.HttpContext.RequestServices.GetRequiredService<IRepository<Company>>();
+                var company = companies.GetById(companyId)
+                    ?? throw new TenantEntityNotFoundException(nameof(Company), companyId);
                 allowed = Array.Exists(_moduleKeys, m => SubscriptionAccess.IsModuleAvailable(company, m));
-                // SUBSCRIPTION_INACTIVE only when an active subscription would allow a key; opted-out or
-                // never-included modules stay MODULE_NOT_SUBSCRIBED because paying would not unlock them.
+                string? lapsedModule = null;
                 if (!allowed && Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company))
                     lapsedModule = Array.Find(_moduleKeys, company.HasModule);
                 denyCode = !allowed
                     ? (lapsedModule != null ? "SUBSCRIPTION_INACTIVE" : "MODULE_NOT_SUBSCRIBED")
                     : null;
+                requiredModule = lapsedModule ?? _moduleKeys[0];
+                subscriptionStatus = company.SubscriptionStatus ?? "canceled";
 
-                var entitlements = context.HttpContext.RequestServices.GetService<IEntitlementService>();
                 var logger = context.HttpContext.RequestServices.GetService<ILoggerFactory>()
                     ?.CreateLogger(typeof(RequireModuleAttribute));
                 EntitlementEngineShadow.CompareModuleGate(
@@ -75,13 +76,16 @@ namespace Api.Filters
             }
             else
             {
-                var adminService = context.HttpContext.RequestServices.GetRequiredService<IAdministrationService>();
-                allowed = Array.Exists(_moduleKeys, adminService.IsModuleEnabled);
+                var decision = entitlements.Evaluate(companyId, new EntitlementAction.Module(access, _moduleKeys));
+                allowed = decision.Allowed;
+                denyCode = decision.Code;
+                requiredModule = decision.RequiredModule ?? _moduleKeys[0];
+                subscriptionStatus = decision.SubscriptionStatus;
             }
 
             if (!allowed)
             {
-                if (lapsedModule != null)
+                if (string.Equals(denyCode, "SUBSCRIPTION_INACTIVE", StringComparison.Ordinal))
                 {
                     var inactive = new ProblemDetails
                     {
@@ -91,8 +95,8 @@ namespace Api.Filters
                         Status = StatusCodes.Status403Forbidden
                     };
                     inactive.Extensions["code"] = "SUBSCRIPTION_INACTIVE";
-                    inactive.Extensions["status"] = company!.SubscriptionStatus ?? "canceled";
-                    inactive.Extensions["requiredModule"] = lapsedModule;
+                    inactive.Extensions["status"] = subscriptionStatus ?? "canceled";
+                    inactive.Extensions["requiredModule"] = requiredModule;
                     inactive.Extensions["upgradeAvailable"] = true;
 
                     context.Result = new ObjectResult(inactive)
@@ -111,8 +115,8 @@ namespace Api.Filters
                         : $"None of the '{string.Join("', '", _moduleKeys)}' modules is included in this organization's active plan.",
                     Status = StatusCodes.Status403Forbidden
                 };
-                problem.Extensions["code"] = "MODULE_NOT_SUBSCRIBED";
-                problem.Extensions["requiredModule"] = _moduleKeys[0];
+                problem.Extensions["code"] = denyCode ?? "MODULE_NOT_SUBSCRIBED";
+                problem.Extensions["requiredModule"] = requiredModule ?? _moduleKeys[0];
                 problem.Extensions["upgradeAvailable"] = true;
 
                 context.Result = new ObjectResult(problem)
@@ -123,6 +127,17 @@ namespace Api.Filters
             }
 
             await next();
+        }
+
+        private static ModuleAccess ResolveAccess(ActionExecutingContext context)
+        {
+            var method = context.HttpContext.Request.Method;
+            if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method))
+                return ModuleAccess.Read;
+            var endpoint = context.HttpContext.GetEndpoint();
+            if (endpoint?.Metadata.GetMetadata<AllowWhenReadOnlyAttribute>() != null)
+                return ModuleAccess.Read;
+            return ModuleAccess.Write;
         }
     }
 

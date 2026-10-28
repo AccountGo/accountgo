@@ -458,6 +458,7 @@ public static class AccountGoApp
 
         app.UseAuthentication();
         app.UseMiddleware<Api.Middleware.TenantResolutionMiddleware>();
+        app.UseMiddleware<Api.Middleware.EntitlementsVersionMiddleware>();
         app.UseAuthorization();
 
         // Pending-token blocking middleware (covers controllers and /mcp)

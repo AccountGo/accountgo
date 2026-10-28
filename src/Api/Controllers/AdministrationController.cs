@@ -119,7 +119,7 @@ namespace Api.Controllers
                 slug = string.IsNullOrWhiteSpace(company.Slug) ? (company.ShortName?.ToLowerInvariant() ?? $"org-{company.Id}") : company.Slug,
                 companyCode = company.CompanyCode,
                 cra = company.CRA,
-                plan = company.Plan ?? "accounting",
+                plan = Core.Domain.Company.NormalizePlanKey(company.Plan ?? "accounting_free"),
                 subscriptionStatus = company.SubscriptionStatus ?? "active",
                 subscriptionValidUntil = company.SubscriptionValidUntil,
                 activeModules = company.GetActiveModules()

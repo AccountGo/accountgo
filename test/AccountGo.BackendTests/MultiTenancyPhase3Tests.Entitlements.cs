@@ -48,6 +48,14 @@ namespace AccountGo.BackendTests
             db.SaveChanges();
         }
 
+        private void SetPlan(string plan)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.Companies.Single(c => c.Id == _companyId).Plan = plan;
+            db.SaveChanges();
+        }
+
         private static async Task AssertQuotaExceeded(HttpResponseMessage response, string resource, int limit)
         {
             var body = await response.Content.ReadAsStringAsync();
@@ -82,7 +90,7 @@ namespace AccountGo.BackendTests
             var state = await Json(await Send(HttpMethod.Get, "/api/entitlements"));
             Assert.False(state.GetProperty("enabled").GetBoolean());
             Assert.False(state.GetProperty("limited").GetBoolean());
-            Assert.Equal(3, state.GetProperty("selfServicePlans").GetArrayLength());
+            Assert.Equal(Core.Domain.Company.KnownPlans.Count, state.GetProperty("selfServicePlans").GetArrayLength());
             Assert.Equal(JsonValueKindNull, state.GetProperty("limits").GetProperty("salesDocuments").GetProperty("limit").ValueKind);
 
             using var scope = _factory.Services.CreateScope();
@@ -145,17 +153,23 @@ namespace AccountGo.BackendTests
             await AssertQuotaExceeded(await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", await NewInvoice()), "salesDocuments", 0);
             try
             {
-                foreach (var tier in new[] { CompanyTiers.Pro, CompanyTiers.Comp })
-                {
-                    SetTier(tier);
-                    Assert.True((await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", await NewInvoice())).IsSuccessStatusCode, tier);
-                    var state = await Json(await Send(HttpMethod.Get, "/api/entitlements"));
-                    Assert.Equal(tier, state.GetProperty("tier").GetString());
-                    Assert.False(state.GetProperty("limited").GetBoolean());
-                }
+                // P8: paid effective plan (not Tier=pro alone) and Tier=comp are unlimited.
+                SetPlan("accounting_pro");
+                Assert.True((await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", await NewInvoice())).IsSuccessStatusCode, "accounting_pro");
+                var paidState = await Json(await Send(HttpMethod.Get, "/api/entitlements"));
+                Assert.Equal(CompanyTiers.Pro, paidState.GetProperty("tier").GetString());
+                Assert.False(paidState.GetProperty("limited").GetBoolean());
+
+                SetPlan("accounting_free");
+                SetTier(CompanyTiers.Comp);
+                Assert.True((await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", await NewInvoice())).IsSuccessStatusCode, "comp");
+                var compState = await Json(await Send(HttpMethod.Get, "/api/entitlements"));
+                Assert.Equal(CompanyTiers.Comp, compState.GetProperty("tier").GetString());
+                Assert.False(compState.GetProperty("limited").GetBoolean());
             }
             finally
             {
+                SetPlan("accounting_free");
                 SetTier(null);
             }
         }
@@ -205,7 +219,10 @@ namespace AccountGo.BackendTests
         {
             using var _ = EnableFreeTier(ownedWorkspaces: 2);
             var plans = await Json(await Send(HttpMethod.Get, "/api/Subscription/plans", scoped: false));
-            Assert.Equal(new[] { true, true, false }, plans.EnumerateArray().Select(p => p.GetProperty("selfService").GetBoolean()).ToArray());
+            // SelfServicePlans env lists invoicing/accounting → *_free rows only (product×tier catalog).
+            Assert.Equal(
+                new[] { true, false, true, false, false },
+                plans.EnumerateArray().Select(p => p.GetProperty("selfService").GetBoolean()).ToArray());
             // Enterprise is not self-service on hosted.
             var enterprise = await Send(HttpMethod.Post, "/api/organizations", new { name = "Big Co", slug = "big-co", plan = "enterprise" }, scoped: false);
             Assert.Equal(HttpStatusCode.Forbidden, enterprise.StatusCode);
@@ -214,7 +231,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.Forbidden, switchToEnterprise.StatusCode);
 
             // Owner already owns 1; a second is allowed, a third is not.
-            Assert.Equal(HttpStatusCode.Created, (await Send(HttpMethod.Post, "/api/organizations", new { name = "Second", slug = "second-ws", plan = "invoicing" }, scoped: false)).StatusCode);
+            Assert.Equal(HttpStatusCode.Created, (await Send(HttpMethod.Post, "/api/organizations", new { name = "Second", slug = "second-ws", plan = "invoicing_free" }, scoped: false)).StatusCode);
             await AssertQuotaExceeded(await Send(HttpMethod.Post, "/api/organizations", new { name = "Third", slug = "third-ws" }, scoped: false), "ownedWorkspaces", 2);
 
             // Switching between self-service products is free.

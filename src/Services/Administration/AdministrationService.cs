@@ -263,7 +263,7 @@ namespace Services.Administration
                 CompanyId = company.Id,
                 CompanyName = company.Name ?? "AccountGo Organization",
                 Slug = company.Slug ?? $"org-{company.Id}",
-                Plan = company.Plan ?? "accounting",
+                Plan = Company.NormalizePlanKey(company.Plan ?? "accounting_free"),
                 SubscriptionStatus = company.SubscriptionStatus ?? "active",
                 SubscriptionValidUntil = company.SubscriptionValidUntil,
                 ActiveModules = company.GetActiveModules()
@@ -282,20 +282,26 @@ namespace Services.Administration
                 throw new Core.Tenancy.TenantEntityNotFoundException(nameof(Company), companyId);
             }
 
+            var previousPlan = company.Plan;
             // Null/blank plan = keep the current plan and only change modules. Unknown plans are rejected.
             if (!string.IsNullOrWhiteSpace(dto.Plan))
             {
                 if (!Company.IsKnownPlan(dto.Plan))
                     throw new ArgumentException($"Unknown plan '{dto.Plan}'.");
-                var newPlan = dto.Plan.Trim().ToLowerInvariant();
+                var newPlan = Company.NormalizePlanKey(dto.Plan);
                 // Staying on a plan is always allowed (e.g. toggling modules on an ops-assigned plan);
                 // switching needs a self-service plan unless ops manages the workspace (comp tier).
-                if (!string.Equals(newPlan, company.Plan, StringComparison.OrdinalIgnoreCase)
+                if (!string.Equals(newPlan, Company.NormalizePlanKey(company.Plan), StringComparison.OrdinalIgnoreCase)
                     && Core.Entitlements.CompanyTiers.Normalize(company.Tier) != Core.Entitlements.CompanyTiers.Comp)
                     _entitlements?.EnsureSelfServicePlan(newPlan);
                 company.Plan = newPlan;
             }
-            company.Plan ??= "accounting";
+            company.Plan = Company.NormalizePlanKey(company.Plan ?? "accounting_free");
+
+            // Paid → free plan key writes PaidAccessEndedAt; free ↔ free never touches it.
+            if (Company.IsPaidPlan(previousPlan) && !Company.IsPaidPlan(company.Plan))
+                company.PaidAccessEndedAt = DateTime.UtcNow;
+
             var planModules = Company.ModulesForPlan(company.Plan);
             if (dto.ActiveModules != null && dto.ActiveModules.Count > 0)
             {
@@ -317,11 +323,18 @@ namespace Services.Administration
                     sanitized = planModules.Where(m => Company.IsRequiredModule(company.Plan, m)).ToList();
                 if (sanitized.Count == 0)
                     sanitized = new List<string> { "sales" };
-                company.ActiveModulesJson = System.Text.Json.JsonSerializer.Serialize(sanitized);
+                var disabled = planModules
+                    .Where(m => !Company.IsRequiredModule(company.Plan, m)
+                        && !sanitized.Contains(m, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                company.DisabledModulesJson = System.Text.Json.JsonSerializer.Serialize(disabled);
+                // Stop writing ActiveModulesJson (column retained for one-release fallback).
+                company.ActiveModulesJson = null;
             }
             else
             {
-                company.ActiveModulesJson = null; // Revert to plan defaults
+                company.DisabledModulesJson = "[]"; // full plan; no opt-outs
+                company.ActiveModulesJson = null;
             }
 
             _company.Update(company);
@@ -335,9 +348,14 @@ namespace Services.Administration
                 return false;
 
             var companyId = _tenantContext.CompanyId.Value;
+            if (_entitlements != null && !_entitlements.Options.LegacyModuleGate)
+            {
+                // Write-mode sugar until callers migrate to Evaluate(ModuleAccess).
+                return _entitlements.Evaluate(companyId, new Core.Entitlements.EntitlementAction.Module(moduleKey)).Allowed;
+            }
+
             var company = _company.GetById(companyId);
             if (company == null) return false;
-            // Same lifecycle-aware rule as RequireModule / Catalog / MCP (SubscriptionAccess).
             var allowed = Core.Billing.SubscriptionAccess.IsModuleAvailable(company, moduleKey);
             EntitlementEngineShadow.CompareModuleAllow(_entitlements, _logger, companyId, moduleKey, allowed);
             return allowed;
@@ -349,18 +367,34 @@ namespace Services.Administration
             {
                 new PlanDefinitionDto
                 {
-                    Key = "invoicing",
-                    Name = "Invoicing",
+                    Key = "invoicing_free",
+                    Name = "Invoicing Free",
                     Description = "Quotes, client invoices, payments, and expense bills — without full double-entry accounting.",
-                    IncludedModules = Company.ModulesForPlan("invoicing"),
+                    IncludedModules = Company.ModulesForPlan("invoicing_free"),
+                    MonthlyPrice = 0m
+                },
+                new PlanDefinitionDto
+                {
+                    Key = "invoicing_pro",
+                    Name = "Invoicing Pro",
+                    Description = "Invoicing with higher limits for growing teams.",
+                    IncludedModules = Company.ModulesForPlan("invoicing_pro"),
                     MonthlyPrice = 15m
                 },
                 new PlanDefinitionDto
                 {
-                    Key = "accounting",
-                    Name = "Accounting",
+                    Key = "accounting_free",
+                    Name = "Accounting Free",
                     Description = "Full double-entry bookkeeping, banking, and financial statements.",
-                    IncludedModules = Company.ModulesForPlan("accounting"),
+                    IncludedModules = Company.ModulesForPlan("accounting_free"),
+                    MonthlyPrice = 0m
+                },
+                new PlanDefinitionDto
+                {
+                    Key = "accounting_pro",
+                    Name = "Accounting Pro",
+                    Description = "Accounting with higher limits for growing teams.",
+                    IncludedModules = Company.ModulesForPlan("accounting_pro"),
                     MonthlyPrice = 39m
                 },
                 new PlanDefinitionDto
