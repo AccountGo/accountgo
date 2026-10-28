@@ -45,3 +45,4 @@ Attach before/after screenshots or logs demonstrating the change.
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing automated tests pass locally with my changes
 - [ ] Any dependent changes have been merged and published in downstream modules
+- [ ] I have signed the [Contributor License Agreement](https://github.com/AccountGo/accountgo/blob/main/CLA.md) (the CLA check comments on your first pull request)
