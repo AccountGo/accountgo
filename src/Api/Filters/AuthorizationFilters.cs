@@ -50,12 +50,15 @@ namespace Api.Filters
                 : null;
 
             bool allowed;
-            bool inactivePaid = false;
+            string? lapsedModule = null;
             if (company != null)
             {
                 // One load: IsModuleAvailable already applies lifecycle + owner opt-outs.
                 allowed = Array.Exists(_moduleKeys, m => SubscriptionAccess.IsModuleAvailable(company, m));
-                inactivePaid = Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company);
+                // SUBSCRIPTION_INACTIVE only when an active subscription would allow a key; opted-out or
+                // never-included modules stay MODULE_NOT_SUBSCRIBED because paying would not unlock them.
+                if (!allowed && Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company))
+                    lapsedModule = Array.Find(_moduleKeys, company.HasModule);
             }
             else
             {
@@ -65,7 +68,7 @@ namespace Api.Filters
 
             if (!allowed)
             {
-                if (inactivePaid)
+                if (lapsedModule != null)
                 {
                     var inactive = new ProblemDetails
                     {
@@ -76,7 +79,7 @@ namespace Api.Filters
                     };
                     inactive.Extensions["code"] = "SUBSCRIPTION_INACTIVE";
                     inactive.Extensions["status"] = company!.SubscriptionStatus ?? "canceled";
-                    inactive.Extensions["requiredModule"] = _moduleKeys[0];
+                    inactive.Extensions["requiredModule"] = lapsedModule;
                     inactive.Extensions["upgradeAvailable"] = true;
 
                     context.Result = new ObjectResult(inactive)
