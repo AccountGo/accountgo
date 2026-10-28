@@ -19,6 +19,21 @@ public class SubscriptionAccessTests
     }
 
     [Fact]
+    public void BlankOrWhitespaceStatus_IsTreatedAsActive()
+    {
+        Assert.False(SubscriptionAccess.IsInactive(new Company
+        {
+            Plan = "accounting_pro",
+            SubscriptionStatus = ""
+        }));
+        Assert.False(SubscriptionAccess.IsInactive(new Company
+        {
+            Plan = "accounting_pro",
+            SubscriptionStatus = "   "
+        }));
+    }
+
+    [Fact]
     public void PastDue_WithinGrace_IsNotInactive()
     {
         var company = new Company
@@ -40,6 +55,20 @@ public class SubscriptionAccessTests
             CurrentPeriodEnd = DateTime.UtcNow.AddDays(-20)
         };
         Assert.True(SubscriptionAccess.IsInactive(company));
+    }
+
+    [Fact]
+    public void PastDue_UnspecifiedPeriodEnd_IsTreatedAsUtc()
+    {
+        // Unspecified kind must not be interpreted as local (UTC+7 would shrink grace by 7h).
+        var periodEndUnspecified = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(-13).AddHours(-20), DateTimeKind.Unspecified);
+        var company = new Company
+        {
+            Plan = "accounting_pro",
+            SubscriptionStatus = "past_due",
+            CurrentPeriodEnd = periodEndUnspecified
+        };
+        Assert.False(SubscriptionAccess.IsInactive(company, utcNow: DateTime.UtcNow));
     }
 
     [Fact]
@@ -106,10 +135,26 @@ public class SubscriptionAccessTests
     }
 
     [Fact]
-    public void Integrity_QuotaDoesNotAffectModuleAvailability()
+    public void InactivePlan_DoesNotRestoreOwnerOptedOutModule()
     {
-        // Accounting integrity: module reads stay available for free-row modules even when
-        // the paid subscription has lapsed (creation quotas are a separate gate).
+        // accounting_free includes reports, but the owner turned it off while on Pro.
+        var company = new Company
+        {
+            Plan = "accounting_pro",
+            SubscriptionStatus = "canceled",
+            ActiveModulesJson = "[\"sales\",\"purchases\",\"financials\"]"
+        };
+        Assert.True(company.HasModule("sales"));
+        Assert.False(company.HasModule("reports"));
+        Assert.True(SubscriptionAccess.IsModuleAvailable(company, "sales"));
+        Assert.False(SubscriptionAccess.IsModuleAvailable(company, "reports"));
+    }
+
+    [Fact]
+    public void LapsedPaidPlan_KeepsFreeRowModulesThatRemainEnabled()
+    {
+        // Integrity: free-row modules the owner still has enabled stay available after lapse
+        // (creation quotas are a separate gate; this only covers module availability).
         var company = new Company
         {
             Plan = "accounting_pro",

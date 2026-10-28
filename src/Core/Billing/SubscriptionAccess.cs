@@ -30,7 +30,9 @@ namespace Core.Billing
                 return false;
 
             var now = utcNow ?? DateTime.UtcNow;
-            var status = (company.SubscriptionStatus ?? "active").Trim().ToLowerInvariant();
+            var status = string.IsNullOrWhiteSpace(company.SubscriptionStatus)
+                ? "active"
+                : company.SubscriptionStatus.Trim().ToLowerInvariant();
 
             if (status is "active" or "trialing")
                 return false;
@@ -41,7 +43,12 @@ namespace Core.Billing
                 if (periodEnd == null)
                     return true;
 
-                return now > periodEnd.Value.ToUniversalTime().Add(PastDueGrace);
+                // D1/SQLite returns Unspecified; treat as UTC (not local) so grace is timezone-stable.
+                var periodEndUtc = periodEnd.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(periodEnd.Value, DateTimeKind.Utc)
+                    : periodEnd.Value.ToUniversalTime();
+
+                return now > periodEndUtc.Add(PastDueGrace);
             }
 
             // canceled, unpaid, incomplete, incomplete_expired, paused, unrecognized
@@ -50,7 +57,8 @@ namespace Core.Billing
 
         /// <summary>
         /// Whether <paramref name="moduleKey"/> is available under the current subscription lifecycle.
-        /// When a paid plan is inactive, only modules from <see cref="Company.FreePlanFor"/> remain.
+        /// When a paid plan is inactive, only modules that are both on the free plan row and still
+        /// enabled on the company (owner opt-outs via <see cref="Company.HasModule"/>) remain.
         /// </summary>
         public static bool IsModuleAvailable(Company company, string moduleKey, DateTime? utcNow = null)
         {
@@ -61,7 +69,8 @@ namespace Core.Billing
             if (Company.IsPaidPlan(company.Plan) && IsInactive(company, utcNow))
             {
                 var freeModules = Company.ModulesForPlan(Company.FreePlanFor(company.Plan));
-                return freeModules.Contains(moduleKey, StringComparer.OrdinalIgnoreCase);
+                return freeModules.Contains(moduleKey, StringComparer.OrdinalIgnoreCase)
+                    && company.HasModule(moduleKey);
             }
 
             return company.HasModule(moduleKey);

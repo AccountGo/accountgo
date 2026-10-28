@@ -48,16 +48,24 @@ namespace Api.Filters
             var company = (companies != null && tenantContext.CompanyId.HasValue)
                 ? companies.GetById(tenantContext.CompanyId.Value)
                 : null;
-            // Inactive paid workspaces keep free-tier modules; deny only modules outside FreePlanFor.
-            // Comp / BillingManagedManually are never inactive (SubscriptionAccess.IsInactive).
-            if (company != null
-                && Company.IsPaidPlan(company.Plan)
-                && SubscriptionAccess.IsInactive(company))
+
+            bool allowed;
+            bool inactivePaid = false;
+            if (company != null)
             {
-                var allowedUnderFree = Array.Exists(
-                    _moduleKeys,
-                    m => SubscriptionAccess.IsModuleAvailable(company, m));
-                if (!allowedUnderFree)
+                // One load: IsModuleAvailable already applies lifecycle + owner opt-outs.
+                allowed = Array.Exists(_moduleKeys, m => SubscriptionAccess.IsModuleAvailable(company, m));
+                inactivePaid = Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company);
+            }
+            else
+            {
+                var adminService = context.HttpContext.RequestServices.GetRequiredService<IAdministrationService>();
+                allowed = Array.Exists(_moduleKeys, adminService.IsModuleEnabled);
+            }
+
+            if (!allowed)
+            {
+                if (inactivePaid)
                 {
                     var inactive = new ProblemDetails
                     {
@@ -67,7 +75,7 @@ namespace Api.Filters
                         Status = StatusCodes.Status403Forbidden
                     };
                     inactive.Extensions["code"] = "SUBSCRIPTION_INACTIVE";
-                    inactive.Extensions["status"] = company.SubscriptionStatus ?? "canceled";
+                    inactive.Extensions["status"] = company!.SubscriptionStatus ?? "canceled";
                     inactive.Extensions["requiredModule"] = _moduleKeys[0];
                     inactive.Extensions["upgradeAvailable"] = true;
 
@@ -77,12 +85,7 @@ namespace Api.Filters
                     };
                     return;
                 }
-            }
 
-            var adminService = context.HttpContext.RequestServices.GetRequiredService<IAdministrationService>();
-
-            if (!Array.Exists(_moduleKeys, adminService.IsModuleEnabled))
-            {
                 var problem = new ProblemDetails
                 {
                     Type = "https://accountgo.ph/errors/module-not-subscribed",
