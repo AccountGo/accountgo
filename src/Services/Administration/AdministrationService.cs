@@ -361,56 +361,6 @@ namespace Services.Administration
             return allowed;
         }
 
-        public List<PlanDefinitionDto> GetPlanDefinitions()
-        {
-            var plans = new List<PlanDefinitionDto>
-            {
-                new PlanDefinitionDto
-                {
-                    Key = "invoicing_free",
-                    Name = "Invoicing Free",
-                    Description = "Quotes, client invoices, payments, and expense bills — without full double-entry accounting.",
-                    IncludedModules = Company.ModulesForPlan("invoicing_free"),
-                    MonthlyPrice = 0m
-                },
-                new PlanDefinitionDto
-                {
-                    Key = "invoicing_pro",
-                    Name = "Invoicing Pro",
-                    Description = "Invoicing with higher limits for growing teams.",
-                    IncludedModules = Company.ModulesForPlan("invoicing_pro"),
-                    MonthlyPrice = 15m
-                },
-                new PlanDefinitionDto
-                {
-                    Key = "accounting_free",
-                    Name = "Accounting Free",
-                    Description = "Full double-entry bookkeeping, banking, and financial statements.",
-                    IncludedModules = Company.ModulesForPlan("accounting_free"),
-                    MonthlyPrice = 0m
-                },
-                new PlanDefinitionDto
-                {
-                    Key = "accounting_pro",
-                    Name = "Accounting Pro",
-                    Description = "Accounting with higher limits for growing teams.",
-                    IncludedModules = Company.ModulesForPlan("accounting_pro"),
-                    MonthlyPrice = 39m
-                },
-                new PlanDefinitionDto
-                {
-                    Key = "enterprise",
-                    Name = "Enterprise",
-                    Description = "Complete ERP suite with inventory management, non-profit donations, audit trails, and whitelabeling.",
-                    IncludedModules = Company.ModulesForPlan("enterprise"),
-                    MonthlyPrice = 99m
-                }
-            };
-            foreach (var plan in plans)
-                plan.RequiredModules = plan.IncludedModules.Where(m => Company.IsRequiredModule(plan.Key, m)).ToList();
-            return plans;
-        }
-
         public List<ModuleDefinitionDto> GetModuleDefinitions()
         {
             // Ordered by subscription tier: Invoicing → Accounting → Enterprise.

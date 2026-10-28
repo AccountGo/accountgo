@@ -227,10 +227,10 @@ namespace AccountGo.BackendTests
         {
             using var _ = EnableFreeTier(ownedWorkspaces: 2);
             var plans = await Json(await Send(HttpMethod.Get, "/api/Subscription/plans", scoped: false));
-            // SelfServicePlans env lists invoicing/accounting → *_free rows only (product×tier catalog).
-            Assert.Equal(
-                new[] { true, false, true, false, false },
-                plans.EnumerateArray().Select(p => p.GetProperty("selfService").GetBoolean()).ToArray());
+            // The community catalog serves one plan and does not apply SelfServicePlans to it.
+            var plan = Assert.Single(plans.EnumerateArray());
+            Assert.Equal("community", plan.GetProperty("key").GetString());
+            Assert.False(plan.GetProperty("selfService").GetBoolean());
             // Enterprise is not self-service on hosted.
             var enterprise = await Send(HttpMethod.Post, "/api/organizations", new { name = "Big Co", slug = "big-co", plan = "enterprise" }, scoped: false);
             Assert.Equal(HttpStatusCode.Forbidden, enterprise.StatusCode);

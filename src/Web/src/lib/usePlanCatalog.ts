@@ -11,7 +11,8 @@ export interface PlanCatalogEntry {
   requiredModules: ModuleKey[];
   /** False when the operator assigns this plan (e.g. Enterprise on hosted). */
   selfService: boolean;
-  monthlyPrice: number;
+  /** Null when the plan has no price; never defaulted client-side. */
+  monthlyPrice: number | null;
 }
 
 let cached: PlanCatalogEntry[] | null = null;

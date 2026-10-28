@@ -11,6 +11,7 @@ using Dto.Subscription;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
+using Services.Billing;
 
 namespace Api.Controllers
 {
@@ -19,18 +20,18 @@ namespace Api.Controllers
     public class SubscriptionController : BaseController
     {
         private readonly IAdministrationService _adminService;
-        private readonly Core.Entitlements.EntitlementsOptions _entitlements;
+        private readonly IPlanCatalog _plans;
         private readonly IBillingProvider _billing;
         private readonly ITenantContext _tenant;
 
         public SubscriptionController(
             IAdministrationService adminService,
-            Core.Entitlements.EntitlementsOptions entitlements,
+            IPlanCatalog plans,
             IBillingProvider billing,
             ITenantContext tenant)
         {
             _adminService = adminService;
-            _entitlements = entitlements;
+            _plans = plans;
             _billing = billing;
             _tenant = tenant;
         }
@@ -130,10 +131,7 @@ namespace Api.Controllers
         [HttpGet("plans")]
         public IActionResult GetPlans()
         {
-            var plans = _adminService.GetPlanDefinitions();
-            foreach (var plan in plans)
-                plan.SelfService = _entitlements.IsSelfServicePlan(plan.Key);
-            return Ok(plans);
+            return Ok(_plans.GetPlans());
         }
 
         [TenantFree]

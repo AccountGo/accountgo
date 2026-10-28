@@ -47,7 +47,6 @@ namespace Services.Administration
         TenantSubscriptionDto GetCurrentSubscription();
         TenantSubscriptionDto UpdateSubscription(UpdateSubscriptionDto dto);
         bool IsModuleEnabled(string moduleKey);
-        List<PlanDefinitionDto> GetPlanDefinitions();
         List<ModuleDefinitionDto> GetModuleDefinitions();
     }
 }
