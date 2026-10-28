@@ -174,9 +174,15 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DisabledModulesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PaidAccessEndedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Plan")
                         .HasColumnType("nvarchar(max)");
@@ -215,7 +221,7 @@ namespace Api.Data.Migrations.ApiDb
                             CompanyCode = "100",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Financial Solutions Inc.",
-                            Plan = "accounting",
+                            Plan = "accounting_free",
                             ShortName = "FSI",
                             Slug = "ph-financials",
                             SubscriptionStatus = "active"

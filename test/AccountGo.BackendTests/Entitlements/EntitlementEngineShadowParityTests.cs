@@ -6,7 +6,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using Core.Billing;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -19,8 +18,7 @@ using Xunit;
 namespace AccountGo.BackendTests.Entitlements;
 
 /// <summary>
-/// E1a parity: old gate (SubscriptionAccess + E0.5 deny-code rule) must equal Evaluate(Module).
-/// Expected-divergence list is intentionally empty — any failure is a real bug, not a documented gap.
+/// E1b property checks over the E1a axis grid. Expectations are invariants, not engine-derived oracles.
 /// </summary>
 public class EntitlementEngineShadowParityTests
 {
@@ -39,16 +37,11 @@ public class EntitlementEngineShadowParityTests
         "incomplete_expired", "paused", "weird_status", ""
     };
 
-    private static readonly string[] Modules =
-    {
-        "sales", "purchases", "financials", "reports", "inventory", "donations", "audit"
-    };
-
-    // Trimmed to two sets so the expanded axes stay under ~30s.
-    private static readonly string?[] StoredModuleSets =
+    private static readonly string?[] DisabledSets =
     {
         null,
-        "[\"sales\",\"purchases\",\"financials\"]" // owner opted out of reports on accounting family
+        "[]",
+        "[\"reports\"]"
     };
 
     private static readonly (string Label, DateTime? Value)[] PeriodEnds =
@@ -60,83 +53,79 @@ public class EntitlementEngineShadowParityTests
     };
 
     private static readonly string?[] Tiers = { null, "free", "pro", "comp" };
-
     private static readonly bool[] BillingManaged = { false, true };
 
-    public static IEnumerable<object[]> ParityCases()
+    public static IEnumerable<object[]> AxisCases()
     {
         foreach (var plan in Plans)
         foreach (var status in Statuses)
-        foreach (var module in Modules)
-        foreach (var stored in StoredModuleSets)
+        foreach (var disabled in DisabledSets)
         foreach (var (periodLabel, periodEnd) in PeriodEnds)
         foreach (var tier in Tiers)
         foreach (var billingManaged in BillingManaged)
         {
             yield return new object[]
             {
-                plan, status, module, stored ?? "", periodLabel, periodEnd!, tier ?? "", billingManaged
+                plan, status, disabled ?? "", periodLabel, periodEnd!, tier ?? "", billingManaged
             };
         }
     }
 
     [Theory]
-    [MemberData(nameof(ParityCases))]
-    public void OldGate_Equals_Evaluate(
-        string plan,
-        string status,
-        string module,
-        string storedJson,
-        string periodLabel,
-        DateTime? periodEnd,
-        string tier,
-        bool billingManagedManually)
+    [MemberData(nameof(AxisCases))]
+    public void PropertyInvariants_Hold(
+        string plan, string status, string disabledJson, string periodLabel, DateTime? periodEnd,
+        string tier, bool billingManagedManually)
     {
         _ = periodLabel;
         var company = new Company
         {
             Id = 42,
-            Name = "Parity",
+            Name = "Props",
             Plan = plan,
             SubscriptionStatus = status,
             CurrentPeriodEnd = periodEnd,
-            ActiveModulesJson = string.IsNullOrEmpty(storedJson) ? null : storedJson,
+            DisabledModulesJson = string.IsNullOrEmpty(disabledJson) ? null : disabledJson,
             Tier = string.IsNullOrEmpty(tier) ? null : tier,
             BillingManagedManually = billingManagedManually
         };
 
-        var oldAllowed = SubscriptionAccess.IsModuleAvailable(company, module, NowUtc);
-        string? oldCode = null;
-        if (!oldAllowed)
-        {
-            if (Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company, NowUtc) && company.HasModule(module))
-                oldCode = "SUBSCRIPTION_INACTIVE";
-            else
-                oldCode = "MODULE_NOT_SUBSCRIBED";
-        }
-
         var engine = CreateEngine(company, NowUtc);
-        var decision = engine.Evaluate(42, new EntitlementAction.Module(module));
+        var snapshot = engine.Get(42);
+        var storedPlanModules = Company.ModulesForPlan(Company.NormalizePlanKey(
+            Company.IsKnownPlan(plan) ? plan : "accounting_free"));
 
-        Assert.Equal(oldAllowed, decision.Allowed);
-        Assert.Equal(oldCode, decision.Code);
+        // Comp and free plans are never lifecycle-reduced.
+        var isCompOrManual = string.Equals(tier, "comp", StringComparison.OrdinalIgnoreCase) || billingManagedManually;
+        var normalized = Company.NormalizePlanKey(Company.IsKnownPlan(plan) ? plan : "accounting_free");
+        var isFree = !normalized.EndsWith("_pro", StringComparison.Ordinal) && normalized != "enterprise";
+        if (isCompOrManual || isFree)
+            Assert.Null(snapshot.Lifecycle?.ReducedBy);
+
+        // ReadOnlyModules ⊆ stored-plan modules (after owner toggles via GetActiveModules).
+        var storedActive = company.GetActiveModules();
+        Assert.All(snapshot.ReadOnlyModules, m => Assert.Contains(m, storedActive, StringComparer.OrdinalIgnoreCase));
+
+        // Modules ∩ ReadOnlyModules = ∅
+        Assert.Empty(snapshot.Modules.Intersect(snapshot.ReadOnlyModules, StringComparer.OrdinalIgnoreCase));
+
+        // Required modules are always in Modules.
+        foreach (var required in storedPlanModules.Where(m => Company.IsRequiredModule(company.Plan, m)))
+        {
+            if (storedActive.Contains(required, StringComparer.OrdinalIgnoreCase))
+                Assert.Contains(required, snapshot.Modules, StringComparer.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
     public void ShadowFailure_DoesNotChangeOldOutcome()
     {
-        var company = new Company { Id = 7, Name = "X", Plan = "accounting_pro", SubscriptionStatus = "active" };
-        var oldAllowed = SubscriptionAccess.IsModuleAvailable(company, "sales");
-        Assert.True(oldAllowed);
-
         var throwing = new Mock<IEntitlementService>();
-        throwing.SetupGet(e => e.Options).Returns(new EntitlementsOptions { EngineShadow = true });
+        throwing.SetupGet(e => e.Options).Returns(new EntitlementsOptions { EngineShadow = true, LegacyModuleGate = true });
         throwing.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
             .Throws(new InvalidOperationException("shadow boom"));
 
-        // Must not throw — old answer remains authoritative.
-        EntitlementEngineShadow.CompareModuleAllow(throwing.Object, logger: null, 7, "sales", oldAllowed);
-        Assert.True(oldAllowed);
+        EntitlementEngineShadow.CompareModuleAllow(throwing.Object, logger: null, 7, "sales", oldAllowed: true);
     }
 
     private static EntitlementService CreateEngine(Company company, DateTime utcNow)
@@ -152,10 +141,10 @@ public class EntitlementEngineShadowParityTests
         invites.Setup(r => r.Table).Returns(new List<CompanyInvitation>().AsQueryable());
         var banks = new Mock<IRepository<Bank>>();
         banks.Setup(r => r.Table).Returns(new List<Bank>().AsQueryable());
-        var tenant = new Mock<ITenantContext>();
         return new EntitlementService(
             new EntitlementsOptions { EngineShadow = false },
-            companies.Object, members.Object, invites.Object, empty.Object, banks.Object, tenant.Object,
+            companies.Object, members.Object, invites.Object, empty.Object, banks.Object,
+            new Mock<ITenantContext>().Object,
             new FixedTimeProvider(new DateTimeOffset(utcNow, TimeSpan.Zero)));
     }
 

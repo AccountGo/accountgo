@@ -39,8 +39,10 @@ namespace Api.Options
             {
                 Enabled = bool.TryParse(configuration["ENTITLEMENTS_ENABLED"], out var enabled) && enabled,
                 SupportEmail = configuration["SUPPORT_EMAIL"] ?? configuration["Email:SupportAddress"],
-                // Default on: missing or non-false keeps shadow mode (E1a).
+                // Default on: missing or non-false keeps shadow mode when LegacyModuleGate is true.
                 EngineShadow = !string.Equals(configuration["ENTITLEMENTS_ENGINE_SHADOW"], "false", StringComparison.OrdinalIgnoreCase),
+                // Default off: engine owns module gates (E1b). Set true to restore E0.5 path + shadow.
+                LegacyModuleGate = string.Equals(configuration["ENTITLEMENTS_LEGACY_MODULE_GATE"], "true", StringComparison.OrdinalIgnoreCase),
             };
 
             var plans = configuration["ENTITLEMENTS_SELF_SERVICE_PLANS"];

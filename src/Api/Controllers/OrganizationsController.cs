@@ -55,7 +55,7 @@ namespace Api.Controllers
             public string Name { get; set; } = "";
             public string ShortName { get; set; }
             public string Slug { get; set; }
-            public string Plan { get; set; } = "accounting";
+            public string Plan { get; set; } = "accounting_free";
             public string Currency { get; set; } = "USD";
             public string LegalName { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public ReportingFramework? ReportingFramework { get; set; }
@@ -98,7 +98,7 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Company Name Required", detail: "Company name is required.");
             var slug = WorkspaceService.NormalizeSlug(string.IsNullOrWhiteSpace(request.Slug) ? request.Name : request.Slug);
             var currency = (request.Currency ?? "USD").Trim().ToUpperInvariant();
-            var plan = (request.Plan ?? "accounting").Trim().ToLowerInvariant();
+            var plan = Company.NormalizePlanKey(request.Plan ?? "accounting_free");
             if (slug.Length == 0 || slug.Length > 100 || !System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$") ||
                 !Company.IsKnownPlan(plan))
                 return Problem(statusCode: 400, title: "Invalid workspace settings");

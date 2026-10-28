@@ -5,6 +5,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -15,13 +17,13 @@ using Microsoft.Extensions.Logging;
 namespace Services.Entitlements
 {
     /// <summary>
-    /// Configuration-driven entitlements. Limits apply only when <see cref="EntitlementsOptions.Enabled"/> and the
-    /// workspace is on the free tier; everything else (self-host, pro, comp) is unlimited.
-    /// Module <see cref="Evaluate"/> runs pipeline steps 1–6 (no usage counts).
+    /// Configuration-driven entitlements. Quotas apply when Enabled and the effective plan is free
+    /// (or Tier=comp overrides to unlimited). Module <see cref="Evaluate"/> runs pipeline steps 1–6.
     /// </summary>
     public class EntitlementService : IEntitlementService
     {
         private static readonly MeteredResource[] AllResources = (MeteredResource[])Enum.GetValues(typeof(MeteredResource));
+        private static readonly TimeSpan PastDueGrace = TimeSpan.FromDays(14);
 
         private readonly EntitlementsOptions _options;
         private readonly IRepository<Company> _companies;
@@ -32,12 +34,10 @@ namespace Services.Entitlements
         private readonly ITenantContext _tenant;
         private readonly TimeProvider _time;
         private readonly ILogger<EntitlementService>? _logger;
-        // Assumption: Plan / ActiveModulesJson / status / tier / billing flags are immutable for the
+        // Assumption: Plan / modules / status / tier / billing flags are immutable for the
         // request after the first ResolvePolicy; writers must ClearPolicyMemo so a later Evaluate sees fresh state.
         private readonly Dictionary<int, PolicyMemo> _policyMemo = new();
         private int _bypassDepth;
-
-        private static readonly TimeSpan PastDueGrace = TimeSpan.FromDays(14);
 
         public EntitlementService(
             EntitlementsOptions options,
@@ -65,25 +65,39 @@ namespace Services.Entitlements
 
         public EntitlementSnapshot Get(int companyId)
         {
-            var company = LoadCompany(companyId);
-            var limited = IsLimited(company);
+            var policy = ResolvePolicy(companyId);
+            var limited = policy.Limited;
             var usage = AllResources
-                .Where(r => r != MeteredResource.OwnedWorkspaces) // per user, not per workspace
-                .Select(r => new ResourceUsage(r, limited ? LimitOf(r) : null, CountUsed(companyId, r), MeteredResources.IsMonthly(r)))
+                .Where(r => r != MeteredResource.OwnedWorkspaces)
+                .Select(r =>
+                {
+                    var limit = limited ? LimitOf(r) : null;
+                    var used = CountUsed(companyId, r, policy);
+                    return new ResourceUsage(r, limit, used, MeteredResources.IsMonthly(r),
+                        OverLimit: limit != null && used > limit.Value);
+                })
                 .ToList();
-            var selfService = _options.Enabled && _options.SelfServicePlans.Count > 0
-                ? _options.SelfServicePlans.Where(Company.IsKnownPlan).Select(p => p.ToLowerInvariant()).ToList()
-                : Company.KnownPlans.ToList();
+
+            var selfService = ResolveSelfServicePlans();
+            var transitions = Company.KnownPlans
+                .Where(p => Company.IsAllowedSelfServicePlanChange(policy.StoredPlan, p))
+                .ToList();
 
             return new EntitlementSnapshot(
                 _options.Enabled,
-                company.Plan ?? "accounting",
-                CompanyTiers.Normalize(company.Tier),
+                policy.StoredPlan,
+                policy.Tier,
                 limited,
-                company.GetActiveModules(),
+                policy.Modules.ToList(),
                 selfService,
                 usage,
-                _options.SupportEmail);
+                _options.SupportEmail,
+                Features: null,
+                EffectivePlan: policy.EffectivePlan,
+                ReadOnlyModules: policy.ReadOnlyModules.ToList(),
+                Lifecycle: policy.Lifecycle,
+                AllowedTransitions: transitions,
+                Version: policy.Version);
         }
 
         public EntitlementDecision Evaluate(int companyId, EntitlementAction action)
@@ -91,7 +105,7 @@ namespace Services.Entitlements
             ArgumentNullException.ThrowIfNull(action);
             return action switch
             {
-                EntitlementAction.Module module => EvaluateModule(companyId, module.AnyOf),
+                EntitlementAction.Module module => EvaluateModule(companyId, module.AnyOf, module.Access),
                 _ => throw new NotSupportedException($"Entitlement action '{action.GetType().Name}' is not implemented until a later phase.")
             };
         }
@@ -103,17 +117,19 @@ namespace Services.Entitlements
         {
             if (!_options.Enabled || _bypassDepth > 0 || resource == MeteredResource.OwnedWorkspaces)
                 return;
-            var limit = LimitOf(resource);
-            if (limit == null || !IsLimited(LoadCompany(companyId)))
+            var policy = ResolvePolicy(companyId);
+            if (!policy.Limited)
                 return;
-            var used = CountUsed(companyId, resource);
+            var limit = LimitOf(resource);
+            if (limit == null)
+                return;
+            var used = CountUsed(companyId, resource, policy);
             if (used + count > limit.Value)
                 throw new QuotaExceededException(resource, limit.Value, used);
         }
 
         public void Record(MeteredResource resource, int? entityId)
         {
-            // Self-hosted builds keep no usage history; counting starts when limits are turned on.
             if (!_options.Enabled || !MeteredResources.IsMonthly(resource))
                 return;
             _usage.Insert(new EntitlementUsage
@@ -132,9 +148,8 @@ namespace Services.Entitlements
             if (!_options.FreeLimits.TryGetValue(MeteredResource.OwnedWorkspaces, out var limit))
                 return;
 
-            // Owning a paid or comped workspace lifts the per-user limit.
             var owned = OwnedWorkspaces(userId);
-            if (owned.Any(c => !IsLimited(c)))
+            if (owned.Any(c => !IsCompanyLimited(c)))
                 return;
             if (owned.Count + 1 > limit)
                 throw new QuotaExceededException(MeteredResource.OwnedWorkspaces, limit, owned.Count);
@@ -152,7 +167,20 @@ namespace Services.Entitlements
             return new Releaser(() => _bypassDepth--);
         }
 
-        private EntitlementDecision EvaluateModule(int companyId, IReadOnlyList<string> anyOf)
+        public void ClearPolicyMemo(int companyId) => _policyMemo.Remove(companyId);
+
+        public bool TryGetResolvedPolicyVersion(int companyId, out string version)
+        {
+            if (_policyMemo.TryGetValue(companyId, out var memo))
+            {
+                version = memo.Version;
+                return true;
+            }
+            version = "";
+            return false;
+        }
+
+        private EntitlementDecision EvaluateModule(int companyId, IReadOnlyList<string> anyOf, ModuleAccess access)
         {
             var keys = (anyOf ?? Array.Empty<string>())
                 .Where(k => !string.IsNullOrWhiteSpace(k))
@@ -168,18 +196,35 @@ namespace Services.Entitlements
             }
 
             var policy = ResolvePolicy(companyId);
-            var allowedKey = keys.FirstOrDefault(k => policy.IsModuleAvailable(k));
-            if (allowedKey != null)
+
+            // Fully available (write or read).
+            var fullKey = keys.FirstOrDefault(k => policy.IsModuleAvailable(k));
+            if (fullKey != null)
             {
                 return new EntitlementDecision(
                     Allowed: true,
                     Code: null,
                     Detail: null,
-                    RequiredModule: allowedKey);
+                    RequiredModule: fullKey,
+                    SubscriptionStatus: policy.Lifecycle.Status);
             }
 
-            // SUBSCRIPTION_INACTIVE only when the module is under the stored plan (incl. owner toggles)
-            // but not under the lifecycle-reduced effective set — same rule as E0.5 RequireModule.
+            // Read may use a read-only (lapsed paid) module.
+            if (access == ModuleAccess.Read)
+            {
+                var readOnlyKey = keys.FirstOrDefault(k => policy.IsReadOnlyModule(k));
+                if (readOnlyKey != null)
+                {
+                    return new EntitlementDecision(
+                        Allowed: true,
+                        Code: null,
+                        Detail: null,
+                        RequiredModule: readOnlyKey,
+                        SubscriptionStatus: policy.Lifecycle.Status);
+                }
+            }
+
+            // Write (or Read with no read-only hit): SUBSCRIPTION_INACTIVE when under stored plan.
             var lapsedKey = keys.FirstOrDefault(k =>
                 policy.HasModuleUnderStoredPlan(k) && !policy.IsModuleAvailable(k));
             if (lapsedKey != null)
@@ -189,7 +234,8 @@ namespace Services.Entitlements
                     Code: "SUBSCRIPTION_INACTIVE",
                     Detail: "This workspace's subscription is inactive. Update billing to restore paid modules.",
                     RequiredModule: lapsedKey,
-                    UpgradeAvailable: true);
+                    UpgradeAvailable: true,
+                    SubscriptionStatus: policy.Lifecycle.Status);
             }
 
             return new EntitlementDecision(
@@ -199,64 +245,78 @@ namespace Services.Entitlements
                     ? $"The '{keys[0]}' module is not included in this organization's active plan."
                     : $"None of the '{string.Join("', '", keys)}' modules is included in this organization's active plan.",
                 RequiredModule: keys[0],
-                UpgradeAvailable: true);
+                UpgradeAvailable: true,
+                SubscriptionStatus: policy.Lifecycle.Status);
         }
 
-        public void ClearPolicyMemo(int companyId) => _policyMemo.Remove(companyId);
-
-        /// <summary>Pipeline steps 1–6; memoized per request (scoped service) by companyId.</summary>
         private PolicyMemo ResolvePolicy(int companyId)
         {
             if (_policyMemo.TryGetValue(companyId, out var cached))
                 return cached;
 
-            // 1. Load
             var company = LoadCompany(companyId);
-
-            // 2. Normalize plan key (unknown → default free row + error log)
             var storedPlan = NormalizeStoredPlan(companyId, company.Plan);
-
-            // 3. Lifecycle → effective plan (§6.2 table a–h; independent of SubscriptionAccess)
             var now = _time.GetUtcNow().UtcDateTime;
-            var effectivePlan = ResolveEffectivePlan(company, storedPlan, now);
-
-            // 4. Catalog lookup for effective plan
+            var (effectivePlan, graceEndsAt, reducedBy) = ResolveEffectivePlan(company, storedPlan, now);
             var effectiveCatalog = Company.ModulesForPlan(effectivePlan);
-
-            // 5. Allow-list relative to the *stored* plan (same as Company.GetActiveModules today).
-            // TODO(E1b): migrate to DisabledModulesJson = ModulesForPlan(Plan) − stored at migration time.
+            // Step 5: GetActiveModules reads DisabledModulesJson (with ActiveModulesJson fallback until E5).
             var storedActive = company.GetActiveModules();
-
-            // 6. Fold add-ons — no-op until E4 (CompanyAddOn); leave named seam.
             FoldAddOnsNoOp();
 
-            var memo = new PolicyMemo(storedPlan, effectivePlan, storedActive, effectiveCatalog);
+            var modules = storedActive
+                .Where(m => effectiveCatalog.Contains(m, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            var readOnly = string.Equals(storedPlan, effectivePlan, StringComparison.Ordinal)
+                ? new List<string>()
+                : storedActive
+                    .Where(m => !modules.Contains(m, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+
+            var status = string.IsNullOrWhiteSpace(company.SubscriptionStatus)
+                ? "active"
+                : company.SubscriptionStatus.Trim().ToLowerInvariant();
+            var periodEnd = company.CurrentPeriodEnd ?? company.SubscriptionValidUntil;
+            var tier = CompanyTiers.Derive(company.Tier, effectivePlan);
+            var limited = _options.Enabled
+                && !string.Equals(tier, CompanyTiers.Comp, StringComparison.Ordinal)
+                && !IsPaidStoredPlan(effectivePlan);
+
+            var limitsFingerprint = string.Join(',',
+                AllResources.Select(r => $"{MeteredResources.Key(r)}={(limited ? LimitOf(r)?.ToString() ?? "-" : "-")}"));
+            var version = HashPolicy(effectivePlan, modules, readOnly, features: Array.Empty<string>(), limitsFingerprint);
+
+            var lifecycle = new EntitlementLifecycle(
+                Status: status,
+                GraceEndsAt: graceEndsAt,
+                CancelAtPeriodEnd: company.CancelAtPeriodEnd,
+                PeriodEnd: periodEnd,
+                ReducedBy: reducedBy);
+
+            var memo = new PolicyMemo(
+                company, storedPlan, effectivePlan, tier, limited, modules, readOnly, lifecycle, version,
+                paidAccessEndedAt: company.PaidAccessEndedAt);
             _policyMemo[companyId] = memo;
             return memo;
         }
 
-        /// <summary>Spec §6.2 step 3 — ordered a–h; first match wins. Paid detection uses the step-2 key.</summary>
-        private string ResolveEffectivePlan(Company company, string storedPlan, DateTime nowUtc)
+        private (string EffectivePlan, DateTime? GraceEndsAt, string? ReducedBy) ResolveEffectivePlan(
+            Company company, string storedPlan, DateTime nowUtc)
         {
-            // a) Tier = comp or BillingManagedManually → stored plan (ignore provider status)
             if (string.Equals(CompanyTiers.Normalize(company.Tier), CompanyTiers.Comp, StringComparison.Ordinal)
                 || company.BillingManagedManually)
-                return storedPlan;
+                return (storedPlan, null, null);
 
-            // b) Stored plan is free → stored plan
             if (!IsPaidStoredPlan(storedPlan))
-                return storedPlan;
+                return (storedPlan, null, null);
 
             // §6.2 row c (amended): null / empty / whitespace status normalizes to active.
             var status = string.IsNullOrWhiteSpace(company.SubscriptionStatus)
                 ? "active"
                 : company.SubscriptionStatus.Trim().ToLowerInvariant();
 
-            // c) active / trialing
             if (status is "active" or "trialing")
-                return storedPlan;
+                return (storedPlan, null, null);
 
-            // d/e) past_due — grace inclusive at periodEnd + 14d
             if (status == "past_due")
             {
                 var periodEnd = company.CurrentPeriodEnd ?? company.SubscriptionValidUntil;
@@ -265,37 +325,32 @@ namespace Services.Entitlements
                     var periodEndUtc = periodEnd.Value.Kind == DateTimeKind.Unspecified
                         ? DateTime.SpecifyKind(periodEnd.Value, DateTimeKind.Utc)
                         : periodEnd.Value.ToUniversalTime();
-                    if (nowUtc <= periodEndUtc.Add(PastDueGrace))
-                        return storedPlan; // d
+                    var graceEnds = periodEndUtc.Add(PastDueGrace);
+                    if (nowUtc <= graceEnds)
+                        return (storedPlan, graceEnds, null);
                 }
-                return Company.FreePlanFor(storedPlan); // e
+                return (Company.FreePlanFor(storedPlan), null, "lifecycle");
             }
 
-            // f) canceled / unpaid / incomplete_expired
-            if (status is "canceled" or "unpaid" or "incomplete_expired")
-                return Company.FreePlanFor(storedPlan);
+            if (status is "canceled" or "unpaid" or "incomplete_expired" or "incomplete")
+                return (Company.FreePlanFor(storedPlan), null, "lifecycle");
 
-            // g) incomplete (first payment never succeeded)
-            if (status == "incomplete")
-                return Company.FreePlanFor(storedPlan);
-
-            // h) paused or any non-empty unrecognized status → free + error log
+            // h) paused or any non-empty unrecognized status
             EntitlementEngineShadow.LogErrorOnce(
                 _logger,
                 $"unrecognized-status|{company.Id}|{status}",
                 "Unrecognized subscription status '{Status}' for company {CompanyId} — treating as free-plan entitlements",
                 status, company.Id);
-            return Company.FreePlanFor(storedPlan);
+            return (Company.FreePlanFor(storedPlan), null, "lifecycle");
         }
 
-        /// <summary>Paid detection from the step-2 normalized key (not <see cref="Company.IsPaidPlan"/>).</summary>
         private static bool IsPaidStoredPlan(string normalizedStoredPlan) =>
             normalizedStoredPlan is "enterprise"
             || normalizedStoredPlan.EndsWith("_pro", StringComparison.Ordinal);
 
         private string NormalizeStoredPlan(int companyId, string? plan)
         {
-            var key = Company.NormalizePlanKey(string.IsNullOrWhiteSpace(plan) ? "accounting" : plan);
+            var key = Company.NormalizePlanKey(string.IsNullOrWhiteSpace(plan) ? "accounting_free" : plan);
             if (Company.IsKnownPlan(key))
                 return key;
 
@@ -307,29 +362,64 @@ namespace Services.Entitlements
             return "accounting_free";
         }
 
-        /// <summary>Step 6 seam: add-on quota deltas land in E4.</summary>
         private static void FoldAddOnsNoOp() { }
+
+        private static string HashPolicy(
+            string effectivePlan,
+            IReadOnlyList<string> modules,
+            IReadOnlyList<string> readOnly,
+            IReadOnlyList<string> features,
+            string limitsFingerprint)
+        {
+            var payload = string.Join('|',
+                effectivePlan,
+                string.Join(',', modules.OrderBy(m => m, StringComparer.Ordinal)),
+                string.Join(',', readOnly.OrderBy(m => m, StringComparer.Ordinal)),
+                string.Join(',', features.OrderBy(f => f, StringComparer.Ordinal)),
+                limitsFingerprint);
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+            return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
+        }
+
+        private List<string> ResolveSelfServicePlans()
+        {
+            if (_options.Enabled && _options.SelfServicePlans.Count > 0)
+            {
+                return _options.SelfServicePlans
+                    .Where(Company.IsKnownPlan)
+                    .Select(Company.NormalizePlanKey)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+            return Company.KnownPlans.ToList();
+        }
 
         private Company LoadCompany(int companyId) =>
             _companies.Table.FirstOrDefault(c => c.Id == companyId)
             ?? throw new TenantEntityNotFoundException(nameof(Company), companyId);
 
-        private bool IsLimited(Company company) =>
-            _options.Enabled && CompanyTiers.Normalize(company.Tier) == CompanyTiers.Free;
+        private bool IsCompanyLimited(Company company)
+        {
+            if (!_options.Enabled) return false;
+            if (string.Equals(CompanyTiers.Normalize(company.Tier), CompanyTiers.Comp, StringComparison.Ordinal))
+                return false;
+            var plan = Company.NormalizePlanKey(company.Plan ?? "accounting_free");
+            return !IsPaidStoredPlan(plan);
+        }
 
         private int? LimitOf(MeteredResource resource) =>
             _options.FreeLimits.TryGetValue(resource, out var limit) ? limit : null;
 
-        private int CountUsed(int companyId, MeteredResource resource)
+        private int CountUsed(int companyId, MeteredResource resource, PolicyMemo policy)
         {
-            var now = DateTime.UtcNow;
+            var now = _time.GetUtcNow().UtcDateTime;
             switch (resource)
             {
                 case MeteredResource.SalesDocuments:
                 case MeteredResource.Bills:
                     var key = MeteredResources.Key(resource);
-                    var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-                    return _usage.Table.Count(u => u.CompanyId == companyId && u.Resource == key && u.OccurredAt >= monthStart);
+                    var windowStart = MonthlyMeterWindowStart(now, policy);
+                    return _usage.Table.Count(u => u.CompanyId == companyId && u.Resource == key && u.OccurredAt >= windowStart);
                 case MeteredResource.Seats:
                     var members = _members.Table.Count(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active);
                     var pending = _invitations.Table.Count(i => i.CompanyId == companyId && i.AcceptedAt == null
@@ -342,45 +432,95 @@ namespace Services.Entitlements
             }
         }
 
+        /// <summary>§6.7 monthly meter window: max(monthStart, paidAccessEndedAt) when ended in current month.</summary>
+        private static DateTime MonthlyMeterWindowStart(DateTime nowUtc, PolicyMemo policy)
+        {
+            var monthStart = new DateTime(nowUtc.Year, nowUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var ended = DerivePaidAccessEndedAt(policy, nowUtc);
+            if (ended == null)
+                return monthStart;
+            var endedUtc = ended.Value.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(ended.Value, DateTimeKind.Utc)
+                : ended.Value.ToUniversalTime();
+            if (endedUtc.Year == monthStart.Year && endedUtc.Month == monthStart.Month && endedUtc > monthStart)
+                return endedUtc;
+            return monthStart;
+        }
+
+        private static DateTime? DerivePaidAccessEndedAt(PolicyMemo policy, DateTime nowUtc)
+        {
+            if (policy.Lifecycle.ReducedBy == null)
+                return null;
+
+            var status = policy.Lifecycle.Status ?? "";
+            // incomplete never had paid access — calendar month only.
+            if (status == "incomplete")
+                return null;
+
+            if (status == "past_due" && policy.Lifecycle.PeriodEnd != null)
+            {
+                var periodEnd = policy.Lifecycle.PeriodEnd.Value;
+                var periodEndUtc = periodEnd.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(periodEnd, DateTimeKind.Utc)
+                    : periodEnd.ToUniversalTime();
+                return periodEndUtc.Add(PastDueGrace);
+            }
+
+            // canceled / unpaid / incomplete_expired / paused / unknown → stored ?? periodEnd
+            return policy.PaidAccessEndedAt ?? policy.Lifecycle.PeriodEnd;
+        }
+
         private List<Company> OwnedWorkspaces(string userId)
         {
             var companyIds = _members.Table
                 .Where(m => m.UserId == userId && m.Role == CompanyMemberRole.Owner && m.Status == CompanyMemberStatus.Active)
                 .Select(m => m.CompanyId)
                 .ToList();
-            // Company's query filter hides deleted workspaces.
             return _companies.Table.Where(c => companyIds.Contains(c.Id)).ToList();
         }
 
         private sealed class PolicyMemo
         {
-            private readonly HashSet<string> _storedActive;
-            private readonly HashSet<string> _effectiveModules;
-
             public PolicyMemo(
+                Company company,
                 string storedPlan,
                 string effectivePlan,
-                IReadOnlyList<string> storedActive,
-                IReadOnlyList<string> effectiveCatalog)
+                string tier,
+                bool limited,
+                IReadOnlyList<string> modules,
+                IReadOnlyList<string> readOnlyModules,
+                EntitlementLifecycle lifecycle,
+                string version,
+                DateTime? paidAccessEndedAt)
             {
+                Company = company;
                 StoredPlan = storedPlan;
                 EffectivePlan = effectivePlan;
-                _storedActive = new HashSet<string>(storedActive, StringComparer.OrdinalIgnoreCase);
-                // Steps 4∩5: modules present after catalog lookup for the effective plan and the
-                // stored allow-list (GetActiveModules). Independent of SubscriptionAccess.IsModuleAvailable.
-                _effectiveModules = new HashSet<string>(
-                    storedActive.Where(m => effectiveCatalog.Contains(m, StringComparer.OrdinalIgnoreCase)),
-                    StringComparer.OrdinalIgnoreCase);
+                Tier = tier;
+                Limited = limited;
+                Modules = new HashSet<string>(modules, StringComparer.OrdinalIgnoreCase);
+                ReadOnlyModules = new HashSet<string>(readOnlyModules, StringComparer.OrdinalIgnoreCase);
+                StoredActive = new HashSet<string>(company.GetActiveModules(), StringComparer.OrdinalIgnoreCase);
+                Lifecycle = lifecycle;
+                Version = version;
+                PaidAccessEndedAt = paidAccessEndedAt;
             }
 
+            public Company Company { get; }
             public string StoredPlan { get; }
             public string EffectivePlan { get; }
+            public string Tier { get; }
+            public bool Limited { get; }
+            public HashSet<string> Modules { get; }
+            public HashSet<string> ReadOnlyModules { get; }
+            public HashSet<string> StoredActive { get; }
+            public EntitlementLifecycle Lifecycle { get; }
+            public string Version { get; }
+            public DateTime? PaidAccessEndedAt { get; }
 
-            public bool HasModuleUnderStoredPlan(string moduleKey) =>
-                _storedActive.Contains(moduleKey);
-
-            public bool IsModuleAvailable(string moduleKey) =>
-                _effectiveModules.Contains(moduleKey);
+            public bool HasModuleUnderStoredPlan(string moduleKey) => StoredActive.Contains(moduleKey);
+            public bool IsModuleAvailable(string moduleKey) => Modules.Contains(moduleKey);
+            public bool IsReadOnlyModule(string moduleKey) => ReadOnlyModules.Contains(moduleKey);
         }
 
         private sealed class Releaser : IDisposable

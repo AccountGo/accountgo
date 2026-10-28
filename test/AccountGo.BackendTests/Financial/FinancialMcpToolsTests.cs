@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Api.Mcp.Models;
 using Api.Mcp.Tools;
 using Core.Domain;
+using Core.Entitlements;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Tenancy;
@@ -23,14 +24,18 @@ namespace AccountGo.BackendTests.Financial
     {
         private readonly Mock<IFinancialService> _mockFinancial = new();
         private readonly Mock<IAdministrationService> _mockAdmin = new();
+        private readonly Mock<IEntitlementService> _mockEntitlements = new();
         private readonly Mock<ITenantContext> _mockTenant = new();
 
         public FinancialMcpToolsTests()
         {
             _mockTenant.Setup(t => t.IsResolved).Returns(true);
             _mockTenant.Setup(t => t.CompanyId).Returns(1);
+            _mockTenant.Setup(t => t.RequireCompanyId()).Returns(1);
             _mockTenant.Setup(t => t.CompanySlug).Returns("ph-financials");
             _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Owner);
+            _mockEntitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions());
+            AllowModules();
 
             _mockAdmin.Setup(a => a.IsModuleEnabled("financials")).Returns(true);
             _mockAdmin.Setup(a => a.IsModuleEnabled("reports")).Returns(true);
@@ -45,6 +50,18 @@ namespace AccountGo.BackendTests.Financial
             });
         }
 
+
+        private void AllowModules(bool allow = true)
+        {
+            _mockEntitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
+                .Returns(allow
+                    ? new EntitlementDecision(true, null, null, RequiredModule: "financials")
+                    : new EntitlementDecision(false, "MODULE_NOT_SUBSCRIBED", "denied", RequiredModule: "financials"));
+        }
+
+        private FinancialMcpTools CreateTools() =>
+            new(_mockFinancial.Object, _mockAdmin.Object, _mockEntitlements.Object, _mockTenant.Object);
+
         #region Phase 1: Chart of Accounts Tests
 
         [Fact]
@@ -53,7 +70,7 @@ namespace AccountGo.BackendTests.Financial
             _mockTenant.Setup(t => t.IsResolved).Returns(false);
             _mockTenant.Setup(t => t.CompanyId).Returns((int?)null);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 tools.GetChartOfAccounts());
@@ -64,24 +81,23 @@ namespace AccountGo.BackendTests.Financial
         [Fact]
         public async Task GetChartOfAccounts_ReturnsPlanRestrictedWhenSubscriptionModuleDisabled()
         {
-            _mockAdmin.Setup(a => a.IsModuleEnabled("financials")).Returns(false);
-            _mockAdmin.Setup(a => a.IsModuleEnabled("reports")).Returns(false);
+            AllowModules(false);
             _mockAdmin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto
             {
                 CompanyId = 1,
                 Slug = "ph-financials",
-                Plan = "invoicing",
+                Plan = "invoicing_free",
                 ActiveModules = new List<string> { "sales", "purchases" }
             });
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetChartOfAccounts();
 
             Assert.Equal(FinancialMcpStatus.PlanRestricted, response.Status);
             Assert.Contains("Invoicing", response.Message);
             Assert.Contains("Settings > Subscription", response.Message);
-            Assert.Equal("accounting", response.UpgradePlanHint);
+            Assert.Equal("accounting_free", response.UpgradePlanHint);
             Assert.Equal(new[] { "financials", "reports" }, response.RequiredModules);
             Assert.Empty(response.Accounts);
             Assert.Equal(0, response.TotalAccounts);
@@ -91,8 +107,7 @@ namespace AccountGo.BackendTests.Financial
         [Fact]
         public async Task GetChartOfAccounts_ReturnsPlanRestrictedWhenAccountingPlanModulesDisabled()
         {
-            _mockAdmin.Setup(a => a.IsModuleEnabled("financials")).Returns(false);
-            _mockAdmin.Setup(a => a.IsModuleEnabled("reports")).Returns(false);
+            AllowModules(false);
             _mockAdmin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto
             {
                 CompanyId = 1,
@@ -101,7 +116,7 @@ namespace AccountGo.BackendTests.Financial
                 ActiveModules = new List<string> { "sales", "purchases" }
             });
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetChartOfAccounts();
 
@@ -151,7 +166,7 @@ namespace AccountGo.BackendTests.Financial
 
             _mockFinancial.Setup(s => s.GetAccounts()).Returns(accounts);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var result = await tools.GetChartOfAccounts();
 
@@ -189,7 +204,7 @@ namespace AccountGo.BackendTests.Financial
 
             _mockFinancial.Setup(s => s.GetAccounts()).Returns(accounts);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var filtered = await tools.GetChartOfAccounts(filter: "Petty");
 
@@ -215,7 +230,7 @@ namespace AccountGo.BackendTests.Financial
 
             _mockFinancial.Setup(s => s.GetAccounts()).Returns(accounts);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var filtered = await tools.GetChartOfAccounts(accountClass: "Expense");
 
@@ -256,7 +271,7 @@ namespace AccountGo.BackendTests.Financial
 
             _mockFinancial.Setup(s => s.GetAccounts()).Returns(new List<Core.Domain.Financials.Account> { accountWithBalance, accountZeroBalance });
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var result = await tools.GetChartOfAccounts(includeZeroBalances: false);
 
@@ -285,7 +300,7 @@ namespace AccountGo.BackendTests.Financial
 
             _mockFinancial.Setup(s => s.GetAccounts()).Returns(new List<Core.Domain.Financials.Account> { accountWithoutClass });
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var result = await tools.GetChartOfAccounts(includeZeroBalances: false);
 
@@ -311,7 +326,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.TrialBalance(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
                 .Returns(tbItems);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetTrialBalance(fromDate: "2026-01-01", toDate: "2026-12-31", accountingBasis: "Accrual");
 
@@ -330,7 +345,7 @@ namespace AccountGo.BackendTests.Financial
             _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
             _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>());
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetTrialBalance();
 
@@ -351,7 +366,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.TrialBalance(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), AccountingBasis.Accrual))
                 .Returns(new List<Services.Financial.TrialBalance>());
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetTrialBalance();
 
@@ -372,7 +387,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.BalanceSheet(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
                 .Returns(bsItems);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetBalanceSheet(asOfDate: "2026-12-31");
 
@@ -398,7 +413,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.IncomeStatement(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
                 .Returns(incomeItems);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetIncomeStatement(fromDate: "2026-01-01", toDate: "2026-06-30");
 
@@ -438,7 +453,7 @@ namespace AccountGo.BackendTests.Financial
                 10, 20))
                 .Returns(page);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetGeneralLedgerTransactions(skip: 10, take: 20);
 
@@ -453,7 +468,7 @@ namespace AccountGo.BackendTests.Financial
         [Fact]
         public async Task DateValidation_ThrowsWhenStartAfterEnd()
         {
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
                 tools.GetTrialBalance(fromDate: "2026-12-31", toDate: "2026-01-01"));
@@ -464,7 +479,7 @@ namespace AccountGo.BackendTests.Financial
         [Fact]
         public async Task GetGeneralLedgerTransactions_ThrowsOnInvalidTake()
         {
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
                 tools.GetGeneralLedgerTransactions(take: 501));
@@ -478,7 +493,7 @@ namespace AccountGo.BackendTests.Financial
             _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
             _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string> { SystemPermissions.ReportsView });
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetGeneralLedgerTransactions();
 
@@ -507,7 +522,7 @@ namespace AccountGo.BackendTests.Financial
                 })
                 .Returns(new List<Services.Financial.TrialBalance>());
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             await tools.GetTrialBalance(fromDate: "2026-01-01", toDate: "2026-01-01");
 
@@ -518,7 +533,7 @@ namespace AccountGo.BackendTests.Financial
         [Fact]
         public async Task GetTrialBalance_ThrowsOnUndefinedNumericAccountingBasis()
         {
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
                 tools.GetTrialBalance(accountingBasis: "999"));
@@ -531,7 +546,7 @@ namespace AccountGo.BackendTests.Financial
         [InlineData("Manual")]
         public async Task GetGeneralLedgerTransactions_ThrowsOnInvalidOrNumericDocumentType_WithHelpfulMessage(string invalidDocType)
         {
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
                 tools.GetGeneralLedgerTransactions(documentType: invalidDocType));
@@ -561,7 +576,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.IncomeStatement(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
                 .Returns(incomeItems);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var bsResponse = await tools.GetBalanceSheet(asOfDate: "2026-12-31", includeZeroBalances: false);
             var isResponse = await tools.GetIncomeStatement(fromDate: "2026-01-01", toDate: "2026-12-31", includeZeroBalances: false);
@@ -606,7 +621,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.CashFlow(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
                 .Returns(cfStatement);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetCashFlow(fromDate: "2026-01-01", toDate: "2026-12-31");
 
@@ -629,7 +644,7 @@ namespace AccountGo.BackendTests.Financial
         {
             _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
             _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>());
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetCashFlow();
 
@@ -659,7 +674,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.CashFlow(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
                 .Returns(cfStatement);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetCashFlow(includeZeroBalances: false);
 
@@ -683,7 +698,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.CashFlow(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Cash))
                 .Returns(cfStatement);
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var response = await tools.GetCashFlow(accountingBasis: "Cash");
 
@@ -698,7 +713,7 @@ namespace AccountGo.BackendTests.Financial
         [Fact]
         public async Task GetCashFlow_ThrowsOnUndefinedNumericAccountingBasis()
         {
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
                 tools.GetCashFlow(accountingBasis: "999"));
@@ -714,7 +729,7 @@ namespace AccountGo.BackendTests.Financial
                 .Callback<DateTime?, DateTime?, Core.Domain.AccountingBasis>((f, t, b) => capturedTo = t)
                 .Returns(new Services.Financial.CashFlowStatement());
 
-            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+            var tools = CreateTools();
 
             await tools.GetCashFlow(fromDate: "2026-01-01", toDate: "2026-01-01");
 

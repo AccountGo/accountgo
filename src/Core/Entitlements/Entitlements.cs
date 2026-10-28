@@ -34,12 +34,23 @@ namespace Core.Entitlements
 
     public static class CompanyTiers
     {
-        public const string Free = "free";   // also what a null Tier means
-        public const string Pro = "pro";     // paid (future): no limits
-        public const string Comp = "comp";   // managed manually by ops: no limits, any plan
+        public const string Free = "free";   // derived from a free plan key
+        public const string Pro = "pro";     // derived from a paid plan key
+        public const string Comp = "comp";   // ops override on Company.Tier
 
         public static string Normalize(string? tier) =>
             string.IsNullOrWhiteSpace(tier) ? Free : tier.Trim().ToLowerInvariant();
+
+        /// <summary>Derive the API tier from effective plan, honouring an explicit <c>comp</c> override.</summary>
+        public static string Derive(string? companyTier, string effectivePlan)
+        {
+            if (string.Equals(Normalize(companyTier), Comp, StringComparison.Ordinal))
+                return Comp;
+            var key = effectivePlan.Trim().ToLowerInvariant();
+            if (key is "enterprise" || key.EndsWith("_pro", StringComparison.Ordinal))
+                return Pro;
+            return Free;
+        }
     }
 
     /// <summary>
@@ -56,17 +67,42 @@ namespace Core.Entitlements
         /// <summary>Shown to users when a limit is reached.</summary>
         public string? SupportEmail { get; set; }
         /// <summary>
-        /// When true (default), module gates also call <see cref="IEntitlementService.Evaluate"/> and log
-        /// divergences; the old path still decides the HTTP outcome (E1a shadow mode).
+        /// When true with <see cref="LegacyModuleGate"/>, module gates also call Evaluate and log divergences.
+        /// Ignored when the engine owns the gate (LegacyModuleGate false).
         /// </summary>
         public bool EngineShadow { get; set; } = true;
+        /// <summary>
+        /// When true, RequireModule / IsModuleEnabled use SubscriptionAccess and optionally shadow-log (E1a).
+        /// Default false: the engine decides and there is no shadow call.
+        /// </summary>
+        public bool LegacyModuleGate { get; set; }
 
-        public bool IsSelfServicePlan(string? plan) =>
-            !Enabled || SelfServicePlans.Count == 0
-            || (plan != null && SelfServicePlans.Contains(plan.Trim(), StringComparer.OrdinalIgnoreCase));
+        public bool IsSelfServicePlan(string? plan)
+        {
+            if (!Enabled || SelfServicePlans.Count == 0)
+                return true;
+            if (plan == null)
+                return false;
+            var normalized = Core.Domain.Company.NormalizePlanKey(plan);
+            return SelfServicePlans.Any(p =>
+                string.Equals(p.Trim(), plan.Trim(), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Core.Domain.Company.NormalizePlanKey(p), normalized, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
-    public sealed record ResourceUsage(MeteredResource Resource, int? Limit, int Used, bool Monthly);
+    public sealed record ResourceUsage(
+        MeteredResource Resource,
+        int? Limit,
+        int Used,
+        bool Monthly,
+        bool OverLimit = false);
+
+    public sealed record EntitlementLifecycle(
+        string? Status,
+        DateTime? GraceEndsAt,
+        bool CancelAtPeriodEnd,
+        DateTime? PeriodEnd,
+        string? ReducedBy);
 
     public sealed record EntitlementSnapshot(
         bool Enabled,
@@ -77,10 +113,25 @@ namespace Core.Entitlements
         IReadOnlyList<string> SelfServicePlans,
         IReadOnlyList<ResourceUsage> Usage,
         string? SupportEmail,
-        IReadOnlySet<string>? Features = null)
+        IReadOnlySet<string>? Features = null,
+        string? EffectivePlan = null,
+        IReadOnlyList<string>? ReadOnlyModules = null,
+        EntitlementLifecycle? Lifecycle = null,
+        IReadOnlyList<string>? AllowedTransitions = null,
+        string? Version = null)
     {
         public IReadOnlySet<string> Features { get; init; } = Features ?? System.Collections.Immutable.ImmutableHashSet<string>.Empty;
+        public string EffectivePlan { get; init; } = EffectivePlan ?? Plan;
+        public IReadOnlyList<string> ReadOnlyModules { get; init; } = ReadOnlyModules ?? Array.Empty<string>();
+        public IReadOnlyList<string> AllowedTransitions { get; init; } = AllowedTransitions ?? Array.Empty<string>();
         public bool HasFeature(string feature) => Features.Contains(feature);
+    }
+
+    /// <summary>Read vs write intent for module gates (E1b).</summary>
+    public enum ModuleAccess
+    {
+        Read = 0,
+        Write = 1
     }
 
     /// <summary>Gate request for <see cref="IEntitlementService.Evaluate"/>. Feature/Create arrive in E2.</summary>
@@ -89,9 +140,21 @@ namespace Core.Entitlements
         private EntitlementAction() { }
 
         /// <summary>Any-of module keys (same semantics as <c>[RequireModule]</c>).</summary>
-        public sealed record Module(params string[] AnyOf) : EntitlementAction
+        public sealed record Module : EntitlementAction
         {
-            public Module(IReadOnlyList<string> anyOf) : this(anyOf?.ToArray() ?? Array.Empty<string>()) { }
+            public string[] AnyOf { get; }
+            public ModuleAccess Access { get; }
+
+            public Module(params string[] anyOf) : this(ModuleAccess.Write, anyOf) { }
+
+            public Module(ModuleAccess access, params string[] anyOf)
+            {
+                Access = access;
+                AnyOf = anyOf ?? Array.Empty<string>();
+            }
+
+            public Module(IReadOnlyList<string> anyOf, ModuleAccess access = ModuleAccess.Write)
+                : this(access, anyOf?.ToArray() ?? Array.Empty<string>()) { }
         }
     }
 
@@ -106,7 +169,8 @@ namespace Core.Entitlements
         int? Limit = null,
         int? Used = null,
         string? Period = null,
-        bool UpgradeAvailable = false);
+        bool UpgradeAvailable = false,
+        string? SubscriptionStatus = null);
 
     /// <summary>Central entitlement gate: what a workspace may use and how much of it.</summary>
     public interface IEntitlementService
@@ -129,6 +193,16 @@ namespace Core.Entitlements
         /// Default is a no-op for implementers that do not memoize.
         /// </summary>
         void ClearPolicyMemo(int companyId) { }
+
+        /// <summary>
+        /// When policy was already resolved for this company in the current request, returns the policy Version
+        /// (no extra Company load). Otherwise false.
+        /// </summary>
+        bool TryGetResolvedPolicyVersion(int companyId, out string version)
+        {
+            version = "";
+            return false;
+        }
 
         /// <summary>Checks whether the workspace is entitled to the given feature key (e.g. "mfa").</summary>
         bool HasFeature(int companyId, string feature) => Get(companyId).HasFeature(feature);

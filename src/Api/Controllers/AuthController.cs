@@ -303,7 +303,7 @@ namespace Api.Controllers
 
                 Core.Domain.Company? company = null;
                 if (cleanSlug != null)
-                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, "accounting", currency);
+                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, "accounting_free", currency);
 
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
                 // Keep delivery inside the transaction so a failed send rolls back signup and workspace creation.

@@ -149,8 +149,7 @@ public class EntitlementEnginePipelineTests
     [InlineData("   ")]
     public void BlankOrWhitespaceStatus_TreatedAsActive_KeepsEnterpriseModules(string status)
     {
-        var company = Company(1, "enterprise", status,
-            modulesJson: "[\"sales\",\"purchases\",\"financials\",\"reports\",\"inventory\",\"donations\",\"audit\"]");
+        var company = Company(1, "enterprise", status);
         var engine = CreateEngine(company);
         Assert.True(engine.Evaluate(1, new EntitlementAction.Module("inventory")).Allowed);
         Assert.True(engine.Evaluate(1, new EntitlementAction.Module("donations")).Allowed);
@@ -215,7 +214,8 @@ public class EntitlementEnginePipelineTests
         string? tier = null,
         bool billingManagedManually = false,
         DateTime? periodEnd = null,
-        string? modulesJson = null) =>
+        string? modulesJson = null,
+        string? disabledJson = null) =>
         new()
         {
             Id = id,
@@ -225,6 +225,8 @@ public class EntitlementEnginePipelineTests
             SubscriptionStatus = status,
             BillingManagedManually = billingManagedManually,
             CurrentPeriodEnd = periodEnd,
+            // Prefer DisabledModulesJson; modulesJson is legacy ActiveModulesJson fallback only.
+            DisabledModulesJson = disabledJson ?? (modulesJson == null ? "[]" : null),
             ActiveModulesJson = modulesJson
         };
 

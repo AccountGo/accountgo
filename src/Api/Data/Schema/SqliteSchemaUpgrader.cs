@@ -225,6 +225,9 @@ namespace Api.Data.Schema
                     new[] { "Company", "CurrentPeriodEnd", "TEXT NULL" },
                     new[] { "Company", "CancelAtPeriodEnd", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "Company", "BillingManagedManually", "INTEGER NOT NULL DEFAULT 0" },
+                    // D1 0030_entitlements_e1b.sql
+                    new[] { "Company", "DisabledModulesJson", "TEXT NULL" },
+                    new[] { "Company", "PaidAccessEndedAt", "TEXT NULL" },
                     new[] { "Account", "ArchivedAt", "TEXT NULL" },
                     new[] { "CompanySetting", "MfaPolicy", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "MfaGracePeriodEndsAt", "TEXT NULL" },
@@ -304,9 +307,108 @@ namespace Api.Data.Schema
                     cmd.CommandText = CompanyBooksStartDateBackfillSql;
                     cmd.ExecuteNonQuery();
                 }
+                // E1b: backfill whenever the opt-out column exists and legacy ActiveModulesJson is still authoritative.
+                BackfillDisabledModules(connection, tx);
+                NormalizeCompanyPlanKeysAndTier(connection, tx);
                 tx.Commit();
             }
         }
+
+        /// <summary>
+        /// Idempotent: WHERE DisabledModulesJson IS NULL AND ActiveModulesJson IS NOT NULL.
+        /// Same predicates as D1 0030_entitlements_e1b.sql (self-host never runs D1).
+        /// </summary>
+        public static void BackfillDisabledModules(DbConnection connection, DbTransaction? tx = null)
+        {
+            foreach (var sql in DisabledModulesBackfillSql)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public static void NormalizeCompanyPlanKeysAndTier(DbConnection connection, DbTransaction? tx = null)
+        {
+            foreach (var sql in new[]
+            {
+                @"UPDATE ""Company"" SET ""Plan"" = 'invoicing_free' WHERE lower(""Plan"") = 'invoicing';",
+                @"UPDATE ""Company"" SET ""Plan"" = 'accounting_free' WHERE lower(""Plan"") = 'accounting';",
+                @"UPDATE ""Company"" SET ""Tier"" = NULL WHERE ""Tier"" IS NOT NULL AND lower(""Tier"") != 'comp';"
+            })
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private static readonly string[] DisabledModulesBackfillSql =
+        {
+            @"UPDATE ""Company""
+SET ""DisabledModulesJson"" = (
+  SELECT COALESCE(json_group_array(m.value), '[]')
+  FROM json_each('[""sales"",""financials"",""purchases"",""reports""]') AS m
+  WHERE lower(m.value) != 'sales'
+    AND NOT EXISTS (
+      SELECT 1 FROM json_each(""Company"".""ActiveModulesJson"") AS a
+      WHERE lower(a.value) = lower(m.value)
+    )
+)
+WHERE ""DisabledModulesJson"" IS NULL
+  AND ""ActiveModulesJson"" IS NOT NULL
+  AND json_valid(""ActiveModulesJson"")
+  AND json_array_length(""ActiveModulesJson"") > 0
+  AND lower(COALESCE(""Plan"", '')) IN ('accounting', 'accounting_free', 'accounting_pro');",
+            @"UPDATE ""Company""
+SET ""DisabledModulesJson"" = '[]'
+WHERE ""DisabledModulesJson"" IS NULL
+  AND ""ActiveModulesJson"" IS NOT NULL
+  AND json_valid(""ActiveModulesJson"")
+  AND json_array_length(""ActiveModulesJson"") > 0
+  AND lower(COALESCE(""Plan"", '')) IN ('invoicing', 'invoicing_free', 'invoicing_pro');",
+            @"UPDATE ""Company""
+SET ""DisabledModulesJson"" = (
+  SELECT COALESCE(json_group_array(m.value), '[]')
+  FROM json_each('[""sales"",""financials"",""purchases"",""reports"",""inventory"",""donations"",""audit""]') AS m
+  WHERE lower(m.value) != 'sales'
+    AND NOT EXISTS (
+      SELECT 1 FROM json_each(""Company"".""ActiveModulesJson"") AS a
+      WHERE lower(a.value) = lower(m.value)
+    )
+)
+WHERE ""DisabledModulesJson"" IS NULL
+  AND ""ActiveModulesJson"" IS NOT NULL
+  AND json_valid(""ActiveModulesJson"")
+  AND json_array_length(""ActiveModulesJson"") > 0
+  AND lower(COALESCE(""Plan"", '')) = 'enterprise';",
+            @"UPDATE ""Company""
+SET ""DisabledModulesJson"" = (
+  SELECT COALESCE(json_group_array(m.value), '[]')
+  FROM json_each('[""sales"",""financials"",""purchases"",""reports""]') AS m
+  WHERE lower(m.value) != 'sales'
+    AND NOT EXISTS (
+      SELECT 1 FROM json_each(""Company"".""ActiveModulesJson"") AS a
+      WHERE lower(a.value) = lower(m.value)
+    )
+)
+WHERE ""DisabledModulesJson"" IS NULL
+  AND ""ActiveModulesJson"" IS NOT NULL
+  AND json_valid(""ActiveModulesJson"")
+  AND json_array_length(""ActiveModulesJson"") > 0
+  AND lower(COALESCE(""Plan"", '')) NOT IN (
+    'accounting', 'accounting_free', 'accounting_pro',
+    'invoicing', 'invoicing_free', 'invoicing_pro',
+    'enterprise'
+  );",
+            // Empty array or invalid JSON: legacy GetActiveModules treated these as full plan.
+            @"UPDATE ""Company""
+SET ""DisabledModulesJson"" = '[]'
+WHERE ""DisabledModulesJson"" IS NULL
+  AND ""ActiveModulesJson"" IS NOT NULL;"
+        };
 
         private const string CompanyBooksStartDateBackfillSql = @"
             UPDATE ""CompanySetting""

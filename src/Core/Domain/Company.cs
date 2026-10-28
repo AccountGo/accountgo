@@ -25,10 +25,13 @@ namespace Core.Domain
         public string? CompanyCode { get; set; }
         public string? CRA { get; set; }
 
-        public string? Plan { get; set; } = "accounting";
-        /// <summary>Pricing tier within the plan: null/"free", "pro", or "comp" (see Core.Entitlements.CompanyTiers).</summary>
+        public string? Plan { get; set; } = "accounting_free";
+        /// <summary>Ops override only: null (derived from Plan) or "comp" (see Core.Entitlements.CompanyTiers).</summary>
         public string? Tier { get; set; }
+        /// <summary>Legacy allow-list JSON. Prefer <see cref="DisabledModulesJson"/>. Kept for one-release read fallback.</summary>
         public string? ActiveModulesJson { get; set; }
+        /// <summary>Owner opt-outs: plan modules the owner turned off. Null until backfill / first write.</summary>
+        public string? DisabledModulesJson { get; set; }
         public string? SubscriptionStatus { get; set; } = "active";
         public DateTime? SubscriptionValidUntil { get; set; }
 
@@ -43,6 +46,8 @@ namespace Core.Domain
         public bool CancelAtPeriodEnd { get; set; }
         /// <summary>When true, provider webhooks must not overwrite plan/status (enterprise / ops-managed).</summary>
         public bool BillingManagedManually { get; set; }
+        /// <summary>UTC when a paid plan key was replaced by a free one (portal cancel). Not written on free↔free.</summary>
+        public DateTime? PaidAccessEndedAt { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string? CreatedByUserId { get; set; }
@@ -51,45 +56,54 @@ namespace Core.Domain
         public List<string> GetActiveModules()
         {
             var planModules = ModulesForPlan(Plan);
-            List<string>? stored = null;
-            if (!string.IsNullOrWhiteSpace(ActiveModulesJson))
+
+            // Opt-out path (E1b+): ModulesForPlan − DisabledModulesJson.
+            if (DisabledModulesJson != null)
             {
-                try
-                {
-                    stored = JsonSerializer.Deserialize<List<string>>(ActiveModulesJson);
-                }
-                catch { }
+                var disabled = ParseStringList(DisabledModulesJson) ?? new List<string>();
+                return planModules
+                    .Where(m => IsRequiredModule(Plan, m)
+                        || !disabled.Contains(m, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
             }
 
-            if (stored == null || stored.Count == 0)
-                return planModules;
+            // TODO(E5): remove ActiveModulesJson fallback once every row has DisabledModulesJson.
+            if (!string.IsNullOrWhiteSpace(ActiveModulesJson))
+            {
+                var stored = ParseStringList(ActiveModulesJson);
+                if (stored != null && stored.Count > 0)
+                {
+                    return planModules
+                        .Where(m => IsRequiredModule(Plan, m)
+                            || stored.Contains(m, StringComparer.OrdinalIgnoreCase))
+                        .ToList();
+                }
+            }
 
-            // Keep stored subset (Accounting can toggle modules), but always force
-            // plan-required cores so legacy Invoicing tenants with ["sales"] get purchases.
-            return planModules
-                .Where(m => IsRequiredModule(Plan, m)
-                    || stored.Contains(m, StringComparer.OrdinalIgnoreCase))
-                .ToList();
+            return planModules;
         }
 
-        /// <summary>Community catalog plan keys (also used by GetPlanDefinitions). Product×tier keys are accepted via <see cref="IsKnownPlan"/>.</summary>
-        public static readonly IReadOnlyList<string> KnownPlans = new[] { "invoicing", "accounting", "enterprise" };
-
-        private static readonly HashSet<string> ProductTierPlans = new(StringComparer.OrdinalIgnoreCase)
+        /// <summary>Product×tier catalog keys (also used by GetPlanDefinitions). Legacy invoicing/accounting accepted via <see cref="NormalizePlanKey"/>.</summary>
+        public static readonly IReadOnlyList<string> KnownPlans = new[]
         {
-            "invoicing_free", "invoicing_pro", "accounting_free", "accounting_pro"
+            "invoicing_free", "invoicing_pro", "accounting_free", "accounting_pro", "enterprise"
         };
 
-        public static bool IsKnownPlan(string? plan) =>
-            plan != null
-            && (KnownPlans.Contains(plan.Trim(), StringComparer.OrdinalIgnoreCase)
-                || ProductTierPlans.Contains(plan.Trim()));
+        public static bool IsKnownPlan(string? plan)
+        {
+            if (plan == null) return false;
+            var raw = plan.Trim();
+            if (KnownPlans.Contains(raw, StringComparer.OrdinalIgnoreCase))
+                return true;
+            var normalized = NormalizePlanKey(raw);
+            return KnownPlans.Contains(normalized, StringComparer.OrdinalIgnoreCase);
+        }
 
         /// <summary>True when the plan key denotes a paid (self-serve or enterprise) product tier.</summary>
         public static bool IsPaidPlan(string? plan)
         {
             if (string.IsNullOrWhiteSpace(plan)) return false;
-            var key = plan.Trim().ToLowerInvariant();
+            var key = NormalizePlanKey(plan);
             return key is "invoicing_pro" or "accounting_pro" or "enterprise"
                 || key.EndsWith("_pro", StringComparison.Ordinal);
         }
@@ -97,16 +111,15 @@ namespace Core.Domain
         /// <summary>
         /// Capability rank for upgrade ordering (higher = more capable).
         /// Ladder: Invoicing Free → Invoicing Pro → Accounting Free → Accounting Pro → Enterprise.
-        /// Moving to a lower or equal rank is a downgrade / lateral change, not a self-serve upgrade.
         /// </summary>
         public static int PlanRank(string? plan)
         {
-            var key = (plan ?? string.Empty).Trim().ToLowerInvariant();
+            var key = NormalizePlanKey(plan);
             return key switch
             {
-                "invoicing" or "invoicing_free" => 10,
+                "invoicing_free" => 10,
                 "invoicing_pro" => 20,
-                "accounting" or "accounting_free" => 30,
+                "accounting_free" => 30,
                 "accounting_pro" => 40,
                 "enterprise" => 50,
                 _ => 0
@@ -119,6 +132,7 @@ namespace Core.Domain
 
         /// <summary>
         /// Self-serve plan changes (one plan at a time). Cancel of *_pro is Stripe Portal, not this method.
+        /// Legacy <c>invoicing</c>/<c>accounting</c> keys are accepted via <see cref="NormalizePlanKey"/>.
         /// <list type="bullet">
         /// <item><c>accounting_free</c> → <c>accounting_pro</c> or <c>invoicing_free</c></item>
         /// <item><c>invoicing_free</c> → <c>invoicing_pro</c> or <c>accounting_free</c></item>
@@ -162,7 +176,7 @@ namespace Core.Domain
         /// <summary>Maps a product×tier plan key to the free key of the same product (e.g. accounting_pro → accounting_free).</summary>
         public static string FreePlanFor(string? plan)
         {
-            var key = NormalizePlanKey(plan ?? "accounting");
+            var key = NormalizePlanKey(plan ?? "accounting_free");
             if (key.StartsWith("invoicing", StringComparison.Ordinal))
                 return "invoicing_free";
             if (key is "enterprise")
@@ -173,7 +187,7 @@ namespace Core.Domain
         /// <summary>Modules included by subscription tier, ordered Invoicing → Accounting → Enterprise.</summary>
         public static List<string> ModulesForPlan(string? plan)
         {
-            var key = plan?.ToLowerInvariant() ?? "accounting";
+            var key = NormalizePlanKey(plan ?? "accounting_free");
             if (key.StartsWith("invoicing", StringComparison.Ordinal))
                 return new List<string> { "sales", "purchases" };
             if (key is "enterprise")
@@ -189,7 +203,7 @@ namespace Core.Domain
         {
             if (string.Equals(moduleKey, "sales", StringComparison.OrdinalIgnoreCase))
                 return true;
-            var key = plan?.ToLowerInvariant() ?? "";
+            var key = NormalizePlanKey(plan ?? "");
             if (string.Equals(moduleKey, "purchases", StringComparison.OrdinalIgnoreCase)
                 && key.StartsWith("invoicing", StringComparison.Ordinal))
                 return true;
@@ -200,6 +214,28 @@ namespace Core.Domain
         {
             var active = GetActiveModules();
             return active.Any(m => string.Equals(m, moduleKey, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>Plan modules the owner has turned off (empty when none / full plan).</summary>
+        public List<string> GetDisabledModules()
+        {
+            var planModules = ModulesForPlan(Plan);
+            var active = GetActiveModules();
+            return planModules
+                .Where(m => !active.Contains(m, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        private static List<string>? ParseStringList(string json)
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<List<string>>(json);
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }
