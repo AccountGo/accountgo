@@ -99,9 +99,9 @@ test('create-workspace wizard hides plans the operator assigns', () => {
     createElement(IntentStep, { plan: 'accounting', onChange: () => {} })));
 
   primePlanCatalog([plan('invoicing', true), plan('accounting', true), plan('enterprise', false)]);
-  const hosted = render();
-  assert.ok(hosted.includes('value="invoicing"') && hosted.includes('value="accounting"'));
-  assert.ok(!hosted.includes('value="enterprise"'));
+  const restricted = render();
+  assert.ok(restricted.includes('value="invoicing"') && restricted.includes('value="accounting"'));
+  assert.ok(!restricted.includes('value="enterprise"'));
 
   primePlanCatalog([plan('invoicing', true), plan('accounting', true), plan('enterprise', true)]);
   assert.ok(render().includes('value="enterprise"'));

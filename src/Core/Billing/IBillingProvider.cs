@@ -32,20 +32,20 @@ namespace Core.Billing
 
     /// <summary>
     /// Pluggable billing backend. Community default applies plan changes immediately with no payment provider.
-    /// Hosted modules replace this registration.
+    /// A module may replace this registration.
     /// </summary>
     public interface IBillingProvider
     {
         /// <summary>
-        /// Self-serve Checkout / Upgrade UI. Hosted Stripe: requires secret key and
-        /// <c>BILLING_SUBSCRIPTIONS_ENABLED</c>. Community: always false (immediate plan switches).
+        /// Self-serve Checkout / Upgrade UI. Each implementation decides when this is enabled.
+        /// Community: always false (immediate plan switches).
         /// </summary>
         bool Enabled { get; }
 
         /// <summary>
         /// When true, paid plan changes must go through <see cref="RequestPlanChangeAsync"/>
-        /// (never apply immediately). Hosted Stripe is true whenever the provider is composed,
-        /// even if <see cref="Enabled"/> is false due to the subscriptions kill switch.
+        /// (never apply immediately). A provider-backed implementation may return true even when
+        /// <see cref="Enabled"/> is false (for example, behind its own kill switch).
         /// </summary>
         bool RequiresProviderCheckout { get; }
 

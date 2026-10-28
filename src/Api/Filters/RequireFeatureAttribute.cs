@@ -14,8 +14,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Api.Filters
 {
     /// <summary>
-    /// Requires the workspace snapshot to include a commercial feature key.
-    /// No production usages in E2 (public); commercial Security will apply it.
+    /// Requires the workspace snapshot to include a feature key.
+    /// No production usages in this repository; available for modules to apply.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
     public sealed class RequireFeatureAttribute : Attribute, IAsyncActionFilter

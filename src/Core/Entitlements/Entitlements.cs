@@ -180,7 +180,7 @@ namespace Core.Entitlements
                 : this(access, anyOf?.ToArray() ?? Array.Empty<string>()) { }
         }
 
-        /// <summary>Commercial feature key (e.g. <c>mfa</c>). Community emits none.</summary>
+        /// <summary>Feature key (e.g. <c>mfa</c>). Community emits none.</summary>
         public sealed record Feature : EntitlementAction
         {
             public string Key { get; }
@@ -241,7 +241,7 @@ namespace Core.Entitlements
 
         /// <summary>
         /// Policy decision without throwing.
-        /// Default throws so out-of-repo implementers (accountgo-commercial) keep compiling until they opt in.
+        /// Default throws so other implementations keep compiling until they opt in.
         /// </summary>
         EntitlementDecision Evaluate(int companyId, EntitlementAction action) =>
             throw new NotSupportedException(
@@ -249,7 +249,7 @@ namespace Core.Entitlements
 
         /// <summary>
         /// Same as <see cref="Evaluate"/> but throws a typed <see cref="EntitlementException"/> on deny.
-        /// Default throws so commercial implementers keep compiling until they opt in.
+        /// Default throws so other implementations keep compiling until they opt in.
         /// </summary>
         void Ensure(int companyId, EntitlementAction action) =>
             throw new NotSupportedException(
@@ -257,7 +257,7 @@ namespace Core.Entitlements
 
         /// <summary>
         /// User-scoped decision (own-another-workspace, MFA any-membership). Must not use <see cref="ITenantContext"/>.
-        /// Default throws so commercial implementers keep compiling until they opt in.
+        /// Default throws so other implementations keep compiling until they opt in.
         /// </summary>
         EntitlementDecision EvaluateForUser(string userId, UserAction action) =>
             throw new NotSupportedException(
@@ -293,7 +293,7 @@ namespace Core.Entitlements
         void Record(MeteredResource resource, int? entityId);
 
         /// <summary>
-        /// Records one creation for an explicit company. Default throws so commercial keep compiling until they opt in.
+        /// Records one creation for an explicit company. Default throws so other implementations keep compiling until they opt in.
         /// </summary>
         void Record(int companyId, MeteredResource resource, int? entityId) =>
             throw new NotSupportedException(

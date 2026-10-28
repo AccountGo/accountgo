@@ -98,10 +98,6 @@
     "ENTITLEMENTS_FREE_BILLS_PER_MONTH": "10",
     "ENTITLEMENTS_FREE_SEATS": "1",
     "ENTITLEMENTS_FREE_BANK_ACCOUNTS": "2",
-    // Hosted Cloud (ops overlay) also sets REQUIRED_MODULES and Stripe price IDs.
-    // Kill switch for self-serve Checkout / Upgrade (hosted Billing module). Default on when unset.
-    // "BILLING_PROVIDER": "stripe",
-    // "BILLING_SUBSCRIPTIONS_ENABLED": "true",
     "ENTITLEMENTS_FREE_OWNED_WORKSPACES": "1"
   },
   "observability": {

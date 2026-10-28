@@ -6,8 +6,7 @@ using Microsoft.AspNetCore.Builder;
 namespace Api.Modules;
 
 /// <summary>
-/// Contract for pluggable commercial modules (e.g. AccountGo.Security, AccountGo.Billing)
-/// composed ahead of time into AccountGo.Cloud.Host.
+/// Contract for pluggable modules composed into the API host at startup.
 /// </summary>
 public interface IAccountGoModule
 {

@@ -171,10 +171,10 @@ public static class AccountGoApp
         builder.Services.AddScoped<Api.Service.D1Sync.ID1SyncContext, Api.Service.D1Sync.D1SyncContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
-        // Free-tier limits: off unless ENTITLEMENTS_ENABLED (hosted values come from the deployment environment).
+        // Free-tier limits: off unless ENTITLEMENTS_ENABLED (values come from the deployment environment).
         builder.Services.AddSingleton(Api.Options.EntitlementsConfiguration.FromConfiguration(builder.Configuration));
         builder.Services.AddScoped<Core.Entitlements.IEntitlementService, Services.Entitlements.CommunityEntitlementService>();
-        // Community default: billing off, immediate plan switches. Hosted BillingModule replaces IBillingProvider.
+        // Community default: billing off, immediate plan switches. A module may replace IBillingProvider.
         builder.Services.AddScoped<Core.Billing.IBillingProvider, Services.Billing.CommunityBillingProvider>();
         builder.Services.AddMemoryCache();
         builder.Services.AddExceptionHandler<Api.Filters.MultiTenancyExceptionHandler>();
@@ -374,7 +374,7 @@ public static class AccountGoApp
             });
         });
 
-        // Module-specific service registrations (e.g. SecurityModule, BillingModule)
+        // Module-specific service registrations
         foreach (var module in modules)
         {
             Console.WriteLine($"Configuring module '{module.Name}'...");
