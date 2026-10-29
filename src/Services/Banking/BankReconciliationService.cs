@@ -20,6 +20,8 @@ namespace Services.Banking
         private readonly IRepository<Bank> _banks;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
+        private readonly IRepository<Company> _companies;
+        private readonly IRepository<CompanySetting> _companySettings;
         private readonly IBankTransactionService _transactions;
         private readonly ITenantContext _tenant;
 
@@ -29,6 +31,8 @@ namespace Services.Banking
             IRepository<Bank> banks,
             IRepository<GeneralLedgerLine> glLines,
             IRepository<GeneralLedgerHeader> glHeaders,
+            IRepository<Company> companies,
+            IRepository<CompanySetting> companySettings,
             IBankTransactionService transactions,
             ITenantContext tenant)
         {
@@ -37,6 +41,8 @@ namespace Services.Banking
             _banks = banks;
             _glLines = glLines;
             _glHeaders = glHeaders;
+            _companies = companies;
+            _companySettings = companySettings;
             _transactions = transactions;
             _tenant = tenant;
         }
@@ -236,6 +242,7 @@ namespace Services.Banking
             recon.Status = BankReconciliationStatuses.Finished;
             recon.FinishedBy = string.IsNullOrWhiteSpace(actor) ? null : actor.Trim();
             recon.FinishedAt = DateTime.UtcNow;
+            recon.FinishedMaxGeneralLedgerHeaderId = MaxBankHeaderIdAsOf(bank.AccountId.Value, recon.StatementEndDate.Date);
             BumpVersion(recon);
             return ToDetail(recon);
         }
@@ -285,6 +292,202 @@ namespace Services.Banking
             foreach (var item in _items.Table.Where(i => i.BankReconciliationId == recon.Id).ToList())
                 _items.Delete(item);
             _recons.Delete(recon);
+        }
+
+        public BankReconciliationReportDto GetReport(int id)
+        {
+            EnsureCompany();
+            var recon = RequireRecon(id);
+            if (recon.Status != BankReconciliationStatuses.Finished)
+                throw new InvalidOperationException("Finish the reconciliation before downloading the report.");
+
+            var bank = RequireBank(recon.BankId);
+            if (!bank.AccountId.HasValue)
+                throw new InvalidOperationException("That bank account has no posting account.");
+
+            var endDate = recon.StatementEndDate.Date;
+            var accountId = bank.AccountId.Value;
+            var companyId = _tenant.RequireCompanyId();
+            var companyName = _companies.GetById(companyId)?.Name ?? "Company";
+            var currency = _companySettings.Table.Select(s => s.Currency).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(currency))
+                currency = "USD";
+
+            var cutoffHeaderId = recon.FinishedMaxGeneralLedgerHeaderId
+                ?? MaxBankHeaderIdAsOf(accountId, endDate);
+
+            var totals = ComputeTotals(recon);
+            var openingBalanceLine = BuildOpeningBalanceReportLine(bank, recon, endDate);
+
+            var periodLines = BankLinesAsOf(accountId, endDate).ToList();
+            var postedAfter = periodLines
+                .Where(l => l.GeneralLedgerHeaderId > cutoffHeaderId)
+                .Select(l => ToReportLine(bank, l, endDate))
+                .OrderBy(i => i.HeaderId)
+                .ThenBy(i => i.Date)
+                .ToList();
+
+            var outstandingItems = periodLines
+                .Where(l =>
+                    l.GeneralLedgerHeaderId <= cutoffHeaderId
+                    && IsOutstandingAsOf(l, recon))
+                .Select(l => ToReportLine(bank, l, endDate))
+                .OrderBy(i => i.Date)
+                .ThenBy(i => i.HeaderId)
+                .ToList();
+
+            var depositsInTransit = Round2(outstandingItems.Sum(i => i.In));
+            var outstandingPayments = Round2(outstandingItems.Sum(i => i.Out));
+            var statementEnding = Round2(recon.StatementEndingBalance);
+            var adjustedBank = Round2(statementEnding + depositsInTransit - outstandingPayments);
+            var booksBalance = Round2(BooksBalanceAsOf(accountId, endDate, cutoffHeaderId));
+            var difference = Round2(adjustedBank - booksBalance);
+
+            return new BankReconciliationReportDto
+            {
+                ReconciliationId = recon.Id,
+                CompanyName = companyName,
+                BankName = bank.Name,
+                StatementEndDate = endDate,
+                CurrencyCode = currency.Trim().ToUpperInvariant(),
+                BeginningBalance = Round2(recon.BeginningBalance),
+                ClearedDeposits = totals.ClearedDeposits,
+                ClearedPayments = totals.ClearedPayments,
+                ClearedBalance = totals.ClearedBalance,
+                StatementEndingBalance = statementEnding,
+                DepositsInTransit = depositsInTransit,
+                OutstandingPayments = outstandingPayments,
+                AdjustedBankBalance = adjustedBank,
+                BooksBalance = booksBalance,
+                Difference = difference,
+                PreparedBy = recon.FinishedBy,
+                PreparedAt = recon.FinishedAt,
+                ReviewedBy = recon.ReviewedBy,
+                ReviewedAt = recon.ReviewedAt,
+                OpeningBalanceLine = openingBalanceLine,
+                OutstandingItems = outstandingItems,
+                PostedAfterFinishItems = postedAfter
+            };
+        }
+
+        private BankReconciliationReportLineDto? BuildOpeningBalanceReportLine(
+            Bank bank,
+            BankReconciliation recon,
+            DateTime endDate)
+        {
+            if (!bank.OpeningBalanceGeneralLedgerHeaderId.HasValue)
+                return null;
+
+            var itemLineIds = _items.Table
+                .Where(i => i.BankReconciliationId == recon.Id)
+                .Select(i => i.GeneralLedgerLineId)
+                .ToHashSet();
+            var obLine = _glLines.Table.FirstOrDefault(l =>
+                itemLineIds.Contains(l.Id)
+                && l.GeneralLedgerHeaderId == bank.OpeningBalanceGeneralLedgerHeaderId.Value);
+            return obLine == null ? null : ToReportLine(bank, obLine, endDate);
+        }
+
+        private BankReconciliationReportLineDto ToReportLine(Bank bank, GeneralLedgerLine line, DateTime endDate)
+        {
+            var header = _glHeaders.GetById(line.GeneralLedgerHeaderId);
+            var date = header?.Date.Date ?? endDate;
+            return new BankReconciliationReportLineDto
+            {
+                Date = date,
+                Type = ReportLineTypeLabel(bank, line, header),
+                Reference = header?.Description,
+                In = line.DrCr == DrOrCrSide.Dr ? line.Amount : 0m,
+                Out = line.DrCr == DrOrCrSide.Cr ? line.Amount : 0m,
+                AgeDays = Math.Max(0, (endDate - date).Days),
+                HeaderId = line.GeneralLedgerHeaderId
+            };
+        }
+
+        private static string ReportLineTypeLabel(Bank bank, GeneralLedgerLine line, GeneralLedgerHeader? header)
+        {
+            if (IsOpeningBalanceLine(bank, line) && header != null)
+                return $"Opening balance (as of {header.Date:yyyy-MM-dd})";
+            return DocumentTypeLabel(header?.DocumentType);
+        }
+
+        private static string DocumentTypeLabel(DocumentTypes? type) => type switch
+        {
+            DocumentTypes.SalesReceipt => "Receipt",
+            DocumentTypes.PurchaseInvoicePayment => "Bill payment",
+            DocumentTypes.JournalEntry => "Journal",
+            DocumentTypes.SalesInvoice => "Invoice",
+            DocumentTypes.PurchaseInvoice => "Bill",
+            DocumentTypes.BankTransaction => "Bank transaction",
+            DocumentTypes.SalesCreditMemo => "Credit memo",
+            DocumentTypes.SalesDebitMemo => "Debit memo",
+            DocumentTypes.PurchaseCreditMemo => "Bill credit",
+            DocumentTypes.PurchaseDebitMemo => "Bill debit",
+            DocumentTypes.PurchaseReceipt => "Purchase receipt",
+            null => "Line",
+            _ => SplitPascalCase(type.Value.ToString())
+        };
+
+        private static string SplitPascalCase(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            var chars = new char[value.Length * 2];
+            var n = 0;
+            for (var i = 0; i < value.Length; i++)
+            {
+                var c = value[i];
+                if (i > 0 && char.IsUpper(c) && char.IsLower(value[i - 1]))
+                    chars[n++] = ' ';
+                chars[n++] = c;
+            }
+            return new string(chars, 0, n);
+        }
+
+        private bool IsOutstandingAsOf(GeneralLedgerLine line, BankReconciliation recon)
+        {
+            if (!line.BankReconciliationId.HasValue)
+                return true;
+
+            var clearing = _recons.GetById(line.BankReconciliationId.Value);
+            if (clearing == null)
+                return true;
+
+            // Cleared by this recon or an earlier statement → not outstanding as of this recon.
+            return clearing.StatementEndDate.Date > recon.StatementEndDate.Date;
+        }
+
+        private decimal BooksBalanceAsOf(int accountId, DateTime endDate, int maxHeaderIdInclusive)
+        {
+            var lines =
+                from line in _glLines.Table
+                join header in _glHeaders.Table on line.GeneralLedgerHeaderId equals header.Id
+                where line.AccountId == accountId
+                      && header.Date.Date <= endDate
+                      && header.Id <= maxHeaderIdInclusive
+                select line;
+
+            var dr = lines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount);
+            var cr = lines.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount);
+            // Bank posting accounts are debit-normal (cash).
+            return dr - cr;
+        }
+
+        private IEnumerable<GeneralLedgerLine> BankLinesAsOf(int accountId, DateTime endDate) =>
+            from line in _glLines.Table
+            join header in _glHeaders.Table on line.GeneralLedgerHeaderId equals header.Id
+            where line.AccountId == accountId && header.Date.Date <= endDate
+            orderby header.Date, header.Id, line.Id
+            select line;
+
+        private int MaxBankHeaderIdAsOf(int accountId, DateTime endDate)
+        {
+            var ids = (
+                from line in _glLines.Table
+                join header in _glHeaders.Table on line.GeneralLedgerHeaderId equals header.Id
+                where line.AccountId == accountId && header.Date.Date <= endDate
+                select header.Id
+            ).ToList();
+            return ids.Count == 0 ? 0 : ids.Max();
         }
 
         private void InsertItem(BankReconciliation recon, GeneralLedgerLine line)
@@ -476,7 +679,7 @@ namespace Services.Banking
                     Date = header?.Date ?? DateTime.MinValue,
                     Type = isOpeningBalance && header != null
                         ? $"Opening balance (as of {header.Date:yyyy-MM-dd})"
-                        : (header?.DocumentType.ToString() ?? "Line"),
+                        : DocumentTypeLabel(header?.DocumentType),
                     Reference = header?.Description,
                     In = line.DrCr == DrOrCrSide.Dr ? line.Amount : 0m,
                     Out = line.DrCr == DrOrCrSide.Cr ? line.Amount : 0m,

@@ -40,6 +40,12 @@ namespace Core.Domain.Financials
         /// <summary>Optimistic concurrency token (integer; incremented on each write).</summary>
         public long Version { get; set; } = 1;
 
+        /// <summary>
+        /// Highest <see cref="GeneralLedgerHeader.Id"/> on this bank with a document date on or before
+        /// <see cref="StatementEndDate"/> at Finish time. Report uses it to split lines posted afterward.
+        /// </summary>
+        public int? FinishedMaxGeneralLedgerHeaderId { get; set; }
+
         public virtual Bank Bank { get; set; } = null!;
         public virtual ICollection<BankReconciliationItem> Items { get; set; } = new HashSet<BankReconciliationItem>();
     }
