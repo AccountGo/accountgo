@@ -58,6 +58,7 @@ public class BankAccountServiceEfTests : IDisposable
         var financial = new Mock<IFinancialService>(MockBehavior.Strict);
         _service = new BankAccountService(
             new EfRepository<Bank>(NullLogger<Bank>.Instance, _db),
+            new EfRepository<BankTransaction>(NullLogger<BankTransaction>.Instance, _db),
             new EfRepository<Account>(NullLogger<Account>.Instance, _db),
             new EfRepository<GeneralLedgerLine>(NullLogger<GeneralLedgerLine>.Instance, _db),
             new EfRepository<GeneralLedgerHeader>(NullLogger<GeneralLedgerHeader>.Instance, _db),

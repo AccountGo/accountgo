@@ -171,6 +171,7 @@ namespace Services.Financial
                         transaction.SourcePath = "/purchases/" + id; break;
                     case nameof(DocumentTypes.JournalEntry): transaction.SourcePath = "/financials/journals?id=" + id; break;
                     case nameof(DocumentTypes.InventoryAdjustment): transaction.SourcePath = "/items/inventory"; break;
+                    case nameof(DocumentTypes.BankTransaction): transaction.SourcePath = "/banking/accounts/" + id; break;
                 }
             }
 
