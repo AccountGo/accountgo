@@ -20,18 +20,29 @@ export const OnboardingChecklist: React.FC<Props> = ({ orgSlug, hasFinancialsMod
     let cancelled = false;
     (async () => {
       try {
-        const [policyRes, profileRes] = await Promise.all([
+        const requests: Promise<Response>[] = [
           authFetch('/api/organizations/current/accounting-policy'),
           authFetch('/api/organizations/current/business-profile'),
-        ]);
+        ];
+        if (hasFinancialsModule) {
+          requests.push(authFetch('/api/Banking/Accounts'));
+        }
+        const [policyRes, profileRes, banksRes] = await Promise.all(requests);
         if (!policyRes.ok || cancelled) return;
         const policy = await policyRes.json();
         if (policy.onboardingChecklistDismissedAt) return;
         const profile = profileRes.ok ? await profileRes.json() : null;
+        let hasBankAccount = false;
+        if (banksRes?.ok) {
+          const banks = await banksRes.json();
+          const accounts = Array.isArray(banks?.accounts) ? banks.accounts : [];
+          hasBankAccount = accounts.some((a: { archivedAt?: string | null }) => !a.archivedAt);
+        }
         setItems(buildChecklist({
           hasFinancialsModule,
           taxRegime: policy.taxRegime,
           hasLegalName: Boolean(profile?.legalName),
+          hasBankAccount,
         }));
       } catch (err) {
         console.error('Failed to load onboarding checklist:', err);
