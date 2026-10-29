@@ -26,11 +26,37 @@ public class PlanCatalogTests
 
     private sealed class StubPlanCatalog : IPlanCatalog
     {
-        public IReadOnlyList<PlanDefinitionDto> GetPlans() => new[]
+        private static readonly PlanDefinitionDto StubA = new()
         {
-            new PlanDefinitionDto { Key = "stub_a", Name = "Stub A", IncludedModules = { "sales" }, RequiredModules = { "sales" }, SelfService = true, MonthlyPrice = 1m },
-            new PlanDefinitionDto { Key = "stub_b", Name = "Stub B", IncludedModules = { "sales" }, RequiredModules = { "sales" }, SelfService = false },
+            Key = "stub_a", Name = "Stub A", IncludedModules = { "sales" }, RequiredModules = { "sales" },
+            SelfService = true, MonthlyPrice = 1m
         };
+        private static readonly PlanDefinitionDto StubB = new()
+        {
+            Key = "stub_b", Name = "Stub B", IncludedModules = { "sales" }, RequiredModules = { "sales" },
+            SelfService = false
+        };
+
+        public IReadOnlyList<PlanDefinitionDto> GetPlans() => new[] { StubA, StubB };
+
+        public bool TryResolvePlan(string? key, out PlanDefinitionDto plan)
+        {
+            plan = null!;
+            if (string.Equals(key, "stub_a", StringComparison.OrdinalIgnoreCase))
+            {
+                plan = StubA;
+                return true;
+            }
+            if (string.Equals(key, "stub_b", StringComparison.OrdinalIgnoreCase))
+            {
+                plan = StubB;
+                return true;
+            }
+            return false;
+        }
+
+        public PlanDefinitionDto ResolveStoredPlan(string? storedPlan) =>
+            TryResolvePlan(storedPlan, out var plan) ? plan : StubA;
     }
 
     private sealed class PlanCatalogModule : IAccountGoModule
@@ -53,7 +79,6 @@ public class PlanCatalogTests
             builder.UseSetting("SECRET_KEY", SecretKey);
             // Self-service filtering must not reach the community plan.
             builder.UseSetting("ENTITLEMENTS_ENABLED", "true");
-            builder.UseSetting("ENTITLEMENTS_SELF_SERVICE_PLANS", "invoicing");
         });
 
         Assert.IsType<CommunityPlanCatalog>(factory.Services.GetRequiredService<IPlanCatalog>());

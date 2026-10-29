@@ -636,7 +636,7 @@ namespace AccountGo.BackendTests
             Assert.Empty(offendingFiles);
         }
 
-        // Test 10: Module gating: A on invoicing plan gets 403 MODULE_NOT_SUBSCRIBED on financials; B on accounting passes
+        // Test 10: Module gating via owner opt-outs (community plan includes all modules).
         [Fact]
         public async Task Test10_Module_Gating_Enforced_Per_Workspace_Plan()
         {
@@ -646,20 +646,25 @@ namespace AccountGo.BackendTests
                 {
                     var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                     var compA = await db.Companies.FirstAsync(c => c.Id == CompanyAId);
-                    compA.Plan = "invoicing";
+                    compA.Plan = "community";
+                    // Class-level gate is any-of financials|reports — opt out both.
+                    compA.DisabledModulesJson = "[\"financials\",\"reports\"]";
+                    compA.ActiveModulesJson = null;
                     var compB = await db.Companies.FirstAsync(c => c.Id == CompanyBId);
-                    compB.Plan = "accounting";
+                    compB.Plan = "community";
+                    compB.DisabledModulesJson = "[]";
+                    compB.ActiveModulesJson = null;
                     await db.SaveChangesAsync();
                 }
 
-                // Company A is on 'invoicing' plan -> Financials module is not included -> 403 MODULE_NOT_SUBSCRIBED
+                // Company A opted out of financials -> 403 MODULE_NOT_SUBSCRIBED
                 var reqA = CreateRequest(HttpMethod.Get, "/api/Financials/Accounts", TokenUAB, SlugA);
                 var resA = await _client.SendAsync(reqA);
                 Assert.Equal(HttpStatusCode.Forbidden, resA.StatusCode);
                 var bodyA = await resA.Content.ReadAsStringAsync();
                 Assert.Contains("MODULE_NOT_SUBSCRIBED", bodyA);
 
-                // Company B is on 'accounting' plan -> Financials module is included -> 200 OK
+                // Company B keeps financials -> 200 OK
                 var reqB = CreateRequest(HttpMethod.Get, "/api/Financials/Accounts", TokenUAB, SlugB);
                 var resB = await _client.SendAsync(reqB);
                 Assert.Equal(HttpStatusCode.OK, resB.StatusCode);
@@ -669,9 +674,11 @@ namespace AccountGo.BackendTests
                 using var scope = _factory.Services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 var compA = await db.Companies.FirstAsync(c => c.Id == CompanyAId);
-                compA.Plan = "enterprise";
+                compA.Plan = "community";
+                compA.DisabledModulesJson = "[]";
                 var compB = await db.Companies.FirstAsync(c => c.Id == CompanyBId);
-                compB.Plan = "enterprise";
+                compB.Plan = "community";
+                compB.DisabledModulesJson = "[]";
                 await db.SaveChangesAsync();
             }
         }
@@ -687,7 +694,7 @@ namespace AccountGo.BackendTests
             var json = await res.Content.ReadAsStringAsync();
             Assert.Contains("\"slug\":\"alpha\"", json);
             Assert.Contains("\"role\":\"Owner\"", json);
-            Assert.Contains("\"plan\":\"enterprise\"", json);
+            Assert.Contains("\"plan\":\"community\"", json);
         }
         /// <summary>Returns the literal inserted for a column in an `INSERT INTO "t" (cols) VALUES (vals) ...` statement.</summary>
         private static string InsertedValue(string insertSql, string column)

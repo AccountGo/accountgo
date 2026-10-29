@@ -68,49 +68,24 @@ namespace Core.Entitlements
     }
 
     /// <summary>
-    /// Free-tier configuration. Absent configuration = disabled: every plan is self-service and nothing is limited
-    /// (self-hosted builds). Hosted values come from the deployment environment, not from source control.
+    /// Entitlement switches used by other implementations. The community engine ignores
+    /// <see cref="Enabled"/> and <see cref="FeaturesEnabled"/> for gates (always unlimited,
+    /// never emits feature keys) but still exposes them on snapshots / configuration.
     /// </summary>
     public class EntitlementsOptions
     {
         /// <summary>
-        /// When false, quotas are unlimited and every plan is self-service (self-host default).
-        /// Does not change modules, lifecycle, ReadOnlyModules, or features (§8.1).
+        /// Used by other implementations for quota enforcement. The community engine ignores this
+        /// (quotas stay unlimited).
         /// </summary>
         public bool Enabled { get; set; }
         /// <summary>
-        /// When false, <see cref="EntitlementSnapshot.Features"/> is empty. Quotas unaffected (§8.1).
-        /// Default true; community still emits no feature keys.
+        /// Used by other implementations to suppress feature emission. The community engine never
+        /// emits feature keys regardless of this switch.
         /// </summary>
         public bool FeaturesEnabled { get; set; } = true;
-        /// <summary>Plans users may pick themselves. Empty = all known plans.</summary>
-        public List<string> SelfServicePlans { get; set; } = new();
-        /// <summary>Free-tier limits; a missing resource is unlimited.</summary>
-        public Dictionary<MeteredResource, int> FreeLimits { get; set; } = new();
         /// <summary>Shown to users when a limit is reached.</summary>
         public string? SupportEmail { get; set; }
-        /// <summary>
-        /// When true with <see cref="LegacyModuleGate"/>, module gates also call Evaluate and log divergences.
-        /// Ignored when the engine owns the gate (LegacyModuleGate false).
-        /// </summary>
-        public bool EngineShadow { get; set; } = true;
-        /// <summary>
-        /// When true, RequireModule / IsModuleEnabled use SubscriptionAccess and optionally shadow-log (E1a).
-        /// Default false: the engine decides and there is no shadow call.
-        /// </summary>
-        public bool LegacyModuleGate { get; set; }
-
-        public bool IsSelfServicePlan(string? plan)
-        {
-            if (!Enabled || SelfServicePlans.Count == 0)
-                return true;
-            if (plan == null)
-                return false;
-            var normalized = Core.Domain.Company.NormalizePlanKey(plan);
-            return SelfServicePlans.Any(p =>
-                string.Equals(p.Trim(), plan.Trim(), StringComparison.OrdinalIgnoreCase)
-                || string.Equals(Core.Domain.Company.NormalizePlanKey(p), normalized, StringComparison.OrdinalIgnoreCase));
-        }
     }
 
     public sealed record ResourceUsage(

@@ -24,7 +24,7 @@ public class RequireModuleAttributeTests
     public async Task SeveralModules_PassWhenAnyIsEnabled(string[] enabled, bool passes)
     {
         var entitlements = new Mock<IEntitlementService>();
-        entitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions { LegacyModuleGate = false });
+        entitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions());
         entitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
             .Returns<int, EntitlementAction>((_, action) =>
             {
@@ -67,7 +67,7 @@ public class RequireModuleAttributeTests
     public async Task EngineDeny_PropagatesCode(string module, string expectedCode)
     {
         var entitlements = new Mock<IEntitlementService>();
-        entitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions { LegacyModuleGate = false });
+        entitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions());
         entitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
             .Returns(new EntitlementDecision(false, expectedCode, "denied", RequiredModule: module,
                 SubscriptionStatus: "canceled"));
@@ -100,7 +100,7 @@ public class RequireModuleAttributeTests
     {
         ModuleAccess? seen = null;
         var entitlements = new Mock<IEntitlementService>();
-        entitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions { LegacyModuleGate = false });
+        entitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions());
         entitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
             .Returns<int, EntitlementAction>((_, action) =>
             {

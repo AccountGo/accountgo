@@ -4,14 +4,13 @@
 #nullable enable
 using System.Collections.Generic;
 using System.Linq;
-using Core.Domain;
 using Dto.Subscription;
 
 namespace Services.Billing;
 
 /// <summary>
 /// Self-hosted / community default: one plan with every module. Owners turn modules off; there is
-/// no plan to pick and no price.
+/// no plan to pick and no price. Every key (including null/blank/unknown) resolves to community.
 /// </summary>
 public sealed class CommunityPlanCatalog : IPlanCatalog
 {
@@ -23,17 +22,36 @@ public sealed class CommunityPlanCatalog : IPlanCatalog
         "sales", "financials", "purchases", "reports", "inventory", "donations", "audit"
     };
 
-    public IReadOnlyList<PlanDefinitionDto> GetPlans() => new[]
+    private static readonly PlanDefinitionDto CommunityPlan = new()
     {
-        new PlanDefinitionDto
-        {
-            Key = PlanKey,
-            Name = "Community",
-            Description = "Every module. Turn off the ones you don't need.",
-            IncludedModules = AllModules.ToList(),
-            RequiredModules = AllModules.Where(m => Company.IsRequiredModule(PlanKey, m)).ToList(),
-            SelfService = false,
-            MonthlyPrice = null
-        }
+        Key = PlanKey,
+        Name = "Community",
+        Description = "Every module. Turn off the ones you don't need.",
+        IncludedModules = AllModules.ToList(),
+        RequiredModules = new List<string> { "sales" },
+        SelfService = false,
+        MonthlyPrice = null
+    };
+
+    public IReadOnlyList<PlanDefinitionDto> GetPlans() => new[] { Clone(CommunityPlan) };
+
+    public bool TryResolvePlan(string? key, out PlanDefinitionDto plan)
+    {
+        // Self-host never rejects a plan key — SPA may still send legacy product keys.
+        plan = Clone(CommunityPlan);
+        return true;
+    }
+
+    public PlanDefinitionDto ResolveStoredPlan(string? storedPlan) => Clone(CommunityPlan);
+
+    private static PlanDefinitionDto Clone(PlanDefinitionDto source) => new()
+    {
+        Key = source.Key,
+        Name = source.Name,
+        Description = source.Description,
+        IncludedModules = source.IncludedModules.ToList(),
+        RequiredModules = source.RequiredModules.ToList(),
+        SelfService = source.SelfService,
+        MonthlyPrice = source.MonthlyPrice
     };
 }

@@ -110,6 +110,7 @@ public class RequireFeatureAttributeTests
         tenant.SetupGet(t => t.Permissions).Returns(new HashSet<string>());
         var engine = new EntitlementService(
             new EntitlementsOptions { Enabled = true },
+            new Services.Billing.CommunityPlanCatalog(),
             companies.Object, members.Object, invites.Object,
             usage.Object, banks.Object, tenant.Object);
 

@@ -56,7 +56,8 @@ public class CompanyPolicyLocksTests : IDisposable
             _tenant,
             _db,
             new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenant)),
-            new CompanyAccountingPolicyService(_db));
+            new CompanyAccountingPolicyService(_db),
+            new Services.Billing.CommunityPlanCatalog());
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

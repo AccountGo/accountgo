@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Services.Billing;
 
 namespace Api.Controllers
 {
@@ -24,18 +25,21 @@ namespace Api.Controllers
         private readonly ApiDbContext _db;
         private readonly WorkspaceService _workspaces;
         private readonly CompanyAccountingPolicyService _accountingPolicy;
+        private readonly IPlanCatalog _plans;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
             ITenantContext tenant,
             ApiDbContext db,
             WorkspaceService workspaces,
-            CompanyAccountingPolicyService accountingPolicy)
+            CompanyAccountingPolicyService accountingPolicy,
+            IPlanCatalog plans)
         {
             _tenant = tenant;
             _db = db;
             _workspaces = workspaces;
             _accountingPolicy = accountingPolicy;
+            _plans = plans;
         }
 
         [TenantFree]
@@ -98,9 +102,10 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Company Name Required", detail: "Company name is required.");
             var slug = WorkspaceService.NormalizeSlug(string.IsNullOrWhiteSpace(request.Slug) ? request.Name : request.Slug);
             var currency = (request.Currency ?? "USD").Trim().ToUpperInvariant();
-            var plan = Company.NormalizePlanKey(request.Plan ?? "accounting_free");
-            if (slug.Length == 0 || slug.Length > 100 || !System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$") ||
-                !Company.IsKnownPlan(plan))
+            if (!_plans.TryResolvePlan(request.Plan, out var resolvedPlan))
+                return Problem(statusCode: 400, title: "Invalid workspace settings");
+            var plan = resolvedPlan.Key;
+            if (slug.Length == 0 || slug.Length > 100 || !System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$"))
                 return Problem(statusCode: 400, title: "Invalid workspace settings");
 
             var options = ToOptions(request);
@@ -134,7 +139,7 @@ namespace Api.Controllers
             return Ok(new
             {
                 id = company.Id, name = company.Name, slug = company.Slug, shortName = company.ShortName,
-                plan = company.Plan, activeModules = company.GetActiveModules(), subscriptionStatus = company.SubscriptionStatus,
+                plan = _plans.ResolveStoredPlan(company.Plan).Key, activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), subscriptionStatus = company.SubscriptionStatus,
                 role = _tenant.Role.ToString(), permissions = _tenant.Permissions,
                 currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault() ?? "USD"
             });
@@ -443,13 +448,13 @@ namespace Api.Controllers
             DefaultPaymentInstructions = settings.DefaultPaymentInstructions,
         };
 
-        private static object Summary(Company company, CompanyMemberRole role)
+        private object Summary(Company company, CompanyMemberRole role)
         {
             return new
             {
                 id = company.Id.ToString(), name = company.Name, shortName = company.ShortName, slug = company.Slug,
-                plan = company.Plan, subscriptionStatus = company.SubscriptionStatus,
-                activeModules = company.GetActiveModules(), role = role.ToString()
+                plan = _plans.ResolveStoredPlan(company.Plan).Key, subscriptionStatus = company.SubscriptionStatus,
+                activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), role = role.ToString()
             };
         }
     }

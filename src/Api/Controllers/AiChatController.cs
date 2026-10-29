@@ -355,8 +355,8 @@ namespace Api.Controllers
             {
                 var subscription = _administrationService.GetCurrentSubscription();
                 companyPlan = string.IsNullOrWhiteSpace(subscription.Plan)
-                    ? "accounting_free"
-                    : Company.NormalizePlanKey(subscription.Plan);
+                    ? "community"
+                    : subscription.Plan;
                 activeModules = string.Join(
                     ",",
                     subscription.ActiveModules ?? new List<string>());

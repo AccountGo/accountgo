@@ -88,17 +88,11 @@
     "Cors__AllowedOrigins__1": "http://localhost:5173",
     "ANTER_BASE_URL": "https://agents.anter.ai",
     "ANTER_AGENT_SLUG": "accountgo-assistant",
-    // Free-tier entitlements (optional). Leave ENABLED false for local/community (quotas off; all plans self-service).
+    // Entitlement switches (optional). Used by other implementations; the community engine ignores them for gates.
     // Observability: Server-Timing on responses (default on when unset). Set "false" to disable.
     "SERVER_TIMING_ENABLED": "true",
     "ENTITLEMENTS_ENABLED": "false",
-    "ENTITLEMENT_FEATURES_ENABLED": "true",
-    "ENTITLEMENTS_SELF_SERVICE_PLANS": "invoicing,accounting",
-    "ENTITLEMENTS_FREE_SALES_DOCUMENTS_PER_MONTH": "10",
-    "ENTITLEMENTS_FREE_BILLS_PER_MONTH": "10",
-    "ENTITLEMENTS_FREE_SEATS": "1",
-    "ENTITLEMENTS_FREE_BANK_ACCOUNTS": "2",
-    "ENTITLEMENTS_FREE_OWNED_WORKSPACES": "1"
+    "ENTITLEMENT_FEATURES_ENABLED": "true"
   },
   "observability": {
     "enabled": true,
