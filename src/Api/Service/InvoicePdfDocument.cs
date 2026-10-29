@@ -127,7 +127,7 @@ namespace Api.Service
                     column.Spacing(2);
                     column.Item().Text("BILLED TO").FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
                     column.Item().PaddingTop(2).Text(_invoice.CustomerName ?? "Customer").FontSize(11).Bold();
-                    if (!string.IsNullOrWhiteSpace(_invoice.CustomerAttention))
+                    if (_invoice.Display.ShowAttention && !string.IsNullOrWhiteSpace(_invoice.CustomerAttention))
                         column.Item().Text(_invoice.CustomerAttention).FontColor(Secondary);
                     if (!string.IsNullOrWhiteSpace(_invoice.CustomerAddress))
                         column.Item().Text(_invoice.CustomerAddress).FontColor(Secondary);

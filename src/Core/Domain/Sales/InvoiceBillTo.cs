@@ -36,29 +36,24 @@ namespace Core.Domain.Sales
         public string? Phone { get; set; }
         public List<string> AddressLines { get; set; } = new();
 
-        /// <summary>The customer as its party describes it now, optionally with a Bill To contact person.</summary>
+        /// <summary>
+        /// The customer as its party describes it now. Bill To is the company being billed, so the email, phone, and
+        /// address are always the company's; a Bill To contact only adds the "Attn:" line naming who it is for.
+        /// </summary>
         public static InvoiceBillTo FromParty(Party? party, Contact? billToContact = null)
         {
-            var contactParty = billToContact?.Party;
-            var contactAddress = NonBlank(
-                contactParty?.CompanyStreet,
-                contactParty?.CompanyProvince,
-                contactParty?.CompanyPostalCode,
-                contactParty?.CompanyCountry);
-            var companyAddress = NonBlank(
-                party?.CompanyStreet,
-                party?.CompanyProvince,
-                party?.CompanyPostalCode,
-                party?.CompanyCountry);
-
             return new InvoiceBillTo
             {
                 Name = party?.Name ?? "Unknown",
                 Attention = AttentionLine(billToContact),
                 ContactId = billToContact?.Id > 0 ? billToContact.Id : null,
-                Email = Blank(contactParty?.Email) ?? Blank(party?.Email),
-                Phone = Blank(contactParty?.Phone) ?? Blank(party?.Phone),
-                AddressLines = contactAddress.Count > 0 ? contactAddress : companyAddress,
+                Email = Blank(party?.Email),
+                Phone = Blank(party?.Phone),
+                AddressLines = NonBlank(
+                    party?.CompanyStreet,
+                    party?.CompanyProvince,
+                    party?.CompanyPostalCode,
+                    party?.CompanyCountry),
             };
         }
 
