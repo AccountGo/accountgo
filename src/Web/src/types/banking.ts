@@ -207,6 +207,8 @@ export interface BankReconciliationListItem {
   statusLabel: string;
   finishedAt?: string | null;
   finishedBy?: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
   version: number;
 }
 
@@ -228,6 +230,8 @@ export interface BankReconciliation {
   createdAt: string;
   finishedBy?: string | null;
   finishedAt?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
   deposits: BankReconciliationCandidateLine[];
   payments: BankReconciliationCandidateLine[];
 }
@@ -237,3 +241,64 @@ export const BANK_RECONCILIATION_STATUS = {
   Finished: 2,
   Undone: 3,
 } as const;
+
+export interface OutstandingAgingBucket {
+  label: string;
+  minDays: number;
+  maxDays?: number | null;
+  count: number;
+  depositsInTransit: number;
+  outstandingPayments: number;
+  net: number;
+  isStale: boolean;
+}
+
+export interface OutstandingAging {
+  bankId: number;
+  asOfDate: string;
+  buckets: OutstandingAgingBucket[];
+  totalCount: number;
+  totalDepositsInTransit: number;
+  totalOutstandingPayments: number;
+  staleCount: number;
+  hasStale: boolean;
+}
+
+export interface BankCloseStatusBank {
+  bankId: number;
+  name: string;
+  reconciledThrough?: string | null;
+  isReconciled: boolean;
+}
+
+export interface BankCloseStatus {
+  periodEnd: string;
+  periodLabel: string;
+  reconciledCount: number;
+  totalCount: number;
+  isComplete: boolean;
+  banks: BankCloseStatusBank[];
+}
+
+export interface BankBalanceCheckLine {
+  lineId: number;
+  headerId: number;
+  date: string;
+  type: string;
+  payee?: string | null;
+  reference?: string | null;
+  in: number;
+  out: number;
+  mayExplainDifference: boolean;
+}
+
+export interface BankBalanceCheck {
+  bankId: number;
+  asOfDate: string;
+  bankBalance: number;
+  bookBalance: number;
+  difference: number;
+  isMatch: boolean;
+  message: string;
+  recentLines: BankBalanceCheckLine[];
+}

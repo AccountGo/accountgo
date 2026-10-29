@@ -5,6 +5,8 @@ import { PageHeader, HeaderButton, HeaderMenu } from '../components/PageHeader';
 import { BankAccountFormDialog } from '../components/BankAccountFormDialog';
 import { BankTransactionDialog } from '../components/BankTransactionDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { BalanceCheckDialog } from '../components/BalanceCheckDialog';
+import { canShowBalanceCheck } from '../lib/balanceCheck';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import { localToday } from '../lib/businessDays';
@@ -38,6 +40,7 @@ const BankRegisterPage: React.FC = () => {
   const canManage = hasPermission('banking.accounts.manage');
   const canCreateTx = hasPermission('banking.transactions.create');
   const canReconcile = hasPermission('banking.reconcile');
+  const canViewAccounts = hasPermission('banking.accounts.view');
 
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [banks, setBanks] = useState<BankAccount[]>([]);
@@ -48,6 +51,7 @@ const BankRegisterPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [txOpen, setTxOpen] = useState(false);
+  const [balanceCheckOpen, setBalanceCheckOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [archiveConfirmMessage, setArchiveConfirmMessage] = useState<string | null>(null);
 
@@ -204,6 +208,14 @@ const BankRegisterPage: React.FC = () => {
                 onClick={() => navigate(`/org/${currentOrg.slug}/banking/${account.id}/reconcile`)}
               />
             )}
+            {canShowBalanceCheck({ hasFinancials, canView: canViewAccounts, archived: !!account.archivedAt }) && (
+              <HeaderButton
+                label="Check balance"
+                icon={Scale}
+                variant="secondary"
+                onClick={() => setBalanceCheckOpen(true)}
+              />
+            )}
             {canManage ? (
               <HeaderMenu
                 label="Actions"
@@ -325,6 +337,10 @@ const BankRegisterPage: React.FC = () => {
             await load();
           }}
         />
+      )}
+
+      {balanceCheckOpen && (
+        <BalanceCheckDialog bank={account} formatCurrency={formatCurrency} onClose={() => setBalanceCheckOpen(false)} />
       )}
 
       {archiveConfirmMessage && (

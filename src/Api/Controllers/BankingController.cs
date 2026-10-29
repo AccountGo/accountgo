@@ -117,6 +117,60 @@ namespace Api.Controllers
             }
         }
 
+        [HttpGet("Accounts/{id:int}/OutstandingAging")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult GetOutstandingAging(int id, [FromQuery] string? asOf = null)
+        {
+            try
+            {
+                return Ok(_banks.GetOutstandingAging(id, ParseRegisterDate(asOf)));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or FormatException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Accounts/{id:int}/BalanceCheck")]
+        [RequireModule(SystemModules.Sales, SystemModules.Purchases)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult CheckBalance(int id, [FromBody] BankBalanceCheckRequest request)
+        {
+            try
+            {
+                return Ok(_banks.CheckBalance(id, request));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("CloseStatus")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult GetCloseStatus([FromQuery] string? asOf = null)
+        {
+            try
+            {
+                var status = _banks.GetCloseStatus(ParseRegisterDate(asOf));
+                return status == null ? NoContent() : Ok(status);
+            }
+            catch (FormatException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         private static DateTime? ParseRegisterDate(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -463,6 +517,32 @@ namespace Api.Controllers
                 var undone = _reconciliations.Undo(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
                 tx.Commit();
                 return Ok(undone);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (BankReconciliationConflictException ex)
+            {
+                return ReconciliationConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Reconciliations/{id:int}/Review")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult ReviewReconciliation(int id)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var reviewed = _reconciliations.Review(id, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(reviewed);
             }
             catch (TenantEntityNotFoundException)
             {

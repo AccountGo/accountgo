@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Core.Domain;
+using Core.Domain.Security;
+using Core.Tenancy;
 using Dto.Dashboard;
+using Services.Banking;
 using Services.Financial;
 using Services.Purchasing;
 using Services.Sales;
@@ -15,15 +18,21 @@ namespace Services.Dashboard
         private readonly IFinancialService _financialService;
         private readonly ISalesService _salesService;
         private readonly IPurchasingService _purchasingService;
+        private readonly IBankAccountService _bankAccountService;
+        private readonly ITenantContext _tenantContext;
 
         public DashboardService(
             IFinancialService financialService,
             ISalesService salesService,
-            IPurchasingService purchasingService)
+            IPurchasingService purchasingService,
+            IBankAccountService bankAccountService,
+            ITenantContext tenantContext)
         {
             _financialService = financialService;
             _salesService = salesService;
             _purchasingService = purchasingService;
+            _bankAccountService = bankAccountService;
+            _tenantContext = tenantContext;
         }
 
         public DashboardSummaryDto GetDashboardSummary(
@@ -134,10 +143,22 @@ namespace Services.Dashboard
                     salesInvoices,
                     salesReceipts,
                     purchaseInvoices,
-                    recentActivity)
+                    recentActivity),
+                BankCloseStatus = BuildBankCloseStatus(DateTime.Today)
             };
 
             return summary;
+        }
+
+        private Dto.Banking.BankCloseStatusDto? BuildBankCloseStatus(DateTime asOf)
+        {
+            if (!_tenantContext.IsResolved
+                || !_tenantContext.Permissions.Contains(SystemPermissions.BankingAccountsView))
+            {
+                return null;
+            }
+
+            return _bankAccountService.GetCloseStatus(asOf);
         }
 
         private static (DateTime Start, DateTime End) ResolveDateRange(DateTime? from, DateTime? to)

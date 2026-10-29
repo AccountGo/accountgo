@@ -6,12 +6,14 @@ using System;
 
 namespace Services.Banking
 {
-    /// <summary>HTTP 409 conflicts for draft resume / concurrent finish / latest-only undo.</summary>
+    /// <summary>HTTP 409 conflicts for draft resume / concurrent finish / latest-only undo / reviewer sign-off.</summary>
     public sealed class BankReconciliationConflictException : InvalidOperationException
     {
         public const string DraftExistsCode = "DRAFT_EXISTS";
         public const string ConcurrentFinishCode = "CONCURRENT_FINISH";
         public const string NotLatestCode = "NOT_LATEST";
+        public const string SameReviewerCode = "SAME_REVIEWER";
+        public const string AlreadyReviewedCode = "ALREADY_REVIEWED";
 
         public BankReconciliationConflictException(string code, string message, int? reconciliationId = null)
             : base(message)

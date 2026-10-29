@@ -282,6 +282,36 @@ namespace Services.Banking
             return ToDetail(recon);
         }
 
+        public BankReconciliationDto Review(int id, string actor)
+        {
+            EnsureCompany();
+            var reviewer = (actor ?? string.Empty).Trim();
+            if (reviewer.Length == 0)
+                throw new InvalidOperationException("The reviewer could not be identified.");
+
+            var recon = RequireRecon(id);
+            if (recon.Status != BankReconciliationStatuses.Finished)
+                throw new InvalidOperationException("Only a finished reconciliation can be reviewed.");
+
+            if (recon.ReviewedAt.HasValue)
+                throw new BankReconciliationConflictException(
+                    BankReconciliationConflictException.AlreadyReviewedCode,
+                    $"This reconciliation was already reviewed by {recon.ReviewedBy}.",
+                    recon.Id);
+
+            if (!string.IsNullOrWhiteSpace(recon.FinishedBy)
+                && string.Equals(recon.FinishedBy.Trim(), reviewer, StringComparison.OrdinalIgnoreCase))
+                throw new BankReconciliationConflictException(
+                    BankReconciliationConflictException.SameReviewerCode,
+                    "A different person than the preparer must review this reconciliation.",
+                    recon.Id);
+
+            recon.ReviewedBy = reviewer;
+            recon.ReviewedAt = DateTime.UtcNow;
+            BumpVersion(recon);
+            return ToDetail(recon);
+        }
+
         public void DiscardDraft(int id)
         {
             EnsureCompany();
@@ -718,6 +748,8 @@ namespace Services.Banking
                 CreatedAt = recon.CreatedAt,
                 FinishedBy = recon.FinishedBy,
                 FinishedAt = recon.FinishedAt,
+                ReviewedBy = recon.ReviewedBy,
+                ReviewedAt = recon.ReviewedAt,
                 Deposits = deposits,
                 Payments = payments
             };
@@ -789,6 +821,8 @@ namespace Services.Banking
                 StatusLabel = StatusLabel(recon.Status),
                 FinishedAt = recon.FinishedAt,
                 FinishedBy = recon.FinishedBy,
+                ReviewedBy = recon.ReviewedBy,
+                ReviewedAt = recon.ReviewedAt,
                 Version = recon.Version
             };
         }
