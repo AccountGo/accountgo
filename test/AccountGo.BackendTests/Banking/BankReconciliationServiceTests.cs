@@ -267,6 +267,87 @@ public class BankReconciliationServiceTests
     }
 
     [Fact]
+    public void GetReport_TiesOutstandingToBooks_AndGoldenText()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        var bank = harness.CreateBankWithOpeningBalance(100m);
+        var clearedOut = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.MoneyOut,
+            BankId = bank.Id,
+            ContraAccountId = harness.RequireAccount("50100").Id,
+            Date = new DateTime(2024, 1, 15, 0, 0, 0, DateTimeKind.Utc),
+            Amount = 25m
+        });
+        var outstandingOut = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.MoneyOut,
+            BankId = bank.Id,
+            ContraAccountId = harness.RequireAccount("50100").Id,
+            Date = new DateTime(2024, 1, 20, 0, 0, 0, DateTimeKind.Utc),
+            Amount = 10m
+        });
+
+        var end = new DateTime(2024, 1, 31, 0, 0, 0, DateTimeKind.Utc);
+        var draft = harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = end,
+            StatementEndingBalance = 75m
+        }, "prep");
+
+        var clearedLine = harness.Repos.GlLines.Table.Single(l =>
+            l.GeneralLedgerHeaderId == clearedOut.GeneralLedgerHeaderId && l.AccountId == bank.AccountId);
+        draft = harness.Reconciliations.UpdateItems(draft.Id, new UpdateBankReconciliationItemsRequest
+        {
+            Add = new[] { clearedLine.Id },
+            Version = draft.Version
+        });
+        Assert.Equal(0m, draft.Difference);
+
+        var finished = harness.Reconciliations.Finish(draft.Id, new FinishBankReconciliationRequest
+        {
+            Version = draft.Version
+        }, "prep");
+
+        var report = harness.Reconciliations.GetReport(finished.Id);
+        Assert.Equal(75m, report.StatementEndingBalance);
+        Assert.Equal(0m, report.DepositsInTransit);
+        Assert.Equal(10m, report.OutstandingPayments);
+        Assert.Equal(65m, report.AdjustedBankBalance);
+        Assert.Equal(65m, report.BooksBalance);
+        Assert.Equal(0m, report.Difference);
+        Assert.Equal("prep", report.PreparedBy);
+        Assert.Single(report.OutstandingItems);
+        Assert.Equal(10m, report.OutstandingItems[0].Out);
+        Assert.Equal((end - new DateTime(2024, 1, 20, 0, 0, 0, DateTimeKind.Utc)).Days, report.OutstandingItems[0].AgeDays);
+
+        var text = Api.Service.BankReconciliationReportText.Render(report);
+        Assert.Contains("Balance per bank statement:", text, StringComparison.Ordinal);
+        Assert.Contains("  75.00", text, StringComparison.Ordinal);
+        Assert.Contains("Add: Deposits in transit:", text, StringComparison.Ordinal);
+        Assert.Contains("Less: Outstanding payments:", text, StringComparison.Ordinal);
+        Assert.Contains("  10.00", text, StringComparison.Ordinal);
+        Assert.Contains("Adjusted bank balance:", text, StringComparison.Ordinal);
+        Assert.Contains("  65.00", text, StringComparison.Ordinal);
+        Assert.Contains("Balance per books:", text, StringComparison.Ordinal);
+        Assert.Contains("Difference:", text, StringComparison.Ordinal);
+        Assert.Contains("  0.00", text, StringComparison.Ordinal);
+        Assert.Contains("Prepared by: prep", text, StringComparison.Ordinal);
+        Assert.Contains($"age {report.OutstandingItems[0].AgeDays}d", text, StringComparison.Ordinal);
+
+        // PDF generates without throwing.
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+        var pdf = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(
+            new Api.Service.BankReconciliationReportPdfDocument(report));
+        Assert.True(pdf.Length > 100);
+
+        _ = outstandingOut; // kept uncleared on purpose
+    }
+
+    [Fact]
     public void MoneyOut_RefusesCustomerArAndVendorApContra()
     {
         using var harness = new Harness();
@@ -369,13 +450,17 @@ public class BankReconciliationServiceTests
                 Repos.Banks,
                 Repos.GlLines,
                 Repos.GlHeaders,
+                Repos.Companies,
+                Repos.Settings,
                 Transactions,
                 tenant);
 
+            Repos.Companies.Insert(new Company { Id = 1, Name = "Test Co", ShortName = "Test" });
             Repos.Settings.Insert(new CompanySetting
             {
                 CompanyId = 1,
                 CoaTemplateId = CoaTemplates.Legacy,
+                Currency = "USD",
                 BooksStartDate = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             });
             Repos.FiscalYears.Insert(new FinancialYear
@@ -548,6 +633,7 @@ public class BankReconciliationServiceTests
             public MemoryRepo<BankReconciliationItem> ReconciliationItems { get; } = new();
             public MemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
             public MemoryRepo<GeneralLedgerHeader> GlHeaders { get; } = new();
+            public MemoryRepo<Company> Companies { get; } = new();
             public MemoryRepo<CompanySetting> Settings { get; } = new();
             public MemoryRepo<FinancialYear> FiscalYears { get; } = new();
             public MemoryRepo<SalesReceiptHeader> Receipts { get; } = new();

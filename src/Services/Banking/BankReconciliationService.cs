@@ -20,6 +20,8 @@ namespace Services.Banking
         private readonly IRepository<Bank> _banks;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
+        private readonly IRepository<Company> _companies;
+        private readonly IRepository<CompanySetting> _companySettings;
         private readonly IBankTransactionService _transactions;
         private readonly ITenantContext _tenant;
 
@@ -29,6 +31,8 @@ namespace Services.Banking
             IRepository<Bank> banks,
             IRepository<GeneralLedgerLine> glLines,
             IRepository<GeneralLedgerHeader> glHeaders,
+            IRepository<Company> companies,
+            IRepository<CompanySetting> companySettings,
             IBankTransactionService transactions,
             ITenantContext tenant)
         {
@@ -37,6 +41,8 @@ namespace Services.Banking
             _banks = banks;
             _glLines = glLines;
             _glHeaders = glHeaders;
+            _companies = companies;
+            _companySettings = companySettings;
             _transactions = transactions;
             _tenant = tenant;
         }
@@ -286,6 +292,95 @@ namespace Services.Banking
                 _items.Delete(item);
             _recons.Delete(recon);
         }
+
+        public BankReconciliationReportDto GetReport(int id)
+        {
+            EnsureCompany();
+            var recon = RequireRecon(id);
+            if (recon.Status != BankReconciliationStatuses.Finished)
+                throw new InvalidOperationException("Finish the reconciliation before downloading the report.");
+
+            var bank = RequireBank(recon.BankId);
+            if (!bank.AccountId.HasValue)
+                throw new InvalidOperationException("That bank account has no posting account.");
+
+            var endDate = recon.StatementEndDate.Date;
+            var companyId = _tenant.RequireCompanyId();
+            var companyName = _companies.GetById(companyId)?.Name ?? "Company";
+            var currency = _companySettings.Table.Select(s => s.Currency).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(currency))
+                currency = "USD";
+
+            var booksBalance = Round2(BooksBalanceAsOf(bank.AccountId.Value, endDate));
+            var outstandingLines = UnclearedLinesAsOf(bank.AccountId.Value, endDate);
+            var outstandingItems = outstandingLines
+                .Select(line =>
+                {
+                    var header = _glHeaders.GetById(line.GeneralLedgerHeaderId);
+                    var date = header?.Date.Date ?? endDate;
+                    return new BankReconciliationReportOutstandingItemDto
+                    {
+                        Date = date,
+                        Type = header?.DocumentType.ToString() ?? "Line",
+                        Reference = header?.Description,
+                        In = line.DrCr == DrOrCrSide.Dr ? line.Amount : 0m,
+                        Out = line.DrCr == DrOrCrSide.Cr ? line.Amount : 0m,
+                        AgeDays = Math.Max(0, (endDate - date).Days)
+                    };
+                })
+                .OrderBy(i => i.Date)
+                .ThenBy(i => i.Type)
+                .ToList();
+
+            var depositsInTransit = Round2(outstandingItems.Sum(i => i.In));
+            var outstandingPayments = Round2(outstandingItems.Sum(i => i.Out));
+            var statementEnding = Round2(recon.StatementEndingBalance);
+            var adjustedBank = Round2(statementEnding + depositsInTransit - outstandingPayments);
+            var difference = Round2(adjustedBank - booksBalance);
+
+            return new BankReconciliationReportDto
+            {
+                ReconciliationId = recon.Id,
+                CompanyName = companyName,
+                BankName = bank.Name,
+                StatementEndDate = endDate,
+                CurrencyCode = currency.Trim().ToUpperInvariant(),
+                StatementEndingBalance = statementEnding,
+                DepositsInTransit = depositsInTransit,
+                OutstandingPayments = outstandingPayments,
+                AdjustedBankBalance = adjustedBank,
+                BooksBalance = booksBalance,
+                Difference = difference,
+                PreparedBy = recon.FinishedBy,
+                PreparedAt = recon.FinishedAt,
+                OutstandingItems = outstandingItems
+            };
+        }
+
+        private decimal BooksBalanceAsOf(int accountId, DateTime endDate)
+        {
+            var lines =
+                from line in _glLines.Table
+                join header in _glHeaders.Table on line.GeneralLedgerHeaderId equals header.Id
+                where line.AccountId == accountId && header.Date.Date <= endDate
+                select line;
+
+            var dr = lines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount);
+            var cr = lines.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount);
+            // Bank posting accounts are debit-normal (cash).
+            return dr - cr;
+        }
+
+        private IReadOnlyList<GeneralLedgerLine> UnclearedLinesAsOf(int accountId, DateTime endDate) =>
+            (
+                from line in _glLines.Table
+                join header in _glHeaders.Table on line.GeneralLedgerHeaderId equals header.Id
+                where line.AccountId == accountId
+                      && line.BankReconciliationId == null
+                      && header.Date.Date <= endDate
+                orderby header.Date, header.Id, line.Id
+                select line
+            ).ToList();
 
         private void InsertItem(BankReconciliation recon, GeneralLedgerLine line)
         {
