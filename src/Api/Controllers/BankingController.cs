@@ -4,6 +4,7 @@
 #nullable enable
 using System;
 using System.Data;
+using System.Globalization;
 using Api.Data;
 using Api.Filters;
 using Core.Domain.Security;
@@ -85,6 +86,38 @@ namespace Api.Controllers
             {
                 return NotFound(new { message = "Bank account not found" });
             }
+        }
+
+        [HttpGet("Accounts/{id:int}/Register")]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult GetRegister(
+            int id,
+            [FromQuery] string? from = null,
+            [FromQuery] string? to = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = BankAccountService.RegisterDefaultPageSize)
+        {
+            try
+            {
+                return Ok(_banks.GetRegister(id, ParseRegisterDate(from), ParseRegisterDate(to), page, pageSize));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or FormatException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private static DateTime? ParseRegisterDate(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+            if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+                return parsed.Date;
+            throw new FormatException($"Invalid date '{value}'. Use yyyy-MM-dd.");
         }
 
         [HttpPost("Accounts")]

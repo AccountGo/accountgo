@@ -38,7 +38,9 @@ namespace Core.Domain
         PurchaseInvoicePayment,
         JournalEntry,
         CustomerAllocation,
-        InventoryAdjustment
+        InventoryAdjustment,
+        /// <summary>Bank register document (Phase 1: opening balance; Phase 2: money in/out, transfer, etc.).</summary>
+        BankTransaction = 17
     }
 
     public enum AccountTypes
