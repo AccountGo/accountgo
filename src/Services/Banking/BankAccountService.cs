@@ -190,6 +190,9 @@ namespace Services.Banking
             var name = RequireUniqueName(request.Name, exceptBankId: null);
             var type = ParseType(request.Type);
 
+            if (request.OpeningBalance.HasValue || request.OpeningBalanceDate.HasValue)
+                throw new InvalidOperationException("Opening balances arrive with the register (1D).");
+
             if (request.PostingAccountId.HasValue && !HasFinancialsModule())
                 throw new InvalidOperationException("Linking a posting account requires the Financials module.");
 
@@ -221,8 +224,8 @@ namespace Services.Banking
                 Iban = request.Iban,
                 Swift = request.Swift,
                 AccountId = account.Id,
-                OpeningBalance = request.OpeningBalance,
-                OpeningBalanceDate = request.OpeningBalanceDate,
+                OpeningBalance = null,
+                OpeningBalanceDate = null,
                 CurrencyCode = NormalizeCurrency(request.CurrencyCode),
                 IsActive = true,
                 ArchivedAt = null,
@@ -369,7 +372,7 @@ namespace Services.Banking
             return ToDto(bank, includeFullNumbers);
         }
 
-        public void DeleteOrArchive(int id)
+        public bool DeleteOrArchive(int id)
         {
             var bank = RequireBank(id);
             var hasHistory = bank.AccountId.HasValue && LinesForAccount(bank.AccountId.Value).Any();
@@ -377,12 +380,13 @@ namespace Services.Banking
             {
                 // Explicit delete counts as confirmation for a non-zero I&B balance.
                 Archive(id, includeFullNumbers: false, confirmNonZeroBalance: true);
-                return;
+                return true;
             }
 
             // 1B: always leave the GL account in place. Takeover renames the account to the
             // bank's name, so "name match ⇒ dedicated" would delete cash history accounts.
             _banks.Delete(bank);
+            return false;
         }
 
         public Account EnsureEligiblePostingAccount(int accountId, int? exceptBankId)
