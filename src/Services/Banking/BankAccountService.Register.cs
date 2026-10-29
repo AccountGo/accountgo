@@ -155,6 +155,32 @@ namespace Services.Banking
 
             var headerIds = pageItems.Select(m => m.HeaderId).Distinct().ToList();
 
+            var bankTxs = _bankTransactions.Table
+                .Where(t => t.GeneralLedgerHeaderId != null && headerIds.Contains(t.GeneralLedgerHeaderId.Value))
+                .ToList();
+            var bankTxPartyIds = bankTxs.Where(t => t.PartyId != null).Select(t => t.PartyId!.Value).Distinct().ToList();
+            var bankTxParties = bankTxPartyIds.Count == 0
+                ? new Dictionary<int, Party>()
+                : _parties.Table.Where(p => bankTxPartyIds.Contains(p.Id)).ToDictionary(p => p.Id);
+            foreach (var tx in bankTxs)
+            {
+                if (result.ContainsKey(tx.GeneralLedgerHeaderId!.Value))
+                    continue;
+                string? payee = null;
+                if (tx.PartyId.HasValue && bankTxParties.TryGetValue(tx.PartyId.Value, out var party))
+                    payee = party.Name;
+                result[tx.GeneralLedgerHeaderId.Value] = new RegisterEnrichment(
+                    BankTransactionService.KindLabel(tx.Kind),
+                    payee,
+                    tx.ReferenceNo ?? tx.Memo,
+                    new BankRegisterSourceDocDto
+                    {
+                        Type = nameof(DocumentTypes.BankTransaction),
+                        Id = tx.Id,
+                        No = tx.No
+                    });
+            }
+
             var receipts = _receipts.Table
                 .Where(r => r.GeneralLedgerHeaderId != null && headerIds.Contains(r.GeneralLedgerHeaderId.Value))
                 .ToList();

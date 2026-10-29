@@ -14,6 +14,7 @@ namespace Api.Data.Schema
             "Address",
             "AuditLog",
             "Bank",
+            "BankTransaction",
             "CompanySetting",
             "Contact",
             "Customer",
@@ -605,6 +606,9 @@ WHERE ""DisabledModulesJson"" IS NULL
             cmd.ExecuteNonQuery();
             cmd.CommandText = EntitlementUsageTableSql;
             cmd.ExecuteNonQuery();
+            cmd.CommandText = BankTransactionTableSql;
+            cmd.ExecuteNonQuery();
+            BackfillOpeningBalanceBankTransactions(connection);
         }
 
         // D1 0026_security_schema.sql
@@ -760,6 +764,73 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_InventoryAdjustment_ItemId"" ON ""InventoryAdjustment"" (""ItemId"");
             CREATE INDEX IF NOT EXISTS ""IX_InventoryAdjustment_GeneralLedgerHeaderId"" ON ""InventoryAdjustment"" (""GeneralLedgerHeaderId"");
             CREATE INDEX IF NOT EXISTS ""IX_InventoryAdjustment_InventoryControlJournalId"" ON ""InventoryAdjustment"" (""InventoryControlJournalId"");";
+
+        // D1 0036_bank_transactions.sql (#413 Phase 2A)
+        private const string BankTransactionTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""BankTransaction"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BankTransaction"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""Kind"" INTEGER NOT NULL,
+                ""BankId"" INTEGER NOT NULL,
+                ""ToBankId"" INTEGER NULL,
+                ""Date"" TEXT NOT NULL,
+                ""Amount"" NUMERIC NOT NULL,
+                ""ContraAccountId"" INTEGER NULL,
+                ""PartyId"" INTEGER NULL,
+                ""No"" TEXT NOT NULL,
+                ""ReferenceNo"" TEXT NULL,
+                ""Memo"" TEXT NULL,
+                ""GeneralLedgerHeaderId"" INTEGER NULL,
+                ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                CONSTRAINT ""FK_BankTransaction_Bank_BankId"" FOREIGN KEY (""BankId"") REFERENCES ""Bank"" (""Id""),
+                CONSTRAINT ""FK_BankTransaction_Bank_ToBankId"" FOREIGN KEY (""ToBankId"") REFERENCES ""Bank"" (""Id""),
+                CONSTRAINT ""FK_BankTransaction_Account_ContraAccountId"" FOREIGN KEY (""ContraAccountId"") REFERENCES ""Account"" (""Id""),
+                CONSTRAINT ""FK_BankTransaction_Party_PartyId"" FOREIGN KEY (""PartyId"") REFERENCES ""Party"" (""Id""),
+                CONSTRAINT ""FK_BankTransaction_GeneralLedgerHeader_GeneralLedgerHeaderId"" FOREIGN KEY (""GeneralLedgerHeaderId"") REFERENCES ""GeneralLedgerHeader"" (""Id""),
+                CONSTRAINT ""FK_BankTransaction_GeneralLedgerHeader_VoidGeneralLedgerHeaderId"" FOREIGN KEY (""VoidGeneralLedgerHeaderId"") REFERENCES ""GeneralLedgerHeader"" (""Id"")
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_BankTransaction_CompanyId"" ON ""BankTransaction"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankTransaction_Company_Bank_Date"" ON ""BankTransaction"" (""CompanyId"", ""BankId"", ""Date"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankTransaction_GeneralLedgerHeaderId"" ON ""BankTransaction"" (""GeneralLedgerHeaderId"");
+            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankTransaction_Company_No"" ON ""BankTransaction"" (""CompanyId"", ""No"");";
+
+        private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
+        {
+            if (!TableExists(connection, "BankTransaction") || !TableExists(connection, "Bank") || !TableExists(connection, "GeneralLedgerHeader"))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = @"
+                UPDATE ""GeneralLedgerHeader""
+                SET ""SourceDocumentId"" = (
+                    SELECT b.""Id"" FROM ""Bank"" AS b
+                    WHERE b.""OpeningBalanceGeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id""
+                      AND b.""CompanyId"" = ""GeneralLedgerHeader"".""CompanyId"")
+                WHERE ""DocumentType"" = 17
+                  AND ""Description"" = 'Opening balance'
+                  AND ""SourceDocumentId"" IS NULL
+                  AND EXISTS (
+                    SELECT 1 FROM ""Bank"" AS b
+                    WHERE b.""OpeningBalanceGeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id""
+                      AND b.""CompanyId"" = ""GeneralLedgerHeader"".""CompanyId"");
+
+                INSERT INTO ""BankTransaction"" (
+                    ""CompanyId"", ""Kind"", ""BankId"", ""ToBankId"", ""Date"", ""Amount"",
+                    ""ContraAccountId"", ""PartyId"", ""No"", ""ReferenceNo"", ""Memo"",
+                    ""GeneralLedgerHeaderId"", ""VoidGeneralLedgerHeaderId"")
+                SELECT b.""CompanyId"", 7, b.""Id"", NULL,
+                       COALESCE(b.""OpeningBalanceDate"", date('now')),
+                       ABS(COALESCE(b.""OpeningBalance"", 0)),
+                       NULL, NULL, 'OB-' || CAST(b.""Id"" AS TEXT), NULL, 'Opening balance',
+                       b.""OpeningBalanceGeneralLedgerHeaderId"", NULL
+                FROM ""Bank"" AS b
+                WHERE b.""OpeningBalanceGeneralLedgerHeaderId"" IS NOT NULL
+                  AND COALESCE(b.""OpeningBalance"", 0) != 0
+                  AND NOT EXISTS (
+                    SELECT 1 FROM ""BankTransaction"" AS t
+                    WHERE t.""BankId"" = b.""Id"" AND t.""Kind"" = 7 AND t.""VoidGeneralLedgerHeaderId"" IS NULL);";
+            cmd.ExecuteNonQuery();
+        }
 
         public static void UpgradePostSeed(DbConnection connection, ILogger? logger = null)
         {

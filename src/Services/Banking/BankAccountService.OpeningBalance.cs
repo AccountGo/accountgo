@@ -15,8 +15,9 @@ namespace Services.Banking
         private const string OpeningBalanceEquityCode = "30700";
 
         /// <summary>
-        /// Stores opening balance on the bank and posts DR bank / CR 30700 (or reverse if negative),
-        /// including on cash-basis workspaces. Phase 1 keeps the GL header id on Bank (2A moves it to BankTransaction).
+        /// Stores opening balance on the bank, posts DR bank / CR 30700 (or reverse if negative),
+        /// and keeps a <see cref="BankTransaction"/> of kind OpeningBalance. GL
+        /// <c>SourceDocumentId</c> is the bank id so migrations can map headers to banks.
         /// </summary>
         private void ApplyOpeningBalance(
             Bank bank,
@@ -58,7 +59,12 @@ namespace Services.Banking
             if (!bank.AccountId.HasValue)
                 throw new InvalidOperationException("That bank account has no posting account.");
 
+            // Books-start / earliest-other first so pre-books dates keep the books-start message.
             EnsureOpeningBalanceDateAllowed(bank.AccountId.Value, date, booksStart, previousHeaderId);
+
+            // Same FY gate for the new as-of date (create or change into a closed period).
+            if (rounded != 0m && !IsInActiveFiscalYear(date))
+                throw new InvalidOperationException("Post an adjustment instead.");
 
             if (previousHeaderId.HasValue)
             {
@@ -69,6 +75,7 @@ namespace Services.Banking
                     reversalDate);
                 _financial.SaveGeneralLedgerEntry(reversal);
                 bank.OpeningBalanceGeneralLedgerHeaderId = null;
+                MarkOpeningBalanceTransactionVoided(bank.Id, previousHeaderId.Value, reversal.Id);
             }
 
             bank.OpeningBalance = rounded == 0m ? null : rounded;
@@ -85,15 +92,60 @@ namespace Services.Banking
             var equitySide = rounded > 0m ? DrOrCrSide.Cr : DrOrCrSide.Dr;
             var abs = Math.Abs(rounded);
 
+            // SourceDocumentId = bank.Id so a BankTransaction backfill can map the header (2A / #420).
             var header = _financial.CreateGeneralLedgerHeader(
                 DocumentTypes.BankTransaction,
                 date,
                 OpeningBalanceDescription,
-                sourceDocumentId: null);
+                sourceDocumentId: bank.Id);
             header.GeneralLedgerLines.Add(_financial.CreateGeneralLedgerLine(bankSide, bank.AccountId.Value, abs));
             header.GeneralLedgerLines.Add(_financial.CreateGeneralLedgerLine(equitySide, equity.Id, abs));
             _financial.SaveGeneralLedgerEntry(header);
             bank.OpeningBalanceGeneralLedgerHeaderId = header.Id;
+
+            InsertOpeningBalanceTransaction(bank, abs, date, header.Id);
+        }
+
+        private void InsertOpeningBalanceTransaction(Bank bank, decimal absAmount, DateTime date, int headerId)
+        {
+            var existing = _bankTransactions.Table.FirstOrDefault(t =>
+                t.BankId == bank.Id
+                && t.Kind == BankTransactionKinds.OpeningBalance
+                && t.VoidGeneralLedgerHeaderId == null);
+            if (existing != null)
+            {
+                existing.Date = date;
+                existing.Amount = absAmount;
+                existing.GeneralLedgerHeaderId = headerId;
+                existing.Memo = OpeningBalanceDescription;
+                _bankTransactions.Update(existing);
+                return;
+            }
+
+            _bankTransactions.Insert(new BankTransaction
+            {
+                CompanyId = bank.CompanyId,
+                Kind = BankTransactionKinds.OpeningBalance,
+                BankId = bank.Id,
+                Date = date,
+                Amount = absAmount,
+                No = $"OB-{bank.Id}",
+                Memo = OpeningBalanceDescription,
+                GeneralLedgerHeaderId = headerId
+            });
+        }
+
+        private void MarkOpeningBalanceTransactionVoided(int bankId, int previousHeaderId, int voidHeaderId)
+        {
+            var prior = _bankTransactions.Table.FirstOrDefault(t =>
+                t.BankId == bankId
+                && t.Kind == BankTransactionKinds.OpeningBalance
+                && t.GeneralLedgerHeaderId == previousHeaderId
+                && t.VoidGeneralLedgerHeaderId == null);
+            if (prior == null)
+                return;
+            prior.VoidGeneralLedgerHeaderId = voidHeaderId;
+            _bankTransactions.Update(prior);
         }
 
         private void EnsureOpeningBalanceDateAllowed(

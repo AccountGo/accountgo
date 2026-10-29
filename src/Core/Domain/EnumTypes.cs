@@ -115,7 +115,20 @@ namespace Core.Domain
         Vendor,
         Contact,
         DonationInvoice,
-        InventoryAdjustment
+        InventoryAdjustment,
+        BankTransaction
+    }
+
+    /// <summary>Kinds for <see cref="Financials.BankTransaction"/> (D6).</summary>
+    public enum BankTransactionKinds
+    {
+        MoneyIn = 1,
+        MoneyOut = 2,
+        Transfer = 3,
+        Fee = 4,
+        Interest = 5,
+        Adjustment = 6,
+        OpeningBalance = 7
     }
 
     public enum AddressTypes
