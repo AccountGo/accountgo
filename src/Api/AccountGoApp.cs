@@ -181,6 +181,7 @@ public static class AccountGoApp
         builder.Services.AddControllers(options =>
         {
             options.Filters.Add<Api.Filters.TenantEndpointFilter>();
+            options.Filters.Add<Api.Filters.ReconciledPeriodConfirmationFilter>();
         })
         .AddNewtonsoftJson(
             options =>
@@ -211,6 +212,7 @@ public static class AccountGoApp
         builder.Services.AddScoped(typeof(Services.Dashboard.IDashboardService), typeof(Services.Dashboard.DashboardService));
         builder.Services.AddScoped(typeof(Services.Financial.IFinancialService), typeof(Services.Financial.FinancialService));
         builder.Services.AddScoped<Services.Banking.IBankAccountService, Services.Banking.BankAccountService>();
+        builder.Services.AddScoped<Services.Banking.IReconciledPeriodGuard, Services.Banking.ReconciledPeriodGuard>();
         builder.Services.AddScoped<Services.Banking.IBankTransactionService, Services.Banking.BankTransactionService>();
         builder.Services.AddScoped<Services.Banking.IBankReconciliationService, Services.Banking.BankReconciliationService>();
         builder.Services.AddScoped<Services.Banking.IBankStatementImportService, Services.Banking.BankStatementImportService>();

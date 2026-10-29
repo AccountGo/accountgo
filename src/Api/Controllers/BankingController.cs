@@ -334,6 +334,10 @@ namespace Api.Controllers
             {
                 return NotFound(new { message = "Bank account not found" });
             }
+            catch (ReconciledPeriodConfirmationRequiredException ex)
+            {
+                return ReconciledPeriodConflict(ex);
+            }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
                 return BadRequest(new { message = ex.Message });
@@ -738,6 +742,16 @@ namespace Api.Controllers
                 code = ex.Code,
                 message = ex.Message,
                 reconciliationId = ex.ReconciliationId
+            });
+
+        private static IActionResult ReconciledPeriodConflict(ReconciledPeriodConfirmationRequiredException ex) =>
+            new ConflictObjectResult(new
+            {
+                code = ReconciledPeriodConfirmationRequiredException.ErrorCode,
+                message = ex.Message,
+                bankName = ex.BankName,
+                statementEndDate = ex.StatementEndDate.ToString("yyyy-MM-dd"),
+                postingDate = ex.PostingDate.ToString("yyyy-MM-dd")
             });
 
         private static IActionResult ReconciledConflict(ReconciledTransactionException ex) =>

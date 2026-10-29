@@ -6,6 +6,8 @@ import { Bill, BillAccount } from '../types';
 import type { BankAccountPickerItem } from '../types/banking';
 import { useAuth } from '../auth/AuthContext';
 import { ModalShell } from './ModalShell';
+import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
+import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 
 const inputClass =
   'w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition';
@@ -80,8 +82,10 @@ export const PayBillDialog: React.FC<{
     };
   }, [authFetch]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const periodConfirm = useReconciledPeriodConfirm();
+
+  const handleSubmit = async (e: React.FormEvent | null, confirmReconciledPeriod = false) => {
+    e?.preventDefault();
     const value = Number(amount);
     if (!(value > 0)) {
       setError('Enter an amount more than zero.');
@@ -97,7 +101,7 @@ export const PayBillDialog: React.FC<{
     try {
       const usingBank = banks && banks.length > 0;
       const glFromPicker = payFromKey.startsWith('gl:');
-      const res = await authFetch('/api/Purchasing/PayBill', {
+      const res = await authFetch(withConfirmReconciledPeriod('/api/Purchasing/PayBill', confirmReconciledPeriod), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,6 +119,10 @@ export const PayBillDialog: React.FC<{
           memo: memo.trim() || null,
         }),
       });
+      if (await periodConfirm.handleConflict(res, () => void handleSubmit(null, true))) {
+        setIsSaving(false);
+        return;
+      }
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(res.status === 403 ? "You don't have permission to pay bills." : data?.message || 'The payment could not be recorded.');
@@ -131,6 +139,7 @@ export const PayBillDialog: React.FC<{
   const usingBanks = banksReady && (banks?.length ?? 0) > 0;
 
   return (
+    <>
     <ModalShell
       open
       onClose={() => {
@@ -315,5 +324,7 @@ export const PayBillDialog: React.FC<{
           </div>
         </form>
     </ModalShell>
+    {periodConfirm.dialog}
+    </>
   );
 };
