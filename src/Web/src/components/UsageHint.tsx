@@ -19,7 +19,9 @@ export const UsageHint: React.FC<{ entitlements: Entitlements | null; resource: 
         aria-valuemin={0}
         aria-valuemax={limit}
         aria-valuenow={Math.min(used, limit)}
-        className="h-1.5 w-28 rounded-full bg-[var(--bg-subtle)] overflow-hidden"
+        className="h-1.5 w-28 rounded-full overflow-hidden"
+        // Track tinted from the text colour so it shows on light and dark surfaces alike.
+        style={{ background: 'color-mix(in srgb, var(--text-muted) 30%, transparent)' }}
       >
         <div
           className={`h-full rounded-full ${reached ? 'bg-amber-500' : 'bg-[var(--brand-primary)]'}`}
