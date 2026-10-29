@@ -104,6 +104,7 @@ namespace Api.Service
             {
                 From = from,
                 To = recipients.ToArray(),
+                Cc = message.Cc.Count > 0 ? message.Cc.ToArray() : null,
                 Bcc = message.Bcc.Count > 0 ? message.Bcc.ToArray() : null,
                 ReplyTo = string.IsNullOrWhiteSpace(message.ReplyTo) ? null : message.ReplyTo,
                 Subject = message.Subject,
@@ -186,6 +187,7 @@ namespace Api.Service
         {
             public string From { get; set; } = string.Empty;
             public string[] To { get; set; } = Array.Empty<string>();
+            public string[]? Cc { get; set; }
             public string[]? Bcc { get; set; }
             public string? ReplyTo { get; set; }
             public string Subject { get; set; } = string.Empty;

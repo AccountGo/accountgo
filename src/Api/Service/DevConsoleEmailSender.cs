@@ -34,6 +34,7 @@ namespace Api.Service
 
             var border = new string('=', 65);
             var logMessage = $"\n{border}\n[EMAIL DISPATCH - DEV CONSOLE]\nFrom:    {message.FromName ?? "AccountGo"}\nTo:      {string.Join(", ", allTo)}\n" +
+                (message.Cc.Count > 0 ? $"Cc:      {string.Join(", ", message.Cc)}\n" : "") +
                 (message.Bcc.Count > 0 ? $"Bcc:     {string.Join(", ", message.Bcc)}\n" : "") +
                 (string.IsNullOrWhiteSpace(message.ReplyTo) ? "" : $"ReplyTo: {message.ReplyTo}\n") +
                 $"Subject: {message.Subject}\nTime:    {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC\n" +
