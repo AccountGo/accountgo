@@ -265,7 +265,12 @@ public class BankAccountServiceTests
         Assert.Equal(asOf.Date, created.OpeningBalanceDate!.Value.Date);
         Assert.NotNull(saved);
         Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
-        Assert.Null(saved.SourceDocumentId);
+        var obTx = Assert.Single(harness.BankTransactions.Table.Where(t =>
+            t.BankId == created.Id
+            && t.Kind == BankTransactionKinds.OpeningBalance
+            && t.GeneralLedgerHeaderId == saved.Id));
+        Assert.Equal(obTx.Id, saved.SourceDocumentId);
+        Assert.Equal(500m, obTx.Amount);
         Assert.Equal(2, saved.GeneralLedgerLines.Count);
         Assert.Contains(saved.GeneralLedgerLines, l => l.AccountId == created.AccountId && l.DrCr == DrOrCrSide.Dr && l.Amount == 500m);
 
@@ -278,7 +283,7 @@ public class BankAccountServiceTests
         var obLine = harness.Service.GetRegister(created.Id, from: asOf, to: asOf, page: 1, pageSize: 50).Lines.Single();
         Assert.Equal("Opening balance", obLine.Type);
         Assert.Equal(nameof(DocumentTypes.BankTransaction), obLine.SourceDoc!.Type);
-        Assert.Equal(created.Id, obLine.SourceDoc.Id);
+        Assert.Equal(obTx.Id, obLine.SourceDoc.Id);
     }
 
     [Fact]
@@ -318,8 +323,33 @@ public class BankAccountServiceTests
         Assert.Equal(100m, created.OpeningBalance);
         Assert.NotNull(saved);
         Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
-        Assert.Null(saved.SourceDocumentId);
+        var obTx = Assert.Single(harness.BankTransactions.Table.Where(t =>
+            t.BankId == created.Id && t.Kind == BankTransactionKinds.OpeningBalance));
+        Assert.Equal(obTx.Id, saved.SourceDocumentId);
         harness.Financial.Verify(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()), Times.Once);
+    }
+
+    [Fact]
+    public void Create_OpeningBalance_OutsideActiveFiscalYear_IsRefused()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedOpeningBalanceEquity();
+        harness.SetupOpeningBalanceFinancialMocks();
+        // On or after books start (2020-01-01) but outside the only active fiscal year.
+        var fy = harness.FiscalYears.Table.Single();
+        fy.StartDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        fy.EndDate = new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.Create(new CreateBankAccountRequest
+            {
+                Name = "Closed OB",
+                Type = 1,
+                OpeningBalance = 50m,
+                OpeningBalanceDate = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc)
+            }, includeFullNumbers: false));
+        Assert.Equal("Post an adjustment instead.", ex.Message);
     }
 
     [Fact]
@@ -422,6 +452,10 @@ public class BankAccountServiceTests
         Assert.Equal(-25.50m, created.OpeningBalance);
         Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
         Assert.Contains(saved.GeneralLedgerLines, l => l.AccountId == created.AccountId && l.DrCr == DrOrCrSide.Cr && l.Amount == 25.50m);
+        var obTx = Assert.Single(harness.BankTransactions.Table.Where(t =>
+            t.BankId == created.Id && t.Kind == BankTransactionKinds.OpeningBalance));
+        Assert.Equal(-25.50m, obTx.Amount);
+        Assert.Equal(obTx.Id, saved.SourceDocumentId);
     }
 
     [Fact]
@@ -563,6 +597,7 @@ public class BankAccountServiceTests
         public Mock<IFinancialService> Financial { get; }
         public IRepository<Account> Accounts => _repos.Accounts;
         public IRepository<Bank> Banks => _repos.Banks;
+        public IRepository<BankTransaction> BankTransactions => _repos.BankTransactions;
         public IRepository<GeneralLedgerHeader> GlHeaders => _repos.GlHeaders;
         public IRepository<GeneralLedgerLine> GlLines => _repos.GlLines;
         public IRepository<FinancialYear> FiscalYears => _repos.FiscalYears;
@@ -582,6 +617,7 @@ public class BankAccountServiceTests
             Financial = new Mock<IFinancialService>(MockBehavior.Loose);
             Service = new BankAccountService(
                 _repos.Banks,
+                _repos.BankTransactions,
                 _repos.Accounts,
                 _repos.GlLines,
                 _repos.GlHeaders,
@@ -774,6 +810,7 @@ public class BankAccountServiceTests
         private int _glLineId = 100;
         public MemoryRepo<Account> Accounts { get; } = new();
         public MemoryRepo<Bank> Banks { get; } = new();
+        public MemoryRepo<BankTransaction> BankTransactions { get; } = new();
         public MemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
         public MemoryRepo<GeneralLedgerHeader> GlHeaders { get; } = new();
         public MemoryRepo<CompanySetting> Settings { get; } = new();

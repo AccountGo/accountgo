@@ -22,6 +22,7 @@ namespace Services.Banking
     public partial class BankAccountService : IBankAccountService
     {
         private readonly IRepository<Bank> _banks;
+        private readonly IRepository<BankTransaction> _bankTransactions;
         private readonly IRepository<Account> _accounts;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
@@ -42,6 +43,7 @@ namespace Services.Banking
 
         public BankAccountService(
             IRepository<Bank> banks,
+            IRepository<BankTransaction> bankTransactions,
             IRepository<Account> accounts,
             IRepository<GeneralLedgerLine> glLines,
             IRepository<GeneralLedgerHeader> glHeaders,
@@ -61,6 +63,7 @@ namespace Services.Banking
             ITenantContext tenant)
         {
             _banks = banks;
+            _bankTransactions = bankTransactions;
             _accounts = accounts;
             _glLines = glLines;
             _glHeaders = glHeaders;
@@ -420,7 +423,8 @@ namespace Services.Banking
         public bool DeleteOrArchive(int id)
         {
             var bank = RequireBank(id);
-            var hasHistory = bank.AccountId.HasValue && LinesForAccount(bank.AccountId.Value).Any();
+            var hasHistory = (bank.AccountId.HasValue && LinesForAccount(bank.AccountId.Value).Any())
+                || _bankTransactions.Table.Any(t => t.BankId == id || t.ToBankId == id);
             if (hasHistory)
             {
                 // Explicit delete counts as confirmation for a non-zero I&B balance.

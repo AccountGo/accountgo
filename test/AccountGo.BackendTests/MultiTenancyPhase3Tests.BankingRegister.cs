@@ -43,18 +43,20 @@ namespace AccountGo.BackendTests
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Register Vendor" });
             var bill = NewBill(vendor.Id, ("Widget", 1, 40m, null));
             bill.Status = "Open";
+            // Bill date is "today"; pay on/after that date (InvariantCulture fixed dates can precede today).
+            var payDate = DateTime.UtcNow.Date;
             var approved = await SaveBillOk(bill);
             await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill
                 {
                     BillId = approved.Id,
                     Amount = 40m,
-                    Date = DateTime.Parse("2026-01-15", CultureInfo.InvariantCulture),
+                    Date = payDate,
                     BankAccountId = bank.Id
                 }));
 
             var register = await (await Send(HttpMethod.Get,
-                $"/api/Banking/Accounts/{bank.Id}/Register?from=2026-01-01&to=2026-01-31&page=1&pageSize=50"))
+                $"/api/Banking/Accounts/{bank.Id}/Register?from=2026-01-01&page=1&pageSize=50"))
                 .Content.ReadFromJsonAsync<BankRegisterDto>();
 
             Assert.Equal(0m, register.BroughtForward);

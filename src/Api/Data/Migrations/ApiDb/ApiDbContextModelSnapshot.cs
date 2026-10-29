@@ -892,6 +892,81 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("Bank");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ContraAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("No")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("PartyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReferenceNo")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ToBankId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("ContraAccountId");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PartyId");
+
+                    b.HasIndex("ToBankId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId", "Date" }, "IX_BankTransaction_Company_Bank_Date");
+
+                    b.HasIndex(new[] { "CompanyId", "No" }, "UX_BankTransaction_Company_No")
+                        .IsUnique();
+
+                    b.ToTable("BankTransaction");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.FinancialYear", b =>
                 {
                     b.Property<int>("Id")
@@ -3251,6 +3326,52 @@ namespace Api.Data.Migrations.ApiDb
                         .HasForeignKey("AccountId");
 
                     b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.Account", "ContraAccount")
+                        .WithMany()
+                        .HasForeignKey("ContraAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Party", "Party")
+                        .WithMany()
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Bank", "ToBank")
+                        .WithMany()
+                        .HasForeignKey("ToBankId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Bank");
+
+                    b.Navigation("ContraAccount");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("Party");
+
+                    b.Navigation("ToBank");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerLine", b =>
