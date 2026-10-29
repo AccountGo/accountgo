@@ -16,7 +16,6 @@ import {
   ArrowRight,
   Clock,
   Landmark,
-  CreditCard,
   CheckCircle2,
   AlertCircle,
   RefreshCw,
@@ -53,14 +52,6 @@ interface LivePaymentTerm {
   paymentType: string;
   dueAfterDays?: number;
   isActive: boolean;
-}
-
-interface LiveCashBank {
-  id: number;
-  name: string;
-  bankName?: string;
-  accountNo?: string;
-  accountId?: number;
 }
 
 export const Settings: React.FC = () => {
@@ -137,7 +128,6 @@ export const Settings: React.FC = () => {
   // 2. Financial & Accounting Rules State
   const [fiscalYears, setFiscalYears] = useState<LiveFinancialYear[]>([]);
   const [paymentTerms, setPaymentTerms] = useState<LivePaymentTerm[]>([]);
-  const [cashBanks, setCashBanks] = useState<LiveCashBank[]>([]);
   const [isLoadingFinancials, setIsLoadingFinancials] = useState(false);
 
   // 3. Authorized Members Summary State
@@ -186,23 +176,15 @@ export const Settings: React.FC = () => {
     }
   }, [authFetch]);
 
-  // Load Financials Rules (Fiscal years, cash banks); the banking API is only open to the accounting module.
+  // Load fiscal years; bank accounts live on the Banking page.
   const fetchFinancialRules = useCallback(async () => {
     if (!hasFinancials) return;
     try {
       setIsLoadingFinancials(true);
-      const [fyRes, cbRes] = await Promise.all([
-        authFetch('/api/Administration/financialyears'),
-        authFetch('/api/Financials/CashBanks'),
-      ]);
-
+      const fyRes = await authFetch('/api/Administration/financialyears');
       if (fyRes.ok) {
         const fyData = await fyRes.json();
         if (Array.isArray(fyData)) setFiscalYears(fyData);
-      }
-      if (cbRes.ok) {
-        const cbData = await cbRes.json();
-        if (Array.isArray(cbData)) setCashBanks(cbData);
       }
     } catch (err) {
       console.error('Failed to load financial rules:', err);
@@ -888,64 +870,27 @@ export const Settings: React.FC = () => {
                 </div>
               </div>
 
-              {/* Operating Cash & Bank Accounts */}
+              {/* Banking — managed on the Banking page */}
               <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[var(--border-subtle)]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <Landmark className="w-5 h-5 text-emerald-400" />
                     <div>
                       <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)]">
-                        Operating Cash & Bank Accounts
+                        Banking
                       </h2>
                       <p className="text-xs text-[var(--text-muted)]">
-                        Settlement accounts from the database Bank table linked to the General Ledger
+                        Add accounts, opening balances, and registers on the Banking page.
                       </p>
                     </div>
                   </div>
                   <Link
-                    to={`/org/${currentOrg.slug}/financials/accounts`}
+                    to={`/org/${currentOrg.slug}/banking`}
                     className="h-9 px-3 self-start sm:self-auto rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-xs font-semibold text-[var(--text-main)] transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
-                    <span>View Full Chart of Accounts</span>
+                    <span>Open Banking</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {cashBanks.length > 0 ? (
-                    cashBanks.map((bank) => (
-                      <div
-                        key={bank.id}
-                        className="p-4 rounded-xl bg-[var(--bg-subtle)] space-y-2 border border-[var(--border-subtle)]"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="w-4 h-4 text-emerald-400" />
-                            <span className="text-xs font-bold text-[var(--text-main)]">
-                              {bank.name}
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--bg-canvas)] text-[var(--brand-primary)]">
-                            Account #{bank.accountId}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-muted)] pt-1">
-                          <div>
-                            <span>Bank: </span>
-                            <strong className="text-[var(--text-secondary)]">{bank.bankName || 'Direct Cash'}</strong>
-                          </div>
-                          <div>
-                            <span>Number: </span>
-                            <strong className="text-[var(--text-secondary)] font-mono">{bank.accountNo || '—'}</strong>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="col-span-full p-4 rounded-xl bg-[var(--bg-subtle)] text-xs text-[var(--text-muted)] text-center">
-                      No bank accounts configured in database.
-                    </div>
-                  )}
                 </div>
               </div>
 
