@@ -43,7 +43,7 @@ internal sealed class BankingTestHarness : IDisposable
         Entitlements.Setup(e => e.EnsureCanCreate(It.IsAny<MeteredResource>(), It.IsAny<int>()));
         Entitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
             .Returns(new EntitlementDecision(true, null, null));
-        Guard = new ReconciledPeriodGuard(Repos.Banks, Repos.Reconciliations, new FakeTenant(companyId: 1));
+        Guard = new ReconciledPeriodGuard(Repos.Banks, Repos.Reconciliations, Repos.BankTransactions, new FakeTenant(companyId: 1));
         Financial = new Mock<IFinancialService>(MockBehavior.Loose);
         SetupFinancial();
 

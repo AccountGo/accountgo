@@ -228,6 +228,81 @@ public class ReconciledPeriodGuardTests
         Assert.True(financial.ValidateGeneralLedgerEntry(Entry(bank.AccountId!.Value, expense.Id, D(2026, 9, 12))));
     }
 
+    private static UpdateBankAccountRequest OpeningBalanceUpdate(BankAccountDto bank, decimal amount, DateTime asOf) => new()
+    {
+        Name = bank.Name,
+        Type = 1,
+        OpeningBalance = amount,
+        OpeningBalanceDate = asOf
+    };
+
+    [Fact]
+    public void OpeningBalance_SetAfterAFinishedReconciliation_NeedsNoConfirmation()
+    {
+        using var harness = NewHarness(out var bank, D(2026, 9, 30));
+
+        var updated = harness.Banks.Update(bank.Id, OpeningBalanceUpdate(bank, 500m, D(2026, 9, 1)), includeFullNumbers: false);
+
+        Assert.Equal(500m, updated.OpeningBalance);
+        Assert.False(harness.Guard.IsConfirmed);
+        var openingTx = Assert.Single(harness.Repos.BankTransactions.Table, t => t.Kind == BankTransactionKinds.OpeningBalance);
+        Assert.NotNull(openingTx.GeneralLedgerHeaderId);
+    }
+
+    [Fact]
+    public void OpeningBalance_ChangedAfterAFinishedReconciliation_NeedsNoConfirmation()
+    {
+        using var harness = NewHarness(out var bank, reconciledThrough: null);
+        harness.Banks.Update(bank.Id, OpeningBalanceUpdate(bank, 500m, D(2026, 9, 1)), includeFullNumbers: false);
+        AddReconciliation(harness, bank.Id, D(2026, 9, 30), BankReconciliationStatuses.Finished);
+
+        var updated = harness.Banks.Update(bank.Id, OpeningBalanceUpdate(bank, 650m, D(2026, 9, 1)), includeFullNumbers: false);
+
+        Assert.Equal(650m, updated.OpeningBalance);
+        Assert.False(harness.Guard.IsConfirmed);
+    }
+
+    [Fact]
+    public void OpeningBalanceExemption_DoesNotCoverOtherBankTransactionEntries()
+    {
+        using var harness = NewHarness(out var bank, D(2026, 9, 30));
+        var expense = harness.RequireAccount("50100").Id;
+        var moneyOut = harness.Repos.BankTransactions;
+        moneyOut.Insert(new BankTransaction
+        {
+            CompanyId = 1,
+            BankId = bank.Id,
+            Kind = BankTransactionKinds.MoneyOut,
+            Date = D(2026, 9, 10),
+            Amount = 10m
+        });
+        var entry = Entry(bank.AccountId!.Value, expense, D(2026, 9, 10));
+        entry.DocumentType = DocumentTypes.BankTransaction;
+        entry.SourceDocumentId = moneyOut.Table.Single().Id;
+
+        Assert.Throws<ReconciledPeriodConfirmationRequiredException>(() => harness.Guard.EnsurePostingAllowed(entry));
+    }
+
+    [Fact]
+    public void OpeningBalanceExemption_IgnoresAnotherCompanysOpeningBalanceTransaction()
+    {
+        using var harness = NewHarness(out var bank, D(2026, 9, 30));
+        var expense = harness.RequireAccount("50100").Id;
+        harness.Repos.BankTransactions.Insert(new BankTransaction
+        {
+            CompanyId = 2,
+            BankId = bank.Id,
+            Kind = BankTransactionKinds.OpeningBalance,
+            Date = D(2026, 9, 10),
+            Amount = 10m
+        });
+        var entry = Entry(bank.AccountId!.Value, expense, D(2026, 9, 10));
+        entry.DocumentType = DocumentTypes.BankTransaction;
+        entry.SourceDocumentId = harness.Repos.BankTransactions.Table.Single().Id;
+
+        Assert.Throws<ReconciledPeriodConfirmationRequiredException>(() => harness.Guard.EnsurePostingAllowed(entry));
+    }
+
     private static FinancialService BuildFinancialService(BankingTestHarness harness) =>
         new(
             Mock.Of<IInventoryService>(),
