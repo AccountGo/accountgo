@@ -31,6 +31,8 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
 import { ModalShell } from '../components/ModalShell';
 import { VoidDialog } from '../components/VoidDialog';
+import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
+import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 import { invoiceTitle } from '../lib/invoiceNumber';
 import { localToday } from '../lib/businessDays';
 import { pickDefaultReceiptBankId } from '../lib/bankingForm';
@@ -48,6 +50,7 @@ export const InvoiceDetail: React.FC = () => {
   const { canCreate: canCreateResource } = useCapabilities();
   const salesWritable = canWrite('sales');
   const { authFetch, user } = useAuth();
+  const periodConfirm = useReconciledPeriodConfirm();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -250,8 +253,8 @@ export const InvoiceDetail: React.FC = () => {
   }, [isPaymentModalOpen, authFetch]);
 
   // Payment Submission
-  const handleRecordPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRecordPayment = async (e: React.FormEvent | null, confirmReconciledPeriod = false) => {
+    e?.preventDefault();
     if (!invoice) return;
 
     const amountNum = parseFloat(paymentAmount);
@@ -281,11 +284,13 @@ export const InvoiceDetail: React.FC = () => {
         bankAccountId: depositBankId === '' ? undefined : Number(depositBankId),
       };
 
-      const res = await authFetch('/api/Sales/RecordPayment', {
+      const res = await authFetch(withConfirmReconciledPeriod('/api/Sales/RecordPayment', confirmReconciledPeriod), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
+      if (await periodConfirm.handleConflict(res, () => void handleRecordPayment(null, true))) return;
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
@@ -599,6 +604,7 @@ export const InvoiceDetail: React.FC = () => {
 
   return (
     <div className="print-page max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
+      {periodConfirm.dialog}
       <div className="no-print mb-4">
         <ReadOnlyModuleBanner module="sales" orgSlug={orgSlug} />
       </div>

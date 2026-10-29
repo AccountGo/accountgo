@@ -33,6 +33,25 @@ namespace Api.Filters
                 return true;
             }
 
+            if (exception is ReconciledPeriodConfirmationRequiredException periodEx)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
+                httpContext.Response.ContentType = "application/problem+json";
+                var problem = new ProblemDetails
+                {
+                    Title = "Reconciled period",
+                    Detail = periodEx.Message,
+                    Status = StatusCodes.Status409Conflict
+                };
+                problem.Extensions["code"] = ReconciledPeriodConfirmationRequiredException.ErrorCode;
+                problem.Extensions["message"] = periodEx.Message;
+                problem.Extensions["bankName"] = periodEx.BankName;
+                problem.Extensions["statementEndDate"] = periodEx.StatementEndDate.ToString("yyyy-MM-dd");
+                problem.Extensions["postingDate"] = periodEx.PostingDate.ToString("yyyy-MM-dd");
+                await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+                return true;
+            }
+
             if (exception is BankReconciliationConflictException conflictEx)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
