@@ -53,6 +53,7 @@ namespace Services.Financial
         private readonly IRepository<VendorPayment> _vendorPaymentRepo;
         private readonly IRepository<CompanySetting> _companySettingRepo;
         private readonly IRepository<BankTransaction> _bankTransactionRepo;
+        private readonly IRepository<BankReconciliation> _bankReconciliationRepo;
 
         public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
@@ -81,7 +82,8 @@ namespace Services.Financial
             IRepository<PurchaseInvoiceHeader> purchaseInvoiceRepo = null,
             IRepository<VendorPayment> vendorPaymentRepo = null,
             Core.Entitlements.IEntitlementService entitlements = null,
-            IRepository<BankTransaction> bankTransactionRepo = null
+            IRepository<BankTransaction> bankTransactionRepo = null,
+            IRepository<BankReconciliation> bankReconciliationRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -113,6 +115,7 @@ namespace Services.Financial
             _purchaseInvoiceRepo = purchaseInvoiceRepo;
             _vendorPaymentRepo = vendorPaymentRepo;
             _bankTransactionRepo = bankTransactionRepo;
+            _bankReconciliationRepo = bankReconciliationRepo;
         }
 
         public const int GeneralLedgerDefaultPageSize = 100;
@@ -1725,8 +1728,29 @@ namespace Services.Financial
         /// An entry that undoes another, not yet saved: the same lines with debits and credits swapped, dated on the
         /// reversal date. The reversal date cannot be before the original entry's date and must fall on or after the books start date.
         /// </summary>
+        public void EnsureNotReconciled(int generalLedgerHeaderId)
+        {
+            if (_bankReconciliationRepo == null || _generalLedgerLineRepository == null)
+                return;
+
+            var finished = (
+                from line in _generalLedgerLineRepository.Table
+                where line.GeneralLedgerHeaderId == generalLedgerHeaderId && line.BankReconciliationId != null
+                join recon in _bankReconciliationRepo.Table on line.BankReconciliationId equals recon.Id
+                where recon.Status == BankReconciliationStatuses.Finished
+                select recon
+            ).FirstOrDefault();
+            if (finished == null)
+                return;
+
+            var bankName = _bankRepo?.GetById(finished.BankId)?.Name ?? "bank";
+            throw new Services.Banking.ReconciledTransactionException(bankName, finished.StatementEndDate);
+        }
+
         public GeneralLedgerHeader CreateReversingEntry(int generalLedgerHeaderId, string description, DateTime reversalDate)
         {
+            EnsureNotReconciled(generalLedgerHeaderId);
+
             var original = _generalLedgerRepository.GetAllIncluding(gl => gl.GeneralLedgerLines)
                 .FirstOrDefault(gl => gl.Id == generalLedgerHeaderId)
                 ?? throw new InvalidOperationException($"Journal entry {generalLedgerHeaderId} was not found.");

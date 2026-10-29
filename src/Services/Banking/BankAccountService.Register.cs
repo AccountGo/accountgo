@@ -49,7 +49,8 @@ namespace Services.Banking
                     header.ReversedGeneralLedgerHeaderId,
                     header.Description,
                     line.DrCr,
-                    line.Amount)
+                    line.Amount,
+                    line.BankReconciliationId)
             ).ToList();
 
             decimal Signed(RegisterMovement m) =>
@@ -91,7 +92,7 @@ namespace Services.Banking
                     In = isIn ? m.Amount : 0m,
                     Out = isIn ? 0m : m.Amount,
                     Balance = running,
-                    ReconciliationId = null
+                    ReconciliationId = m.BankReconciliationId
                 });
             }
 
@@ -369,7 +370,8 @@ namespace Services.Banking
             int? ReversedGeneralLedgerHeaderId,
             string? Description,
             DrOrCrSide DrCr,
-            decimal Amount);
+            decimal Amount,
+            int? BankReconciliationId);
 
         private sealed record RegisterEnrichment(
             string TypeLabel,

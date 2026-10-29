@@ -8,6 +8,8 @@ using System.Linq;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Purchases;
+using Core.Domain.Sales;
 using Core.Tenancy;
 using Dto.Banking;
 using Services.Financial;
@@ -26,6 +28,8 @@ namespace Services.Banking
         private readonly IRepository<Bank> _banks;
         private readonly IRepository<Account> _accounts;
         private readonly IRepository<Party> _parties;
+        private readonly IRepository<Customer> _customers;
+        private readonly IRepository<Vendor> _vendors;
         private readonly IFinancialService _financial;
         private readonly ITenantContext _tenant;
 
@@ -37,6 +41,8 @@ namespace Services.Banking
             IRepository<BankTransaction> transactions,
             IRepository<Account> accounts,
             IRepository<Party> parties,
+            IRepository<Customer> customers,
+            IRepository<Vendor> vendors,
             IFinancialService financial,
             ITenantContext tenant)
             : base(sequenceNumbers, glSettings, paymentTerms, banks)
@@ -45,6 +51,8 @@ namespace Services.Banking
             _banks = banks;
             _accounts = accounts;
             _parties = parties;
+            _customers = customers;
+            _vendors = vendors;
             _financial = financial;
             _tenant = tenant;
         }
@@ -245,6 +253,11 @@ namespace Services.Banking
             var glSetting = GetGeneralLedgerSetting();
             if (glSetting?.PayableAccountId == account.Id)
                 throw new InvalidOperationException("AR and AP control accounts can't be used as a contra account.");
+
+            if (_customers.Table.Any(c => c.AccountsReceivableAccountId == account.Id)
+                || _vendors.Table.Any(v => v.AccountsPayableAccountId == account.Id))
+                throw new InvalidOperationException(
+                    "Customer AR and vendor AP accounts can't be used as a contra account.");
 
             if (IsCashOrBankLinked(account))
                 throw new InvalidOperationException("Cash and bank accounts can't be used as a contra account. Use a Transfer instead.");

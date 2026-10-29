@@ -26,7 +26,13 @@ namespace Core.Domain.Financials
         public int AccountId { get; set; }
         public DrOrCrSide DrCr { get; set; }
         public decimal Amount { get; set; }
+
+        /// <summary>Set when this line is cleared by a finished bank reconciliation (Phase 2B).</summary>
+        public int? BankReconciliationId { get; set; }
+
         public virtual Account Account { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
+        public virtual BankReconciliation BankReconciliation { get; set; }
     }
 }
+

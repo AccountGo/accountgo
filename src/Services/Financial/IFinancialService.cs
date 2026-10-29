@@ -58,6 +58,8 @@ namespace Services.Financial
         void UpdateJournalEntry(JournalEntryHeader journalEntry, bool posted = false);
         GeneralLedgerHeader GetGeneralLedgerHeader(int id);
         GeneralLedgerHeader CreateReversingEntry(int generalLedgerHeaderId, string description, DateTime reversalDate);
+        /// <summary>Throws <see cref="Services.Banking.ReconciledTransactionException"/> when any line on the header is stamped by a finished reconciliation.</summary>
+        void EnsureNotReconciled(int generalLedgerHeaderId);
         IEnumerable<GeneralLedgerLine> GetGeneralLedgerLines(int generalLedgerHeaderId);
         Account GetAccountByAccountCode(string accountcode);
         Account GetAccount(int id);
