@@ -36,3 +36,18 @@ test('bankRegisterPath targets the list page without a bank id', () => {
   assert.equal(bankRegisterPath('acme'), '/org/acme/banking');
   assert.equal(bankRegisterPath('acme', 3), '/org/acme/banking/3');
 });
+
+test('lists an archived bank that still holds money, labelled, and the rows still add up', () => {
+  const withArchived = {
+    moneyInBank: 1800,
+    bankBalances: [
+      ...kpis.bankBalances,
+      { bankId: 12, name: 'Old account', balance: 200, isArchived: true },
+    ],
+    unassignedCash: 49.5,
+  };
+  const rows = moneyInBankRows(withArchived, 'acme');
+  assert.equal(rows.find((r) => r.key === 'bank-12').label, 'Old account (archived)');
+  assert.equal(rows.find((r) => r.key === 'bank-4').label, 'Checking');
+  assert.ok(rowsMatchTotal(rows, withArchived.moneyInBank));
+});

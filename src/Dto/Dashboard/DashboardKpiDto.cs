@@ -7,7 +7,10 @@ namespace Dto.Dashboard
         /// <summary>Always the sum of <see cref="BankBalances"/> and <see cref="UnassignedCash"/>.</summary>
         public decimal MoneyInBank { get; set; }
 
-        /// <summary>Active bank accounts with their book balance. Null when the caller cannot view bank accounts.</summary>
+        /// <summary>
+        /// Active bank accounts, plus archived ones that still hold a balance, with their book balance.
+        /// Null when the caller cannot view bank accounts.
+        /// </summary>
         public List<DashboardBankBalanceDto>? BankBalances { get; set; }
 
         /// <summary>Balance of cash accounts that no bank record is attached to.</summary>
@@ -26,5 +29,7 @@ namespace Dto.Dashboard
         public int BankId { get; set; }
         public string Name { get; set; } = string.Empty;
         public decimal Balance { get; set; }
+        /// <summary>True for an archived bank that still holds a balance.</summary>
+        public bool IsArchived { get; set; }
     }
 }
