@@ -2228,10 +2228,14 @@ namespace Api.Controllers
         [HttpPost]
         [Route("VoidSalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
-        public IActionResult VoidSalesInvoice(int id)
+        public IActionResult VoidSalesInvoice(int id, DateTime? date = null)
         {
             try
             {
+                if (!date.HasValue || date.Value == default)
+                    return BadRequest(new { message = "Void date is required." });
+                var voidDate = date.Value.Date;
+
                 using var tx = BeginInvoiceNumberingTransaction();
                 var invoice = _salesService.GetSalesInvoiceById(id);
                 if (invoice == null)
@@ -2248,10 +2252,13 @@ namespace Api.Controllers
                     return BadRequest(new { message = ex.Message });
                 }
 
+                if (voidDate < invoice.Date.Date)
+                    return BadRequest(new { message = $"The void date ({voidDate:yyyy-MM-dd}) cannot be earlier than the invoice date ({invoice.Date:yyyy-MM-dd})." });
+
                 // Issuing posted the invoice to receivables and sales; voiding reverses that, so it no longer counts.
                 if (invoice.GeneralLedgerHeaderId.HasValue && !invoice.VoidGeneralLedgerHeaderId.HasValue)
-                    invoice.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(invoice.GeneralLedgerHeaderId.Value, $"Void of invoice {invoice.No ?? invoice.Id.ToString()}");
-                _salesService.VoidSalesInvoiceStock(invoice);
+                    invoice.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(invoice.GeneralLedgerHeaderId.Value, $"Void of invoice {invoice.No ?? invoice.Id.ToString()}", voidDate);
+                _salesService.VoidSalesInvoiceStock(invoice, voidDate);
                 invoice.Status = Core.Domain.SalesInvoiceStatus.Void;
                 _salesService.UpdateSalesInvoice(invoice);
                 tx.Commit();

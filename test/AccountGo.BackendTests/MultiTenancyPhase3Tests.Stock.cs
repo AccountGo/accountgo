@@ -62,7 +62,7 @@ namespace AccountGo.BackendTests
             AssertStockState(itemId, 15m, 6m);
             AssertStockInvariant(itemId);
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invoiceId}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invoiceId}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             AssertStockState(itemId, 20m, 6m);
             var invoiceAndVoid = Ledger(invoiceLedgerId).Concat(Ledger(InvoiceVoidLedgerId(invoiceId))).ToList();
             Assert.All(invoiceAndVoid.Select(line => line.AccountId).Distinct(), accountId =>
@@ -70,7 +70,7 @@ namespace AccountGo.BackendTests
                     .Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount)));
             AssertStockInvariant(itemId);
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={secondBill.Id}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={secondBill.Id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             AssertStockState(itemId, 10m, 5m);
             AssertStockInvariant(itemId);
 

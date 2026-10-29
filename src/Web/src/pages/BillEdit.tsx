@@ -6,6 +6,7 @@ import { PartyPickerDialog } from '../components/PartyPickerDialog';
 import { PartyFormDialog } from '../components/PartyFormDialog';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
 import { ItemFormDialog } from '../components/ItemFormDialog';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { usePermissions } from '../components/Gating';
 import { Bill, BillAccount, CatalogItem, CustomerOption, ItemOption, PaymentTermOption, TenantContextType, Vendor } from '../types';
 import { useAuth } from '../auth/AuthContext';
@@ -80,6 +81,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const [duplicatedFrom, setDuplicatedFrom] = useState<string | null>(null);
 
   const [saving, setSaving] = useState<'draft' | 'approve' | null>(null);
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{ approve: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isVendorPickerOpen, setIsVendorPickerOpen] = useState(false);
   const [isAddingVendor, setIsAddingVendor] = useState(false);
@@ -225,7 +227,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, taxes]);
 
-  const handleSave = async (approve: boolean) => {
+  const handleSave = async (approve: boolean, confirmDuplicate = false) => {
     setError(null);
     if (!vendorId) {
       setError('Pick the vendor the bill is from.');
@@ -268,6 +270,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           paymentTermId: paymentTermId || null,
           notes: notes.trim() || null,
           status: approve ? 'Open' : 'Draft',
+          confirmDuplicate,
           lines: lines.map((l) => ({
             id: l.id,
             itemId: l.itemId,
@@ -282,6 +285,14 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
+        if (res.status === 409 && data?.code === 'possible_duplicate') {
+          setDuplicateConfirm({
+            approve,
+            message: data?.message || 'A bill from this vendor with the same date and total has already been entered.',
+          });
+          setSaving(null);
+          return;
+        }
         throw new Error(
           res.status === 403
             ? approve
@@ -825,6 +836,21 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             setNewItemLine(null);
           }}
           onClose={() => setNewItemLine(null)}
+        />
+      )}
+
+      {duplicateConfirm && (
+        <ConfirmDialog
+          title="Possible duplicate bill"
+          message={`${duplicateConfirm.message} Do you want to save anyway?`}
+          confirmLabel="Save anyway"
+          busy={!!saving}
+          onConfirm={() => {
+            const approve = duplicateConfirm.approve;
+            setDuplicateConfirm(null);
+            handleSave(approve, true);
+          }}
+          onCancel={() => setDuplicateConfirm(null)}
         />
       )}
     </div>

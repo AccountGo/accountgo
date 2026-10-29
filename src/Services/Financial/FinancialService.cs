@@ -629,7 +629,7 @@ namespace Services.Financial
                     ?? new Dictionary<int, int?>();
 
                 var paymentsByBill = (_vendorPaymentRepo?.Table
-                        .Where(p => p.PurchaseInvoiceHeaderId.HasValue)
+                        .Where(p => p.PurchaseInvoiceHeaderId.HasValue && !p.VoidedAt.HasValue)
                         .Select(p => new
                         {
                             p.Id,
@@ -1712,20 +1712,21 @@ namespace Services.Financial
                 .ToList();
 
         /// <summary>
-        /// An entry that undoes another, not yet saved: the same lines with debits and credits swapped, dated as the
-        /// original so a voided document nets to nothing in its own period. When that period's financial year is no
-        /// longer open, it is dated today instead.
+        /// An entry that undoes another, not yet saved: the same lines with debits and credits swapped, dated on the
+        /// reversal date. The reversal date cannot be before the original entry's date and must fall on or after the books start date.
         /// </summary>
-        public GeneralLedgerHeader CreateReversingEntry(int generalLedgerHeaderId, string description)
+        public GeneralLedgerHeader CreateReversingEntry(int generalLedgerHeaderId, string description, DateTime reversalDate)
         {
             var original = _generalLedgerRepository.GetAllIncluding(gl => gl.GeneralLedgerLines)
                 .FirstOrDefault(gl => gl.Id == generalLedgerHeaderId)
                 ?? throw new InvalidOperationException($"Journal entry {generalLedgerHeaderId} was not found.");
 
-            var date = _fiscalYearRepo.Table.Any(fy => fy.IsActive && original.Date >= fy.StartDate && original.Date <= fy.EndDate)
-                ? original.Date
-                : DateTime.UtcNow.Date;
-            var reversal = CreateGeneralLedgerHeader(original.DocumentType, date, description, original.SourceDocumentId, original.Id);
+            if (reversalDate.Date < original.Date.Date)
+                throw new InvalidOperationException($"The void date ({reversalDate:yyyy-MM-dd}) cannot be earlier than the document date ({original.Date:yyyy-MM-dd}).");
+
+            EnsureOnOrAfterBooksStart(reversalDate.Date);
+
+            var reversal = CreateGeneralLedgerHeader(original.DocumentType, reversalDate.Date, description, original.SourceDocumentId, original.Id);
             foreach (var line in original.GeneralLedgerLines)
                 reversal.GeneralLedgerLines.Add(CreateGeneralLedgerLine(line.DrCr == DrOrCrSide.Dr ? DrOrCrSide.Cr : DrOrCrSide.Dr, line.AccountId, line.Amount));
 

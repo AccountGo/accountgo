@@ -37,6 +37,8 @@ namespace Core.Domain.Purchases
         public int? GeneralLedgerHeaderId { get; set; }
         /// <summary>The entry that reversed the bill's posting when it was voided.</summary>
         public int? VoidGeneralLedgerHeaderId { get; set; }
+        /// <summary>The Accounts Payable account credited when the bill was approved.</summary>
+        public int? PayableAccountId { get; set; }
         public DateTime Date { get; set; }
         /// <summary>The workspace's own number, given when the bill is approved; null on drafts.</summary>
         public string? No { get; set; }
@@ -52,8 +54,14 @@ namespace Core.Domain.Purchases
         /// <summary>The vendor as it was when the bill was approved; drafts follow the vendor.</summary>
         public string? BillFromJson { get; set; }
         public PurchaseInvoiceStatus? Status { get; set; }
+        public string? ApprovedBy { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public string? VoidedBy { get; set; }
+        public DateTime? VoidedAt { get; set; }
+        public string? VoidReason { get; set; }
 
         public virtual Vendor? Vendor { get; set; }
+        public virtual Account? PayableAccount { get; set; }
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
 
@@ -72,9 +80,52 @@ namespace Core.Domain.Purchases
 
         public decimal Total() => Subtotal() + TotalTax();
 
-        public decimal AmountPaid() => VendorPayments?.Sum(p => p.Amount) ?? 0;
+        public decimal AmountPaid() => VendorPayments?.Where(p => !p.IsVoid).Sum(p => p.Amount) ?? 0;
 
         public decimal BalanceDue() => Math.Max(0, Total() - AmountPaid());
+
+        public void EnsureEditable()
+        {
+            if (!IsDraft)
+                throw new InvalidOperationException("This bill is approved, so it can't be changed. Void it and enter it again instead.");
+        }
+
+        public void EnsureCanBeApproved()
+        {
+            if (GeneralLedgerHeaderId.HasValue)
+                throw new InvalidOperationException("This bill is already approved.");
+            if (IsVoid)
+                throw new InvalidOperationException("A void bill can't be approved.");
+            if (!VendorId.HasValue)
+                throw new InvalidOperationException("Pick the vendor the bill is from.");
+            if (PurchaseInvoiceLines.Count == 0)
+                throw new InvalidOperationException("Add at least one line to the bill.");
+            if (Total() <= 0)
+                throw new InvalidOperationException("A bill's total must be more than zero.");
+        }
+
+        public void EnsureCanBeVoided()
+        {
+            if (IsVoid)
+                return;
+            if (IsDraft)
+                throw new InvalidOperationException("Only an approved bill can be voided. Delete a draft bill instead.");
+            if (VendorPayments.Any(p => !p.IsVoid))
+                throw new InvalidOperationException("This bill has payments that aren't void, so it can't be voided. Void each payment first.");
+        }
+
+        public void EnsureCanRecordPayment(decimal amount)
+        {
+            if (IsVoid)
+                throw new InvalidOperationException("A void bill can't be paid.");
+            if (IsDraft)
+                throw new InvalidOperationException("Approve the bill before paying it.");
+            if (amount <= 0)
+                throw new InvalidOperationException("A payment must be more than zero.");
+            var balance = BalanceDue();
+            if (amount > balance)
+                throw new InvalidOperationException($"The payment is more than the {balance:0.00} still owed on this bill.");
+        }
 
         /// <summary>
         /// The stored due date, or for bills saved before due dates were stored, the term's days after the bill date (30
