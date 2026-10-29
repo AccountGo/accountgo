@@ -8,11 +8,14 @@ import { useTenantContext } from '../components/Gating';
 import { localToday } from '../lib/businessDays';
 import {
   RECONCILE_TICK_DEBOUNCE_MS,
+  TickSaveController,
   canFinishReconciliation,
   filterVisibleLines,
+  mergeTickIntoPending,
   nextFocusIndex,
-  tickTogglePayload,
+  reconcileLineTypeLabel,
   type ReconcileLineRef,
+  type TickSavePutResult,
 } from '../lib/reconcileUi';
 import type { TenantContextType } from '../types';
 import type {
@@ -47,13 +50,12 @@ const ReconcilePage: React.FC = () => {
   const [focusIndex, setFocusIndex] = useState(0);
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  const pendingTicks = useRef<{ add: Set<number>; remove: Set<number> }>({
-    add: new Set(),
-    remove: new Set(),
-  });
   const tickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconRef = useRef<BankReconciliation | null>(null);
   reconRef.current = recon;
+  const tickSaverRef = useRef<TickSaveController<BankReconciliation> | null>(null);
+  const flushTicksRef = useRef<() => Promise<BankReconciliation | null>>(async () => null);
+  const mountedRef = useRef(true);
 
   const formatCurrency = useCallback(
     (n: number) =>
@@ -123,76 +125,108 @@ const ReconcilePage: React.FC = () => {
     void bootstrap();
   }, [bootstrap]);
 
-  const flushTicks = useCallback(async () => {
-    const current = reconRef.current;
-    if (!current || current.status !== BANK_RECONCILIATION_STATUS.Draft) return;
-    const add = [...pendingTicks.current.add];
-    const remove = [...pendingTicks.current.remove];
-    pendingTicks.current = { add: new Set(), remove: new Set() };
-    if (add.length === 0 && remove.length === 0) return;
-
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await authFetch(`/api/Banking/Reconciliations/${current.id}/Items`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ add, remove, version: current.version }),
-      });
-      if (res.status === 409) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || 'Someone else changed this reconciliation.');
-      }
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || 'Could not save ticks.');
-      }
-      setRecon(await res.json());
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not save ticks.');
-      await loadRecon(current.id);
-    } finally {
-      setBusy(false);
+  const putTickItemsRef = useRef<
+    (
+      id: number,
+      add: number[],
+      remove: number[],
+      version: number,
+    ) => Promise<TickSavePutResult<BankReconciliation>>
+  >(async () => ({ ok: false, conflict: false, message: 'Not ready.' }));
+  putTickItemsRef.current = async (id, add, remove, version) => {
+    const res = await authFetch(`/api/Banking/Reconciliations/${id}/Items`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ add, remove, version }),
+    });
+    if (res.status === 409) return { ok: false, conflict: true };
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      return { ok: false, conflict: false, message: body?.message || 'Could not save ticks.' };
     }
-  }, [authFetch, loadRecon]);
+    return { ok: true, recon: await res.json() };
+  };
+
+  const loadReconRef = useRef(loadRecon);
+  loadReconRef.current = loadRecon;
+
+  if (!tickSaverRef.current) {
+    tickSaverRef.current = new TickSaveController<BankReconciliation>(
+      () => reconRef.current,
+      (r) => r.status === BANK_RECONCILIATION_STATUS.Draft,
+      (id, add, remove, version) => putTickItemsRef.current(id, add, remove, version),
+      (id) => loadReconRef.current(id),
+      (updated) => {
+        reconRef.current = updated;
+        if (mountedRef.current) setRecon(updated);
+      },
+    );
+  }
+
+  const flushTicks = useCallback(
+    async (options?: { manageBusy?: boolean }): Promise<BankReconciliation | null> => {
+      const saver = tickSaverRef.current;
+      if (!saver || !saver.hasWork) return reconRef.current;
+      const manageBusy = options?.manageBusy !== false;
+      if (manageBusy && mountedRef.current) {
+        setBusy(true);
+        setError(null);
+      }
+      try {
+        return await saver.flush();
+      } catch (err: unknown) {
+        if (mountedRef.current) {
+          setError(err instanceof Error ? err.message : 'Could not save ticks.');
+        }
+        throw err;
+      } finally {
+        if (manageBusy && mountedRef.current) setBusy(false);
+      }
+    },
+    [],
+  );
+  flushTicksRef.current = () => flushTicks();
 
   const queueTick = useCallback(
     (lineId: number) => {
       const current = reconRef.current;
-      if (!current || !canReconcile) return;
+      const saver = tickSaverRef.current;
+      if (!current || !canReconcile || !saver) return;
       const ticked = new Set(
-        [...current.deposits, ...current.payments].filter((l) => l.ticked).map((l => l.lineId)),
+        [...current.deposits, ...current.payments].filter((l) => l.ticked).map((l) => l.lineId),
       );
-      const { add, remove } = tickTogglePayload(ticked, lineId);
+      mergeTickIntoPending(saver.pending, ticked, lineId);
 
-      // Optimistic UI
+      // Optimistic UI — update reconRef immediately so the next Space uses the new state.
       setRecon((prev) => {
         if (!prev) return prev;
         const flip = (lines: BankReconciliationCandidateLine[]) =>
           lines.map((l) => (l.lineId === lineId ? { ...l, ticked: !l.ticked } : l));
-        return { ...prev, deposits: flip(prev.deposits), payments: flip(prev.payments) };
+        const next = { ...prev, deposits: flip(prev.deposits), payments: flip(prev.payments) };
+        reconRef.current = next;
+        return next;
       });
 
-      for (const id of add) {
-        pendingTicks.current.remove.delete(id);
-        pendingTicks.current.add.add(id);
-      }
-      for (const id of remove) {
-        pendingTicks.current.add.delete(id);
-        pendingTicks.current.remove.add(id);
-      }
       if (tickTimer.current) clearTimeout(tickTimer.current);
-      tickTimer.current = setTimeout(() => void flushTicks(), RECONCILE_TICK_DEBOUNCE_MS);
+      tickTimer.current = setTimeout(() => {
+        void flushTicksRef.current().catch(() => {
+          /* error surfaced via setError */
+        });
+      }, RECONCILE_TICK_DEBOUNCE_MS);
     },
-    [canReconcile, flushTicks],
+    [canReconcile],
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
       if (tickTimer.current) clearTimeout(tickTimer.current);
-    },
-    [],
-  );
+      void flushTicksRef.current().catch(() => {
+        /* unmount flush — best effort */
+      });
+    };
+  }, []);
 
   const allLines: ReconcileLineRef[] = useMemo(() => {
     if (!recon) return [];
@@ -223,6 +257,9 @@ const ReconcilePage: React.FC = () => {
       e.preventDefault();
       setFocusIndex((i) => nextFocusIndex(visible.length, i, -1));
     } else if (e.key === ' ' || e.key === 'Spacebar') {
+      // Row buttons use tabIndex={-1}; ignore Space when some other control is focused.
+      const target = e.target as HTMLElement | null;
+      if (target && target !== e.currentTarget && target.tagName === 'BUTTON') return;
       e.preventDefault();
       const line = visible[focusIndex];
       if (line && canReconcile) queueTick(line.lineId);
@@ -274,13 +311,14 @@ const ReconcilePage: React.FC = () => {
     if (!recon || !canReconcile) return;
     if (tickTimer.current) {
       clearTimeout(tickTimer.current);
-      await flushTicks();
+      tickTimer.current = null;
     }
-    const current = reconRef.current;
-    if (!current || !canFinishReconciliation(current.difference)) return;
     setBusy(true);
     setError(null);
     try {
+      const flushed = await flushTicks({ manageBusy: false });
+      const current = flushed ?? reconRef.current;
+      if (!current || !canFinishReconciliation(current.difference)) return;
       const res = await authFetch(`/api/Banking/Reconciliations/${current.id}/Finish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -550,6 +588,7 @@ function LineColumn({
             <li key={line.lineId}>
               <button
                 type="button"
+                tabIndex={-1}
                 disabled={!interactive}
                 onClick={() => interactive && onToggle(line.lineId)}
                 className={`w-full text-left px-4 py-2.5 flex items-start gap-3 transition ${
@@ -568,7 +607,7 @@ function LineColumn({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm text-[var(--text-main)]">
-                    {String(line.date).slice(0, 10)} · {line.type}
+                    {String(line.date).slice(0, 10)} · {reconcileLineTypeLabel(line.type)}
                   </span>
                   <span className="block text-xs text-[var(--text-muted)] truncate">
                     {line.reference || line.payee || '—'}
