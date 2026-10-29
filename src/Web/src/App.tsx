@@ -25,6 +25,9 @@ import Reports from './pages/Reports';
 import ChartOfAccounts from './pages/ChartOfAccounts';
 import Banking from './pages/Banking';
 import BankRegisterPage from './pages/BankRegister';
+import BankingTransactionsPage from './pages/BankingTransactions';
+import ReconciliationHistoryPage from './pages/ReconciliationHistory';
+import ReconcilePage from './pages/Reconcile';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PermissionDeniedCard, RequiresModule, useTenantContext } from './components/Gating';
@@ -152,6 +155,38 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module={['sales', 'purchases', 'financials']}>
                 <Banking />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'banking/transactions',
+            element: (
+              <RequiresModule module="financials">
+                <BankingTransactionsPage />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'banking/reconcile',
+            element: (
+              <RequiresModule module="financials">
+                <ReconciliationHistoryPage />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'banking/:bankId/reconcile/:reconId',
+            element: (
+              <RequiresModule module="financials">
+                <ReconcilePage />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'banking/:bankId/reconcile',
+            element: (
+              <RequiresModule module="financials">
+                <ReconcilePage />
               </RequiresModule>
             ),
           },

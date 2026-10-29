@@ -4,6 +4,7 @@ import { AlertTriangle, Landmark, Loader2, Plus } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { BankAccountFormDialog } from '../components/BankAccountFormDialog';
 import { CashHistoryStep } from '../components/CashHistoryStep';
+import { BankingTabs } from '../components/BankingTabs';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import { needsCashHistoryStep } from '../lib/bankingForm';
@@ -102,6 +103,8 @@ const Banking: React.FC = () => {
           <span>{error}</span>
         </div>
       )}
+
+      <BankingTabs active="accounts" orgSlug={currentOrg.slug} />
 
       <div className="flex items-center gap-2">
         <button

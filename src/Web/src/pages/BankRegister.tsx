@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { AlertTriangle, Archive, Loader2, Pencil, Star } from 'lucide-react';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { AlertTriangle, Archive, Loader2, Pencil, Plus, Scale, Star } from 'lucide-react';
 import { PageHeader, HeaderButton, HeaderMenu } from '../components/PageHeader';
 import { BankAccountFormDialog } from '../components/BankAccountFormDialog';
+import { BankTransactionDialog } from '../components/BankTransactionDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
@@ -29,19 +30,24 @@ function sourcePath(orgSlug: string, type: string, id: number): string | null {
 const BankRegisterPage: React.FC = () => {
   const { bankId } = useParams<{ bankId: string }>();
   const id = Number(bankId);
+  const navigate = useNavigate();
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasModule, hasPermission } = useTenantContext();
   const hasFinancials = hasModule('financials');
   const canManage = hasPermission('banking.accounts.manage');
+  const canCreateTx = hasPermission('banking.transactions.create');
+  const canReconcile = hasPermission('banking.reconcile');
 
   const [account, setAccount] = useState<BankAccount | null>(null);
+  const [banks, setBanks] = useState<BankAccount[]>([]);
   const [register, setRegister] = useState<BankRegisterDto | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState(localToday());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [txOpen, setTxOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [archiveConfirmMessage, setArchiveConfirmMessage] = useState<string | null>(null);
 
@@ -62,9 +68,10 @@ const BankRegisterPage: React.FC = () => {
       const q = new URLSearchParams({ page: '1', pageSize: '200' });
       if (from) q.set('from', from);
       if (to) q.set('to', to);
-      const [accRes, regRes] = await Promise.all([
+      const [accRes, regRes, listRes] = await Promise.all([
         authFetch(`/api/Banking/Accounts/${id}`),
         authFetch(`/api/Banking/Accounts/${id}/Register?${q}`),
+        authFetch('/api/Banking/Accounts'),
       ]);
       if (!accRes.ok) throw new Error('Bank account not found.');
       if (!regRes.ok) {
@@ -73,6 +80,10 @@ const BankRegisterPage: React.FC = () => {
       }
       setAccount(await accRes.json());
       setRegister(await regRes.json());
+      if (listRes.ok) {
+        const body = await listRes.json();
+        setBanks(body.accounts ?? []);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not load the register.');
       setAccount(null);
@@ -181,24 +192,37 @@ const BankRegisterPage: React.FC = () => {
           <span className="font-mono text-sm font-bold text-[var(--text-main)]">{formatCurrency(account.bookBalance)}</span>
         }
         actions={
-          canManage ? (
-            <HeaderMenu
-              label="Actions"
-              items={[
-                { label: 'Edit', icon: Pencil, onSelect: () => setEditOpen(true) },
-                { label: 'Default for receipts', icon: Star, onSelect: () => void setDefault('receipts') },
-                { label: 'Default for payments', icon: Star, onSelect: () => void setDefault('payments') },
-                {
-                  label: account.archivedAt ? 'Unarchive' : 'Archive',
-                  icon: Archive,
-                  onSelect: () => {
-                    if (account.archivedAt) void unarchive();
-                    else void archive(false);
+          <div className="flex flex-wrap items-center gap-2">
+            {hasFinancials && canCreateTx && !account.archivedAt && (
+              <HeaderButton label="Record transaction" icon={Plus} variant="secondary" onClick={() => setTxOpen(true)} />
+            )}
+            {hasFinancials && canReconcile && !account.archivedAt && (
+              <HeaderButton
+                label="Reconcile"
+                icon={Scale}
+                variant="secondary"
+                onClick={() => navigate(`/org/${currentOrg.slug}/banking/${account.id}/reconcile`)}
+              />
+            )}
+            {canManage ? (
+              <HeaderMenu
+                label="Actions"
+                items={[
+                  { label: 'Edit', icon: Pencil, onSelect: () => setEditOpen(true) },
+                  { label: 'Default for receipts', icon: Star, onSelect: () => void setDefault('receipts') },
+                  { label: 'Default for payments', icon: Star, onSelect: () => void setDefault('payments') },
+                  {
+                    label: account.archivedAt ? 'Unarchive' : 'Archive',
+                    icon: Archive,
+                    onSelect: () => {
+                      if (account.archivedAt) void unarchive();
+                      else void archive(false);
+                    },
                   },
-                },
-              ]}
-            />
-          ) : undefined
+                ]}
+              />
+            ) : null}
+          </div>
         }
       />
 
@@ -279,12 +303,6 @@ const BankRegisterPage: React.FC = () => {
         </table>
       </div>
 
-      {hasFinancials && (
-        <p className="text-xs text-[var(--text-muted)]">
-          Reconciliation and manual transactions arrive in a later update. The register already shows every ledger line on this account.
-        </p>
-      )}
-
       {editOpen && (
         <BankAccountFormDialog
           account={account}
@@ -294,6 +312,18 @@ const BankRegisterPage: React.FC = () => {
             await load();
           }}
           onClose={() => setEditOpen(false)}
+        />
+      )}
+
+      {txOpen && (
+        <BankTransactionDialog
+          bank={account}
+          banks={banks}
+          onClose={() => setTxOpen(false)}
+          onSaved={async () => {
+            setTxOpen(false);
+            await load();
+          }}
         />
       )}
 
