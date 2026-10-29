@@ -125,4 +125,32 @@ namespace Dto.Banking
         public int Id { get; set; }
         public string? No { get; set; }
     }
+
+    public class OutstandingAgingBucketDto
+    {
+        /// <summary>0-30, 31-60, 61-90, or 90+.</summary>
+        public string Label { get; set; } = string.Empty;
+        public int MinDays { get; set; }
+        /// <summary>Null for the open-ended last bucket.</summary>
+        public int? MaxDays { get; set; }
+        public int Count { get; set; }
+        public decimal DepositsInTransit { get; set; }
+        public decimal OutstandingPayments { get; set; }
+        /// <summary>Deposits minus payments.</summary>
+        public decimal Net { get; set; }
+        /// <summary>The 90+ bucket: items old enough to need a look.</summary>
+        public bool IsStale { get; set; }
+    }
+
+    public class OutstandingAgingDto
+    {
+        public int BankId { get; set; }
+        public DateTime AsOfDate { get; set; }
+        public IReadOnlyList<OutstandingAgingBucketDto> Buckets { get; set; } = Array.Empty<OutstandingAgingBucketDto>();
+        public int TotalCount { get; set; }
+        public decimal TotalDepositsInTransit { get; set; }
+        public decimal TotalOutstandingPayments { get; set; }
+        public int StaleCount { get; set; }
+        public bool HasStale { get; set; }
+    }
 }

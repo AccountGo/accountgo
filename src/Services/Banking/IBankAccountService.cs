@@ -14,6 +14,9 @@ namespace Services.Banking
         BankAccountsListDto List(bool includeArchived, bool includeFullNumbers, bool includeCashHistoryCodes);
         BankAccountDto Get(int id, bool includeFullNumbers);
         BankRegisterDto GetRegister(int bankId, DateTime? from, DateTime? to, int page, int pageSize);
+
+        /// <summary>Uncleared ledger lines dated on or before <paramref name="asOf"/> (default today), bucketed by age in days (3B).</summary>
+        OutstandingAgingDto GetOutstandingAging(int bankId, DateTime? asOf);
         IReadOnlyList<BankAccountPickerItemDto> Picker(bool includeOtherCashAccounts);
         IReadOnlyList<UnassignedCashDto> GetCashHistory(bool includeCodes);
         IReadOnlyList<object> EligiblePostingAccounts();
