@@ -1636,7 +1636,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 if (InvoiceNumberProblem(ex) is { } numberProblem)
                     return StatusCode(numberProblem.Status, new[] { numberProblem.Message });
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
@@ -1936,7 +1936,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 if (InvoiceNumberProblem(ex) is { } numberProblem)
                     return StatusCode(numberProblem.Status, new[] { numberProblem.Message });
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
@@ -2229,7 +2229,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 _logger.LogError(ex, "Failed to record payment for invoice {InvoiceId}", paymentDto.InvoiceId);
                 return BadRequest(new { message = ex.InnerException != null ? ex.InnerException.Message : ex.Message });
             }
@@ -2456,7 +2456,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -2513,7 +2513,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -2606,7 +2606,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -2673,7 +2673,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }

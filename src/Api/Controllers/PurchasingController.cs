@@ -254,7 +254,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -1047,6 +1047,11 @@ namespace Api.Controllers
                     tx.Commit();
                 }
                 return Ok(ToBill(BillsQuery().Single(b => b.Id == id), _adminService.GetPaymentTerms().ToList()));
+            }
+            catch (Services.Banking.ReconciledPeriodConfirmationRequiredException)
+            {
+                // Handled globally as 409 RECONCILED_PERIOD_CONFIRM_REQUIRED so the client can ask and resend.
+                throw;
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {

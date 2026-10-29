@@ -55,6 +55,7 @@ namespace Services.Financial
         private readonly IRepository<BankTransaction> _bankTransactionRepo;
         private readonly IRepository<BankReconciliation> _bankReconciliationRepo;
         private readonly IRepository<BankStatementLine> _bankStatementLineRepo;
+        private readonly Services.Banking.IReconciledPeriodGuard _reconciledPeriodGuard;
 
         public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
@@ -85,7 +86,8 @@ namespace Services.Financial
             Core.Entitlements.IEntitlementService entitlements = null,
             IRepository<BankTransaction> bankTransactionRepo = null,
             IRepository<BankReconciliation> bankReconciliationRepo = null,
-            IRepository<BankStatementLine> bankStatementLineRepo = null
+            IRepository<BankStatementLine> bankStatementLineRepo = null,
+            Services.Banking.IReconciledPeriodGuard reconciledPeriodGuard = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -119,6 +121,7 @@ namespace Services.Financial
             _bankTransactionRepo = bankTransactionRepo;
             _bankReconciliationRepo = bankReconciliationRepo;
             _bankStatementLineRepo = bankStatementLineRepo;
+            _reconciledPeriodGuard = reconciledPeriodGuard;
         }
 
         public const int GeneralLedgerDefaultPageSize = 100;
@@ -325,6 +328,8 @@ namespace Services.Financial
 
             if (!FinancialHelper.NoLineAmountIsEqualToZero(glEntry))
                 throw new InvalidOperationException("One or more line(s) amount is zero.");
+
+            _reconciledPeriodGuard?.EnsurePostingAllowed(glEntry);
 
             var activeFiscalYear = _fiscalYearRepo.Table
                 .FirstOrDefault(fy => fy.IsActive && glEntry.Date >= fy.StartDate && glEntry.Date <= fy.EndDate);

@@ -34,12 +34,16 @@ internal sealed class BankingTestHarness : IDisposable
     public BankReconciliationService Reconciliations { get; }
     public BankStatementImportService Statements { get; }
 
+    /// <summary>The real guard over the in-memory repositories; the mocked financial service calls it like FinancialService does.</summary>
+    public ReconciledPeriodGuard Guard { get; }
+
     public BankingTestHarness()
     {
         Entitlements = new Mock<IEntitlementService>();
         Entitlements.Setup(e => e.EnsureCanCreate(It.IsAny<MeteredResource>(), It.IsAny<int>()));
         Entitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
             .Returns(new EntitlementDecision(true, null, null));
+        Guard = new ReconciledPeriodGuard(Repos.Banks, Repos.Reconciliations, Repos.BankTransactions, new FakeTenant(companyId: 1));
         Financial = new Mock<IFinancialService>(MockBehavior.Loose);
         SetupFinancial();
 
@@ -216,6 +220,7 @@ internal sealed class BankingTestHarness : IDisposable
             .Setup(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()))
             .Callback<GeneralLedgerHeader>(h =>
             {
+                Guard.EnsurePostingAllowed(h);
                 if (h.Id == 0)
                     h.Id = Repos.NextGlHeaderId();
                 Repos.GlHeaders.Insert(h);

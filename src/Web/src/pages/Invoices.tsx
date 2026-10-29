@@ -28,10 +28,13 @@ import { useCapabilities } from '../lib/entitlements';
 import { UsageHint } from '../components/UsageHint';
 import { ModalShell } from '../components/ModalShell';
 import { VoidDialog } from '../components/VoidDialog';
+import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
+import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 
 export const Invoices: React.FC = () => {
   const { currentOrg, canWrite } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
+  const periodConfirm = useReconciledPeriodConfirm();
   const { entitlements, canCreate: canCreateResource } = useCapabilities();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
@@ -183,8 +186,8 @@ export const Invoices: React.FC = () => {
   };
 
   // Submit Record Payment
-  const handleSubmitPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmitPayment = async (e: React.FormEvent | null, confirmReconciledPeriod = false) => {
+    e?.preventDefault();
     if (!paymentModalInvoice) return;
 
     const parsedAmount = parseFloat(paymentAmount);
@@ -211,11 +214,13 @@ export const Invoices: React.FC = () => {
     };
 
     try {
-      const res = await authFetch('/api/Sales/RecordPayment', {
+      const res = await authFetch(withConfirmReconciledPeriod('/api/Sales/RecordPayment', confirmReconciledPeriod), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
+      if (await periodConfirm.handleConflict(res, () => void handleSubmitPayment(null, true))) return;
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -281,6 +286,7 @@ export const Invoices: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {periodConfirm.dialog}
       <PageHeader
         title="Invoices"
         subtitle="Create invoices, track what's been paid, and see who still owes you."
