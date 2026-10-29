@@ -32,6 +32,8 @@ namespace Core.Domain
         public string SellerName { get; set; } = TradingName;
         public bool ShowSellerAddress { get; set; } = true;
         public bool ShowCustomerEmail { get; set; } = true;
+        /// <summary>Prints the "Attn:" contact line under the customer's name in Bill To.</summary>
+        public bool ShowAttention { get; set; } = true;
         public bool ShowNotes { get; set; } = true;
         public bool ShowPaymentInstructions { get; set; } = true;
         public string? DefaultNotes { get; set; }

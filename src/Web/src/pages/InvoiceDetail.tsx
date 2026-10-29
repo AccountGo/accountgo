@@ -310,13 +310,16 @@ export const InvoiceDetail: React.FC = () => {
     followUp = false,
     attachPdf = false,
     additionalRecipients: string[] = [],
+    cc: string[] = [],
   ): Promise<string> => {
     if (!invoice) return '';
     const attach = attachPdf ? '&attachPdf=true' : '';
-    const extras = additionalRecipients
-      .filter((r) => r.trim().length > 0)
-      .map((r) => `&additionalRecipients=${encodeURIComponent(r.trim())}`)
-      .join('');
+    const query = (name: string, values: string[]) =>
+      values
+        .filter((r) => r.trim().length > 0)
+        .map((r) => `&${name}=${encodeURIComponent(r.trim())}`)
+        .join('');
+    const extras = query('additionalRecipients', additionalRecipients) + query('cc', cc);
     const path = followUp
       ? `/api/Sales/SendSalesInvoiceFollowUpEmail?id=${invoice.id}${attach}${extras}`
       : `/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}${attach}${extras}`;
@@ -368,6 +371,7 @@ export const InvoiceDetail: React.FC = () => {
     followUp: boolean,
     attachPdf = false,
     additionalRecipients: string[] = [],
+    cc: string[] = [],
   ) => {
     if (!invoice || !sendDialogMode) return;
     const issuing = sendDialogMode === 'issue';
@@ -388,10 +392,11 @@ export const InvoiceDetail: React.FC = () => {
     }
 
     try {
-      const to = await emailInvoice(sendAsFollowUp, attachPdf, additionalRecipients);
+      const to = await emailInvoice(sendAsFollowUp, attachPdf, additionalRecipients, cc);
+      const others = additionalRecipients.length + cc.length;
       const recipientNotice =
-        additionalRecipients.length > 0
-          ? `${to} and ${additionalRecipients.length} other recipient${additionalRecipients.length > 1 ? 's' : ''}`
+        others > 0
+          ? `${to} and ${others} other recipient${others > 1 ? 's' : ''}`
           : to;
 
       setSuccessBanner(
@@ -475,6 +480,7 @@ export const InvoiceDetail: React.FC = () => {
   const sellerName = invoice.seller?.name || currentOrg.name || invoice.companyName || 'AccountGo Organization';
   const sellerContact = [invoice.seller?.email, invoice.seller?.phone].filter(Boolean).join(' · ');
   const showCustomerEmail = invoice.display?.showCustomerEmail ?? true;
+  const showAttention = invoice.display?.showAttention ?? true;
   const showNotes = invoice.display?.showNotes ?? true;
   const showPaymentInstructions = invoice.display?.showPaymentInstructions ?? true;
   const lastEmail = invoice.emails?.[0] ?? null;
@@ -682,7 +688,7 @@ export const InvoiceDetail: React.FC = () => {
             <div className="font-bold text-[var(--text-main)] text-base">
               {invoice.customerName}
             </div>
-            {invoice.customerAttention && (
+            {showAttention && invoice.customerAttention && (
               <div className="text-[var(--text-secondary)]">{invoice.customerAttention}</div>
             )}
             {showCustomerEmail && invoice.customerEmail && (
@@ -1128,7 +1134,14 @@ export const InvoiceDetail: React.FC = () => {
           invoiceNumber={invoice.no || issueNumber || ''}
           numberOnIssue={sendDialogMode === 'issue' && !invoice.no}
           to={invoice.recipientEmail}
-          bcc={user?.email && user.email.toLowerCase() !== invoice.recipientEmail.toLowerCase() ? user.email : undefined}
+          cc={invoice.recipientCcEmail}
+          bcc={
+            user?.email &&
+            user.email.toLowerCase() !== invoice.recipientEmail.toLowerCase() &&
+            user.email.toLowerCase() !== invoice.recipientCcEmail?.toLowerCase()
+              ? user.email
+              : undefined
+          }
           lastSent={sendDialogMode === 'send' ? lastEmail : null}
           followUpEligible={sendDialogMode === 'send' && followUpEligible}
           busy={isSendingEmail || isSubmittingIssue}

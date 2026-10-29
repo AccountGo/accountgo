@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS: SalesInvoiceSettings = {
   sellerName: 'TradingName',
   showSellerAddress: true,
   showCustomerEmail: true,
+  showAttention: true,
   showNotes: true,
   showPaymentInstructions: true,
   defaultNotes: null,
@@ -20,11 +21,12 @@ const DEFAULT_SETTINGS: SalesInvoiceSettings = {
 
 const MAX_DEFAULT_TEXT = 2000;
 
-type ToggleKey = 'showSellerAddress' | 'showCustomerEmail' | 'showNotes' | 'showPaymentInstructions';
+type ToggleKey = 'showSellerAddress' | 'showCustomerEmail' | 'showAttention' | 'showNotes' | 'showPaymentInstructions';
 
 const TOGGLES: Array<{ key: ToggleKey; label: string; hint: string }> = [
   { key: 'showSellerAddress', label: 'Show business address', hint: 'Prints your address under the name in the invoice header.' },
   { key: 'showCustomerEmail', label: "Show customer's email in Bill to", hint: "Hide it when the invoice is shared outside the customer's team." },
+  { key: 'showAttention', label: 'Show attention line in Bill to', hint: "The \"Attn:\" contact name under the client's company name. The contact is still copied on invoice emails." },
   { key: 'showNotes', label: 'Show notes', hint: 'The per-invoice client notes block.' },
   { key: 'showPaymentInstructions', label: 'Show payment instructions', hint: 'The per-invoice payment instructions block.' },
 ];
