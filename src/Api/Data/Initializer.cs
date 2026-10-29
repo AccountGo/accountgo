@@ -1,5 +1,6 @@
 using Core.Domain.Financials;
 using Services.Administration;
+using Services.Billing;
 using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
@@ -19,13 +20,15 @@ namespace Api.Data
         private readonly IPurchasingService _purchasingService;
         private readonly IInventoryService _inventoryService;
         private readonly ISecurityService _securityService;
+        private readonly IPlanCatalog _plans;
 
         public Initializer(IAdministrationService adminService,
             IFinancialService financialService,
             ISalesService salesService,
             IPurchasingService purchasingService,
             IInventoryService inventoryService,
-            ISecurityService securityService)
+            ISecurityService securityService,
+            IPlanCatalog plans)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -33,6 +36,7 @@ namespace Api.Data
             _purchasingService = purchasingService;
             _inventoryService = inventoryService;
             _securityService = securityService;
+            _plans = plans;
         }
         public bool Setup(Api.Service.CompanyProvisioningService provisioning)
         {
@@ -172,7 +176,8 @@ namespace Api.Data
                     Name = "Financial Solutions Inc.",
                     CompanyCode = "100",
                     ShortName = "FSI",
-                    CRA = "012345678"
+                    CRA = "012345678",
+                    Plan = _plans.DefaultPlanKey,
                 };
 
                 _adminService.SaveCompany(defaultCompany);

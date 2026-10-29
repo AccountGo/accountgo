@@ -57,6 +57,7 @@ namespace Api.Data.Seed
                     ShortName = "FSI",
                     Slug = "ph-financials",
                     CRA = "012345678",
+                    Plan = "accounting_free",
                     CreatedAt = new System.DateTime(2025, 1, 1, 0, 0, 0, System.DateTimeKind.Utc)
                 }
             };

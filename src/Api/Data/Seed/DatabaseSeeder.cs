@@ -41,7 +41,8 @@ namespace Api.Data.Seed
                     salesService,
                     purchasingService,
                     inventoryService,
-                    securityService
+                    securityService,
+                    scope.ServiceProvider.GetRequiredService<Services.Billing.IPlanCatalog>()
                 );
 
                 var success = initializer.Setup(scope.ServiceProvider.GetRequiredService<Api.Service.CompanyProvisioningService>());

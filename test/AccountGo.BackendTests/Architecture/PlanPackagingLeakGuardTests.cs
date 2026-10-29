@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -18,27 +20,32 @@ namespace AccountGo.BackendTests.Architecture;
 /// </summary>
 public class PlanPackagingLeakGuardTests
 {
-    // Private module / assembly type names that must not appear in public src/.
-    private static readonly string[] ForbiddenPrivateNames =
-    [
-        "accountgo-commercial",
-        "HostedEntitlementService",
-        "HostedPlanCatalog",
-        "HostedPlanCatalogProvider",
-        "HostedPlanRules",
-        "HostedEntitlementSettings",
-        "AccountGo.Billing",
-    ];
+    // Digests of identifiers that must not appear in this repository.
+    private static readonly HashSet<string> ForbiddenTokenDigests = new(StringComparer.Ordinal)
+    {
+        "32c43f1d941c0d8d433532e7ac94c83cd6e1c3b344ccd8d11cc4d02e8e912e74",
+        "31ccc0849300e18f5135a2f4514a7715e3c653329f394ffc2e3ae9972688c5a8",
+        "bf3de4165adb56391ebed4839574c9e970e7c7b1f209ab144bca9ff4e6319af7",
+        "d7a8886f27cedee53a6d2e9a102bc1323f6d7aa9dc50cfd0a2d9cc45e4313c46",
+        "fafca1dbf2c395bd2cb90f0a7d44ea34536ec925c5a3733faddc43dbfb1506f5",
+        "c41e1ee4ae09d274d4aa6cc77f9cec11c93e3829cdb293bb2ed092e62af5e8f2",
+        "ae2ab7a70ea537678d645e6dbdffcf90dd4ea909b4068c2dc836436acce096c9",
+        "700c8cb3230d65a8911bc384ebcdf0b353a1f373cbadb84058b9ccabda355c6f",
+        "14386bdbe24db460d82cc6c567cc537d1b674072786e7d78c1d530e507a39ca2",
+        "71edb6b16ed1f07828588321ed37faf9978586eac232b5671038e008509a242f",
+        "41bf3b5484dc570deaae1fabb343067aa7cbf444111056812368ebafe2c3270a",
+    };
 
     private static readonly (string RelativePath, string Reason)[] Allowlist =
     [
         ("src/Api/Data/Migrations/", "Historical EF migrations keep prior seed/plan values."),
         ("src/Api/d1/migrations/", "Historical D1 migrations keep prior seed/plan values."),
         ("src/Api/Data/Schema/SqliteSchemaUpgrader.cs", "Legacy plan-key rewrites for databases upgraded in place."),
+        ("src/Api/Data/Seed/SeeData.cs", "EF seed must match the migration snapshot."),
     ];
 
-    private static readonly Regex PlanTieruffix = new(
-        @"\b(invoicing|accounting)_(free|pro)\b",
+    private static readonly Regex TokenPattern = new(
+        @"[A-Za-z][A-Za-z0-9_.-]*",
         RegexOptions.Compiled);
 
     private static readonly Regex MonthlyPriceLiteral = new(
@@ -70,14 +77,13 @@ public class PlanPackagingLeakGuardTests
                 var line = lines[i];
                 var location = $"{relative}:{i + 1}";
 
-                if (PlanTieruffix.IsMatch(line))
-                    failures.Add($"{location}: plan tier key");
                 if (MonthlyPriceLiteral.IsMatch(line))
                     failures.Add($"{location}: monthlyPrice numeric literal");
-                foreach (var name in ForbiddenPrivateNames)
+
+                foreach (Match match in TokenPattern.Matches(line))
                 {
-                    if (line.Contains(name, StringComparison.Ordinal))
-                        failures.Add($"{location}: forbidden name '{name}'");
+                    if (ForbiddenTokenDigests.Contains(Sha256Hex(match.Value.ToLowerInvariant())))
+                        failures.Add($"{location}: forbidden token");
                 }
             }
         }
@@ -93,10 +99,14 @@ public class PlanPackagingLeakGuardTests
             {
                 var line = lines[i];
                 var location = $"{relative}:{i + 1}";
-                if (line.Contains("accountgo-commercial", StringComparison.Ordinal))
-                    failures.Add($"{location}: forbidden name 'accountgo-commercial'");
                 if (line.Contains("ENTITLEMENTS_FREE_", StringComparison.Ordinal))
                     failures.Add($"{location}: ENTITLEMENTS_FREE_");
+
+                foreach (Match match in TokenPattern.Matches(line))
+                {
+                    if (ForbiddenTokenDigests.Contains(Sha256Hex(match.Value.ToLowerInvariant())))
+                        failures.Add($"{location}: forbidden token");
+                }
             }
         }
 
@@ -104,6 +114,12 @@ public class PlanPackagingLeakGuardTests
             failures.Count == 0,
             "Plan packaging leak guard failed:\n" + string.Join("\n", failures.Take(50))
             + (failures.Count > 50 ? $"\n... and {failures.Count - 50} more" : ""));
+    }
+
+    private static string Sha256Hex(string value)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private static bool IsAllowlisted(string relativePath) =>
@@ -130,9 +146,7 @@ public class PlanPackagingLeakGuardTests
             }
 
             foreach (var file in Directory.EnumerateFiles(dir))
-            {
                 yield return file;
-            }
         }
     }
 

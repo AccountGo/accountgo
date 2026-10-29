@@ -96,7 +96,7 @@ namespace Api.Controllers
                 });
             }
 
-            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
+            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService, _plans);
             bool success = initializer.Clear();
             if (success)
                 return Ok(new { message = "Database is cleared!" });
