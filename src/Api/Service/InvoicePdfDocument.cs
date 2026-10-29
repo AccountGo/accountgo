@@ -113,8 +113,8 @@ namespace Api.Service
                 if (_invoice.Display.ShowNotes && !string.IsNullOrWhiteSpace(_invoice.Notes))
                     column.Item().ShowEntire().Element(c => ComposeNote(c, "NOTES", _invoice.Notes!));
 
-                if (_invoice.Display.ShowPaymentInstructions && !string.IsNullOrWhiteSpace(_invoice.PaymentInstructions))
-                    column.Item().ShowEntire().Element(c => ComposeNote(c, "PAYMENT INSTRUCTIONS", _invoice.PaymentInstructions!));
+                if (_invoice.Display.ShowPaymentInstructions && !string.IsNullOrWhiteSpace(_invoice.PaymentInstructionsToPrint()))
+                    column.Item().ShowEntire().Element(c => ComposeNote(c, "PAYMENT INSTRUCTIONS", _invoice.PaymentInstructionsToPrint()!));
             });
         }
 

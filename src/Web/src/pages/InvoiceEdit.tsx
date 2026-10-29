@@ -226,7 +226,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         const settings: SalesInvoiceSettings = await res.json();
         // Only fill fields the user has not started typing in.
         setNotes((current) => current || settings.defaultNotes || '');
-        setPaymentInstructions((current) => current || settings.defaultPaymentInstructions || '');
+        // With a payment bank set, leave the field empty so the bank details print instead of a frozen copy of the default.
+        if (!settings.paymentBankId) {
+          setPaymentInstructions((current) => current || settings.defaultPaymentInstructions || '');
+        }
       } catch (err) {
         console.error('Error loading invoice defaults:', err);
       }
