@@ -1,0 +1,10 @@
+ALTER TABLE "CompanySetting" ADD COLUMN "LegalName" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "BusinessEmail" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "BusinessPhone" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "SalesInvoiceSettingsJson" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "BusinessAddress_Line1" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "BusinessAddress_Line2" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "BusinessAddress_City" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "BusinessAddress_Region" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "BusinessAddress_PostalCode" TEXT NULL;
+ALTER TABLE "CompanySetting" ADD COLUMN "BusinessAddress_CountryCode" TEXT NULL;

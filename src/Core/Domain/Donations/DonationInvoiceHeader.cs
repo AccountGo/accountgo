@@ -8,12 +8,14 @@ using System.Linq;
 namespace Core.Domain.Donations
 {
     [Table("DonationInvoiceHeader")]
-    public partial class DonationInvoiceHeader : BaseEntity
+    public partial class DonationInvoiceHeader : BaseEntity, ICompanyOwned
     {
         public DonationInvoiceHeader()
         {
             DonationInvoiceLines = new HashSet<DonationInvoiceLine>();
         }
+
+        public int CompanyId { get; set; }
 
         public int DonorId { get; set; }
         public string No { get; set; }

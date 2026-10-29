@@ -1,0 +1,108 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "accountgo-api",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
+  "containers": [
+    {
+      "class_name": "AccountGoApiContainer",
+      "image": "./Dockerfile",
+      "image_build_context": "../..",
+      "max_instances": 5,
+      "constraints": {
+        "regions": ["ENAM", "WNAM"]
+      }
+    },
+    {
+      "name": "accountgo-api-v2",
+      "class_name": "AccountGoApiContainerV2",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "dockerfile": "./Dockerfile",
+          "build_context": "../.."
+        }
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CONTAINER",
+        "class_name": "AccountGoApiContainer"
+      },
+      {
+        "name": "CONTAINER_V2",
+        "class_name": "AccountGoApiContainerV2"
+      }
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "accountgo-db",
+      // Local/dev placeholder. Production D1 id lives only in AccountGo/accountgo-ops.
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "d1/migrations"
+    }
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "AccountGoApiContainer"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "AccountGoApiContainerV2"
+      ]
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "Development",
+    "CONTAINER_NAME": "local",
+    "TIERED_CAPACITY_ENABLED": "false",
+    "CONTAINER_INSTANCE_TYPE": "standard-1",
+    "DatabaseProvider": "Sqlite",
+    "EMAIL_PROVIDER": "Console",
+    "PUBLIC_WEB_URL": "http://localhost:3000",
+    "PUBLIC_API_URL": "http://localhost:8001",
+    "RESEND_EMAIL_FROM": "billing@example.com",
+    "RESEND_FROM_NAME": "AccountGo",
+    "AUTH_EMAIL_FROM": "auth@example.com",
+    "SECURITY_EMAIL_FROM": "security@example.com",
+    "INVITES_EMAIL_FROM": "invites@example.com",
+    "SUPPORT_EMAIL": "support@example.com",
+    "JwtSettings__validIssuer": "AccountGo API",
+    "JwtSettings__validAudience": "http://localhost:8001",
+    "Cors__AllowedOrigins__0": "http://localhost:3000",
+    "Cors__AllowedOrigins__1": "http://localhost:5173",
+    "ANTER_BASE_URL": "https://agents.anter.ai",
+    "ANTER_AGENT_SLUG": "accountgo-assistant",
+    "TURNSTILE_HOSTNAMES": "localhost, 127.0.0.1, accountgo.dev, app.accountgo.dev"
+  },
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1.0,
+      "persist": true
+    },
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "issues": {
+      "enabled": true
+    }
+  }
+}

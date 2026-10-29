@@ -1,5 +1,6 @@
 using Core.Domain.Financials;
 using Services.Administration;
+using Services.Billing;
 using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
@@ -19,13 +20,15 @@ namespace Api.Data
         private readonly IPurchasingService _purchasingService;
         private readonly IInventoryService _inventoryService;
         private readonly ISecurityService _securityService;
+        private readonly IPlanCatalog _plans;
 
         public Initializer(IAdministrationService adminService,
             IFinancialService financialService,
             ISalesService salesService,
             IPurchasingService purchasingService,
             IInventoryService inventoryService,
-            ISecurityService securityService)
+            ISecurityService securityService,
+            IPlanCatalog plans)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -33,8 +36,9 @@ namespace Api.Data
             _purchasingService = purchasingService;
             _inventoryService = inventoryService;
             _securityService = securityService;
+            _plans = plans;
         }
-        public bool Setup()
+        public bool Setup(Api.Service.CompanyProvisioningService provisioning)
         {
             /*
              * 1.Company
@@ -56,21 +60,7 @@ namespace Api.Data
                 var company = SetupCompany();
                 Console.WriteLine("SetupCompany() - Completed!");
 
-                // 2.Chart of accounts/ account classes
-                SetupChartOfAccountsAndAccountClasses();
-                Console.WriteLine("SetupChartOfAccountsAndAccountClasses() - Completed!");
-
-                //3.Financial year
-                SetupFinancialYear();
-                Console.WriteLine("SetupFinancialYear() - Completed!");
-
-                //4.Payment terms
-                SetupPaymentTerms();
-                Console.WriteLine("SetupPaymentTerms() - Completed!");
-
-                //5.gl setting
-                SetupLedgerSetting(company);
-                Console.WriteLine("setupledgersetting() - completed!");
+                provisioning.Provision(company, "PHP");
 
                 //6.Tax
                 SetupTax();
@@ -171,7 +161,7 @@ namespace Api.Data
             // return defaultCompany;
 
             Console.WriteLine("Checking if there is already a default company.");
-            var defaultCompany = _adminService.GetDefaultCompany();
+            var defaultCompany = _adminService.GetCompanyBySlug("ph-financials") ?? _adminService.GetCompanies().FirstOrDefault();
             if (defaultCompany != null)
             {
                 Console.WriteLine("Default company found. Returning it.");
@@ -186,7 +176,8 @@ namespace Api.Data
                     Name = "Financial Solutions Inc.",
                     CompanyCode = "100",
                     ShortName = "FSI",
-                    CRA = "012345678"
+                    CRA = "012345678",
+                    Plan = _plans.DefaultPlanKey,
                 };
 
                 _adminService.SaveCompany(defaultCompany);
@@ -204,11 +195,11 @@ namespace Api.Data
                 // If no accounts found just return.
                 //if (_financialService.GetAccounts().Any()) return accountClasses;
                 string[,] values;
-                var assembly = Assembly.GetEntryAssembly();
+                var assembly = typeof(Initializer).Assembly;
                 var resourceStream = assembly!.GetManifestResourceStream("Api.Data.coa.csv");
                 using (var reader = new StreamReader(resourceStream!, Encoding.UTF8))
                 {
-                    var coa = reader.ReadToEndAsync().Result;
+                    var coa = reader.ReadToEnd();
                     values = LoadCsv(coa);
                 }
                 List<Core.Domain.Financials.Account> accounts = new List<Core.Domain.Financials.Account>();
@@ -239,7 +230,6 @@ namespace Api.Data
                             break;
                     }
 
-                    account.CompanyId = 1;
                     accounts.Add(account);
                 }
 
@@ -334,7 +324,7 @@ namespace Api.Data
                 // If no accounts found just return.
                 if (_financialService.GetAccounts().Any()) return;
                 string[,] values;
-                var assembly = Assembly.GetEntryAssembly();
+                var assembly = typeof(Initializer).Assembly;
                 var resourceStream = assembly!.GetManifestResourceStream("Api.Data.coa.csv");
                 using (var reader = new StreamReader(resourceStream!, Encoding.UTF8))
                 {
@@ -369,7 +359,6 @@ namespace Api.Data
                             break;
                     }
 
-                    account.CompanyId = 1;
                     accounts.Add(account);
                 }
 
@@ -459,15 +448,47 @@ namespace Api.Data
         private void SetupFinancialYear()
         {
             if (_adminService.GetFinancialYears().Count >= 1) return;
-            var financialYear = new Core.Domain.Financials.FinancialYear
+
+            var years = new List<Core.Domain.Financials.FinancialYear>
             {
-                FiscalYearCode = "FY1819",
-                FiscalYearName = "FY 2018/2019",
-                StartDate = new DateTime(2018, 01, 01),
-                EndDate = new DateTime(2018, 12, 31),
-                IsActive = true
+                new()
+                {
+                    FiscalYearCode = "FY2024",
+                    FiscalYearName = "FY 2024",
+                    StartDate = new DateTime(2024, 01, 01),
+                    EndDate = new DateTime(2024, 12, 31, 23, 59, 59),
+                    IsActive = false
+                },
+                new()
+                {
+                    FiscalYearCode = "FY2025",
+                    FiscalYearName = "FY 2025",
+                    StartDate = new DateTime(2025, 01, 01),
+                    EndDate = new DateTime(2025, 12, 31, 23, 59, 59),
+                    IsActive = false
+                },
+                new()
+                {
+                    FiscalYearCode = "FY2026",
+                    FiscalYearName = "FY 2026",
+                    StartDate = new DateTime(2026, 01, 01),
+                    EndDate = new DateTime(2026, 12, 31, 23, 59, 59),
+                    IsActive = true
+                },
+                new()
+                {
+                    FiscalYearCode = "FY2027",
+                    FiscalYearName = "FY 2027",
+                    StartDate = new DateTime(2027, 01, 01),
+                    EndDate = new DateTime(2027, 12, 31, 23, 59, 59),
+                    IsActive = true
+                }
             };
-            _financialService.SaveFinancialYear(financialYear);
+
+            foreach (var fy in years)
+            {
+                _financialService.SaveFinancialYear(fy);
+            }
         }
 
         private void SetupPaymentTerms()
@@ -536,10 +557,10 @@ namespace Api.Data
         private void SetupTax()
         {
             IList<Core.Domain.TaxSystem.Tax> taxes = new List<Core.Domain.TaxSystem.Tax>();
-            if (_financialService.GetTaxes().Any()) return;
+            if (_financialService.GetTaxes().Any(t => t.TaxCode != "NONE")) return;
 
             var salesTaxAccount = _financialService.GetAccountByAccountCode("20300");
-            var purchaseTaxAccount = _financialService.GetAccountByAccountCode("50700");
+            var purchaseTaxAccount = _financialService.GetAccountByAccountCode("10160");
 
             var gst = new Core.Domain.TaxSystem.Tax()
             {
@@ -741,7 +762,8 @@ namespace Api.Data
 
             foreach (var m in measurements)
             {
-                _inventoryService.SaveMeasurement(m);
+                if (!_inventoryService.GetMeasurements().Any(existing => existing.Code == m.Code))
+                    _inventoryService.SaveMeasurement(m);
             }
 
             // Accounts = Sales A/C (40100), Inventory (10800), COGS (50300), Inv Adjustment (50500), Item Assm Cost (10900)
@@ -899,12 +921,7 @@ namespace Api.Data
             Console.WriteLine("SetupSecurityRoles() - Started");
             try
             {
-                var existingSecurityRoles = _securityService.GetAllSecurityRole();
-                // Console.WriteLine(existingSecurityRoles.Count());
-                if (existingSecurityRoles.FirstOrDefault(r => r.Name == "SystemAdministrators") == null)
-                    _securityService.AddRole("SystemAdministrators");
-                if (existingSecurityRoles.FirstOrDefault(r => r.Name == "GeneralUsers") == null)
-                    _securityService.AddRole("GeneralUsers");
+                _securityService.EnsureDefaultPermissionsAndRoles();
             }
             catch (System.Exception ex)
             {
@@ -1146,7 +1163,7 @@ namespace Api.Data
             DateTime paymentDate,
             decimal amount)
         {
-            _purchasingService.SavePayment(invoice.Id, vendor.Id, bankAccountId, amount, paymentDate);
+            _purchasingService.PayBill(invoice.Id, bankAccountId, amount, paymentDate);
         }
 
         private static string[,] LoadCsv(string filename)

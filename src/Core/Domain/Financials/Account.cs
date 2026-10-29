@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="Account.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -15,7 +16,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("Account")]
-    public partial class Account : BaseEntity
+    public partial class Account : BaseEntity, ICompanyOwned
     {
         public Account()
         {
@@ -37,6 +38,7 @@ namespace Core.Domain.Financials
         public string Description { get; set; }
         public bool IsCash { get; set; }
         public bool IsContraAccount { get; set; }
+        public DateTime? ArchivedAt { get; set; }
         [Column(TypeName = "timestamp")]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
         [MaxLength(8)]
@@ -99,7 +101,10 @@ namespace Core.Domain.Financials
             decimal drAmount = dr.Sum(d => d.Amount);
             decimal crAmount = cr.Sum(c => c.Amount);
 
-            if (AccountClass.NormalBalance == "Dr")
+            bool isDebitNormal = AccountClass?.NormalBalance == "Dr" ||
+                (AccountClass == null && DrOrCrSide == DrOrCrSide.Dr);
+
+            if (isDebitNormal)
             {
                 balance = drAmount - crAmount;
             }

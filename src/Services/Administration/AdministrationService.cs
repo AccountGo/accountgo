@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="AdministrationService.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -14,18 +15,21 @@ using Core.Domain.Error;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
-using Services.Financial;
-using Services.TaxSystem;
+using Dto.Subscription;
+using Core.Domain.Purchases;
+using Core.Domain.Sales;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Services.Billing;
 
 namespace Services.Administration
 {
-    public class AdministrationService : BaseService, IAdministrationService
+    public partial class AdministrationService : BaseService, IAdministrationService
     {
         private readonly IRepository<FinancialYear> _fiscalYearRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
@@ -37,10 +41,14 @@ namespace Services.Administration
         private readonly IRepository<Company> _company;
         private readonly IRepository<Account> _accountRepo;
         private readonly IRepository<AuditLog> _auditLogRepo;
+        private readonly IRepository<SalesInvoiceLine> _salesInvoiceLineRepo;
+        private readonly IRepository<PurchaseInvoiceLine> _purchaseInvoiceLineRepo;
         private readonly ISecurityRepository _securityRepository;
-        private readonly IFinancialService _financialService;
-        private readonly ITaxService _taxService;
         private readonly IMapper _mapper;
+        private readonly Core.Tenancy.ITenantContext? _tenantContext;
+        private readonly Core.Entitlements.IEntitlementService? _entitlements;
+        private readonly IPlanCatalog _plans;
+        private readonly ILogger<AdministrationService>? _logger;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -51,14 +59,21 @@ namespace Services.Administration
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
             IRepository<Account> accountRepo,
             IRepository<AuditLog> auditLogRepo,
+            IRepository<SalesInvoiceLine> salesInvoiceLineRepo,
+            IRepository<PurchaseInvoiceLine> purchaseInvoiceLineRepo,
             ISecurityRepository securityRepository,
-            IFinancialService financialService,
-            ITaxService taxService,
             IMapper mapper,
-            IRepository<Company> company = null
+            IPlanCatalog plans,
+            IRepository<Company> company = null,
+            Core.Tenancy.ITenantContext? tenantContext = null,
+            Core.Entitlements.IEntitlementService? entitlements = null,
+            ILogger<AdministrationService>? logger = null
             )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
+            _entitlements = entitlements;
+            _plans = plans ?? throw new ArgumentNullException(nameof(plans));
+            _logger = logger;
             _fiscalYearRepo = fiscalYearRepo;
             _taxGroupRepo = taxGroupRepo;
             _itemTaxGroupRepo = itemTaxGroupRepo;
@@ -69,10 +84,11 @@ namespace Services.Administration
             _company = company;
             _accountRepo = accountRepo;
             _auditLogRepo = auditLogRepo;
+            _salesInvoiceLineRepo = salesInvoiceLineRepo;
+            _purchaseInvoiceLineRepo = purchaseInvoiceLineRepo;
             _securityRepository = securityRepository;
-            _financialService = financialService;
-            _taxService = taxService;
             _mapper = mapper;
+            _tenantContext = tenantContext;
         }
 
         public ICollection<Tax> GetAllTaxes(bool includeInActive)
@@ -82,63 +98,9 @@ namespace Services.Administration
             return query.ToList();
         }
 
-        public async Task<Result<Dto.TaxSystem.Tax>> CreateTaxAsync(Dto.TaxSystem.TaxForCreation taxForCreationDto)
-        {
-            var query = from f in _taxRepo.Table
-                        where f.TaxName == taxForCreationDto.TaxName || f.TaxCode == taxForCreationDto.TaxCode
-                        select f;
-
-            if (query.Any())
-            {
-                var message = $"Tax with name {taxForCreationDto.TaxName} or code {taxForCreationDto.TaxCode} already exists";
-                return Result<Dto.TaxSystem.Tax>.Failure(Error.ValidationError(message));
-            }
-
-            var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.SalesAccountId.ToString());
-            var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.PurchaseAccountId.ToString());
-
-            var taxEntity = _mapper.Map<Core.Domain.TaxSystem.Tax>(taxForCreationDto);
-            taxEntity.SalesAccountId = salesTaxAccount.Id;
-            taxEntity.PurchasingAccountId = purchaseTaxAccount.Id;
-            taxEntity.SalesAccount = salesTaxAccount;
-            taxEntity.PurchasingAccount = purchaseTaxAccount;
-
-            if (taxForCreationDto.TaxGroup != null)
-            {
-                var taxGroupEntity = AddNewTaxGroup(taxForCreationDto.TaxGroup);
-                taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
-                {
-                    TaxId = taxEntity.Id,
-                    TaxGroupId = taxGroupEntity.Id,
-                    TaxGroup = taxGroupEntity,
-                });
-            }
-
-            if (taxForCreationDto.ItemTaxGroup != null)
-            {
-                var itemTaxGroupEntity = AddNewItemTaxGroup(taxForCreationDto.ItemTaxGroup);
-                taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
-                {
-                    TaxId = taxEntity.Id,
-                    ItemTaxGroupId = itemTaxGroupEntity.Id,
-                    ItemTaxGroup = itemTaxGroupEntity,
-                });
-            }
-
-            await AddNewTaxAsync(taxEntity);
-            var taxToReturn = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
-
-            return Result<Dto.TaxSystem.Tax>.Success(taxToReturn);
-        }
-
         public void AddNewTax(Tax tax)
         {
             _taxRepo.Insert(tax);
-        }
-
-        public async Task AddNewTaxAsync(Tax tax)
-        {
-            await _taxRepo.InsertAsync(tax);
         }
 
         public TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto)
@@ -163,81 +125,6 @@ namespace Services.Administration
             }
 
             return itemTaxGroupEntity;
-        }
-
-        public async Task<Result<Dto.TaxSystem.Tax>> EditTaxAsync(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
-        {
-            if (taxForUpdateDto == null || taxForUpdateDto.Tax == null)
-            {
-                return Result<Dto.TaxSystem.Tax>.Failure(Error.ValidationError("Tax data is required."));
-            }
-
-            var taxEntity = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
-            if (taxEntity is null)
-            {
-                var message = $"Tax with id {taxForUpdateDto.Tax.Id} is not found.";
-                return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
-            }
-
-            var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.SalesAccountId.ToString());
-            var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.PurchaseAccountId.ToString());
-
-            _mapper.Map(taxForUpdateDto, taxEntity);
-            taxEntity.SalesAccountId = salesTaxAccount.Id;
-            taxEntity.PurchasingAccountId = purchaseTaxAccount.Id;
-            taxEntity.SalesAccount = salesTaxAccount;
-            taxEntity.PurchasingAccount = purchaseTaxAccount;
-
-            taxEntity.TaxGroupTaxes.Clear();
-
-            if (taxForUpdateDto.TaxGroup != null)
-            {
-                var taxGroupEntity = AddNewTaxGroup(taxForUpdateDto.TaxGroup);
-                taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
-                {
-                    TaxId = taxEntity.Id,
-                    TaxGroupId = taxGroupEntity.Id,
-                    TaxGroup = taxGroupEntity,
-                });
-            }
-
-            taxEntity.ItemTaxGroupTaxes.Clear();
-
-            if (taxForUpdateDto.ItemTaxGroup != null)
-            {
-                var itemTaxGroupEntity = AddNewItemTaxGroup(taxForUpdateDto.ItemTaxGroup);
-                taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
-                {
-                    TaxId = taxEntity.Id,
-                    ItemTaxGroupId = itemTaxGroupEntity.Id,
-                    ItemTaxGroup = itemTaxGroupEntity
-                });
-            }
-
-            await UpdateTaxAsync(taxEntity);
-            var taxToRetun = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
-
-            return Result<Dto.TaxSystem.Tax>.Success(taxToRetun);
-        }
-
-        public async Task UpdateTaxAsync(Tax tax)
-        {
-            await _taxRepo.UpdateAsync(tax);
-        }
-
-        public async Task<Result<Dto.TaxSystem.Tax>> DeleteTaxAsync(int taxId)
-        {
-            var tax = _taxRepo.GetById(taxId);
-
-            if (tax is null)
-            {
-                var message = $"Tax with id {taxId} not found";
-                return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
-            }
-
-            await _taxRepo.DeleteAsync(tax);
-
-            return Result<Dto.TaxSystem.Tax>.Success(null);
         }
 
         public async Task<Result<Dto.TaxSystem.TaxGroup>> DeleteTaxGroupAsync(int taxGroupId)
@@ -292,9 +179,15 @@ namespace Services.Administration
             }
         }
 
-        public Company GetDefaultCompany()
+        public ICollection<Company> GetCompanies()
         {
-            return _company.Table.ToList().FirstOrDefault();
+            return _company.Table.ToList();
+        }
+
+        public Company? GetCompanyBySlug(string slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug)) return null;
+            return _company.Table.FirstOrDefault(c => c.Slug == slug);
         }
 
         public ICollection<PaymentTerm> GetPaymentTerms()
@@ -317,7 +210,14 @@ namespace Services.Administration
             {
                 _company.Insert(company);
             }
-            else { _company.Update(company); }
+            else
+            {
+                if (_tenantContext?.CompanyId.HasValue == true && company.Id != _tenantContext.CompanyId.Value)
+                {
+                    throw new Core.Tenancy.CrossTenantWriteException("Cannot update another organization's settings.");
+                }
+                _company.Update(company);
+            }
         }
 
         public bool IsSystemInitialized()
@@ -351,6 +251,174 @@ namespace Services.Administration
         public IEnumerable<AuditLog> AuditLogs()
         {
             return _auditLogRepo.Table.AsEnumerable();
+        }
+
+        public TenantSubscriptionDto GetCurrentSubscription()
+        {
+            // Workspace context only. Never accept a client-supplied slug/id here.
+            int companyId = _tenantContext?.RequireCompanyId()
+                ?? throw new Core.Tenancy.TenantNotResolvedException();
+            var company = _company.GetById(companyId)
+                ?? throw new Core.Tenancy.TenantEntityNotFoundException(nameof(Company), companyId);
+
+            var resolved = _plans.ResolveStoredPlan(company.Plan);
+            return new TenantSubscriptionDto
+            {
+                CompanyId = company.Id,
+                CompanyName = company.Name ?? "AccountGo Organization",
+                Slug = company.Slug ?? $"org-{company.Id}",
+                Plan = resolved.Key,
+                SubscriptionStatus = company.SubscriptionStatus ?? "active",
+                SubscriptionValidUntil = company.SubscriptionValidUntil,
+                ActiveModules = PlanModuleResolver.ResolveActiveModules(resolved, company)
+            };
+        }
+
+        public TenantSubscriptionDto UpdateSubscription(UpdateSubscriptionDto dto)
+        {
+            // Workspace context only: dto.CompanyId / dto.Slug are ignored.
+            int companyId = _tenantContext?.RequireCompanyId()
+                ?? throw new Core.Tenancy.TenantNotResolvedException();
+
+            var company = _company.GetById(companyId);
+            if (company == null)
+            {
+                throw new Core.Tenancy.TenantEntityNotFoundException(nameof(Company), companyId);
+            }
+
+            // Null/blank plan = keep the current plan and only change modules.
+            if (!string.IsNullOrWhiteSpace(dto.Plan))
+            {
+                if (!_plans.TryResolvePlan(dto.Plan, out var resolvedNew))
+                    throw new ArgumentException($"Unknown plan '{dto.Plan}'.");
+                var newPlan = resolvedNew.Key;
+                var currentKey = _plans.ResolveStoredPlan(company.Plan).Key;
+                // Staying on a plan is always allowed (e.g. toggling modules on an ops-assigned plan);
+                // switching needs a self-service plan unless ops manages the workspace (comp tier).
+                if (!string.Equals(newPlan, currentKey, StringComparison.OrdinalIgnoreCase)
+                    && Core.Entitlements.CompanyTiers.Normalize(company.Tier) != Core.Entitlements.CompanyTiers.Comp)
+                    _entitlements?.EnsureSelfServicePlan(newPlan);
+                company.Plan = newPlan;
+            }
+
+            var resolved = _plans.ResolveStoredPlan(company.Plan);
+            company.Plan = resolved.Key;
+            var planModules = resolved.IncludedModules ?? new List<string>();
+            var requiredModules = resolved.RequiredModules ?? new List<string>();
+
+            if (dto.ActiveModules != null && dto.ActiveModules.Count > 0)
+            {
+                var requested = dto.ActiveModules
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .Select(m => m.Trim().ToLowerInvariant())
+                    .Distinct()
+                    .ToList();
+                var disallowed = requested.Where(m => !planModules.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (disallowed.Count > 0)
+                    throw new ArgumentException(
+                        $"Module(s) not included in the {company.Plan} plan: {string.Join(", ", disallowed)}.");
+
+                // Keep plan order; force plan-required cores.
+                var sanitized = planModules.Where(m =>
+                    requiredModules.Contains(m, StringComparer.OrdinalIgnoreCase)
+                    || requested.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (sanitized.Count == 0)
+                    sanitized = planModules.Where(m => requiredModules.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (sanitized.Count == 0)
+                    sanitized = new List<string> { "sales" };
+                var disabled = planModules
+                    .Where(m => !requiredModules.Contains(m, StringComparer.OrdinalIgnoreCase)
+                        && !sanitized.Contains(m, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                company.DisabledModulesJson = System.Text.Json.JsonSerializer.Serialize(disabled);
+                // Stop writing ActiveModulesJson (column retained for one-release fallback).
+                company.ActiveModulesJson = null;
+            }
+            else
+            {
+                company.DisabledModulesJson = "[]"; // full plan; no opt-outs
+                company.ActiveModulesJson = null;
+            }
+
+            _company.Update(company);
+            _entitlements?.ClearPolicyMemo(companyId);
+            return GetCurrentSubscription();
+        }
+
+        public bool IsModuleEnabled(string moduleKey)
+        {
+            if (_tenantContext == null || !_tenantContext.CompanyId.HasValue)
+                return false;
+
+            var companyId = _tenantContext.CompanyId.Value;
+            if (_entitlements == null)
+                return false;
+            // Write-mode sugar until callers migrate to Evaluate(ModuleAccess).
+            return _entitlements.Evaluate(companyId, new Core.Entitlements.EntitlementAction.Module(moduleKey)).Allowed;
+        }
+
+        public List<ModuleDefinitionDto> GetModuleDefinitions()
+        {
+            // Ordered by subscription tier: Invoicing → Accounting → Enterprise.
+            return new List<ModuleDefinitionDto>
+            {
+                new ModuleDefinitionDto
+                {
+                    Key = "sales",
+                    Name = "Invoicing & Sales",
+                    Description = "Customers, quotations, sales orders, invoices, and payments.",
+                    Icon = "Receipt",
+                    IsCore = true
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "financials",
+                    Name = "General Ledger & Banking",
+                    Description = "Chart of accounts, cash & bank accounts, journal entries, and trial balance.",
+                    Icon = "BookOpen",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "purchases",
+                    Name = "Purchases & Bills",
+                    Description = "Vendors, purchase orders, vendor invoices, and bill payments.",
+                    Icon = "ShoppingBag",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "reports",
+                    Name = "Financial Reports",
+                    Description = "Income statements, balance sheets, customer/vendor aging, and tax summaries.",
+                    Icon = "BarChart3",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "inventory",
+                    Name = "Inventory & Items",
+                    Description = "Product catalog, warehouse stock items, and inventory control journals.",
+                    Icon = "Boxes",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "donations",
+                    Name = "Donations & Non-Profit",
+                    Description = "Donor tracking, donation invoices, pledges, and tax receipts.",
+                    Icon = "HeartHandshake",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "audit",
+                    Name = "Audit Trail & Compliance",
+                    Description = "Comprehensive system audit logging and user activity monitoring.",
+                    Icon = "ShieldCheck",
+                    IsCore = false
+                }
+            };
         }
     }
 }

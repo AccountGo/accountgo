@@ -1,0 +1,429 @@
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { Archive, ArchiveRestore, Loader2, Package, Trash2, X } from 'lucide-react';
+import { CatalogItem } from '../types';
+import { useAuth } from '../auth/AuthContext';
+import { ConfirmDialog } from './ConfirmDialog';
+import { ModalShell } from './ModalShell';
+
+const inputClass =
+  'w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition';
+const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
+
+const amountOrNull = (value: string) => (value.trim() === '' ? null : Number(value));
+
+/**
+ * Adds a product or service, or edits one; editing also archives, restores or deletes it. Changes apply to new
+ * lines: invoice lines keep the text and price they were saved with.
+ */
+export const ItemFormDialog: React.FC<{
+  /** The item to edit; omitted to add one. */
+  item?: CatalogItem;
+  /** Selling price, shown when the workspace sells. */
+  showPrice: boolean;
+  /** Purchase cost, shown when the workspace buys. */
+  showCost: boolean;
+  /** Whether this workspace can create stock-tracked items. */
+  hasInventoryModule: boolean;
+  currencySymbol: string;
+  salesAccounts?: { id: number; code: string; name: string }[];
+  /** The item after it was added, edited, archived or restored. */
+  onSaved: (item: CatalogItem) => void;
+  onDeleted?: (id: number) => void;
+  onClose: () => void;
+}> = ({ item, showPrice, showCost, hasInventoryModule, currencySymbol, salesAccounts: propSalesAccounts, onSaved, onDeleted, onClose }) => {
+  const { authFetch } = useAuth();
+  const [name, setName] = useState(item?.name ?? '');
+  const [code, setCode] = useState(item?.code ?? '');
+  const [price, setPrice] = useState(item?.price != null ? String(item.price) : '');
+  const [cost, setCost] = useState(item?.cost != null ? String(item.cost) : '');
+  const [salesAccounts, setSalesAccounts] = useState<{ id: number; code: string; name: string }[]>(
+    propSalesAccounts ?? []
+  );
+  const [salesAccountId, setSalesAccountId] = useState<number | ''>(
+    item?.salesAccountId ?? ''
+  );
+  const [trackStock, setTrackStock] = useState(item?.trackStock ?? false);
+  const [openingQuantity, setOpeningQuantity] = useState('');
+  const [openingUnitCost, setOpeningUnitCost] = useState('');
+  const [openingCostEdited, setOpeningCostEdited] = useState(false);
+  const [busy, setBusy] = useState<'save' | 'archive' | 'delete' | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
+  const isEdit = !!item;
+
+  useEffect(() => {
+    if (propSalesAccounts && propSalesAccounts.length > 0) {
+      setSalesAccounts(propSalesAccounts);
+      return;
+    }
+    if (!showPrice) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/Catalog/SalesAccounts');
+        if (res.ok) {
+          const list = await res.json();
+          if (!cancelled && Array.isArray(list)) {
+            setSalesAccounts(list);
+          }
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, propSalesAccounts, showPrice]);
+
+  useEffect(() => {
+    if (salesAccountId === '' && salesAccounts.length > 0) {
+      const default40100 = salesAccounts.find((a) => a.code === '40100') ?? salesAccounts[0];
+      if (default40100) setSalesAccountId(default40100.id);
+    }
+  }, [salesAccounts, salesAccountId]);
+
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    nameRef.current?.focus();
+    return () => trigger?.focus();
+  }, []);
+
+  const request = async (kind: 'save' | 'archive' | 'delete', url: string, init: RequestInit, failure: string) => {
+    setBusy(kind);
+    setError(null);
+    try {
+      const res = await authFetch(url, init);
+      const data = res.status === 204 ? null : await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(res.status === 403 ? "You don't have permission to manage products and services." : data?.message || failure);
+      }
+      return data;
+    } catch (err: any) {
+      setError(err.message);
+      setBusy(null);
+      setIsConfirmingDelete(false);
+      return undefined;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError('Enter a name for the item.');
+      return;
+    }
+    const saved = await request(
+      'save',
+      '/api/Catalog/SaveItem',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: item?.id ?? 0,
+          name: name.trim(),
+          code: code.trim() || null,
+          // Hidden fields keep their value.
+          price: showPrice ? amountOrNull(price) : item?.price ?? null,
+          cost: showCost ? amountOrNull(cost) : item?.cost ?? null,
+          salesAccountId: showPrice && salesAccountId !== '' ? Number(salesAccountId) : item?.salesAccountId ?? null,
+          trackStock,
+          openingQuantity: trackStock && !item ? amountOrNull(openingQuantity) : null,
+          openingUnitCost: trackStock && !item ? amountOrNull(openingCostEdited ? openingUnitCost : cost) : null,
+        }),
+      },
+      isEdit ? 'The item could not be saved.' : 'The item could not be added.'
+    );
+    if (saved) onSaved(saved);
+  };
+
+  const setArchived = async (archived: boolean) => {
+    if (!item) return;
+    const saved = await request(
+      'archive',
+      `/api/Catalog/ArchiveItem?id=${item.id}&archived=${archived}`,
+      { method: 'POST' },
+      archived ? 'The item could not be archived.' : 'The item could not be restored.'
+    );
+    if (saved) onSaved(saved);
+  };
+
+  const handleDelete = async () => {
+    if (!item) return;
+    const result = await request('delete', `/api/Catalog/DeleteItem?id=${item.id}`, { method: 'DELETE' }, 'The item could not be deleted.');
+    if (result !== undefined) onDeleted?.(item.id);
+  };
+
+  return (
+    <>
+    <ModalShell
+      open
+      onClose={() => {
+        if (!busy && !isConfirmingDelete) onClose();
+      }}
+      closeOnEscape={!busy && !isConfirmingDelete}
+      closeOnBackdrop={!busy && !isConfirmingDelete}
+      bare
+      aria-labelledby={titleId}
+      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl"
+    >
+        <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Package className="w-5 h-5 text-[var(--brand-primary)]" />
+            <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">
+              {isEdit ? 'Edit item' : 'New item'}
+            </h3>
+            {item?.archived && (
+              <span className="rounded-full border border-slate-500/20 bg-slate-500/10 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                Archived
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={!!busy}
+            aria-label="Close"
+            className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded-lg transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div role="alert" className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor={`${titleId}-name`} className={labelClass}>
+              Name <span className="text-rose-500">*</span>
+            </label>
+            <input
+              id={`${titleId}-name`}
+              ref={nameRef}
+              type="text"
+              required
+              maxLength={200}
+              placeholder="e.g. Website maintenance"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Becomes the line's text when you pick it; you can still change the text on each line.</p>
+          </div>
+
+          <div>
+            <label htmlFor={`${titleId}-code`} className={labelClass}>
+              Code
+            </label>
+            <input
+              id={`${titleId}-code`}
+              type="text"
+              maxLength={30}
+              placeholder="Optional, e.g. SKU-104"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className={`${inputClass} font-mono`}
+            />
+          </div>
+
+          {(showPrice || showCost) && (
+            <div className={`grid gap-3 ${showPrice && showCost ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {showPrice && (
+                <div>
+                  <label htmlFor={`${titleId}-price`} className={labelClass}>
+                    Selling price ({currencySymbol})
+                  </label>
+                  <input
+                    id={`${titleId}-price`}
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="None"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className={`${inputClass} font-mono`}
+                  />
+                </div>
+              )}
+              {showCost && (
+                <div>
+                  <label htmlFor={`${titleId}-cost`} className={labelClass}>
+                    Purchase cost ({currencySymbol})
+                  </label>
+                  <input
+                    id={`${titleId}-cost`}
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="None"
+                    value={cost}
+                    onChange={(e) => setCost(e.target.value)}
+                    className={`${inputClass} font-mono`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {showPrice && salesAccounts.length > 0 && (
+            <div>
+              <label htmlFor={`${titleId}-sales-account`} className={labelClass}>
+                Sales account
+              </label>
+              <select
+                id={`${titleId}-sales-account`}
+                value={salesAccountId}
+                onChange={(e) => setSalesAccountId(e.target.value === '' ? '' : Number(e.target.value))}
+                className={inputClass}
+              >
+                {salesAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} · {a.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">Sales account controls which P&amp;L revenue account invoices credit.</p>
+            </div>
+          )}
+
+          {hasInventoryModule && (
+            <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-4">
+              <label className="flex items-start gap-3 text-sm text-[var(--text-main)]">
+                <input
+                  type="checkbox"
+                  checked={trackStock}
+                  disabled={!hasInventoryModule || (!!item?.trackStock && !!item.hasStockMovements)}
+                  onChange={(e) => setTrackStock(e.target.checked)}
+                  className="mt-0.5 accent-[var(--brand-primary)]"
+                />
+                <span>
+                  <span className="block font-medium">Track stock</span>
+                  <span className="block text-xs text-[var(--text-muted)]">
+                    Count it in and out: bills add stock, invoices use it up.
+                  </span>
+                </span>
+              </label>
+              {item?.trackStock && item.hasStockMovements && (
+                <p className="text-xs text-[var(--text-muted)]">Stock tracking can't be turned off after this item has movements. You can archive it instead.</p>
+              )}
+              {trackStock && !item && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor={`${titleId}-opening-quantity`} className={labelClass}>Opening quantity</label>
+                    <input
+                      id={`${titleId}-opening-quantity`}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.0001"
+                      placeholder="0"
+                      value={openingQuantity}
+                      onChange={(e) => setOpeningQuantity(e.target.value)}
+                      className={`${inputClass} font-mono`}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor={`${titleId}-opening-cost`} className={labelClass}>Cost per unit ({currencySymbol})</label>
+                    <input
+                      id={`${titleId}-opening-cost`}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.0001"
+                      placeholder="Required"
+                      value={openingCostEdited ? openingUnitCost : cost}
+                      onChange={(e) => {
+                        setOpeningCostEdited(true);
+                        setOpeningUnitCost(e.target.value);
+                      }}
+                      className={`${inputClass} font-mono`}
+                    />
+                  </div>
+                  <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">Opening stock is recorded as an inventory adjustment when you save.</p>
+                </div>
+              )}
+              {trackStock && item && !item.trackStock && (
+                <p className="text-xs text-[var(--text-muted)]">After saving, record opening stock from Inventory &rarr; Adjust stock.</p>
+              )}
+            </div>
+          )}
+
+          {isEdit && (
+            <p className="text-xs text-[var(--text-secondary)]">
+              Changes apply to new lines. Invoices keep the text and price they were saved with.
+            </p>
+          )}
+
+          <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1">
+              {item && (
+                <button
+                  type="button"
+                  onClick={() => setArchived(!item.archived)}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] disabled:opacity-50"
+                >
+                  {busy === 'archive' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : item.archived ? (
+                    <ArchiveRestore className="w-3.5 h-3.5" />
+                  ) : (
+                    <Archive className="w-3.5 h-3.5" />
+                  )}
+                  {item.archived ? 'Restore' : 'Archive'}
+                </button>
+              )}
+              {item?.canDelete && (
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(true)}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400 disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              )}
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={!!busy}
+                className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!!busy}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] transition disabled:opacity-50 shadow-sm"
+              >
+                {busy === 'save' && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isEdit ? 'Save item' : 'Add item'}
+              </button>
+            </div>
+          </div>
+        </form>
+    </ModalShell>
+
+      {isConfirmingDelete && item && (
+        <ConfirmDialog
+          title={`Delete ${item.name}?`}
+          message="No invoice or other document uses this item yet, so it can be deleted. This can't be undone."
+          confirmLabel="Delete item"
+          destructive
+          busy={busy === 'delete'}
+          onConfirm={handleDelete}
+          onCancel={() => setIsConfirmingDelete(false)}
+        />
+      )}
+    </>
+  );
+};

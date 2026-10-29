@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -24,14 +24,19 @@ namespace Core.Domain.Security
         {
             bool isSysAdmin = false;
 
-            if (this.Roles.Count > 0)
+            if (this.Roles != null && this.Roles.Count > 0)
             {
                 foreach (var role in Roles)
-                    if (role.SecurityRole.Name == "Administrator")
+                {
+                    if (role?.SecurityRole != null && 
+                        (role.SecurityRole.Name == "Administrator" || 
+                         role.SecurityRole.Name == "SystemAdministrators" || 
+                         role.SecurityRole.SysAdmin))
                     {
                         isSysAdmin = true;
                         break;
                     }
+                }
             }
 
             return isSysAdmin;

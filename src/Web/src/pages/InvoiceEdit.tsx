@@ -1,0 +1,1301 @@
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link, useOutletContext, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Plus,
+  Trash2,
+  Save,
+  Send,
+  UserPlus,
+  X,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Package,
+  Unlink,
+  Users,
+  ChevronsUpDown,
+  Pencil,
+} from 'lucide-react';
+import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
+import { PartyPickerDialog } from '../components/PartyPickerDialog';
+import { PartyFormDialog } from '../components/PartyFormDialog';
+import { ItemFormDialog } from '../components/ItemFormDialog';
+import { usePermissions } from '../components/Gating';
+import {
+  TenantContextType,
+  Invoice,
+  InvoiceLineItem,
+  CustomerOption,
+  Client,
+  ContactPerson,
+  PaymentTermOption,
+  ItemOption,
+  SalesInvoiceSettings,
+} from '../types';
+import { useAuth } from '../auth/AuthContext';
+import { currencySymbol as getCurrencySymbol } from '../lib/currency';
+import { addBusinessDays, businessDaysBetween, isValidDate, localToday } from '../lib/businessDays';
+import { archivedTaxMessage, firstArchivedTax, invoiceLineAmounts, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
+
+interface InvoiceEditProps {
+  isEdit?: boolean;
+}
+
+interface FormLineItem {
+  id?: number;
+  itemId?: number | null;
+  itemDescription: string;
+  quantity: number;
+  amount: number;
+  discount: number;
+  taxId: number | '';
+  salesAccountId?: number | null;
+  salesAccountCode?: string | null;
+  salesAccountName?: string | null;
+}
+
+interface SalesAccountOption {
+  id: number;
+  code: string;
+  name: string;
+}
+
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
+  const { currentOrg, hasModule, subscription, canWrite } = useOutletContext<TenantContextType>();
+  const { authFetch } = useAuth();
+  const { hasPermission } = usePermissions();
+  const salesWritable = canWrite('sales');
+  const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId?: string }>();
+  const navigate = useNavigate();
+  // "Duplicate invoice" opens a new invoice prefilled from another one (?from=<id>).
+  const [searchParams] = useSearchParams();
+  const duplicateOf = isEdit ? null : searchParams.get('from');
+  const [duplicatedTitle, setDuplicatedTitle] = useState<string | null>(null);
+
+  const planKey = (currentOrg.plan || subscription?.planId || 'accounting').toLowerCase();
+  const isAccountingPlan = planKey === 'accounting' || planKey === 'enterprise';
+
+  // Reference data
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
+  const [catalogItems, setCatalogItems] = useState<ItemOption[]>([]);
+  const [taxes, setTaxes] = useState<WorkspaceTax[]>([]);
+  const [salesAccounts, setSalesAccounts] = useState<SalesAccountOption[]>([]);
+  // Line whose catalog picker is open.
+  const [pickerLine, setPickerLine] = useState<number | null>(null);
+  const [isLoadingRefs, setIsLoadingRefs] = useState<boolean>(true);
+
+  // Form State
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
+  /** Full client with contacts, for the Bill To selector. */
+  const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
+  const [billToContactId, setBillToContactId] = useState<number | ''>('');
+  const [invoiceNo, setInvoiceNo] = useState<string>('');
+  // Issued invoices keep their number; only drafts (and new invoices) can change it.
+  const [isIssued, setIsIssued] = useState<boolean>(false);
+  // Shown as the placeholder: the number the invoice takes when issued, if none is typed.
+  const [nextNumber, setNextNumber] = useState<string | null>(null);
+  const [referenceNo, setReferenceNo] = useState<string>('');
+  const [shippingHandlingCharge, setShippingHandlingCharge] = useState(0);
+  const [invoiceDate, setInvoiceDate] = useState<string>(localToday);
+  const [paymentTermId, setPaymentTermId] = useState<number | ''>('');
+  const [dueDate, setDueDate] = useState<string>('');
+  // New invoices start from the workspace's default texts (Settings → Invoices); edits keep the invoice's own values.
+  const [notes, setNotes] = useState<string>('');
+  const [paymentInstructions, setPaymentInstructions] = useState<string>('');
+
+  // Line items state
+  const [lines, setLines] = useState<FormLineItem[]>([
+    {
+      itemDescription: '',
+      quantity: 1,
+      amount: 0,
+      discount: 0,
+      taxId: '',
+    },
+  ]);
+
+  // UI state
+  const [isSavingDraft, setIsSavingDraft] = useState<boolean>(false);
+  const [isSavingIssue, setIsSavingIssue] = useState<boolean>(false);
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
+  const [stockWarnings, setStockWarnings] = useState<string[]>([]);
+
+  // Client picker and the add/edit client dialog (editing: the client being edited)
+  const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState<boolean>(false);
+  const [clientDialog, setClientDialog] = useState<{ client?: Client } | null>(null);
+  const [isLoadingClient, setIsLoadingClient] = useState(false);
+  const canManageClients = hasPermission('sales.customers.manage');
+  // The line a new catalog item is being added for, from the item picker.
+  const [newItemLine, setNewItemLine] = useState<number | null>(null);
+
+  // Currency
+  const currencySymbol = getCurrencySymbol(currentOrg.currency);
+
+  const formatCurrency = useCallback(
+    (val: number) => {
+      return `${currencySymbol}${val.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+    },
+    [currencySymbol]
+  );
+
+  // Load reference data
+  const loadReferenceData = useCallback(async () => {
+    setIsLoadingRefs(true);
+    try {
+      const [custRes, termsRes, itemsRes, taxesRes, accountsRes] = await Promise.all([
+        authFetch('/api/Sales/Customers'),
+        authFetch('/api/Common/PaymentTerms'),
+        authFetch('/api/Common/Items'),
+        authFetch('/api/Tax/Taxes'),
+        authFetch('/api/Sales/SalesAccounts'),
+      ]);
+
+      if (custRes.ok) {
+        const custList = await custRes.json();
+        setCustomers(Array.isArray(custList) ? custList : []);
+      }
+
+      if (termsRes.ok) {
+        const termsList = await termsRes.json();
+        const termsArr: PaymentTermOption[] = Array.isArray(termsList) ? termsList : [];
+        setPaymentTerms(termsArr);
+        // New invoices start on the first term; edits keep the invoice's own term, or custom terms.
+        if (!isEdit && termsArr.length > 0) {
+          const first = termsArr[0];
+          setPaymentTermId((current) => current || first.id);
+          setDueDate((current) => current || addBusinessDays(invoiceDate, first.dueAfterDays ?? 0));
+        }
+      }
+
+      if (itemsRes.ok) {
+        const itemsList = await itemsRes.json();
+        setCatalogItems(Array.isArray(itemsList) ? itemsList : []);
+      }
+      if (!taxesRes.ok) throw new Error('The invoice taxes could not be loaded.');
+      const taxData = await taxesRes.json();
+      setTaxes((taxData?.taxes ?? []) as WorkspaceTax[]);
+
+      if (accountsRes.ok) {
+        const accList = await accountsRes.json();
+        setSalesAccounts(Array.isArray(accList) ? accList : []);
+      }
+    } catch (err: any) {
+      console.error('Error loading reference data:', err);
+      setErrorBanner(err.message || 'The invoice form could not be loaded.');
+    } finally {
+      setIsLoadingRefs(false);
+    }
+    // Runs once per page; the dates it reads are only the starting values of a new invoice.
+  }, [authFetch, isEdit]);
+
+  useEffect(() => {
+    loadReferenceData();
+  }, [loadReferenceData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/Sales/NextSalesInvoiceNumber');
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        setNextNumber(data?.next ?? null);
+      } catch (err) {
+        console.error('Error loading the next invoice number:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authFetch]);
+
+  // Prefill a new invoice with the workspace's default notes and payment instructions
+  useEffect(() => {
+    if (isEdit || duplicateOf) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/organizations/current/sales-invoice-settings');
+        if (!res.ok || cancelled) return;
+        const settings: SalesInvoiceSettings = await res.json();
+        // Only fill fields the user has not started typing in.
+        setNotes((current) => current || settings.defaultNotes || '');
+        setPaymentInstructions((current) => current || settings.defaultPaymentInstructions || '');
+      } catch (err) {
+        console.error('Error loading invoice defaults:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isEdit, duplicateOf, authFetch]);
+
+  // Duplicate: copy the client, terms, lines, reference and texts. The copy is a new draft dated today, without a
+  // number, and keeps the original's gap between issue and due date in business days.
+  useEffect(() => {
+    if (!duplicateOf) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`/api/Sales/SalesInvoice?id=${encodeURIComponent(duplicateOf)}`);
+        if (!res.ok) throw new Error('The invoice to duplicate could not be loaded.');
+        const data: Invoice = await res.json();
+        if (cancelled) return;
+
+        const today = localToday();
+        const sourceIssue = data.invoiceDate?.split('T')[0] ?? '';
+        const sourceDue = data.dueDate?.split('T')[0] ?? '';
+        const gap = isValidDate(sourceIssue) && isValidDate(sourceDue) ? businessDaysBetween(sourceIssue, sourceDue) : null;
+
+        setSelectedCustomerId(data.customerId);
+        setReferenceNo(data.referenceNo || '');
+        setShippingHandlingCharge(data.shippingHandlingCharge ?? 0);
+        setInvoiceDate(today);
+        setPaymentTermId(data.paymentTermId || '');
+        setDueDate(gap !== null ? addBusinessDays(today, gap) : '');
+        setNotes(data.notes ?? '');
+        setPaymentInstructions(data.paymentInstructions ?? '');
+        if (data.salesInvoiceLines && data.salesInvoiceLines.length > 0) {
+          setLines(
+            data.salesInvoiceLines.map((l: InvoiceLineItem) => ({
+              itemId: l.itemId,
+              itemDescription: l.itemDescription || '',
+              quantity: l.quantity ?? 1,
+              amount: l.amount || 0,
+              discount: l.discount || 0,
+              taxId: l.taxId ?? '',
+              salesAccountId: l.salesAccountId ?? null,
+              salesAccountCode: l.salesAccountCode ?? null,
+              salesAccountName: l.salesAccountName ?? null,
+            }))
+          );
+        }
+        setDuplicatedTitle(data.no ? `invoice #${data.no}` : 'a draft invoice');
+      } catch (err: any) {
+        if (!cancelled) setErrorBanner(err.message || 'The invoice to duplicate could not be loaded.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [duplicateOf, authFetch]);
+
+  // Load existing invoice if edit mode
+  useEffect(() => {
+    if (isEdit && invoiceId) {
+      const loadInvoice = async () => {
+        try {
+          const res = await authFetch(`/api/Sales/SalesInvoice?id=${invoiceId}`);
+          if (!res.ok) throw new Error(`Could not load invoice #${invoiceId}`);
+          const data: Invoice = await res.json();
+
+          setSelectedCustomerId(data.customerId);
+          setInvoiceNo(data.no || '');
+          setIsIssued(data.status !== 'Draft');
+          setReferenceNo(data.referenceNo || '');
+          setShippingHandlingCharge(data.shippingHandlingCharge ?? 0);
+          if (data.invoiceDate) {
+            setInvoiceDate(data.invoiceDate.split('T')[0]);
+          }
+          if (data.dueDate) {
+            setDueDate(data.dueDate.split('T')[0]);
+          }
+          if (data.paymentTermId) {
+            setPaymentTermId(data.paymentTermId);
+          }
+          setNotes(data.notes ?? '');
+          setPaymentInstructions(data.paymentInstructions ?? '');
+
+          if (data.salesInvoiceLines && data.salesInvoiceLines.length > 0) {
+            setLines(
+              data.salesInvoiceLines.map((l: InvoiceLineItem) => ({
+                id: l.id,
+                itemId: l.itemId,
+                itemDescription: l.itemDescription || '',
+                quantity: l.quantity ?? 1,
+                amount: l.amount || 0,
+                discount: l.discount || 0,
+                taxId: l.taxId ?? '',
+                salesAccountId: l.salesAccountId ?? null,
+                salesAccountCode: l.salesAccountCode ?? null,
+                salesAccountName: l.salesAccountName ?? null,
+              }))
+            );
+          }
+        } catch (err: any) {
+          setErrorBanner(err.message || 'Failed to load invoice for editing.');
+        }
+      };
+      loadInvoice();
+    }
+  }, [isEdit, invoiceId, authFetch]);
+
+  // Payment terms count business days (lib/businessDays). Choosing a term sets the due date; editing either date by
+  // hand keeps both dates and selects the term they match, or Custom when none does.
+  const applyTerm = (id: number | '') => {
+    setPaymentTermId(id);
+    const term = paymentTerms.find((t) => t.id === id);
+    if (term && isValidDate(invoiceDate)) setDueDate(addBusinessDays(invoiceDate, term.dueAfterDays ?? 0));
+  };
+
+  // "New invoice" from a client's page (?client=<id>) starts billed to that client, on its default terms. Once the
+  // clients and terms have loaded; never again after, so it can't undo a change.
+  const clientParam = isEdit || duplicateOf ? null : searchParams.get('client');
+  const [clientParamApplied, setClientParamApplied] = useState(false);
+  useEffect(() => {
+    if (!clientParam || clientParamApplied || customers.length === 0 || paymentTerms.length === 0) return;
+    setClientParamApplied(true);
+    const client = customers.find((c) => c.id === Number(clientParam) && !c.archived);
+    if (!client) return;
+    setSelectedCustomerId(client.id);
+    if (client.paymentTermId) applyTerm(client.paymentTermId);
+  }, [clientParam, clientParamApplied, customers, paymentTerms]);
+
+  const matchTerm = (issue: string, due: string) => {
+    if (!isValidDate(issue) || !isValidDate(due)) {
+      setPaymentTermId('');
+      return;
+    }
+    const fits = (t: PaymentTermOption) => addBusinessDays(issue, t.dueAfterDays ?? 0) === due;
+    setPaymentTermId((current) => {
+      const kept = paymentTerms.find((t) => t.id === current);
+      if (kept && fits(kept)) return current;
+      return paymentTerms.find(fits)?.id ?? '';
+    });
+  };
+
+  const dueInBusinessDays =
+    isValidDate(invoiceDate) && isValidDate(dueDate) ? businessDaysBetween(invoiceDate, dueDate) : undefined;
+
+  // Line item helpers
+  const handleLineChange = (index: number, field: keyof FormLineItem, val: any) => {
+    setLines((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: val };
+      return updated;
+    });
+  };
+
+  const selectedCustomer = customers.find((c) => c.id === Number(selectedCustomerId));
+
+  const loadClientDetail = useCallback(
+    async (customerId: number) => {
+      try {
+        const res = await authFetch(`/api/Sales/Client?id=${customerId}`);
+        if (!res.ok) {
+          setSelectedClientDetail(null);
+          setBillToContactId('');
+          return;
+        }
+        const client = (await res.json()) as Client;
+        setSelectedClientDetail(client);
+        setBillToContactId(client.billToContactId ?? '');
+      } catch {
+        setSelectedClientDetail(null);
+        setBillToContactId('');
+      }
+    },
+    [authFetch],
+  );
+
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setSelectedClientDetail(null);
+      setBillToContactId('');
+      return;
+    }
+    void loadClientDetail(Number(selectedCustomerId));
+  }, [selectedCustomerId, loadClientDetail]);
+
+  const handlePickCustomer = (customer: CustomerOption) => {
+    setSelectedCustomerId(customer.id);
+    if (customer.paymentTermId) applyTerm(customer.paymentTermId);
+    setIsCustomerPickerOpen(false);
+  };
+
+  const handleBillToChange = async (contactId: number | '') => {
+    setBillToContactId(contactId);
+    if (!selectedCustomerId) return;
+    try {
+      const res = await authFetch(
+        `/api/Sales/SetClientBillToContact?clientId=${Number(selectedCustomerId)}&contactId=${contactId || 0}`,
+        { method: 'POST' },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || 'The Bill To contact could not be updated.');
+      }
+      setSelectedClientDetail(await res.json());
+    } catch (err: any) {
+      setErrorBanner(err.message);
+    }
+  };
+
+  const billToContact: ContactPerson | undefined = selectedClientDetail?.contacts?.find(
+    (c) => c.id === Number(billToContactId),
+  );
+  const billToPreviewEmail = billToContact?.email || selectedCustomer?.email;
+  const billToPreviewPhone = billToContact?.phone || selectedCustomer?.phone;
+  const billToPreviewAddress = billToContact
+    ? [billToContact.street, [billToContact.city, billToContact.postalCode].filter(Boolean).join(' '), billToContact.country]
+        .filter(Boolean)
+        .join(', ')
+    : null;
+
+  const handlePickItem = (index: number, catalogItem: ItemOption) => {
+    setLines((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        itemId: catalogItem.id,
+        itemDescription: catalogItem.description,
+        amount: catalogItem.price ?? updated[index].amount,
+        salesAccountId: null,
+      };
+      return updated;
+    });
+    setPickerLine(null);
+  };
+
+  const handleAddLine = () => {
+    setLines((prev) => [
+      ...prev,
+      {
+        itemDescription: '',
+        quantity: 1,
+        amount: 0,
+        discount: 0,
+        taxId: '',
+      },
+    ]);
+  };
+
+  const handleRemoveLine = (index: number) => {
+    if (lines.length <= 1) return;
+    setLines((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Calculations
+  const calculatedTotals = useMemo(() => {
+    let subtotal = 0;
+    let totalDiscount = 0;
+    let totalTax = 0;
+
+    lines.forEach((l) => {
+      const taxPercent = taxes.find(t => t.id === l.taxId)?.rate ?? 0;
+      const amounts = invoiceLineAmounts(l.quantity, l.amount, l.discount, taxPercent);
+      subtotal += amounts.subtotal;
+      totalDiscount += amounts.discount;
+      totalTax += amounts.tax;
+    });
+
+    subtotal = Math.round(subtotal * 100) / 100;
+    totalDiscount = Math.round(totalDiscount * 100) / 100;
+    totalTax = Math.round(totalTax * 100) / 100;
+    const grandTotal = round2(subtotal + totalTax + shippingHandlingCharge);
+
+    return {
+      subtotal,
+      totalDiscount,
+      totalTax,
+      grandTotal,
+    };
+  }, [lines, taxes, shippingHandlingCharge]);
+
+  // Submit Handler
+  const handleSaveInvoice = async (asDraft: boolean) => {
+    setErrorBanner(null);
+    setSuccessBanner(null);
+
+    // Validation
+    if (!selectedCustomerId) {
+      setErrorBanner('Please select or add a client for this invoice.');
+      return;
+    }
+
+    if (dueInBusinessDays === null) {
+      setErrorBanner("The due date can't be before the issue date.");
+      return;
+    }
+
+    const validLines = lines.filter((l) => l.itemDescription.trim() !== '' || l.amount > 0);
+    if (validLines.length === 0) {
+      setErrorBanner('Please provide at least one line item with a description or rate.');
+      return;
+    }
+    const archived = firstArchivedTax(taxes, validLines.map((line) => line.taxId));
+    if (archived) {
+      setErrorBanner(archivedTaxMessage(archived.taxName));
+      return;
+    }
+    if (validLines.some(l => l.taxId !== '' && !taxes.some(t => t.id === l.taxId))) {
+      setErrorBanner('A selected tax is no longer available. Pick an active tax or No tax.');
+      return;
+    }
+
+    if (asDraft) setIsSavingDraft(true);
+    else setIsSavingIssue(true);
+
+    try {
+      const payload: any = {
+        id: isEdit && invoiceId ? Number(invoiceId) : 0,
+        // Blank: the invoice takes the next number when it is issued.
+        no: invoiceNo.trim() || null,
+        customerId: Number(selectedCustomerId),
+        invoiceDate: invoiceDate,
+        dueDate: dueDate || invoiceDate,
+        paymentTermId: paymentTermId ? Number(paymentTermId) : null,
+        referenceNo: referenceNo.trim() || undefined,
+        shippingHandlingCharge,
+        status: asDraft ? 'Draft' : 'Open',
+        notes: notes.trim() || undefined,
+        paymentInstructions: paymentInstructions.trim() || undefined,
+        salesInvoiceLines: validLines.map((l) => ({
+          id: l.id || 0,
+          itemId: l.itemId || null,
+          itemDescription: l.itemDescription.trim() || 'Service / Product',
+          quantity: Number(l.quantity),
+          amount: Number(l.amount) || 0,
+          discount: Number(l.discount) || 0,
+          taxId: l.taxId || null,
+          salesAccountId: l.salesAccountId ? Number(l.salesAccountId) : null,
+        })),
+      };
+
+      const res = await authFetch('/api/Sales/SaveSalesInvoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        let msg = 'Failed to save sales invoice.';
+        if (Array.isArray(errorData)) msg = errorData.join(' ');
+        else if (errorData?.message) msg = errorData.message;
+        throw new Error(msg);
+      }
+
+      const savedData = await res.json();
+      const targetId = savedData.id || invoiceId;
+      const warnings = Array.isArray(savedData.warnings) ? savedData.warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : [];
+      const postingError = typeof savedData.postingError === 'string' ? savedData.postingError : null;
+      setStockWarnings(warnings);
+      if (postingError) setErrorBanner(`Issued, but not posted to the ledger: ${postingError}`);
+
+      setSuccessBanner(
+        asDraft
+          ? 'Invoice saved as draft successfully!'
+          : 'Invoice saved and issued successfully!'
+      );
+
+      // Navigate to detail view
+      setTimeout(() => {
+        navigate(`/org/${orgSlug}/sales/${targetId}`, { state: { stockWarnings: warnings, postingError } });
+      }, warnings.length > 0 || postingError ? 3500 : 700);
+    } catch (err: any) {
+      console.error('Save invoice error:', err);
+      setErrorBanner(err.message || 'An error occurred while saving the invoice.');
+    } finally {
+      setIsSavingDraft(false);
+      setIsSavingIssue(false);
+    }
+  };
+
+  // A client added here is selected, with its default terms; an edited one updates the bill-to.
+  const handleClientSaved = (client: Client) => {
+    const option: CustomerOption = {
+      id: client.id,
+      name: client.name,
+      email: client.email ?? undefined,
+      phone: client.phone ?? undefined,
+      paymentTermId: client.paymentTermId ?? undefined,
+      archived: client.archived,
+    };
+    const isNew = !customers.some((c) => c.id === client.id);
+    setCustomers((prev) => (isNew ? [option, ...prev] : prev.map((c) => (c.id === client.id ? option : c))));
+    if (isNew) {
+      setSelectedCustomerId(client.id);
+      if (client.paymentTermId) applyTerm(client.paymentTermId);
+    } else if (Number(selectedCustomerId) === client.id) {
+      void loadClientDetail(client.id);
+    }
+    setClientDialog(null);
+  };
+
+  const handleEditClient = async () => {
+    if (!selectedCustomerId) return;
+    setIsLoadingClient(true);
+    try {
+      const res = await authFetch(`/api/Sales/Client?id=${Number(selectedCustomerId)}`);
+      if (!res.ok) throw new Error('The client could not be loaded.');
+      setClientDialog({ client: await res.json() });
+    } catch (err: any) {
+      setErrorBanner(err.message);
+    } finally {
+      setIsLoadingClient(false);
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
+      <PageHeader
+        className="mb-6"
+        back={{ to: `/org/${orgSlug}/sales`, label: 'Back to invoices' }}
+        title={isEdit ? (invoiceNo && isIssued ? `Edit invoice #${invoiceNo}` : 'Edit draft') : 'New invoice'}
+        subtitle={
+          duplicatedTitle
+            ? `A copy of ${duplicatedTitle}, dated today. Nothing is saved until you save it.`
+            : 'Save a draft to finish later, or issue it to post it to your books.'
+        }
+        actions={
+          <>
+            <HeaderButton label="Cancel" to={`/org/${orgSlug}/sales`} />
+            {salesWritable && (
+              <HeaderButton
+                label="Save draft"
+                icon={Save}
+                compact
+                busy={isSavingDraft}
+                disabled={isSavingIssue}
+                onClick={() => handleSaveInvoice(true)}
+              />
+            )}
+            {/* Issuing needs its own permission; without it, invoices are saved as drafts for someone else to issue. */}
+            {salesWritable && hasPermission('sales.invoices.post') && (
+              <HeaderButton
+                label="Save & issue"
+                icon={Send}
+                variant="primary"
+                busy={isSavingIssue}
+                disabled={isSavingDraft}
+                onClick={() => handleSaveInvoice(false)}
+              />
+            )}
+          </>
+        }
+      />
+
+      {/* Notifications */}
+      {errorBanner && (
+        <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm font-medium">{errorBanner}</div>
+          <button
+            onClick={() => setErrorBanner(null)}
+            className="p-1 hover:opacity-75 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {successBanner && (
+        <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <div className="flex-1 text-sm font-medium">{successBanner}</div>
+        </div>
+      )}
+
+      {stockWarnings.length > 0 && (
+        <div role="status" aria-live="polite" className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 rounded-xl">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-semibold">Stock warning</p>
+              <ul className="mt-1 list-disc pl-5">
+                {stockWarnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Invoice Card */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-sm p-6 sm:p-8 space-y-8">
+        {/* Section 1: Parties & Invoice Meta */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 border-b border-[var(--border-subtle)] pb-8">
+          {/* Client Selection */}
+          <div className="lg:col-span-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                <span>Bill To (Client)</span>
+                <span className="text-rose-500">*</span>
+                {isLoadingRefs && <Loader2 className="w-3 h-3 animate-spin text-[var(--brand-primary)]" />}
+              </label>
+              {canManageClients && (
+                <div className="flex items-center gap-3">
+                  {selectedCustomer && (
+                    <button
+                      type="button"
+                      onClick={handleEditClient}
+                      disabled={isLoadingClient}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition disabled:opacity-50"
+                    >
+                      {isLoadingClient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                      Edit client
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setClientDialog({})}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    New client
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {selectedCustomer ? (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomerPickerOpen(true)}
+                  title="Change client"
+                  className="group flex w-full items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-left transition hover:border-[var(--brand-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-subtle)] text-sm font-bold text-[var(--brand-primary)]">
+                    {selectedCustomer.name.trim().charAt(0).toUpperCase() || '?'}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-[var(--text-main)]">{selectedCustomer.name}</span>
+                    <span className="block truncate text-xs text-[var(--text-secondary)]">
+                      {[billToPreviewEmail, billToPreviewPhone].filter(Boolean).join(' · ') || 'No email or phone on record'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-[var(--text-muted)] transition group-hover:text-[var(--brand-primary)]">
+                    Change
+                  </span>
+                </button>
+
+                {(selectedClientDetail?.contacts?.length ?? 0) > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]" htmlFor="bill-to-contact">
+                      Bill To contact
+                    </label>
+                    <select
+                      id="bill-to-contact"
+                      value={billToContactId}
+                      disabled={isIssued}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        void handleBillToChange(raw ? Number(raw) : '');
+                      }}
+                      className="w-full h-10 px-3 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] disabled:opacity-60"
+                    >
+                      <option value="">Company only</option>
+                      {(selectedClientDetail?.contacts ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.fullName || `${c.firstName} ${c.lastName}`.trim()}
+                          {c.isPrimary ? ' (Primary)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {isIssued && (
+                      <p className="text-xs text-[var(--text-muted)]">Issued invoices keep the Bill To they were issued with.</p>
+                    )}
+                    {(billToContact || billToPreviewAddress) && !isIssued && (
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        {billToContact && (
+                          <span className="block">Attn: {billToContact.fullName || `${billToContact.firstName} ${billToContact.lastName}`.trim()}</span>
+                        )}
+                        {billToPreviewAddress && <span className="block">{billToPreviewAddress}</span>}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsCustomerPickerOpen(true)}
+                className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-4 text-left text-sm text-[var(--text-muted)] transition hover:border-[var(--brand-ring)] hover:text-[var(--text-main)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+              >
+                <Users className="h-4 w-4" />
+                <span className="flex-1">Select a client</span>
+                <ChevronsUpDown className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Invoice Metadata (Number, Dates, Terms, PO #) */}
+          <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="invoice-number" className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Invoice #
+              </label>
+              <input
+                id="invoice-number"
+                type="text"
+                value={invoiceNo}
+                readOnly={isIssued}
+                maxLength={30}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={nextNumber ? `Auto · ${nextNumber}` : 'Auto'}
+                aria-describedby="invoice-number-hint"
+                onChange={(e) => setInvoiceNo(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-sm font-mono bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition read-only:opacity-70 read-only:cursor-not-allowed"
+              />
+              <p id="invoice-number-hint" className="mt-1.5 text-xs text-[var(--text-muted)]">
+                {isIssued ? 'Issued invoices keep their number.' : 'Blank: numbered when issued.'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Reference / PO #
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. PO-9842"
+                value={referenceNo}
+                onChange={(e) => setReferenceNo(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Issue Date <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => {
+                    setInvoiceDate(e.target.value);
+                    matchTerm(e.target.value, dueDate);
+                  }}
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Payment Terms
+              </label>
+              <select
+                value={paymentTermId}
+                onChange={(e) => applyTerm(e.target.value ? Number(e.target.value) : '')}
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+              >
+                <option value="">Custom</option>
+                {paymentTerms.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.description}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Due Date
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                min={invoiceDate || undefined}
+                aria-describedby="due-date-hint"
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  matchTerm(invoiceDate, e.target.value);
+                }}
+                className={`w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition ${
+                  dueInBusinessDays === null ? 'border-rose-500/60' : 'border-[var(--border-subtle)]'
+                }`}
+              />
+              {dueInBusinessDays !== undefined && (
+                <p
+                  id="due-date-hint"
+                  className={`mt-1.5 text-xs ${dueInBusinessDays === null ? 'text-rose-500' : 'text-[var(--text-muted)]'}`}
+                >
+                  {dueInBusinessDays === null
+                    ? 'The due date is before the issue date.'
+                    : dueInBusinessDays === 0
+                      ? 'Due on the issue date'
+                      : `${dueInBusinessDays} business day${dueInBusinessDays === 1 ? '' : 's'} after the issue date`}
+                </p>
+              )}
+            </div>
+
+          </div>
+        </div>
+
+        {/* Section 2: Line Items Table */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Line Items
+            </h3>
+            {catalogItems.length > 0 && (
+              <span className="text-xs text-[var(--text-muted)]">
+                Type a description, or pick an item with <Package className="inline w-3.5 h-3.5 -mt-0.5" />
+              </span>
+            )}
+          </div>
+
+          <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-surface)]">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[var(--bg-subtle)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">
+                  <th className="py-3 px-4 min-w-[260px]">Item & Description</th>
+                  <th className="py-3 px-3 w-20 text-right">Qty</th>
+                  <th className="py-3 px-3 w-28 text-right">Unit Price</th>
+                  <th className="py-3 px-3 w-20 text-right">Disc %</th>
+                  <th className="py-3 px-3 w-40 text-right">
+                    <span className="inline-flex items-center justify-end gap-2">
+                      Tax
+                      {taxes.filter(isSelectableTax).length === 0 && hasPermission('admin.taxes.manage') && (
+                        <Link to={`/org/${orgSlug}/settings?tab=taxes`} className="normal-case tracking-normal font-semibold text-[var(--brand-primary)]">Manage taxes</Link>
+                      )}
+                    </span>
+                  </th>
+                  <th className="py-3 px-4 w-28 text-right">Line Total</th>
+                  <th className="py-3 px-2 w-12 text-center"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
+                {lines.map((line, idx) => {
+                  const lineTotal = invoiceLineAmounts(line.quantity, line.amount, line.discount, 0).subtotal;
+                  const linked = line.itemId ? catalogItems.find((ci) => ci.id === line.itemId) : undefined;
+                  const isCatalogLinked = Boolean(linked && linked.description !== 'Service / Product');
+                  const requestedQuantity = lines.filter(other => other.itemId === line.itemId)
+                    .reduce((total, other) => total + (Number(other.quantity) || 0), 0);
+                  const exceedsStock = linked?.trackStock && linked.quantityOnHand != null && requestedQuantity > linked.quantityOnHand;
+
+                  return (
+                    <tr key={idx} className="align-middle hover:bg-[var(--bg-surface-hover)]/40 transition">
+                      <td className="py-2.5 px-4">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            aria-label={`Line ${idx + 1} description`}
+                            placeholder="Description (e.g. Consulting, Design, Software license)"
+                            value={line.itemDescription}
+                            onChange={(e) =>
+                              handleLineChange(idx, 'itemDescription', e.target.value)
+                            }
+                            className={`w-full h-9 pl-3 ${isCatalogLinked ? 'pr-[4.25rem]' : catalogItems.length > 0 ? 'pr-10' : 'pr-3'} text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition`}
+                          />
+                          {catalogItems.length > 0 && (
+                            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+                              {/* Linked lines: the package icon reads as "catalog item" and reopens the picker. */}
+                              <button
+                                type="button"
+                                onClick={() => setPickerLine(idx)}
+                                title={isCatalogLinked ? `Catalog item: ${linked!.code ? `${linked!.code} · ` : ''}${linked!.description}` : 'Pick from catalog'}
+                                aria-label={isCatalogLinked ? `Line ${idx + 1} is catalog item ${linked!.description}; change it` : `Pick line ${idx + 1} from catalog`}
+                                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                                  isCatalogLinked
+                                    ? 'text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)]'
+                                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
+                                }`}
+                              >
+                                <Package className="w-4 h-4" />
+                              </button>
+                              {isCatalogLinked && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLineChange(idx, 'itemId', null)}
+                                  title="Unlink from catalog"
+                                  aria-label={`Unlink line ${idx + 1} from the catalog`}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                                >
+                                  <Unlink className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {exceedsStock && (
+                          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400" role="status">
+                            Only {linked.quantityOnHand?.toLocaleString(undefined, { maximumFractionDigits: 4 })} in stock. You can still issue this invoice.
+                          </p>
+                        )}
+                        {isAccountingPlan && (
+                          isCatalogLinked ? (
+                            <p className="mt-1 text-[11px] text-[var(--text-muted)] truncate" title={linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}>
+                              Books to {linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}
+                            </p>
+                          ) : (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <span className="text-[11px] text-[var(--text-muted)] whitespace-nowrap">Income account:</span>
+                              <select
+                                aria-label={`Line ${idx + 1} income account`}
+                                value={line.salesAccountId ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value ? Number(e.target.value) : null;
+                                  const acc = salesAccounts.find((a) => a.id === val);
+                                  setLines((prev) => {
+                                    const updated = [...prev];
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      salesAccountId: val,
+                                      salesAccountCode: acc?.code ?? null,
+                                      salesAccountName: acc?.name ?? null,
+                                    };
+                                    return updated;
+                                  });
+                                }}
+                                className="h-6 px-1.5 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-muted)] hover:text-[var(--text-main)] focus:text-[var(--text-main)] focus:ring-1 focus:ring-[var(--brand-ring)] focus:outline-none transition max-w-[220px]"
+                              >
+                                <option value="">Default (40100 · Sales)</option>
+                                {line.salesAccountId && !salesAccounts.some((a) => a.id === line.salesAccountId) && (
+                                  <option value={line.salesAccountId}>
+                                    {line.salesAccountCode ? `${line.salesAccountCode} · ${line.salesAccountName}` : `Account #${line.salesAccountId}`}
+                                  </option>
+                                )}
+                                {salesAccounts.map((acc) => (
+                                  <option key={acc.id} value={acc.id}>
+                                    {acc.code} · {acc.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )
+                        )}
+                      </td>
+
+                      <td className="py-2.5 px-3 text-right">
+                        <input
+                          type="number"
+                          min="1"
+                          step="any"
+                          value={line.quantity}
+                          onChange={(e) =>
+                            handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-full h-9 px-2.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                        />
+                      </td>
+
+                      <td className="py-2.5 px-3 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.amount}
+                          onChange={(e) =>
+                            handleLineChange(idx, 'amount', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-full h-9 px-2.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                        />
+                      </td>
+
+                      <td className="py-2.5 px-3 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={line.discount}
+                          onChange={(e) =>
+                            handleLineChange(idx, 'discount', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-full h-9 px-2 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                        />
+                      </td>
+
+                      <td className="py-2.5 px-3 text-right">
+                        <select
+                          aria-label={`Line ${idx + 1} tax`}
+                          value={line.taxId}
+                          onChange={(e) =>
+                            handleLineChange(idx, 'taxId', e.target.value ? Number(e.target.value) : '')
+                          }
+                          className="w-full h-9 px-2 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                        >
+                          <option value="">No tax</option>
+                          {lineTaxChoices(taxes, line.taxId).map(t => (
+                            <option key={t.id} value={t.id}>{taxChoiceLabel(t)}</option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td className="py-2.5 px-4 text-right font-medium font-mono text-[var(--text-main)]">
+                        {formatCurrency(lineTotal)}
+                      </td>
+
+                      <td className="py-2.5 px-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLine(idx)}
+                          disabled={lines.length <= 1}
+                          className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 rounded-lg hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-20"
+                          title="Remove item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={handleAddLine}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[var(--brand-primary)] bg-[var(--brand-subtle)] rounded-xl hover:opacity-85 transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Line Item
+            </button>
+          </div>
+        </div>
+
+        {/* Section 3: Notes & Totals Breakdown */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 border-t border-[var(--border-subtle)] pt-8">
+          {/* Notes & Payment Instructions */}
+          <div className="lg:col-span-7 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Client Notes
+              </label>
+              <textarea
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Notes visible to your client on the invoice..."
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Payment Instructions / Bank Wire Info
+              </label>
+              <textarea
+                rows={2}
+                value={paymentInstructions}
+                onChange={(e) => setPaymentInstructions(e.target.value)}
+                placeholder="Bank name, Swift/IBAN, routing, or PayPal info..."
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
+              />
+            </div>
+          </div>
+
+          {/* Totals Summary Box */}
+          <div className="lg:col-span-5 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-2xl p-6 space-y-3">
+            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+              <span>Subtotal</span>
+              <span className="font-medium font-mono text-[var(--text-main)]">
+                {formatCurrency(calculatedTotals.subtotal)}
+              </span>
+            </div>
+
+            {calculatedTotals.totalDiscount > 0 && (
+              <div className="flex items-center justify-between text-sm text-emerald-500">
+                <span>Discounts</span>
+                <span className="font-mono">-{formatCurrency(calculatedTotals.totalDiscount)}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+              <span>Tax</span>
+              <span className="font-medium font-mono text-[var(--text-main)]">
+                {formatCurrency(calculatedTotals.totalTax)}
+              </span>
+            </div>
+
+            {shippingHandlingCharge > 0 && (
+              <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+                <span>Shipping</span>
+                <span className="font-mono">{formatCurrency(shippingHandlingCharge)}</span>
+              </div>
+            )}
+
+            <div className="border-t border-[var(--border-subtle)] pt-3 flex items-center justify-between">
+              <span className="text-base font-bold text-[var(--text-main)]">
+                Total Due
+              </span>
+              <span className="text-xl font-bold font-mono text-[var(--brand-primary)]">
+                {formatCurrency(calculatedTotals.grandTotal)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {newItemLine !== null && (
+        <ItemFormDialog
+          showPrice
+          showCost={false}
+          hasInventoryModule={hasModule('inventory')}
+          currencySymbol={currencySymbol}
+          onSaved={(item) => {
+            const option: ItemOption = {
+              id: item.id,
+              code: item.code ?? undefined,
+              description: item.name,
+              price: item.price ?? undefined,
+              trackStock: item.trackStock,
+              inventoryAccountId: item.inventoryAccountId,
+              quantityOnHand: item.quantityOnHand,
+              averageCost: item.averageCost,
+            };
+            setCatalogItems((prev) => [...prev, option].sort((a, b) => a.description.localeCompare(b.description)));
+            if (lines[newItemLine]) handlePickItem(newItemLine, option);
+            setNewItemLine(null);
+          }}
+          onClose={() => setNewItemLine(null)}
+        />
+      )}
+
+      {clientDialog && (
+        <PartyFormDialog
+          role="client"
+          party={clientDialog.client}
+          paymentTerms={paymentTerms}
+          onSaved={handleClientSaved}
+          onClose={() => setClientDialog(null)}
+        />
+      )}
+
+      {isCustomerPickerOpen && (
+        <PartyPickerDialog
+          role="client"
+          parties={customers.filter((c) => !c.archived || c.id === Number(selectedCustomerId))}
+          selectedId={selectedCustomerId || null}
+          onPick={handlePickCustomer}
+          onAddNew={
+            canManageClients
+              ? () => {
+                  setIsCustomerPickerOpen(false);
+                  setClientDialog({});
+                }
+              : undefined
+          }
+          onClose={() => setIsCustomerPickerOpen(false)}
+        />
+      )}
+
+      {pickerLine !== null && lines[pickerLine] && (
+        <CatalogPickerDialog
+          items={catalogItems.filter((i) => !i.archived || i.id === lines[pickerLine].itemId)}
+          selectedId={lines[pickerLine].itemId}
+          formatPrice={formatCurrency}
+          onPick={(item) => handlePickItem(pickerLine, item)}
+          onAddNew={
+            hasPermission('inventory.items.manage')
+              ? () => {
+                  setNewItemLine(pickerLine);
+                  setPickerLine(null);
+                }
+              : undefined
+          }
+          onClose={() => setPickerLine(null)}
+        />
+      )}
+    </div>
+  );
+};

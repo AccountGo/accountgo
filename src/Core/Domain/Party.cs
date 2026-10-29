@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="Party.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -13,12 +14,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("Party")]
-    public partial class Party : BaseEntity
+    public partial class Party : BaseEntity, ICompanyOwned
     {
         public Party()
         {
             Contacts = new HashSet<Contact>();
         }
+
+        public int CompanyId { get; set; }
 
         public PartyTypes PartyType { get; set; }
         public string Name { get; set; }

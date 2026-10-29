@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <title>AccountGo</title>
+  <defs>
+    <linearGradient id="agArch" x1="13" y1="0" x2="99" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="0.5" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="agArrow" x1="27" y1="89" x2="120" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.55" stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#C084FC"/>
+    </linearGradient>
+    <mask id="agGap" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="#fff"/>
+      <path d="M51.6 77.1C66.2 68.9 81.8 56.2 101 37" stroke="#000" stroke-width="30"/>
+    </mask>
+  </defs>
+    <path d="M23 88C47 83 69 69 99 39" stroke="url(#agArrow)" stroke-width="18" stroke-linecap="round"/>
+    <path d="M120.2 17.8L113.1 53.1L84.9 24.9Z" fill="url(#agArrow)" stroke="url(#agArrow)" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M17 107C27 59 37 23 55 23C73 23 83 59 93 107" stroke="url(#agArch)" stroke-width="18" stroke-linecap="round" mask="url(#agGap)"/>
+</svg>

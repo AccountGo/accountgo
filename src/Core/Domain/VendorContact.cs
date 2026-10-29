@@ -1,4 +1,4 @@
-﻿using Core.Domain.Purchases;
+using Core.Domain.Purchases;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -9,8 +9,9 @@ using System.Threading.Tasks;
 namespace Core.Domain
 {
     [Table("VendorContact")]
-    public class VendorContact : BaseEntity
+    public class VendorContact : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         //public int Id { get; set; }
         public int ContactId { get; set; }
 
