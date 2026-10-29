@@ -238,7 +238,18 @@ namespace Api.Data.Schema
                     new[] { "RefreshTokens", "TrustedDeviceId", "INTEGER NULL" },
                     // D1 0031_refresh_token_family.sql
                     new[] { "RefreshTokens", "FamilyId", "TEXT NOT NULL DEFAULT ''" },
-                    new[] { "RefreshTokens", "GraceReuseCount", "INTEGER NOT NULL DEFAULT 0" }
+                    new[] { "RefreshTokens", "GraceReuseCount", "INTEGER NOT NULL DEFAULT 0" },
+                    // D1 0032_bank_accounts.sql (#413 Phase 1A)
+                    new[] { "Bank", "RoutingNumber", "TEXT NULL" },
+                    new[] { "Bank", "Iban", "TEXT NULL" },
+                    new[] { "Bank", "Swift", "TEXT NULL" },
+                    new[] { "Bank", "IsDefaultForReceipts", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "Bank", "IsDefaultForPayments", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "Bank", "OpeningBalance", "NUMERIC NULL" },
+                    new[] { "Bank", "OpeningBalanceDate", "TEXT NULL" },
+                    new[] { "Bank", "OpeningBalanceGeneralLedgerHeaderId", "INTEGER NULL" },
+                    new[] { "Bank", "ArchivedAt", "TEXT NULL" },
+                    new[] { "Bank", "CurrencyCode", "TEXT NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -318,6 +329,14 @@ namespace Api.Data.Schema
                 // E1b: backfill whenever the opt-out column exists and legacy ActiveModulesJson is still authoritative.
                 BackfillDisabledModules(connection, tx);
                 NormalizeCompanyPlanKeysAndTier(connection, tx);
+
+                // #413 / D1 0032: bank columns → clean-up → indexes/triggers (idempotent).
+                if (TableExists(connection, "Bank", tx) && ColumnExists(connection, "Bank", "IsDefaultForReceipts", tx))
+                {
+                    BankAccountCleanup.Apply(connection, tx, logger: null);
+                    BankAccountCleanup.EnsureIndexesAndTriggers(connection, tx);
+                }
+
                 tx.Commit();
             }
         }
@@ -887,6 +906,11 @@ WHERE ""DisabledModulesJson"" IS NULL
 
         private static void EnsureAllIndexes(DbConnection connection, ILogger? logger)
         {
+            if (TableExists(connection, "Bank") && ColumnExists(connection, "Bank", "IsDefaultForReceipts"))
+            {
+                BankAccountCleanup.EnsureIndexesAndTriggers(connection);
+            }
+
             if (TableExists(connection, "CompanyMemberSecurityRole"))
             {
                 using var cmd = connection.CreateCommand();
