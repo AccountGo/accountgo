@@ -2,6 +2,8 @@ export interface DashboardBankBalance {
   bankId: number;
   name: string;
   balance: number;
+  /** An archived bank that still holds a balance. */
+  isArchived?: boolean;
 }
 
 export interface MoneyInBankKpis {
@@ -26,7 +28,8 @@ export function bankRegisterPath(orgSlug: string, bankId?: number): string {
 }
 
 /**
- * Rows for the money-in-bank breakdown: one per active bank, then unassigned cash when there is any.
+ * Rows for the money-in-bank breakdown: one per active bank, archived banks that still hold a balance (labelled),
+ * then unassigned cash when there is any.
  * Empty when the caller cannot see bank accounts or there is nothing to split.
  */
 export function moneyInBankRows(kpis: MoneyInBankKpis | undefined | null, orgSlug: string): MoneyInBankRow[] {
@@ -34,7 +37,7 @@ export function moneyInBankRows(kpis: MoneyInBankKpis | undefined | null, orgSlu
 
   const rows: MoneyInBankRow[] = kpis.bankBalances.map((bank) => ({
     key: `bank-${bank.bankId}`,
-    label: bank.name,
+    label: bank.isArchived ? `${bank.name} (archived)` : bank.name,
     balance: bank.balance,
     path: bankRegisterPath(orgSlug, bank.bankId),
   }));

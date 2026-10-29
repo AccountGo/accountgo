@@ -82,22 +82,74 @@ public class DashboardMoneyInBankTests
     }
 
     [Fact]
-    public void ArchivedBanks_AreExcludedFromSplitAndTotal()
+    public void ArchivedBankWithABalance_StaysInTheSplitAndTheTotal()
     {
         using var harness = NewHarness();
         var checking = harness.CreateBank("Checking");
         var closed = harness.CreateBank("Closed account");
         PostBalance(harness, checking.AccountId!.Value, 500m);
         harness.Banks.Archive(closed.Id, includeFullNumbers: false);
-        // Late postings can still land on an archived bank's ledger account; they must not inflate the dashboard.
+        // Late postings can still land on an archived bank's ledger account; the money is there, so it counts.
         PostBalance(harness, closed.AccountId!.Value, 200m);
+
+        var kpis = BuildKpis(harness);
+
+        var archived = kpis.BankBalances!.Single(b => b.BankId == closed.Id);
+        Assert.True(archived.IsArchived);
+        Assert.Equal(200m, archived.Balance);
+        Assert.False(kpis.BankBalances!.Single(b => b.BankId == checking.Id).IsArchived);
+        Assert.Equal(0m, kpis.UnassignedCash);
+        Assert.Equal(700m, kpis.MoneyInBank);
+        Assert.Equal(kpis.BankBalances!.Sum(b => b.Balance) + kpis.UnassignedCash, kpis.MoneyInBank);
+    }
+
+    [Fact]
+    public void ArchivedBankWithALateNegativeBalance_IsCountedToo()
+    {
+        using var harness = NewHarness();
+        var checking = harness.CreateBank("Checking");
+        var closed = harness.CreateBank("Closed account");
+        PostBalance(harness, checking.AccountId!.Value, 500m);
+        harness.Banks.Archive(closed.Id, includeFullNumbers: false);
+        // Late postings can still land on an archived bank's ledger account (here an overdraft).
+        var overdraft = harness.Post(closed.AccountId!.Value, DrOrCrSide.Cr, 30m, PostingDate);
+        harness.Repos.Accounts.GetById(closed.AccountId!.Value).GeneralLedgerLines.Add(overdraft);
+
+        var kpis = BuildKpis(harness);
+
+        Assert.Equal(-30m, kpis.BankBalances!.Single(b => b.BankId == closed.Id).Balance);
+        Assert.Equal(470m, kpis.MoneyInBank);
+    }
+
+    [Fact]
+    public void ArchivedBankWithNothingInIt_IsLeftOutOfTheSplit()
+    {
+        using var harness = NewHarness();
+        var checking = harness.CreateBank("Checking");
+        var closed = harness.CreateBank("Closed account");
+        PostBalance(harness, checking.AccountId!.Value, 500m);
+        harness.Banks.Archive(closed.Id, includeFullNumbers: false);
 
         var kpis = BuildKpis(harness);
 
         Assert.DoesNotContain(kpis.BankBalances!, b => b.BankId == closed.Id);
         Assert.Equal(0m, kpis.UnassignedCash);
         Assert.Equal(500m, kpis.MoneyInBank);
-        Assert.Equal(kpis.BankBalances!.Sum(b => b.Balance) + kpis.UnassignedCash, kpis.MoneyInBank);
+    }
+
+    [Fact]
+    public void ArchivedBanksListAfterActiveOnes()
+    {
+        using var harness = NewHarness();
+        var archived = harness.CreateBank("Alpha (closed)");
+        var active = harness.CreateBank("Zulu");
+        PostBalance(harness, active.AccountId!.Value, 20m);
+        harness.Banks.Archive(archived.Id, includeFullNumbers: false);
+        PostBalance(harness, archived.AccountId!.Value, 10m);
+
+        var kpis = BuildKpis(harness);
+
+        Assert.Equal(new[] { "Zulu", "Alpha (closed)" }, kpis.BankBalances!.Select(b => b.Name).ToArray());
     }
 
     [Fact]

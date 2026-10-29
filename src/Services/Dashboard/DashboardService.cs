@@ -162,8 +162,8 @@ namespace Services.Dashboard
             && _tenantContext.Permissions.Contains(SystemPermissions.BankingAccountsView);
 
         /// <summary>
-        /// Money in bank split per active bank account plus cash accounts no bank record covers.
-        /// Archived banks are left out of both the split and the total so the parts always add up.
+        /// Money in bank split per bank account plus cash accounts no bank record covers. An archived bank is listed (and
+        /// counted) only while its account still holds a balance, so archiving a bank never hides money from the total.
         /// </summary>
         private (decimal Total, List<DashboardBankBalanceDto>? BankBalances, decimal UnassignedCash) BuildMoneyInBank(
             IReadOnlyCollection<Account> accounts)
@@ -172,14 +172,17 @@ namespace Services.Dashboard
             var accountById = accounts.ToDictionary(a => a.Id);
 
             var balances = allBanks
-                .Where(b => b.ArchivedAt == null && b.AccountId.HasValue)
-                .OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
+                .Where(b => b.AccountId.HasValue)
                 .Select(b => new DashboardBankBalanceDto
                 {
                     BankId = b.Id,
                     Name = b.Name,
+                    IsArchived = b.ArchivedAt != null,
                     Balance = RoundMoney(accountById.TryGetValue(b.AccountId!.Value, out var account) ? account.Balance : 0m)
                 })
+                .Where(b => !b.IsArchived || b.Balance != 0m)
+                .OrderBy(b => b.IsArchived)
+                .ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             // Workspaces without bank records still hold cash in the postable cash accounts (e.g. 10111).
