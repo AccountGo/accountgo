@@ -257,7 +257,8 @@ namespace Services.Entitlements
                         && i.RevokedAt == null && i.ExpiresAt > now);
                     return members + pending;
                 case MeteredResource.BankAccounts:
-                    return _banks.Table.Count(b => b.CompanyId == companyId);
+                    // D9 / #413: archived banks do not consume the plan slot.
+                    return _banks.Table.Count(b => b.CompanyId == companyId && b.ArchivedAt == null);
                 default:
                     return 0;
             }

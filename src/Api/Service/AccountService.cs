@@ -7,6 +7,7 @@ using Core.Domain.Purchases;
 using Core.Domain.Sales;
 using Core.Domain.TaxSystem;
 using Microsoft.EntityFrameworkCore;
+using Services.Banking;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,11 +17,13 @@ public class AccountService : IAccountService
 {
     private readonly ApiDbContext _context;
     private readonly ICoaFormatAdapterRegistry _formatAdapters;
+    private readonly IBankAccountService _bankAccounts;
 
-    public AccountService(ApiDbContext context, ICoaFormatAdapterRegistry formatAdapters)
+    public AccountService(ApiDbContext context, ICoaFormatAdapterRegistry formatAdapters, IBankAccountService bankAccounts)
     {
         _context = context;
         _formatAdapters = formatAdapters ?? throw new ArgumentNullException(nameof(formatAdapters));
+        _bankAccounts = bankAccounts ?? throw new ArgumentNullException(nameof(bankAccounts));
     }
 
     // Add a new account
@@ -34,6 +37,14 @@ public class AccountService : IAccountService
             {
                 throw new InvalidOperationException($"Parent account #{newAccount.ParentAccountId.Value} not found.");
             }
+
+            // #413 D2: a bank posting account cannot become a summary by gaining a child.
+            _bankAccounts.EnsureAccountMayChangeWhileBackingBank(
+                parent,
+                proposedParent: null,
+                proposedCode: parent.AccountCode,
+                becomingSummary: true,
+                archiving: false);
 
             if (newAccount.AccountClassId == 0)
             {
@@ -136,8 +147,22 @@ public class AccountService : IAccountService
         account.IsCash = updatedAccount.IsCash;
         account.IsContraAccount = updatedAccount.IsContraAccount;
 
+        Account? proposedParent = null;
+        if (account.ParentAccountId.HasValue)
+            proposedParent = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == account.ParentAccountId.Value);
+
+        _bankAccounts.EnsureAccountMayChangeWhileBackingBank(
+            account,
+            proposedParent,
+            account.AccountCode,
+            becomingSummary: false,
+            archiving: false);
+
         _context.Accounts.Update(account);
         await _context.SaveChangesAsync();
+
+        // D8: renaming a bank-backed account renames the bank (unique-name check inside).
+        _bankAccounts.SyncBankNameFromAccount(account);
 
         return account;
     }
@@ -261,6 +286,20 @@ public class AccountService : IAccountService
         if (isProtected)
         {
             return (null, $"Cannot archive account: {protectionReason}");
+        }
+
+        try
+        {
+            _bankAccounts.EnsureAccountMayChangeWhileBackingBank(
+                account,
+                proposedParent: null,
+                proposedCode: account.AccountCode,
+                becomingSummary: false,
+                archiving: true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (null, ex.Message);
         }
 
         account.ArchivedAt = DateTime.UtcNow;
@@ -1011,11 +1050,15 @@ public class AccountService : IAccountService
                     _context.Taxes.Update(tax);
                 }
 
-                // Repoint Banks
+                // Repoint Banks through D2 eligibility (#413 1B).
                 var banks = await _context.Banks.ToListAsync();
                 foreach (var bank in banks)
                 {
-                    if (TryGetMappedId($"Bank_{bank.Id}", controlMappings, codeToIdMap, out var idBank)) bank.AccountId = idBank;
+                    if (TryGetMappedId($"Bank_{bank.Id}", controlMappings, codeToIdMap, out var idBank))
+                    {
+                        _bankAccounts.EnsureEligiblePostingAccount(idBank, exceptBankId: bank.Id);
+                        bank.AccountId = idBank;
+                    }
                     _context.Banks.Update(bank);
                 }
 

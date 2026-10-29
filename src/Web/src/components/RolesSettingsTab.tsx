@@ -52,7 +52,7 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey | ModuleKey[]
     ],
   },
   {
-    group: 'General Ledger & Banking',
+    group: 'General Ledger',
     module: 'financials',
     permissions: [
       { key: 'financials.accounts.view', label: 'View Chart of Accounts' },
@@ -60,7 +60,17 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey | ModuleKey[]
       { key: 'financials.journal.view', label: 'View Journal Entries' },
       { key: 'financials.journal.create', label: 'Create Journal Entries' },
       { key: 'financials.journal.post', label: 'Post to General Ledger' },
-      { key: 'financials.cashbanks.view', label: 'View Cash & Bank Balances' },
+    ],
+  },
+  {
+    group: 'Banking',
+    module: ['sales', 'purchases', 'financials'],
+    permissions: [
+      { key: 'banking.accounts.view', label: 'View Bank Accounts' },
+      { key: 'banking.accounts.manage', label: 'Manage Bank Accounts' },
+      { key: 'banking.transactions.create', label: 'Record Bank Transactions' },
+      { key: 'banking.reconcile', label: 'Reconcile Bank Accounts' },
+      { key: 'banking.reconcile.undo', label: 'Undo Bank Reconciliation' },
     ],
   },
   {
