@@ -82,7 +82,12 @@ namespace AccountGo.BackendTests
         [Fact]
         public async Task RecordPayment_RefusesCrossTenantBankAccountId()
         {
+            var ownerSlug = _slug;
+            Assert.Equal(HttpStatusCode.Created, (await Send(HttpMethod.Post, "/api/organizations",
+                new { name = "Other Co Bank Org", slug = "other-bank-org" }, token: _otherToken, scoped: false)).StatusCode);
+            _slug = "other-bank-org";
             var otherBank = await CreateBankOk(new CreateBankAccountRequest { Name = "Other Co Bank", Type = 1 }, _otherToken);
+            _slug = ownerSlug;
 
             var invoice = await NewInvoice();
             invoice.Status = "Open";
@@ -98,7 +103,8 @@ namespace AccountGo.BackendTests
                     PaymentDate = DateTime.UtcNow,
                     BankAccountId = otherBank.Id
                 });
-            Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Equal("CROSS_TENANT_REFERENCE_DENIED", (await Json(refused)).GetProperty("code").GetString());
         }
 
         [Fact]
