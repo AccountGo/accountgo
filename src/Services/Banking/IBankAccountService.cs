@@ -20,6 +20,9 @@ namespace Services.Banking
 
         /// <summary>Reconciled-through-last-month status for active banks; null when the Financials module is off (3C).</summary>
         BankCloseStatusDto? GetCloseStatus(DateTime? asOf);
+
+        /// <summary>Invoicing &amp; Bills workspaces: compare a typed-in bank balance with the books. Posts nothing; refused when Financials is on (3F).</summary>
+        BankBalanceCheckDto CheckBalance(int bankId, BankBalanceCheckRequest request);
         IReadOnlyList<BankAccountPickerItemDto> Picker(bool includeOtherCashAccounts);
         IReadOnlyList<UnassignedCashDto> GetCashHistory(bool includeCodes);
         IReadOnlyList<object> EligiblePostingAccounts();

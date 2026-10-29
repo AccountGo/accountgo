@@ -136,6 +136,25 @@ namespace Api.Controllers
             }
         }
 
+        [HttpPost("Accounts/{id:int}/BalanceCheck")]
+        [RequireModule(SystemModules.Sales, SystemModules.Purchases)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult CheckBalance(int id, [FromBody] BankBalanceCheckRequest request)
+        {
+            try
+            {
+                return Ok(_banks.CheckBalance(id, request));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpGet("CloseStatus")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]

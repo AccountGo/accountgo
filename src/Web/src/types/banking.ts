@@ -279,3 +279,26 @@ export interface BankCloseStatus {
   isComplete: boolean;
   banks: BankCloseStatusBank[];
 }
+
+export interface BankBalanceCheckLine {
+  lineId: number;
+  headerId: number;
+  date: string;
+  type: string;
+  payee?: string | null;
+  reference?: string | null;
+  in: number;
+  out: number;
+  mayExplainDifference: boolean;
+}
+
+export interface BankBalanceCheck {
+  bankId: number;
+  asOfDate: string;
+  bankBalance: number;
+  bookBalance: number;
+  difference: number;
+  isMatch: boolean;
+  message: string;
+  recentLines: BankBalanceCheckLine[];
+}

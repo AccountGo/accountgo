@@ -174,4 +174,40 @@ namespace Dto.Banking
         public bool IsComplete { get; set; }
         public IReadOnlyList<BankCloseStatusBankDto> Banks { get; set; } = Array.Empty<BankCloseStatusBankDto>();
     }
+
+    public class BankBalanceCheckRequest
+    {
+        /// <summary>The balance the bank shows (statement, app, or online banking).</summary>
+        public decimal AsOfBalance { get; set; }
+        /// <summary>Defaults to today.</summary>
+        public DateTime? AsOfDate { get; set; }
+    }
+
+    public class BankBalanceCheckLineDto
+    {
+        public int LineId { get; set; }
+        public int HeaderId { get; set; }
+        public DateTime Date { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string? Payee { get; set; }
+        public string? Reference { get; set; }
+        public decimal In { get; set; }
+        public decimal Out { get; set; }
+        /// <summary>The amount equals the difference, so this entry is a likely culprit.</summary>
+        public bool MayExplainDifference { get; set; }
+    }
+
+    /// <summary>Compares a balance the user types in with the book balance. Nothing is posted (3F).</summary>
+    public class BankBalanceCheckDto
+    {
+        public int BankId { get; set; }
+        public DateTime AsOfDate { get; set; }
+        public decimal BankBalance { get; set; }
+        public decimal BookBalance { get; set; }
+        /// <summary>Bank balance minus book balance.</summary>
+        public decimal Difference { get; set; }
+        public bool IsMatch { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public IReadOnlyList<BankBalanceCheckLineDto> RecentLines { get; set; } = Array.Empty<BankBalanceCheckLineDto>();
+    }
 }
