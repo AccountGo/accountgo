@@ -892,6 +892,119 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("Bank");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankReconciliation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("BeginningBalance")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FinishedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("StatementEndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("StatementEndingBalance")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UndoReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("UndoneAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UndoneBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId", "StatementEndDate" }, "IX_BankReconciliation_Company_Bank_EndDate");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId" }, "UX_BankReconciliation_OneDraft")
+                        .IsUnique()
+                        .HasFilter("[Status] = 1");
+
+                    b.ToTable("BankReconciliation");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankReconciliationItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("BankReconciliationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DrCr")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GeneralLedgerLineId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankReconciliationId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("GeneralLedgerLineId");
+
+                    b.HasIndex(new[] { "BankReconciliationId", "GeneralLedgerLineId" }, "UX_BankReconciliationItem_Recon_Line")
+                        .IsUnique();
+
+                    b.ToTable("BankReconciliationItem");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -1047,6 +1160,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int?>("BankReconciliationId")
+                        .HasColumnType("int");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -1060,7 +1176,11 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("AccountId");
 
+                    b.HasIndex("BankReconciliationId");
+
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex(new[] { "CompanyId", "BankReconciliationId" }, "IX_GeneralLedgerLine_Company_BankReconciliationId");
 
                     b.ToTable("GeneralLedgerLine");
                 });
@@ -3328,6 +3448,36 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("Account");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankReconciliation", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bank");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankReconciliationItem", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.BankReconciliation", "BankReconciliation")
+                        .WithMany("Items")
+                        .HasForeignKey("BankReconciliationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerLine", "GeneralLedgerLine")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BankReconciliation");
+
+                    b.Navigation("GeneralLedgerLine");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
                 {
                     b.HasOne("Core.Domain.Financials.Bank", "Bank")
@@ -3382,6 +3532,11 @@ namespace Api.Data.Migrations.ApiDb
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Core.Domain.Financials.BankReconciliation", "BankReconciliation")
+                        .WithMany()
+                        .HasForeignKey("BankReconciliationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
                         .WithMany("GeneralLedgerLines")
                         .HasForeignKey("GeneralLedgerHeaderId")
@@ -3389,6 +3544,8 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired();
 
                     b.Navigation("Account");
+
+                    b.Navigation("BankReconciliation");
 
                     b.Navigation("GeneralLedgerHeader");
                 });
@@ -4400,6 +4557,11 @@ namespace Api.Data.Migrations.ApiDb
             modelBuilder.Entity("Core.Domain.Financials.AccountClass", b =>
                 {
                     b.Navigation("Accounts");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankReconciliation", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerHeader", b =>

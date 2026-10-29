@@ -23,6 +23,7 @@ namespace Services.Banking
     {
         private readonly IRepository<Bank> _banks;
         private readonly IRepository<BankTransaction> _bankTransactions;
+        private readonly IRepository<BankReconciliation> _reconciliations;
         private readonly IRepository<Account> _accounts;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
@@ -44,6 +45,7 @@ namespace Services.Banking
         public BankAccountService(
             IRepository<Bank> banks,
             IRepository<BankTransaction> bankTransactions,
+            IRepository<BankReconciliation> reconciliations,
             IRepository<Account> accounts,
             IRepository<GeneralLedgerLine> glLines,
             IRepository<GeneralLedgerHeader> glHeaders,
@@ -64,6 +66,7 @@ namespace Services.Banking
         {
             _banks = banks;
             _bankTransactions = bankTransactions;
+            _reconciliations = reconciliations;
             _accounts = accounts;
             _glLines = glLines;
             _glHeaders = glHeaders;
@@ -333,6 +336,11 @@ namespace Services.Banking
             var bank = RequireBank(id);
             if (bank.ArchivedAt != null)
                 return ToDto(bank, includeFullNumbers);
+
+            if (_reconciliations.Table.Any(r =>
+                    r.BankId == bank.Id && r.Status == BankReconciliationStatuses.Draft))
+                throw new InvalidOperationException(
+                    "Finish or discard the draft reconciliation before archiving this bank account.");
 
             var activeCount = _banks.Table.Count(b => b.ArchivedAt == null);
             if (activeCount <= 1)
@@ -704,6 +712,7 @@ namespace Services.Banking
                 IsDefaultForReceipts = bank.IsDefaultForReceipts,
                 IsDefaultForPayments = bank.IsDefaultForPayments,
                 BookBalance = account == null ? 0m : BookBalance(account),
+                ReconciledThrough = LatestFinishedStatementEnd(bank.Id),
                 ArchivedAt = bank.ArchivedAt,
                 OpeningBalance = bank.OpeningBalance,
                 OpeningBalanceDate = bank.OpeningBalanceDate,
@@ -720,6 +729,14 @@ namespace Services.Banking
 
             return dto;
         }
+
+        private DateTime? LatestFinishedStatementEnd(int bankId) =>
+            _reconciliations.Table
+                .Where(r => r.BankId == bankId && r.Status == BankReconciliationStatuses.Finished)
+                .OrderByDescending(r => r.StatementEndDate)
+                .ThenByDescending(r => r.Id)
+                .Select(r => (DateTime?)r.StatementEndDate)
+                .FirstOrDefault();
 
         private Bank RequireBank(int id)
         {

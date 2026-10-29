@@ -131,6 +131,14 @@ namespace Core.Domain
         OpeningBalance = 7
     }
 
+    /// <summary>Statuses for <see cref="Financials.BankReconciliation"/> (Phase 2B).</summary>
+    public enum BankReconciliationStatuses
+    {
+        Draft = 1,
+        Finished = 2,
+        Undone = 3
+    }
+
     public enum AddressTypes
     {
         Office,

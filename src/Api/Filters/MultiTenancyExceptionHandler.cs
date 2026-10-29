@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Services.Banking;
 
 namespace Api.Filters
 {
@@ -15,6 +16,40 @@ namespace Api.Filters
     {
         public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
         {
+            if (exception is ReconciledTransactionException reconciledEx)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
+                httpContext.Response.ContentType = "application/problem+json";
+                var problem = new ProblemDetails
+                {
+                    Title = "Reconciled transaction",
+                    Detail = reconciledEx.Message,
+                    Status = StatusCodes.Status409Conflict
+                };
+                problem.Extensions["code"] = ReconciledTransactionException.ErrorCode;
+                problem.Extensions["bankName"] = reconciledEx.BankName;
+                problem.Extensions["statementEndDate"] = reconciledEx.StatementEndDate.ToString("yyyy-MM-dd");
+                await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+                return true;
+            }
+
+            if (exception is BankReconciliationConflictException conflictEx)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
+                httpContext.Response.ContentType = "application/problem+json";
+                var problem = new ProblemDetails
+                {
+                    Title = "Reconciliation conflict",
+                    Detail = conflictEx.Message,
+                    Status = StatusCodes.Status409Conflict
+                };
+                problem.Extensions["code"] = conflictEx.Code;
+                if (conflictEx.ReconciliationId.HasValue)
+                    problem.Extensions["reconciliationId"] = conflictEx.ReconciliationId.Value;
+                await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+                return true;
+            }
+
             if (exception is TenantEntityNotFoundException notFoundEx)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;

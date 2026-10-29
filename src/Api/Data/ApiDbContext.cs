@@ -112,6 +112,7 @@ namespace Api.Data
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             EnforceBankAccountIdRequired();
+            EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
 
             if (_d1SyncContext == null)
@@ -127,6 +128,7 @@ namespace Api.Data
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
             EnforceBankAccountIdRequired();
+            EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
 
             if (_d1SyncContext == null)
@@ -137,6 +139,56 @@ namespace Api.Data
             var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
             pending.FlushTo(_d1SyncContext);
             return result;
+        }
+
+        /// <summary>
+        /// §5 backstop: reconciled GL lines cannot be deleted or edited (except clearing/setting BankReconciliationId).
+        /// </summary>
+        private void EnforceReconciledLineImmutability()
+        {
+            foreach (var entry in ChangeTracker.Entries<GeneralLedgerLine>())
+            {
+                if (entry.State == EntityState.Deleted)
+                {
+                    var originalReconId = entry.Property(e => e.BankReconciliationId).OriginalValue;
+                    if (originalReconId.HasValue)
+                        throw new System.InvalidOperationException(
+                            "This ledger line is reconciled and cannot be deleted. Undo the reconciliation first.");
+                    continue;
+                }
+
+                if (entry.State != EntityState.Modified)
+                    continue;
+
+                var stampedId = entry.Property(e => e.BankReconciliationId).OriginalValue;
+                if (!stampedId.HasValue)
+                    continue;
+
+                foreach (var property in entry.Properties)
+                {
+                    if (!property.IsModified)
+                        continue;
+                    if (property.Metadata.Name == nameof(GeneralLedgerLine.BankReconciliationId))
+                        continue;
+                    throw new System.InvalidOperationException(
+                        "This ledger line is reconciled and cannot be changed. Undo the reconciliation first.");
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<GeneralLedgerHeader>())
+            {
+                if (entry.State != EntityState.Deleted)
+                    continue;
+
+                var headerId = entry.Entity.Id;
+                var hasReconciled = GeneralLedgerLines.Local.Any(l =>
+                        l.GeneralLedgerHeaderId == headerId && l.BankReconciliationId != null)
+                    || GeneralLedgerLines.Any(l =>
+                        l.GeneralLedgerHeaderId == headerId && l.BankReconciliationId != null);
+                if (hasReconciled)
+                    throw new System.InvalidOperationException(
+                        "This ledger entry has reconciled lines and cannot be deleted. Undo the reconciliation first.");
+            }
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -584,6 +636,50 @@ namespace Api.Data
                 entity.HasOne(e => e.VoidGeneralLedgerHeader).WithMany().HasForeignKey(e => e.VoidGeneralLedgerHeaderId).OnDelete(DeleteBehavior.Restrict);
             });
 
+            builder.Entity<BankReconciliation>(entity =>
+            {
+                entity.Property(e => e.StatementEndingBalance).HasColumnType("decimal(18, 2)");
+                entity.Property(e => e.BeginningBalance).HasColumnType("decimal(18, 2)");
+                entity.Property(e => e.CreatedBy).HasMaxLength(100);
+                entity.Property(e => e.FinishedBy).HasMaxLength(100);
+                entity.Property(e => e.ReviewedBy).HasMaxLength(100);
+                entity.Property(e => e.UndoneBy).HasMaxLength(100);
+                entity.Property(e => e.UndoReason).HasMaxLength(500);
+
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => new { e.CompanyId, e.BankId, e.StatementEndDate }, "IX_BankReconciliation_Company_Bank_EndDate");
+                entity.HasIndex(e => new { e.CompanyId, e.BankId }, "UX_BankReconciliation_OneDraft")
+                    .IsUnique()
+                    .HasFilter("[Status] = 1");
+
+                entity.HasOne(e => e.Bank).WithMany().HasForeignKey(e => e.BankId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<BankReconciliationItem>(entity =>
+            {
+                entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => e.BankReconciliationId);
+                entity.HasIndex(e => new { e.BankReconciliationId, e.GeneralLedgerLineId }, "UX_BankReconciliationItem_Recon_Line")
+                    .IsUnique();
+
+                entity.HasOne(e => e.BankReconciliation).WithMany(r => r.Items)
+                    .HasForeignKey(e => e.BankReconciliationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.GeneralLedgerLine).WithMany()
+                    .HasForeignKey(e => e.GeneralLedgerLineId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<GeneralLedgerLine>(entity =>
+            {
+                entity.HasIndex(e => new { e.CompanyId, e.BankReconciliationId }, "IX_GeneralLedgerLine_Company_BankReconciliationId");
+                entity.HasOne(e => e.BankReconciliation).WithMany()
+                    .HasForeignKey(e => e.BankReconciliationId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
             builder.Seed();
             /* Medhat END */
         }
@@ -600,6 +696,8 @@ namespace Api.Data
         public virtual DbSet<AuditableEntity> AuditableEntities { get; set; }
         public virtual DbSet<Bank> Banks { get; set; }
         public virtual DbSet<BankTransaction> BankTransactions { get; set; }
+        public virtual DbSet<BankReconciliation> BankReconciliations { get; set; }
+        public virtual DbSet<BankReconciliationItem> BankReconciliationItems { get; set; }
         public virtual DbSet<Company> Companies { get; set; }
         public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }
