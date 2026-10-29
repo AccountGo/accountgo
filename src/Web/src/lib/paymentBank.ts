@@ -31,3 +31,26 @@ export function paymentBankChoice(
   }
   return options;
 }
+
+/** First line of the text the server builds from a bank account (mirrors BankPaymentInstructions.Heading). */
+export const GENERATED_BANK_INSTRUCTIONS_HEADING = 'Pay by bank transfer to:';
+
+/**
+ * What to send for an invoice's payment instructions. Text is sent as typed. A field the user cleared on purpose is
+ * sent as an empty string so the invoice prints nothing; a field never touched is left out so the workspace's payment
+ * bank or default text applies.
+ */
+export function paymentInstructionsPayload(text: string, clearedOnPurpose: boolean): string | undefined {
+  const trimmed = text.trim();
+  if (trimmed) return trimmed;
+  return clearedOnPurpose ? '' : undefined;
+}
+
+/**
+ * Duplicating an issued invoice: the stored text may be the bank details frozen at issue, with the old invoice number
+ * in its Reference line. That text is not carried over; the new draft resolves the bank details with its own number.
+ */
+export function carriedOverPaymentInstructions(stored: string | null | undefined): string {
+  if (!stored) return '';
+  return stored.trimStart().startsWith(GENERATED_BANK_INSTRUCTIONS_HEADING) ? '' : stored;
+}

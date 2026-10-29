@@ -5,6 +5,7 @@
 using System;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Sales;
 using Services.Banking;
 using Xunit;
 
@@ -137,5 +138,152 @@ public class BankPaymentInstructionsTests
         Assert.Equal(7, copy.PaymentBankId);
         Assert.Null(SalesInvoiceSettings.FromJson("{\"showNotes\":true}").PaymentBankId);
         Assert.Null(SalesInvoiceSettings.FromJson(new SalesInvoiceSettings().ToJson()).PaymentBankId);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Resolve_ClearedField_PrintsNothingEvenWithABankAndDefaultText(string cleared)
+    {
+        Assert.Null(BankPaymentInstructions.Resolve(cleared, Settings(), Bank(), PayeeName, InvoiceNo));
+        Assert.Null(BankPaymentInstructions.Resolve(cleared, Settings(bankId: null), null, PayeeName, InvoiceNo));
+    }
+
+    [Fact]
+    public void Resolve_NeverSetField_StillUsesTheWorkspaceDefaults()
+    {
+        Assert.Contains("Account number", BankPaymentInstructions.Resolve(null, Settings(), Bank(), PayeeName, InvoiceNo));
+        Assert.Equal(FreeTextDefault, BankPaymentInstructions.Resolve(null, Settings(bankId: null), null, PayeeName, InvoiceNo));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", "")]
+    [InlineData("   ", "")]
+    [InlineData("  Wire us  ", "Wire us")]
+    public void ForSave_KeepsAbsentAsNull_AndClearedAsEmpty(string? requested, string? expected)
+    {
+        Assert.Equal(expected, BankPaymentInstructions.ForSave(requested));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void ForPresentation_IssuedInvoiceNeverFallsBackToTheBankOrDefault(string? stored)
+    {
+        var text = BankPaymentInstructions.ForPresentation(true, stored, Settings(), Bank(), PayeeName, InvoiceNo);
+
+        Assert.Null(text);
+    }
+
+    [Fact]
+    public void ForPresentation_IssuedInvoicePrintsItsStoredTextEvenAfterTheWorkspaceChanges()
+    {
+        const string frozen = "Pay by bank transfer to:\nBank: Old Bank\nReference: INV-0042";
+
+        var text = BankPaymentInstructions.ForPresentation(true, frozen, Settings(), Bank(), PayeeName, InvoiceNo);
+
+        Assert.Equal(frozen, text);
+    }
+
+    [Fact]
+    public void ForPresentation_DraftResolvesLive()
+    {
+        var text = BankPaymentInstructions.ForPresentation(false, null, Settings(), Bank(), PayeeName, InvoiceNo);
+
+        Assert.Contains("Account number: 001-234-567", text);
+        Assert.Null(BankPaymentInstructions.ForPresentation(false, "", Settings(), Bank(), PayeeName, InvoiceNo));
+    }
+
+    private static SalesInvoiceHeader Invoice(SalesInvoiceStatus? status, string? instructions) => new()
+    {
+        Status = status,
+        PaymentInstructions = instructions,
+        No = InvoiceNo,
+    };
+
+    [Fact]
+    public void Capture_AtIssue_WritesTheResolvedTextWhenUnset()
+    {
+        var invoice = Invoice(SalesInvoiceStatus.Open, null);
+        var resolved = BankPaymentInstructions.Resolve(invoice.PaymentInstructions, Settings(), Bank(), PayeeName, InvoiceNo);
+
+        invoice.CapturePaymentInstructionsIfIssued(resolved);
+
+        Assert.Equal(resolved, invoice.PaymentInstructions);
+        Assert.Contains("Reference: INV-0042", invoice.PaymentInstructions);
+    }
+
+    [Fact]
+    public void Capture_AtIssue_KeepsAnExplicitlyClearedField()
+    {
+        var invoice = Invoice(SalesInvoiceStatus.Open, "");
+
+        invoice.CapturePaymentInstructionsIfIssued("Pay by bank transfer to:\nBank: First National");
+
+        Assert.Equal("", invoice.PaymentInstructions);
+    }
+
+    [Fact]
+    public void Capture_AtIssue_KeepsTheInvoicesOwnText()
+    {
+        var invoice = Invoice(SalesInvoiceStatus.Open, "Wire to our Singapore account");
+        var resolved = BankPaymentInstructions.Resolve(invoice.PaymentInstructions, Settings(), Bank(), PayeeName, InvoiceNo);
+
+        invoice.CapturePaymentInstructionsIfIssued(resolved);
+
+        Assert.Equal("Wire to our Singapore account", invoice.PaymentInstructions);
+    }
+
+    [Fact]
+    public void Capture_AtIssue_ReplacesACopyOfTheDefaultTextWithTheBankDetailsTheDraftShowed()
+    {
+        var invoice = Invoice(SalesInvoiceStatus.Open, FreeTextDefault);
+        var resolved = BankPaymentInstructions.Resolve(invoice.PaymentInstructions, Settings(), Bank(), PayeeName, InvoiceNo);
+
+        invoice.CapturePaymentInstructionsIfIssued(resolved);
+
+        Assert.Contains("Account number: 001-234-567", invoice.PaymentInstructions);
+    }
+
+    [Fact]
+    public void Capture_NothingToResolve_LeavesItNone()
+    {
+        var invoice = Invoice(SalesInvoiceStatus.Open, null);
+
+        invoice.CapturePaymentInstructionsIfIssued(null);
+
+        Assert.Null(invoice.PaymentInstructions);
+        Assert.Null(BankPaymentInstructions.ForPresentation(true, invoice.PaymentInstructions, Settings(), Bank(), PayeeName, InvoiceNo));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(SalesInvoiceStatus.Draft)]
+    [InlineData(SalesInvoiceStatus.Void)]
+    public void Capture_DoesNothingWhileDraftOrVoid(SalesInvoiceStatus? status)
+    {
+        var invoice = Invoice(status, null);
+
+        invoice.CapturePaymentInstructionsIfIssued("Pay by bank transfer to:");
+
+        Assert.Null(invoice.PaymentInstructions);
+    }
+
+    [Fact]
+    public void IssuedInvoice_IsUnaffectedWhenThePaymentBankChangesAfterIssue()
+    {
+        var invoice = Invoice(SalesInvoiceStatus.Open, null);
+        invoice.CapturePaymentInstructionsIfIssued(
+            BankPaymentInstructions.Resolve(invoice.PaymentInstructions, Settings(), Bank(), PayeeName, InvoiceNo));
+        var printedAtIssue = invoice.PaymentInstructions;
+
+        var laterBank = Bank();
+        laterBank.Number = "999-999-999";
+        var printedLater = BankPaymentInstructions.ForPresentation(
+            true, invoice.PaymentInstructions, Settings(), laterBank, PayeeName, InvoiceNo);
+
+        Assert.Equal(printedAtIssue, printedLater);
+        Assert.DoesNotContain("999-999-999", printedLater);
     }
 }

@@ -82,7 +82,8 @@ namespace Api.Service
                 ShippingHandlingCharge = salesInvoice.ShippingHandlingCharge,
                 Notes = salesInvoice.Notes,
                 PaymentInstructions = salesInvoice.PaymentInstructions,
-                EffectivePaymentInstructions = Services.Banking.BankPaymentInstructions.Resolve(
+                EffectivePaymentInstructions = Services.Banking.BankPaymentInstructions.ForPresentation(
+                    salesInvoice.Status is not (null or Core.Domain.SalesInvoiceStatus.Draft),
                     salesInvoice.PaymentInstructions, invoiceSettings, paymentBank, seller.Name, salesInvoice.No),
                 Posted = salesInvoice.GeneralLedgerHeaderId != null,
                 CompanyName = defaultCompany?.Name,
