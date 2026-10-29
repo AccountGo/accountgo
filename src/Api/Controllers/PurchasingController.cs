@@ -5,6 +5,7 @@ using Core.Domain.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Services.Administration;
+using Services.Banking;
 using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
@@ -29,6 +30,7 @@ namespace Api.Controllers
         private readonly IPurchasingService _purchasingService;
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
+        private readonly IBankAccountService _bankAccounts;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly Api.Data.ApiDbContext _db;
@@ -38,6 +40,7 @@ namespace Api.Controllers
             IPurchasingService purchasingService,
             IFinancialService financialService,
             IInventoryService inventoryService,
+            IBankAccountService bankAccounts,
             Core.Tenancy.ITenantGuard tenantGuard,
             Core.Tenancy.ITenantContext tenantContext,
             Api.Data.ApiDbContext db,
@@ -47,6 +50,7 @@ namespace Api.Controllers
             _purchasingService = purchasingService;
             _financialService = financialService;
             _inventoryService = inventoryService;
+            _bankAccounts = bankAccounts;
             _tenantGuard = tenantGuard;
             _tenantContext = tenantContext;
             _db = db;
@@ -906,24 +910,16 @@ namespace Api.Controllers
         public IActionResult PayBill([FromBody] Dto.Purchasing.PayBill paymentDto)
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(paymentDto.BillId, nameof(paymentDto.BillId));
-            var cashAccounts = PaymentAccountsQuery().ToList();
+
+            // #413 1C: bank → Accounting GL AccountId → payment default → unlinked cash only when no banks exist.
             int accountId;
-            if (paymentDto.AccountId > 0)
+            try
             {
-                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(paymentDto.AccountId.Value, nameof(paymentDto.AccountId));
-                if (!cashAccounts.Any(a => a.Id == paymentDto.AccountId))
-                    return BadRequest(new { message = "Pay from a cash or bank account." });
-                accountId = paymentDto.AccountId.Value;
+                accountId = _bankAccounts.ResolvePaymentAccountId(paymentDto.BankAccountId, paymentDto.AccountId);
             }
-            else
+            catch (InvalidOperationException ex)
             {
-                var bankAccountId = _financialService.GetCashAndBanks()
-                    .Select(b => b.AccountId)
-                    .FirstOrDefault(id => id.HasValue && cashAccounts.Any(a => a.Id == id));
-                var fallback = bankAccountId ?? cashAccounts.Select(a => (int?)a.Id).FirstOrDefault();
-                if (fallback == null)
-                    return BadRequest(new { message = "No cash or bank account is set up to pay from." });
-                accountId = fallback.Value;
+                return BadRequest(new { message = ex.Message });
             }
 
             return BillAction(paymentDto.BillId, () => _purchasingService.PayBill(paymentDto.BillId, accountId, paymentDto.Amount,

@@ -475,6 +475,88 @@ namespace Services.Banking
                     $"Account is linked as GL account for Bank '{bank.Name}'. Keep it under a cash account.");
         }
 
+        public int ResolveDepositAccountId(int? bankAccountId)
+        {
+            EnsureCompany();
+            if (bankAccountId.HasValue)
+                return RequireActiveBank(bankAccountId.Value).AccountId!.Value;
+
+            var receiptDefault = ActiveBanks()
+                .OrderByDescending(b => b.IsDefaultForReceipts)
+                .ThenBy(b => b.Name)
+                .FirstOrDefault();
+            if (receiptDefault != null)
+                return receiptDefault.AccountId
+                    ?? throw new InvalidOperationException("That bank account has no posting account.");
+
+            return FallbackPostableCashAccountId("No cash or bank account is set up to receive payments.");
+        }
+
+        public int ResolvePaymentAccountId(int? bankAccountId, int? accountId)
+        {
+            EnsureCompany();
+            if (bankAccountId.HasValue)
+                return RequireActiveBank(bankAccountId.Value).AccountId!.Value;
+
+            if (accountId.HasValue && accountId.Value > 0)
+            {
+                // Accounting only: Invoicing & Bills pays through bank accounts (same gate as PostingAccountId).
+                if (!HasFinancialsModule())
+                    throw new InvalidOperationException("Paying from a GL account requires the Financials module.");
+
+                var account = _accounts.GetById(accountId.Value);
+                if (account == null || account.CompanyId != _tenant.CompanyId)
+                    throw new TenantEntityNotFoundException(nameof(Account), accountId.Value, nameof(accountId));
+                if (account.ArchivedAt.HasValue || !IsPostableCashAccount(account))
+                    throw new InvalidOperationException("Pay from a cash or bank account.");
+                return account.Id;
+            }
+
+            var paymentDefault = ActiveBanks()
+                .OrderByDescending(b => b.IsDefaultForPayments)
+                .ThenBy(b => b.Name)
+                .FirstOrDefault();
+            if (paymentDefault != null)
+                return paymentDefault.AccountId
+                    ?? throw new InvalidOperationException("That bank account has no posting account.");
+
+            return FallbackPostableCashAccountId("No cash or bank account is set up to pay from.");
+        }
+
+        public Bank RequireActiveBank(int bankId)
+        {
+            var bank = RequireBank(bankId);
+            if (bank.ArchivedAt != null)
+                throw new InvalidOperationException("That bank account is archived.");
+            if (!bank.AccountId.HasValue)
+                throw new InvalidOperationException("That bank account has no posting account.");
+            return bank;
+        }
+
+        private IQueryable<Bank> ActiveBanks() =>
+            _banks.Table.Where(b => b.ArchivedAt == null && b.AccountId != null);
+
+        private int FallbackPostableCashAccountId(string missingMessage)
+        {
+            var account = PostableCashAccounts().OrderBy(a => a.AccountCode).FirstOrDefault();
+            if (account == null)
+                throw new InvalidOperationException(missingMessage);
+            return account.Id;
+        }
+
+        private bool IsPostableCashAccount(Account account)
+        {
+            if (account.ArchivedAt.HasValue)
+                return false;
+            if (_accounts.Table.Any(a => a.ParentAccountId == account.Id))
+                return false;
+            if (!TryParseCode(account.AccountCode, out var code)
+                || code < BankCashAccountCodeAllocator.CashCodeMin
+                || code > BankCashAccountCodeAllocator.CashCodeMax)
+                return false;
+            return IsCashOrCashChild(account);
+        }
+
         private Account ResolveAccountForCreate(string bankName)
         {
             var existingBanks = _banks.Table.Any();
