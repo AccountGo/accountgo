@@ -108,11 +108,10 @@ export const UserProfileSection: React.FC<UserProfileSectionProps> = ({
         aria-haspopup="menu"
         aria-label={collapsed ? user.name || user.email : undefined}
         title={collapsed ? user.name || user.email : undefined}
-        className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all duration-150 text-left cursor-pointer ${
-          open
+        className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all duration-150 text-left cursor-pointer ${open
             ? 'bg-[var(--bg-surface-hover)] shadow-lg'
             : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)]'
-        } ${collapsed ? 'justify-center p-2' : ''}`}
+          } ${collapsed ? 'justify-center p-2' : ''}`}
       >
         {/* User Avatar with Online Dot */}
         <div className="relative flex-shrink-0">
@@ -147,11 +146,10 @@ export const UserProfileSection: React.FC<UserProfileSectionProps> = ({
           ref={menuRef}
           role="menu"
           aria-label="User profile menu"
-          className={`absolute z-50 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-2xl shadow-2xl shadow-black/80 p-1.5 text-[var(--text-main)] transition-all ring-1 ring-white/10 ${
-            collapsed
+          className={`absolute z-50 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-2xl shadow-2xl shadow-black/80 p-1.5 text-[var(--text-main)] transition-all ring-1 ring-white/10 ${collapsed
               ? 'left-full ml-3 bottom-0 w-72'
               : 'left-0 right-0 bottom-full mb-2 w-full'
-          }`}
+            }`}
         >
           {/* Header Info Card */}
           <div className="p-3 flex items-center gap-3">
@@ -216,11 +214,10 @@ export const UserProfileSection: React.FC<UserProfileSectionProps> = ({
                       key={opt.id}
                       type="button"
                       onClick={() => setScheme(opt.id as SchemeId)}
-                      className={`flex items-center justify-center gap-1 py-1 px-1.5 rounded-md transition-all cursor-pointer ${
-                        active
+                      className={`flex items-center justify-center gap-1 py-1 px-1.5 rounded-md transition-all cursor-pointer ${active
                           ? 'bg-[var(--brand-primary)] text-[var(--brand-text)] font-semibold shadow-xs'
                           : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-                      }`}
+                        }`}
                       title={`${opt.label} mode`}
                     >
                       <Icon className="w-3 h-3" />
@@ -246,11 +243,10 @@ export const UserProfileSection: React.FC<UserProfileSectionProps> = ({
                         key={t.id}
                         type="button"
                         onClick={() => setTheme(t.id as ThemeId)}
-                        className={`group relative flex items-center justify-center p-1 rounded-lg transition-all cursor-pointer ${
-                          isSelected
+                        className={`group relative flex items-center justify-center p-1 rounded-lg transition-all cursor-pointer ${isSelected
                             ? 'ring-2 ring-[var(--brand-primary)] bg-[var(--brand-subtle)]'
                             : 'hover:bg-[var(--bg-surface-hover)]'
-                        }`}
+                          }`}
                         title={t.label}
                       >
                         <span
@@ -264,18 +260,6 @@ export const UserProfileSection: React.FC<UserProfileSectionProps> = ({
                   })}
                 </div>
               </div>
-            </div>
-
-            <div className="h-px bg-[var(--bg-subtle)] my-1 mx-1" />
-
-            <div className="px-3 py-1.5 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-              <span className="flex items-center gap-1.5">
-                <Command className="w-3 h-3 text-[var(--text-muted)]" />
-                Command Menu
-              </span>
-              <kbd className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-subtle)] text-[var(--text-muted)]">
-                ⌘K
-              </kbd>
             </div>
 
             <div className="h-px bg-[var(--bg-subtle)] my-1 mx-1" />
