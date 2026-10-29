@@ -9,6 +9,7 @@ using System.Linq;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Security;
 using Core.Entitlements;
 using Core.Tenancy;
 using Dto.Banking;
@@ -43,7 +44,7 @@ namespace Services.Banking
             _tenant = tenant;
         }
 
-        public BankAccountsListDto List(bool includeArchived, bool includeFullNumbers)
+        public BankAccountsListDto List(bool includeArchived, bool includeFullNumbers, bool includeCashHistoryCodes)
         {
             EnsureCompany();
             var query = _banks.Table.AsQueryable();
@@ -54,7 +55,7 @@ namespace Services.Banking
             return new BankAccountsListDto
             {
                 Accounts = banks.Select(b => ToDto(b, includeFullNumbers)).ToList(),
-                UnassignedCash = GetCashHistory(includeCodes: true)
+                UnassignedCash = GetCashHistory(includeCodes: includeCashHistoryCodes)
             };
         }
 
@@ -155,7 +156,7 @@ namespace Services.Banking
                     ReceiptCount = receiptCount,
                     PaymentCount = paymentCount,
                     OtherLineCount = otherCount,
-                    Balance = account.GetBalance()
+                    Balance = BookBalance(account)
                 });
             }
 
@@ -178,7 +179,7 @@ namespace Services.Banking
                     a.Id,
                     Code = a.AccountCode,
                     Name = a.AccountName,
-                    Balance = a.GetBalance()
+                    Balance = BookBalance(a)
                 })
                 .ToList();
         }
@@ -188,6 +189,9 @@ namespace Services.Banking
             EnsureCompany();
             var name = RequireUniqueName(request.Name, exceptBankId: null);
             var type = ParseType(request.Type);
+
+            if (request.PostingAccountId.HasValue && !HasFinancialsModule())
+                throw new InvalidOperationException("Linking a posting account requires the Financials module.");
 
             Account account;
             if (request.AdoptAccountId.HasValue)
@@ -250,6 +254,8 @@ namespace Services.Banking
 
             if (request.PostingAccountId.HasValue && request.PostingAccountId != bank.AccountId)
             {
+                if (!HasFinancialsModule())
+                    throw new InvalidOperationException("Linking a posting account requires the Financials module.");
                 if (bank.AccountId.HasValue && LinesForAccount(bank.AccountId.Value).Any())
                     throw new InvalidOperationException("The posting account can only be changed while the bank's current account has no ledger lines.");
                 bank.AccountId = EnsureEligiblePostingAccount(request.PostingAccountId.Value, exceptBankId: id).Id;
@@ -271,7 +277,7 @@ namespace Services.Banking
             return ToDto(bank, includeFullNumbers);
         }
 
-        public BankAccountDto Archive(int id, bool includeFullNumbers)
+        public BankAccountDto Archive(int id, bool includeFullNumbers, bool confirmNonZeroBalance = false)
         {
             var bank = RequireBank(id);
             if (bank.ArchivedAt != null)
@@ -280,6 +286,8 @@ namespace Services.Banking
             var activeCount = _banks.Table.Count(b => b.ArchivedAt == null);
             if (activeCount <= 1)
                 throw new InvalidOperationException("Keep at least one active bank account while receipts or bill payments need a default.");
+
+            EnsureArchiveBalanceAllowed(bank, confirmNonZeroBalance);
 
             bank.ArchivedAt = DateTime.UtcNow;
             bank.IsActive = false;
@@ -367,26 +375,14 @@ namespace Services.Banking
             var hasHistory = bank.AccountId.HasValue && LinesForAccount(bank.AccountId.Value).Any();
             if (hasHistory)
             {
-                Archive(id, includeFullNumbers: false);
+                // Explicit delete counts as confirmation for a non-zero I&B balance.
+                Archive(id, includeFullNumbers: false, confirmNonZeroBalance: true);
                 return;
             }
 
-            // Dedicated account created for this bank (name match, no other banks) is removed with it.
-            Account? account = null;
-            if (bank.AccountId.HasValue)
-                account = _accounts.GetById(bank.AccountId.Value);
-
-            var accountId = bank.AccountId;
+            // 1B: always leave the GL account in place. Takeover renames the account to the
+            // bank's name, so "name match ⇒ dedicated" would delete cash history accounts.
             _banks.Delete(bank);
-
-            if (account != null
-                && accountId.HasValue
-                && !_banks.Table.Any(b => b.AccountId == accountId)
-                && string.Equals(account.AccountName, bank.Name, StringComparison.OrdinalIgnoreCase)
-                && !LinesForAccount(account.Id).Any())
-            {
-                _accounts.Delete(account);
-            }
         }
 
         public Account EnsureEligiblePostingAccount(int accountId, int? exceptBankId)
@@ -432,9 +428,7 @@ namespace Services.Banking
             if (string.IsNullOrEmpty(newName))
                 throw new InvalidOperationException("Bank account name is required.");
 
-            if (_banks.Table.Any(b =>
-                    b.Id != bank.Id
-                    && string.Equals(b.Name, newName, StringComparison.OrdinalIgnoreCase)))
+            if (NameTaken(newName, exceptBankId: bank.Id))
                 throw new InvalidOperationException($"A bank account named '{newName}' already exists.");
 
             bank.Name = newName;
@@ -574,7 +568,7 @@ namespace Services.Banking
                 AccountName = account?.AccountName,
                 IsDefaultForReceipts = bank.IsDefaultForReceipts,
                 IsDefaultForPayments = bank.IsDefaultForPayments,
-                BookBalance = account?.GetBalance() ?? 0m,
+                BookBalance = account == null ? 0m : BookBalance(account),
                 ArchivedAt = bank.ArchivedAt,
                 OpeningBalance = bank.OpeningBalance,
                 OpeningBalanceDate = bank.OpeningBalanceDate,
@@ -607,12 +601,62 @@ namespace Services.Banking
             if (string.IsNullOrEmpty(name))
                 throw new InvalidOperationException("Bank account name is required.");
 
-            if (_banks.Table.Any(b =>
-                    (!exceptBankId.HasValue || b.Id != exceptBankId.Value)
-                    && string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase)))
+            if (NameTaken(name, exceptBankId))
                 throw new InvalidOperationException($"A bank account named '{name}' already exists.");
 
             return name;
+        }
+
+        /// <summary>
+        /// Case-insensitive name clash check that EF Core can translate (SQLite LOWER).
+        /// Do not use <see cref="string.Equals(string, string, StringComparison)"/> in IQueryable.
+        /// </summary>
+        private bool NameTaken(string name, int? exceptBankId)
+        {
+            var nameKey = name.ToLower();
+            return _banks.Table.Any(b =>
+                (!exceptBankId.HasValue || b.Id != exceptBankId.Value)
+                && b.Name.ToLower() == nameKey);
+        }
+
+        private void EnsureArchiveBalanceAllowed(Bank bank, bool confirmNonZeroBalance)
+        {
+            if (!bank.AccountId.HasValue)
+                return;
+
+            var account = _accounts.GetById(bank.AccountId.Value);
+            if (account == null)
+                return;
+
+            var balance = BookBalance(account);
+            if (balance == 0m)
+                return;
+
+            var amount = balance.ToString("0.00", CultureInfo.InvariantCulture);
+            if (HasFinancialsModule())
+                throw new InvalidOperationException($"Move the remaining {amount} to another account first.");
+
+            if (!confirmNonZeroBalance)
+                throw new BankArchiveConfirmationRequiredException(balance);
+        }
+
+        /// <summary>Book balance from GL lines (does not rely on <see cref="Account.GeneralLedgerLines"/> being loaded).</summary>
+        private decimal BookBalance(Account account)
+        {
+            var lines = LinesForAccount(account.Id).ToList();
+            var dr = lines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount);
+            var cr = lines.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount);
+            var isDebitNormal = account.AccountClass?.NormalBalance == "Dr"
+                || (account.AccountClass == null && account.DrOrCrSide == DrOrCrSide.Dr);
+            return isDebitNormal ? dr - cr : cr - dr;
+        }
+
+        private bool HasFinancialsModule()
+        {
+            EnsureCompany();
+            return _entitlements.Evaluate(
+                _tenant.RequireCompanyId(),
+                new EntitlementAction.Module(ModuleAccess.Read, SystemModules.Financials)).Allowed;
         }
 
         private IEnumerable<Account> PostableCashAccounts()

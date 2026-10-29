@@ -42,7 +42,10 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsView)]
         public IActionResult ListAccounts([FromQuery] bool includeArchived = false)
         {
-            return Ok(_banks.List(includeArchived, includeFullNumbers: CanManage()));
+            return Ok(_banks.List(
+                includeArchived,
+                includeFullNumbers: CanManage(),
+                includeCashHistoryCodes: HasFinancialsModule()));
         }
 
         [HttpGet("Accounts/Picker")]
@@ -124,18 +127,27 @@ namespace Api.Controllers
 
         [HttpPost("Accounts/{id:int}/Archive")]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult Archive(int id)
+        public IActionResult Archive(int id, [FromQuery] bool confirm = false)
         {
             try
             {
                 using var tx = BeginWriteTransaction();
-                var archived = _banks.Archive(id, includeFullNumbers: true);
+                var archived = _banks.Archive(id, includeFullNumbers: true, confirmNonZeroBalance: confirm);
                 tx.Commit();
                 return Ok(archived);
             }
             catch (TenantEntityNotFoundException)
             {
                 return NotFound(new { message = "Bank account not found" });
+            }
+            catch (BankArchiveConfirmationRequiredException ex)
+            {
+                return Conflict(new
+                {
+                    code = "ARCHIVE_CONFIRM_REQUIRED",
+                    message = ex.Message,
+                    balance = ex.Balance
+                });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
