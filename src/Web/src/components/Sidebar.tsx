@@ -6,6 +6,7 @@ import {
   Receipt,
   ShoppingBag,
   Package,
+  Landmark,
   BarChart3,
   Settings,
   Users,
@@ -69,6 +70,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: ShoppingBag,
       module: 'purchases',
       permission: 'purchases.bills.view',
+    },
+    {
+      name: 'Banking',
+      path: `/org/${currentOrg.slug}/banking`,
+      icon: Landmark,
+      module: ['sales', 'purchases', 'financials'],
+      permission: 'banking.accounts.view',
     },
     {
       // Items are shared by sales and purchases, so they live here rather than under either.

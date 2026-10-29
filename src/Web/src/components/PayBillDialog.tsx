@@ -1,7 +1,9 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { localToday } from '../lib/businessDays';
+import { pickDefaultPaymentBankId } from '../lib/bankingForm';
 import { Loader2, Wallet, X } from 'lucide-react';
 import { Bill, BillAccount } from '../types';
+import type { BankAccountPickerItem } from '../types/banking';
 import { useAuth } from '../auth/AuthContext';
 import { ModalShell } from './ModalShell';
 
@@ -10,19 +12,21 @@ const inputClass =
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
 
 /**
- * Records a payment on an approved bill, from a cash or bank account. A payment can't be more than what is still
- * owed; the server checks that too.
+ * Records a payment on an approved bill. Prefers bank accounts from Banking/Picker; falls back to
+ * Purchasing/PaymentAccounts GL cash when no banks exist.
  */
 export const PayBillDialog: React.FC<{
   bill: Bill;
   currencySymbol: string;
   formatCurrency: (value: number) => string;
-  /** The bill with the payment recorded. */
   onPaid: (bill: Bill) => void;
   onClose: () => void;
 }> = ({ bill, currencySymbol, formatCurrency, onPaid, onClose }) => {
   const { authFetch } = useAuth();
-  const [accounts, setAccounts] = useState<BillAccount[] | null>(null);
+  const [banks, setBanks] = useState<BankAccountPickerItem[] | null>(null);
+  const [glAccounts, setGlAccounts] = useState<BillAccount[] | null>(null);
+  /** Bank id, or `gl:{accountId}` for Accounting "Other cash accounts". */
+  const [payFromKey, setPayFromKey] = useState('');
   const [accountId, setAccountId] = useState<number | ''>('');
   const [amount, setAmount] = useState(bill.balanceDue.toFixed(2));
   const [date, setDate] = useState(localToday);
@@ -44,10 +48,31 @@ export const PayBillDialog: React.FC<{
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const pickerRes = await authFetch('/api/Banking/Accounts/Picker');
+      if (cancelled) return;
+      const pickerList: BankAccountPickerItem[] = pickerRes.ok ? await pickerRes.json() : [];
+      const bankOnly = pickerList.filter((b) => !b.group);
+      const otherCash = pickerList.filter((b) => b.group);
+      if (bankOnly.length > 0 || otherCash.length > 0) {
+        setBanks(pickerList);
+        setGlAccounts([]);
+        const preferred = pickDefaultPaymentBankId(bankOnly);
+        if (preferred != null) {
+          setPayFromKey(String(preferred));
+        } else if (otherCash[0]?.accountId != null) {
+          setPayFromKey(`gl:${otherCash[0].accountId}`);
+        } else {
+          setPayFromKey('');
+        }
+        setAccountId('');
+        return;
+      }
+
       const res = await authFetch('/api/Purchasing/PaymentAccounts');
       if (cancelled) return;
       const list: BillAccount[] = res.ok ? await res.json() : [];
-      setAccounts(list);
+      setBanks([]);
+      setGlAccounts(list);
       if (list.length > 0) setAccountId(list[0].id);
     })();
     return () => {
@@ -70,6 +95,8 @@ export const PayBillDialog: React.FC<{
     setIsSaving(true);
     setError(null);
     try {
+      const usingBank = banks && banks.length > 0;
+      const glFromPicker = payFromKey.startsWith('gl:');
       const res = await authFetch('/api/Purchasing/PayBill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,7 +104,12 @@ export const PayBillDialog: React.FC<{
           billId: bill.id,
           amount: value,
           date,
-          accountId: accountId || null,
+          bankAccountId: usingBank && !glFromPicker && payFromKey ? Number(payFromKey) : null,
+          accountId: glFromPicker
+            ? Number(payFromKey.slice(3))
+            : !usingBank
+              ? accountId || null
+              : null,
           paymentMethod: method,
           referenceNo: reference.trim() || null,
           memo: memo.trim() || null,
@@ -93,6 +125,10 @@ export const PayBillDialog: React.FC<{
       setIsSaving(false);
     }
   };
+
+  const banksReady = banks !== null;
+  const glReady = glAccounts !== null;
+  const usingBanks = banksReady && (banks?.length ?? 0) > 0;
 
   return (
     <ModalShell
@@ -169,28 +205,57 @@ export const PayBillDialog: React.FC<{
 
           <div>
             <label htmlFor={`${titleId}-account`} className={labelClass}>
-              Paid from
+              Pay from
             </label>
-            {accounts === null ? (
+            {!banksReady || (!usingBanks && !glReady) ? (
               <div className="flex h-[42px] items-center gap-2 text-xs text-[var(--text-muted)]">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 Loading accounts...
               </div>
-            ) : accounts.length === 0 ? (
-              <p className="text-xs text-rose-500">No cash or bank account is set up to pay from.</p>
-            ) : (
+            ) : usingBanks ? (
+              <select
+                id={`${titleId}-account`}
+                value={payFromKey}
+                onChange={(e) => setPayFromKey(e.target.value)}
+                className={inputClass}
+                required
+              >
+                {banks!
+                  .filter((b) => !b.group)
+                  .map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                      {b.accountNumberMasked ? ` · ${b.accountNumberMasked}` : ''}
+                      {b.isDefaultForPayments ? ' (default)' : ''}
+                    </option>
+                  ))}
+                {banks!.some((b) => b.group) && (
+                  <optgroup label="Other cash accounts">
+                    {banks!
+                      .filter((b) => b.group && b.accountId != null)
+                      .map((b) => (
+                        <option key={`g-${b.accountId}`} value={`gl:${b.accountId}`}>
+                          {b.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
+            ) : glAccounts && glAccounts.length > 0 ? (
               <select
                 id={`${titleId}-account`}
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : '')}
                 className={inputClass}
               >
-                {accounts.map((a) => (
+                {glAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.code} · {a.name}
                   </option>
                 ))}
               </select>
+            ) : (
+              <p className="text-xs text-rose-500">No cash or bank account is set up to pay from.</p>
             )}
           </div>
 
@@ -241,7 +306,7 @@ export const PayBillDialog: React.FC<{
             </button>
             <button
               type="submit"
-              disabled={isSaving || accounts?.length === 0}
+              disabled={isSaving || (usingBanks ? !payFromKey : glAccounts?.length === 0)}
               className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] transition disabled:opacity-50 shadow-sm"
             >
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
