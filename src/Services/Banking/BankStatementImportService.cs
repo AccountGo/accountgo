@@ -23,6 +23,8 @@ namespace Services.Banking
         public const string StatusUnmatched = "unmatched";
         public const string StatusMatched = "matched";
         public const string StatusAll = "all";
+        public const string AlreadyImportedMessage = "Those statement lines were already imported.";
+        private const string StatementLineUniqueIndexName = "UX_BankStatementLine_Company_Bank_Source_External";
 
         private readonly IRepository<BankStatementImport> _imports;
         private readonly IRepository<BankStatementLine> _lines;
@@ -105,22 +107,29 @@ namespace Services.Banking
             };
             _imports.Insert(import);
 
-            foreach (var row in ready)
+            var newLines = ready.Select(row => new BankStatementLine
             {
-                _lines.Insert(new BankStatementLine
-                {
-                    CompanyId = companyId,
-                    BankId = bank.Id,
-                    BankStatementImportId = import.Id,
-                    Source = source,
-                    ExternalId = row.ExternalId,
-                    PostedDate = row.PostedDate!.Value.Date,
-                    Amount = row.Amount!.Value,
-                    Payee = row.Payee,
-                    Memo = row.Memo,
-                    Reference = row.Reference,
-                    CreatedAt = now
-                });
+                CompanyId = companyId,
+                BankId = bank.Id,
+                BankStatementImportId = import.Id,
+                Source = source,
+                ExternalId = row.ExternalId,
+                PostedDate = row.PostedDate!.Value.Date,
+                Amount = row.Amount!.Value,
+                Payee = row.Payee,
+                Memo = row.Memo,
+                Reference = row.Reference,
+                CreatedAt = now
+            }).ToList();
+
+            try
+            {
+                _lines.Insert(newLines);
+            }
+            catch (Exception ex) when (IsDuplicateStatementLine(ex))
+            {
+                // A concurrent import of the same file won the unique (bank, source, external id) index.
+                throw new InvalidOperationException(AlreadyImportedMessage, ex);
             }
 
             result.ImportId = import.Id;
@@ -269,13 +278,17 @@ namespace Services.Banking
                 return 0;
 
             var plan = ComputeAutoMatches(bank, unmatched);
+            BankStatementLine? lastMatched = null;
             foreach (var line in unmatched)
             {
                 if (!plan.TryGetValue(line.Id, out var glLineId))
                     continue;
                 line.MatchedGeneralLedgerLineId = glLineId;
-                _lines.Update(line);
+                lastMatched = line;
             }
+            // The repository saves every tracked change, so one Update persists the whole plan.
+            if (lastMatched != null)
+                _lines.Update(lastMatched);
             return plan.Count;
         }
 
@@ -361,16 +374,14 @@ namespace Services.Banking
                 .Where(r => !claimed.Contains(r.LineId) && r.Date.Date >= windowStart && r.Date.Date <= windowEnd)
                 .ToList();
 
-            // A voided entry and its reversal net to zero and never appear on a statement.
-            var headerIds = rows.Select(r => r.HeaderId).ToHashSet();
-            var voidPairHeaders = new HashSet<int>();
+            // A voided entry and its reversal never appear on a statement. The reversal can be dated outside the
+            // window (or in another period), so a header counts as voided when any entry reverses it, wherever dated.
+            var headerIds = rows.Select(r => r.HeaderId).Distinct().ToList();
+            var voidPairHeaders = new HashSet<int>(VoidedHeaderIds(headerIds));
             foreach (var row in rows)
             {
-                if (row.ReversedGeneralLedgerHeaderId is { } original && headerIds.Contains(original))
-                {
+                if (row.ReversedGeneralLedgerHeaderId.HasValue)
                     voidPairHeaders.Add(row.HeaderId);
-                    voidPairHeaders.Add(original);
-                }
             }
 
             return rows
@@ -384,6 +395,21 @@ namespace Services.Banking
                 .ToList();
         }
 
+        /// <summary>Headers among <paramref name="headerIds"/> that some reversing entry points at, whatever its date.</summary>
+        private HashSet<int> VoidedHeaderIds(IReadOnlyCollection<int> headerIds)
+        {
+            if (headerIds.Count == 0)
+                return new HashSet<int>();
+
+            var companyId = _tenant.RequireCompanyId();
+            return _glHeaders.Table
+                .Where(h => h.CompanyId == companyId
+                            && h.ReversedGeneralLedgerHeaderId != null
+                            && headerIds.Contains(h.ReversedGeneralLedgerHeaderId.Value))
+                .Select(h => h.ReversedGeneralLedgerHeaderId!.Value)
+                .ToHashSet();
+        }
+
         private GeneralLedgerLine RequireMatchableLedgerLine(Bank bank, BankStatementLine statementLine, int glLineId)
         {
             var glLine = _glLines.GetById(glLineId);
@@ -393,6 +419,11 @@ namespace Services.Banking
                 throw new InvalidOperationException("That ledger line is not on this bank account.");
             if (glLine.BankReconciliationId.HasValue)
                 throw new InvalidOperationException("That ledger line is already cleared by a reconciliation.");
+
+            var header = _glHeaders.GetById(glLine.GeneralLedgerHeaderId);
+            var isReversalEntry = header != null && header.ReversedGeneralLedgerHeaderId.HasValue;
+            if (isReversalEntry || VoidedHeaderIds(new[] { glLine.GeneralLedgerHeaderId }).Count > 0)
+                throw new InvalidOperationException("That ledger line belongs to a voided entry.");
 
             var signed = glLine.DrCr == DrOrCrSide.Dr ? glLine.Amount : -glLine.Amount;
             if (signed != statementLine.Amount)
@@ -439,6 +470,25 @@ namespace Services.Banking
                 result.Add(new ClassifiedRow(row, RowStatus.Ready));
             }
             return result;
+        }
+
+        /// <summary>
+        /// True when the failure is the unique (bank, source, external id) index rejecting a row. Matches the SQL Server
+        /// message (index name) and the SQLite message ("UNIQUE constraint failed: BankStatementLine...").
+        /// </summary>
+        internal static bool IsDuplicateStatementLine(Exception exception)
+        {
+            for (var current = exception; current != null; current = current.InnerException)
+            {
+                var message = current.Message ?? string.Empty;
+                if (message.Contains(StatementLineUniqueIndexName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase)
+                    && message.Contains(nameof(BankStatementLine), StringComparison.OrdinalIgnoreCase)
+                    && message.Contains(nameof(BankStatementLine.ExternalId), StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         private HashSet<string> ExistingExternalIds(int bankId, BankStatementSources source)

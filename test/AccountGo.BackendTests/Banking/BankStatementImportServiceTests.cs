@@ -3,12 +3,15 @@
 
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
 using Core.Tenancy;
 using Dto.Banking;
+using Moq;
 using Services.Banking;
 using Xunit;
 
@@ -357,5 +360,158 @@ public class BankStatementImportServiceTests
         Assert.Throws<TenantEntityNotFoundException>(() => other.Unmatch(line.Id));
         Assert.Throws<TenantEntityNotFoundException>(() =>
             other.CreateTransaction(line.Id, new CreateTransactionFromStatementLineRequest { Kind = (int)BankTransactionKinds.Fee }));
+    }
+
+    private static GeneralLedgerLine PostReversal(BankingTestHarness harness, GeneralLedgerLine original, DateTime date)
+    {
+        var header = new GeneralLedgerHeader
+        {
+            Id = harness.Repos.NextGlHeaderId(),
+            CompanyId = 1,
+            DocumentType = DocumentTypes.JournalEntry,
+            Date = date.Date,
+            Description = "void",
+            ReversedGeneralLedgerHeaderId = original.GeneralLedgerHeaderId
+        };
+        harness.Repos.GlHeaders.Insert(header);
+        var line = new GeneralLedgerLine
+        {
+            Id = harness.Repos.NextGlLineId(),
+            CompanyId = 1,
+            GeneralLedgerHeaderId = header.Id,
+            AccountId = original.AccountId,
+            DrCr = original.DrCr == DrOrCrSide.Dr ? DrOrCrSide.Cr : DrOrCrSide.Dr,
+            Amount = original.Amount
+        };
+        harness.Repos.GlLines.Insert(line);
+        return line;
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(60)]
+    public void Matching_SkipsVoidedEntry_WhereverTheReversalIsDated(int reversalOffsetDays)
+    {
+        using var harness = NewHarness(out var bank);
+        var original = harness.Post(bank.AccountId, DrOrCrSide.Dr, 100m, BankingTestHarness.Utc(2026, 10, 5));
+        PostReversal(harness, original, BankingTestHarness.Utc(2026, 10, 5).AddDays(reversalOffsetDays));
+
+        var result = harness.Statements.Commit(bank.Id, Csv("2026-10-05,100.00,Customer,,\n"), "t");
+
+        Assert.Equal(1, result.Imported);
+        Assert.Equal(0, result.AutoMatched);
+        var line = Assert.Single(harness.Statements.ListLines(bank.Id, "unmatched").Lines);
+        Assert.Empty(line.Candidates);
+    }
+
+    [Fact]
+    public void Matching_SkipsReversalEntry_WhenOnlyTheReversalIsInTheWindow()
+    {
+        using var harness = NewHarness(out var bank);
+        var original = harness.Post(bank.AccountId, DrOrCrSide.Dr, 100m, BankingTestHarness.Utc(2026, 8, 1));
+        PostReversal(harness, original, BankingTestHarness.Utc(2026, 10, 5));
+
+        var result = harness.Statements.Commit(bank.Id, Csv("2026-10-05,-100.00,Customer,,\n"), "t");
+
+        Assert.Equal(0, result.AutoMatched);
+        Assert.Empty(Assert.Single(harness.Statements.ListLines(bank.Id, "unmatched").Lines).Candidates);
+    }
+
+    [Fact]
+    public void ManualMatch_RefusesVoidedEntryAndItsReversal()
+    {
+        using var harness = NewHarness(out var bank);
+        var original = harness.Post(bank.AccountId, DrOrCrSide.Dr, 100m, BankingTestHarness.Utc(2026, 10, 5));
+        var reversal = PostReversal(harness, original, BankingTestHarness.Utc(2026, 12, 1));
+        harness.Statements.Commit(bank.Id, Csv("2026-10-05,100.00,Customer,,\n2026-10-05,-100.00,Refund,,\n"), "t");
+        Assert.All(harness.Repos.StatementLines.Table, l => Assert.Null(l.MatchedGeneralLedgerLineId));
+        var deposit = harness.Repos.StatementLines.Table.Single(l => l.Amount == 100m);
+        var payment = harness.Repos.StatementLines.Table.Single(l => l.Amount == -100m);
+
+        var voided = Assert.Throws<InvalidOperationException>(() =>
+            harness.Statements.Match(deposit.Id, new MatchBankStatementLineRequest { GeneralLedgerLineId = original.Id }));
+        var reversed = Assert.Throws<InvalidOperationException>(() =>
+            harness.Statements.Match(payment.Id, new MatchBankStatementLineRequest { GeneralLedgerLineId = reversal.Id }));
+
+        Assert.Contains("voided", voided.Message);
+        Assert.Contains("voided", reversed.Message);
+        // A ledger line from an entry that was never voided is still matchable.
+        var healthy = harness.Post(bank.AccountId, DrOrCrSide.Dr, 100m, BankingTestHarness.Utc(2026, 10, 5));
+        var matched = harness.Statements.Match(deposit.Id, new MatchBankStatementLineRequest { GeneralLedgerLineId = healthy.Id });
+        Assert.Equal(healthy.Id, matched.MatchedGeneralLedgerLineId);
+    }
+
+    private static (Mock<IRepository<BankStatementLine>> Repo, List<BankStatementLine> Stored) BatchRepo()
+    {
+        var stored = new List<BankStatementLine>();
+        var repo = new Mock<IRepository<BankStatementLine>>();
+        repo.SetupGet(r => r.Table).Returns(() => stored.AsQueryable());
+        repo.Setup(r => r.Insert(It.IsAny<IEnumerable<BankStatementLine>>()))
+            .Callback<IEnumerable<BankStatementLine>>(batch =>
+            {
+                foreach (var line in batch)
+                {
+                    line.Id = stored.Count + 1;
+                    stored.Add(line);
+                }
+            });
+        return (repo, stored);
+    }
+
+    private static BankStatementImportService ServiceOver(BankingTestHarness harness, IRepository<BankStatementLine> lines) =>
+        new(
+            harness.Repos.StatementImports,
+            lines,
+            harness.Repos.Banks,
+            harness.Repos.GlLines,
+            harness.Repos.GlHeaders,
+            harness.Transactions,
+            new BankingTestHarness.FakeTenant(1));
+
+    [Fact]
+    public void Commit_InsertsAllLinesInOneBatch()
+    {
+        using var harness = NewHarness(out var bank);
+        var (repo, stored) = BatchRepo();
+        var service = ServiceOver(harness, repo.Object);
+
+        var result = service.Commit(bank.Id, Csv("2026-10-01,10.00,A,,\n2026-10-02,20.00,B,,\n2026-10-03,30.00,C,,\n"), "t");
+
+        Assert.Equal(3, result.Imported);
+        Assert.Equal(3, stored.Count);
+        repo.Verify(r => r.Insert(It.IsAny<IEnumerable<BankStatementLine>>()), Times.Once);
+        repo.Verify(r => r.Insert(It.IsAny<BankStatementLine>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("Violation of UNIQUE KEY constraint. Cannot insert duplicate key in object 'dbo.BankStatementLine'. The duplicate key value is (1, 1, 1, csv:abc). unique index 'UX_BankStatementLine_Company_Bank_Source_External'")]
+    [InlineData("SQLite Error 19: 'UNIQUE constraint failed: BankStatementLine.CompanyId, BankStatementLine.BankId, BankStatementLine.Source, BankStatementLine.ExternalId'.")]
+    public void Commit_ConcurrentDuplicateImport_ReportsAlreadyImported(string databaseMessage)
+    {
+        using var harness = NewHarness(out var bank);
+        var repo = new Mock<IRepository<BankStatementLine>>();
+        repo.SetupGet(r => r.Table).Returns(() => new List<BankStatementLine>().AsQueryable());
+        repo.Setup(r => r.Insert(It.IsAny<IEnumerable<BankStatementLine>>()))
+            .Throws(new Exception("An error occurred while saving the entity changes.", new Exception(databaseMessage)));
+        var service = ServiceOver(harness, repo.Object);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            service.Commit(bank.Id, Csv("2026-10-01,10.00,A,,\n"), "t"));
+
+        Assert.Equal(BankStatementImportService.AlreadyImportedMessage, ex.Message);
+    }
+
+    [Fact]
+    public void Commit_OtherSaveFailuresAreNotReportedAsDuplicates()
+    {
+        using var harness = NewHarness(out var bank);
+        var repo = new Mock<IRepository<BankStatementLine>>();
+        repo.SetupGet(r => r.Table).Returns(() => new List<BankStatementLine>().AsQueryable());
+        repo.Setup(r => r.Insert(It.IsAny<IEnumerable<BankStatementLine>>()))
+            .Throws(new TimeoutException("database timed out"));
+        var service = ServiceOver(harness, repo.Object);
+
+        Assert.Throws<TimeoutException>(() => service.Commit(bank.Id, Csv("2026-10-01,10.00,A,,\n"), "t"));
     }
 }
