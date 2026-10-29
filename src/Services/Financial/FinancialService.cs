@@ -52,6 +52,7 @@ namespace Services.Financial
         private readonly IRepository<PurchaseInvoiceHeader> _purchaseInvoiceRepo;
         private readonly IRepository<VendorPayment> _vendorPaymentRepo;
         private readonly IRepository<CompanySetting> _companySettingRepo;
+        private readonly IRepository<BankTransaction> _bankTransactionRepo;
 
         public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
@@ -79,7 +80,8 @@ namespace Services.Financial
             IRepository<CustomerAllocation> customerAllocationRepo = null,
             IRepository<PurchaseInvoiceHeader> purchaseInvoiceRepo = null,
             IRepository<VendorPayment> vendorPaymentRepo = null,
-            Core.Entitlements.IEntitlementService entitlements = null
+            Core.Entitlements.IEntitlementService entitlements = null,
+            IRepository<BankTransaction> bankTransactionRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -110,6 +112,7 @@ namespace Services.Financial
             _customerAllocationRepo = customerAllocationRepo;
             _purchaseInvoiceRepo = purchaseInvoiceRepo;
             _vendorPaymentRepo = vendorPaymentRepo;
+            _bankTransactionRepo = bankTransactionRepo;
         }
 
         public const int GeneralLedgerDefaultPageSize = 100;
@@ -171,7 +174,13 @@ namespace Services.Financial
                         transaction.SourcePath = "/purchases/" + id; break;
                     case nameof(DocumentTypes.JournalEntry): transaction.SourcePath = "/financials/journals?id=" + id; break;
                     case nameof(DocumentTypes.InventoryAdjustment): transaction.SourcePath = "/items/inventory"; break;
-                    case nameof(DocumentTypes.BankTransaction): transaction.SourcePath = "/banking/accounts/" + id; break;
+                    case nameof(DocumentTypes.BankTransaction):
+                        // SourceDocumentId is the BankTransaction id; path goes to the bank register.
+                        var bankId = _bankTransactionRepo?.GetById(id)?.BankId
+                            ?? _bankRepo?.GetById(id)?.Id;
+                        if (bankId.HasValue)
+                            transaction.SourcePath = "/banking/" + bankId.Value;
+                        break;
                 }
             }
 
