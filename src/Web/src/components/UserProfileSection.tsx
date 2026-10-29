@@ -4,7 +4,6 @@ import {
   ChevronsUpDown,
   User,
   LogOut,
-  Command,
   ShieldCheck,
   Palette,
   Sun,
