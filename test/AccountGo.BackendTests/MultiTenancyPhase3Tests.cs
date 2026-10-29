@@ -263,6 +263,7 @@ namespace AccountGo.BackendTests
             var voided = await NewInvoice();
             voided.Status = "Draft";
             var voidedId = (await (await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", voided)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={voidedId}")).IsSuccessStatusCode);
             Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voidedId}")).IsSuccessStatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = voidedId, Amount = 100, PaymentDate = DateTime.UtcNow })).StatusCode);

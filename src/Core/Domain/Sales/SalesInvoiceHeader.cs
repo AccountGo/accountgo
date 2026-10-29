@@ -104,5 +104,46 @@ namespace Core.Domain.Sales
 
         public decimal GrandTotal() =>
             Math.Round(ComputeTotalAmount() + ComputeTotalTax() + ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
+
+        public bool IsPaid() =>
+            Status == SalesInvoiceStatus.Closed || (BalanceDue() <= 0.005m && TotalAllocated() > 0);
+
+        public void EnsureEditable()
+        {
+            if (Status != SalesInvoiceStatus.Draft || GeneralLedgerHeaderId.HasValue)
+                throw new InvalidOperationException("Issued invoices can't be edited. Void it and issue a new one.");
+        }
+
+        public void EnsureCanBeVoided()
+        {
+            if (Status == SalesInvoiceStatus.Draft)
+                throw new InvalidOperationException("Draft invoices cannot be voided. Delete the draft instead.");
+            if (Status == SalesInvoiceStatus.Closed || IsPaid() || IsFullPaid())
+                throw new InvalidOperationException("Cannot void a paid invoice.");
+            if (TotalAllocated() > 0)
+                throw new InvalidOperationException("Cannot void an invoice with recorded payments. Please unallocate or refund payments first.");
+        }
+
+        public void EnsureCanRecordPayment(decimal amount)
+        {
+            if (amount <= 0)
+                throw new InvalidOperationException("Payment amount must be greater than zero.");
+            if (Status == SalesInvoiceStatus.Draft)
+                throw new InvalidOperationException("Issue the invoice before recording a payment.");
+            if (Status == SalesInvoiceStatus.Void)
+                throw new InvalidOperationException("Cannot record a payment on a void invoice.");
+            if (Status == SalesInvoiceStatus.Closed || IsPaid() || IsFullPaid() || BalanceDue() <= 0.005m)
+                throw new InvalidOperationException("Cannot record a payment on an invoice that is already paid.");
+            if (amount > BalanceDue() + 0.005m)
+                throw new InvalidOperationException($"Payment amount ({amount:0.00}) exceeds balance due ({BalanceDue():0.00}).");
+        }
+
+        public void RefreshPaymentStatus()
+        {
+            if (Status is SalesInvoiceStatus.Draft or SalesInvoiceStatus.Void)
+                return;
+
+            Status = BalanceDue() <= 0.005m ? SalesInvoiceStatus.Closed : SalesInvoiceStatus.Open;
+        }
     }
 }

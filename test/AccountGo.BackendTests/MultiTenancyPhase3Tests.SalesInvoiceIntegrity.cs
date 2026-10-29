@@ -301,6 +301,7 @@ namespace AccountGo.BackendTests
         {
             // 1. Post on Void is rejected and remains Void
             var draftId = await SaveDraft();
+            await Issue(draftId);
             var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}");
             Assert.True(voidRes.IsSuccessStatusCode);
             var voidPostRes = await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", new Dto.Sales.SalesInvoice { Id = draftId });
@@ -354,6 +355,223 @@ namespace AccountGo.BackendTests
             Assert.Equal("Draft", created.Status);
             var fetched = await GetInvoice(created.Id);
             Assert.Equal("Draft", fetched.Status);
+        }
+
+        [Fact]
+        public async Task SalesInvoice_VoidSalesInvoice_RejectsDraft()
+        {
+            var draftId = await SaveDraft();
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}");
+            Assert.Equal(HttpStatusCode.BadRequest, voidRes.StatusCode);
+            var msg = await voidRes.Content.ReadAsStringAsync();
+            Assert.Contains("Draft invoices cannot be voided. Delete the draft instead.", msg);
+
+            var reloaded = await GetInvoice(draftId);
+            Assert.Equal("Draft", reloaded.Status);
+        }
+
+        [Fact]
+        public async Task SalesInvoice_SaveAllocation_AtomicRollback_OnBatchFailure()
+        {
+            // Create two issued invoices
+            var draftId1 = await SaveDraft();
+            await Issue(draftId1);
+            var invoice1 = await GetInvoice(draftId1);
+
+            var draftId2 = await SaveDraft();
+            await Issue(draftId2);
+            var invoice2 = await GetInvoice(draftId2);
+
+            // Create a Customer Advance receipt
+            int customerId = invoice1.CustomerId;
+            int receiptId = 0;
+            WithDb(db =>
+            {
+                var customer = db.Customers.Find(customerId);
+                var cashAccount = db.Accounts.First(a => a.AccountCode == "10110");
+                var receipt = new SalesReceiptHeader
+                {
+                    CustomerId = customer.Id,
+                    Date = DateTime.UtcNow,
+                    Amount = 1000m,
+                    AccountToDebitId = cashAccount.Id,
+                    No = Guid.NewGuid().ToString("N")
+                };
+                receipt.SalesReceiptLines.Add(new SalesReceiptLine
+                {
+                    Amount = 1000m,
+                    AmountPaid = 1000m,
+                    AccountToCreditId = customer.CustomerAdvancesAccountId ?? 2
+                });
+                db.SalesReceiptHeaders.Add(receipt);
+                db.SaveChanges();
+                receiptId = receipt.Id;
+            });
+
+            // Batch allocation where line 1 is valid, but line 2 exceeds invoice balance
+            var batchAllocDto = new Api.Controllers.SalesController.SaveAllocationDto
+            {
+                CustomerId = customerId,
+                ReceiptId = receiptId,
+                Date = DateTime.UtcNow,
+                AllocationLines = new List<Api.Controllers.SalesController.SaveAllocationLineDto>
+                {
+                    new() { InvoiceId = invoice1.Id, AmountToAllocate = invoice1.BalanceDue },
+                    new() { InvoiceId = invoice2.Id, AmountToAllocate = invoice2.BalanceDue + 999m }
+                }
+            };
+
+            var allocRes = await Send(HttpMethod.Post, "/api/Sales/SaveAllocation", batchAllocDto);
+            Assert.Equal(HttpStatusCode.BadRequest, allocRes.StatusCode);
+
+            // Verify rollback: invoice 1 has NO allocations and is still Open with original balance due
+            var reloadedInvoice1 = await GetInvoice(invoice1.Id);
+            Assert.Equal("Open", reloadedInvoice1.Status);
+            Assert.Equal(invoice1.BalanceDue, reloadedInvoice1.BalanceDue);
+            Assert.Equal(0m, reloadedInvoice1.TotalAllocatedAmount);
+
+            int allocationsCount = 0;
+            WithDb(db =>
+            {
+                allocationsCount = db.CustomerAllocations.Count(a => a.SalesReceiptHeaderId == receiptId);
+            });
+            Assert.Equal(0, allocationsCount);
+        }
+
+        [Fact]
+        public async Task SalesInvoice_SaveCustomerAllocation_ReceiptAccountPairing_RejectsArReceipt_AcceptsAdvanceReceipt()
+        {
+            var invoice1Dto = await NewInvoice();
+            invoice1Dto.Status = "Draft";
+            var saveRes1 = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice1Dto);
+            var draftId1 = (await Json(saveRes1)).GetProperty("id").GetInt32();
+            await Issue(draftId1);
+            var invoice1 = await GetInvoice(draftId1);
+
+            var invoice2Dto = await NewInvoice();
+            invoice2Dto.CustomerId = invoice1.CustomerId;
+            invoice2Dto.Status = "Draft";
+            var saveRes2 = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice2Dto);
+            var draftId2 = (await Json(saveRes2)).GetProperty("id").GetInt32();
+            await Issue(draftId2);
+            var invoice2 = await GetInvoice(draftId2);
+
+            // 1. Record payment on invoice 1 (this creates a receipt crediting AR)
+            var payRes = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", new Dto.Sales.RecordInvoicePaymentDto
+            {
+                InvoiceId = invoice1.Id,
+                Amount = 50m,
+                PaymentMethod = "Bank Transfer"
+            });
+            Assert.True(payRes.IsSuccessStatusCode);
+            var payData = await payRes.Content.ReadFromJsonAsync<JsonElement>();
+            var arReceiptId = payData.GetProperty("receiptId").GetInt32();
+
+            // Attempting to allocate an AR-crediting receipt via SaveAllocation must be rejected
+            var arAllocDto = new Api.Controllers.SalesController.SaveAllocationDto
+            {
+                CustomerId = invoice2.CustomerId,
+                ReceiptId = arReceiptId,
+                Date = DateTime.UtcNow,
+                AllocationLines = new List<Api.Controllers.SalesController.SaveAllocationLineDto>
+                {
+                    new() { InvoiceId = invoice2.Id, AmountToAllocate = 10m }
+                }
+            };
+            var arAllocRes = await Send(HttpMethod.Post, "/api/Sales/SaveAllocation", arAllocDto);
+            Assert.Equal(HttpStatusCode.BadRequest, arAllocRes.StatusCode);
+            var arAllocErr = await arAllocRes.Content.ReadAsStringAsync();
+            Assert.Contains("Cannot allocate a receipt that already credited Accounts Receivable", arAllocErr);
+
+            // 2. Customer Advance receipt (credits Customer Advances account) must succeed
+            int customer2Id = invoice2.CustomerId;
+            int advanceReceiptId = 0;
+            WithDb(db =>
+            {
+                var customer = db.Customers.Find(customer2Id);
+                var cashAccount = db.Accounts.First(a => a.AccountCode == "10110");
+                var advanceReceipt = new SalesReceiptHeader
+                {
+                    CustomerId = customer.Id,
+                    Date = DateTime.UtcNow,
+                    Amount = 100m,
+                    AccountToDebitId = cashAccount.Id,
+                    No = Guid.NewGuid().ToString("N")
+                };
+                advanceReceipt.SalesReceiptLines.Add(new SalesReceiptLine
+                {
+                    Amount = 100m,
+                    AmountPaid = 100m,
+                    AccountToCreditId = customer.CustomerAdvancesAccountId ?? 2
+                });
+                db.SalesReceiptHeaders.Add(advanceReceipt);
+                db.SaveChanges();
+                advanceReceiptId = advanceReceipt.Id;
+            });
+
+            var advAllocDto = new Api.Controllers.SalesController.SaveAllocationDto
+            {
+                CustomerId = customer2Id,
+                ReceiptId = advanceReceiptId,
+                Date = DateTime.UtcNow,
+                AllocationLines = new List<Api.Controllers.SalesController.SaveAllocationLineDto>
+                {
+                    new() { InvoiceId = invoice2.Id, AmountToAllocate = 20m }
+                }
+            };
+            var advAllocRes = await Send(HttpMethod.Post, "/api/Sales/SaveAllocation", advAllocDto);
+            Assert.Equal(HttpStatusCode.OK, advAllocRes.StatusCode);
+
+            var reloadedInvoice2 = await GetInvoice(invoice2.Id);
+            Assert.Equal(20m, reloadedInvoice2.TotalAllocatedAmount);
+        }
+
+        [Fact]
+        public async Task SalesInvoice_ReadEndpoints_RequireViewPermission()
+        {
+            var draftId = await SaveDraft();
+
+            WithDb(db =>
+            {
+                var member = db.CompanyMembers.Include(m => m.SecurityRoles).FirstOrDefault(m => m.CompanyId == _companyId && m.UserId == _otherId);
+                if (member == null)
+                {
+                    db.CompanyMembers.Add(new CompanyMember
+                    {
+                        CompanyId = _companyId,
+                        UserId = _otherId,
+                        Role = CompanyMemberRole.Member,
+                        Status = CompanyMemberStatus.Active
+                    });
+                }
+                else
+                {
+                    member.Role = CompanyMemberRole.Member;
+                    member.Status = CompanyMemberStatus.Active;
+                    member.SecurityRoles.Clear();
+                }
+                db.SaveChanges();
+            });
+
+            // Calling read endpoints with _otherToken (which lacks sales.invoices.view in this workspace) returns 403 Forbidden
+            var r1 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={draftId}", token: _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, r1.StatusCode);
+
+            var r2 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={draftId}", token: _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, r2.StatusCode);
+
+            var r3 = await Send(HttpMethod.Get, "/api/Sales/SalesInvoices", token: _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, r3.StatusCode);
+
+            var r4 = await Send(HttpMethod.Get, $"/api/Sales/CustomerInvoices?id={draftId}", token: _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, r4.StatusCode);
+
+            var r5 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoiceForPrinting?id={draftId}", token: _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, r5.StatusCode);
+
+            // Calling with authorized token succeeds
+            var okRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={draftId}");
+            Assert.Equal(HttpStatusCode.OK, okRes.StatusCode);
         }
     }
 }

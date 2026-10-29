@@ -594,6 +594,31 @@ namespace Services.Sales
             if (invoice.Status == SalesInvoiceStatus.Void)
                 throw new InvalidOperationException("Cannot allocate to a void invoice.");
 
+            var customer = invoice.Customer ?? GetCustomerById(invoice.CustomerId);
+            var arAccountId = customer?.AccountsReceivableAccountId
+                ?? customer?.AccountsReceivableAccount?.Id
+                ?? _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "10120")?.Id;
+
+            // X5: Disallow allocating receipts that already credited Accounts Receivable (RecordPayment-style receipts)
+            bool creditedAR = false;
+            if (receipt.SalesReceiptLines != null && receipt.SalesReceiptLines.Any(l => l.AccountToCreditId.HasValue && l.AccountToCreditId == arAccountId))
+            {
+                creditedAR = true;
+            }
+            else if (receipt.GeneralLedgerHeaderId.HasValue)
+            {
+                var glLines = _financialService.GetGeneralLedgerLines(receipt.GeneralLedgerHeaderId.Value);
+                if (glLines != null && glLines.Any(l => l.DrCr == Core.Domain.DrOrCrSide.Cr && l.AccountId == arAccountId))
+                {
+                    creditedAR = true;
+                }
+            }
+
+            if (creditedAR)
+            {
+                throw new InvalidOperationException("Cannot allocate a receipt that already credited Accounts Receivable. Allocations can only be made from customer advance receipts.");
+            }
+
             var invoiceBalance = invoice.BalanceDue();
             if (allocation.Amount > invoiceBalance + 0.005m)
                 throw new InvalidOperationException($"Allocation amount ({allocation.Amount:0.00}) exceeds invoice balance due ({invoiceBalance:0.00}).");
@@ -610,14 +635,19 @@ namespace Services.Sales
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(Core.Domain.DocumentTypes.CustomerAllocation, allocation.Date, string.Empty);
 
-            var debitAccountId = invoice.Customer?.CustomerAdvancesAccount?.Id
-                ?? invoice.Customer?.CustomerAdvancesAccountId
+            var debitAccountId = customer?.CustomerAdvancesAccount?.Id
+                ?? customer?.CustomerAdvancesAccountId
                 ?? receipt.SalesReceiptLines?.FirstOrDefault(l => l.AccountToCreditId.HasValue)?.AccountToCreditId
                 ?? throw new InvalidOperationException("Customer has no customer advances account configured.");
+
+            if (debitAccountId == arAccountId)
+            {
+                throw new InvalidOperationException("Cannot allocate a receipt that already credited Accounts Receivable. Allocations can only be made from customer advance receipts.");
+            }
+
             glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(Core.Domain.DrOrCrSide.Dr, debitAccountId, allocation.Amount));
 
-            var creditAccountId = invoice.Customer?.AccountsReceivableAccount?.Id
-                ?? invoice.Customer?.AccountsReceivableAccountId
+            var creditAccountId = arAccountId
                 ?? throw new InvalidOperationException("Customer has no accounts receivable account configured.");
             glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(Core.Domain.DrOrCrSide.Cr, creditAccountId, allocation.Amount));
 
@@ -627,8 +657,7 @@ namespace Services.Sales
                 allocation.GeneralLedgerHeaderId = glHeader.Id;
                 invoice.CustomerAllocations.Add(allocation);
 
-                var remainingBalance = invoice.BalanceDue();
-                invoice.Status = remainingBalance <= 0.005m ? SalesInvoiceStatus.Closed : SalesInvoiceStatus.Open;
+                invoice.RefreshPaymentStatus();
 
                 _salesInvoiceRepo.Update(invoice);
                 if (allocation.Id > 0)
@@ -890,8 +919,14 @@ namespace Services.Sales
                 return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
             }
 
-            if (salesInvoice.Status != SalesInvoiceStatus.Draft || salesInvoice.GeneralLedgerHeaderId.HasValue)
-                return Result<Dto.Sales.SalesInvoice>.Failure(Error.ValidationError("Issued invoices can't be edited. Void it and issue a new one."));
+            try
+            {
+                salesInvoice.EnsureEditable();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Result<Dto.Sales.SalesInvoice>.Failure(Error.ValidationError(ex.Message));
+            }
 
             var currentNo = salesInvoice.No;
             var currentStatus = salesInvoice.Status;
@@ -959,8 +994,8 @@ namespace Services.Sales
 
         public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
         {
-            if (salesInvoice.Id != 0 && (salesInvoice.Status != SalesInvoiceStatus.Draft || salesInvoice.GeneralLedgerHeaderId.HasValue))
-                throw new InvalidOperationException("Issued invoices can't be edited. Void it and issue a new one.");
+            if (salesInvoice.Id != 0)
+                salesInvoice.EnsureEditable();
 
             // Checked before anything is written, so a blocked invoice leaves no sales order behind.
             var isNewInvoice = salesInvoice.Id == 0;
