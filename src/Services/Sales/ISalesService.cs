@@ -10,6 +10,7 @@
 using Core.Domain;
 using Core.Domain.Error;
 using Core.Domain.Sales;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -55,7 +56,7 @@ namespace Services.Sales
         Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id);
         void PostSalesInvoice(int invoiceId);
-        void VoidSalesInvoiceStock(SalesInvoiceHeader invoice);
+        void VoidSalesInvoiceStock(SalesInvoiceHeader invoice, DateTime? reversalDateOverride = null);
         List<string> GetSalesInvoiceStockWarnings(SalesInvoiceHeader invoice);
         Contact GetContacyById(int id);
     }

@@ -1249,14 +1249,14 @@ namespace Services.Sales
         }
 
         /// <summary>Restores stock for an invoice after its general-ledger posting has been reversed.</summary>
-        public void VoidSalesInvoiceStock(SalesInvoiceHeader invoice)
+        public void VoidSalesInvoiceStock(SalesInvoiceHeader invoice, DateTime? reversalDateOverride = null)
         {
             if (invoice == null)
                 throw new ArgumentNullException(nameof(invoice));
             if (invoice.Status == SalesInvoiceStatus.Void)
                 return;
 
-            var reversalDate = invoice.VoidGeneralLedgerHeader?.Date ?? invoice.Date;
+            var reversalDate = reversalDateOverride ?? invoice.VoidGeneralLedgerHeader?.Date ?? invoice.Date;
             foreach (var line in invoice.SalesInvoiceLines.Where(l => l.InventoryControlJournalId.HasValue))
             {
                 var item = _inventoryService.GetItemById(line.ItemId);

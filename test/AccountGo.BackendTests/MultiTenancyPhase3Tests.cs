@@ -43,6 +43,7 @@ namespace AccountGo.BackendTests
         private string _otherToken;
         private string _otherId;
         private string _slug;
+        private static string IsoDate(DateTime dt) => dt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
         private int _companyId;
         private const string Current = "/api/organizations/current";
         private readonly ITestOutputHelper _output;
@@ -264,7 +265,7 @@ namespace AccountGo.BackendTests
             voided.Status = "Draft";
             var voidedId = (await (await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", voided)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
             Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={voidedId}")).IsSuccessStatusCode);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voidedId}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voidedId}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = voidedId, Amount = 100, PaymentDate = DateTime.UtcNow })).StatusCode);
         }
@@ -1920,7 +1921,7 @@ namespace AccountGo.BackendTests
 
             // The owner issues it; the representative records a payment but can't void.
             await Issue(draftId);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}", token: _otherToken)).StatusCode);
             var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = draftId, Amount = 10, PaymentDate = DateTime.UtcNow }, _otherToken);
             Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
@@ -1981,7 +1982,7 @@ namespace AccountGo.BackendTests
             var overdue = await Invoice("Open", 40, today.AddDays(-40), today.AddDays(-10));
             await Invoice("Draft", 999, today.AddDays(1));
             var voided = await Invoice("Open", 500, today.AddDays(-5));
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voided}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voided}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             Assert.True((await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = open, Amount = 30, PaymentDate = DateTime.UtcNow })).IsSuccessStatusCode);
 
