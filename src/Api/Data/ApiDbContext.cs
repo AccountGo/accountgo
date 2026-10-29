@@ -496,9 +496,21 @@ namespace Api.Data
                 .HasIndex(e => new { e.CompanyId, e.No })
                 .IsUnique();
 
+            builder.Entity<Customer>()
+                .HasOne(e => e.BillToContact)
+                .WithMany()
+                .HasForeignKey(e => e.BillToContactId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             builder.Entity<Vendor>()
                 .HasIndex(e => new { e.CompanyId, e.No })
                 .IsUnique();
+
+            builder.Entity<Vendor>()
+                .HasOne(e => e.BillToContact)
+                .WithMany()
+                .HasForeignKey(e => e.BillToContactId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             builder.Entity<Item>()
                 .HasIndex(e => new { e.CompanyId, e.No })
