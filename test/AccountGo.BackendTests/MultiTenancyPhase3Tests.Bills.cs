@@ -93,7 +93,7 @@ namespace AccountGo.BackendTests
                 new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 200.01m, Date = DateTime.UtcNow })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 10m, Date = DateTime.UtcNow, AccountId = AccountId("50200") })).StatusCode);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}")).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).StatusCode);
 
             var settled = await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 200m, Date = DateTime.UtcNow }));
@@ -105,7 +105,7 @@ namespace AccountGo.BackendTests
             other.Status = "Open";
             var toVoid = await SaveBillOk(other);
             Assert.Equal(80m, await DashboardKpi("totalPayables"));
-            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={toVoid.Id}&date={IsoDate(DateTime.UtcNow)}"));
+            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={toVoid.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
             Assert.Equal("Void", voided.Status);
             Assert.Equal(0m, voided.BalanceDue);
             Assert.Equal(0m, await DashboardKpi("totalPayables"));
@@ -282,7 +282,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(1100m, approved.Total);
             Assert.Equal(100m, approved.TotalTax);
 
-            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}"));
+            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
             Assert.Equal("Void", voided.Status);
             Assert.Equal(0m, voided.BalanceDue);
 
@@ -374,7 +374,7 @@ namespace AccountGo.BackendTests
             await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draft.Id}"));
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill { BillId = draft.Id, Amount = 5m, Date = DateTime.UtcNow }, _otherToken)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={draft.Id}&date={IsoDate(DateTime.UtcNow)}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={draft.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction", token: _otherToken)).StatusCode);
 
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
                 new { securityRoleIds = new[] { RoleId("Accountant") } })).StatusCode);
@@ -414,7 +414,7 @@ namespace AccountGo.BackendTests
             var draft = await Bill("Draft", 999m, today.AddDays(1));
             var voided = await Bill("Open", 500m, today.AddDays(-5));
             Assert.Equal("Overdue", overdue.Status);
-            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={voided.Id}&date={IsoDate(today)}"));
+            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={voided.Id}&date={IsoDate(today)}&reason=correction"));
             await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill", new Dto.Purchasing.PayBill { BillId = open.Id, Amount = 30m, Date = today }));
 
             var bills = await Bills(vendor.Id);

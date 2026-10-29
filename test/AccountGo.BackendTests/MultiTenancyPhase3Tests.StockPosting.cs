@@ -78,10 +78,10 @@ namespace AccountGo.BackendTests
             bill.Status = "Open";
             var saved = await SaveBillOk(bill);
             AssertStockState(itemId, 10m, 5m);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
             AssertStockState(itemId, 0m, 5m);
             AssertStockInvariant(itemId);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
             AssertStockState(itemId, 0m, 5m);
         }
 
@@ -149,7 +149,7 @@ namespace AccountGo.BackendTests
             var id = (await Json(issued)).GetProperty("id").GetInt32();
             Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             AssertStockInvariant(itemId);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
             AssertStockState(itemId, 0m, 0.6734m);
             AssertStockInvariant(itemId);
         }

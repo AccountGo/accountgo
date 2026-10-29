@@ -117,7 +117,7 @@ namespace AccountGo.BackendTests
             var approved = await SaveBillOk(bill);
 
             var paid = await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
-                new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 50m, BankAccountId = bank.Id }));
+                new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 50m, BankAccountId = bank.Id, Date = DateTime.UtcNow }));
             var payment = Assert.Single(paid.Payments);
             Assert.Equal(bank.AccountId, payment.AccountId);
         }

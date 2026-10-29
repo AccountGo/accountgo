@@ -8,6 +8,7 @@ interface VoidDialogProps {
   confirmLabel?: string;
   minDate?: string;
   requireReason?: boolean;
+  error?: string | null;
   busy?: boolean;
   onConfirm: (date: string, reason: string) => void;
   onCancel: () => void;
@@ -19,6 +20,7 @@ export const VoidDialog: React.FC<VoidDialogProps> = ({
   confirmLabel = 'Void',
   minDate,
   requireReason = false,
+  error = null,
   busy = false,
   onConfirm,
   onCancel,
@@ -63,6 +65,12 @@ export const VoidDialog: React.FC<VoidDialogProps> = ({
         <p id="void-dialog-message" className="text-sm text-[var(--text-secondary)]">
           {message}
         </p>
+
+        {error && (
+          <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
+            {error}
+          </div>
+        )}
 
         <div className="space-y-3">
           <div>

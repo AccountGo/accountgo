@@ -492,25 +492,35 @@ namespace Services.Purchasing
 
             bill.EnsureCanBeVoided();
 
+            if (string.IsNullOrWhiteSpace(voidReason))
+                throw new InvalidOperationException("A reason is required to void a bill.");
+
             if (voidDate.Date < bill.Date.Date)
                 throw new InvalidOperationException($"The void date ({voidDate:yyyy-MM-dd}) cannot be earlier than the bill date ({bill.Date:yyyy-MM-dd}).");
 
-            // Stock sold pre-check before posting any reversals
-            foreach (var line in bill.PurchaseInvoiceLines.Where(l => l.InventoryControlJournalId.HasValue))
+            // Stock sold pre-check before posting any reversals: group by item so multiple lines sum together
+            var stockGroups = bill.PurchaseInvoiceLines
+                .Where(l => l.InventoryControlJournalId.HasValue)
+                .GroupBy(l => l.ItemId);
+
+            foreach (var group in stockGroups)
             {
-                var item = _inventoryService.GetItemById(line.ItemId);
-                var original = item?.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId.Value);
-                if (original == null)
+                var item = _inventoryService.GetItemById(group.Key);
+                if (item == null)
                     continue;
 
-                if (original.INQty.GetValueOrDefault() > 0)
+                decimal totalQtyReceived = 0;
+                foreach (var line in group)
                 {
-                    var qtyReceived = original.INQty.Value;
-                    if (item.QuantityOnHand < qtyReceived)
-                    {
-                        var sold = StockService.RoundQuantity(qtyReceived - item.QuantityOnHand);
-                        throw new InvalidOperationException($"{sold} of {item.Description ?? item.Code ?? item.No} have already been sold. Record a return to the vendor instead.");
-                    }
+                    var original = item.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId!.Value);
+                    if (original != null && original.INQty.GetValueOrDefault() > 0)
+                        totalQtyReceived += original.INQty.Value;
+                }
+
+                if (totalQtyReceived > 0 && item.QuantityOnHand < totalQtyReceived)
+                {
+                    var sold = StockService.RoundQuantity(totalQtyReceived - item.QuantityOnHand);
+                    throw new InvalidOperationException($"{sold} of {item.Description ?? item.Code ?? item.No} have already been sold. Record a return to the vendor instead.");
                 }
             }
 
@@ -597,6 +607,8 @@ namespace Services.Purchasing
                 .FirstOrDefault(p => p.Id == paymentId)
                 ?? throw new InvalidOperationException($"Payment #{paymentId} was not found.");
 
+            EnsurePaymentNotReconciled(payment);
+
             if (payment.IsVoid)
                 return payment;
 
@@ -627,6 +639,11 @@ namespace Services.Purchasing
             }
 
             return payment;
+        }
+
+        private static void EnsurePaymentNotReconciled(VendorPayment payment)
+        {
+            // Banking PR 2B hook: refuse voiding payments already cleared or reconciled in a bank reconciliation.
         }
 
         public Contact GetContacyById(int id)

@@ -41,6 +41,7 @@ export const BillDetail: React.FC = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<'approve' | 'void' | 'delete' | null>(null);
   const [confirm, setConfirm] = useState<'delete' | null>(null);
+  const [duplicateConfirmApprove, setDuplicateConfirmApprove] = useState(false);
   const [voidTarget, setVoidTarget] = useState<
     | { type: 'bill' }
     | { type: 'payment'; payment: BillPayment }
@@ -84,14 +85,21 @@ export const BillDetail: React.FC = () => {
     };
   }, [authFetch, billId]);
 
-  const act = async (kind: 'approve', path: string, done: string) => {
+  const act = async (kind: 'approve', path: string, done: string, confirmDuplicate = false) => {
     if (!bill) return;
     setBusy(kind);
     setError(null);
     try {
-      const res = await authFetch(`${path}?id=${bill.id}`, { method: 'POST' });
+      const url = `${path}?id=${bill.id}${confirmDuplicate ? '&confirmDuplicate=true' : ''}`;
+      const res = await authFetch(url, { method: 'POST' });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
+      if (!res.ok) {
+        if (res.status === 409 && data?.code === 'possible_duplicate') {
+          setDuplicateConfirmApprove(true);
+          return;
+        }
+        throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
+      }
       setBill(data);
       setNotice(done);
     } catch (err: any) {
@@ -479,9 +487,14 @@ export const BillDetail: React.FC = () => {
           message="Voiding reverses what approving it posted, so it no longer counts as owed or spent. Stock received on this bill is removed. It stays listed as void. This can't be undone."
           confirmLabel="Void bill"
           minDate={bill.date ? bill.date.slice(0, 10) : undefined}
+          requireReason
+          error={error}
           busy={busy === 'void'}
           onConfirm={(date, reason) => handleVoidBill(date, reason)}
-          onCancel={() => setVoidTarget(null)}
+          onCancel={() => {
+            setVoidTarget(null);
+            setError(null);
+          }}
         />
       )}
 
@@ -492,9 +505,27 @@ export const BillDetail: React.FC = () => {
           confirmLabel="Void payment"
           minDate={voidTarget.payment.date ? voidTarget.payment.date.slice(0, 10) : undefined}
           requireReason
+          error={error}
           busy={busy === 'void'}
           onConfirm={(date, reason) => handleVoidPayment(voidTarget.payment.id, date, reason)}
-          onCancel={() => setVoidTarget(null)}
+          onCancel={() => {
+            setVoidTarget(null);
+            setError(null);
+          }}
+        />
+      )}
+
+      {duplicateConfirmApprove && (
+        <ConfirmDialog
+          title="Possible duplicate bill"
+          message="A bill from this vendor with the same date and total has already been entered. Do you want to approve this bill anyway?"
+          confirmLabel="Approve anyway"
+          busy={busy === 'approve'}
+          onConfirm={() => {
+            setDuplicateConfirmApprove(false);
+            act('approve', '/api/Purchasing/ApproveBill', 'The bill has been approved and posted.', true);
+          }}
+          onCancel={() => setDuplicateConfirmApprove(false)}
         />
       )}
 
