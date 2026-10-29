@@ -163,6 +163,8 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
   const canManage = hasPermission('financials.accounts.manage');
 
   const [accounts, setAccounts] = useState<ApiAccount[]>([]);
+  /** GL account id → bank account id for linked cash accounts. */
+  const [bankByAccountId, setBankByAccountId] = useState<Map<number, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState('');
@@ -220,9 +222,10 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
     setLoading(true);
     setLoadFailed(false);
     try {
-      const [res, statusRes] = await Promise.all([
+      const [res, statusRes, banksRes] = await Promise.all([
         authFetch('/api/Financials/Accounts'),
         authFetch('/api/Financials/ChartStatus').catch(() => null),
+        authFetch('/api/Banking/Accounts?includeArchived=false').catch(() => null),
       ]);
       if (!res.ok) throw new Error('Failed to load accounts');
       const data = await res.json() as ApiAccount[];
@@ -232,6 +235,15 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
         const s = await statusRes.json() as ChartOfAccountsStatus;
         setChartStatus(s);
       }
+
+      const linked = new Map<number, number>();
+      if (banksRes && banksRes.ok) {
+        const list = await banksRes.json() as { accounts?: Array<{ id: number; accountId?: number | null }> };
+        for (const bank of list.accounts ?? []) {
+          if (bank.accountId != null) linked.set(bank.accountId, bank.id);
+        }
+      }
+      setBankByAccountId(linked);
     } catch {
       setLoadFailed(true);
     } finally {
@@ -974,6 +986,15 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
                           <span className={`truncate ${isArchived ? 'line-through text-[var(--text-muted)]' : ''}`}>{a.accountName}</span>
                           {a.isContraAccount && <Badge>Contra</Badge>}
                           {a.isCash && <Badge>Cash</Badge>}
+                          {bankByAccountId.has(a.id) && (
+                            <Link
+                              to={`/org/${currentOrg.slug}/banking/${bankByAccountId.get(a.id)}`}
+                              className="shrink-0"
+                              title="Open bank register"
+                            >
+                              <Badge>Bank</Badge>
+                            </Link>
+                          )}
                           {hasChildren && !isRoot && <Badge muted>Header</Badge>}
                           {isArchived && <Badge variant="archived">Archived</Badge>}
                           {a.isProtected && (

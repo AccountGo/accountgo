@@ -33,3 +33,21 @@ test('legal name marks the business item done', () => {
   }).find((i) => i.id === 'business');
   assert.equal(item.done, true);
 });
+
+test('bank checklist item links to banking and marks done when an account exists', () => {
+  const pending = buildChecklist({
+    hasFinancialsModule: true,
+    taxRegime: 'None',
+    hasLegalName: false,
+  }).find((i) => i.id === 'bank');
+  assert.equal(pending.to, 'banking');
+  assert.equal(pending.done, false);
+
+  const done = buildChecklist({
+    hasFinancialsModule: true,
+    taxRegime: 'None',
+    hasLegalName: false,
+    hasBankAccount: true,
+  }).find((i) => i.id === 'bank');
+  assert.equal(done.done, true);
+});

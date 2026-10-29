@@ -5,6 +5,7 @@ import {
   BookOpen,
   Receipt,
   ShoppingBag,
+  Landmark,
   Settings,
   Menu,
 } from 'lucide-react';
@@ -23,14 +24,18 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   hasPermission,
   hasModule,
 }) => {
-  const moduleAllowed = hasModule
-    ?? ((moduleKey: ModuleKey) => (currentOrg.subscription?.activeModules || []).includes(moduleKey));
+  const moduleAllowed = (module: ModuleKey | ModuleKey[]) => {
+    const keys = Array.isArray(module) ? module : [module];
+    const check = hasModule
+      ?? ((moduleKey: ModuleKey) => (currentOrg.subscription?.activeModules || []).includes(moduleKey));
+    return keys.some(check);
+  };
 
   const allNavItems: Array<{
     name: string;
     path: string;
     icon: typeof LayoutDashboard;
-    module?: ModuleKey;
+    module?: ModuleKey | ModuleKey[];
     permission?: string;
     adminOnly?: boolean;
   }> = [
@@ -54,6 +59,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       icon: ShoppingBag,
       module: 'purchases',
       permission: 'purchases.bills.view',
+    },
+    {
+      name: 'Banking',
+      path: `/org/${currentOrg.slug}/banking`,
+      icon: Landmark,
+      module: ['sales', 'purchases', 'financials'],
+      permission: 'banking.accounts.view',
     },
     {
       name: 'Ledger',
