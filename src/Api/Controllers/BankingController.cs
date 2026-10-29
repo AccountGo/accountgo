@@ -25,6 +25,7 @@ namespace Api.Controllers
         private readonly IBankAccountService _banks;
         private readonly IBankTransactionService _transactions;
         private readonly IBankReconciliationService _reconciliations;
+        private readonly IBankStatementImportService _statements;
         private readonly ITenantContext _tenant;
         private readonly IEntitlementService _entitlements;
         private readonly ApiDbContext _db;
@@ -33,6 +34,7 @@ namespace Api.Controllers
             IBankAccountService banks,
             IBankTransactionService transactions,
             IBankReconciliationService reconciliations,
+            IBankStatementImportService statements,
             ITenantContext tenant,
             IEntitlementService entitlements,
             ApiDbContext db)
@@ -40,6 +42,7 @@ namespace Api.Controllers
             _banks = banks;
             _transactions = transactions;
             _reconciliations = reconciliations;
+            _statements = statements;
             _tenant = tenant;
             _entitlements = entitlements;
             _db = db;
@@ -595,6 +598,133 @@ namespace Api.Controllers
             catch (TenantEntityNotFoundException)
             {
                 return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Accounts/{bankId:int}/StatementImports/Preview")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult PreviewStatementImport(int bankId, [FromBody] BankStatementImportRequest request)
+        {
+            try
+            {
+                return Ok(_statements.Preview(bankId, request));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Accounts/{bankId:int}/StatementImports")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult CommitStatementImport(int bankId, [FromBody] BankStatementImportRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statements.Commit(bankId, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("Accounts/{bankId:int}/StatementLines")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult ListStatementLines(int bankId, [FromQuery] string? status = null)
+        {
+            try
+            {
+                return Ok(_statements.ListLines(bankId, status));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("StatementLines/{id:int}/Match")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult MatchStatementLine(int id, [FromBody] MatchBankStatementLineRequest? request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var matched = _statements.Match(id, request ?? new MatchBankStatementLineRequest());
+                tx.Commit();
+                return Ok(matched);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("StatementLines/{id:int}/Unmatch")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult UnmatchStatementLine(int id)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var unmatched = _statements.Unmatch(id);
+                tx.Commit();
+                return Ok(unmatched);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("StatementLines/{id:int}/CreateTransaction")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
+        public IActionResult CreateTransactionFromStatementLine(int id, [FromBody] CreateTransactionFromStatementLineRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var matched = _statements.CreateTransaction(id, request);
+                tx.Commit();
+                return Ok(matched);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {

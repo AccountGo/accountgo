@@ -1008,6 +1008,115 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("BankReconciliationItem");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementImport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ColumnMapJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<DateTime>("ImportedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ImportedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId" }, "IX_BankStatementImport_Company_Bank");
+
+                    b.ToTable("BankStatementImport");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BankStatementImportId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("MatchedGeneralLedgerLineId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Payee")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("PostedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("BankStatementImportId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("MatchedGeneralLedgerLineId");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId", "PostedDate" }, "IX_BankStatementLine_Company_Bank_PostedDate");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId", "Source", "ExternalId" }, "UX_BankStatementLine_Company_Bank_Source_External")
+                        .IsUnique()
+                        .HasFilter("[ExternalId] IS NOT NULL");
+
+                    b.ToTable("BankStatementLine");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -3481,6 +3590,43 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("GeneralLedgerLine");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementImport", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bank");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementLine", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.BankStatementImport", "BankStatementImport")
+                        .WithMany("Lines")
+                        .HasForeignKey("BankStatementImportId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerLine", "MatchedGeneralLedgerLine")
+                        .WithMany()
+                        .HasForeignKey("MatchedGeneralLedgerLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Bank");
+
+                    b.Navigation("BankStatementImport");
+
+                    b.Navigation("MatchedGeneralLedgerLine");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
                 {
                     b.HasOne("Core.Domain.Financials.Bank", "Bank")
@@ -4565,6 +4711,11 @@ namespace Api.Data.Migrations.ApiDb
             modelBuilder.Entity("Core.Domain.Financials.BankReconciliation", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementImport", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerHeader", b =>

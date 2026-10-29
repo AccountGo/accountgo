@@ -11,6 +11,7 @@ namespace Core.Data
 {
     using Domain;
     using System;
+    using System.Collections.Generic;
     using System.Linq;
     using System.Threading.Tasks;
 
@@ -21,6 +22,15 @@ namespace Core.Data
     {
         T GetById(object id);
         void Insert(T entity);
+
+        /// <summary>Inserts all entities in one save. Implementations that can batch (EF) override this.</summary>
+        void Insert(IEnumerable<T> entities)
+        {
+            if (entities == null)
+                throw new ArgumentNullException(nameof(entities));
+            foreach (var entity in entities)
+                Insert(entity);
+        }
         Task InsertAsync(T entity);
         void Update(T entity);
         Task UpdateAsync(T enitity);

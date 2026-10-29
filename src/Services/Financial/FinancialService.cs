@@ -54,6 +54,7 @@ namespace Services.Financial
         private readonly IRepository<CompanySetting> _companySettingRepo;
         private readonly IRepository<BankTransaction> _bankTransactionRepo;
         private readonly IRepository<BankReconciliation> _bankReconciliationRepo;
+        private readonly IRepository<BankStatementLine> _bankStatementLineRepo;
 
         public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
@@ -83,7 +84,8 @@ namespace Services.Financial
             IRepository<VendorPayment> vendorPaymentRepo = null,
             Core.Entitlements.IEntitlementService entitlements = null,
             IRepository<BankTransaction> bankTransactionRepo = null,
-            IRepository<BankReconciliation> bankReconciliationRepo = null
+            IRepository<BankReconciliation> bankReconciliationRepo = null,
+            IRepository<BankStatementLine> bankStatementLineRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -116,6 +118,7 @@ namespace Services.Financial
             _vendorPaymentRepo = vendorPaymentRepo;
             _bankTransactionRepo = bankTransactionRepo;
             _bankReconciliationRepo = bankReconciliationRepo;
+            _bankStatementLineRepo = bankStatementLineRepo;
         }
 
         public const int GeneralLedgerDefaultPageSize = 100;
@@ -1765,7 +1768,29 @@ namespace Services.Financial
                 reversal.GeneralLedgerLines.Add(CreateGeneralLedgerLine(line.DrCr == DrOrCrSide.Dr ? DrOrCrSide.Cr : DrOrCrSide.Dr, line.AccountId, line.Amount));
 
             ValidateGeneralLedgerEntry(reversal);
+            ClearStatementMatches(original.GeneralLedgerLines.Select(l => l.Id).ToList());
             return reversal;
+        }
+
+        /// <summary>
+        /// Every void path reverses through <see cref="CreateReversingEntry"/>, so this is where statement lines stop
+        /// pointing at ledger lines of an entry that is being voided. The lines go back to unmatched.
+        /// </summary>
+        private void ClearStatementMatches(IReadOnlyCollection<int> generalLedgerLineIds)
+        {
+            if (_bankStatementLineRepo == null || generalLedgerLineIds.Count == 0)
+                return;
+
+            var matched = _bankStatementLineRepo.Table
+                .Where(l => l.MatchedGeneralLedgerLineId != null && generalLedgerLineIds.Contains(l.MatchedGeneralLedgerLineId.Value))
+                .ToList();
+            if (matched.Count == 0)
+                return;
+
+            foreach (var statementLine in matched)
+                statementLine.MatchedGeneralLedgerLineId = null;
+            // The repository saves every tracked change, so one Update persists all cleared matches.
+            _bankStatementLineRepo.Update(matched[0]);
         }
 
         public JournalEntryHeader CloseAccountingPeriod()
