@@ -324,11 +324,11 @@ const BankStatementImportPage: React.FC = () => {
                 ))}
                 <div>
                   <label className={labelClass} htmlFor="col-dateFormat">
-                    Date format (optional)
+                    Date format (required for 03/04/2026-style dates)
                   </label>
                   <input
                     id="col-dateFormat"
-                    placeholder="e.g. dd/MM/yyyy"
+                    placeholder="e.g. dd/MM/yyyy or MM/dd/yyyy"
                     value={columnMap.dateFormat ?? ''}
                     onChange={(e) => {
                       setPreview(null);

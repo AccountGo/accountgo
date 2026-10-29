@@ -39,11 +39,17 @@ namespace Services.Banking
         public const int MaxExternalIdLength = 200;
         private const int SyntheticHashLength = 32;
 
-        private static readonly string[] DefaultDateFormats =
+        /// <summary>
+        /// Formats that read the same way everywhere (year first, or a month name). Numeric day/month orders such as
+        /// 03/04/2026 are never guessed: the column map must carry the format, or the row is refused.
+        /// </summary>
+        private static readonly string[] UnambiguousDateFormats =
         {
-            "yyyy-MM-dd", "yyyy/MM/dd", "M/d/yyyy", "M/d/yy", "d-MMM-yyyy", "dd-MMM-yy",
-            "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm:ss", "M/d/yyyy H:mm", "M/d/yyyy h:mm:ss tt", "yyyyMMdd"
+            "yyyy-MM-dd", "yyyy/MM/dd", "d-MMM-yyyy", "dd-MMM-yy",
+            "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyyMMdd"
         };
+
+        private const int MaxDecimalCommaFractionDigits = 2;
 
         private static readonly char[] CandidateDelimiters = { ',', ';', '\t' };
 
@@ -251,11 +257,13 @@ namespace Services.Banking
             }
             else
             {
-                parsed = DateTime.TryParseExact(raw, DefaultDateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+                parsed = DateTime.TryParseExact(raw, UnambiguousDateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
             }
 
             if (!parsed)
-                throw new FormatException($"Date '{raw}' is not recognised.");
+                throw new FormatException(string.IsNullOrWhiteSpace(format)
+                    ? $"Date '{raw}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map."
+                    : $"Date '{raw}' does not match the format '{format.Trim()}'.");
             return DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
         }
 
@@ -405,10 +413,30 @@ namespace Services.Banking
 
         private static decimal ParseOfxAmount(string? raw)
         {
-            var amount = Math.Round(ParseAmount(raw?.Replace(',', '.'), "Amount"), 2, MidpointRounding.AwayFromZero);
+            var amount = Math.Round(ParseAmount(NormalizeOfxDecimalComma(raw), "Amount"), 2, MidpointRounding.AwayFromZero);
             if (amount == 0m)
                 throw new FormatException("Amount is zero.");
             return amount;
+        }
+
+        /// <summary>
+        /// Some OFX 1.x files write the decimal separator as a comma ("12,50"). A comma is only a decimal separator when
+        /// it is the single separator and one or two digits follow it; every other comma is a thousands separator
+        /// ("1,234" is 1234) and ParseAmount drops it.
+        /// </summary>
+        private static string? NormalizeOfxDecimalComma(string? raw)
+        {
+            if (raw == null || raw.Contains('.'))
+                return raw;
+
+            var lastComma = raw.LastIndexOf(',');
+            if (lastComma < 0 || lastComma != raw.IndexOf(','))
+                return raw;
+
+            var fractionDigits = raw.Length - lastComma - 1;
+            return fractionDigits is >= 1 and <= MaxDecimalCommaFractionDigits
+                ? string.Concat(raw.AsSpan(0, lastComma), ".", raw.AsSpan(lastComma + 1))
+                : raw;
         }
 
         private static string? Truncate(string? value, int max)

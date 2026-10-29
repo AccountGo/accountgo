@@ -65,6 +65,62 @@ public class BankStatementParserTests
         Assert.Equal("Bakery", row.Payee);
     }
 
+    [Theory]
+    [InlineData("03/04/2026")]
+    [InlineData("13/04/2026")]
+    [InlineData("3/4/26")]
+    public void Csv_NumericSlashDatesAreRefusedWithoutADateFormat(string rawDate)
+    {
+        var csv = $"d,a\n{rawDate},5.00\n";
+        var map = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1 };
+
+        var row = Assert.Single(BankStatementParser.ParseCsv(csv, map));
+
+        Assert.False(row.IsValid);
+        Assert.Contains("needs a date format", row.Error);
+    }
+
+    [Fact]
+    public void Csv_AmbiguousDateIsReadTheWayTheColumnMapSays()
+    {
+        const string csv = "d,a\n03/04/2026,5.00\n";
+
+        var monthFirst = Assert.Single(BankStatementParser.ParseCsv(
+            csv, new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1, DateFormat = "MM/dd/yyyy" }));
+        var dayFirst = Assert.Single(BankStatementParser.ParseCsv(
+            csv, new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1, DateFormat = "dd/MM/yyyy" }));
+
+        Assert.Equal(new DateTime(2026, 3, 4), monthFirst.PostedDate);
+        Assert.Equal(new DateTime(2026, 4, 3), dayFirst.PostedDate);
+    }
+
+    [Fact]
+    public void Csv_DateThatDoesNotMatchTheGivenFormatIsAnError()
+    {
+        var map = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1, DateFormat = "dd/MM/yyyy" };
+
+        var row = Assert.Single(BankStatementParser.ParseCsv("d,a\n2026-10-01,5.00\n", map));
+
+        Assert.False(row.IsValid);
+        Assert.Contains("dd/MM/yyyy", row.Error);
+    }
+
+    [Theory]
+    [InlineData("2026-10-01")]
+    [InlineData("2026/10/01")]
+    [InlineData("20261001")]
+    [InlineData("1-Oct-2026")]
+    [InlineData("2026-10-01 08:30:00")]
+    public void Csv_UnambiguousDatesNeedNoFormat(string rawDate)
+    {
+        var map = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1 };
+
+        var row = Assert.Single(BankStatementParser.ParseCsv($"d,a\n{rawDate},5.00\n", map));
+
+        Assert.True(row.IsValid, row.Error);
+        Assert.Equal(new DateTime(2026, 10, 1), row.PostedDate);
+    }
+
     [Fact]
     public void Csv_DepositAndWithdrawalColumns_AndInvertSign()
     {
@@ -91,7 +147,7 @@ public class BankStatementParserTests
 
         Assert.Equal(4, rows.Count);
         Assert.Equal(3, rows.Count(r => !r.IsValid));
-        Assert.Contains("not recognised", rows[0].Error);
+        Assert.Contains("date format", rows[0].Error);
         Assert.Contains("not a number", rows[1].Error);
         Assert.Contains("zero", rows[2].Error);
         Assert.True(rows[3].IsValid);
@@ -154,5 +210,23 @@ public class BankStatementParserTests
         Assert.Equal("X1", row.ExternalId);
 
         Assert.Throws<InvalidOperationException>(() => BankStatementParser.ParseOfx("<OFX></OFX>"));
+    }
+
+    [Theory]
+    [InlineData("1,234.56", 1234.56)]
+    [InlineData("-1,234.56", -1234.56)]
+    [InlineData("1,234", 1234)]
+    [InlineData("-12,345,678.90", -12345678.90)]
+    [InlineData("12,50", 12.50)]
+    [InlineData("-0,5", -0.5)]
+    [InlineData("1250.50", 1250.50)]
+    public void Ofx_AmountKeepsThousandsCommaOutOfTheDecimalPoint(string raw, double expected)
+    {
+        var ofx = $"<OFX><BANKTRANLIST><STMTTRN><DTPOSTED>20261001<TRNAMT>{raw}<FITID>T1<NAME>X</STMTTRN></BANKTRANLIST></OFX>";
+
+        var row = Assert.Single(BankStatementParser.ParseOfx(ofx));
+
+        Assert.True(row.IsValid, row.Error);
+        Assert.Equal((decimal)expected, row.Amount);
     }
 }
