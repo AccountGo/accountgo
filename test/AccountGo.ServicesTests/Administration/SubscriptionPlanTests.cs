@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using AutoMapper;
 using Core.Data;
 using Core.Domain;
@@ -12,13 +14,14 @@ using Moq;
 using Services.Administration;
 using Services.Billing;
 using Services.Security;
+using Xunit;
 
 namespace AccountGo.ServicesTests.Administration;
 
-/// <summary>The server is the only source of plan rules: unknown plans are rejected, not silently mapped.</summary>
+/// <summary>Community UpdateSubscription stores the resolved catalog key and uses catalog module allow-lists.</summary>
 public class SubscriptionPlanTests
 {
-    private readonly Company _company = new() { Id = 7, Name = "Acme", Slug = "acme", Plan = "invoicing_free" };
+    private readonly Company _company = new() { Id = 7, Name = "Acme", Slug = "acme", Plan = "community" };
     private readonly Mock<IRepository<Company>> _companyRepo = new();
     private readonly AdministrationService _service;
 
@@ -43,57 +46,35 @@ public class SubscriptionPlanTests
             Mock.Of<IRepository<PurchaseInvoiceLine>>(),
             Mock.Of<ISecurityRepository>(),
             Mock.Of<IMapper>(),
+            new CommunityPlanCatalog(),
             _companyRepo.Object,
             tenant.Object);
     }
 
     [Theory]
     [InlineData("foo")]
-    [InlineData("pro")]
-    [InlineData("starter")]
-    public void UpdateSubscription_UnknownPlan_IsRejectedAndNotSaved(string plan)
-    {
-        var ex = Assert.Throws<ArgumentException>(() => _service.UpdateSubscription(new UpdateSubscriptionDto { Plan = plan }));
-
-        Assert.Contains(plan, ex.Message);
-        Assert.Equal("invoicing_free", _company.Plan);
-        _companyRepo.Verify(r => r.Update(It.IsAny<Company>()), Times.Never);
-    }
-
-    [Theory]
-    [InlineData("invoicing_free")]
-    [InlineData("invoicing_pro")]
     [InlineData("accounting_free")]
-    [InlineData("accounting_pro")]
-    public void UpdateSubscription_ProductTierPlan_IsAccepted(string plan)
+    [InlineData("invoicing")]
+    public void UpdateSubscription_AnyPlanKey_StoresCommunity(string plan)
     {
         var result = _service.UpdateSubscription(new UpdateSubscriptionDto { Plan = plan });
 
-        Assert.Equal(plan, _company.Plan);
-        Assert.Equal(Company.ModulesForPlan(plan), result.ActiveModules);
+        Assert.Equal(CommunityPlanCatalog.PlanKey, _company.Plan);
+        Assert.Equal(CommunityPlanCatalog.PlanKey, result.Plan);
+        Assert.Equal(CommunityPlanCatalog.AllModules, result.ActiveModules);
     }
 
     [Fact]
-    public void UpdateSubscription_KnownPlan_IsNormalizedAndResetsModules()
+    public void UpdateSubscription_NoPlan_KeepsResolvedKeyAndAppliesModules()
     {
-        _company.ActiveModulesJson = "[\"sales\"]";
+        _company.Plan = "legacy_key";
 
-        var result = _service.UpdateSubscription(new UpdateSubscriptionDto { Plan = "  Accounting " });
+        var result = _service.UpdateSubscription(new UpdateSubscriptionDto
+        {
+            ActiveModules = new List<string> { "sales", "reports" }
+        });
 
-        Assert.Equal("accounting_free", _company.Plan);
-        Assert.Null(_company.ActiveModulesJson);
-        Assert.Equal("[]", _company.DisabledModulesJson);
-        Assert.Equal(Company.ModulesForPlan("accounting_free"), result.ActiveModules);
-    }
-
-    [Fact]
-    public void UpdateSubscription_NoPlan_KeepsCurrentPlanAndAppliesModules()
-    {
-        _company.Plan = "accounting_free";
-
-        var result = _service.UpdateSubscription(new UpdateSubscriptionDto { ActiveModules = new List<string> { "sales", "reports" } });
-
-        Assert.Equal("accounting_free", _company.Plan);
+        Assert.Equal(CommunityPlanCatalog.PlanKey, _company.Plan);
         Assert.Equal(new[] { "sales", "reports" }, result.ActiveModules);
         Assert.Contains("financials", _company.DisabledModulesJson!);
     }

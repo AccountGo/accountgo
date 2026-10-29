@@ -8,7 +8,7 @@ using Core.Domain;
 using Core.Domain.Financials;
 using Core.Entitlements;
 using Core.Tenancy;
-using Microsoft.Extensions.Logging;
+using Services.Billing;
 
 namespace Services.Entitlements;
 
@@ -19,15 +19,15 @@ public class CommunityEntitlementService : EntitlementService
 {
     public CommunityEntitlementService(
         EntitlementsOptions options,
+        IPlanCatalog plans,
         IRepository<Company> companies,
         IRepository<CompanyMember> members,
         IRepository<CompanyInvitation> invitations,
         IRepository<EntitlementUsage> usage,
         IRepository<Bank> banks,
         ITenantContext tenant,
-        TimeProvider? time = null,
-        ILogger<EntitlementService>? logger = null)
-        : base(options, companies, members, invitations, usage, banks, tenant, time, logger)
+        TimeProvider? time = null)
+        : base(options, plans, companies, members, invitations, usage, banks, tenant, time)
     {
     }
 }

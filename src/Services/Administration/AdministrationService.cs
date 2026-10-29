@@ -25,7 +25,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Services.Entitlements;
+using Services.Billing;
 
 namespace Services.Administration
 {
@@ -47,6 +47,7 @@ namespace Services.Administration
         private readonly IMapper _mapper;
         private readonly Core.Tenancy.ITenantContext? _tenantContext;
         private readonly Core.Entitlements.IEntitlementService? _entitlements;
+        private readonly IPlanCatalog _plans;
         private readonly ILogger<AdministrationService>? _logger;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
@@ -62,6 +63,7 @@ namespace Services.Administration
             IRepository<PurchaseInvoiceLine> purchaseInvoiceLineRepo,
             ISecurityRepository securityRepository,
             IMapper mapper,
+            IPlanCatalog plans,
             IRepository<Company> company = null,
             Core.Tenancy.ITenantContext? tenantContext = null,
             Core.Entitlements.IEntitlementService? entitlements = null,
@@ -70,6 +72,7 @@ namespace Services.Administration
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _entitlements = entitlements;
+            _plans = plans ?? throw new ArgumentNullException(nameof(plans));
             _logger = logger;
             _fiscalYearRepo = fiscalYearRepo;
             _taxGroupRepo = taxGroupRepo;
@@ -258,15 +261,16 @@ namespace Services.Administration
             var company = _company.GetById(companyId)
                 ?? throw new Core.Tenancy.TenantEntityNotFoundException(nameof(Company), companyId);
 
+            var resolved = _plans.ResolveStoredPlan(company.Plan);
             return new TenantSubscriptionDto
             {
                 CompanyId = company.Id,
                 CompanyName = company.Name ?? "AccountGo Organization",
                 Slug = company.Slug ?? $"org-{company.Id}",
-                Plan = Company.NormalizePlanKey(company.Plan ?? "accounting_free"),
+                Plan = resolved.Key,
                 SubscriptionStatus = company.SubscriptionStatus ?? "active",
                 SubscriptionValidUntil = company.SubscriptionValidUntil,
-                ActiveModules = company.GetActiveModules()
+                ActiveModules = PlanModuleResolver.ResolveActiveModules(resolved, company)
             };
         }
 
@@ -282,27 +286,26 @@ namespace Services.Administration
                 throw new Core.Tenancy.TenantEntityNotFoundException(nameof(Company), companyId);
             }
 
-            var previousPlan = company.Plan;
-            // Null/blank plan = keep the current plan and only change modules. Unknown plans are rejected.
+            // Null/blank plan = keep the current plan and only change modules.
             if (!string.IsNullOrWhiteSpace(dto.Plan))
             {
-                if (!Company.IsKnownPlan(dto.Plan))
+                if (!_plans.TryResolvePlan(dto.Plan, out var resolvedNew))
                     throw new ArgumentException($"Unknown plan '{dto.Plan}'.");
-                var newPlan = Company.NormalizePlanKey(dto.Plan);
+                var newPlan = resolvedNew.Key;
+                var currentKey = _plans.ResolveStoredPlan(company.Plan).Key;
                 // Staying on a plan is always allowed (e.g. toggling modules on an ops-assigned plan);
                 // switching needs a self-service plan unless ops manages the workspace (comp tier).
-                if (!string.Equals(newPlan, Company.NormalizePlanKey(company.Plan), StringComparison.OrdinalIgnoreCase)
+                if (!string.Equals(newPlan, currentKey, StringComparison.OrdinalIgnoreCase)
                     && Core.Entitlements.CompanyTiers.Normalize(company.Tier) != Core.Entitlements.CompanyTiers.Comp)
                     _entitlements?.EnsureSelfServicePlan(newPlan);
                 company.Plan = newPlan;
             }
-            company.Plan = Company.NormalizePlanKey(company.Plan ?? "accounting_free");
 
-            // Paid → free plan key writes PaidAccessEndedAt; free ↔ free never touches it.
-            if (Company.IsPaidPlan(previousPlan) && !Company.IsPaidPlan(company.Plan))
-                company.PaidAccessEndedAt = DateTime.UtcNow;
+            var resolved = _plans.ResolveStoredPlan(company.Plan);
+            company.Plan = resolved.Key;
+            var planModules = resolved.IncludedModules ?? new List<string>();
+            var requiredModules = resolved.RequiredModules ?? new List<string>();
 
-            var planModules = Company.ModulesForPlan(company.Plan);
             if (dto.ActiveModules != null && dto.ActiveModules.Count > 0)
             {
                 var requested = dto.ActiveModules
@@ -315,16 +318,16 @@ namespace Services.Administration
                     throw new ArgumentException(
                         $"Module(s) not included in the {company.Plan} plan: {string.Join(", ", disallowed)}.");
 
-                // Keep plan order; force plan-required cores (sales always; purchases on Invoicing).
+                // Keep plan order; force plan-required cores.
                 var sanitized = planModules.Where(m =>
-                    Company.IsRequiredModule(company.Plan, m)
+                    requiredModules.Contains(m, StringComparer.OrdinalIgnoreCase)
                     || requested.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
                 if (sanitized.Count == 0)
-                    sanitized = planModules.Where(m => Company.IsRequiredModule(company.Plan, m)).ToList();
+                    sanitized = planModules.Where(m => requiredModules.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
                 if (sanitized.Count == 0)
                     sanitized = new List<string> { "sales" };
                 var disabled = planModules
-                    .Where(m => !Company.IsRequiredModule(company.Plan, m)
+                    .Where(m => !requiredModules.Contains(m, StringComparer.OrdinalIgnoreCase)
                         && !sanitized.Contains(m, StringComparer.OrdinalIgnoreCase))
                     .ToList();
                 company.DisabledModulesJson = System.Text.Json.JsonSerializer.Serialize(disabled);
@@ -348,17 +351,10 @@ namespace Services.Administration
                 return false;
 
             var companyId = _tenantContext.CompanyId.Value;
-            if (_entitlements != null && !_entitlements.Options.LegacyModuleGate)
-            {
-                // Write-mode sugar until callers migrate to Evaluate(ModuleAccess).
-                return _entitlements.Evaluate(companyId, new Core.Entitlements.EntitlementAction.Module(moduleKey)).Allowed;
-            }
-
-            var company = _company.GetById(companyId);
-            if (company == null) return false;
-            var allowed = Core.Billing.SubscriptionAccess.IsModuleAvailable(company, moduleKey);
-            EntitlementEngineShadow.CompareModuleAllow(_entitlements, _logger, companyId, moduleKey, allowed);
-            return allowed;
+            if (_entitlements == null)
+                return false;
+            // Write-mode sugar until callers migrate to Evaluate(ModuleAccess).
+            return _entitlements.Evaluate(companyId, new Core.Entitlements.EntitlementAction.Module(moduleKey)).Allowed;
         }
 
         public List<ModuleDefinitionDto> GetModuleDefinitions()

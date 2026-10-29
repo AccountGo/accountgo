@@ -49,7 +49,8 @@ public class SignUpAndOrganizationTests : IDisposable
     {
         var controller = new OrganizationsController(_tenantContext, _db,
             new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext)),
-            new CompanyAccountingPolicyService(_db));
+            new CompanyAccountingPolicyService(_db),
+            new Services.Billing.CommunityPlanCatalog());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -86,7 +87,7 @@ public class SignUpAndOrganizationTests : IDisposable
         Assert.Equal(StatusCodes.Status201Created, createdResult.StatusCode);
 
         var company = _db.Companies.Single(c => c.Slug == "pacific-rim-trading");
-        Assert.Equal("accounting_free", company.Plan);
+        Assert.Equal("community", company.Plan);
 
         var member = _db.CompanyMembers.Single(m => m.CompanyId == company.Id);
         Assert.Equal(CallerId, member.UserId);

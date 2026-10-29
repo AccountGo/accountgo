@@ -15,6 +15,7 @@ using Dto.Subscription;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using Services.Administration;
+using Services.Billing;
 using Services.Financial;
 
 namespace Api.Mcp.Tools
@@ -27,6 +28,7 @@ namespace Api.Mcp.Tools
         private readonly IFinancialService _financialService;
         private readonly IAdministrationService _adminService;
         private readonly IEntitlementService _entitlements;
+        private readonly IPlanCatalog _plans;
         private readonly ITenantContext _tenantContext;
         private readonly ILogger<FinancialMcpTools> _logger;
 
@@ -34,12 +36,14 @@ namespace Api.Mcp.Tools
             IFinancialService financialService,
             IAdministrationService adminService,
             IEntitlementService entitlements,
+            IPlanCatalog plans,
             ITenantContext tenantContext,
             ILogger<FinancialMcpTools>? logger = null)
         {
             _financialService = financialService ?? throw new ArgumentNullException(nameof(financialService));
             _adminService = adminService ?? throw new ArgumentNullException(nameof(adminService));
             _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
+            _plans = plans ?? throw new ArgumentNullException(nameof(plans));
             _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
             _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<FinancialMcpTools>.Instance;
         }
@@ -553,40 +557,31 @@ namespace Api.Mcp.Tools
 
         private EntitlementDenial BuildPlanRestrictedDenial(IReadOnlyList<string> requiredModules)
         {
-            TenantSubscriptionDto? subscription = null;
+            string planKey = "unknown";
+            string planDisplay = "unknown";
             try
             {
-                subscription = _adminService.GetCurrentSubscription();
+                var snapshot = _entitlements.Get(_tenantContext.RequireCompanyId());
+                planKey = snapshot.EffectivePlan ?? snapshot.Plan;
+                planDisplay = _plans.ResolveStoredPlan(planKey).Name;
+                if (string.IsNullOrWhiteSpace(planDisplay))
+                    planDisplay = planKey;
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Could not load subscription while building PlanRestricted message");
+                _logger.LogDebug(ex, "Could not load entitlements while building PlanRestricted message");
             }
 
-            var planKey = Company.NormalizePlanKey(subscription?.Plan ?? "unknown");
-            var planDisplay = PlanDisplayName(planKey);
             var org = OrgLabel();
             var modulesLabel = string.Join("' or '", requiredModules);
-
-            string message;
-            if (planKey.StartsWith("invoicing", StringComparison.Ordinal))
-            {
-                message =
-                    $"The active workspace '{org}' is on the {planDisplay} plan, which includes quotes, invoicing, and expenses, but does not include double-entry accounting or financial statements. Upgrade to the Accounting or Enterprise plan under Settings > Subscription to access financial reports and statements.";
-            }
-            else
-            {
-                message =
-                    $"The active workspace '{org}' does not have the '{modulesLabel}' module enabled (plan: {planDisplay}). Enable the required modules or upgrade under Settings > Subscription.";
-            }
+            var message =
+                $"The active workspace '{org}' does not have the '{modulesLabel}' module enabled (plan: {planDisplay}). Enable the required modules under Settings > Subscription.";
 
             return new EntitlementDenial(
                 FinancialMcpStatus.PlanRestricted,
                 message,
                 RequiredModules: requiredModules,
-                UpgradePlanHint: planKey.StartsWith("invoicing", StringComparison.Ordinal) || planKey == "unknown"
-                    ? "accounting_free"
-                    : null);
+                UpgradePlanHint: null);
         }
 
         private T Denied<T>(EntitlementDenial denial) where T : FinancialMcpBaseResponse, new()
@@ -608,15 +603,6 @@ namespace Api.Mcp.Tools
 
         private string OrgLabel() =>
             _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}";
-
-        private static string PlanDisplayName(string planKey)
-        {
-            var key = Company.NormalizePlanKey(planKey);
-            if (key.StartsWith("invoicing", StringComparison.Ordinal)) return "Invoicing";
-            if (key.StartsWith("accounting", StringComparison.Ordinal)) return "Accounting";
-            if (key is "enterprise") return "Enterprise";
-            return string.IsNullOrWhiteSpace(planKey) ? "unknown" : planKey;
-        }
 
         private readonly record struct EntitlementDenial(
             string Status,

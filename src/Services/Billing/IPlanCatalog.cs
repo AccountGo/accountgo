@@ -15,4 +15,16 @@ public interface IPlanCatalog
 {
     /// <summary>The final plan list, in display order, with <see cref="PlanDefinitionDto.SelfService"/> already set.</summary>
     IReadOnlyList<PlanDefinitionDto> GetPlans();
+
+    /// <summary>
+    /// Validates a client-supplied plan key for create / update.
+    /// When true, <paramref name="plan"/> is the catalog entry to store.
+    /// </summary>
+    bool TryResolvePlan(string? key, out PlanDefinitionDto plan);
+
+    /// <summary>
+    /// Resolves a stored company plan key for module allow-lists. Never fails —
+    /// the catalog owns aliases and fallbacks.
+    /// </summary>
+    PlanDefinitionDto ResolveStoredPlan(string? storedPlan);
 }

@@ -219,6 +219,7 @@ namespace AccountGo.BackendTests
         [Fact]
         public async Task Catalog_StockCreationIsModuleGated_OpeningStockPosts_AndBillsUseInventory()
         {
+            SetInventoryModuleEnabled(false);
             var stock = new Dto.Inventory.CatalogItem
             {
                 Name = "Catalog stock",
@@ -288,13 +289,10 @@ namespace AccountGo.BackendTests
             WithDb(db =>
             {
                 var company = db.Companies.Single(c => c.Id == _companyId);
-                company.Plan = enabled ? "enterprise" : "accounting";
-                var modules = company.GetActiveModules();
-                if (enabled && !modules.Contains("inventory"))
-                    modules.Add("inventory");
-                if (!enabled)
-                    modules.RemoveAll(m => string.Equals(m, "inventory", StringComparison.OrdinalIgnoreCase));
-                company.ActiveModulesJson = System.Text.Json.JsonSerializer.Serialize(modules);
+                company.Plan = "community";
+                company.ActiveModulesJson = null;
+                // Community catalog includes inventory; opt out via DisabledModulesJson when disabled.
+                company.DisabledModulesJson = enabled ? "[]" : "[\"inventory\"]";
                 db.SaveChanges();
             });
         }

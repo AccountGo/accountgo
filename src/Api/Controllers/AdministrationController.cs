@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Services.Administration;
+using Services.Billing;
 using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
@@ -39,6 +40,7 @@ namespace Api.Controllers
         private readonly ISecurityService _securityService;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
+        private readonly IPlanCatalog _plans;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -47,7 +49,8 @@ namespace Api.Controllers
             IInventoryService inventoryService,
             ISecurityService securityService,
             UserManager<ApplicationUser> userManager,
-            Core.Tenancy.ITenantContext tenantContext)
+            Core.Tenancy.ITenantContext tenantContext,
+            IPlanCatalog plans)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -57,6 +60,7 @@ namespace Api.Controllers
             _securityService = securityService;
             _userManager = userManager;
             _tenantContext = tenantContext;
+            _plans = plans;
         }
 
         [Api.Filters.RequireWorkspaceRole(Core.Domain.CompanyMemberRole.Owner)]
@@ -119,10 +123,10 @@ namespace Api.Controllers
                 slug = string.IsNullOrWhiteSpace(company.Slug) ? (company.ShortName?.ToLowerInvariant() ?? $"org-{company.Id}") : company.Slug,
                 companyCode = company.CompanyCode,
                 cra = company.CRA,
-                plan = Core.Domain.Company.NormalizePlanKey(company.Plan ?? "accounting_free"),
+                plan = _plans.ResolveStoredPlan(company.Plan).Key,
                 subscriptionStatus = company.SubscriptionStatus ?? "active",
                 subscriptionValidUntil = company.SubscriptionValidUntil,
-                activeModules = company.GetActiveModules()
+                activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company)
             });
         }
 
@@ -422,9 +426,9 @@ namespace Api.Controllers
                 slug = company.Slug,
                 companyCode = company.CompanyCode,
                 cra = company.CRA,
-                plan = company.Plan,
+                plan = _plans.ResolveStoredPlan(company.Plan).Key,
                 subscriptionStatus = company.SubscriptionStatus,
-                activeModules = company.GetActiveModules()
+                activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company)
             });
         }
     }

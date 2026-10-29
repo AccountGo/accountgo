@@ -1,7 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using Core.Billing;
-using Core.Data;
 using Core.Domain;
 using Core.Entitlements;
 using Core.Tenancy;
@@ -9,8 +7,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Services.Entitlements;
 
 namespace Api.Filters
 {
@@ -48,48 +44,7 @@ namespace Api.Filters
             var companyId = tenantContext.RequireCompanyId();
             var entitlements = context.HttpContext.RequestServices.GetRequiredService<IEntitlementService>();
             var access = ResolveAccess(context);
-
-            EntitlementDecision decision;
-            if (entitlements.Options.LegacyModuleGate)
-            {
-                var companies = context.HttpContext.RequestServices.GetRequiredService<IRepository<Company>>();
-                var company = companies.GetById(companyId)
-                    ?? throw new TenantEntityNotFoundException(nameof(Company), companyId);
-                var allowed = Array.Exists(_moduleKeys, m => SubscriptionAccess.IsModuleAvailable(company, m));
-                string? lapsedModule = null;
-                if (!allowed && Company.IsPaidPlan(company.Plan) && SubscriptionAccess.IsInactive(company))
-                    lapsedModule = Array.Find(_moduleKeys, company.HasModule);
-                var denyCode = !allowed
-                    ? (lapsedModule != null ? "SUBSCRIPTION_INACTIVE" : "MODULE_NOT_SUBSCRIBED")
-                    : null;
-                var requiredModule = lapsedModule ?? _moduleKeys[0];
-                var subscriptionStatus = company.SubscriptionStatus ?? "canceled";
-
-                var logger = context.HttpContext.RequestServices.GetService<ILoggerFactory>()
-                    ?.CreateLogger(typeof(RequireModuleAttribute));
-                EntitlementEngineShadow.CompareModuleGate(
-                    entitlements, logger, company.Id, _moduleKeys, allowed, denyCode);
-
-                decision = allowed
-                    ? new EntitlementDecision(true, null, null, RequiredModule: requiredModule,
-                        SubscriptionStatus: subscriptionStatus)
-                    : new EntitlementDecision(
-                        Allowed: false,
-                        Code: denyCode ?? "MODULE_NOT_SUBSCRIBED",
-                        Detail: string.Equals(denyCode, "SUBSCRIPTION_INACTIVE", StringComparison.Ordinal)
-                            ? "This workspace's subscription is inactive. Update billing to restore paid modules."
-                            : (_moduleKeys.Length == 1
-                                ? $"The '{_moduleKeys[0]}' module is not included in this organization's active plan."
-                                : $"None of the '{string.Join("', '", _moduleKeys)}' modules is included in this organization's active plan."),
-                        RequiredModule: requiredModule,
-                        // Legacy path kept prior hard-coded true; engine path computes via AllowedTransitions.
-                        UpgradeAvailable: true,
-                        SubscriptionStatus: subscriptionStatus);
-            }
-            else
-            {
-                decision = entitlements.Evaluate(companyId, new EntitlementAction.Module(access, _moduleKeys));
-            }
+            var decision = entitlements.Evaluate(companyId, new EntitlementAction.Module(access, _moduleKeys));
 
             if (!decision.Allowed)
             {

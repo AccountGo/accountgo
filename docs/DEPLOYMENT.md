@@ -86,10 +86,8 @@ docker run -d \
 | `RESEND_API_KEY` | Resend API key when `EMAIL_PROVIDER=Resend` |
 | `ANTER_API_KEY` / `ANTER_PROJECT_ID` | Optional AccountGo Assistant; set via secrets / env — do not commit |
 | `JwtSettings__validIssuer` / `validAudience` | Match your public API origin |
-| `ENTITLEMENTS_ENABLED` | Optional. `"true"` turns on free-tier **quota** checks; unset/`false` = quotas unlimited and **all plans self-service** (self-host default). Does **not** change modules, lifecycle, ReadOnlyModules, or features (§8.1) |
-| `ENTITLEMENT_FEATURES_ENABLED` | Optional. Default on; `"false"` empties Features only (quotas unaffected). Community never emits feature keys either way |
-| `ENTITLEMENTS_SELF_SERVICE_PLANS` | Optional comma list (e.g. `invoicing,accounting`). When `ENTITLEMENTS_ENABLED` is false or this list is empty = all known plans |
-| `ENTITLEMENTS_FREE_*` | Optional per-resource free limits (see `.env.example`). Missing key = unlimited for that resource |
+| `ENTITLEMENTS_ENABLED` | Optional. Used by other implementations for quota enforcement; the community engine ignores it (quotas stay unlimited) |
+| `ENTITLEMENT_FEATURES_ENABLED` | Optional. Default on. Used by other implementations to suppress feature emission; the community engine never emits feature keys either way |
 | `SUPPORT_EMAIL` | Shown when a quota is exceeded |
 | `SERVER_TIMING_ENABLED` | Optional. Default `"true"`. When `"false"`, no `Server-Timing` header from the .NET API, API worker, or web worker |
 

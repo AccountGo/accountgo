@@ -60,7 +60,8 @@ namespace AccountGo.BackendTests.Financial
         }
 
         private FinancialMcpTools CreateTools() =>
-            new(_mockFinancial.Object, _mockAdmin.Object, _mockEntitlements.Object, _mockTenant.Object);
+            new(_mockFinancial.Object, _mockAdmin.Object, _mockEntitlements.Object,
+                new Services.Billing.CommunityPlanCatalog(), _mockTenant.Object);
 
         #region Phase 1: Chart of Accounts Tests
 
@@ -82,22 +83,26 @@ namespace AccountGo.BackendTests.Financial
         public async Task GetChartOfAccounts_ReturnsPlanRestrictedWhenSubscriptionModuleDisabled()
         {
             AllowModules(false);
-            _mockAdmin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto
-            {
-                CompanyId = 1,
-                Slug = "ph-financials",
-                Plan = "invoicing_free",
-                ActiveModules = new List<string> { "sales", "purchases" }
-            });
+            _mockEntitlements.Setup(e => e.Get(It.IsAny<int>())).Returns(new EntitlementSnapshot(
+                Enabled: false,
+                Plan: "community",
+                Tier: CompanyTiers.Free,
+                Limited: false,
+                Modules: new List<string> { "sales" },
+                SelfServicePlans: new[] { "community" },
+                Usage: Array.Empty<ResourceUsage>(),
+                SupportEmail: null,
+                EffectivePlan: "community"));
+            _mockTenant.Setup(t => t.RequireCompanyId()).Returns(1);
 
             var tools = CreateTools();
 
             var response = await tools.GetChartOfAccounts();
 
             Assert.Equal(FinancialMcpStatus.PlanRestricted, response.Status);
-            Assert.Contains("Invoicing", response.Message);
+            Assert.Contains("Community", response.Message);
             Assert.Contains("Settings > Subscription", response.Message);
-            Assert.Equal("accounting_free", response.UpgradePlanHint);
+            Assert.Null(response.UpgradePlanHint);
             Assert.Equal(new[] { "financials", "reports" }, response.RequiredModules);
             Assert.Empty(response.Accounts);
             Assert.Equal(0, response.TotalAccounts);
@@ -108,11 +113,22 @@ namespace AccountGo.BackendTests.Financial
         public async Task GetChartOfAccounts_ReturnsPlanRestrictedWhenAccountingPlanModulesDisabled()
         {
             AllowModules(false);
+            _mockEntitlements.Setup(e => e.Get(It.IsAny<int>())).Returns(new EntitlementSnapshot(
+                Enabled: false,
+                Plan: "community",
+                Tier: CompanyTiers.Free,
+                Limited: false,
+                Modules: new List<string> { "sales", "purchases" },
+                SelfServicePlans: new[] { "community" },
+                Usage: Array.Empty<ResourceUsage>(),
+                SupportEmail: null,
+                EffectivePlan: "community"));
+            _mockTenant.Setup(t => t.RequireCompanyId()).Returns(1);
             _mockAdmin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto
             {
                 CompanyId = 1,
                 Slug = "ph-financials",
-                Plan = "accounting",
+                Plan = "community",
                 ActiveModules = new List<string> { "sales", "purchases" }
             });
 
@@ -121,7 +137,7 @@ namespace AccountGo.BackendTests.Financial
             var response = await tools.GetChartOfAccounts();
 
             Assert.Equal(FinancialMcpStatus.PlanRestricted, response.Status);
-            Assert.Contains("Accounting", response.Message);
+            Assert.Contains("Community", response.Message);
             Assert.Contains("financials", response.Message);
             Assert.Null(response.UpgradePlanHint);
             Assert.Empty(response.Accounts);
