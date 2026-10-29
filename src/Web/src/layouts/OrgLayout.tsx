@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Outlet, useNavigate, Link } from 'react-router-dom';
 import { Building2, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo, Organization } from '../types';
-import { isEnterprisePlan, isInvoicingProduct } from '../lib/plans';
 import { setPersistedOrgSlug, clearPersistedOrgSlug } from '../lib/storage';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
@@ -74,13 +73,9 @@ export const OrgLayout: React.FC = () => {
           shortName: organization.shortName,
           role: organization.role,
           plan: organization.plan,
-          avatarBg: isInvoicingProduct(organization.plan)
-            ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600'
-            : isEnterprisePlan(organization.plan)
-              ? 'bg-gradient-to-br from-indigo-500 to-blue-600'
-              : 'bg-gradient-to-br from-emerald-500 to-teal-600',
+          avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
           whitelabel: {
-            themeId: isInvoicingProduct(organization.plan) ? 'tokyo-night' : isEnterprisePlan(organization.plan) ? 'sapphire' : 'accountgo',
+            themeId: 'accountgo',
             brandName: organization.name,
           },
           subscription: {
