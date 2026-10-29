@@ -23,6 +23,8 @@ import GeneralLedger from './pages/GeneralLedger';
 import JournalEntries from './pages/JournalEntries';
 import Reports from './pages/Reports';
 import ChartOfAccounts from './pages/ChartOfAccounts';
+import Banking from './pages/Banking';
+import BankRegisterPage from './pages/BankRegister';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PermissionDeniedCard, RequiresModule, useTenantContext } from './components/Gating';
@@ -142,6 +144,22 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="financials">
                 <ChartOfAccounts />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'banking',
+            element: (
+              <RequiresModule module={['sales', 'purchases', 'financials']}>
+                <Banking />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'banking/:bankId',
+            element: (
+              <RequiresModule module={['sales', 'purchases', 'financials']}>
+                <BankRegisterPage />
               </RequiresModule>
             ),
           },

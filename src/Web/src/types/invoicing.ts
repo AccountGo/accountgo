@@ -135,6 +135,8 @@ export interface RecordPaymentPayload {
   paymentMethod: string;
   referenceNo?: string;
   notes?: string;
+  /** Deposit-to bank account; omitted when the workspace has no banks. */
+  bankAccountId?: number | null;
 }
 
 /** A client or vendor as a picker lists it. */

@@ -33,6 +33,8 @@ import { ModalShell } from '../components/ModalShell';
 import { VoidDialog } from '../components/VoidDialog';
 import { invoiceTitle } from '../lib/invoiceNumber';
 import { localToday } from '../lib/businessDays';
+import { pickDefaultReceiptBankId } from '../lib/bankingForm';
+import type { BankAccountPickerItem } from '../types/banking';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
 import { useCapabilities } from '../lib/entitlements';
@@ -84,6 +86,8 @@ export const InvoiceDetail: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<string>('Bank Transfer');
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [paymentNotes, setPaymentNotes] = useState<string>('');
+  const [depositBanks, setDepositBanks] = useState<BankAccountPickerItem[] | null>(null);
+  const [depositBankId, setDepositBankId] = useState<number | ''>('');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState<boolean>(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
@@ -163,6 +167,22 @@ export const InvoiceDetail: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!isPaymentModalOpen) return;
+    let cancelled = false;
+    (async () => {
+      const res = await authFetch('/api/Banking/Accounts/Picker');
+      if (cancelled) return;
+      const list: BankAccountPickerItem[] = res.ok ? await res.json() : [];
+      setDepositBanks(list);
+      const preferred = pickDefaultReceiptBankId(list);
+      setDepositBankId(preferred ?? '');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isPaymentModalOpen, authFetch]);
+
   // Payment Submission
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,6 +212,7 @@ export const InvoiceDetail: React.FC = () => {
         paymentMethod: paymentMethod,
         referenceNo: paymentReference.trim() || undefined,
         notes: paymentNotes.trim() || undefined,
+        bankAccountId: depositBankId === '' ? undefined : Number(depositBankId),
       };
 
       const res = await authFetch('/api/Sales/RecordPayment', {
@@ -579,6 +600,8 @@ export const InvoiceDetail: React.FC = () => {
                   onClick={() => {
                     setPaymentAmount(invoice.balanceDue.toFixed(2));
                     setPaymentError(null);
+                    setDepositBanks(null);
+                    setDepositBankId('');
                     setIsPaymentModalOpen(true);
                   }}
                 />
@@ -1024,6 +1047,28 @@ export const InvoiceDetail: React.FC = () => {
                   {formatCurrency(invoice.balanceDue)}
                 </span>
               </div>
+
+              {depositBanks && depositBanks.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    Deposit to <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={depositBankId}
+                    onChange={(e) => setDepositBankId(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                  >
+                    {depositBanks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                        {b.accountNumberMasked ? ` · ${b.accountNumberMasked}` : ''}
+                        {b.isDefaultForReceipts ? ' (default)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
