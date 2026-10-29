@@ -8,6 +8,8 @@ using Api.Data;
 using Api.Tenancy;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Purchases;
+using Core.Domain.Sales;
 using Core.Domain.Security;
 using Core.Entitlements;
 using Dto.Banking;
@@ -16,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Services.Banking;
+using Services.Financial;
 using Xunit;
 
 namespace AccountGo.BackendTests.Banking;
@@ -52,12 +55,24 @@ public class BankAccountServiceEfTests : IDisposable
                     ? new EntitlementDecision(_hasFinancials, null, null)
                     : new EntitlementDecision(true, null, null));
 
+        var financial = new Mock<IFinancialService>(MockBehavior.Strict);
         _service = new BankAccountService(
             new EfRepository<Bank>(NullLogger<Bank>.Instance, _db),
             new EfRepository<Account>(NullLogger<Account>.Instance, _db),
             new EfRepository<GeneralLedgerLine>(NullLogger<GeneralLedgerLine>.Instance, _db),
             new EfRepository<GeneralLedgerHeader>(NullLogger<GeneralLedgerHeader>.Instance, _db),
             new EfRepository<CompanySetting>(NullLogger<CompanySetting>.Instance, _db),
+            new EfRepository<FinancialYear>(NullLogger<FinancialYear>.Instance, _db),
+            new EfRepository<SalesReceiptHeader>(NullLogger<SalesReceiptHeader>.Instance, _db),
+            new EfRepository<CustomerAllocation>(NullLogger<CustomerAllocation>.Instance, _db),
+            new EfRepository<SalesInvoiceHeader>(NullLogger<SalesInvoiceHeader>.Instance, _db),
+            new EfRepository<VendorPayment>(NullLogger<VendorPayment>.Instance, _db),
+            new EfRepository<PurchaseInvoiceHeader>(NullLogger<PurchaseInvoiceHeader>.Instance, _db),
+            new EfRepository<JournalEntryHeader>(NullLogger<JournalEntryHeader>.Instance, _db),
+            new EfRepository<Customer>(NullLogger<Customer>.Instance, _db),
+            new EfRepository<Vendor>(NullLogger<Vendor>.Instance, _db),
+            new EfRepository<Party>(NullLogger<Party>.Instance, _db),
+            financial.Object,
             _entitlements.Object,
             _tenant);
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #nullable enable
+using System;
 using System.Collections.Generic;
 using Core.Domain.Financials;
 using Dto.Banking;
@@ -12,6 +13,7 @@ namespace Services.Banking
     {
         BankAccountsListDto List(bool includeArchived, bool includeFullNumbers, bool includeCashHistoryCodes);
         BankAccountDto Get(int id, bool includeFullNumbers);
+        BankRegisterDto GetRegister(int bankId, DateTime? from, DateTime? to, int page, int pageSize);
         IReadOnlyList<BankAccountPickerItemDto> Picker(bool includeOtherCashAccounts);
         IReadOnlyList<UnassignedCashDto> GetCashHistory(bool includeCodes);
         IReadOnlyList<object> EligiblePostingAccounts();
