@@ -1,0 +1,29 @@
+name: History base
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  base:
+    name: Based on current history
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # Every branch must descend from the 2026-10-29 history root.
+      - name: Check ancestry
+        env:
+          ROOT: 12eb65e56ca97881bf913dea5f139773811cd01b
+        run: |
+          if ! git merge-base --is-ancestor "$ROOT" HEAD; then
+            echo "::error::This branch is not based on $ROOT. Rebase it onto the current main."
+            exit 1
+          fi
