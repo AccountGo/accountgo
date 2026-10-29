@@ -292,14 +292,7 @@ export const PayBillDialog: React.FC<{
             <label htmlFor={`${titleId}-memo`} className={labelClass}>
               Memo
             </label>
-            <input
-              id={`${titleId}-memo`}
-              type="text"
-              maxLength={200}
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              className={inputClass}
-            />
+            <input id={`${titleId}-memo`} type="text" maxLength={500} value={memo} onChange={(e) => setMemo(e.target.value)} className={inputClass} />
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-3">
@@ -307,14 +300,14 @@ export const PayBillDialog: React.FC<{
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)]"
+              className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSaving}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 disabled:opacity-50"
+              disabled={isSaving || (usingBanks ? !payFromKey : glAccounts?.length === 0)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] transition disabled:opacity-50 shadow-sm"
             >
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
               Record payment

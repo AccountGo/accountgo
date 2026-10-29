@@ -63,6 +63,23 @@ export const BankAccountFormDialog: React.FC<{
     };
   }, [authFetch, hasFinancials, editing]);
 
+  // Taken-over (adopt) accounts must use books start as the OB as-of default — the server requires
+  // as-of ≤ the first existing line. Brand-new accounts keep today's date.
+  useEffect(() => {
+    if (editing || !defaultAdoptAccountId) return;
+    let cancelled = false;
+    (async () => {
+      const res = await authFetch('/api/organizations/current/accounting-policy');
+      if (!res.ok || cancelled) return;
+      const policy = await res.json();
+      const booksStart = typeof policy?.booksStartDate === 'string' ? policy.booksStartDate.slice(0, 10) : null;
+      if (booksStart) setOpeningBalanceDate(booksStart);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, editing, defaultAdoptAccountId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
