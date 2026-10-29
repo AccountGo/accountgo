@@ -610,6 +610,18 @@ WHERE ""DisabledModulesJson"" IS NULL
             cmd.ExecuteNonQuery();
             BackfillOpeningBalanceBankTransactions(connection);
             EnsureBankReconciliationSchema(connection);
+            EnsureBankStatementSchema(connection);
+        }
+
+        // D1 0039_bank_statement_lines.sql (#413 Phase 3A)
+        private static void EnsureBankStatementSchema(DbConnection connection)
+        {
+            if (!TableExists(connection, "Bank") || !TableExists(connection, "GeneralLedgerLine"))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = BankStatementTablesSql;
+            cmd.ExecuteNonQuery();
         }
 
         // D1 0037_bank_reconciliation.sql (#413 Phase 2B). Plan called this part of 0034; 0035/0036 shipped first.
@@ -865,6 +877,46 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_BankReconciliationItem_CompanyId"" ON ""BankReconciliationItem"" (""CompanyId"");
             CREATE INDEX IF NOT EXISTS ""IX_BankReconciliationItem_BankReconciliationId"" ON ""BankReconciliationItem"" (""BankReconciliationId"");
             CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankReconciliationItem_Recon_Line"" ON ""BankReconciliationItem"" (""BankReconciliationId"", ""GeneralLedgerLineId"");";
+
+        private const string BankStatementTablesSql = @"
+            CREATE TABLE IF NOT EXISTS ""BankStatementImport"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BankStatementImport"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""BankId"" INTEGER NOT NULL,
+                ""Source"" INTEGER NOT NULL,
+                ""FileName"" TEXT NULL,
+                ""ImportedAt"" TEXT NOT NULL,
+                ""ImportedBy"" TEXT NULL,
+                ""ColumnMapJson"" TEXT NULL,
+                CONSTRAINT ""FK_BankStatementImport_Bank_BankId"" FOREIGN KEY (""BankId"") REFERENCES ""Bank"" (""Id"")
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementImport_CompanyId"" ON ""BankStatementImport"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementImport_Company_Bank"" ON ""BankStatementImport"" (""CompanyId"", ""BankId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementImport_BankId"" ON ""BankStatementImport"" (""BankId"");
+            CREATE TABLE IF NOT EXISTS ""BankStatementLine"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BankStatementLine"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""BankId"" INTEGER NOT NULL,
+                ""BankStatementImportId"" INTEGER NOT NULL,
+                ""Source"" INTEGER NOT NULL,
+                ""ExternalId"" TEXT NULL,
+                ""PostedDate"" TEXT NOT NULL,
+                ""Amount"" NUMERIC NOT NULL,
+                ""Payee"" TEXT NULL,
+                ""Memo"" TEXT NULL,
+                ""Reference"" TEXT NULL,
+                ""MatchedGeneralLedgerLineId"" INTEGER NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_BankStatementLine_Bank_BankId"" FOREIGN KEY (""BankId"") REFERENCES ""Bank"" (""Id""),
+                CONSTRAINT ""FK_BankStatementLine_BankStatementImport_BankStatementImportId"" FOREIGN KEY (""BankStatementImportId"") REFERENCES ""BankStatementImport"" (""Id""),
+                CONSTRAINT ""FK_BankStatementLine_GeneralLedgerLine_MatchedGeneralLedgerLineId"" FOREIGN KEY (""MatchedGeneralLedgerLineId"") REFERENCES ""GeneralLedgerLine"" (""Id"")
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_CompanyId"" ON ""BankStatementLine"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_BankStatementImportId"" ON ""BankStatementLine"" (""BankStatementImportId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_MatchedGeneralLedgerLineId"" ON ""BankStatementLine"" (""MatchedGeneralLedgerLineId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_BankId"" ON ""BankStatementLine"" (""BankId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_PostedDate"" ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""PostedDate"");
+            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankStatementLine_Company_Bank_Source_External"" ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""Source"", ""ExternalId"") WHERE ""ExternalId"" IS NOT NULL;";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
         {
