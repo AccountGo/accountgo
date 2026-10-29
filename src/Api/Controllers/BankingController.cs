@@ -513,6 +513,32 @@ namespace Api.Controllers
             }
         }
 
+        [HttpPost("Reconciliations/{id:int}/Review")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult ReviewReconciliation(int id)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var reviewed = _reconciliations.Review(id, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(reviewed);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (BankReconciliationConflictException ex)
+            {
+                return ReconciliationConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpDelete("Reconciliations/{id:int}")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingReconcile)]
