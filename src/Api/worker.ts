@@ -16,11 +16,17 @@ import {
   serviceUnavailable,
   sleep,
 } from "./container-shared";
+import { shouldSkipPortsReady, type ReadyTiming } from "./ports-ready";
 import {
-  shouldEnsurePortsReadyOnAttempt,
-  shouldSkipPortsReady,
-  type ReadyTiming,
-} from "./ports-ready";
+  ContainerUnavailableError,
+  RestoreState,
+  bufferRequest,
+  fetchFromContainer,
+  toRequest,
+  unavailableResponse,
+  watchContainerExit,
+  type ContainerHost,
+} from "./container-proxy";
 import { constantTimeEqual, parseSyncSqlHeaders } from "./sync-utils";
 import {
   isServerTimingEnabled,
@@ -50,9 +56,15 @@ const CONTAINER_RETRY_ATTEMPTS = 4;
 const CONTAINER_RETRY_BASE_DELAY_MS = 750;
 
 export class AccountGoApiContainer extends Container<Env> {
-  restored = false;
+  private readonly restoreState = new RestoreState();
+  private readonly host: ContainerHost;
   private initPromise: Promise<void> | null = null;
   private loggedMismatch = false;
+
+  /** True only while the running container is the one the last D1 restore went into. */
+  get restored(): boolean {
+    return this.restoreState.restored;
+  }
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx as DurableObjectState, env);
@@ -64,15 +76,40 @@ export class AccountGoApiContainer extends Container<Env> {
       this.env as unknown as Record<string, unknown>,
       CONTAINER_PORT
     );
+    const self = this;
+    this.host = {
+      get restored() {
+        return self.restored;
+      },
+      isRunning: () => this.container.running,
+      ensureReady: () => this.ensurePortsReady(),
+      ensureRestored: (readyTiming) => this.ensureInitialized(readyTiming),
+      invalidate: (reason) => this.invalidate(reason),
+      dispatch: (request) => this.dispatch(request),
+      log: (message) => console.warn(`[worker] ${message}`),
+    };
   }
 
   override onStop(_params: StopParams) {
-    this.restored = false;
-    this.initPromise = null;
+    this.invalidate("container stopped");
     this.loggedMismatch = false;
   }
 
+  override onError(error: unknown) {
+    // A rollout exit arrives here, not in onStop.
+    if (!this.container.running) this.invalidate(`container error: ${errorText(error)}`);
+    return super.onError(error);
+  }
+
+  private invalidate(reason: string): void {
+    if (this.restoreState.invalidate()) {
+      console.warn(`[worker] restore required: ${reason}`);
+    }
+  }
+
   private async ensurePortsReady(): Promise<void> {
+    // A container that is not running comes back empty; it must be restored before it serves anything.
+    if (!this.container.running) this.invalidate("container is starting");
     await this.startAndWaitForPorts({
       ports: CONTAINER_PORT,
       cancellationOptions: { portReadyTimeoutMS: PORT_READY_TIMEOUT_MS },
@@ -80,43 +117,36 @@ export class AccountGoApiContainer extends Container<Env> {
   }
 
   /**
-   * containerFetch after ensuring the port is listening. Retries transient
-   * "not running" / "just exited" races that show up during cold start and D1 restore.
-   * Warm path (running + restored) skips readiness on the first attempt; retries always re-check.
+   * Raw port fetch. Unlike the library's containerFetch it never starts a container, so a request can
+   * only reach an instance that went through ensurePortsReady and the D1 restore.
    */
-  private async containerFetchWithRetry(
-    input: string | Request,
+  private async dispatch(request: Request): Promise<Response> {
+    // Keeps sleepAfter from expiring while a request is in flight (containerFetch did this for us).
+    this.renewActivityTimeout();
+    try {
+      return await this.ctx.container!.getTcpPort(CONTAINER_PORT).fetch(request);
+    } finally {
+      this.renewActivityTimeout();
+    }
+  }
+
+  /** Internal build-check / restore calls; replayable because a failed restore is redone in full. */
+  private containerFetchWithRetry(
+    input: string,
     init: RequestInit | undefined,
     label: string,
     readyTiming?: ReadyTiming
   ): Promise<Response> {
-    let lastErr: unknown;
-    for (let attempt = 1; attempt <= CONTAINER_RETRY_ATTEMPTS; attempt++) {
-      try {
-        if (
-          shouldEnsurePortsReadyOnAttempt(attempt, this.container.running, this.restored)
-        ) {
-          const readyStarted = Date.now();
-          await this.ensurePortsReady();
-          if (readyTiming) readyTiming.readyMs += Date.now() - readyStarted;
-        }
-        if (typeof input === "string") {
-          return await this.containerFetch(input, init);
-        }
-        return await this.containerFetch(input);
-      } catch (err) {
-        lastErr = err;
-        const transient = isTransientContainerError(err);
-        console.warn(
-          `[worker] ${label} attempt ${attempt}/${CONTAINER_RETRY_ATTEMPTS} failed transient=${transient}: ${errorText(err)}`
-        );
-        if (!transient || attempt === CONTAINER_RETRY_ATTEMPTS) {
-          break;
-        }
-        await sleep(CONTAINER_RETRY_BASE_DELAY_MS * attempt);
-      }
-    }
-    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+    return fetchFromContainer(this.host, () => new Request(input, init), {
+      label,
+      method: init?.method ?? "GET",
+      requireRestored: false,
+      replayable: true,
+      readyTiming,
+      attempts: CONTAINER_RETRY_ATTEMPTS,
+      baseDelayMs: CONTAINER_RETRY_BASE_DELAY_MS,
+      sleep,
+    });
   }
 
   async restoreD1ToContainer(readyTiming?: ReadyTiming): Promise<void> {
@@ -124,11 +154,13 @@ export class AccountGoApiContainer extends Container<Env> {
       db: this.env.DB,
       env: this.env,
       containerFetchWithRetry: (input, init, label) =>
-        this.containerFetchWithRetry(input, init, label, readyTiming),
+        this.containerFetchWithRetry(String(input), init, label, readyTiming),
     });
   }
 
   private async initialize(readyTiming?: ReadyTiming): Promise<void> {
+    const token = this.restoreState.current();
+    watchContainerExit(this.ctx.container, this.restoreState, token, (m) => console.warn(`[worker] ${m}`));
     const syncKey = resolveInternalSyncKey(this.env);
 
     // Build check (1.2.4)
@@ -177,7 +209,12 @@ export class AccountGoApiContainer extends Container<Env> {
     // D1 restore (throws RestoreError with detail on failure)
     await this.restoreD1ToContainer(readyTiming);
 
-    this.restored = true;
+    // Commit only if every restore batch went into the container that is running now.
+    if (!this.container.running || !this.restoreState.commit(token)) {
+      throw new RestoreError(
+        "Database restore did not finish on one container: the container is not running"
+      );
+    }
   }
 
   /** Single-flight init with one full retry after a transient container death. */
@@ -188,12 +225,11 @@ export class AccountGoApiContainer extends Container<Env> {
       const p = (this.initPromise ??= this.initialize(readyTiming));
       try {
         await p;
-      } catch (err) {
+      } finally {
+        // Settled either way; a later invalidation must start a fresh restore.
         if (this.initPromise === p) {
           this.initPromise = null;
         }
-        this.restored = false;
-        throw err;
       }
     };
 
@@ -204,8 +240,6 @@ export class AccountGoApiContainer extends Container<Env> {
         throw err;
       }
       console.warn(`[worker] initialize retry after transient failure: ${errorText(err)}`);
-      this.initPromise = null;
-      this.restored = false;
       await sleep(CONTAINER_RETRY_BASE_DELAY_MS);
       const readyStarted = Date.now();
       await this.ensurePortsReady();
@@ -272,8 +306,7 @@ export class AccountGoApiContainer extends Container<Env> {
           )
         );
       }
-      this.restored = false;
-      this.initPromise = null;
+      this.invalidate("container restarted");
       this.loggedMismatch = false;
       return finish(
         new Response(JSON.stringify({ status: "container restarted" }), {
@@ -324,22 +357,20 @@ export class AccountGoApiContainer extends Container<Env> {
     cleanHeaders.delete("x-restart-container");
 
     const httpUrl = request.url.replace(/^https:/i, "http:");
-    const containerReq = new Request(httpUrl, {
-      method: request.method,
-      headers: cleanHeaders,
-      body: request.body,
-      redirect: "manual",
-      duplex: "half",
-    } as RequestInit);
 
     try {
+      // Buffered so a retry resends the same bytes.
+      const buffered = await bufferRequest(httpUrl, request, cleanHeaders);
       const containerStarted = Date.now();
-      const containerRes = await this.containerFetchWithRetry(
-        containerReq,
-        undefined,
-        `proxy ${request.method} ${scrubbedRoute}`,
-        readyTiming
-      );
+      const containerRes = await fetchFromContainer(this.host, () => toRequest(buffered), {
+        label: `proxy ${request.method} ${scrubbedRoute}`,
+        method: request.method,
+        requireRestored: true,
+        readyTiming,
+        attempts: CONTAINER_RETRY_ATTEMPTS,
+        baseDelayMs: CONTAINER_RETRY_BASE_DELAY_MS,
+        sleep,
+      });
       const containerMs = Date.now() - containerStarted;
 
       if (containerRes.status === 101) {
@@ -360,8 +391,7 @@ export class AccountGoApiContainer extends Container<Env> {
         } catch (destroyErr) {
           console.error("[worker] Failed to destroy container after D1 header error:", destroyErr);
         }
-        this.restored = false;
-        this.initPromise = null;
+        this.invalidate("D1 sync header error");
         return finish(serviceUnavailable("Your change could not be saved. Please retry.", 5), [
           { name: "container", dur: containerMs },
         ]);
@@ -385,8 +415,7 @@ export class AccountGoApiContainer extends Container<Env> {
         } catch (destroyErr) {
           console.error("[worker] Failed to destroy container after D1 sync failure:", destroyErr);
         }
-        this.restored = false;
-        this.initPromise = null;
+        this.invalidate("D1 sync failure");
         return finish(serviceUnavailable("Your change could not be saved. Please retry.", 5), [
           { name: "container", dur: containerMs },
         ]);
@@ -413,8 +442,13 @@ export class AccountGoApiContainer extends Container<Env> {
       console.error(
         `[worker] Proxy failed method=${request.method} path=${scrubbedRoute}: ${errorText(err)}`
       );
-      this.restored = false;
-      this.initPromise = null;
+      if (err instanceof ContainerUnavailableError) {
+        return finish(unavailableResponse(err));
+      }
+      if (err instanceof BuildMismatchError || err instanceof RestoreError) {
+        return finish(serviceUnavailable(err.message, 5));
+      }
+      this.invalidate("proxy failed");
       return finish(
         serviceUnavailable(
           isTransientContainerError(err)

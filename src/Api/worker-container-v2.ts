@@ -14,11 +14,17 @@ import {
   serviceUnavailable,
   sleep,
 } from "./container-shared";
+import { shouldSkipPortsReady, type ReadyTiming } from "./ports-ready";
 import {
-  shouldEnsurePortsReadyOnAttempt,
-  shouldSkipPortsReady,
-  type ReadyTiming,
-} from "./ports-ready";
+  ContainerUnavailableError,
+  RestoreState,
+  bufferRequest,
+  fetchFromContainer,
+  toRequest,
+  unavailableResponse,
+  watchContainerExit,
+  type ContainerHost,
+} from "./container-proxy";
 import {
   isServerTimingEnabled,
   logSlowWorkerRequest,
@@ -43,9 +49,15 @@ const PORT_POLL_INTERVAL_MS = 500;
  * Does not extend @cloudflare/containers Container (unsupported for this policy).
  */
 export class AccountGoApiContainerV2 extends DurableObject<Env> {
-  restored = false;
+  private readonly restoreState = new RestoreState();
+  private readonly host: ContainerHost;
   private initPromise: Promise<void> | null = null;
   private loggedMismatch = false;
+
+  /** True only while the running container is the one the last D1 restore went into. */
+  get restored(): boolean {
+    return this.restoreState.restored;
+  }
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -54,6 +66,24 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       void ctx.blockConcurrencyWhile(() =>
         container.setInactivityTimeout(INACTIVITY_TIMEOUT_MS)
       );
+    }
+    const self = this;
+    this.host = {
+      get restored() {
+        return self.restored;
+      },
+      isRunning: () => this.isContainerRunning(),
+      ensureReady: () => this.ensurePortsReady(),
+      ensureRestored: (readyTiming) => this.ensureInitialized(readyTiming),
+      invalidate: (reason) => this.invalidate(reason),
+      dispatch: (request) => this.dispatch(request),
+      log: (message) => console.warn(`[worker-v2] ${message}`),
+    };
+  }
+
+  private invalidate(reason: string): void {
+    if (this.restoreState.invalidate()) {
+      console.warn(`[worker-v2] restore required: ${reason}`);
     }
   }
 
@@ -71,8 +101,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     } catch (err) {
       console.error("[worker-v2] destroy failed:", errorText(err));
     }
-    this.restored = false;
-    this.initPromise = null;
+    this.invalidate(reason ?? "destroyed");
     this.loggedMismatch = false;
   }
 
@@ -83,6 +112,8 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     }
 
     if (!container.running) {
+      // A container that is not running comes back empty; it must be restored before it serves anything.
+      this.invalidate("container is starting");
       const images = container.images;
       if (!images?.base) {
         throw new Error("Container image 'base' is not configured for AccountGoApiContainerV2");
@@ -138,52 +169,39 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     return !!this.ctx.container?.running;
   }
 
-  /**
-   * Port fetch after ensuring the port is listening. Warm path (running + restored)
-   * skips readiness on the first attempt; retries always re-check.
-   */
-  private async containerFetchWithRetry(
-    input: string | Request,
-    init: RequestInit | undefined,
-    label: string,
-    readyTiming?: ReadyTiming
-  ): Promise<Response> {
+  /** Port fetch; never starts a container. */
+  private async dispatch(request: Request): Promise<Response> {
     const container = this.ctx.container;
     if (!container) {
       throw new Error("No container is configured for AccountGoApiContainerV2");
     }
+    return await container.getTcpPort(CONTAINER_PORT).fetch(request);
+  }
 
-    let lastErr: unknown;
-    for (let attempt = 1; attempt <= CONTAINER_RETRY_ATTEMPTS; attempt++) {
-      try {
-        if (
-          shouldEnsurePortsReadyOnAttempt(attempt, this.isContainerRunning(), this.restored)
-        ) {
-          const readyStarted = Date.now();
-          await this.ensurePortsReady();
-          if (readyTiming) readyTiming.readyMs += Date.now() - readyStarted;
-        }
-        const port = container.getTcpPort(CONTAINER_PORT);
-        if (typeof input === "string") {
-          return await port.fetch(input, init);
-        }
-        return await port.fetch(input);
-      } catch (err) {
-        lastErr = err;
-        const transient = isTransientContainerError(err);
-        console.warn(
-          `[worker-v2] ${label} attempt ${attempt}/${CONTAINER_RETRY_ATTEMPTS} failed transient=${transient}: ${errorText(err)}`
-        );
-        if (!transient || attempt === CONTAINER_RETRY_ATTEMPTS) {
-          break;
-        }
-        await sleep(CONTAINER_RETRY_BASE_DELAY_MS * attempt);
-      }
-    }
-    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+  /** Internal build-check / restore calls; replayable because a failed restore is redone in full. */
+  private containerFetchWithRetry(
+    input: string,
+    init: RequestInit | undefined,
+    label: string,
+    readyTiming?: ReadyTiming
+  ): Promise<Response> {
+    return fetchFromContainer(this.host, () => new Request(input, init), {
+      label,
+      method: init?.method ?? "GET",
+      requireRestored: false,
+      replayable: true,
+      readyTiming,
+      attempts: CONTAINER_RETRY_ATTEMPTS,
+      baseDelayMs: CONTAINER_RETRY_BASE_DELAY_MS,
+      sleep,
+    });
   }
 
   private async initialize(readyTiming?: ReadyTiming): Promise<void> {
+    const token = this.restoreState.current();
+    watchContainerExit(this.ctx.container, this.restoreState, token, (m) =>
+      console.warn(`[worker-v2] ${m}`)
+    );
     const syncKey = resolveInternalSyncKey(this.env);
 
     if (this.env.BUILD_SHA) {
@@ -232,10 +250,15 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       db: this.env.DB,
       env: this.env,
       containerFetchWithRetry: (input, init, label) =>
-        this.containerFetchWithRetry(input, init, label, readyTiming),
+        this.containerFetchWithRetry(String(input), init, label, readyTiming),
     });
 
-    this.restored = true;
+    // Commit only if every restore batch went into the container that is running now.
+    if (!this.isContainerRunning() || !this.restoreState.commit(token)) {
+      throw new RestoreError(
+        "Database restore did not finish on one container: the container is not running"
+      );
+    }
   }
 
   private async ensureInitialized(readyTiming?: ReadyTiming): Promise<void> {
@@ -245,12 +268,11 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       const p = (this.initPromise ??= this.initialize(readyTiming));
       try {
         await p;
-      } catch (err) {
+      } finally {
+        // Settled either way; a later invalidation must start a fresh restore.
         if (this.initPromise === p) {
           this.initPromise = null;
         }
-        this.restored = false;
-        throw err;
       }
     };
 
@@ -261,8 +283,6 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
         throw err;
       }
       console.warn(`[worker-v2] initialize retry after transient failure: ${errorText(err)}`);
-      this.initPromise = null;
-      this.restored = false;
       await sleep(CONTAINER_RETRY_BASE_DELAY_MS);
       const readyStarted = Date.now();
       await this.ensurePortsReady();
@@ -374,22 +394,20 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     cleanHeaders.delete("x-restart-container");
 
     const httpUrl = request.url.replace(/^https:/i, "http:");
-    const containerReq = new Request(httpUrl, {
-      method: request.method,
-      headers: cleanHeaders,
-      body: request.body,
-      redirect: "manual",
-      duplex: "half",
-    } as RequestInit);
 
     try {
+      // Buffered so a retry resends the same bytes.
+      const buffered = await bufferRequest(httpUrl, request, cleanHeaders);
       const containerStarted = Date.now();
-      const containerRes = await this.containerFetchWithRetry(
-        containerReq,
-        undefined,
-        `proxy ${request.method} ${scrubbedRoute}`,
-        readyTiming
-      );
+      const containerRes = await fetchFromContainer(this.host, () => toRequest(buffered), {
+        label: `proxy ${request.method} ${scrubbedRoute}`,
+        method: request.method,
+        requireRestored: true,
+        readyTiming,
+        attempts: CONTAINER_RETRY_ATTEMPTS,
+        baseDelayMs: CONTAINER_RETRY_BASE_DELAY_MS,
+        sleep,
+      });
       const containerMs = Date.now() - containerStarted;
 
       // 101 upgrades: pass through untouched (no header mutation, no body read).
@@ -450,8 +468,13 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       console.error(
         `[worker-v2] Proxy failed method=${request.method} path=${scrubbedRoute}: ${errorText(err)}`
       );
-      this.restored = false;
-      this.initPromise = null;
+      if (err instanceof ContainerUnavailableError) {
+        return finish(unavailableResponse(err));
+      }
+      if (err instanceof BuildMismatchError || err instanceof RestoreError) {
+        return finish(serviceUnavailable(err.message, 5));
+      }
+      this.invalidate("proxy failed");
       return finish(
         serviceUnavailable(
           isTransientContainerError(err)

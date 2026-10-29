@@ -1,7 +1,7 @@
 /**
  * Warm path: skip redundant startAndWaitForPorts / port probes when the container is
- * already running and D1 has been restored. Library containerFetch still calls
- * startAndWaitForPorts when the instance is not running or not healthy.
+ * already running and D1 has been restored. A container that is not running is only
+ * started through readiness, which invalidates the restore first (container-proxy.ts).
  */
 export function shouldSkipPortsReady(running: boolean, restored: boolean): boolean {
   return running && restored;
