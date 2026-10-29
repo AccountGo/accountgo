@@ -9,20 +9,33 @@ using System.Linq;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Purchases;
+using Core.Domain.Sales;
 using Core.Domain.Security;
 using Core.Entitlements;
 using Core.Tenancy;
 using Dto.Banking;
+using Services.Financial;
 
 namespace Services.Banking
 {
-    public class BankAccountService : IBankAccountService
+    public partial class BankAccountService : IBankAccountService
     {
         private readonly IRepository<Bank> _banks;
         private readonly IRepository<Account> _accounts;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
         private readonly IRepository<CompanySetting> _companySettings;
+        private readonly IRepository<SalesReceiptHeader> _receipts;
+        private readonly IRepository<CustomerAllocation> _allocations;
+        private readonly IRepository<SalesInvoiceHeader> _salesInvoices;
+        private readonly IRepository<VendorPayment> _vendorPayments;
+        private readonly IRepository<PurchaseInvoiceHeader> _purchaseInvoices;
+        private readonly IRepository<JournalEntryHeader> _journals;
+        private readonly IRepository<Customer> _customers;
+        private readonly IRepository<Vendor> _vendors;
+        private readonly IRepository<Party> _parties;
+        private readonly IFinancialService _financial;
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
 
@@ -32,6 +45,16 @@ namespace Services.Banking
             IRepository<GeneralLedgerLine> glLines,
             IRepository<GeneralLedgerHeader> glHeaders,
             IRepository<CompanySetting> companySettings,
+            IRepository<SalesReceiptHeader> receipts,
+            IRepository<CustomerAllocation> allocations,
+            IRepository<SalesInvoiceHeader> salesInvoices,
+            IRepository<VendorPayment> vendorPayments,
+            IRepository<PurchaseInvoiceHeader> purchaseInvoices,
+            IRepository<JournalEntryHeader> journals,
+            IRepository<Customer> customers,
+            IRepository<Vendor> vendors,
+            IRepository<Party> parties,
+            IFinancialService financial,
             IEntitlementService entitlements,
             ITenantContext tenant)
         {
@@ -40,6 +63,16 @@ namespace Services.Banking
             _glLines = glLines;
             _glHeaders = glHeaders;
             _companySettings = companySettings;
+            _receipts = receipts;
+            _allocations = allocations;
+            _salesInvoices = salesInvoices;
+            _vendorPayments = vendorPayments;
+            _purchaseInvoices = purchaseInvoices;
+            _journals = journals;
+            _customers = customers;
+            _vendors = vendors;
+            _parties = parties;
+            _financial = financial;
             _entitlements = entitlements;
             _tenant = tenant;
         }
@@ -190,9 +223,6 @@ namespace Services.Banking
             var name = RequireUniqueName(request.Name, exceptBankId: null);
             var type = ParseType(request.Type);
 
-            if (request.OpeningBalance.HasValue || request.OpeningBalanceDate.HasValue)
-                throw new InvalidOperationException("Opening balances arrive with the register (1D).");
-
             if (request.PostingAccountId.HasValue && !HasFinancialsModule())
                 throw new InvalidOperationException("Linking a posting account requires the Financials module.");
 
@@ -237,6 +267,13 @@ namespace Services.Banking
             SyncAccountName(account, name);
             ApplyDefaults(bank);
             _banks.Insert(bank);
+            ApplyOpeningBalance(
+                bank,
+                request.OpeningBalance,
+                request.OpeningBalanceDate,
+                accountHasHistory: LinesForAccount(account.Id).Any(),
+                omittedMeansNoChange: true);
+            _banks.Update(bank);
             return ToDto(bank, includeFullNumbers);
         }
 
@@ -275,6 +312,13 @@ namespace Services.Banking
             bank.IsDefaultForPayments = request.IsDefaultForPayments;
             bank.IsDefault = bank.IsDefaultForReceipts;
             ApplyDefaults(bank);
+            // Opening balance is optional on update; send 0 (with or without date) to clear.
+            ApplyOpeningBalance(
+                bank,
+                request.OpeningBalance,
+                request.OpeningBalanceDate,
+                accountHasHistory: false,
+                omittedMeansNoChange: true);
 
             _banks.Update(bank);
             return ToDto(bank, includeFullNumbers);
