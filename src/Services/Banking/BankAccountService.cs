@@ -26,6 +26,7 @@ namespace Services.Banking
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
         private readonly IRepository<CompanySetting> _companySettings;
+        private readonly IRepository<FinancialYear> _fiscalYears;
         private readonly IRepository<SalesReceiptHeader> _receipts;
         private readonly IRepository<CustomerAllocation> _allocations;
         private readonly IRepository<SalesInvoiceHeader> _salesInvoices;
@@ -45,6 +46,7 @@ namespace Services.Banking
             IRepository<GeneralLedgerLine> glLines,
             IRepository<GeneralLedgerHeader> glHeaders,
             IRepository<CompanySetting> companySettings,
+            IRepository<FinancialYear> fiscalYears,
             IRepository<SalesReceiptHeader> receipts,
             IRepository<CustomerAllocation> allocations,
             IRepository<SalesInvoiceHeader> salesInvoices,
@@ -63,6 +65,7 @@ namespace Services.Banking
             _glLines = glLines;
             _glHeaders = glHeaders;
             _companySettings = companySettings;
+            _fiscalYears = fiscalYears;
             _receipts = receipts;
             _allocations = allocations;
             _salesInvoices = salesInvoices;
@@ -271,7 +274,6 @@ namespace Services.Banking
                 bank,
                 request.OpeningBalance,
                 request.OpeningBalanceDate,
-                accountHasHistory: LinesForAccount(account.Id).Any(),
                 omittedMeansNoChange: true);
             _banks.Update(bank);
             return ToDto(bank, includeFullNumbers);
@@ -317,7 +319,6 @@ namespace Services.Banking
                 bank,
                 request.OpeningBalance,
                 request.OpeningBalanceDate,
-                accountHasHistory: false,
                 omittedMeansNoChange: true);
 
             _banks.Update(bank);

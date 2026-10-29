@@ -40,7 +40,16 @@ namespace Services.Banking
                 join header in _glHeaders.Table on line.GeneralLedgerHeaderId equals header.Id
                 where line.AccountId == accountId
                 orderby header.Date, header.Id, line.Id
-                select new RegisterMovement(line.Id, header.Id, header.Date, header.DocumentType, header.SourceDocumentId, header.Description, line.DrCr, line.Amount)
+                select new RegisterMovement(
+                    line.Id,
+                    header.Id,
+                    header.Date,
+                    header.DocumentType,
+                    header.SourceDocumentId,
+                    header.ReversedGeneralLedgerHeaderId,
+                    header.Description,
+                    line.DrCr,
+                    line.Amount)
             ).ToList();
 
             decimal Signed(RegisterMovement m) =>
@@ -62,7 +71,7 @@ namespace Services.Banking
             var balanceBeforePage = broughtForward
                 + ranged.Take((page - 1) * pageSize).Sum(Signed);
 
-            var enrichment = EnrichRegister(pageItems);
+            var enrichment = EnrichRegister(pageItems, bank);
             var running = balanceBeforePage;
             var lines = new List<BankRegisterLineDto>(pageItems.Count);
             foreach (var m in pageItems)
@@ -96,11 +105,53 @@ namespace Services.Banking
             };
         }
 
-        private Dictionary<int, RegisterEnrichment> EnrichRegister(IReadOnlyList<RegisterMovement> pageItems)
+        private Dictionary<int, RegisterEnrichment> EnrichRegister(IReadOnlyList<RegisterMovement> pageItems, Bank bank)
         {
             var result = new Dictionary<int, RegisterEnrichment>();
             if (pageItems.Count == 0)
                 return result;
+
+            // Identify OB by Bank.OpeningBalanceGeneralLedgerHeaderId (and prior OB posts of the same kind);
+            // identify reversals by ReversedGeneralLedgerHeaderId pointing at those headers — never by description alone.
+            var openingBalanceHeaderIds = new HashSet<int>();
+            if (bank.OpeningBalanceGeneralLedgerHeaderId.HasValue)
+                openingBalanceHeaderIds.Add(bank.OpeningBalanceGeneralLedgerHeaderId.Value);
+            foreach (var m in pageItems)
+            {
+                if (m.DocumentType == DocumentTypes.BankTransaction
+                    && string.Equals(m.Description, OpeningBalanceDescription, StringComparison.Ordinal)
+                    && !m.ReversedGeneralLedgerHeaderId.HasValue)
+                    openingBalanceHeaderIds.Add(m.HeaderId);
+            }
+
+            var reversedTargets = pageItems
+                .Where(m => m.ReversedGeneralLedgerHeaderId.HasValue)
+                .Select(m => m.ReversedGeneralLedgerHeaderId!.Value)
+                .Where(id => !openingBalanceHeaderIds.Contains(id))
+                .Distinct()
+                .ToList();
+            if (reversedTargets.Count > 0)
+            {
+                foreach (var id in _glHeaders.Table
+                    .Where(h => reversedTargets.Contains(h.Id)
+                                && h.DocumentType == DocumentTypes.BankTransaction
+                                && h.Description == OpeningBalanceDescription)
+                    .Select(h => h.Id))
+                    openingBalanceHeaderIds.Add(id);
+            }
+
+            foreach (var m in pageItems)
+            {
+                if (openingBalanceHeaderIds.Contains(m.HeaderId))
+                {
+                    result[m.HeaderId] = OpeningBalanceEnrichment(bank.Id, isReversal: false);
+                    continue;
+                }
+
+                if (m.ReversedGeneralLedgerHeaderId.HasValue
+                    && openingBalanceHeaderIds.Contains(m.ReversedGeneralLedgerHeaderId.Value))
+                    result[m.HeaderId] = OpeningBalanceEnrichment(bank.Id, isReversal: true);
+            }
 
             var headerIds = pageItems.Select(m => m.HeaderId).Distinct().ToList();
 
@@ -121,6 +172,8 @@ namespace Services.Banking
 
             foreach (var receipt in receipts)
             {
+                if (result.ContainsKey(receipt.GeneralLedgerHeaderId!.Value))
+                    continue;
                 var customer = customers.FirstOrDefault(c => c.Id == receipt.CustomerId);
                 string? payee = null;
                 if (customer?.PartyId != null && customerParties.TryGetValue(customer.PartyId.Value, out var party))
@@ -162,6 +215,8 @@ namespace Services.Banking
 
             foreach (var payment in payments)
             {
+                if (result.ContainsKey(payment.GeneralLedgerHeaderId!.Value))
+                    continue;
                 var vendor = vendors.FirstOrDefault(v => v.Id == payment.VendorId);
                 string? payee = null;
                 if (vendor?.PartyId != null && vendorParties.TryGetValue(vendor.PartyId.Value, out var party))
@@ -218,22 +273,6 @@ namespace Services.Banking
             {
                 if (result.ContainsKey(m.HeaderId))
                     continue;
-                // Opening-balance postings (Phase 1) are JournalEntry headers with SourceDocumentId = bank id.
-                if (m.DocumentType == DocumentTypes.JournalEntry
-                    && string.Equals(m.Description, OpeningBalanceDescription, StringComparison.Ordinal))
-                {
-                    result[m.HeaderId] = new RegisterEnrichment(
-                        "Opening balance",
-                        null,
-                        null,
-                        new BankRegisterSourceDocDto
-                        {
-                            Type = "OpeningBalance",
-                            Id = m.SourceDocumentId ?? 0,
-                            No = null
-                        });
-                    continue;
-                }
 
                 result[m.HeaderId] = new RegisterEnrichment(
                     DocumentTypeLabel(m.DocumentType),
@@ -252,6 +291,18 @@ namespace Services.Banking
             return result;
         }
 
+        private static RegisterEnrichment OpeningBalanceEnrichment(int bankId, bool isReversal) =>
+            new(
+                isReversal ? "Opening balance reversal" : "Opening balance",
+                null,
+                null,
+                new BankRegisterSourceDocDto
+                {
+                    Type = nameof(DocumentTypes.BankTransaction),
+                    Id = bankId,
+                    No = null
+                });
+
         private static string DocumentTypeLabel(DocumentTypes type) => type switch
         {
             DocumentTypes.SalesReceipt => "Receipt",
@@ -259,6 +310,7 @@ namespace Services.Banking
             DocumentTypes.JournalEntry => "Journal",
             DocumentTypes.SalesInvoice => "Invoice",
             DocumentTypes.PurchaseInvoice => "Bill",
+            DocumentTypes.BankTransaction => "Bank transaction",
             _ => type.ToString()
         };
 
@@ -268,6 +320,7 @@ namespace Services.Banking
             DateTime Date,
             DocumentTypes DocumentType,
             int? SourceDocumentId,
+            int? ReversedGeneralLedgerHeaderId,
             string? Description,
             DrOrCrSide DrCr,
             decimal Amount);
