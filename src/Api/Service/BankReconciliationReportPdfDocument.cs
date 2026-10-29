@@ -77,9 +77,51 @@ namespace Api.Service
         {
             container.PaddingTop(16).Column(column =>
             {
-                column.Item().Element(ComposeSummary);
-                column.Item().PaddingTop(18).Element(ComposeOutstanding);
-                column.Item().PaddingTop(18).Element(ComposePreparer);
+                column.Item().Element(ComposeCleared);
+                column.Item().PaddingTop(18).Element(ComposeSummary);
+                column.Item().PaddingTop(18).Element(c => ComposeLineSection(c, "Outstanding items", _report.OutstandingItems));
+                column.Item().PaddingTop(18).Element(c => ComposeLineSection(
+                    c,
+                    "Posted after this reconciliation was finished",
+                    _report.PostedAfterFinishItems));
+                column.Item().PaddingTop(18).Element(ComposeSignOff);
+            });
+        }
+
+        private void ComposeCleared(IContainer container)
+        {
+            container.Column(column =>
+            {
+                column.Item().Text("Cleared").FontSize(11).Bold();
+                column.Item().PaddingTop(8).Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(3);
+                        columns.RelativeColumn(1);
+                    });
+
+                    void Row(string label, decimal amount, bool bold = false)
+                    {
+                        table.Cell().PaddingVertical(3).Text(label).FontColor(Secondary).SemiBold();
+                        var cell = table.Cell().PaddingVertical(3).AlignRight();
+                        if (bold)
+                            cell.Text(Money(amount)).Bold();
+                        else
+                            cell.Text(Money(amount));
+                    }
+
+                    Row("Beginning balance", _report.BeginningBalance);
+                    if (_report.OpeningBalanceLine != null)
+                    {
+                        var ob = _report.OpeningBalanceLine;
+                        Row(ob.Type, ob.In != 0m ? ob.In : ob.Out);
+                    }
+                    Row("Cleared deposits", _report.ClearedDeposits);
+                    Row("Cleared payments", _report.ClearedPayments);
+                    Row("Cleared balance", _report.ClearedBalance, bold: true);
+                    Row("Statement ending balance", _report.StatementEndingBalance, bold: true);
+                });
             });
         }
 
@@ -120,12 +162,15 @@ namespace Api.Service
             });
         }
 
-        private void ComposeOutstanding(IContainer container)
+        private void ComposeLineSection(
+            IContainer container,
+            string title,
+            System.Collections.Generic.IReadOnlyList<BankReconciliationReportLineDto> items)
         {
             container.Column(column =>
             {
-                column.Item().Text("Outstanding items").FontSize(11).Bold();
-                if (_report.OutstandingItems.Count == 0)
+                column.Item().Text(title).FontSize(11).Bold();
+                if (items.Count == 0)
                 {
                     column.Item().PaddingTop(6).Text("None.").FontColor(Muted);
                     return;
@@ -151,7 +196,7 @@ namespace Api.Service
                     Head("Amount");
                     Head("Age");
 
-                    foreach (var item in _report.OutstandingItems)
+                    foreach (var item in items)
                     {
                         table.Cell().Padding(4).Text(item.Date.ToString("yyyy-MM-dd", _culture));
                         table.Cell().Padding(4).Text(item.Type);
@@ -164,12 +209,26 @@ namespace Api.Service
             });
         }
 
-        private void ComposePreparer(IContainer container)
+        private void ComposeSignOff(IContainer container)
         {
-            var when = _report.PreparedAt?.ToString("yyyy-MM-dd HH:mm' UTC'", _culture) ?? "—";
-            container.BorderTop(1).BorderColor(Rule).PaddingTop(10)
-                .Text($"Prepared by {_report.PreparedBy ?? "—"} at {when}")
-                .FontSize(8.5f).FontColor(Muted);
+            var preparedWhen = _report.PreparedAt?.ToString("yyyy-MM-dd HH:mm' UTC'", _culture) ?? "—";
+            var reviewedName = string.IsNullOrWhiteSpace(_report.ReviewedBy) ? string.Empty : _report.ReviewedBy.Trim();
+            var reviewedWhen = _report.ReviewedAt?.ToString("yyyy-MM-dd HH:mm' UTC'", _culture);
+
+            container.BorderTop(1).BorderColor(Rule).PaddingTop(10).Column(column =>
+            {
+                column.Item().Text($"Prepared by {_report.PreparedBy ?? "—"} at {preparedWhen}")
+                    .FontSize(8.5f).FontColor(Muted);
+                if (!string.IsNullOrEmpty(reviewedName) || reviewedWhen != null)
+                {
+                    column.Item().Text($"Reviewed by {reviewedName} at {reviewedWhen ?? "—"}")
+                        .FontSize(8.5f).FontColor(Muted);
+                }
+                else
+                {
+                    column.Item().Text("Reviewed by").FontSize(8.5f).FontColor(Muted);
+                }
+            });
         }
 
         private string Money(decimal value) =>

@@ -632,6 +632,13 @@ WHERE ""DisabledModulesJson"" IS NULL
 
             cmd.CommandText = @"CREATE INDEX IF NOT EXISTS ""IX_GeneralLedgerLine_Company_BankReconciliationId"" ON ""GeneralLedgerLine"" (""CompanyId"", ""BankReconciliationId"");";
             cmd.ExecuteNonQuery();
+
+            // D1 0038_bank_reconciliation_report_cutoff.sql (#413 Phase 2D)
+            if (!ColumnExists(connection, "BankReconciliation", "FinishedMaxGeneralLedgerHeaderId"))
+            {
+                cmd.CommandText = @"ALTER TABLE ""BankReconciliation"" ADD COLUMN ""FinishedMaxGeneralLedgerHeaderId"" INTEGER NULL;";
+                cmd.ExecuteNonQuery();
+            }
         }
 
         // D1 0026_security_schema.sql
@@ -837,6 +844,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""UndoneAt"" TEXT NULL,
                 ""UndoReason"" TEXT NULL,
                 ""Version"" INTEGER NOT NULL DEFAULT 1,
+                ""FinishedMaxGeneralLedgerHeaderId"" INTEGER NULL,
                 CONSTRAINT ""FK_BankReconciliation_Bank_BankId"" FOREIGN KEY (""BankId"") REFERENCES ""Bank"" (""Id"")
             );
             CREATE INDEX IF NOT EXISTS ""IX_BankReconciliation_CompanyId"" ON ""BankReconciliation"" (""CompanyId"");
