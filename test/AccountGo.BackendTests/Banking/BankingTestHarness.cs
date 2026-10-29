@@ -32,6 +32,8 @@ internal sealed class BankingTestHarness : IDisposable
     public BankAccountService Banks { get; }
     public BankTransactionService Transactions { get; }
     public BankReconciliationService Reconciliations { get; }
+    public BankStatementImportService Statements { get; }
+
     public BankingTestHarness()
     {
         Entitlements = new Mock<IEntitlementService>();
@@ -45,6 +47,7 @@ internal sealed class BankingTestHarness : IDisposable
         Banks = services.Banks;
         Transactions = services.Transactions;
         Reconciliations = services.Reconciliations;
+        Statements = services.Statements;
         Repos.Companies.Insert(new Company { Id = 1, Name = "Test Co", ShortName = "Test" });
         Repos.Settings.Insert(new CompanySetting
         {
@@ -66,7 +69,8 @@ internal sealed class BankingTestHarness : IDisposable
     public sealed record ServiceSet(
         BankAccountService Banks,
         BankTransactionService Transactions,
-        BankReconciliationService Reconciliations);
+        BankReconciliationService Reconciliations,
+        BankStatementImportService Statements);
 
     /// <summary>Services bound to a different tenant over the same repositories (isolation tests).</summary>
     public ServiceSet BuildServices(int companyId)
@@ -119,7 +123,16 @@ internal sealed class BankingTestHarness : IDisposable
             transactions,
             tenant);
 
-        return new ServiceSet(banks, transactions, reconciliations);
+        var statements = new BankStatementImportService(
+            Repos.StatementImports,
+            Repos.StatementLines,
+            Repos.Banks,
+            Repos.GlLines,
+            Repos.GlHeaders,
+            transactions,
+            tenant);
+
+        return new ServiceSet(banks, transactions, reconciliations, statements);
     }
 
     public void Dispose() { }
@@ -306,6 +319,8 @@ internal sealed class BankingInMemoryRepos
     public BankingMemoryRepo<BankTransaction> BankTransactions { get; } = new();
     public BankingMemoryRepo<BankReconciliation> Reconciliations { get; } = new();
     public BankingMemoryRepo<BankReconciliationItem> ReconciliationItems { get; } = new();
+    public BankingMemoryRepo<BankStatementImport> StatementImports { get; } = new();
+    public BankingMemoryRepo<BankStatementLine> StatementLines { get; } = new();
     public BankingMemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
     public BankingMemoryRepo<GeneralLedgerHeader> GlHeaders { get; } = new();
     public BankingMemoryRepo<Company> Companies { get; } = new();
