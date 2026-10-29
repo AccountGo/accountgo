@@ -20,6 +20,9 @@ import {
   Terminal,
 } from 'lucide-react';
 
+const PRIVACY_POLICY_URL = 'https://www.accountgo.dev/legal/privacy-policy/';
+const TERMS_OF_USE_URL = 'https://www.accountgo.dev/legal/terms-of-use/';
+
 interface LoginProps {
   initialMode?: 'signin' | 'signup';
 }
@@ -160,7 +163,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       return;
     }
     if (!acceptedTerms) {
-      setErrorMessage('Please accept the privacy and terms to continue.');
+      setErrorMessage('Please accept the Privacy Policy and Terms of Use to continue.');
       return;
     }
 
@@ -221,7 +224,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       return;
     }
     if (!acceptedTerms) {
-      setErrorMessage('Please accept the privacy and terms to continue.');
+      setErrorMessage('Please accept the Privacy Policy and Terms of Use to continue.');
       return;
     }
 
@@ -527,7 +530,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                     className="mt-0.5 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0 accent-[var(--brand-primary)] cursor-pointer"
                   />
                   <span className="leading-relaxed">
-                    By signing in, you accept the <span className="underline underline-offset-2">Privacy and Terms</span>.
+                    By signing in, you accept the <a href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--text-primary)]">Privacy Policy</a> and <a href={TERMS_OF_USE_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--text-primary)]">Terms of Use</a>.
                   </span>
                 </label>
 
@@ -699,7 +702,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                     className="mt-0.5 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0 accent-[var(--brand-primary)] cursor-pointer"
                   />
                   <span className="leading-relaxed">
-                    By signing up, you accept the <span className="underline underline-offset-2">Privacy and Terms</span>.
+                    By signing up, you accept the <a href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--text-primary)]">Privacy Policy</a> and <a href={TERMS_OF_USE_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--text-primary)]">Terms of Use</a>.
                   </span>
                 </label>
 
