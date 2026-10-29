@@ -237,3 +237,25 @@ export const BANK_RECONCILIATION_STATUS = {
   Finished: 2,
   Undone: 3,
 } as const;
+
+export interface OutstandingAgingBucket {
+  label: string;
+  minDays: number;
+  maxDays?: number | null;
+  count: number;
+  depositsInTransit: number;
+  outstandingPayments: number;
+  net: number;
+  isStale: boolean;
+}
+
+export interface OutstandingAging {
+  bankId: number;
+  asOfDate: string;
+  buckets: OutstandingAgingBucket[];
+  totalCount: number;
+  totalDepositsInTransit: number;
+  totalOutstandingPayments: number;
+  staleCount: number;
+  hasStale: boolean;
+}

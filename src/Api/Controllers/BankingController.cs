@@ -117,6 +117,25 @@ namespace Api.Controllers
             }
         }
 
+        [HttpGet("Accounts/{id:int}/OutstandingAging")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult GetOutstandingAging(int id, [FromQuery] string? asOf = null)
+        {
+            try
+            {
+                return Ok(_banks.GetOutstandingAging(id, ParseRegisterDate(asOf)));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or FormatException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         private static DateTime? ParseRegisterDate(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
