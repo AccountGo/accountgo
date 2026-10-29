@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Core.Domain;
+using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Tenancy;
 using Dto.Dashboard;
@@ -15,6 +16,8 @@ namespace Services.Dashboard
 {
     public class DashboardService : IDashboardService
     {
+        private const int MoneyDecimalPlaces = 2;
+
         private readonly IFinancialService _financialService;
         private readonly ISalesService _salesService;
         private readonly IPurchasingService _purchasingService;
@@ -71,6 +74,8 @@ namespace Services.Dashboard
                     .Select(a => a.Id))
                 .ToHashSet();
 
+            var moneyInBank = BuildMoneyInBank(accounts);
+
             var totalSalesYtd = ComputeNetAmount(ledger, revenueAccountIds, normalBalanceIsDebit: false);
             var totalExpensesYtd = ComputeNetAmount(ledger, expenseAccountIds, normalBalanceIsDebit: true);
             var cashFlowYtd = ComputeNetAmount(ledger, bankAccountIds, normalBalanceIsDebit: true);
@@ -79,7 +84,9 @@ namespace Services.Dashboard
             {
                 Kpis = new DashboardKpiDto
                 {
-                    MoneyInBank = accounts.Where(a => bankAccountIds.Contains(a.Id)).Sum(a => a.Balance),
+                    MoneyInBank = moneyInBank.Total,
+                    BankBalances = moneyInBank.BankBalances,
+                    UnassignedCash = moneyInBank.UnassignedCash,
                     OutstandingReceivables = customers.Sum(c => c.Balance),
                     TotalPayables = purchaseInvoices.Where(i => i.IsPayable).Sum(i => i.BalanceDue()),
                     TotalAssets = balanceSheet
@@ -150,13 +157,52 @@ namespace Services.Dashboard
             return summary;
         }
 
+        private bool CanViewBankAccounts() =>
+            _tenantContext.IsResolved
+            && _tenantContext.Permissions.Contains(SystemPermissions.BankingAccountsView);
+
+        /// <summary>
+        /// Money in bank split per active bank account plus cash accounts no bank record covers.
+        /// Archived banks are left out of both the split and the total so the parts always add up.
+        /// </summary>
+        private (decimal Total, List<DashboardBankBalanceDto>? BankBalances, decimal UnassignedCash) BuildMoneyInBank(
+            IReadOnlyCollection<Account> accounts)
+        {
+            var allBanks = _financialService.GetCashAndBanks().ToList();
+            var accountById = accounts.ToDictionary(a => a.Id);
+
+            var balances = allBanks
+                .Where(b => b.ArchivedAt == null && b.AccountId.HasValue)
+                .OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(b => new DashboardBankBalanceDto
+                {
+                    BankId = b.Id,
+                    Name = b.Name,
+                    Balance = RoundMoney(accountById.TryGetValue(b.AccountId!.Value, out var account) ? account.Balance : 0m)
+                })
+                .ToList();
+
+            // Workspaces without bank records still hold cash in the postable cash accounts (e.g. 10111).
+            var accountsWithBankRecord = allBanks
+                .Where(b => b.AccountId.HasValue)
+                .Select(b => b.AccountId!.Value)
+                .ToHashSet();
+            var unassignedCash = RoundMoney(accounts
+                .Where(a => a.CanPost() && (a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash)))
+                .Where(a => !accountsWithBankRecord.Contains(a.Id))
+                .Sum(a => a.Balance));
+
+            var total = balances.Sum(b => b.Balance) + unassignedCash;
+            return (total, CanViewBankAccounts() ? balances : null, unassignedCash);
+        }
+
+        private static decimal RoundMoney(decimal amount) =>
+            Math.Round(amount, MoneyDecimalPlaces, MidpointRounding.AwayFromZero);
+
         private Dto.Banking.BankCloseStatusDto? BuildBankCloseStatus(DateTime asOf)
         {
-            if (!_tenantContext.IsResolved
-                || !_tenantContext.Permissions.Contains(SystemPermissions.BankingAccountsView))
-            {
+            if (!CanViewBankAccounts())
                 return null;
-            }
 
             return _bankAccountService.GetCloseStatus(asOf);
         }
