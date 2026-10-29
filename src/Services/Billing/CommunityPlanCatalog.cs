@@ -16,6 +16,9 @@ public sealed class CommunityPlanCatalog : IPlanCatalog
 {
     public const string PlanKey = "community";
 
+    /// <inheritdoc />
+    public string DefaultPlanKey => PlanKey;
+
     /// <summary>Every module key, in the order of <c>GET /api/Subscription/modules</c>.</summary>
     public static readonly IReadOnlyList<string> AllModules = new[]
     {

@@ -22,7 +22,7 @@ namespace Core.Domain
         public string? CompanyCode { get; set; }
         public string? CRA { get; set; }
 
-        public string? Plan { get; set; } = "accounting_free";
+        public string? Plan { get; set; }
         /// <summary>Ops override only: null (derived from Plan) or "comp" (see Core.Entitlements.CompanyTiers).</summary>
         public string? Tier { get; set; }
         /// <summary>Legacy allow-list JSON. Prefer <see cref="DisabledModulesJson"/>. Kept for one-release read fallback.</summary>

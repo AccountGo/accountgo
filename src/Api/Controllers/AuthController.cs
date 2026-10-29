@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Services.Administration;
+using Services.Billing;
 using Services.Security;
 
 namespace Api.Controllers
@@ -43,6 +44,7 @@ namespace Api.Controllers
         private readonly ApiDbContext _apiDb;
         private readonly WorkspaceService _workspaces;
         private readonly AccountDeletionService _accountDeletion;
+        private readonly IPlanCatalog _plans;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -57,7 +59,8 @@ namespace Api.Controllers
             ApplicationIdentityDbContext identityContext,
             ApiDbContext apiDb,
             WorkspaceService workspaces,
-            AccountDeletionService accountDeletion)
+            AccountDeletionService accountDeletion,
+            IPlanCatalog plans)
         {
             _otpService = otpService;
             _authService = authService;
@@ -72,6 +75,7 @@ namespace Api.Controllers
             _apiDb = apiDb;
             _workspaces = workspaces;
             _accountDeletion = accountDeletion;
+            _plans = plans;
         }
 
         [AllowAnonymous]
@@ -303,7 +307,7 @@ namespace Api.Controllers
 
                 Core.Domain.Company? company = null;
                 if (cleanSlug != null)
-                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, "accounting_free", currency);
+                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, _plans.DefaultPlanKey, currency);
 
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
                 // Keep delivery inside the transaction so a failed send rolls back signup and workspace creation.

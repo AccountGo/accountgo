@@ -12,25 +12,19 @@ namespace AccountGo.BackendTests.Entitlements;
 public class EntitlementsConfigurationTests
 {
     [Fact]
-    public void FromConfiguration_Defaults_MatchToday()
+    public void FromConfiguration_Defaults_SupportEmailNull()
     {
         var options = Read(new Dictionary<string, string?>());
-        Assert.False(options.Enabled);
-        Assert.True(options.FeaturesEnabled);
         Assert.Null(options.SupportEmail);
     }
 
     [Fact]
-    public void FromConfiguration_BindsThreeKeptSettings()
+    public void FromConfiguration_BindsSupportEmail()
     {
         var options = Read(new Dictionary<string, string?>
         {
-            ["ENTITLEMENTS_ENABLED"] = "true",
-            ["ENTITLEMENT_FEATURES_ENABLED"] = "false",
             ["SUPPORT_EMAIL"] = "help@example.com",
         });
-        Assert.True(options.Enabled);
-        Assert.False(options.FeaturesEnabled);
         Assert.Equal("help@example.com", options.SupportEmail);
     }
 
@@ -42,21 +36,6 @@ public class EntitlementsConfigurationTests
             ["Email:SupportAddress"] = "fallback@example.com",
         });
         Assert.Equal("fallback@example.com", options.SupportEmail);
-    }
-
-    [Fact]
-    public void FromConfiguration_DeletedVariables_AreIgnored()
-    {
-        var options = Read(new Dictionary<string, string?>
-        {
-            ["ENTITLEMENTS_ENABLED"] = "true",
-            ["ENTITLEMENTS_SELF_SERVICE_PLANS"] = "invoicing,accounting",
-            ["ENTITLEMENTS_FREE_SEATS"] = "1",
-            ["ENTITLEMENTS_ENGINE_SHADOW"] = "false",
-            ["ENTITLEMENTS_LEGACY_MODULE_GATE"] = "true",
-        });
-        Assert.True(options.Enabled);
-        Assert.True(options.FeaturesEnabled);
     }
 
     private static Core.Entitlements.EntitlementsOptions Read(Dictionary<string, string?> values) =>

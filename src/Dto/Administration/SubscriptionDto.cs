@@ -8,7 +8,7 @@ namespace Dto.Subscription
         public int CompanyId { get; set; }
         public string CompanyName { get; set; } = string.Empty;
         public string? Slug { get; set; }
-        public string Plan { get; set; } = "accounting_free";
+        public string Plan { get; set; } = string.Empty;
         public string SubscriptionStatus { get; set; } = "active";
         public DateTime? SubscriptionValidUntil { get; set; }
         public List<string> ActiveModules { get; set; } = new();

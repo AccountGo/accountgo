@@ -108,8 +108,8 @@ public class RequireFeatureAttributeTests
         tenant.SetupGet(t => t.IsResolved).Returns(true);
         tenant.Setup(t => t.RequireCompanyId()).Returns(1);
         tenant.SetupGet(t => t.Permissions).Returns(new HashSet<string>());
-        var engine = new EntitlementService(
-            new EntitlementsOptions { Enabled = true },
+        var engine = new CommunityEntitlementService(
+            new EntitlementsOptions(),
             new Services.Billing.CommunityPlanCatalog(),
             companies.Object, members.Object, invites.Object,
             usage.Object, banks.Object, tenant.Object);

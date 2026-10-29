@@ -86,8 +86,6 @@ docker run -d \
 | `RESEND_API_KEY` | Resend API key when `EMAIL_PROVIDER=Resend` |
 | `ANTER_API_KEY` / `ANTER_PROJECT_ID` | Optional AccountGo Assistant; set via secrets / env — do not commit |
 | `JwtSettings__validIssuer` / `validAudience` | Match your public API origin |
-| `ENTITLEMENTS_ENABLED` | Optional. Used by other implementations for quota enforcement; the community engine ignores it (quotas stay unlimited) |
-| `ENTITLEMENT_FEATURES_ENABLED` | Optional. Default on. Used by other implementations to suppress feature emission; the community engine never emits feature keys either way |
 | `SUPPORT_EMAIL` | Shown when a quota is exceeded |
 | `SERVER_TIMING_ENABLED` | Optional. Default `"true"`. When `"false"`, no `Server-Timing` header from the .NET API, API worker, or web worker |
 

@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
 using Services.Administration;
+using Services.Billing;
 
 namespace Api.Controllers
 {
@@ -30,6 +31,7 @@ namespace Api.Controllers
         IMcpCallerAssertionService assertionService,
         ITenantContext tenantContext,
         IAdministrationService administrationService,
+        IPlanCatalog plans,
         ILogger<AiChatController> logger) : BaseController
     {
         private readonly IAnterAgentRunnerClient _anterClient = anterClient
@@ -40,6 +42,8 @@ namespace Api.Controllers
             ?? throw new ArgumentNullException(nameof(tenantContext));
         private readonly IAdministrationService _administrationService = administrationService
             ?? throw new ArgumentNullException(nameof(administrationService));
+        private readonly IPlanCatalog _plans = plans
+            ?? throw new ArgumentNullException(nameof(plans));
         private readonly ILogger<AiChatController> _logger = logger
             ?? throw new ArgumentNullException(nameof(logger));
 
@@ -346,7 +350,7 @@ namespace Api.Controllers
             out string companyRole,
             out string subscriptionStatus)
         {
-            companyPlan = "accounting_free";
+            companyPlan = _plans.DefaultPlanKey;
             activeModules = string.Empty;
             companyRole = _tenantContext.Role?.ToString() ?? "Member";
             subscriptionStatus = "active";
@@ -355,7 +359,7 @@ namespace Api.Controllers
             {
                 var subscription = _administrationService.GetCurrentSubscription();
                 companyPlan = string.IsNullOrWhiteSpace(subscription.Plan)
-                    ? "community"
+                    ? _plans.DefaultPlanKey
                     : subscription.Plan;
                 activeModules = string.Join(
                     ",",
