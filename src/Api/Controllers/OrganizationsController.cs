@@ -243,6 +243,7 @@ namespace Api.Controllers
             public bool ShowPaymentInstructions { get; set; } = true;
             public string DefaultNotes { get; set; }
             public string DefaultPaymentInstructions { get; set; }
+            public int? PaymentBankId { get; set; }
         }
 
         [TenantScoped]
@@ -311,6 +312,18 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Default text too long",
                     detail: $"Default notes and payment instructions are limited to {SalesInvoiceSettings.MaxDefaultTextLength} characters.");
 
+            if (request.PaymentBankId.HasValue)
+            {
+                // Tenant query filter scopes Banks to this workspace, so another workspace's bank reads as missing.
+                var paymentBank = _db.Banks.FirstOrDefault(b => b.Id == request.PaymentBankId.Value);
+                if (paymentBank == null)
+                    return Problem(statusCode: 400, title: "Bank account not found",
+                        detail: "Pick one of your bank accounts, or clear the selection.");
+                if (paymentBank.ArchivedAt != null)
+                    return Problem(statusCode: 400, title: "Bank account is archived",
+                        detail: "Archived bank accounts cannot be used for invoice payment details. Pick an active account or clear the selection.");
+            }
+
             var settings = new SalesInvoiceSettings
             {
                 SellerName = request.SellerName,
@@ -321,6 +334,7 @@ namespace Api.Controllers
                 ShowPaymentInstructions = request.ShowPaymentInstructions,
                 DefaultNotes = defaultNotes,
                 DefaultPaymentInstructions = defaultPaymentInstructions,
+                PaymentBankId = request.PaymentBankId,
             };
 
             var setting = GetOrCreateSetting();
@@ -450,6 +464,7 @@ namespace Api.Controllers
             ShowPaymentInstructions = settings.ShowPaymentInstructions,
             DefaultNotes = settings.DefaultNotes,
             DefaultPaymentInstructions = settings.DefaultPaymentInstructions,
+            PaymentBankId = settings.PaymentBankId,
         };
 
         private object Summary(Company company, CompanyMemberRole role)

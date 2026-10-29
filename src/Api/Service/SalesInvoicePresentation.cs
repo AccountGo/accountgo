@@ -58,6 +58,10 @@ namespace Api.Service
             var recipientEmail = Blank(party?.Email) ?? Blank(billTo.Email) ?? attentionEmail;
             var ccEmail = string.Equals(attentionEmail, recipientEmail, StringComparison.OrdinalIgnoreCase) ? null : attentionEmail;
 
+            Core.Domain.Financials.Bank? paymentBank = invoiceSettings.PaymentBankId.HasValue
+                ? _db.Banks.FirstOrDefault(b => b.Id == invoiceSettings.PaymentBankId.Value)
+                : null;
+
             var dto = new Dto.Sales.SalesInvoice
             {
                 Id = salesInvoice.Id,
@@ -78,6 +82,8 @@ namespace Api.Service
                 ShippingHandlingCharge = salesInvoice.ShippingHandlingCharge,
                 Notes = salesInvoice.Notes,
                 PaymentInstructions = salesInvoice.PaymentInstructions,
+                EffectivePaymentInstructions = Services.Banking.BankPaymentInstructions.Resolve(
+                    salesInvoice.PaymentInstructions, invoiceSettings, paymentBank, seller.Name, salesInvoice.No),
                 Posted = salesInvoice.GeneralLedgerHeaderId != null,
                 CompanyName = defaultCompany?.Name,
                 Seller = new Dto.Sales.SellerInfo

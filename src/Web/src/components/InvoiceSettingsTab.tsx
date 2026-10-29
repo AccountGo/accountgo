@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileText, RefreshCw, Save } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { SalesInvoiceSettings, SellerNameSource } from '../types/invoicing';
+import type { BankAccountPickerItem } from '../types/banking';
+import { paymentBankChoice } from '../lib/paymentBank';
 
 interface InvoiceSettingsTabProps {
   tradingName: string;
@@ -17,6 +19,7 @@ const DEFAULT_SETTINGS: SalesInvoiceSettings = {
   showPaymentInstructions: true,
   defaultNotes: null,
   defaultPaymentInstructions: null,
+  paymentBankId: null,
 };
 
 const MAX_DEFAULT_TEXT = 2000;
@@ -39,6 +42,8 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
   const { authFetch } = useAuth();
   const [settings, setSettings] = useState<SalesInvoiceSettings>(DEFAULT_SETTINGS);
   const [legalName, setLegalName] = useState<string | null>(null);
+  const [banks, setBanks] = useState<BankAccountPickerItem[]>([]);
+  const [banksLoaded, setBanksLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -48,11 +53,16 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
     let cancelled = false;
     (async () => {
       try {
-        const [settingsRes, profileRes] = await Promise.all([
+        const [settingsRes, profileRes, banksRes] = await Promise.all([
           authFetch('/api/organizations/current/sales-invoice-settings'),
           authFetch('/api/organizations/current/business-profile'),
+          authFetch('/api/Banking/Accounts/Picker'),
         ]);
         if (cancelled) return;
+        if (banksRes.ok) {
+          setBanks((await banksRes.json()) as BankAccountPickerItem[]);
+          setBanksLoaded(true);
+        }
         if (settingsRes.ok) setSettings(await settingsRes.json() as SalesInvoiceSettings);
         if (profileRes.ok) setLegalName(((await profileRes.json()) as { legalName: string | null }).legalName);
       } catch (err) {
@@ -175,6 +185,29 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
             </label>
           ))}
         </fieldset>
+
+        <div className="space-y-1.5">
+          <label htmlFor="payment-bank-select" className="block text-xs font-semibold text-[var(--text-secondary)]">
+            Bank details on invoices
+          </label>
+          <select
+            id="payment-bank-select"
+            value={settings.paymentBankId ?? ''}
+            onChange={(e) => setSettings((s) => ({ ...s, paymentBankId: e.target.value ? Number(e.target.value) : null }))}
+            disabled={disabled}
+            className="w-full h-11 px-3 rounded-xl bg-[var(--bg-subtle)] text-sm text-[var(--text-main)] disabled:opacity-60"
+          >
+            {paymentBankChoice(banks, settings.paymentBankId, banksLoaded).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-[var(--text-muted)]">
+            Prints this account's bank, account number, and routing details as the payment instructions on the PDF and email.
+            With none selected, the default text below is used. An invoice with its own edited instructions keeps them.
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
