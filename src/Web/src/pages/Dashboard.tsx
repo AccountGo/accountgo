@@ -20,11 +20,15 @@ import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
 import { BankCloseStatusCard } from '../components/BankCloseStatusCard';
+import { MoneyInBankBreakdown } from '../components/MoneyInBankBreakdown';
+import type { DashboardBankBalance } from '../lib/moneyInBank';
 import type { BankCloseStatus } from '../types/banking';
 
 interface DashboardSummary {
   kpis: {
     moneyInBank: number;
+    bankBalances?: DashboardBankBalance[] | null;
+    unassignedCash?: number;
     outstandingReceivables: number;
     totalPayables: number;
     totalAssets: number;
@@ -227,6 +231,14 @@ export const Dashboard: React.FC = () => {
           <div className="text-xs text-[var(--text-muted)] mt-2">
             Operating liquidity in ledger
           </div>
+          {!loading && (
+            <MoneyInBankBreakdown
+              kpis={kpis}
+              orgSlug={currentOrg.slug}
+              currencySymbol={currencySymbol}
+              formatAmount={formatAmount}
+            />
+          )}
         </div>
 
         {/* Metric 4: Total Ledger Assets */}
