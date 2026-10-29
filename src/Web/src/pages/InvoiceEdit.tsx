@@ -291,6 +291,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           if (!res.ok) throw new Error(`Could not load invoice #${invoiceId}`);
           const data: Invoice = await res.json();
 
+          if (data.status !== 'Draft') {
+            navigate(`/org/${orgSlug}/sales/${invoiceId}`, { replace: true });
+            return;
+          }
+
           setSelectedCustomerId(data.customerId);
           setInvoiceNo(data.no || '');
           setIsIssued(data.status !== 'Draft');

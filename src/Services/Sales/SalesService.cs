@@ -857,6 +857,7 @@ namespace Services.Sales
             }
 
             salesInvoice = _mapper.Map<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto);
+            salesInvoice.Status = Core.Domain.SalesInvoiceStatus.Draft;
             salesInvoice.No = InvoiceNumber.ForSave(null, null, exists: false, salesInvoiceDto.No);
 
             foreach (var invoiceLine in salesInvoice.SalesInvoiceLines)
@@ -1051,6 +1052,12 @@ namespace Services.Sales
             if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                 throw new Exception("Invoice is already posted. Update is not allowed.");
 
+            if (salesInvoice.Status == SalesInvoiceStatus.Void)
+                throw new InvalidOperationException("Cannot post a void invoice.");
+
+            if (salesInvoice.Status == SalesInvoiceStatus.Closed)
+                throw new InvalidOperationException("Cannot post a closed/paid invoice.");
+
             var taxes = new List<KeyValuePair<int, decimal>>();
             var sales = new List<KeyValuePair<int, decimal>>();
             var availableTaxes = _financialService.GetTaxes().ToList();
@@ -1199,7 +1206,10 @@ namespace Services.Sales
                 issue.Line.InventoryControlJournal = issue.Movement;
             }
             salesInvoice.GeneralLedgerHeader = glHeader;
-            salesInvoice.Status = Core.Domain.SalesInvoiceStatus.Open;
+            if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft)
+            {
+                salesInvoice.Status = Core.Domain.SalesInvoiceStatus.Open;
+            }
             _salesInvoiceRepo.Update(salesInvoice);
         }
 

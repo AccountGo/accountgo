@@ -278,6 +278,82 @@ namespace AccountGo.BackendTests
             var reloaded = await GetInvoice(savedInvoice.Id);
             Assert.True(reloaded.Posted);
             Assert.Null(reloaded.PostingError);
+
+            // Assert AR debit in GL lines equals GrandTotal() exactly
+            WithDb(db =>
+            {
+                var header = db.SalesInvoiceHeaders
+                    .Include(h => h.SalesInvoiceLines)
+                    .Include(h => h.Customer)
+                    .Include(h => h.GeneralLedgerHeader).ThenInclude(gl => gl.GeneralLedgerLines)
+                    .Single(h => h.Id == savedInvoice.Id);
+                var arAccountId = header.Customer.AccountsReceivableAccountId ?? 1;
+                var arLine = header.GeneralLedgerHeader.GeneralLedgerLines.Single(l => l.DrCr == DrOrCrSide.Dr && l.AccountId == arAccountId);
+                Assert.Equal(header.GrandTotal(), arLine.Amount);
+                var totalDebits = header.GeneralLedgerHeader.GeneralLedgerLines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount);
+                var totalCredits = header.GeneralLedgerHeader.GeneralLedgerLines.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount);
+                Assert.Equal(totalDebits, totalCredits);
+            });
+        }
+
+        [Fact]
+        public async Task SalesInvoice_PostSalesInvoice_RejectsVoidAndClosed_AndDoesNotReopen()
+        {
+            // 1. Post on Void is rejected and remains Void
+            var draftId = await SaveDraft();
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}");
+            Assert.True(voidRes.IsSuccessStatusCode);
+            var voidPostRes = await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", new Dto.Sales.SalesInvoice { Id = draftId });
+            Assert.Equal(HttpStatusCode.BadRequest, voidPostRes.StatusCode);
+            var voidInvoice = await GetInvoice(draftId);
+            Assert.Equal("Void", voidInvoice.Status);
+
+            // 2. Post on Closed (Paid) is rejected and remains Closed
+            var paidDraftId = await SaveDraft();
+            await Issue(paidDraftId);
+            var paidInvoice = await GetInvoice(paidDraftId);
+            var payRes = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", new Dto.Sales.RecordInvoicePaymentDto
+            {
+                InvoiceId = paidDraftId,
+                Amount = paidInvoice.BalanceDue,
+                PaymentMethod = "Cash"
+            });
+            Assert.True(payRes.IsSuccessStatusCode);
+            var closedInvoice = await GetInvoice(paidDraftId);
+            Assert.Equal("Paid", closedInvoice.Status);
+
+            var closedPostRes = await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", new Dto.Sales.SalesInvoice { Id = paidDraftId });
+            Assert.Equal(HttpStatusCode.BadRequest, closedPostRes.StatusCode);
+            var reloadedClosed = await GetInvoice(paidDraftId);
+            Assert.Equal("Paid", reloadedClosed.Status);
+        }
+
+        [Fact]
+        public async Task SalesInvoice_CreateSalesInvoice_ForcesDraft_AndRejectsNonDraft()
+        {
+            var invoice = await NewInvoice();
+
+            // Attempting to create with non-draft status via CreateSalesInvoice is rejected
+            invoice.Status = "Open";
+            var openRes = await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice);
+            Assert.Equal(HttpStatusCode.BadRequest, openRes.StatusCode);
+
+            invoice.Status = "Closed";
+            var closedRes = await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice);
+            Assert.Equal(HttpStatusCode.BadRequest, closedRes.StatusCode);
+
+            invoice.Status = "Void";
+            var voidRes = await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice);
+            Assert.Equal(HttpStatusCode.BadRequest, voidRes.StatusCode);
+
+            // Creating with Draft succeeds as Draft
+            invoice.Status = "Draft";
+            var draftRes = await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice);
+            Assert.True(draftRes.IsSuccessStatusCode, await draftRes.Content.ReadAsStringAsync());
+            var created = await draftRes.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            Assert.Equal("Draft", created.Status);
+            var fetched = await GetInvoice(created.Id);
+            Assert.Equal("Draft", fetched.Status);
         }
     }
 }

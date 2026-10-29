@@ -1598,6 +1598,16 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
+                var existing = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
+                if (existing == null)
+                    return NotFound(new { message = $"Invoice #{salesInvoiceDto.Id} not found." });
+
+                if (existing.Status == Core.Domain.SalesInvoiceStatus.Void)
+                    return BadRequest(new { message = "Cannot post a void invoice." });
+
+                if (existing.Status == Core.Domain.SalesInvoiceStatus.Closed)
+                    return BadRequest(new { message = "Cannot post a closed/paid invoice." });
+
                 using (var tx = BeginInvoiceNumberingTransaction())
                 {
                     _salesService.PostSalesInvoice(salesInvoiceDto.Id);
@@ -1989,6 +1999,10 @@ namespace Api.Controllers
         public IActionResult CreateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             EnsureSalesInvoiceReferencesOwned(salesInvoiceDto);
+            if (!string.IsNullOrEmpty(salesInvoiceDto.Status) && !string.Equals(salesInvoiceDto.Status, "Draft", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "New invoices must be created as Draft. Issue the invoice after creation." });
+            }
             Core.Domain.Error.Result<Dto.Sales.SalesInvoice> result;
             try
             {
