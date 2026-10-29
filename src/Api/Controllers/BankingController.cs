@@ -500,6 +500,28 @@ namespace Api.Controllers
             }
         }
 
+        [HttpGet("Reconciliations/{id:int}/Report.pdf")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult ReconciliationReportPdf(int id)
+        {
+            try
+            {
+                var report = _reconciliations.GetReport(id);
+                var document = new Api.Service.BankReconciliationReportPdfDocument(report);
+                var bytes = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(document);
+                return File(bytes, "application/pdf", $"{document.FileStem}.pdf");
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         private static IActionResult ReconciliationConflict(BankReconciliationConflictException ex) =>
             new ConflictObjectResult(new
             {

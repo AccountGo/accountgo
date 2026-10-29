@@ -17,5 +17,7 @@ namespace Services.Banking
         BankReconciliationDto Finish(int id, FinishBankReconciliationRequest request, string actor);
         BankReconciliationDto Undo(int id, UndoBankReconciliationRequest request, string actor);
         void DiscardDraft(int id);
+        /// <summary>Finished reconciliation report figures (statement + outstanding → books).</summary>
+        BankReconciliationReportDto GetReport(int id);
     }
 }
