@@ -500,6 +500,10 @@ namespace Services.Banking
 
             if (accountId.HasValue && accountId.Value > 0)
             {
+                // Accounting only: Invoicing & Bills pays through bank accounts (same gate as PostingAccountId).
+                if (!HasFinancialsModule())
+                    throw new InvalidOperationException("Paying from a GL account requires the Financials module.");
+
                 var account = _accounts.GetById(accountId.Value);
                 if (account == null || account.CompanyId != _tenant.CompanyId)
                     throw new TenantEntityNotFoundException(nameof(Account), accountId.Value, nameof(accountId));

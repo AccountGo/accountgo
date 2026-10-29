@@ -339,6 +339,21 @@ public class BankAccountServiceTests
     }
 
     [Fact]
+    public void ResolvePaymentAccountId_RefusesGlAccountWithoutFinancials()
+    {
+        using var harness = new Harness(hasFinancials: false);
+        harness.SeedCashTree();
+        var cash = harness.RequireAccount("10111");
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.ResolvePaymentAccountId(null, cash.Id));
+        Assert.Equal("Paying from a GL account requires the Financials module.", ex.Message);
+
+        // Without AccountId, I&B still falls back to cash when no banks exist.
+        Assert.Equal(cash.Id, harness.Service.ResolvePaymentAccountId(null, null));
+    }
+
+    [Fact]
     public void RequireActiveBank_RefusesArchived()
     {
         using var harness = new Harness();

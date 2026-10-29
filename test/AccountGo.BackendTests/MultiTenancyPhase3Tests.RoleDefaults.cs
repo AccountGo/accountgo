@@ -31,9 +31,11 @@ namespace AccountGo.BackendTests
             Assert.NotEqual(expected, RolePermissions(command));
 
             // When a role default changes, add a migration like this one and run it here too.
+            // 0013 still grants financials.cashbanks.*; 0033 migrates those to banking.* and retires cashbanks.
             var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0013_role_defaults.sql"));
             migration += File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0015_stock_permission.sql"));
             migration += File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0017_stock_permission_cleanup.sql"));
+            migration += File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0033_banking_permissions.sql"));
             command.CommandText = migration;
             command.ExecuteNonQuery();
             Assert.Equal(expected, RolePermissions(command));

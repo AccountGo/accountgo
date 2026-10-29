@@ -38,7 +38,7 @@ namespace Services.Banking
 
         /// <summary>
         /// GL cash account to credit for a bill payment (1C).
-        /// Explicit bank → optional Accounting GL account → payment default → unlinked cash only when no banks exist.
+        /// Explicit bank → optional Accounting GL account (Financials only) → payment default → unlinked cash only when no banks exist.
         /// </summary>
         int ResolvePaymentAccountId(int? bankAccountId, int? accountId);
 
