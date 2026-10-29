@@ -44,7 +44,9 @@ SELECT 'blank_name' AS violation, b."Id" AS bank_id, b."CompanyId", b."Name", b.
 FROM "Bank" b
 WHERE b."Name" IS NULL OR TRIM(b."Name") = '';
 
--- 6. Duplicate bank names within a company (case-insensitive)
+-- 6. Duplicate bank names within a company (case-insensitive).
+-- Fix these by hand before deploying 0032. The migration's Name || ' (' || Id || ')'
+-- rename can still collide with an existing name (e.g. Id 2 "bdo" next to "BDO (2)").
 SELECT 'duplicate_name' AS violation, b."CompanyId", lower(b."Name") AS name_key, COUNT(*) AS bank_count,
        GROUP_CONCAT(b."Id") AS bank_ids
 FROM "Bank" b
