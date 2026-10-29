@@ -210,6 +210,31 @@ public class BankAccountServiceTests
     }
 
     [Fact]
+    public void Create_RefusesOpeningBalanceUntilRegisterSlice()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+
+        var withBalance = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.Create(new CreateBankAccountRequest
+            {
+                Name = "With OB",
+                Type = 1,
+                OpeningBalance = 100m
+            }, includeFullNumbers: false));
+        Assert.Equal("Opening balances arrive with the register (1D).", withBalance.Message);
+
+        var withDate = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.Create(new CreateBankAccountRequest
+            {
+                Name = "With OB Date",
+                Type = 1,
+                OpeningBalanceDate = DateTime.UtcNow.Date
+            }, includeFullNumbers: false));
+        Assert.Equal("Opening balances arrive with the register (1D).", withDate.Message);
+    }
+
+    [Fact]
     public void SetDefault_ClearsOtherBanksDefaultFlag()
     {
         using var harness = new Harness();

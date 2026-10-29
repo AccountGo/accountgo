@@ -1321,9 +1321,12 @@ namespace Api.Controllers
             try
             {
                 using var tx = RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, System.Data.IsolationLevel.Serializable);
-                _bankAccountService.DeleteOrArchive(id);
+                var archived = _bankAccountService.DeleteOrArchive(id);
                 tx.Commit();
-                return Ok(new { message = "Bank deleted successfully" });
+                return Ok(new
+                {
+                    message = archived ? "Bank archived successfully" : "Bank deleted successfully"
+                });
             }
             catch (Core.Tenancy.TenantEntityNotFoundException)
             {

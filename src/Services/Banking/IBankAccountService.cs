@@ -23,8 +23,9 @@ namespace Services.Banking
         /// <summary>
         /// Hard-delete the bank row when it has no GL history; otherwise archives (D9).
         /// Never deletes the linked GL account in 1B (takeover renames make "dedicated" unsafe).
+        /// Returns <c>true</c> when the bank was archived instead of deleted.
         /// </summary>
-        void DeleteOrArchive(int id);
+        bool DeleteOrArchive(int id);
         Account EnsureEligiblePostingAccount(int accountId, int? exceptBankId);
         void SyncBankNameFromAccount(Account account);
         void EnsureAccountMayChangeWhileBackingBank(Account account, Account? proposedParent, string? proposedCode, bool becomingSummary, bool archiving);
