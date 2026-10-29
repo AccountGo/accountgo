@@ -42,6 +42,7 @@ test('the reports route renders all statement controls and respects reports.view
           element: createElement(Outlet, { context: {
             currentOrg: { slug: 'ws-one', name: 'WS One', currency: 'PHP' },
             hasPermission: permission => allowed && permission === 'reports.view',
+            hasModule: () => false,
           } }),
         }, createElement(Route, { path: 'reports', element: createElement(Reports) }))))));
   const html = render(true);

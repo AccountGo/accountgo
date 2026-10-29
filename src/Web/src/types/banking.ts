@@ -259,3 +259,19 @@ export interface OutstandingAging {
   staleCount: number;
   hasStale: boolean;
 }
+
+export interface BankCloseStatusBank {
+  bankId: number;
+  name: string;
+  reconciledThrough?: string | null;
+  isReconciled: boolean;
+}
+
+export interface BankCloseStatus {
+  periodEnd: string;
+  periodLabel: string;
+  reconciledCount: number;
+  totalCount: number;
+  isComplete: boolean;
+  banks: BankCloseStatusBank[];
+}

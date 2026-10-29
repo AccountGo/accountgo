@@ -136,6 +136,22 @@ namespace Api.Controllers
             }
         }
 
+        [HttpGet("CloseStatus")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult GetCloseStatus([FromQuery] string? asOf = null)
+        {
+            try
+            {
+                var status = _banks.GetCloseStatus(ParseRegisterDate(asOf));
+                return status == null ? NoContent() : Ok(status);
+            }
+            catch (FormatException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         private static DateTime? ParseRegisterDate(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))

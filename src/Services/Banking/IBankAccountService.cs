@@ -17,6 +17,9 @@ namespace Services.Banking
 
         /// <summary>Uncleared ledger lines dated on or before <paramref name="asOf"/> (default today), bucketed by age in days (3B).</summary>
         OutstandingAgingDto GetOutstandingAging(int bankId, DateTime? asOf);
+
+        /// <summary>Reconciled-through-last-month status for active banks; null when the Financials module is off (3C).</summary>
+        BankCloseStatusDto? GetCloseStatus(DateTime? asOf);
         IReadOnlyList<BankAccountPickerItemDto> Picker(bool includeOtherCashAccounts);
         IReadOnlyList<UnassignedCashDto> GetCashHistory(bool includeCodes);
         IReadOnlyList<object> EligiblePostingAccounts();
