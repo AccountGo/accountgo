@@ -36,6 +36,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { addBusinessDays, businessDaysBetween, isValidDate, localToday } from '../lib/businessDays';
+import { carriedOverPaymentInstructions, paymentInstructionsPayload } from '../lib/paymentBank';
 import { archivedTaxMessage, firstArchivedTax, invoiceLineAmounts, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
 
 interface InvoiceEditProps {
@@ -106,6 +107,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   // New invoices start from the workspace's default texts (Settings → Invoices); edits keep the invoice's own values.
   const [notes, setNotes] = useState<string>('');
   const [paymentInstructions, setPaymentInstructions] = useState<string>('');
+  // True once the user emptied the field (or the invoice was saved that way): it then prints nothing, instead of
+  // falling back to the workspace's payment bank or default text.
+  const [paymentInstructionsCleared, setPaymentInstructionsCleared] = useState(false);
 
   // Line items state
   const [lines, setLines] = useState<FormLineItem[]>([
@@ -226,7 +230,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         const settings: SalesInvoiceSettings = await res.json();
         // Only fill fields the user has not started typing in.
         setNotes((current) => current || settings.defaultNotes || '');
-        setPaymentInstructions((current) => current || settings.defaultPaymentInstructions || '');
+        // With a payment bank set, leave the field empty so the bank details print instead of a frozen copy of the default.
+        if (!settings.paymentBankId) {
+          setPaymentInstructions((current) => current || settings.defaultPaymentInstructions || '');
+        }
       } catch (err) {
         console.error('Error loading invoice defaults:', err);
       }
@@ -258,7 +265,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         setPaymentTermId(data.paymentTermId || '');
         setDueDate(gap !== null ? addBusinessDays(today, gap) : '');
         setNotes(data.notes ?? '');
-        setPaymentInstructions(data.paymentInstructions ?? '');
+        setPaymentInstructions(carriedOverPaymentInstructions(data.paymentInstructions));
+        setPaymentInstructionsCleared(data.paymentInstructions === '');
         if (data.salesInvoiceLines && data.salesInvoiceLines.length > 0) {
           setLines(
             data.salesInvoiceLines.map((l: InvoiceLineItem) => ({
@@ -312,6 +320,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           }
           setNotes(data.notes ?? '');
           setPaymentInstructions(data.paymentInstructions ?? '');
+          setPaymentInstructionsCleared(data.paymentInstructions === '');
 
           if (data.salesInvoiceLines && data.salesInvoiceLines.length > 0) {
             setLines(
@@ -556,7 +565,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         shippingHandlingCharge,
         status: asDraft ? 'Draft' : 'Open',
         notes: notes.trim() || undefined,
-        paymentInstructions: paymentInstructions.trim() || undefined,
+        paymentInstructions: paymentInstructionsPayload(paymentInstructions, paymentInstructionsCleared),
         salesInvoiceLines: validLines.map((l) => ({
           id: l.id || 0,
           itemId: l.itemId || null,
@@ -1182,7 +1191,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               <textarea
                 rows={2}
                 value={paymentInstructions}
-                onChange={(e) => setPaymentInstructions(e.target.value)}
+                onChange={(e) => {
+                  setPaymentInstructions(e.target.value);
+                  setPaymentInstructionsCleared(e.target.value.trim() === '');
+                }}
                 placeholder="Bank name, Swift/IBAN, routing, or PayPal info..."
                 className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
               />

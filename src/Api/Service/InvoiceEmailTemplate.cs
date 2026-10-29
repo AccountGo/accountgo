@@ -136,8 +136,8 @@ namespace Api.Service
             facts.Add((paidInFull ? "Amount paid" : "Amount due", headline));
 
             var sections = new List<(string Heading, string Body)>();
-            if (invoice.Display.ShowPaymentInstructions && !string.IsNullOrWhiteSpace(invoice.PaymentInstructions) && !paidInFull)
-                sections.Add(("Payment", invoice.PaymentInstructions.Trim()));
+            if (invoice.Display.ShowPaymentInstructions && !string.IsNullOrWhiteSpace(invoice.PaymentInstructionsToPrint()) && !paidInFull)
+                sections.Add(("Payment", invoice.PaymentInstructionsToPrint()!.Trim()));
             if (invoice.Display.ShowNotes && !string.IsNullOrWhiteSpace(invoice.Notes))
                 sections.Add(("Notes", invoice.Notes.Trim()));
 

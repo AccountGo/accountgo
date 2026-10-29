@@ -1109,6 +1109,29 @@ namespace Api.Controllers
             (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
             ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);
 
+        /// <summary>
+        /// Stores the payment instructions as they resolve when the invoice is issued, after the seller is recorded and the
+        /// number is assigned (the bank text carries the invoice number). Issued invoices print only what is stored.
+        /// </summary>
+        private bool CapturePaymentInstructionsIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice)
+        {
+            if (invoice.Status is null or Core.Domain.SalesInvoiceStatus.Draft or Core.Domain.SalesInvoiceStatus.Void)
+                return false;
+
+            var invoiceSettings = _db.CompanySettings.FirstOrDefault()?.GetSalesInvoiceSettings()
+                ?? new Core.Domain.SalesInvoiceSettings();
+            var paymentBank = invoiceSettings.PaymentBankId.HasValue
+                ? _db.Banks.FirstOrDefault(b => b.Id == invoiceSettings.PaymentBankId.Value)
+                : null;
+            var sellerName = Core.Domain.Sales.InvoiceSeller.FromJson(invoice.SellerJson)?.Name;
+
+            var resolved = BankPaymentInstructions.Resolve(
+                invoice.PaymentInstructions, invoiceSettings, paymentBank, sellerName, invoice.No);
+            var before = invoice.PaymentInstructions;
+            invoice.CapturePaymentInstructionsIfIssued(resolved);
+            return !string.Equals(before, invoice.PaymentInstructions, StringComparison.Ordinal);
+        }
+
         /// <summary>Records the seller and the customer as they print, once the invoice is issued.</summary>
         private void CaptureIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice)
         {
@@ -1727,7 +1750,7 @@ namespace Api.Controllers
                     salesInvoice.DueDate = DueDateForSave(salesInvoice.Date, salesInvoiceDto.DueDate, paymentTermId);
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
                     salesInvoice.Notes = string.IsNullOrWhiteSpace(salesInvoiceDto.Notes) ? null : salesInvoiceDto.Notes.Trim();
-                    salesInvoice.PaymentInstructions = string.IsNullOrWhiteSpace(salesInvoiceDto.PaymentInstructions) ? null : salesInvoiceDto.PaymentInstructions.Trim();
+                    salesInvoice.PaymentInstructions = BankPaymentInstructions.ForSave(salesInvoiceDto.PaymentInstructions);
                     salesInvoice.Status = salesInvoiceDto.Status == "Draft" 
                         ? Core.Domain.SalesInvoiceStatus.Draft 
                         : Core.Domain.SalesInvoiceStatus.Open;
@@ -1815,7 +1838,7 @@ namespace Api.Controllers
                     salesInvoice.DueDate = DueDateForSave(salesInvoice.Date, salesInvoiceDto.DueDate, salesInvoice.PaymentTermId);
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
                     salesInvoice.Notes = string.IsNullOrWhiteSpace(salesInvoiceDto.Notes) ? null : salesInvoiceDto.Notes.Trim();
-                    salesInvoice.PaymentInstructions = string.IsNullOrWhiteSpace(salesInvoiceDto.PaymentInstructions) ? null : salesInvoiceDto.PaymentInstructions.Trim();
+                    salesInvoice.PaymentInstructions = BankPaymentInstructions.ForSave(salesInvoiceDto.PaymentInstructions);
                     // A different customer means a different "Bill to"; it is recorded again below.
                     if (salesInvoice.CustomerId != salesInvoiceDto.CustomerId)
                         salesInvoice.BillToJson = null;
@@ -1922,6 +1945,8 @@ namespace Api.Controllers
                 var stockWarnings = _salesService.GetSalesInvoiceStockWarnings(salesInvoice);
                 CaptureIfIssued(salesInvoice);
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
+                if (CapturePaymentInstructionsIfIssued(salesInvoice))
+                    _salesService.UpdateSalesInvoice(salesInvoice);
                 tx.Commit();
 
                 // Auto-post to GL if issued (not draft) and not already posted
@@ -2328,6 +2353,8 @@ namespace Api.Controllers
                 invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
                 CaptureIfIssued(invoice);
                 _salesService.UpdateSalesInvoice(invoice);
+                if (CapturePaymentInstructionsIfIssued(invoice))
+                    _salesService.UpdateSalesInvoice(invoice);
                 tx.Commit();
 
                 string? postingError = null;

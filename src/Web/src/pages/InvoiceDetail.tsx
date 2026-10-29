@@ -917,13 +917,13 @@ export const InvoiceDetail: React.FC = () => {
               </div>
             )}
 
-            {showPaymentInstructions && invoice.paymentInstructions && (
+            {showPaymentInstructions && (invoice.effectivePaymentInstructions ?? invoice.paymentInstructions) && (
               <div>
                 <span className="font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
                   Payment Instructions
                 </span>
                 <p className="whitespace-pre-line p-3.5 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border-subtle)] text-[var(--text-main)]">
-                  {invoice.paymentInstructions}
+                  {invoice.effectivePaymentInstructions ?? invoice.paymentInstructions}
                 </p>
               </div>
             )}

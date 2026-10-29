@@ -40,6 +40,10 @@ namespace Core.Domain.Sales
         public DateTime? DueDate { get; set; }
         public string ReferenceNo { get; set; }
         public string? Notes { get; set; }
+        /// <summary>
+        /// Null: never set (a draft prints the workspace's payment bank or default text; the text is stored when the
+        /// invoice is issued). Empty: the user cleared it on purpose, so nothing prints. Otherwise the invoice's own text.
+        /// </summary>
         public string? PaymentInstructions { get; set; }
         /// <summary>The seller as printed when the invoice was issued (<see cref="InvoiceSeller"/> JSON); null while a draft.</summary>
         public string? SellerJson { get; set; }
@@ -68,6 +72,21 @@ namespace Core.Domain.Sales
             if (Status is null or SalesInvoiceStatus.Draft or SalesInvoiceStatus.Void || BillToJson != null)
                 return;
             BillToJson = InvoiceBillTo.FromParty(customerParty, billToContact).ToJson();
+        }
+
+        /// <summary>
+        /// Stores the payment instructions as they resolve at issue, so an issued invoice never changes when the workspace's
+        /// payment bank or default text changes later. An empty value means the user cleared the field on purpose and is kept.
+        /// Call once, when the invoice is first issued.
+        /// </summary>
+        public void CapturePaymentInstructionsIfIssued(string? resolvedInstructions)
+        {
+            if (Status is null or SalesInvoiceStatus.Draft or SalesInvoiceStatus.Void)
+                return;
+            if (PaymentInstructions != null && string.IsNullOrWhiteSpace(PaymentInstructions))
+                return;
+            if (!string.IsNullOrWhiteSpace(resolvedInstructions))
+                PaymentInstructions = resolvedInstructions.Trim();
         }
 
         /// <summary>

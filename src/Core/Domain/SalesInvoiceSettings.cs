@@ -38,6 +38,11 @@ namespace Core.Domain
         public bool ShowPaymentInstructions { get; set; } = true;
         public string? DefaultNotes { get; set; }
         public string? DefaultPaymentInstructions { get; set; }
+        /// <summary>
+        /// Bank account whose details print as the payment instructions. JSON only (no column). When null, the free-text
+        /// <see cref="DefaultPaymentInstructions"/> applies.
+        /// </summary>
+        public int? PaymentBankId { get; set; }
 
         public static bool IsValidSellerName(string? value) => value is TradingName or LegalName;
 
