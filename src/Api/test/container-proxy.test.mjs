@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   LIBRARY_FAILURE_PREFIXES,
+  RestoreError,
+  RestoreInterruptedError,
   failureReach,
+  isRestoreTransient,
   libraryFailureText,
 } from "../container-errors.ts";
 import {
@@ -167,10 +170,24 @@ test('POST "Failed to start container" is retried with the same body bytes', asy
   assert.deepEqual(host.sent[1].body, expected);
 });
 
-test("after a transient failure restored is false and the next attempt runs readiness + restore first", async () => {
+test("transient failure while the container keeps running: no restore runs and the GET retry succeeds", async () => {
+  const host = makeHost([library500("Container suddenly disconnected, try again"), ok()]);
+  const res = await run(host, get());
+  assert.equal(res.status, 200);
+  assert.ok(host.restored, "the running container keeps its restore");
+  assert.deepEqual(host.events, ["dispatch GET", "ready", "dispatch GET"]);
+  assert.equal(host.sent[1].instance, host.sent[0].instance);
+});
+
+test("failure where the container stops: restored is false and the retry runs readiness + restore first", async () => {
   let restoredAfterFailure;
   const host = makeHost([
-    library500("Error proxying request to container: The container is not running, consider calling start()"),
+    () => {
+      host.running = false;
+      return library500(
+        "Error proxying request to container: The container is not running, consider calling start()"
+      );
+    },
     ok(),
   ]);
   const realReady = host.ensureReady;
@@ -182,6 +199,8 @@ test("after a transient failure restored is false and the next attempt runs read
   assert.equal(res.status, 200);
   assert.equal(restoredAfterFailure, false);
   assert.deepEqual(host.events, ["dispatch GET", "ready", "restore", "dispatch GET"]);
+  assert.equal(host.sent[1].instance, 2, "served by the new container");
+  assert.equal(host.sent[1].restoredInstance, 2, "only after it was restored");
   assert.ok(host.restored);
 });
 
@@ -259,12 +278,12 @@ test("refresh whose response was lost returns 503 (session kept) and is not rese
   assert.ok(res.status >= 500, "never a 401");
   assert.equal(res.status, 503);
   assert.equal(host.sent.length, 1);
-  assert.equal(host.restored, false);
+  assert.ok(host.restored, "same container still running: no re-restore under in-flight requests");
 
-  // The client's retry restores first, then reaches the app.
+  // The client's retry reaches the same, still-restored container.
   const retry = await run(host, new Request("http://app.test/api/auth/refresh", { method: "POST", body: "" }));
   assert.equal(retry.status, 200);
-  assert.deepEqual(host.events.slice(1), ["ready", "restore", "dispatch POST"]);
+  assert.deepEqual(host.events, ["dispatch POST", "dispatch POST"]);
 });
 
 test("a restore interrupted by an invalidation does not commit", () => {
@@ -276,6 +295,18 @@ test("a restore interrupted by an invalidation does not commit", () => {
   const next = state.current();
   assert.equal(state.commit(next), true);
   assert.equal(state.restored, true);
+});
+
+test("an interrupted restore is retryable by type, not by its message", () => {
+  const err = new RestoreInterruptedError();
+  assert.ok(err instanceof RestoreError);
+  assert.doesNotMatch(err.message, /not running/i);
+  assert.equal(isRestoreTransient(err), true);
+  assert.equal(isRestoreTransient(new RestoreError("Batch count mismatch: restored 1 of 2")), false);
+  assert.equal(
+    isRestoreTransient(new RestoreError("Restore batch 1 failed (500): The container is not running")),
+    true
+  );
 });
 
 test("a monitor that settles while the container is still running does not invalidate", async () => {

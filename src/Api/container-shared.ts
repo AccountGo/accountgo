@@ -1,19 +1,13 @@
-import { errorText, isTransientContainerError, serviceUnavailable } from "./container-errors";
+import {
+  BuildMismatchError,
+  RestoreError,
+  RestoreInterruptedError,
+  errorText,
+  isRestoreTransient,
+  isTransientContainerError,
+  serviceUnavailable,
+} from "./container-errors";
 import { scrubPathForLog } from "./server-timing";
-
-export class BuildMismatchError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "BuildMismatchError";
-  }
-}
-
-export class RestoreError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "RestoreError";
-  }
-}
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -209,11 +203,12 @@ export async function applyD1SyncFromResponse(options: {
   }
 }
 
-export function isRestoreTransient(err: unknown): boolean {
-  return (
-    isTransientContainerError(err) ||
-    (err instanceof RestoreError && isTransientContainerError(err.message))
-  );
-}
-
-export { errorText, isTransientContainerError, serviceUnavailable };
+export {
+  BuildMismatchError,
+  RestoreError,
+  RestoreInterruptedError,
+  errorText,
+  isRestoreTransient,
+  isTransientContainerError,
+  serviceUnavailable,
+};

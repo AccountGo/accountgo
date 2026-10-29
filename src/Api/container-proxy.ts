@@ -8,8 +8,9 @@
  * container instance the D1 restore ran against:
  * - RestoreState hands out a token when a restore starts and accepts the commit only if nothing
  *   invalidated it in between.
- * - Starting a container, a container exit (watchContainerExit), onStop/onError and every transient
- *   failure invalidate.
+ * - Starting a container, a container exit (watchContainerExit), onStop/onError and a transient
+ *   failure that leaves the container not running invalidate. A failure on a container that is still
+ *   running keeps its restore.
  * - dispatch() is a raw port fetch that never starts a container, so the only way to get a new
  *   instance is the host's ensureReady(), which invalidates before starting one.
  * - fetchFromContainer() checks `restored && running` synchronously right before each dispatch and runs
@@ -167,8 +168,8 @@ export type FetchFromContainerOptions = {
 };
 
 /**
- * Sends `build()` to the container. A library 500 or a thrown transient error invalidates the restore,
- * then retries when the request is replayable or provably never reached the app. Otherwise, and when
+ * Sends `build()` to the container. After a library 500 or a thrown transient error (invalidating the
+ * restore only if the container is no longer running), retries when the request is replayable or provably never reached the app. Otherwise, and when
  * attempts run out, throws ContainerUnavailableError. App responses (including app 500s) pass through.
  */
 export async function fetchFromContainer(
@@ -214,7 +215,9 @@ export async function fetchFromContainer(
       }
     }
 
-    host.invalidate(`${opts.label} failed`);
+    // Only a container that is gone loses its restore. Re-restoring a running one would clear tables under
+    // in-flight requests and drop writes not yet synced to D1; real exits and new starts invalidate on their own.
+    if (!host.isRunning()) host.invalidate(`${opts.label} failed: container is not running`);
     const reach: FailureReach = dispatched ? failureReach(failure) : "not-reached";
     const retry = attempt < opts.attempts && (replayable || reach === "not-reached");
     host.log(

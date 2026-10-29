@@ -70,6 +70,37 @@ export function failureReach(failure: unknown): FailureReach {
   return "maybe-reached";
 }
 
+export class BuildMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BuildMismatchError";
+  }
+}
+
+export class RestoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RestoreError";
+  }
+}
+
+/** The restore ran, but a container start or exit invalidated it before it could commit. */
+export class RestoreInterruptedError extends RestoreError {
+  constructor() {
+    super("Database restore was interrupted by a container change; it will be retried");
+    this.name = "RestoreInterruptedError";
+  }
+}
+
+/** Restore failures worth one more full attempt (ensureInitialized). */
+export function isRestoreTransient(err: unknown): boolean {
+  return (
+    err instanceof RestoreInterruptedError ||
+    isTransientContainerError(err) ||
+    (err instanceof RestoreError && isTransientContainerError(err.message))
+  );
+}
+
 export function serviceUnavailable(detail: string, retryAfterSec = 5): Response {
   return new Response(
     JSON.stringify({

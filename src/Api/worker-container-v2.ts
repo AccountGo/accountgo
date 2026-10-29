@@ -4,6 +4,7 @@ import { constantTimeEqual, parseSyncSqlHeaders } from "./sync-utils";
 import {
   BuildMismatchError,
   RestoreError,
+  RestoreInterruptedError,
   applyD1SyncFromResponse,
   buildContainerEnvVars,
   errorText,
@@ -255,9 +256,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
 
     // Commit only if every restore batch went into the container that is running now.
     if (!this.isContainerRunning() || !this.restoreState.commit(token)) {
-      throw new RestoreError(
-        "Database restore did not finish on one container: the container is not running"
-      );
+      throw new RestoreInterruptedError();
     }
   }
 
@@ -376,10 +375,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
         }
 
         if (prepErr instanceof RestoreError) {
-          const retryAfter =
-            isTransientContainerError(prepErr) || isTransientContainerError(prepErr.message)
-              ? 5
-              : 8;
+          const retryAfter = isRestoreTransient(prepErr) ? 5 : 8;
           return finish(serviceUnavailable(prepErr.message, retryAfter));
         }
 
