@@ -37,6 +37,8 @@ public class PlanCatalogTests
             SelfService = false
         };
 
+        public string DefaultPlanKey => StubA.Key;
+
         public IReadOnlyList<PlanDefinitionDto> GetPlans() => new[] { StubA, StubB };
 
         public bool TryResolvePlan(string? key, out PlanDefinitionDto plan)

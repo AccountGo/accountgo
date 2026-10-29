@@ -25,7 +25,7 @@ namespace AccountGo.BackendTests.Entitlements
         protected abstract IEntitlementService CreateService(ContractHarness harness);
 
         /// <summary>
-        /// Optional seam that can emit feature keys when FeaturesEnabled is true (test-only).
+        /// Optional seam that can emit feature keys (test-only for engines that support them).
         /// Default: same as <see cref="CreateService"/>.
         /// </summary>
         protected virtual IEntitlementService CreateFeatureSeamService(
@@ -61,7 +61,7 @@ namespace AccountGo.BackendTests.Entitlements
             });
 
         [Fact]
-        public void KillSwitch_EnabledFalse_DoesNotClearModules()
+        public void ModulesRemainAvailable_OnDefaultOptions()
         {
             var company = new Company
             {
@@ -71,19 +71,19 @@ namespace AccountGo.BackendTests.Entitlements
                 SubscriptionStatus = "active",
                 DisabledModulesJson = "[]"
             };
-            var svc = CreateService(new EntitlementsOptions { Enabled = false, FeaturesEnabled = true }, company);
+            var svc = CreateService(new EntitlementsOptions(), company);
             var snap = svc.Get(1);
             Assert.Contains("sales", snap.Modules, StringComparer.OrdinalIgnoreCase);
             Assert.True(svc.Evaluate(1, new EntitlementAction.Module("sales")).Allowed);
         }
 
         [Fact]
-        public void KillSwitch_FeaturesOff_EmptiesOrKeepsEngineFeaturesIndependentOfQuotas()
+        public void FeatureSeam_EmitsNoFeatures_WhenEngineHasNone()
         {
             var company = FreeCompany();
             var harness = new ContractHarness
             {
-                Options = new EntitlementsOptions { Enabled = true, FeaturesEnabled = false },
+                Options = new EntitlementsOptions(),
                 Companies = new List<Company> { company },
             };
             var withKeys = CreateFeatureSeamService(harness, ImmutableHashSet.Create("mfa"));
@@ -94,7 +94,7 @@ namespace AccountGo.BackendTests.Entitlements
         [Fact]
         public void Deny_FeatureNotEntitled_SetsRequiredFeature()
         {
-            var svc = CreateService(new EntitlementsOptions { Enabled = true, FeaturesEnabled = true }, FreeCompany());
+            var svc = CreateService(new EntitlementsOptions(), FreeCompany());
             var d = svc.Evaluate(1, new EntitlementAction.Feature("mfa"));
             Assert.False(d.Allowed);
             Assert.Equal("FEATURE_NOT_ENTITLED", d.Code);
@@ -105,7 +105,7 @@ namespace AccountGo.BackendTests.Entitlements
         [Fact]
         public void Evaluate_NeverThrows_ForModuleFeatureCreate()
         {
-            var svc = CreateService(new EntitlementsOptions { Enabled = true, FeaturesEnabled = true }, FreeCompany());
+            var svc = CreateService(new EntitlementsOptions(), FreeCompany());
             Assert.Null(Record.Exception(() => svc.Evaluate(1, new EntitlementAction.Module("sales"))));
             Assert.Null(Record.Exception(() => svc.Evaluate(1, new EntitlementAction.Feature("mfa"))));
             Assert.Null(Record.Exception(() => svc.Evaluate(1, new EntitlementAction.Create(MeteredResource.SalesDocuments))));
@@ -114,7 +114,7 @@ namespace AccountGo.BackendTests.Entitlements
         [Fact]
         public void Ensure_ThrowsTypedException_OnFeatureDeny()
         {
-            var svc = CreateService(new EntitlementsOptions { Enabled = true, FeaturesEnabled = true }, FreeCompany());
+            var svc = CreateService(new EntitlementsOptions(), FreeCompany());
             var feature = Assert.ThrowsAny<EntitlementException>(() =>
                 svc.Ensure(1, new EntitlementAction.Feature("mfa")));
             Assert.Equal("FEATURE_NOT_ENTITLED", feature.Code);
@@ -133,7 +133,7 @@ namespace AccountGo.BackendTests.Entitlements
             var tenant = new Mock<ITenantContext>(MockBehavior.Strict);
             var svc = CreateService(new ContractHarness
             {
-                Options = new EntitlementsOptions { Enabled = true },
+                Options = new EntitlementsOptions(),
                 Companies = new List<Company> { company },
                 Members = members,
                 Tenant = tenant,
@@ -153,7 +153,7 @@ namespace AccountGo.BackendTests.Entitlements
             var tenant = new Mock<ITenantContext>(MockBehavior.Strict);
             var svc = CreateService(new ContractHarness
             {
-                Options = new EntitlementsOptions { Enabled = true },
+                Options = new EntitlementsOptions(),
                 Companies = new List<Company> { company },
                 Usage = usage,
                 Tenant = tenant
@@ -172,7 +172,7 @@ namespace AccountGo.BackendTests.Entitlements
             var usage = new List<EntitlementUsage>();
             var svc = CreateService(new ContractHarness
             {
-                Options = new EntitlementsOptions { Enabled = true },
+                Options = new EntitlementsOptions(),
                 Companies = new List<Company> { company },
                 Usage = usage
             });

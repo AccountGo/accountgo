@@ -34,15 +34,15 @@ const { ENTITLEMENT_CODES } = await server.ssrLoadModule('/src/lib/entitlementEv
 
 const snapshot = (overrides = {}) => normalizeEntitlementsPayload({
   enabled: true,
-  plan: 'accounting_free',
-  effectivePlan: 'accounting_free',
+  plan: 'plan_a',
+  effectivePlan: 'plan_a',
   tier: 'free',
   limited: true,
   modules: ['sales', 'purchases', 'financials'],
   readOnlyModules: ['reports'],
   features: ['mfa'],
-  selfServicePlans: ['accounting_free'],
-  allowedTransitions: ['accounting_pro'],
+  selfServicePlans: ['plan_a'],
+  allowedTransitions: ['plan_b'],
   limits: {
     salesDocuments: { limit: 5, used: 5, period: 'month', overLimit: false },
     bills: { limit: 5, used: 0, period: 'month', overLimit: false },

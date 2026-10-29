@@ -52,7 +52,7 @@ public sealed class CommunityEntitlementServiceContractTests : EntitlementServic
             Plan = plan,
             DisabledModulesJson = "[\"inventory\"]"
         };
-        var svc = CreateService(new EntitlementsOptions { Enabled = true }, company);
+        var svc = CreateService(new EntitlementsOptions(), company);
         var snap = svc.Get(1);
 
         Assert.Equal(CommunityPlanCatalog.PlanKey, snap.Plan);

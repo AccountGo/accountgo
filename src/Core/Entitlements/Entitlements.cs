@@ -67,23 +67,9 @@ namespace Core.Entitlements
         }
     }
 
-    /// <summary>
-    /// Entitlement switches used by other implementations. The community engine ignores
-    /// <see cref="Enabled"/> and <see cref="FeaturesEnabled"/> for gates (always unlimited,
-    /// never emits feature keys) but still exposes them on snapshots / configuration.
-    /// </summary>
+    /// <summary>Support contact shown when a limit is reached.</summary>
     public class EntitlementsOptions
     {
-        /// <summary>
-        /// Used by other implementations for quota enforcement. The community engine ignores this
-        /// (quotas stay unlimited).
-        /// </summary>
-        public bool Enabled { get; set; }
-        /// <summary>
-        /// Used by other implementations to suppress feature emission. The community engine never
-        /// emits feature keys regardless of this switch.
-        /// </summary>
-        public bool FeaturesEnabled { get; set; } = true;
         /// <summary>Shown to users when a limit is reached.</summary>
         public string? SupportEmail { get; set; }
     }

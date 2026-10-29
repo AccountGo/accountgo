@@ -82,7 +82,7 @@ namespace Services.Entitlements
                 .ToList();
 
             return new EntitlementSnapshot(
-                Enabled: _options.Enabled,
+                Enabled: false,
                 Plan: CommunityPlanCatalog.PlanKey,
                 Tier: policy.Tier,
                 Limited: false,

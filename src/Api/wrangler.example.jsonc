@@ -88,11 +88,8 @@
     "Cors__AllowedOrigins__1": "http://localhost:5173",
     "ANTER_BASE_URL": "https://agents.anter.ai",
     "ANTER_AGENT_SLUG": "accountgo-assistant",
-    // Entitlement switches (optional). Used by other implementations; the community engine ignores them for gates.
     // Observability: Server-Timing on responses (default on when unset). Set "false" to disable.
-    "SERVER_TIMING_ENABLED": "true",
-    "ENTITLEMENTS_ENABLED": "false",
-    "ENTITLEMENT_FEATURES_ENABLED": "true"
+    "SERVER_TIMING_ENABLED": "true"
   },
   "observability": {
     "enabled": true,
