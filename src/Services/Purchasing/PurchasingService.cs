@@ -12,6 +12,7 @@ using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
+using Core.Domain.TaxSystem;
 using Services.Financial;
 using Services.Inventory;
 using System.Collections.Generic;
@@ -313,8 +314,7 @@ namespace Services.Purchasing
         /// </summary>
         public void SaveBill(PurchaseInvoiceHeader bill)
         {
-            if (bill.GeneralLedgerHeaderId.HasValue)
-                throw new InvalidOperationException("This bill is approved, so it can't be changed. Void it and enter it again instead.");
+            bill.EnsureEditable();
             if (bill.Id == 0)
                 _entitlements?.EnsureCanCreate(MeteredResource.Bills);
 
@@ -328,9 +328,19 @@ namespace Services.Purchasing
                     : null;
                 if (tax != null && !tax.IsActive)
                     throw new InvalidOperationException($"{tax.TaxName} is archived. Pick another tax for this line.");
-                line.AccountId = StockInventoryAccountId(line.ItemId)
+
+                var accountId = StockInventoryAccountId(line.ItemId)
                     ?? line.AccountId
                     ?? DefaultLineAccountId(line.ItemId, vendor);
+
+                var item = line.ItemId > 0 ? _inventoryService.GetItemById(line.ItemId) : null;
+                if (item?.ItemCategory?.ItemType == ItemTypes.Purchased && accountId == item.InventoryAccountId)
+                {
+                    if (line.Amount < 0)
+                        throw new InvalidOperationException($"Stock item '{item.Description ?? item.Code ?? item.No}' cannot have a negative unit cost.");
+                }
+
+                line.AccountId = accountId;
                 line.Cost = line.Amount;
                 line.TaxAmount = PurchaseInvoiceLine.TaxOf(line.Subtotal, tax?.Rate);
             }
@@ -374,25 +384,26 @@ namespace Services.Purchasing
         /// Approves a bill: posts it (each line's account and the claimable tax debited, Accounts Payable credited with
         /// the total), gives it the workspace's next bill number and records the vendor as it is now.
         /// </summary>
-        public void ApproveBill(int billId)
+        public void ApproveBill(int billId, string? approvedBy = null, DateTime? approvedAt = null)
         {
             var bill = GetPurchaseInvoiceById(billId)
                 ?? throw new InvalidOperationException($"Bill #{billId} was not found.");
-            if (bill.GeneralLedgerHeaderId.HasValue)
-                throw new InvalidOperationException("This bill is already approved.");
-            if (bill.IsVoid)
-                throw new InvalidOperationException("A void bill can't be approved.");
-            if (!bill.VendorId.HasValue)
-                throw new InvalidOperationException("Pick the vendor the bill is from.");
-            if (bill.PurchaseInvoiceLines.Count == 0)
-                throw new InvalidOperationException("Add at least one line to the bill.");
-            if (bill.Total() <= 0)
-                throw new InvalidOperationException("A bill's total must be more than zero.");
+            bill.EnsureCanBeApproved();
 
-            var vendor = GetVendorById(bill.VendorId.Value);
-            var payableAccountId = vendor.AccountsPayableAccountId
-                ?? _accountRepo.Table.Where(a => a.AccountCode == "20110").Select(a => (int?)a.Id).FirstOrDefault()
+            var vendor = GetVendorById(bill.VendorId!.Value);
+            if (vendor.ArchivedAt != null)
+                throw new InvalidOperationException($"Vendor '{vendor.Party?.Name ?? vendor.Id.ToString()}' is archived. Restore it before approving bills from it.");
+
+            var payableAccount = (vendor.AccountsPayableAccountId.HasValue
+                ? _accountRepo.GetById(vendor.AccountsPayableAccountId.Value)
+                : _accountRepo.Table.FirstOrDefault(a => a.AccountCode == "20110"))
                 ?? throw new InvalidOperationException("This workspace has no Accounts Payable account.");
+            if (payableAccount.ArchivedAt.HasValue)
+                throw new InvalidOperationException($"Accounts Payable account {payableAccount.AccountCode} is archived.");
+
+            var payableAccountId = payableAccount.Id;
+            bill.PayableAccountId = payableAccountId;
+
             var taxes = _financialService.GetTaxes().ToList();
 
             var debits = new Dictionary<int, decimal>();
@@ -405,17 +416,32 @@ namespace Services.Purchasing
                 var accountId = StockInventoryAccountId(line.ItemId)
                     ?? line.AccountId
                     ?? DefaultLineAccountId(line.ItemId, vendor);
+                var lineAccount = _accountRepo.GetById(accountId);
+                if (lineAccount == null || lineAccount.ArchivedAt.HasValue)
+                    throw new InvalidOperationException($"Account {(lineAccount != null ? lineAccount.AccountCode : accountId.ToString())} is archived or not found.");
+
                 line.AccountId = accountId;
                 Debit(accountId, line.Subtotal);
 
                 // Tax with no purchase tax account can't be claimed back, so it is part of what the line cost.
-                var taxAccountId = taxes.FirstOrDefault(t => t.Id == line.TaxId)?.PurchasingAccountId;
+                Tax? tax = null;
+                if (line.TaxId.HasValue)
+                {
+                    tax = taxes.FirstOrDefault(t => t.Id == line.TaxId);
+                    if (tax == null || !tax.IsActive)
+                        throw new InvalidOperationException($"Tax {(tax != null ? tax.TaxName : line.TaxId.ToString())} is archived or not found.");
+                }
+
+                var taxAccountId = tax?.PurchasingAccountId;
                 if (line.TaxAmount != 0)
                     Debit(taxAccountId ?? accountId, line.TaxAmount);
 
                 var item = _inventoryService.GetItemById(line.ItemId);
                 if (item?.ItemCategory?.ItemType == ItemTypes.Purchased && accountId == item.InventoryAccountId)
                 {
+                    if (line.Amount < 0)
+                        throw new InvalidOperationException($"Stock item '{item.Description ?? item.Code ?? item.No}' cannot have a negative unit cost.");
+
                     if (line.Quantity > 0)
                     {
                         var nonClaimableTax = taxAccountId.HasValue ? 0m : line.TaxAmount;
@@ -444,6 +470,8 @@ namespace Services.Purchasing
 
             bill.GeneralLedgerHeader = glHeader;
             bill.Status = PurchaseInvoiceStatus.Open;
+            bill.ApprovedBy = approvedBy;
+            bill.ApprovedAt = approvedAt ?? DateTime.UtcNow;
             bill.CaptureBillFromIfApproved(vendor.Party, vendor.BillToContact);
             _purchaseInvoiceRepo.Update(bill);
         }
@@ -452,17 +480,53 @@ namespace Services.Purchasing
         /// Voids a bill. An approved bill's posting is reversed, so it no longer counts as owed or as spent; a bill
         /// with payments can't be voided.
         /// </summary>
-        public void VoidBill(int billId)
+        public void VoidBill(int billId, DateTime voidDate, string? voidReason = null, string? voidedBy = null)
         {
+            if (voidDate == default)
+                throw new ArgumentException("Void date is required.");
+
             var bill = GetPurchaseInvoiceById(billId)
                 ?? throw new InvalidOperationException($"Bill #{billId} was not found.");
             if (bill.IsVoid)
                 return;
-            if (bill.AmountPaid() > 0)
-                throw new InvalidOperationException("This bill has payments, so it can't be voided.");
+
+            bill.EnsureCanBeVoided();
+
+            if (string.IsNullOrWhiteSpace(voidReason))
+                throw new InvalidOperationException("A reason is required to void a bill.");
+
+            if (voidDate.Date < bill.Date.Date)
+                throw new InvalidOperationException($"The void date ({voidDate:yyyy-MM-dd}) cannot be earlier than the bill date ({bill.Date:yyyy-MM-dd}).");
+
+            // Stock sold pre-check before posting any reversals: group by item so multiple lines sum together
+            var stockGroups = bill.PurchaseInvoiceLines
+                .Where(l => l.InventoryControlJournalId.HasValue)
+                .GroupBy(l => l.ItemId);
+
+            foreach (var group in stockGroups)
+            {
+                var item = _inventoryService.GetItemById(group.Key);
+                if (item == null)
+                    continue;
+
+                decimal totalQtyReceived = 0;
+                foreach (var line in group)
+                {
+                    var original = item.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId!.Value);
+                    if (original != null && original.INQty.GetValueOrDefault() > 0)
+                        totalQtyReceived += original.INQty.Value;
+                }
+
+                if (totalQtyReceived > 0 && item.QuantityOnHand < totalQtyReceived)
+                {
+                    var sold = StockService.RoundQuantity(totalQtyReceived - item.QuantityOnHand);
+                    throw new InvalidOperationException($"{sold} of {item.Description ?? item.Code ?? item.No} have already been sold. Record a return to the vendor instead.");
+                }
+            }
 
             if (bill.GeneralLedgerHeaderId.HasValue && !bill.VoidGeneralLedgerHeaderId.HasValue)
-                bill.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(bill.GeneralLedgerHeaderId.Value, $"Void of bill {bill.No ?? bill.Id.ToString()}");
+                bill.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(bill.GeneralLedgerHeaderId.Value, $"Void of bill {bill.No ?? bill.Id.ToString()}", voidDate.Date);
+
             foreach (var line in bill.PurchaseInvoiceLines.Where(l => l.InventoryControlJournalId.HasValue))
             {
                 var item = _inventoryService.GetItemById(line.ItemId);
@@ -470,10 +534,13 @@ namespace Services.Purchasing
                 if (original == null)
                     continue;
 
-                _stockService.Reverse(original, bill.VoidGeneralLedgerHeader?.Date ?? bill.Date,
+                _stockService.Reverse(original, voidDate.Date,
                     $"Void of bill {bill.No ?? bill.Id.ToString()}");
             }
             bill.Status = PurchaseInvoiceStatus.Void;
+            bill.VoidedAt = DateTime.UtcNow;
+            bill.VoidedBy = voidedBy;
+            bill.VoidReason = voidReason;
             _purchaseInvoiceRepo.Update(bill);
         }
 
@@ -482,29 +549,24 @@ namespace Services.Purchasing
         /// credited. A payment can't be more than what is still owed on the bill.
         /// </summary>
         public VendorPayment PayBill(int billId, int accountId, decimal amount, DateTime date,
-            string paymentMethod = null, string referenceNo = null, string memo = null)
+            string? paymentMethod = null, string? referenceNo = null, string? memo = null)
         {
+            if (date == default)
+                throw new ArgumentException("Payment date is required.");
+
             var bill = GetPurchaseInvoiceById(billId)
                 ?? throw new InvalidOperationException($"Bill #{billId} was not found.");
-            if (bill.IsVoid)
-                throw new InvalidOperationException("A void bill can't be paid.");
-            if (!bill.GeneralLedgerHeaderId.HasValue)
-                throw new InvalidOperationException("Approve the bill before paying it.");
-            if (amount <= 0)
-                throw new InvalidOperationException("A payment must be more than zero.");
-            var balance = bill.BalanceDue();
-            if (amount > balance)
-                throw new InvalidOperationException($"The payment is more than the {balance:0.00} still owed on this bill.");
 
-            var vendor = GetVendorById(bill.VendorId.Value);
-            // The payable the bill was credited to when it was approved, even if the vendor's has changed since.
-            var payableAccountId = _financialService.GetGeneralLedgerLines(bill.GeneralLedgerHeaderId.Value)
-                    .Where(l => l.DrCr == DrOrCrSide.Cr).OrderByDescending(l => l.Amount).Select(l => (int?)l.AccountId).FirstOrDefault()
-                ?? vendor.AccountsPayableAccountId
-                ?? _accountRepo.Table.Where(a => a.AccountCode == "20110").Select(a => (int?)a.Id).FirstOrDefault()
-                ?? throw new InvalidOperationException("This workspace has no Accounts Payable account.");
+            bill.EnsureCanRecordPayment(amount);
 
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoicePayment, date,
+            if (date.Date < bill.Date.Date)
+                throw new InvalidOperationException($"The payment date ({date:yyyy-MM-dd}) cannot be earlier than the bill date ({bill.Date:yyyy-MM-dd}).");
+
+            var vendor = GetVendorById(bill.VendorId!.Value);
+            var payableAccountId = bill.PayableAccountId
+                ?? throw new InvalidOperationException("This bill has no recorded Accounts Payable account.");
+
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoicePayment, date.Date,
                 $"Payment to {vendor.Party?.Name ?? "vendor"}" + (string.IsNullOrWhiteSpace(bill.VendorInvoiceNo) ? "" : $" for bill {bill.VendorInvoiceNo}"), bill.Id);
             glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, payableAccountId, amount));
             glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, accountId, amount));
@@ -514,7 +576,7 @@ namespace Services.Purchasing
             {
                 VendorId = vendor.Id,
                 PurchaseInvoiceHeaderId = bill.Id,
-                Date = date,
+                Date = date.Date,
                 Amount = amount,
                 AccountId = accountId,
                 PaymentMethod = paymentMethod,
@@ -529,6 +591,59 @@ namespace Services.Purchasing
             bill.Status = bill.BalanceDue() <= 0.005m ? PurchaseInvoiceStatus.Paid : PurchaseInvoiceStatus.Open;
             _purchaseInvoiceRepo.Update(bill);
             return payment;
+        }
+
+        /// <summary>
+        /// Voids a payment on a bill: reverses its general-ledger posting and reopens the bill if it was fully paid.
+        /// </summary>
+        public VendorPayment VoidPayment(int paymentId, DateTime voidDate, string? voidReason = null, string? voidedBy = null)
+        {
+            if (voidDate == default)
+                throw new ArgumentException("Void date is required.");
+            if (string.IsNullOrWhiteSpace(voidReason))
+                throw new InvalidOperationException("A reason is required to void a payment.");
+
+            var payment = _vendorPaymentRepo.GetAllIncluding(p => p.PurchaseInvoiceHeader)
+                .FirstOrDefault(p => p.Id == paymentId)
+                ?? throw new InvalidOperationException($"Payment #{paymentId} was not found.");
+
+            EnsurePaymentNotReconciled(payment);
+
+            if (payment.IsVoid)
+                return payment;
+
+            if (voidDate.Date < payment.Date.Date)
+                throw new InvalidOperationException($"The void date ({voidDate:yyyy-MM-dd}) cannot be earlier than the payment date ({payment.Date:yyyy-MM-dd}).");
+
+            if (payment.GeneralLedgerHeaderId.HasValue && !payment.VoidGeneralLedgerHeaderId.HasValue)
+            {
+                payment.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(
+                    payment.GeneralLedgerHeaderId.Value,
+                    $"Void of payment {payment.No ?? payment.Id.ToString()}",
+                    voidDate.Date);
+            }
+
+            payment.VoidedAt = DateTime.UtcNow;
+            payment.VoidedBy = voidedBy;
+            payment.VoidReason = voidReason;
+            _vendorPaymentRepo.Update(payment);
+
+            var bill = payment.PurchaseInvoiceHeader ?? (payment.PurchaseInvoiceHeaderId.HasValue ? GetPurchaseInvoiceById(payment.PurchaseInvoiceHeaderId.Value) : null);
+            if (bill != null)
+            {
+                if (bill.Status == PurchaseInvoiceStatus.Paid && bill.BalanceDue() > 0)
+                {
+                    bill.Status = PurchaseInvoiceStatus.Open;
+                }
+                _purchaseInvoiceRepo.Update(bill);
+            }
+
+            return payment;
+        }
+
+        private static void EnsurePaymentNotReconciled(VendorPayment payment)
+        {
+            // Banking PR 2B hook: refuse voiding payments already cleared or reconciled in a bank reconciliation.
         }
 
         public Contact GetContacyById(int id)

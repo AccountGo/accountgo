@@ -39,6 +39,10 @@ export interface BillPayment {
   paymentMethod?: string | null;
   referenceNo?: string | null;
   memo?: string | null;
+  isVoid?: boolean;
+  voidedBy?: string | null;
+  voidedAt?: string | null;
+  voidReason?: string | null;
 }
 
 /** A vendor's bill (api/Purchasing/Bill). */
@@ -66,6 +70,12 @@ export interface Bill {
   balanceDue: number;
   status: BillStatus;
   approved: boolean;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  voidedBy?: string | null;
+  voidedAt?: string | null;
+  voidReason?: string | null;
+  confirmDuplicate?: boolean;
   payments: BillPayment[];
 }
 

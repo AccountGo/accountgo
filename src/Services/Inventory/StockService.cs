@@ -127,6 +127,11 @@ namespace Services.Inventory
             var quantityBefore = item.QuantityOnHand;
             var quantity = inQuantity > 0 ? inQuantity : outQuantity;
             var quantityAfter = RoundQuantity(quantityBefore + (inQuantity > 0 ? -quantity : quantity));
+            if (inQuantity > 0 && quantityAfter < 0)
+            {
+                var sold = RoundQuantity(quantity - quantityBefore);
+                throw new InvalidOperationException($"{sold} of {item.Description ?? item.Code ?? item.No} have already been sold. Record a return to the vendor instead.");
+            }
 
             item.StockValue = RoundMoney(item.StockValue + (inQuantity > 0 ? -totalCost : totalCost));
             item.QuantityOnHand = quantityAfter;
@@ -247,7 +252,7 @@ namespace Services.Inventory
                 item.AverageCost = receivedUnitCost.Value;
         }
 
-        private static decimal RoundQuantity(decimal value) => Math.Round(value, 4, MidpointRounding.ToEven);
+        public static decimal RoundQuantity(decimal value) => Math.Round(value, 4, MidpointRounding.ToEven);
         private static decimal RoundUnitCost(decimal value) => Math.Round(value, 4, MidpointRounding.ToEven);
         private static decimal RoundMoney(decimal value) => Math.Round(value, 2, MidpointRounding.ToEven);
     }

@@ -31,9 +31,10 @@ namespace Services.Purchasing
         PurchaseInvoiceHeader GetPurchaseInvoiceById(int id);
         void SaveBill(PurchaseInvoiceHeader bill);
         int DefaultLineAccountId(int itemId, Vendor vendor);
-        void ApproveBill(int billId);
-        void VoidBill(int billId);
+        void ApproveBill(int billId, string? approvedBy = null, DateTime? approvedAt = null);
+        void VoidBill(int billId, DateTime voidDate, string? voidReason = null, string? voidedBy = null);
         VendorPayment PayBill(int billId, int accountId, decimal amount, DateTime date,
-            string paymentMethod = null, string referenceNo = null, string memo = null);
+            string? paymentMethod = null, string? referenceNo = null, string? memo = null);
+        VendorPayment VoidPayment(int paymentId, DateTime voidDate, string? voidReason = null, string? voidedBy = null);
     }
 }

@@ -27,6 +27,7 @@ import { localToday } from '../lib/businessDays';
 import { useCapabilities } from '../lib/entitlements';
 import { UsageHint } from '../components/UsageHint';
 import { ModalShell } from '../components/ModalShell';
+import { VoidDialog } from '../components/VoidDialog';
 
 export const Invoices: React.FC = () => {
   const { currentOrg, canWrite } = useOutletContext<TenantContextType>();
@@ -239,13 +240,13 @@ export const Invoices: React.FC = () => {
     setVoidError(null);
   };
 
-  const handleConfirmVoid = async () => {
+  const handleConfirmVoid = async (date: string) => {
     if (!voidModalInvoice) return;
     setIsSubmittingVoid(true);
     setVoidError(null);
 
     try {
-      const res = await authFetch(`/api/Sales/VoidSalesInvoice?id=${voidModalInvoice.id}`, {
+      const res = await authFetch(`/api/Sales/VoidSalesInvoice?id=${voidModalInvoice.id}&date=${encodeURIComponent(date)}`, {
         method: 'POST',
       });
 
@@ -739,73 +740,21 @@ export const Invoices: React.FC = () => {
       </ModalShell>
 
       {/* Void Modal */}
-      <ModalShell
-        open={!!voidModalInvoice}
-        onClose={() => {
-          if (!isSubmittingVoid) setVoidModalInvoice(null);
-        }}
-        closeOnEscape={!isSubmittingVoid}
-        closeOnBackdrop={!isSubmittingVoid}
-        bare
-        panelClassName="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
-      >
-          {voidModalInvoice && (
-          <div>
-            <div className="p-5 border-b border-[var(--border-subtle)] flex items-center justify-between">
-              <div className="flex items-center gap-2 text-rose-500">
-                <AlertTriangle className="w-5 h-5 shrink-0" />
-                <h3 className="text-base font-bold text-[var(--text-primary)]">Void Invoice</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setVoidModalInvoice(null)}
-                disabled={isSubmittingVoid}
-                className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-3 text-xs">
-              {voidError && (
-                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs">
-                  {voidError}
-                </div>
-              )}
-              <p className="text-[var(--text-secondary)]">
-                Are you sure you want to void{' '}
-                <strong className="text-[var(--text-primary)]">
-                  {voidModalInvoice.no ? `invoice #${voidModalInvoice.no}` : 'this draft'}
-                </strong>{' '}
-                for <strong className="text-[var(--text-primary)]">{voidModalInvoice.customerName}</strong>?
-              </p>
-              <p className="text-xs text-[var(--text-secondary)] bg-[var(--bg-muted)] p-3 rounded-lg border border-[var(--border-subtle)]">
-                Voiding marks this invoice as cancelled. If this invoice was already posted, double-entry audit records are preserved in full compliance with accounting standards.
-              </p>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setVoidModalInvoice(null)}
-                  disabled={isSubmittingVoid}
-                  className="px-4 py-2 rounded-lg border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmVoid}
-                  disabled={isSubmittingVoid}
-                  className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold flex items-center gap-2"
-                >
-                  {isSubmittingVoid && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Confirm Void</span>
-                </button>
-              </div>
-            </div>
-          </div>
-          )}
-      </ModalShell>
+      {voidModalInvoice && (
+        <VoidDialog
+          title={`Void invoice #${voidModalInvoice.no || voidModalInvoice.id}?`}
+          message={`Are you sure you want to void invoice #${voidModalInvoice.no || voidModalInvoice.id} for ${voidModalInvoice.customerName}? In accordance with standard accounting controls, this will mark the invoice as Void and auto-post a reversing journal entry to cancel all receivables and revenues. This can't be undone.`}
+          confirmLabel="Void invoice"
+          minDate={voidModalInvoice.invoiceDate ? voidModalInvoice.invoiceDate.slice(0, 10) : undefined}
+          error={voidError}
+          busy={isSubmittingVoid}
+          onConfirm={(date) => handleConfirmVoid(date)}
+          onCancel={() => {
+            setVoidModalInvoice(null);
+            setVoidError(null);
+          }}
+        />
+      )}
     </div>
   );
 };

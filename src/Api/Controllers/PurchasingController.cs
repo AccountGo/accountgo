@@ -746,6 +746,8 @@ namespace Api.Controllers
             var vendorInvoiceNo = Blank(billDto.VendorInvoiceNo);
             if (vendorInvoiceNo?.Length > VendorInvoiceNoMaxLength)
                 return BadRequest(new { message = $"The vendor's bill number can be at most {VendorInvoiceNoMaxLength} characters." });
+            if (billDto.DueDate.HasValue && billDto.DueDate.Value.Date < billDto.Date.Date)
+                return BadRequest(new { message = "The due date can't be before the bill date." });
             var notes = Blank(billDto.Notes);
             if (notes?.Length > NotesMaxLength)
                 return BadRequest(new { message = $"Notes can be at most {NotesMaxLength} characters." });
@@ -806,6 +808,26 @@ namespace Api.Controllers
                             && b.VendorInvoiceNo.ToLower() == key && b.Status != PurchaseInvoiceStatus.Void))
                         return Conflict(new { message = $"Bill {vendorInvoiceNo} from this vendor has already been entered.", code = "duplicate_bill" });
                 }
+                else if (!billDto.ConfirmDuplicate)
+                {
+                    var targetDate = billDto.Date.Date;
+                    var nextDate = targetDate.AddDays(1);
+                    var taxes = _db.Taxes.ToDictionary(t => t.Id, t => t.Rate);
+                    var billTotal = billDto.Lines.Sum(l =>
+                    {
+                        var subtotal = PurchaseInvoiceLine.SubtotalOf(l.Quantity, l.Amount, l.Discount);
+                        var taxRate = l.TaxId.HasValue && taxes.TryGetValue(l.TaxId.Value, out var rate) ? rate : (decimal?)null;
+                        var tax = PurchaseInvoiceLine.TaxOf(subtotal, taxRate);
+                        return subtotal + tax;
+                    });
+
+                    var candidateBills = _db.PurchaseInvoiceHeaders
+                        .Include(b => b.PurchaseInvoiceLines)
+                        .Where(b => b.Id != billDto.Id && b.VendorId == vendor.Id && b.Date >= targetDate && b.Date < nextDate && b.Status != PurchaseInvoiceStatus.Void)
+                        .ToList();
+                    if (candidateBills.Any(b => b.Total() == billTotal))
+                        return Conflict(new { message = "A bill from this vendor with the same date and total has already been entered.", code = "possible_duplicate" });
+                }
 
                 bill.VendorId = vendor.Id;
                 bill.VendorInvoiceNo = vendorInvoiceNo ?? "";
@@ -839,6 +861,10 @@ namespace Api.Controllers
                     var item = lineDto.ItemId > 0
                         ? items.First(i => i.Id == lineDto.ItemId)
                         : Api.Service.CatalogDefaults.ResolveFreeTextItem(_inventoryService, _financialService, items, lineDto.Description);
+
+                    if (item?.ItemCategory?.ItemType == ItemTypes.Purchased && lineDto.Amount < 0)
+                        return BadRequest(new { message = $"Stock item '{item.Description ?? item.Code ?? item.No}' cannot have a negative unit cost." });
+
                     line.ItemId = item.Id;
                     line.Description = string.IsNullOrWhiteSpace(lineDto.Description) ? item.Description : lineDto.Description.Trim();
                     line.Quantity = lineDto.Quantity;
@@ -852,7 +878,7 @@ namespace Api.Controllers
 
                 _purchasingService.SaveBill(bill);
                 if (approving)
-                    _purchasingService.ApproveBill(bill.Id);
+                    _purchasingService.ApproveBill(bill.Id, GetUserNameFromRequestHeader(), DateTime.UtcNow);
                 tx.Commit();
 
                 return Ok(ToBill(BillsQuery().Single(b => b.Id == bill.Id), _adminService.GetPaymentTerms().ToList()));
@@ -866,20 +892,55 @@ namespace Api.Controllers
         [HttpPost]
         [Route("ApproveBill")]
         [RequirePermission(SystemPermissions.PurchasesBillsPost)]
-        public IActionResult ApproveBill(int id)
+        public IActionResult ApproveBill(int id, bool confirmDuplicate = false)
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
-            return BillAction(id, () => _purchasingService.ApproveBill(id), "approve");
+            var bill = _db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Id == id);
+            var vendorInvoiceNo = Blank(bill.VendorInvoiceNo);
+            if (vendorInvoiceNo != null)
+            {
+                var key = vendorInvoiceNo.ToLower();
+                if (_db.PurchaseInvoiceHeaders.Any(b => b.Id != bill.Id && b.VendorId == bill.VendorId
+                        && b.VendorInvoiceNo.ToLower() == key && b.Status != PurchaseInvoiceStatus.Void))
+                    return Conflict(new { message = $"Bill {vendorInvoiceNo} from this vendor has already been entered.", code = "duplicate_bill" });
+            }
+            else if (!confirmDuplicate)
+            {
+                var targetDate = bill.Date.Date;
+                var nextDate = targetDate.AddDays(1);
+                var billTotal = bill.Total();
+                var candidateBills = _db.PurchaseInvoiceHeaders
+                    .Include(b => b.PurchaseInvoiceLines)
+                    .Where(b => b.Id != bill.Id && b.VendorId == bill.VendorId && b.Date >= targetDate && b.Date < nextDate && b.Status != PurchaseInvoiceStatus.Void)
+                    .ToList();
+                if (candidateBills.Any(b => b.Total() == billTotal))
+                    return Conflict(new { message = "A bill from this vendor with the same date and total has already been entered.", code = "possible_duplicate" });
+            }
+
+            var user = GetUserNameFromRequestHeader();
+            return BillAction(id, () => _purchasingService.ApproveBill(id, user, DateTime.UtcNow), "approve");
         }
 
         /// <summary>Voids a bill; an approved one has its posting reversed. A bill with payments can't be voided.</summary>
         [HttpPost]
         [Route("VoidBill")]
         [RequirePermission(SystemPermissions.PurchasesBillsPost)]
-        public IActionResult VoidBill(int id)
+        public IActionResult VoidBill([FromQuery] int? id, [FromBody] Dto.Purchasing.VoidBillDto? dto = null, [FromQuery] DateTime? date = null, [FromQuery] string? reason = null)
         {
-            _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
-            return BillAction(id, () => _purchasingService.VoidBill(id), "void");
+            int billId = dto?.Id ?? id ?? 0;
+            DateTime? voidDate = dto?.Date ?? date;
+            string? voidReason = dto?.Reason ?? reason;
+
+            if (billId == 0)
+                return BadRequest(new { message = "Bill id is required." });
+            if (!voidDate.HasValue || voidDate.Value == default)
+                return BadRequest(new { message = "Void date is required." });
+            if (string.IsNullOrWhiteSpace(voidReason))
+                return BadRequest(new { message = "A reason is required to void a bill." });
+
+            _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(billId, nameof(billId));
+            var user = GetUserNameFromRequestHeader();
+            return BillAction(billId, () => _purchasingService.VoidBill(billId, voidDate.Value.Date, voidReason, user), "void");
         }
 
         /// <summary>Deletes a draft bill. An approved bill is voided instead, so the ledger keeps its history.</summary>
@@ -911,6 +972,9 @@ namespace Api.Controllers
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(paymentDto.BillId, nameof(paymentDto.BillId));
 
+            if (!paymentDto.Date.HasValue || paymentDto.Date.Value == default)
+                return BadRequest(new { message = "Payment date is required." });
+
             // #413 1C: bank → Accounting GL AccountId → payment default → unlinked cash only when no banks exist.
             int accountId;
             try
@@ -923,8 +987,38 @@ namespace Api.Controllers
             }
 
             return BillAction(paymentDto.BillId, () => _purchasingService.PayBill(paymentDto.BillId, accountId, paymentDto.Amount,
-                (paymentDto.Date ?? DateTime.UtcNow).Date,
+                paymentDto.Date.Value.Date,
                 Blank(paymentDto.PaymentMethod), Blank(paymentDto.ReferenceNo), Blank(paymentDto.Memo)), "pay");
+        }
+
+        /// <summary>Voids a payment on a bill: reverses its posting and reopens the bill if it was paid.</summary>
+        [HttpPost]
+        [Route("VoidPayment")]
+        [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
+        public IActionResult VoidPayment([FromBody] Dto.Purchasing.VoidPaymentDto? dto = null, [FromQuery] int? id = null, [FromQuery] DateTime? date = null, [FromQuery] string? reason = null)
+        {
+            int paymentId = dto?.Id ?? id ?? 0;
+            DateTime? voidDate = dto?.Date ?? date;
+            string? voidReason = dto?.Reason ?? reason;
+
+            if (paymentId == 0)
+                return BadRequest(new { message = "Payment id is required." });
+            if (!voidDate.HasValue || voidDate.Value == default)
+                return BadRequest(new { message = "Void date is required." });
+            if (string.IsNullOrWhiteSpace(voidReason))
+                return BadRequest(new { message = "A reason is required to void a payment." });
+
+            _tenantGuard.EnsureOwned<VendorPayment>(paymentId, nameof(paymentId));
+            var payment = _db.VendorPayments.FirstOrDefault(p => p.Id == paymentId);
+            if (payment == null)
+                return NotFound(new { message = $"Payment #{paymentId} was not found." });
+
+            var billId = payment.PurchaseInvoiceHeaderId;
+            if (!billId.HasValue)
+                return BadRequest(new { message = "Payment has no associated bill." });
+
+            var user = GetUserNameFromRequestHeader();
+            return BillAction(billId.Value, () => _purchasingService.VoidPayment(paymentId, voidDate.Value.Date, voidReason, user), "void payment");
         }
 
         /// <summary>The accounts a bill line can be booked to: postable expense and asset accounts, other than cash and receivables.</summary>
@@ -1040,6 +1134,11 @@ namespace Api.Controllers
                 BalanceDue = bill.IsVoid ? 0 : bill.BalanceDue(),
                 Status = bill.DisplayStatus(dueDate, DateTime.UtcNow),
                 Approved = bill.GeneralLedgerHeaderId.HasValue,
+                ApprovedBy = bill.ApprovedBy,
+                ApprovedAt = bill.ApprovedAt,
+                VoidedBy = bill.VoidedBy,
+                VoidedAt = bill.VoidedAt,
+                VoidReason = bill.VoidReason,
                 Payments = bill.VendorPayments.OrderByDescending(p => p.Date).ThenByDescending(p => p.Id).Select(p => new Dto.Purchasing.BillPayment
                 {
                     Id = p.Id,
@@ -1051,6 +1150,10 @@ namespace Api.Controllers
                     PaymentMethod = p.PaymentMethod,
                     ReferenceNo = p.ReferenceNo,
                     Memo = p.Memo,
+                    IsVoid = p.IsVoid,
+                    VoidedBy = p.VoidedBy,
+                    VoidedAt = p.VoidedAt,
+                    VoidReason = p.VoidReason,
                 }).ToList(),
             };
         }

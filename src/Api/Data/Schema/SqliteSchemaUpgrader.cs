@@ -249,7 +249,18 @@ namespace Api.Data.Schema
                     new[] { "Bank", "OpeningBalanceDate", "TEXT NULL" },
                     new[] { "Bank", "OpeningBalanceGeneralLedgerHeaderId", "INTEGER NULL" },
                     new[] { "Bank", "ArchivedAt", "TEXT NULL" },
-                    new[] { "Bank", "CurrencyCode", "TEXT NULL" }
+                    new[] { "Bank", "CurrencyCode", "TEXT NULL" },
+                    // D1 0035_bill_payment_voids_and_audit.sql (#415)
+                    new[] { "PurchaseInvoiceHeader", "PayableAccountId", "INTEGER NULL" },
+                    new[] { "PurchaseInvoiceHeader", "ApprovedBy", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "ApprovedAt", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "VoidedBy", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "VoidedAt", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "VoidReason", "TEXT NULL" },
+                    new[] { "VendorPayment", "VoidGeneralLedgerHeaderId", "INTEGER NULL" },
+                    new[] { "VendorPayment", "VoidedBy", "TEXT NULL" },
+                    new[] { "VendorPayment", "VoidedAt", "TEXT NULL" },
+                    new[] { "VendorPayment", "VoidReason", "TEXT NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -268,6 +279,29 @@ namespace Api.Data.Schema
                 if (added.Contains("RefreshTokens.FamilyId"))
                 {
                     BackfillRefreshTokenFamilyIds(connection, tx);
+                }
+
+                if (added.Contains("PurchaseInvoiceHeader.PayableAccountId"))
+                {
+                    using (var cmd = connection.CreateCommand())
+                    {
+                        cmd.Transaction = tx;
+                        cmd.CommandText = @"
+                            UPDATE ""PurchaseInvoiceHeader""
+                            SET ""PayableAccountId"" = (
+                                SELECT l.""AccountId""
+                                FROM ""GeneralLedgerLine"" AS l
+                                INNER JOIN ""Account"" AS a ON a.""Id"" = l.""AccountId""
+                                WHERE l.""GeneralLedgerHeaderId"" = ""PurchaseInvoiceHeader"".""GeneralLedgerHeaderId""
+                                  AND l.""DrCr"" = 2
+                                  AND a.""AccountClassId"" = 2
+                                ORDER BY l.""Amount"" DESC
+                                LIMIT 1
+                            )
+                            WHERE ""GeneralLedgerHeaderId"" IS NOT NULL
+                              AND ""PayableAccountId"" IS NULL;";
+                        cmd.ExecuteNonQuery();
+                    }
                 }
 
                 // Filled once, when the column arrives, so later invoices only ever get what was recorded at the time.
