@@ -267,6 +267,206 @@ public class BankReconciliationServiceTests
     }
 
     [Fact]
+    public void GetReport_TiesOutstandingToBooks_AndGoldenText()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        var bank = harness.CreateBankWithOpeningBalance(100m);
+        var clearedOut = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.MoneyOut,
+            BankId = bank.Id,
+            ContraAccountId = harness.RequireAccount("50100").Id,
+            Date = new DateTime(2024, 1, 15, 0, 0, 0, DateTimeKind.Utc),
+            Amount = 25m
+        });
+        var outstandingOut = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.MoneyOut,
+            BankId = bank.Id,
+            ContraAccountId = harness.RequireAccount("50100").Id,
+            Date = new DateTime(2024, 1, 20, 0, 0, 0, DateTimeKind.Utc),
+            Amount = 10m
+        });
+
+        var end = new DateTime(2024, 1, 31, 0, 0, 0, DateTimeKind.Utc);
+        var draft = harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = end,
+            StatementEndingBalance = 75m
+        }, "prep");
+
+        var clearedLine = harness.Repos.GlLines.Table.Single(l =>
+            l.GeneralLedgerHeaderId == clearedOut.GeneralLedgerHeaderId && l.AccountId == bank.AccountId);
+        draft = harness.Reconciliations.UpdateItems(draft.Id, new UpdateBankReconciliationItemsRequest
+        {
+            Add = new[] { clearedLine.Id },
+            Version = draft.Version
+        });
+        Assert.Equal(0m, draft.Difference);
+
+        var finished = harness.Reconciliations.Finish(draft.Id, new FinishBankReconciliationRequest
+        {
+            Version = draft.Version
+        }, "prep");
+
+        var report = harness.Reconciliations.GetReport(finished.Id);
+        Assert.Equal(75m, report.StatementEndingBalance);
+        Assert.Equal(0m, report.BeginningBalance);
+        Assert.Equal(100m, report.ClearedDeposits); // opening balance
+        Assert.Equal(25m, report.ClearedPayments);
+        Assert.Equal(75m, report.ClearedBalance);
+        Assert.Equal(0m, report.DepositsInTransit);
+        Assert.Equal(10m, report.OutstandingPayments);
+        Assert.Equal(65m, report.AdjustedBankBalance);
+        Assert.Equal(65m, report.BooksBalance);
+        Assert.Equal(0m, report.Difference);
+        Assert.Equal("prep", report.PreparedBy);
+        Assert.NotNull(report.OpeningBalanceLine);
+        Assert.StartsWith("Opening balance (as of ", report.OpeningBalanceLine!.Type);
+        Assert.Single(report.OutstandingItems);
+        Assert.Equal(10m, report.OutstandingItems[0].Out);
+        Assert.Equal("Bank transaction", report.OutstandingItems[0].Type);
+        Assert.Equal((end - new DateTime(2024, 1, 20, 0, 0, 0, DateTimeKind.Utc)).Days, report.OutstandingItems[0].AgeDays);
+        Assert.Empty(report.PostedAfterFinishItems);
+
+        var text = Api.Service.BankReconciliationReportText.Render(report);
+        Assert.Contains("Cleared:", text, StringComparison.Ordinal);
+        Assert.Contains("Beginning balance:", text, StringComparison.Ordinal);
+        Assert.Contains("Opening balance (as of ", text, StringComparison.Ordinal);
+        Assert.Contains("Cleared deposits:", text, StringComparison.Ordinal);
+        Assert.Contains("Cleared payments:", text, StringComparison.Ordinal);
+        Assert.Contains("Statement ending balance:", text, StringComparison.Ordinal);
+        Assert.Contains("Balance per bank statement:", text, StringComparison.Ordinal);
+        Assert.Contains("  75.00", text, StringComparison.Ordinal);
+        Assert.Contains("Add: Deposits in transit:", text, StringComparison.Ordinal);
+        Assert.Contains("Less: Outstanding payments:", text, StringComparison.Ordinal);
+        Assert.Contains("  10.00", text, StringComparison.Ordinal);
+        Assert.Contains("Adjusted bank balance:", text, StringComparison.Ordinal);
+        Assert.Contains("  65.00", text, StringComparison.Ordinal);
+        Assert.Contains("Balance per books:", text, StringComparison.Ordinal);
+        Assert.Contains("Difference:", text, StringComparison.Ordinal);
+        Assert.Contains("  0.00", text, StringComparison.Ordinal);
+        Assert.Contains("Prepared by: prep", text, StringComparison.Ordinal);
+        Assert.Contains("Reviewed by:", text, StringComparison.Ordinal);
+        Assert.Contains("Posted after this reconciliation was finished:", text, StringComparison.Ordinal);
+        Assert.Contains($"age {report.OutstandingItems[0].AgeDays}d", text, StringComparison.Ordinal);
+
+        // PDF generates without throwing.
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+        var pdf = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(
+            new Api.Service.BankReconciliationReportPdfDocument(report));
+        Assert.True(pdf.Length > 100);
+
+        _ = outstandingOut; // kept uncleared on purpose
+    }
+
+    [Fact]
+    public void GetReport_KeepsJanuaryDepositsInTransit_AfterFebruaryClearsThem()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        var bank = harness.CreateBankWithOpeningBalance(100m);
+
+        var janDeposit = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.MoneyIn,
+            BankId = bank.Id,
+            ContraAccountId = harness.RequireAccount("50100").Id,
+            Date = new DateTime(2024, 1, 15, 0, 0, 0, DateTimeKind.Utc),
+            Amount = 40m
+        });
+
+        var janEnd = new DateTime(2024, 1, 31, 0, 0, 0, DateTimeKind.Utc);
+        var janDraft = harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = janEnd,
+            StatementEndingBalance = 100m // OB cleared; deposit still in transit
+        }, "prep");
+        Assert.Equal(0m, janDraft.Difference);
+        var janFinished = harness.Reconciliations.Finish(janDraft.Id, new FinishBankReconciliationRequest
+        {
+            Version = janDraft.Version
+        }, "prep");
+
+        var janReportBeforeFeb = harness.Reconciliations.GetReport(janFinished.Id);
+        Assert.Equal(40m, janReportBeforeFeb.DepositsInTransit);
+        Assert.Equal(0m, janReportBeforeFeb.Difference);
+
+        var febDraft = harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = new DateTime(2024, 2, 29, 0, 0, 0, DateTimeKind.Utc),
+            StatementEndingBalance = 140m
+        }, "prep");
+        var depositLine = harness.Repos.GlLines.Table.Single(l =>
+            l.GeneralLedgerHeaderId == janDeposit.GeneralLedgerHeaderId && l.AccountId == bank.AccountId);
+        febDraft = harness.Reconciliations.UpdateItems(febDraft.Id, new UpdateBankReconciliationItemsRequest
+        {
+            Add = new[] { depositLine.Id },
+            Version = febDraft.Version
+        });
+        Assert.Equal(0m, febDraft.Difference);
+        harness.Reconciliations.Finish(febDraft.Id, new FinishBankReconciliationRequest
+        {
+            Version = febDraft.Version
+        }, "prep");
+
+        var janReportAfterFeb = harness.Reconciliations.GetReport(janFinished.Id);
+        Assert.Equal(40m, janReportAfterFeb.DepositsInTransit);
+        Assert.Equal(0m, janReportAfterFeb.Difference);
+        Assert.Single(janReportAfterFeb.OutstandingItems);
+        Assert.Equal(40m, janReportAfterFeb.OutstandingItems[0].In);
+        Assert.Equal(janReportBeforeFeb.BooksBalance, janReportAfterFeb.BooksBalance);
+    }
+
+    [Fact]
+    public void GetReport_ListsBackdatedPostsAfterFinish_Separately()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        var bank = harness.CreateBankWithOpeningBalance(100m);
+
+        var end = new DateTime(2024, 1, 31, 0, 0, 0, DateTimeKind.Utc);
+        var draft = harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = end,
+            StatementEndingBalance = 100m
+        }, "prep");
+        var finished = harness.Reconciliations.Finish(draft.Id, new FinishBankReconciliationRequest
+        {
+            Version = draft.Version
+        }, "prep");
+
+        var late = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.MoneyOut,
+            BankId = bank.Id,
+            ContraAccountId = harness.RequireAccount("50100").Id,
+            Date = new DateTime(2024, 1, 20, 0, 0, 0, DateTimeKind.Utc),
+            Amount = 5m
+        });
+
+        var report = harness.Reconciliations.GetReport(finished.Id);
+        Assert.Equal(0m, report.Difference);
+        Assert.Empty(report.OutstandingItems);
+        Assert.Single(report.PostedAfterFinishItems);
+        Assert.Equal(5m, report.PostedAfterFinishItems[0].Out);
+        Assert.Equal(late.GeneralLedgerHeaderId, report.PostedAfterFinishItems[0].HeaderId);
+        Assert.DoesNotContain(report.OutstandingItems, i => i.HeaderId == late.GeneralLedgerHeaderId);
+
+        var text = Api.Service.BankReconciliationReportText.Render(report);
+        Assert.Contains("Posted after this reconciliation was finished:", text, StringComparison.Ordinal);
+        Assert.Contains("Bank transaction", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MoneyOut_RefusesCustomerArAndVendorApContra()
     {
         using var harness = new Harness();
@@ -369,13 +569,17 @@ public class BankReconciliationServiceTests
                 Repos.Banks,
                 Repos.GlLines,
                 Repos.GlHeaders,
+                Repos.Companies,
+                Repos.Settings,
                 Transactions,
                 tenant);
 
+            Repos.Companies.Insert(new Company { Id = 1, Name = "Test Co", ShortName = "Test" });
             Repos.Settings.Insert(new CompanySetting
             {
                 CompanyId = 1,
                 CoaTemplateId = CoaTemplates.Legacy,
+                Currency = "USD",
                 BooksStartDate = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             });
             Repos.FiscalYears.Insert(new FinancialYear
@@ -548,6 +752,7 @@ public class BankReconciliationServiceTests
             public MemoryRepo<BankReconciliationItem> ReconciliationItems { get; } = new();
             public MemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
             public MemoryRepo<GeneralLedgerHeader> GlHeaders { get; } = new();
+            public MemoryRepo<Company> Companies { get; } = new();
             public MemoryRepo<CompanySetting> Settings { get; } = new();
             public MemoryRepo<FinancialYear> FiscalYears { get; } = new();
             public MemoryRepo<SalesReceiptHeader> Receipts { get; } = new();

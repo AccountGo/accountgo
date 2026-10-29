@@ -923,6 +923,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("FinishedMaxGeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("datetime2");
 
