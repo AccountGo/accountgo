@@ -1,4 +1,4 @@
-import { errorText, isTransientContainerError } from "./container-errors";
+import { errorText, isTransientContainerError, serviceUnavailable } from "./container-errors";
 import { scrubPathForLog } from "./server-timing";
 
 export class BuildMismatchError extends Error {
@@ -17,23 +17,6 @@ export class RestoreError extends Error {
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export function serviceUnavailable(detail: string, retryAfterSec = 5): Response {
-  return new Response(
-    JSON.stringify({
-      title: "Service Unavailable",
-      status: 503,
-      detail,
-    }),
-    {
-      status: 503,
-      headers: {
-        "content-type": "application/problem+json",
-        "Retry-After": String(retryAfterSec),
-      },
-    }
-  );
 }
 
 /** Prefer INTERNAL_SYNC_KEY so JWT signing material is not the DB restore credential. */
@@ -233,4 +216,4 @@ export function isRestoreTransient(err: unknown): boolean {
   );
 }
 
-export { errorText, isTransientContainerError };
+export { errorText, isTransientContainerError, serviceUnavailable };
