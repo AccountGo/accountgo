@@ -818,6 +818,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("SalesInvoice")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
         public IActionResult SalesInvoice(int id)
         {
             try
@@ -836,6 +837,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("SalesInvoicePdf")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
         public IActionResult SalesInvoicePdf(int id)
         {
             var salesInvoiceDto = BuildSalesInvoiceDto(id);
@@ -895,9 +897,12 @@ namespace Api.Controllers
                 if (invoice.BalanceDue <= 0.005m)
                     return BadRequest(new { message = "Follow-ups can only be sent when there is a balance due." });
             }
-            else if (invoice.Status is "Draft" or "Void")
+            else
             {
-                return BadRequest(new { message = $"Only issued invoices can be emailed; this one is {invoice.Status!.ToLowerInvariant()}." });
+                if (invoice.Status is "Draft" or "Void")
+                    return BadRequest(new { message = $"Only issued invoices can be emailed; this one is {invoice.Status!.ToLowerInvariant()}." });
+                if (invoice.Status is "Paid" || invoice.BalanceDue <= 0.005m)
+                    return BadRequest(new { message = "Cannot email an invoice that is already paid." });
             }
 
             // Sent to the customer's address on file now, which may have changed since the invoice was issued.
@@ -1278,6 +1283,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("SalesInvoices")] // api/Sales/SalesInvoices, or ?customerId= for one client's
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
         public IActionResult SalesInvoices(int? customerId = null)
         {
             var salesInvoices = _salesService.GetSalesInvoices()
@@ -1395,6 +1401,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("CustomerInvoices")] // api/Sales/CustomerInvoices
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
         public IActionResult CustomerInvoices(int id)
         {
             try
@@ -1595,6 +1602,16 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
+                var existing = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
+                if (existing == null)
+                    return NotFound(new { message = $"Invoice #{salesInvoiceDto.Id} not found." });
+
+                if (existing.Status == Core.Domain.SalesInvoiceStatus.Void)
+                    return BadRequest(new { message = "Cannot post a void invoice." });
+
+                if (existing.Status == Core.Domain.SalesInvoiceStatus.Closed)
+                    return BadRequest(new { message = "Cannot post a closed/paid invoice." });
+
                 using (var tx = BeginInvoiceNumberingTransaction())
                 {
                     _salesService.PostSalesInvoice(salesInvoiceDto.Id);
@@ -1771,8 +1788,7 @@ namespace Api.Controllers
                     _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto.Id, nameof(salesInvoiceDto.Id));
                     salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
 
-                    if (salesInvoice.GeneralLedgerHeaderId.HasValue)
-                        throw new Exception("Invoice is already posted. Update is not allowed.");
+                    salesInvoice.EnsureEditable();
 
                     // Before the status changes: whether the number may still change depends on the stored status.
                     salesInvoice.No = Core.Domain.Sales.InvoiceNumber.ForSave(salesInvoice.No, salesInvoice.Status, exists: true, salesInvoiceDto.No);
@@ -1986,6 +2002,10 @@ namespace Api.Controllers
         public IActionResult CreateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             EnsureSalesInvoiceReferencesOwned(salesInvoiceDto);
+            if (!string.IsNullOrEmpty(salesInvoiceDto.Status) && !string.Equals(salesInvoiceDto.Status, "Draft", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "New invoices must be created as Draft. Issue the invoice after creation." });
+            }
             Core.Domain.Error.Result<Dto.Sales.SalesInvoice> result;
             try
             {
@@ -2109,10 +2129,28 @@ namespace Api.Controllers
 
                 var invoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(paymentDto.InvoiceId, nameof(paymentDto.InvoiceId));
                 invoice = _salesService.GetSalesInvoiceById(invoice.Id);
-                if (invoice.Status == Core.Domain.SalesInvoiceStatus.Draft)
-                    return BadRequest(new { message = "Issue the invoice before recording a payment." });
-                if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
-                    return BadRequest(new { message = "Cannot record a payment on a void invoice." });
+                if (invoice == null)
+                    return NotFound(new { message = $"Invoice #{paymentDto.InvoiceId} not found." });
+
+                try
+                {
+                    invoice.EnsureCanRecordPayment(paymentDto.Amount);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
+
+                // Auto-post invoice first if unposted, guaranteeing double-entry integrity (DR AR, CR Revenue)
+                if (!invoice.GeneralLedgerHeaderId.HasValue)
+                {
+                    var postError = TryPostSalesInvoice(invoice.Id);
+                    invoice = _salesService.GetSalesInvoiceById(invoice.Id);
+                    if (!invoice.GeneralLedgerHeaderId.HasValue)
+                    {
+                        return BadRequest(new { message = $"Cannot record payment: the invoice could not be posted to the general ledger. {postError}".Trim() });
+                    }
+                }
 
                 // Summary accounts such as 10110 can't take postings, so only postable cash accounts qualify.
                 var postable = _financialService.GetAccounts().Where(a => a.CanPost()).ToList();
@@ -2130,12 +2168,7 @@ namespace Api.Controllers
                     _financialService.GetAccountByAccountCode("10120")?.Id ?? 
                     _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
 
-                // Auto-post invoice first if unposted, guaranteeing double-entry integrity (DR AR, CR Revenue)
-                if (!invoice.GeneralLedgerHeaderId.HasValue)
-                {
-                    TryPostSalesInvoice(invoice.Id);
-                    invoice = _salesService.GetSalesInvoiceById(invoice.Id);
-                }
+                using var tx = BeginInvoiceNumberingTransaction();
 
                 var paymentDate = paymentDto.PaymentDate == default ? DateTime.UtcNow : paymentDto.PaymentDate;
 
@@ -2173,18 +2206,10 @@ namespace Api.Controllers
                 invoice.CustomerAllocations.Add(allocation);
 
                 // Update invoice status based on total allocations including taxes and shipping
-                decimal totalAllocated = invoice.CustomerAllocations != null ? Math.Round(invoice.CustomerAllocations.Sum(a => a.Amount), 2, MidpointRounding.AwayFromZero) : 0;
-                decimal grandTotal = invoice.GrandTotal();
-                if (totalAllocated >= grandTotal - 0.005m)
-                {
-                    invoice.Status = Core.Domain.SalesInvoiceStatus.Closed;
-                }
-                else
-                {
-                    invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
-                }
+                invoice.RefreshPaymentStatus();
                 CaptureIfIssued(invoice);
                 _salesService.UpdateSalesInvoice(invoice);
+                tx.Commit();
 
                 return Ok(new
                 {
@@ -2218,10 +2243,13 @@ namespace Api.Controllers
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
                     return Ok(new { success = true, invoiceId = invoice.Id, status = "Void" });
 
-                decimal allocated = invoice.CustomerAllocations != null ? invoice.CustomerAllocations.Sum(a => a.Amount) : 0;
-                if (allocated > 0)
+                try
                 {
-                    return BadRequest(new { message = "Cannot void an invoice with recorded payments. Please unallocate or refund payments first." });
+                    invoice.EnsureCanBeVoided();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
                 }
 
                 // Issuing posted the invoice to receivables and sales; voiding reverses that, so it no longer counts.
@@ -2253,8 +2281,23 @@ namespace Api.Controllers
                 if (invoice == null)
                     return NotFound(new { message = $"Invoice #{id} not found." });
 
+                if (invoice.Status == Core.Domain.SalesInvoiceStatus.Open)
+                {
+                    tx.Dispose();
+                    string? err = null;
+                    if (!invoice.GeneralLedgerHeaderId.HasValue)
+                        err = TryPostSalesInvoice(invoice.Id);
+                    return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = new List<string>(), postingError = err });
+                }
+
+                if (invoice.Status == Core.Domain.SalesInvoiceStatus.Closed)
+                    return BadRequest(new { message = "Cannot issue a paid invoice." });
+
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
                     return BadRequest(new { message = "Cannot issue a void invoice." });
+
+                if (invoice.Status != Core.Domain.SalesInvoiceStatus.Draft)
+                    return BadRequest(new { message = $"Cannot issue an invoice with status {invoice.Status}." });
 
                 var stockWarnings = invoice.GeneralLedgerHeaderId.HasValue
                     ? new List<string>()
@@ -2462,10 +2505,23 @@ namespace Api.Controllers
             }
         }
 
+        public sealed class UpdateReceiptDto
+        {
+            public int Id { get; set; }
+            public int CustomerId { get; set; }
+            public DateTime ReceiptDate { get; set; }
+            public decimal Amount { get; set; }
+            public int AccountToDebitId { get; set; }
+            public int AccountToCreditId { get; set; }
+            public string? PaymentMethod { get; set; }
+            public string? ReferenceNo { get; set; }
+            public string? Memo { get; set; }
+        }
+
         [HttpPost]
         [Route("UpdateReceipt")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsCreate)]
-        public IActionResult UpdateReceipt([FromBody] dynamic receiptDto)
+        public IActionResult UpdateReceipt([FromBody] UpdateReceiptDto receiptDto)
         {
             string[]? errors = null;
 
@@ -2482,6 +2538,11 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
+                if (receiptDto == null)
+                {
+                    return new BadRequestObjectResult(new string[] { "Invalid receipt payload." });
+                }
+
                 int receiptId = receiptDto.Id;
                 var existingReceipt = _salesService.GetSalesReceiptById(receiptId);
 
@@ -2490,18 +2551,29 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(new string[] { "Sales receipt not found." });
                 }
 
-                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)receiptDto.AccountToDebitId).FirstOrDefault();
+                if (existingReceipt.GeneralLedgerHeaderId.HasValue || (existingReceipt.CustomerAllocations != null && existingReceipt.CustomerAllocations.Any(a => a.Amount > 0)))
+                {
+                    return new BadRequestObjectResult(new string[] { "Posted or allocated receipts cannot be edited." });
+                }
+
+                decimal totalAllocated = existingReceipt.CustomerAllocations?.Sum(a => a.Amount) ?? 0m;
+                if (receiptDto.Amount < totalAllocated)
+                {
+                    return new BadRequestObjectResult(new string[] { $"Receipt amount cannot be less than allocated amount ({totalAllocated:0.00})." });
+                }
+
+                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == receiptDto.AccountToDebitId).FirstOrDefault();
 
                 existingReceipt.Date = receiptDto.ReceiptDate;
                 existingReceipt.CustomerId = receiptDto.CustomerId;
                 existingReceipt.AccountToDebitId = bank!.AccountId;
                 existingReceipt.Amount = receiptDto.Amount;
-                existingReceipt.PaymentMethod = receiptDto.PaymentMethod != null ? (string)receiptDto.PaymentMethod : null;
-                existingReceipt.ReferenceNo = receiptDto.ReferenceNo != null ? (string)receiptDto.ReferenceNo : null;
-                existingReceipt.Memo = receiptDto.Memo != null ? (string)receiptDto.Memo : null;
+                existingReceipt.PaymentMethod = receiptDto.PaymentMethod;
+                existingReceipt.ReferenceNo = receiptDto.ReferenceNo;
+                existingReceipt.Memo = receiptDto.Memo;
 
-                var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
-                if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)
+                var customer = _salesService.GetCustomerById(receiptDto.CustomerId);
+                if (customer.CustomerAdvancesAccountId != receiptDto.AccountToCreditId)
                     throw new Exception("Invalid account.");
 
                 // Update the first receipt line
@@ -2558,6 +2630,8 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
+                using var tx = BeginInvoiceNumberingTransaction();
+
                 _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(allocationDto.CustomerId, "CustomerId");
                 _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesReceiptHeader>(allocationDto.ReceiptId, "ReceiptId");
 
@@ -2578,6 +2652,8 @@ namespace Api.Controllers
                     }
                 }
 
+                tx.Commit();
+
                 return new ObjectResult(Ok());
             }
             catch (Exception ex)
@@ -2590,6 +2666,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("SalesInvoiceForPrinting")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
         public IActionResult SalesInvoiceForPrinting(int id)
         {
             var invoice = BuildSalesInvoiceDto(id);

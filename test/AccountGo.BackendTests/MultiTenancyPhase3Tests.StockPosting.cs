@@ -57,7 +57,7 @@ namespace AccountGo.BackendTests
             {
                 var pay = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                     new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = id, Amount = 10, PaymentDate = DateTime.UtcNow });
-                Assert.True(pay.IsSuccessStatusCode, await pay.Content.ReadAsStringAsync());
+                Assert.Equal(System.Net.HttpStatusCode.BadRequest, pay.StatusCode);
             }
             // Stock may only leave with the invoice's posting; the invoice is still unposted.
             AssertStockState(itemId, 10m, 5m);
@@ -171,8 +171,7 @@ namespace AccountGo.BackendTests
             {
                 var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                     new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = id, Amount = 1m, PaymentDate = DateTime.UtcNow });
-                Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
-                Assert.DoesNotContain(AllSyncStatements(paid), sql => sql.Contains("INSERT INTO \"InventoryControlJournal\"", StringComparison.Ordinal));
+                Assert.Equal(System.Net.HttpStatusCode.BadRequest, paid.StatusCode);
             }
             AssertStockState(itemId, 10m, 5m);
             WithDb(db =>
