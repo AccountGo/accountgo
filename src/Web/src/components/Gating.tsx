@@ -2,6 +2,7 @@ import React from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import { Lock, Sparkles, ArrowRight, ShieldAlert } from 'lucide-react';
 import { ModuleKey, TenantContextType } from '../types';
+import { useCapabilities } from '../lib/entitlements';
 
 export function useTenantContext(): TenantContextType {
   return useOutletContext<TenantContextType>();
@@ -164,6 +165,8 @@ export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }>
   orgSlug,
 }) => {
   const { hasModule } = useTenantContext();
+  const { entitlements } = useCapabilities();
+  const upgradeAvailable = !!entitlements?.upgrade?.available;
   const info = MODULE_METADATA[module] || {
     title: module,
     desc: 'This module is not active in your current subscription plan.',
@@ -195,9 +198,11 @@ export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }>
               <span className="text-[var(--text-muted)]">Slug: </span>
               <code className="text-[var(--brand-primary)] font-mono font-medium">/org/{orgSlug}</code>
             </div>
-            <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-xs text-amber-400 font-medium">
-              Upgrade Available
-            </div>
+            {upgradeAvailable && (
+              <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-xs text-amber-400 font-medium">
+                Upgrade Available
+              </div>
+            )}
           </div>
         )}
       </div>

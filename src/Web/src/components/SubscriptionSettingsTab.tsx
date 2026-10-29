@@ -16,8 +16,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
-import { normalizePlanKey } from '../lib/plans';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
+import { derivePlanCards } from '../lib/planCards';
 import { useCapabilities } from '../lib/entitlements';
 import { useBilling } from '../lib/useBilling';
 import { UsageHint } from './UsageHint';
@@ -35,114 +35,6 @@ function clearCheckoutParam(): void {
   url.searchParams.delete('checkout');
   const next = `${url.pathname}${url.search}${url.hash}`;
   window.history.replaceState({}, '', next);
-}
-
-type HostedPlanKey = 'invoicing_free' | 'invoicing_pro' | 'accounting_free' | 'accounting_pro';
-
-const HOSTED_PLAN_COPY: Record<HostedPlanKey, {
-  name: string;
-  description: string;
-  monthly: number | null;
-  annual: number | null;
-}> = {
-  invoicing_free: {
-    name: 'Invoicing Free',
-    description: 'Core invoicing and bills with free-tier limits — no full ledger.',
-    monthly: null,
-    annual: null,
-  },
-  invoicing_pro: {
-    name: 'Invoicing Pro',
-    description: 'Unlimited invoices and bills for solo operators — without full double-entry accounting.',
-    monthly: 15,
-    annual: 150,
-  },
-  accounting_free: {
-    name: 'Accounting Free',
-    description: 'Full ledger modules with free-tier limits.',
-    monthly: null,
-    annual: null,
-  },
-  accounting_pro: {
-    name: 'Accounting Pro',
-    description: 'Full ledger, reports, multi-seat access, and hosted security for growing teams.',
-    monthly: 99,
-    annual: 990,
-  },
-};
-
-function cancelLandingPlan(planKey: string): HostedPlanKey {
-  const key = normalizePlanKey(planKey);
-  return key.startsWith('invoicing') ? 'invoicing_free' : 'accounting_free';
-}
-
-/** Mirrors Core Company.IsAllowedSelfServicePlanChange. */
-function isAllowedSelfServicePlanChange(fromPlan: string, toPlan: string): boolean {
-  const from = normalizePlanKey(fromPlan);
-  const to = normalizePlanKey(toPlan);
-  if (!to || from === to) return false;
-  const allowed: Record<string, string[]> = {
-    accounting_free: ['accounting_pro', 'invoicing_free'],
-    invoicing_free: ['invoicing_pro', 'accounting_free'],
-    invoicing_pro: ['accounting_pro'],
-  };
-  return (allowed[from] || []).includes(to);
-}
-
-type PlanCardRole = 'current' | 'landing' | 'upgrade' | 'switch';
-
-function planCardsFor(
-  currentPlan: string,
-  allowedTransitions: string[],
-): Array<{ key: HostedPlanKey; role: PlanCardRole }> {
-  const current = normalizePlanKey(currentPlan) as HostedPlanKey;
-  let cards: Array<{ key: HostedPlanKey; role: PlanCardRole }>;
-  switch (current) {
-    case 'accounting_pro':
-      cards = [
-        { key: 'accounting_pro', role: 'current' },
-        { key: 'accounting_free', role: 'landing' },
-      ];
-      break;
-    case 'invoicing_pro':
-      cards = [
-        { key: 'invoicing_pro', role: 'current' },
-        { key: 'invoicing_free', role: 'landing' },
-        { key: 'accounting_pro', role: 'upgrade' },
-      ];
-      break;
-    case 'accounting_free':
-      cards = [
-        { key: 'accounting_free', role: 'current' },
-        { key: 'accounting_pro', role: 'upgrade' },
-        { key: 'invoicing_free', role: 'switch' },
-      ];
-      break;
-    case 'invoicing_free':
-      cards = [
-        { key: 'invoicing_free', role: 'current' },
-        { key: 'invoicing_pro', role: 'upgrade' },
-        { key: 'accounting_free', role: 'switch' },
-      ];
-      break;
-    default:
-      cards = isAllowedSelfServicePlanChange(current, 'accounting_pro')
-        ? [{ key: current as HostedPlanKey, role: 'current' }]
-        : [{ key: 'accounting_free', role: 'current' }, { key: 'accounting_pro', role: 'upgrade' }];
-  }
-  // Engine allowedTransitions is authoritative for upgrade/switch; current + cancel landing stay visible.
-  if (allowedTransitions.length === 0) {
-    return cards.filter((card) => card.role === 'current' || card.role === 'landing');
-  }
-  return cards.filter(
-    (card) => card.role === 'current' || card.role === 'landing' || allowedTransitions.includes(card.key),
-  );
-}
-
-function actionLabel(role: PlanCardRole): string {
-  if (role === 'upgrade') return 'Upgrade';
-  if (role === 'switch') return 'Switch';
-  return '';
 }
 
 interface SubscriptionSettingsTabProps {
@@ -338,7 +230,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     }
   };
 
-  const handlePlanChange = async (planKey: HostedPlanKey) => {
+  const handlePlanChange = async (planKey: string) => {
     setSaving(true);
     setErrorMessage(null);
     try {
@@ -470,18 +362,16 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
       </div>
 
       {billing.billingEnabled && (() => {
-        const cards = planCardsFor(String(currentPlan), allowedTransitions);
-        const showInterval = cards.some((c) => c.role === 'upgrade');
-        const landingKey = cancelLandingPlan(String(currentPlan));
+        const cards = derivePlanCards(String(currentPlan), allowedTransitions, catalog.plans || []);
+        const showInterval = cards.some((card) => card.role === 'action');
         return (
           <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-[var(--text-main)]">Change plan</h3>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  One plan per workspace. Upgrade along the path, switch free products anytime, or cancel a Pro
-                  subscription (access continues until the period ends, then you land on{' '}
-                  {HOSTED_PLAN_COPY[landingKey].name}).
+                  One plan per workspace. Switch or upgrade using the options below, or cancel a paid
+                  subscription (access continues until the period ends).
                 </p>
               </div>
               {showInterval && (
@@ -509,38 +399,27 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             </div>
 
             <div className={`grid grid-cols-1 ${cards.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
-              {cards.map(({ key, role }) => {
-                const plan = HOSTED_PLAN_COPY[key];
-                const isPaid = plan.monthly != null;
-                const price = isPaid
-                  ? (billingInterval === 'year' ? plan.annual : plan.monthly)
-                  : null;
-                const priceLabel = isPaid
-                  ? (billingInterval === 'year' ? `$${price}/yr` : `$${price}/mo`)
-                  : 'Free';
-                const isCurrent = role === 'current';
-                const isLanding = role === 'landing';
-                const landingCopy = isLanding
-                  ? `You'll land here after cancel — access stays on your Pro plan until ${periodEndLabel || 'the period ends'}.`
-                  : plan.description;
+              {cards.map((card) => {
+                const isCurrent = card.role === 'current';
+                const priceLabel = card.monthlyPrice != null ? `$${card.monthlyPrice}/mo` : null;
 
                 return (
                   <div
-                    key={key}
+                    key={card.key}
                     className={`p-5 rounded-2xl flex flex-col justify-between transition-all ${
                       isCurrent
                         ? 'bg-[var(--brand-subtle)] border-2 border-[var(--brand-primary)] shadow-lg'
-                        : isLanding
-                          ? 'bg-[var(--bg-subtle)]/60 border border-dashed border-[var(--border-subtle,rgba(255,255,255,0.12))]'
-                          : 'bg-[var(--bg-subtle)] border border-transparent'
+                        : 'bg-[var(--bg-subtle)] border border-transparent'
                     }`}
                   >
                     <div>
                       <div className="flex items-baseline justify-between mb-2 gap-2">
-                        <h4 className="text-sm font-bold text-[var(--text-main)]">{plan.name}</h4>
-                        <span className="text-sm font-bold text-[var(--text-main)]">{priceLabel}</span>
+                        <h4 className="text-sm font-bold text-[var(--text-main)]">{card.name}</h4>
+                        {priceLabel != null && (
+                          <span className="text-sm font-bold text-[var(--text-main)]">{priceLabel}</span>
+                        )}
                       </div>
-                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">{landingCopy}</p>
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">{card.description}</p>
                     </div>
 
                     {isCurrent ? (
@@ -561,18 +440,14 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                           </button>
                         )}
                       </div>
-                    ) : isLanding ? (
-                      <div className="w-full h-10 rounded-xl text-xs font-semibold flex items-center justify-center text-[var(--text-muted)] bg-transparent">
-                        After cancel
-                      </div>
                     ) : (
                       <button
                         type="button"
                         disabled={saving || checkoutProcessing}
-                        onClick={() => void handlePlanChange(key)}
+                        onClick={() => void handlePlanChange(card.key)}
                         className="w-full h-10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] hover:text-[var(--brand-primary)]"
                       >
-                        <span>{actionLabel(role)}</span>
+                        <span>{card.actionLabel}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     )}

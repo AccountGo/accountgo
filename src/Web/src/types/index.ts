@@ -9,15 +9,8 @@ export type ModuleKey =
   | 'donations' 
   | 'audit';
 
-export type PlanKey =
-  | 'invoicing'
-  | 'accounting'
-  | 'enterprise'
-  | 'invoicing_free'
-  | 'invoicing_pro'
-  | 'accounting_free'
-  | 'accounting_pro'
-  | (string & {});
+/** Plan key from the server catalog / entitlements snapshot (no client-side union). */
+export type PlanKey = string;
 
 export interface SubscriptionInfo {
   planId: PlanKey;

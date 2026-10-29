@@ -98,6 +98,7 @@ test('create-workspace wizard hides plans the operator assigns', () => {
   const render = () => renderToStaticMarkup(createElement(AuthProvider, null,
     createElement(IntentStep, { plan: 'accounting', onChange: () => {} })));
 
+  // IntentStep option values are fixed; the catalog only filters which stay visible.
   primePlanCatalog([plan('invoicing', true), plan('accounting', true), plan('enterprise', false)]);
   const restricted = render();
   assert.ok(restricted.includes('value="invoicing"') && restricted.includes('value="accounting"'));
