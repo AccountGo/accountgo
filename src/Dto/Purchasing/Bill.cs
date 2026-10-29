@@ -39,6 +39,12 @@ namespace Dto.Purchasing
         /// </summary>
         public string? Status { get; set; }
         public bool Approved { get; set; }
+        public string? ApprovedBy { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public string? VoidedBy { get; set; }
+        public DateTime? VoidedAt { get; set; }
+        public string? VoidReason { get; set; }
+        public bool ConfirmDuplicate { get; set; }
         public List<BillPayment> Payments { get; set; } = new();
     }
 
@@ -76,6 +82,25 @@ namespace Dto.Purchasing
         public string? PaymentMethod { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Memo { get; set; }
+        public bool IsVoid { get; set; }
+        public string? VoidedBy { get; set; }
+        public DateTime? VoidedAt { get; set; }
+        public string? VoidReason { get; set; }
+    }
+
+    public class VoidPaymentDto
+    {
+        public int Id { get; set; }
+        public int PaymentId { get => Id; set => Id = value; }
+        public DateTime Date { get; set; }
+        public string Reason { get; set; } = string.Empty;
+    }
+
+    public class VoidBillDto
+    {
+        public int Id { get; set; }
+        public DateTime Date { get; set; }
+        public string Reason { get; set; } = string.Empty;
     }
 
     /// <summary>A payment on one bill.</summary>
