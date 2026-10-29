@@ -15,6 +15,11 @@ namespace Dto.Banking
         public DateTime StatementEndDate { get; set; }
         public string CurrencyCode { get; set; } = "USD";
 
+        public decimal BeginningBalance { get; set; }
+        public decimal ClearedDeposits { get; set; }
+        public decimal ClearedPayments { get; set; }
+        public decimal ClearedBalance { get; set; }
+
         public decimal StatementEndingBalance { get; set; }
         public decimal DepositsInTransit { get; set; }
         public decimal OutstandingPayments { get; set; }
@@ -25,12 +30,21 @@ namespace Dto.Banking
 
         public string? PreparedBy { get; set; }
         public DateTime? PreparedAt { get; set; }
+        public string? ReviewedBy { get; set; }
+        public DateTime? ReviewedAt { get; set; }
 
-        public IReadOnlyList<BankReconciliationReportOutstandingItemDto> OutstandingItems { get; set; } =
-            Array.Empty<BankReconciliationReportOutstandingItemDto>();
+        /// <summary>Opening-balance line cleared on this reconciliation, when present.</summary>
+        public BankReconciliationReportLineDto? OpeningBalanceLine { get; set; }
+
+        public IReadOnlyList<BankReconciliationReportLineDto> OutstandingItems { get; set; } =
+            Array.Empty<BankReconciliationReportLineDto>();
+
+        /// <summary>Lines dated in the period but posted after Finish (ordered by header creation).</summary>
+        public IReadOnlyList<BankReconciliationReportLineDto> PostedAfterFinishItems { get; set; } =
+            Array.Empty<BankReconciliationReportLineDto>();
     }
 
-    public class BankReconciliationReportOutstandingItemDto
+    public class BankReconciliationReportLineDto
     {
         public DateTime Date { get; set; }
         public string Type { get; set; } = string.Empty;
@@ -38,5 +52,6 @@ namespace Dto.Banking
         public decimal In { get; set; }
         public decimal Out { get; set; }
         public int AgeDays { get; set; }
+        public int HeaderId { get; set; }
     }
 }
