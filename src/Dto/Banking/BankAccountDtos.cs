@@ -153,4 +153,25 @@ namespace Dto.Banking
         public int StaleCount { get; set; }
         public bool HasStale { get; set; }
     }
+
+    public class BankCloseStatusBankDto
+    {
+        public int BankId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public DateTime? ReconciledThrough { get; set; }
+        public bool IsReconciled { get; set; }
+    }
+
+    /// <summary>How many active bank accounts are reconciled through the end of the previous month (3C).</summary>
+    public class BankCloseStatusDto
+    {
+        /// <summary>Last day of the previous month.</summary>
+        public DateTime PeriodEnd { get; set; }
+        /// <summary>For example "September 2026".</summary>
+        public string PeriodLabel { get; set; } = string.Empty;
+        public int ReconciledCount { get; set; }
+        public int TotalCount { get; set; }
+        public bool IsComplete { get; set; }
+        public IReadOnlyList<BankCloseStatusBankDto> Banks { get; set; } = Array.Empty<BankCloseStatusBankDto>();
+    }
 }
