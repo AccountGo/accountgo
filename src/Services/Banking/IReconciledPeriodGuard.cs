@@ -21,6 +21,7 @@ namespace Services.Banking
         /// Throws <see cref="ReconciledPeriodConfirmationRequiredException"/> when <paramref name="entry"/> posts to a bank
         /// account dated on or before that bank's latest finished statement end date and the request is not confirmed.
         /// Reversing (void) entries are skipped; they are governed by the reconciled-line check instead.
+        /// Opening-balance entries are exempt (see <see cref="ReconciledPeriodGuard"/>).
         /// </summary>
         void EnsurePostingAllowed(GeneralLedgerHeader entry);
     }
