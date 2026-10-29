@@ -62,6 +62,7 @@ public class BankAccountServiceEfTests : IDisposable
             new EfRepository<GeneralLedgerLine>(NullLogger<GeneralLedgerLine>.Instance, _db),
             new EfRepository<GeneralLedgerHeader>(NullLogger<GeneralLedgerHeader>.Instance, _db),
             new EfRepository<CompanySetting>(NullLogger<CompanySetting>.Instance, _db),
+            new EfRepository<FinancialYear>(NullLogger<FinancialYear>.Instance, _db),
             new EfRepository<SalesReceiptHeader>(NullLogger<SalesReceiptHeader>.Instance, _db),
             new EfRepository<CustomerAllocation>(NullLogger<CustomerAllocation>.Instance, _db),
             new EfRepository<SalesInvoiceHeader>(NullLogger<SalesInvoiceHeader>.Instance, _db),

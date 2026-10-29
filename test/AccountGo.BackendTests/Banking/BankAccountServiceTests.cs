@@ -235,17 +235,7 @@ public class BankAccountServiceTests
         harness.SeedCashTree();
         harness.SeedOpeningBalanceEquity();
         GeneralLedgerHeader? saved = null;
-        harness.Financial
-            .Setup(f => f.GetAccountByAccountCode("30700"))
-            .Returns(harness.RequireAccount("30700"));
-        harness.Financial
-            .Setup(f => f.CreateGeneralLedgerHeader(It.IsAny<DocumentTypes>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<int?>()))
-            .Returns((DocumentTypes type, DateTime date, string desc, int? sourceId, int? rev) =>
-                new GeneralLedgerHeader { DocumentType = type, Date = date, Description = desc, SourceDocumentId = sourceId, ReversedGeneralLedgerHeaderId = rev });
-        harness.Financial
-            .Setup(f => f.CreateGeneralLedgerLine(It.IsAny<DrOrCrSide>(), It.IsAny<int>(), It.IsAny<decimal>()))
-            .Returns((DrOrCrSide side, int accountId, decimal amount) =>
-                new GeneralLedgerLine { DrCr = side, AccountId = accountId, Amount = amount });
+        harness.SetupOpeningBalanceFinancialMocks();
         harness.Financial
             .Setup(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()))
             .Callback<GeneralLedgerHeader>(h =>
@@ -257,6 +247,7 @@ public class BankAccountServiceTests
                 {
                     line.Id = harness.NextGlLineId();
                     line.GeneralLedgerHeaderId = h.Id;
+                    line.CompanyId = 1;
                     harness.GlLines.Insert(line);
                 }
             });
@@ -273,7 +264,9 @@ public class BankAccountServiceTests
         Assert.Equal(500m, created.OpeningBalance);
         Assert.Equal(asOf.Date, created.OpeningBalanceDate!.Value.Date);
         Assert.NotNull(saved);
-        Assert.Equal(2, saved!.GeneralLedgerLines.Count);
+        Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
+        Assert.Null(saved.SourceDocumentId);
+        Assert.Equal(2, saved.GeneralLedgerLines.Count);
         Assert.Contains(saved.GeneralLedgerLines, l => l.AccountId == created.AccountId && l.DrCr == DrOrCrSide.Dr && l.Amount == 500m);
 
         harness.PostDebit(created.AccountId!.Value, 50m, asOf.AddDays(5));
@@ -281,14 +274,38 @@ public class BankAccountServiceTests
         Assert.Equal(500m, register.BroughtForward);
         Assert.Single(register.Lines);
         Assert.Equal(550m, register.Lines[0].Balance);
+
+        var obLine = harness.Service.GetRegister(created.Id, from: asOf, to: asOf, page: 1, pageSize: 50).Lines.Single();
+        Assert.Equal("Opening balance", obLine.Type);
+        Assert.Equal(nameof(DocumentTypes.BankTransaction), obLine.SourceDoc!.Type);
+        Assert.Equal(created.Id, obLine.SourceDoc.Id);
     }
 
     [Fact]
-    public void Create_OpeningBalance_OnCashBasis_StoresWithoutPosting()
+    public void Create_OpeningBalance_OnCashBasis_StillPosts()
     {
         using var harness = new Harness(accountingBasis: AccountingBasis.Cash);
         harness.SeedCashTree();
         harness.SeedOpeningBalanceEquity();
+        harness.Financial
+            .Setup(f => f.GetAccountByAccountCode("30700"))
+            .Returns(harness.RequireAccount("30700"));
+        harness.Financial
+            .Setup(f => f.CreateGeneralLedgerHeader(It.IsAny<DocumentTypes>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<int?>()))
+            .Returns((DocumentTypes type, DateTime date, string desc, int? sourceId, int? rev) =>
+                new GeneralLedgerHeader { DocumentType = type, Date = date, Description = desc, SourceDocumentId = sourceId, ReversedGeneralLedgerHeaderId = rev });
+        harness.Financial
+            .Setup(f => f.CreateGeneralLedgerLine(It.IsAny<DrOrCrSide>(), It.IsAny<int>(), It.IsAny<decimal>()))
+            .Returns((DrOrCrSide side, int accountId, decimal amount) =>
+                new GeneralLedgerLine { DrCr = side, AccountId = accountId, Amount = amount });
+        GeneralLedgerHeader? saved = null;
+        harness.Financial
+            .Setup(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()))
+            .Callback<GeneralLedgerHeader>(h =>
+            {
+                h.Id = harness.NextGlHeaderId();
+                saved = h;
+            });
 
         var created = harness.Service.Create(new CreateBankAccountRequest
         {
@@ -299,8 +316,84 @@ public class BankAccountServiceTests
         }, includeFullNumbers: false);
 
         Assert.Equal(100m, created.OpeningBalance);
-        harness.Financial.Verify(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()), Times.Never);
-        Assert.Empty(harness.GlHeaders.Table);
+        Assert.NotNull(saved);
+        Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
+        Assert.Null(saved.SourceDocumentId);
+        harness.Financial.Verify(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()), Times.Once);
+    }
+
+    [Fact]
+    public void Create_OpeningBalance_AllowedWhenAccountHasHistory()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedOpeningBalanceEquity();
+        var checking = harness.RequireAccount("10111");
+        harness.PostDebit(checking.Id, 10m, new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc));
+        harness.SetupOpeningBalanceFinancialMocks();
+
+        var created = harness.Service.Create(new CreateBankAccountRequest
+        {
+            Name = "Takeover",
+            Type = 1,
+            AdoptAccountId = checking.Id,
+            OpeningBalance = 50m,
+            OpeningBalanceDate = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)
+        }, includeFullNumbers: false);
+
+        Assert.Equal(50m, created.OpeningBalance);
+        Assert.Equal(checking.Id, created.AccountId);
+    }
+
+    [Fact]
+    public void Create_OpeningBalance_AfterEarliestOtherLine_IsRefused()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedOpeningBalanceEquity();
+        var checking = harness.RequireAccount("10111");
+        harness.PostDebit(checking.Id, 10m, new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc));
+        harness.SetupOpeningBalanceFinancialMocks();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.Create(new CreateBankAccountRequest
+            {
+                Name = "Late OB",
+                Type = 1,
+                AdoptAccountId = checking.Id,
+                OpeningBalance = 50m,
+                OpeningBalanceDate = new DateTime(2026, 1, 20, 0, 0, 0, DateTimeKind.Utc)
+            }, includeFullNumbers: false));
+        Assert.Contains("first other transaction", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Update_OpeningBalance_OutsideActiveFiscalYear_IsRefused()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedOpeningBalanceEquity();
+        harness.SetupOpeningBalanceFinancialMocks();
+        var created = harness.Service.Create(new CreateBankAccountRequest
+        {
+            Name = "Closed Period",
+            Type = 1,
+            OpeningBalance = 100m,
+            OpeningBalanceDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        }, includeFullNumbers: false);
+
+        var fy = harness.FiscalYears.Table.Single();
+        fy.IsActive = false;
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.Update(created.Id, new UpdateBankAccountRequest
+            {
+                Name = created.Name,
+                Type = created.Type,
+                OpeningBalance = 200m,
+                OpeningBalanceDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }, includeFullNumbers: false));
+        Assert.Equal("Post an adjustment instead.", ex.Message);
     }
 
     [Fact]
@@ -309,18 +402,8 @@ public class BankAccountServiceTests
         using var harness = new Harness();
         harness.SeedCashTree();
         harness.SeedOpeningBalanceEquity();
-        harness.Financial
-            .Setup(f => f.GetAccountByAccountCode("30700"))
-            .Returns(harness.RequireAccount("30700"));
-        harness.Financial
-            .Setup(f => f.CreateGeneralLedgerHeader(It.IsAny<DocumentTypes>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<int?>()))
-            .Returns((DocumentTypes type, DateTime date, string desc, int? sourceId, int? rev) =>
-                new GeneralLedgerHeader { DocumentType = type, Date = date, Description = desc, SourceDocumentId = sourceId });
-        harness.Financial
-            .Setup(f => f.CreateGeneralLedgerLine(It.IsAny<DrOrCrSide>(), It.IsAny<int>(), It.IsAny<decimal>()))
-            .Returns((DrOrCrSide side, int accountId, decimal amount) =>
-                new GeneralLedgerLine { DrCr = side, AccountId = accountId, Amount = amount });
         GeneralLedgerHeader? saved = null;
+        harness.SetupOpeningBalanceFinancialMocks();
         harness.Financial
             .Setup(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()))
             .Callback<GeneralLedgerHeader>(h =>
@@ -337,7 +420,8 @@ public class BankAccountServiceTests
         }, includeFullNumbers: false);
 
         Assert.Equal(-25.50m, created.OpeningBalance);
-        Assert.Contains(saved!.GeneralLedgerLines, l => l.AccountId == created.AccountId && l.DrCr == DrOrCrSide.Cr && l.Amount == 25.50m);
+        Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
+        Assert.Contains(saved.GeneralLedgerLines, l => l.AccountId == created.AccountId && l.DrCr == DrOrCrSide.Cr && l.Amount == 25.50m);
     }
 
     [Fact]
@@ -481,6 +565,7 @@ public class BankAccountServiceTests
         public IRepository<Bank> Banks => _repos.Banks;
         public IRepository<GeneralLedgerHeader> GlHeaders => _repos.GlHeaders;
         public IRepository<GeneralLedgerLine> GlLines => _repos.GlLines;
+        public IRepository<FinancialYear> FiscalYears => _repos.FiscalYears;
 
         public Harness(bool hasFinancials = true, AccountingBasis accountingBasis = AccountingBasis.Accrual)
         {
@@ -501,6 +586,7 @@ public class BankAccountServiceTests
                 _repos.GlLines,
                 _repos.GlHeaders,
                 _repos.Settings,
+                _repos.FiscalYears,
                 _repos.Receipts,
                 _repos.Allocations,
                 _repos.SalesInvoices,
@@ -520,6 +606,14 @@ public class BankAccountServiceTests
                 AccountingBasis = accountingBasis,
                 BooksStartDate = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             });
+            _repos.FiscalYears.Insert(new FinancialYear
+            {
+                Id = 1,
+                CompanyId = 1,
+                StartDate = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2099, 12, 31, 0, 0, 0, DateTimeKind.Utc),
+                IsActive = true
+            });
         }
 
         public int NextGlHeaderId() => _repos.NextGlHeaderId();
@@ -527,6 +621,65 @@ public class BankAccountServiceTests
 
         public void SeedOpeningBalanceEquity() =>
             AddAccount("30700", "Opening Balance Equity", parentCode: null, isCash: false, id: 50);
+
+        public void SetupOpeningBalanceFinancialMocks()
+        {
+            Financial
+                .Setup(f => f.GetAccountByAccountCode("30700"))
+                .Returns(RequireAccount("30700"));
+            Financial
+                .Setup(f => f.CreateGeneralLedgerHeader(It.IsAny<DocumentTypes>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<int?>()))
+                .Returns((DocumentTypes type, DateTime date, string desc, int? sourceId, int? rev) =>
+                    new GeneralLedgerHeader
+                    {
+                        DocumentType = type,
+                        Date = date,
+                        Description = desc,
+                        SourceDocumentId = sourceId,
+                        ReversedGeneralLedgerHeaderId = rev
+                    });
+            Financial
+                .Setup(f => f.CreateGeneralLedgerLine(It.IsAny<DrOrCrSide>(), It.IsAny<int>(), It.IsAny<decimal>()))
+                .Returns((DrOrCrSide side, int accountId, decimal amount) =>
+                    new GeneralLedgerLine { DrCr = side, AccountId = accountId, Amount = amount });
+            Financial
+                .Setup(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()))
+                .Callback<GeneralLedgerHeader>(h =>
+                {
+                    if (h.Id == 0)
+                        h.Id = NextGlHeaderId();
+                    GlHeaders.Insert(h);
+                    foreach (var line in h.GeneralLedgerLines)
+                    {
+                        if (line.Id == 0)
+                            line.Id = NextGlLineId();
+                        line.GeneralLedgerHeaderId = h.Id;
+                        line.CompanyId = 1;
+                        GlLines.Insert(line);
+                    }
+                });
+            Financial
+                .Setup(f => f.CreateReversingEntry(It.IsAny<int>(), It.IsAny<string>()))
+                .Returns((int headerId, string desc) =>
+                {
+                    var original = GlHeaders.GetById(headerId);
+                    var reversal = new GeneralLedgerHeader
+                    {
+                        DocumentType = original.DocumentType,
+                        Date = original.Date,
+                        Description = desc,
+                        ReversedGeneralLedgerHeaderId = headerId
+                    };
+                    foreach (var line in GlLines.Table.Where(l => l.GeneralLedgerHeaderId == headerId))
+                        reversal.GeneralLedgerLines.Add(new GeneralLedgerLine
+                        {
+                            DrCr = line.DrCr == DrOrCrSide.Dr ? DrOrCrSide.Cr : DrOrCrSide.Dr,
+                            AccountId = line.AccountId,
+                            Amount = line.Amount
+                        });
+                    return reversal;
+                });
+        }
 
         public void PostDebit(int accountId, decimal amount, DateTime? date = null)
         {
@@ -624,6 +777,7 @@ public class BankAccountServiceTests
         public MemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
         public MemoryRepo<GeneralLedgerHeader> GlHeaders { get; } = new();
         public MemoryRepo<CompanySetting> Settings { get; } = new();
+        public MemoryRepo<FinancialYear> FiscalYears { get; } = new();
         public MemoryRepo<SalesReceiptHeader> Receipts { get; } = new();
         public MemoryRepo<CustomerAllocation> Allocations { get; } = new();
         public MemoryRepo<SalesInvoiceHeader> SalesInvoices { get; } = new();
