@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Api.Data;
+using Microsoft.EntityFrameworkCore;
 using Core.Tenancy;
 using Services.Administration;
 using Services.Sales;
@@ -50,9 +51,12 @@ namespace Api.Service
             var billTo = Core.Domain.Sales.InvoiceBillTo.FromJson(salesInvoice.BillToJson)
                 ?? Core.Domain.Sales.InvoiceBillTo.FromParty(party, billToContact);
 
-            // Prefer the live Bill To / company email; fall back to the frozen bill-to so issued invoices stay sendable
-            // after a contact is removed or its email is cleared.
-            var recipientEmail = Blank(billToContact?.Party?.Email) ?? Blank(party?.Email) ?? Blank(billTo.Email);
+            // Invoices go to the company's email on record (often an accounts-payable inbox), falling back to the frozen
+            // bill-to so issued invoices stay sendable after the company email is cleared. The contact named in the
+            // "Attn:" line is copied, or receives it when the company has no email at all.
+            var attentionEmail = Blank(AttentionContact(billTo.ContactId, billToContact)?.Party?.Email);
+            var recipientEmail = Blank(party?.Email) ?? Blank(billTo.Email) ?? attentionEmail;
+            var ccEmail = string.Equals(attentionEmail, recipientEmail, StringComparison.OrdinalIgnoreCase) ? null : attentionEmail;
 
             var dto = new Dto.Sales.SalesInvoice
             {
@@ -64,6 +68,7 @@ namespace Api.Service
                 CustomerPhone = billTo.Phone,
                 CustomerAddress = billTo.AddressText,
                 RecipientEmail = recipientEmail,
+                RecipientCcEmail = ccEmail,
                 No = salesInvoice.No,
                 InvoiceDate = salesInvoice.Date,
                 DueDate = dueDate,
@@ -86,6 +91,7 @@ namespace Api.Service
                 Display = new Dto.Sales.DisplayFlags
                 {
                     ShowCustomerEmail = invoiceSettings.ShowCustomerEmail,
+                    ShowAttention = invoiceSettings.ShowAttention,
                     ShowNotes = invoiceSettings.ShowNotes,
                     ShowPaymentInstructions = invoiceSettings.ShowPaymentInstructions
                 }
@@ -153,6 +159,16 @@ namespace Api.Service
         private Core.Domain.Company? CurrentCompany() =>
             (!string.IsNullOrWhiteSpace(_tenant.CompanySlug) ? _admin.GetCompanyBySlug(_tenant.CompanySlug) : null)
             ?? _admin.GetCompanies().FirstOrDefault(c => c.Id == _tenant.CompanyId);
+
+        /// <summary>The contact the invoice's "Attn:" line names: the frozen one on issued invoices, else the client's Bill To contact.</summary>
+        private Core.Domain.Contact? AttentionContact(int? contactId, Core.Domain.Contact? billToContact)
+        {
+            if (contactId == null)
+                return null;
+            if (billToContact?.Id == contactId)
+                return billToContact;
+            return _db.Contacts.Include(c => c.Party).FirstOrDefault(c => c.Id == contactId);
+        }
 
         private static string? Blank(string? value) =>
             string.IsNullOrWhiteSpace(value) ? null : value.Trim();

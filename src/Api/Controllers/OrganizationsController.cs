@@ -238,6 +238,7 @@ namespace Api.Controllers
             public string SellerName { get; set; } = SalesInvoiceSettings.TradingName;
             public bool ShowSellerAddress { get; set; } = true;
             public bool ShowCustomerEmail { get; set; } = true;
+            public bool ShowAttention { get; set; } = true;
             public bool ShowNotes { get; set; } = true;
             public bool ShowPaymentInstructions { get; set; } = true;
             public string DefaultNotes { get; set; }
@@ -315,6 +316,7 @@ namespace Api.Controllers
                 SellerName = request.SellerName,
                 ShowSellerAddress = request.ShowSellerAddress,
                 ShowCustomerEmail = request.ShowCustomerEmail,
+                ShowAttention = request.ShowAttention,
                 ShowNotes = request.ShowNotes,
                 ShowPaymentInstructions = request.ShowPaymentInstructions,
                 DefaultNotes = defaultNotes,
@@ -443,6 +445,7 @@ namespace Api.Controllers
             SellerName = settings.SellerName,
             ShowSellerAddress = settings.ShowSellerAddress,
             ShowCustomerEmail = settings.ShowCustomerEmail,
+            ShowAttention = settings.ShowAttention,
             ShowNotes = settings.ShowNotes,
             ShowPaymentInstructions = settings.ShowPaymentInstructions,
             DefaultNotes = settings.DefaultNotes,
