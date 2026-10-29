@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext, useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -135,19 +135,24 @@ export const InvoiceDetail: React.FC = () => {
 
   // PDF is rendered by the API so it looks the same whatever browser saves it.
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const fetchInvoicePdf = async (id: number, no: string | null) => {
+    const res = await authFetch(`/api/Sales/SalesInvoicePdf?id=${id}`);
+    if (!res.ok) {
+      throw new Error(`Could not generate the PDF (${res.status})`);
+    }
+    const blob = await res.blob();
+    const fileName =
+      res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ||
+      `Invoice-${no || 'Draft'}.pdf`;
+    return { blob, fileName };
+  };
+
   const handleDownloadPdf = async () => {
     if (!invoice) return;
     setIsDownloadingPdf(true);
     setErrorBanner(null);
     try {
-      const res = await authFetch(`/api/Sales/SalesInvoicePdf?id=${invoice.id}`);
-      if (!res.ok) {
-        throw new Error(`Could not generate the PDF (${res.status})`);
-      }
-      const blob = await res.blob();
-      const fileName =
-        res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ||
-        `Invoice-${invoice.no || 'Draft'}.pdf`;
+      const { blob, fileName } = await fetchInvoicePdf(invoice.id, invoice.no);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -160,6 +165,54 @@ export const InvoiceDetail: React.FC = () => {
       setErrorBanner(err.message || 'Could not generate the PDF.');
     } finally {
       setIsDownloadingPdf(false);
+    }
+  };
+
+  // Print sends the same PDF the customer receives to the printer, so what prints is exactly the download.
+  // Desktop Chromium prints it from a hidden frame; other browsers can't print a PDF that way, so they open
+  // it in a tab to print from the browser's PDF viewer.
+  const printFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const removePrintFrame = () => {
+    const frame = printFrameRef.current;
+    if (!frame) return;
+    URL.revokeObjectURL(frame.src);
+    frame.remove();
+    printFrameRef.current = null;
+  };
+  useEffect(() => removePrintFrame, []);
+  const handlePrint = async () => {
+    if (!invoice || isPrinting) return;
+    const ua = navigator.userAgent;
+    const framePrint = /Chrome\//.test(ua) && !/Android|Mobile|CriOS/.test(ua);
+    // Opened before the fetch, while the click still counts as a user gesture, so it isn't blocked as a popup.
+    const tab = framePrint ? null : window.open('', '_blank');
+    setIsPrinting(true);
+    setErrorBanner(null);
+    try {
+      const { blob } = await fetchInvoicePdf(invoice.id, invoice.no);
+      const url = URL.createObjectURL(blob);
+      if (tab) {
+        tab.location.href = url;
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        return;
+      }
+      removePrintFrame();
+      const frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+      frame.onload = () => {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+      };
+      frame.src = url;
+      document.body.appendChild(frame);
+      printFrameRef.current = frame;
+    } catch (err: any) {
+      tab?.close();
+      setErrorBanner(err.message || 'Could not prepare the invoice for printing.');
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -478,7 +531,7 @@ export const InvoiceDetail: React.FC = () => {
 
   // Seller and display flags are resolved by the API from the workspace's invoice settings, same as the PDF.
   const sellerName = invoice.seller?.name || currentOrg.name || invoice.companyName || 'AccountGo Organization';
-  const sellerContact = [invoice.seller?.email, invoice.seller?.phone].filter(Boolean).join(' · ');
+  const sellerContact = [invoice.seller?.phone, invoice.seller?.email].filter(Boolean).join(' · ');
   const showCustomerEmail = invoice.display?.showCustomerEmail ?? true;
   const showAttention = invoice.display?.showAttention ?? true;
   const showNotes = invoice.display?.showNotes ?? true;
@@ -551,7 +604,7 @@ export const InvoiceDetail: React.FC = () => {
                 // Opens a new invoice prefilled from this one; nothing is saved until the user saves it.
                 canCreate && { label: 'Duplicate invoice', icon: Copy, to: `/org/${orgSlug}/sales/new?from=${invoice.id}` },
                 canEdit && { label: 'Edit invoice', icon: FileEdit, to: `/org/${orgSlug}/sales/${invoice.id}/edit` },
-                { label: 'Print', icon: Printer, onSelect: () => window.print() },
+                { label: isPrinting ? 'Preparing print…' : 'Print', icon: Printer, onSelect: () => void handlePrint() },
                 canDelete && 'separator',
                 canDelete && {
                   label: 'Delete draft',
@@ -688,13 +741,11 @@ export const InvoiceDetail: React.FC = () => {
             <div className="font-bold text-[var(--text-main)] text-base">
               {invoice.customerName}
             </div>
-            {showAttention && invoice.customerAttention && (
-              <div className="text-[var(--text-secondary)]">{invoice.customerAttention}</div>
-            )}
-            {showCustomerEmail && invoice.customerEmail && (
-              <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-                <Mail className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                {invoice.customerEmail}
+            {/* Same order as the PDF: address, phone, email, then the attention line after a gap. */}
+            {invoice.customerAddress && (
+              <div className="flex items-start gap-1.5 text-[var(--text-secondary)]">
+                <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 mt-0.5" />
+                <span>{invoice.customerAddress}</span>
               </div>
             )}
             {invoice.customerPhone && (
@@ -703,11 +754,14 @@ export const InvoiceDetail: React.FC = () => {
                 {invoice.customerPhone}
               </div>
             )}
-            {invoice.customerAddress && (
-              <div className="flex items-start gap-1.5 text-[var(--text-secondary)] pt-1">
-                <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 mt-0.5" />
-                <span>{invoice.customerAddress}</span>
+            {showCustomerEmail && invoice.customerEmail && (
+              <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                <Mail className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                {invoice.customerEmail}
               </div>
+            )}
+            {showAttention && invoice.customerAttention && (
+              <div className="pt-3 text-[var(--text-secondary)]">{invoice.customerAttention}</div>
             )}
           </div>
 
