@@ -609,6 +609,29 @@ WHERE ""DisabledModulesJson"" IS NULL
             cmd.CommandText = BankTransactionTableSql;
             cmd.ExecuteNonQuery();
             BackfillOpeningBalanceBankTransactions(connection);
+            EnsureBankReconciliationSchema(connection);
+        }
+
+        // D1 0037_bank_reconciliation.sql (#413 Phase 2B). Plan called this part of 0034; 0035/0036 shipped first.
+        private static void EnsureBankReconciliationSchema(DbConnection connection)
+        {
+            if (!TableExists(connection, "Bank") || !TableExists(connection, "GeneralLedgerLine"))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = BankReconciliationTableSql;
+            cmd.ExecuteNonQuery();
+            cmd.CommandText = BankReconciliationItemTableSql;
+            cmd.ExecuteNonQuery();
+
+            if (!ColumnExists(connection, "GeneralLedgerLine", "BankReconciliationId"))
+            {
+                cmd.CommandText = @"ALTER TABLE ""GeneralLedgerLine"" ADD COLUMN ""BankReconciliationId"" INTEGER NULL REFERENCES ""BankReconciliation"" (""Id"");";
+                cmd.ExecuteNonQuery();
+            }
+
+            cmd.CommandText = @"CREATE INDEX IF NOT EXISTS ""IX_GeneralLedgerLine_Company_BankReconciliationId"" ON ""GeneralLedgerLine"" (""CompanyId"", ""BankReconciliationId"");";
+            cmd.ExecuteNonQuery();
         }
 
         // D1 0026_security_schema.sql
@@ -793,6 +816,47 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_BankTransaction_Company_Bank_Date"" ON ""BankTransaction"" (""CompanyId"", ""BankId"", ""Date"");
             CREATE INDEX IF NOT EXISTS ""IX_BankTransaction_GeneralLedgerHeaderId"" ON ""BankTransaction"" (""GeneralLedgerHeaderId"");
             CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankTransaction_Company_No"" ON ""BankTransaction"" (""CompanyId"", ""No"");";
+
+        // D1 0037_bank_reconciliation.sql (#413 Phase 2B)
+        private const string BankReconciliationTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""BankReconciliation"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BankReconciliation"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""BankId"" INTEGER NOT NULL,
+                ""StatementEndDate"" TEXT NOT NULL,
+                ""StatementEndingBalance"" NUMERIC NOT NULL,
+                ""BeginningBalance"" NUMERIC NOT NULL,
+                ""Status"" INTEGER NOT NULL,
+                ""CreatedBy"" TEXT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""FinishedBy"" TEXT NULL,
+                ""FinishedAt"" TEXT NULL,
+                ""ReviewedBy"" TEXT NULL,
+                ""ReviewedAt"" TEXT NULL,
+                ""UndoneBy"" TEXT NULL,
+                ""UndoneAt"" TEXT NULL,
+                ""UndoReason"" TEXT NULL,
+                ""Version"" INTEGER NOT NULL DEFAULT 1,
+                CONSTRAINT ""FK_BankReconciliation_Bank_BankId"" FOREIGN KEY (""BankId"") REFERENCES ""Bank"" (""Id"")
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_BankReconciliation_CompanyId"" ON ""BankReconciliation"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankReconciliation_Company_Bank_EndDate"" ON ""BankReconciliation"" (""CompanyId"", ""BankId"", ""StatementEndDate"");
+            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankReconciliation_OneDraft"" ON ""BankReconciliation"" (""CompanyId"", ""BankId"") WHERE ""Status"" = 1;";
+
+        private const string BankReconciliationItemTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""BankReconciliationItem"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BankReconciliationItem"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""BankReconciliationId"" INTEGER NOT NULL,
+                ""GeneralLedgerLineId"" INTEGER NOT NULL,
+                ""Amount"" NUMERIC NOT NULL,
+                ""DrCr"" INTEGER NOT NULL,
+                CONSTRAINT ""FK_BankReconciliationItem_BankReconciliation_BankReconciliationId"" FOREIGN KEY (""BankReconciliationId"") REFERENCES ""BankReconciliation"" (""Id""),
+                CONSTRAINT ""FK_BankReconciliationItem_GeneralLedgerLine_GeneralLedgerLineId"" FOREIGN KEY (""GeneralLedgerLineId"") REFERENCES ""GeneralLedgerLine"" (""Id"")
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_BankReconciliationItem_CompanyId"" ON ""BankReconciliationItem"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankReconciliationItem_BankReconciliationId"" ON ""BankReconciliationItem"" (""BankReconciliationId"");
+            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankReconciliationItem_Recon_Line"" ON ""BankReconciliationItem"" (""BankReconciliationId"", ""GeneralLedgerLineId"");";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
         {

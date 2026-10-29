@@ -24,6 +24,7 @@ namespace Api.Controllers
     {
         private readonly IBankAccountService _banks;
         private readonly IBankTransactionService _transactions;
+        private readonly IBankReconciliationService _reconciliations;
         private readonly ITenantContext _tenant;
         private readonly IEntitlementService _entitlements;
         private readonly ApiDbContext _db;
@@ -31,12 +32,14 @@ namespace Api.Controllers
         public BankingController(
             IBankAccountService banks,
             IBankTransactionService transactions,
+            IBankReconciliationService reconciliations,
             ITenantContext tenant,
             IEntitlementService entitlements,
             ApiDbContext db)
         {
             _banks = banks;
             _transactions = transactions;
+            _reconciliations = reconciliations;
             _tenant = tenant;
             _entitlements = entitlements;
             _db = db;
@@ -296,11 +299,223 @@ namespace Api.Controllers
             {
                 return NotFound(new { message = "Bank transaction not found" });
             }
+            catch (ReconciledTransactionException ex)
+            {
+                return ReconciledConflict(ex);
+            }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        [HttpGet("Reconciliations")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult ListReconciliations([FromQuery] int bankId)
+        {
+            try
+            {
+                return Ok(_reconciliations.List(bankId));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Reconciliations")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult StartReconciliation([FromBody] StartBankReconciliationRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var created = _reconciliations.Start(request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(created);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (BankReconciliationConflictException ex)
+            {
+                return ReconciliationConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("Reconciliations/{id:int}")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult GetReconciliation(int id)
+        {
+            try
+            {
+                return Ok(_reconciliations.Get(id));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut("Reconciliations/{id:int}/Items")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult UpdateReconciliationItems(int id, [FromBody] UpdateBankReconciliationItemsRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var updated = _reconciliations.UpdateItems(id, request);
+                tx.Commit();
+                return Ok(updated);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (BankReconciliationConflictException ex)
+            {
+                return ReconciliationConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Reconciliations/{id:int}/Adjustments")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
+        public IActionResult AddReconciliationAdjustment(int id, [FromBody] CreateReconciliationAdjustmentRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var updated = _reconciliations.AddAdjustment(id, request);
+                tx.Commit();
+                return Ok(updated);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (BankReconciliationConflictException ex)
+            {
+                return ReconciliationConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Reconciliations/{id:int}/Finish")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult FinishReconciliation(int id, [FromBody] FinishBankReconciliationRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var finished = _reconciliations.Finish(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(finished);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (BankReconciliationConflictException ex)
+            {
+                return ReconciliationConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Reconciliations/{id:int}/Undo")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcileUndo)]
+        public IActionResult UndoReconciliation(int id, [FromBody] UndoBankReconciliationRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var undone = _reconciliations.Undo(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(undone);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (BankReconciliationConflictException ex)
+            {
+                return ReconciliationConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("Reconciliations/{id:int}")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingReconcile)]
+        public IActionResult DiscardReconciliation(int id)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                _reconciliations.DiscardDraft(id);
+                tx.Commit();
+                return NoContent();
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Reconciliation not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private static IActionResult ReconciliationConflict(BankReconciliationConflictException ex) =>
+            new ConflictObjectResult(new
+            {
+                code = ex.Code,
+                message = ex.Message,
+                reconciliationId = ex.ReconciliationId
+            });
+
+        private static IActionResult ReconciledConflict(ReconciledTransactionException ex) =>
+            new ConflictObjectResult(new
+            {
+                code = ReconciledTransactionException.ErrorCode,
+                message = ex.Message,
+                bankName = ex.BankName,
+                statementEndDate = ex.StatementEndDate.ToString("yyyy-MM-dd")
+            });
 
         private Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction BeginWriteTransaction() =>
             RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, IsolationLevel.Serializable);

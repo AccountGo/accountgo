@@ -618,6 +618,7 @@ public class BankAccountServiceTests
             Service = new BankAccountService(
                 _repos.Banks,
                 _repos.BankTransactions,
+                _repos.Reconciliations,
                 _repos.Accounts,
                 _repos.GlLines,
                 _repos.GlHeaders,
@@ -811,6 +812,7 @@ public class BankAccountServiceTests
         public MemoryRepo<Account> Accounts { get; } = new();
         public MemoryRepo<Bank> Banks { get; } = new();
         public MemoryRepo<BankTransaction> BankTransactions { get; } = new();
+        public MemoryRepo<BankReconciliation> Reconciliations { get; } = new();
         public MemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
         public MemoryRepo<GeneralLedgerHeader> GlHeaders { get; } = new();
         public MemoryRepo<CompanySetting> Settings { get; } = new();
