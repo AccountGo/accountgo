@@ -47,9 +47,9 @@ const BankRegisterPage: React.FC = () => {
     (n: number) =>
       new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: currentOrg.currencyCode || 'USD',
+        currency: currentOrg.currency || 'USD',
       }).format(n),
-    [currentOrg.currencyCode],
+    [currentOrg.currency],
   );
 
   const load = useCallback(async () => {
