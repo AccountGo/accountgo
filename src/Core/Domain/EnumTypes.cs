@@ -157,8 +157,12 @@ namespace Core.Domain
     public enum BankTypes
     {
         CheckingAccount = 1,
-        SavingsAccount,
-        CashAccount
+        SavingsAccount = 2,
+        CashAccount = 3,
+        /// <summary>Reserved for P2; not offered in the UI yet.</summary>
+        CreditCard = 4,
+        /// <summary>Reserved for P2; not offered in the UI yet.</summary>
+        LineOfCredit = 5
     }
 
     public enum SalesInvoiceStatus

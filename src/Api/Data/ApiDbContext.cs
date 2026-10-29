@@ -89,9 +89,29 @@ namespace Api.Data
             }
         }
 
+        /// <summary>
+        /// D11: Bank.AccountId stays nullable in storage, but every write must set it.
+        /// SQLite/D1 also enforce this with BEFORE INSERT/UPDATE triggers.
+        /// </summary>
+        private void EnforceBankAccountIdRequired()
+        {
+            foreach (var entry in ChangeTracker.Entries<Bank>())
+            {
+                if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
+                    continue;
+
+                if (!entry.Entity.AccountId.HasValue)
+                {
+                    throw new System.InvalidOperationException(
+                        "Bank.AccountId is required. Every bank account must be backed by a postable cash account.");
+                }
+            }
+        }
+
         // Every SaveChanges/SaveChangesAsync overload funnels into these two.
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
+            EnforceBankAccountIdRequired();
             EnforceTenantSecurity();
 
             if (_d1SyncContext == null)
@@ -106,6 +126,7 @@ namespace Api.Data
 
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
+            EnforceBankAccountIdRequired();
             EnforceTenantSecurity();
 
             if (_d1SyncContext == null)
@@ -515,6 +536,33 @@ namespace Api.Data
             builder.Entity<Item>()
                 .HasIndex(e => new { e.CompanyId, e.No })
                 .IsUnique();
+
+            builder.Entity<Bank>(entity =>
+            {
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.CurrencyCode).HasMaxLength(3);
+                entity.Property(e => e.OpeningBalance).HasColumnType("decimal(18, 2)");
+
+                // Storage stays nullable (D11); domain + SaveChanges + triggers require a value.
+                entity.Property(e => e.AccountId).IsRequired(false);
+
+                // Named indexes: two filters on CompanyId must not collapse into one metadata entry.
+                // SQL Server unique indexes on nullable columns get an IS NOT NULL filter from EF.
+                entity.HasIndex(e => new { e.CompanyId, e.AccountId }, "UX_Bank_Company_Account")
+                    .IsUnique()
+                    .HasFilter("[AccountId] IS NOT NULL");
+
+                entity.HasIndex(e => new { e.CompanyId, e.Name }, "UX_Bank_Company_Name")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.CompanyId, "UX_Bank_DefaultReceipts")
+                    .IsUnique()
+                    .HasFilter("[IsDefaultForReceipts] = 1");
+
+                entity.HasIndex(e => e.CompanyId, "UX_Bank_DefaultPayments")
+                    .IsUnique()
+                    .HasFilter("[IsDefaultForPayments] = 1");
+            });
 
             builder.Seed();
             /* Medhat END */
