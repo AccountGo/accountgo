@@ -35,8 +35,20 @@ namespace Services.Banking
         }
 
         /// <summary>
-        /// What an invoice prints: its own edited text wins; otherwise the workspace's payment bank (when set and still
-        /// active) formatted as instructions; otherwise the stored text or the free-text default.
+        /// What to store from a save request. Absent (null) stays null, meaning "use the workspace's payment bank or
+        /// default text". Blank text is a field the user cleared on purpose and is stored empty, so it keeps printing nothing.
+        /// </summary>
+        public static string? ForSave(string? requested) => requested?.Trim();
+
+        /// <summary>
+        /// What a draft invoice prints, by what is stored on it:
+        /// <list type="bullet">
+        /// <item>null: never set, so the workspace's payment bank (when set and still active) formatted as instructions,
+        /// else the free-text default;</item>
+        /// <item>empty or blank: the user cleared the field on purpose, so nothing prints;</item>
+        /// <item>text: the invoice's own text wins. A copy of the free-text default is not an override, so it still
+        /// yields to the payment bank.</item>
+        /// </list>
         /// </summary>
         public static string? Resolve(
             string? invoiceInstructions,
@@ -45,13 +57,42 @@ namespace Services.Banking
             string? payeeName,
             string? invoiceNo)
         {
+            if (invoiceInstructions == null)
+                return FromWorkspaceDefaults(settings, paymentBank, payeeName, invoiceNo);
+
             var own = Clean(invoiceInstructions);
-            var freeTextDefault = Clean(settings.DefaultPaymentInstructions);
+            if (own == null)
+                return null;
 
             // An invoice prefilled from the default text is not an override; only a differing edit is.
-            if (own != null && own != freeTextDefault)
+            if (own != Clean(settings.DefaultPaymentInstructions))
                 return own;
 
+            return FromWorkspaceDefaults(settings, paymentBank, payeeName, invoiceNo) ?? own;
+        }
+
+        /// <summary>
+        /// What an invoice prints. Issued invoices print only what was stored on them when they were issued (see
+        /// <c>SalesInvoiceHeader.CapturePaymentInstructionsIfIssued</c>), so later changes to the payment bank or the
+        /// default text never rewrite them; drafts resolve live through <see cref="Resolve"/>.
+        /// </summary>
+        public static string? ForPresentation(
+            bool isIssued,
+            string? invoiceInstructions,
+            SalesInvoiceSettings settings,
+            Bank? paymentBank,
+            string? payeeName,
+            string? invoiceNo) =>
+            isIssued
+                ? Clean(invoiceInstructions)
+                : Resolve(invoiceInstructions, settings, paymentBank, payeeName, invoiceNo);
+
+        private static string? FromWorkspaceDefaults(
+            SalesInvoiceSettings settings,
+            Bank? paymentBank,
+            string? payeeName,
+            string? invoiceNo)
+        {
             if (paymentBank != null && paymentBank.ArchivedAt == null)
             {
                 var bankText = Format(paymentBank, payeeName, invoiceNo);
@@ -59,7 +100,7 @@ namespace Services.Banking
                     return bankText;
             }
 
-            return own ?? freeTextDefault;
+            return Clean(settings.DefaultPaymentInstructions);
         }
 
         private static void Add(List<string> lines, string label, string? value)

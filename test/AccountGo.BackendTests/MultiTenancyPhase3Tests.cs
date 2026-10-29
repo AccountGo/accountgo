@@ -331,7 +331,79 @@ namespace AccountGo.BackendTests
             Assert.True(cleared.IsSuccessStatusCode, await cleared.Content.ReadAsStringAsync());
             var afterClear = await GetInvoice(invoice.Id);
             Assert.Null(afterClear.Notes);
-            Assert.Null(afterClear.PaymentInstructions);
+            // Cleared on purpose is stored empty (prints nothing); null would mean "never set, use the workspace defaults".
+            Assert.Equal("", afterClear.PaymentInstructions);
+
+            invoice.PaymentInstructions = null;
+            var unset = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(unset.IsSuccessStatusCode, await unset.Content.ReadAsStringAsync());
+            Assert.Null((await GetInvoice(invoice.Id)).PaymentInstructions);
+        }
+
+        private void SetDefaultPaymentInstructions(string text)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var setting = db.CompanySettings.First();
+                var settings = setting.GetSalesInvoiceSettings();
+                settings.DefaultPaymentInstructions = text;
+                setting.SetSalesInvoiceSettings(settings);
+                db.SaveChanges();
+            }
+        }
+
+        [Fact]
+        public async Task PaymentInstructions_AreFrozenAtIssue_AndAClearedFieldStaysNone()
+        {
+            SetDefaultPaymentInstructions("Pay at the counter");
+
+            // Never set: the draft shows the default, and issuing stores it.
+            var neverSet = await NewInvoice();
+            neverSet.Status = "Draft";
+            neverSet.PaymentInstructions = null;
+            var neverSetId = (await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", neverSet))).GetProperty("id").GetInt32();
+            var draft = await GetInvoice(neverSetId);
+            Assert.Null(draft.PaymentInstructions);
+            Assert.Equal("Pay at the counter", draft.PaymentInstructionsToPrint());
+
+            // Cleared on purpose: nothing prints on the draft, and issuing does not fill it in.
+            var cleared = await NewInvoice();
+            cleared.Status = "Draft";
+            cleared.PaymentInstructions = "";
+            var clearedId = (await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", cleared))).GetProperty("id").GetInt32();
+            var clearedDraft = await GetInvoice(clearedId);
+            Assert.Equal("", clearedDraft.PaymentInstructions);
+            Assert.True(string.IsNullOrEmpty(clearedDraft.PaymentInstructionsToPrint()));
+
+            await Issue(neverSetId);
+            await Issue(clearedId);
+
+            // The default text changes after issue; issued invoices keep what they stored.
+            SetDefaultPaymentInstructions("Pay by wire only");
+            var frozen = await GetInvoice(neverSetId);
+            Assert.Equal("Pay at the counter", frozen.PaymentInstructions);
+            Assert.Equal("Pay at the counter", frozen.PaymentInstructionsToPrint());
+
+            var stillNone = await GetInvoice(clearedId);
+            Assert.Equal("", stillNone.PaymentInstructions);
+            Assert.True(string.IsNullOrEmpty(stillNone.PaymentInstructionsToPrint()));
+        }
+
+        [Fact]
+        public async Task PaymentInstructions_IssuedWithNothingConfigured_StayNoneWhenADefaultIsAddedLater()
+        {
+            SetDefaultPaymentInstructions("");
+            var invoice = await NewInvoice();
+            invoice.Status = "Draft";
+            invoice.PaymentInstructions = null;
+            var id = (await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice))).GetProperty("id").GetInt32();
+            await Issue(id);
+
+            SetDefaultPaymentInstructions("Added after issue");
+
+            Assert.True(string.IsNullOrEmpty((await GetInvoice(id)).PaymentInstructionsToPrint()));
         }
 
         [Fact]

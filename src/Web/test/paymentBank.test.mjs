@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { paymentBankChoice } from '../src/lib/paymentBank.ts';
+import { carriedOverPaymentInstructions, paymentBankChoice, paymentInstructionsPayload } from '../src/lib/paymentBank.ts';
 
 const banks = [
   { id: 1, name: 'Checking', accountNumberMasked: '••1234' },
@@ -32,4 +32,18 @@ test('ignores cash accounts that have no bank record', () => {
 test('does not flag the saved bank when the picker could not be loaded', () => {
   const options = paymentBankChoice([], 5, false);
   assert.equal(options.at(-1).label, 'Selected bank account');
+});
+
+test('sends typed text, an empty string for a deliberate clear, and nothing when never touched', () => {
+  assert.equal(paymentInstructionsPayload('  Wire to us ', false), 'Wire to us');
+  assert.equal(paymentInstructionsPayload('', true), '');
+  assert.equal(paymentInstructionsPayload('   ', true), '');
+  assert.equal(paymentInstructionsPayload('', false), undefined);
+});
+
+test('duplicating does not carry over bank text frozen at issue', () => {
+  assert.equal(carriedOverPaymentInstructions('Pay by bank transfer to:\nBank: X\nReference: INV-1'), '');
+  assert.equal(carriedOverPaymentInstructions('Wire to our Singapore account'), 'Wire to our Singapore account');
+  assert.equal(carriedOverPaymentInstructions(null), '');
+  assert.equal(carriedOverPaymentInstructions(''), '');
 });
