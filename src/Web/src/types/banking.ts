@@ -129,3 +129,111 @@ export const BANK_TYPE_LABELS: Record<number, string> = {
 export function bankTypeLabel(type: number): string {
   return BANK_TYPE_LABELS[type] ?? `Type ${type}`;
 }
+
+/** 1 MoneyIn, 2 MoneyOut, 3 Transfer, 4 Fee, 5 Interest, 6 Adjustment, 7 OpeningBalance */
+export type BankTransactionKind = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export const BANK_TRANSACTION_KIND_LABELS: Record<number, string> = {
+  1: 'Money in',
+  2: 'Money out',
+  3: 'Transfer',
+  4: 'Fee',
+  5: 'Interest',
+  6: 'Adjustment',
+  7: 'Opening balance',
+};
+
+export interface BankTransaction {
+  id: number;
+  kind: number;
+  kindLabel: string;
+  bankId: number;
+  bankName?: string | null;
+  toBankId?: number | null;
+  toBankName?: string | null;
+  date: string;
+  amount: number;
+  contraAccountId?: number | null;
+  contraAccountCode?: string | null;
+  contraAccountName?: string | null;
+  partyId?: number | null;
+  partyName?: string | null;
+  no: string;
+  referenceNo?: string | null;
+  memo?: string | null;
+  generalLedgerHeaderId?: number | null;
+  isVoid: boolean;
+  voidGeneralLedgerHeaderId?: number | null;
+}
+
+export interface CreateBankTransactionPayload {
+  kind: number;
+  bankId: number;
+  toBankId?: number | null;
+  date: string;
+  amount: number;
+  contraAccountId?: number | null;
+  partyId?: number | null;
+  referenceNo?: string | null;
+  memo?: string | null;
+  increaseBalance?: boolean | null;
+}
+
+export interface BankTransactionList {
+  transactions: BankTransaction[];
+}
+
+export interface BankReconciliationCandidateLine {
+  lineId: number;
+  headerId: number;
+  date: string;
+  type: string;
+  payee?: string | null;
+  reference?: string | null;
+  in: number;
+  out: number;
+  ticked: boolean;
+  isOpeningBalance: boolean;
+}
+
+export interface BankReconciliationListItem {
+  id: number;
+  bankId: number;
+  bankName?: string | null;
+  statementEndDate: string;
+  statementEndingBalance: number;
+  beginningBalance: number;
+  status: number;
+  statusLabel: string;
+  finishedAt?: string | null;
+  finishedBy?: string | null;
+  version: number;
+}
+
+export interface BankReconciliation {
+  id: number;
+  bankId: number;
+  bankName?: string | null;
+  statementEndDate: string;
+  statementEndingBalance: number;
+  beginningBalance: number;
+  status: number;
+  statusLabel: string;
+  version: number;
+  clearedDeposits: number;
+  clearedPayments: number;
+  clearedBalance: number;
+  difference: number;
+  createdBy?: string | null;
+  createdAt: string;
+  finishedBy?: string | null;
+  finishedAt?: string | null;
+  deposits: BankReconciliationCandidateLine[];
+  payments: BankReconciliationCandidateLine[];
+}
+
+export const BANK_RECONCILIATION_STATUS = {
+  Draft: 1,
+  Finished: 2,
+  Undone: 3,
+} as const;
