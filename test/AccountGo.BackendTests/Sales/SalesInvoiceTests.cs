@@ -200,4 +200,37 @@ public class SalesInvoiceTests
 
         Assert.Equal(expectedStatus, resolvedStatus);
     }
+
+    [Fact]
+    public void SalesInvoiceHeader_CalculatesTotalAllocated_BalanceDue_AndIsFullPaid()
+    {
+        var invoice = new Core.Domain.Sales.SalesInvoiceHeader
+        {
+            ShippingHandlingCharge = 10m
+        };
+        invoice.SalesInvoiceLines.Add(new Core.Domain.Sales.SalesInvoiceLine
+        {
+            Quantity = 2,
+            Amount = 45m,
+            TaxAmount = 5m
+        });
+
+        // Grand total = Subtotal (90) + Tax (5) + Shipping (10) = 105
+        Assert.Equal(105m, invoice.GrandTotal());
+        Assert.Equal(0m, invoice.TotalAllocated());
+        Assert.Equal(105m, invoice.BalanceDue());
+        Assert.False(invoice.IsFullPaid());
+
+        // Partial allocation of 50
+        invoice.CustomerAllocations.Add(new Core.Domain.Sales.CustomerAllocation { Amount = 50m });
+        Assert.Equal(50m, invoice.TotalAllocated());
+        Assert.Equal(55m, invoice.BalanceDue());
+        Assert.False(invoice.IsFullPaid());
+
+        // Full allocation remaining 55
+        invoice.CustomerAllocations.Add(new Core.Domain.Sales.CustomerAllocation { Amount = 55m });
+        Assert.Equal(105m, invoice.TotalAllocated());
+        Assert.Equal(0m, invoice.BalanceDue());
+        Assert.True(invoice.IsFullPaid());
+    }
 }

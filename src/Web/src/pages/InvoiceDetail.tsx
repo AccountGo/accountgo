@@ -18,6 +18,7 @@ import {
   MapPin,
   Send,
   FileDown,
+  Trash2,
 } from 'lucide-react';
 import {
   TenantContextType,
@@ -242,6 +243,34 @@ export const InvoiceDetail: React.FC = () => {
     }
   };
 
+  // Delete Draft State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [isSubmittingDelete, setIsSubmittingDelete] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteDraft = async () => {
+    if (!invoice) return;
+    setIsSubmittingDelete(true);
+    setDeleteError(null);
+
+    try {
+      const res = await authFetch(`/api/Sales/DeleteSalesInvoice?id=${invoice.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.message || errorData || 'Failed to delete draft invoice.');
+      }
+
+      navigate(`/org/${orgSlug}/sales`);
+    } catch (err: any) {
+      setDeleteError(err.message || 'An error occurred while deleting the draft invoice.');
+    } finally {
+      setIsSubmittingDelete(false);
+    }
+  };
+
   // Issue Draft Invoice, optionally emailing it (and emailing issued invoices again later)
   const [isSubmittingIssue, setIsSubmittingIssue] = useState<boolean>(false);
   const [sendDialogMode, setSendDialogMode] = useState<'issue' | 'send' | null>(null);
@@ -453,9 +482,10 @@ export const InvoiceDetail: React.FC = () => {
   // Duplicate also needs remaining quota; edit/issue/void/pay need canWrite(sales).
   const canCreate = hasPermission('sales.invoices.create') && salesWritable && canCreateResource('salesDocuments');
   const canIssue = hasPermission('sales.invoices.post') && salesWritable;
-  const canEdit = hasPermission('sales.invoices.create') && salesWritable && invoice.status !== 'Void' && invoice.paidAmount === 0;
-  const canVoid = canIssue && invoice.status !== 'Void' && invoice.paidAmount === 0;
-  const canEmail = hasPermission('sales.invoices.create') && salesWritable && invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.recipientEmail;
+  const canEdit = hasPermission('sales.invoices.create') && salesWritable && invoice.status === 'Draft';
+  const canDelete = hasPermission('sales.invoices.create') && salesWritable && invoice.status === 'Draft';
+  const canVoid = canIssue && invoice.status !== 'Draft' && invoice.status !== 'Void' && invoice.status !== 'Paid' && invoice.paidAmount === 0 && invoice.balanceDue > 0;
+  const canEmail = hasPermission('sales.invoices.create') && salesWritable && invoice.status !== 'Draft' && invoice.status !== 'Void' && invoice.status !== 'Paid' && invoice.balanceDue > 0 && !!invoice.recipientEmail;
   // Follow-up copy for unpaid issued invoices (Open / Overdue / Partially Paid). API enforces the same.
   const followUpEligible = canEmail && invoice.balanceDue > 0;
   const canRecordPayment =
@@ -515,6 +545,16 @@ export const InvoiceDetail: React.FC = () => {
                 canCreate && { label: 'Duplicate invoice', icon: Copy, to: `/org/${orgSlug}/sales/new?from=${invoice.id}` },
                 canEdit && { label: 'Edit invoice', icon: FileEdit, to: `/org/${orgSlug}/sales/${invoice.id}/edit` },
                 { label: 'Print', icon: Printer, onSelect: () => window.print() },
+                canDelete && 'separator',
+                canDelete && {
+                  label: 'Delete draft',
+                  icon: Trash2,
+                  danger: true,
+                  onSelect: () => {
+                    setDeleteError(null);
+                    setIsDeleteModalOpen(true);
+                  },
+                },
                 canVoid && 'separator',
                 canVoid && {
                   label: 'Void invoice',
@@ -1114,7 +1154,7 @@ export const InvoiceDetail: React.FC = () => {
             <div className="flex items-center gap-3 text-rose-500">
               <Ban className="w-6 h-6 shrink-0" />
               <h3 className="font-bold text-lg text-[var(--text-main)]">
-                Void {invoice.no ? `invoice #${invoice.no}` : 'this draft'}?
+                Void invoice #{invoice.no}?
               </h3>
             </div>
 
@@ -1151,6 +1191,58 @@ export const InvoiceDetail: React.FC = () => {
               </button>
             </div>
           </div>
+      </ModalShell>
+
+      {/* Delete Draft Confirmation Modal */}
+      <ModalShell
+        open={isDeleteModalOpen}
+        onClose={() => {
+          if (!isSubmittingDelete) setIsDeleteModalOpen(false);
+        }}
+        closeOnEscape={!isSubmittingDelete}
+        closeOnBackdrop={!isSubmittingDelete}
+        bare
+        overlayClassName="no-print"
+        panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full border border-[var(--border-subtle)] shadow-2xl p-6 space-y-4 max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-rose-500">
+            <Trash2 className="w-6 h-6 shrink-0" />
+            <h3 className="font-bold text-lg text-[var(--text-main)]">
+              Delete draft invoice?
+            </h3>
+          </div>
+
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+            Are you sure you want to permanently delete this draft invoice? This action cannot be undone.
+          </p>
+
+          {deleteError && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
+              {deleteError}
+            </div>
+          )}
+
+          <div className="pt-2 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsDeleteModalOpen(false)}
+              disabled={isSubmittingDelete}
+              className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteDraft}
+              disabled={isSubmittingDelete}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition disabled:opacity-50 shadow-sm"
+            >
+              {isSubmittingDelete && <Loader2 className="w-4 h-4 animate-spin" />}
+              Delete Draft
+            </button>
+          </div>
+        </div>
       </ModalShell>
     </div>
   );
