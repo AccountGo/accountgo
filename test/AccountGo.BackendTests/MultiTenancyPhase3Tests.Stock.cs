@@ -70,7 +70,7 @@ namespace AccountGo.BackendTests
                     .Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount)));
             AssertStockInvariant(itemId);
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={secondBill.Id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={secondBill.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
             AssertStockState(itemId, 10m, 5m);
             AssertStockInvariant(itemId);
 

@@ -813,15 +813,13 @@ namespace Api.Controllers
                     var targetDate = billDto.Date.Date;
                     var nextDate = targetDate.AddDays(1);
                     var taxes = _db.Taxes.ToDictionary(t => t.Id, t => t.Rate);
-                    var billTotal = billDto.Total > 0
-                        ? billDto.Total
-                        : billDto.Lines.Sum(l =>
-                        {
-                            var subtotal = l.Subtotal > 0 ? l.Subtotal : PurchaseInvoiceLine.SubtotalOf(l.Quantity, l.Amount, l.Discount);
-                            var taxRate = l.TaxId.HasValue && taxes.TryGetValue(l.TaxId.Value, out var rate) ? rate : (decimal?)null;
-                            var tax = l.TaxAmount != 0 ? l.TaxAmount : PurchaseInvoiceLine.TaxOf(subtotal, taxRate);
-                            return subtotal + tax;
-                        });
+                    var billTotal = billDto.Lines.Sum(l =>
+                    {
+                        var subtotal = PurchaseInvoiceLine.SubtotalOf(l.Quantity, l.Amount, l.Discount);
+                        var taxRate = l.TaxId.HasValue && taxes.TryGetValue(l.TaxId.Value, out var rate) ? rate : (decimal?)null;
+                        var tax = PurchaseInvoiceLine.TaxOf(subtotal, taxRate);
+                        return subtotal + tax;
+                    });
 
                     var candidateBills = _db.PurchaseInvoiceHeaders
                         .Include(b => b.PurchaseInvoiceLines)
@@ -894,9 +892,31 @@ namespace Api.Controllers
         [HttpPost]
         [Route("ApproveBill")]
         [RequirePermission(SystemPermissions.PurchasesBillsPost)]
-        public IActionResult ApproveBill(int id)
+        public IActionResult ApproveBill(int id, bool confirmDuplicate = false)
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
+            var bill = _db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Id == id);
+            var vendorInvoiceNo = Blank(bill.VendorInvoiceNo);
+            if (vendorInvoiceNo != null)
+            {
+                var key = vendorInvoiceNo.ToLower();
+                if (_db.PurchaseInvoiceHeaders.Any(b => b.Id != bill.Id && b.VendorId == bill.VendorId
+                        && b.VendorInvoiceNo.ToLower() == key && b.Status != PurchaseInvoiceStatus.Void))
+                    return Conflict(new { message = $"Bill {vendorInvoiceNo} from this vendor has already been entered.", code = "duplicate_bill" });
+            }
+            else if (!confirmDuplicate)
+            {
+                var targetDate = bill.Date.Date;
+                var nextDate = targetDate.AddDays(1);
+                var billTotal = bill.Total();
+                var candidateBills = _db.PurchaseInvoiceHeaders
+                    .Include(b => b.PurchaseInvoiceLines)
+                    .Where(b => b.Id != bill.Id && b.VendorId == bill.VendorId && b.Date >= targetDate && b.Date < nextDate && b.Status != PurchaseInvoiceStatus.Void)
+                    .ToList();
+                if (candidateBills.Any(b => b.Total() == billTotal))
+                    return Conflict(new { message = "A bill from this vendor with the same date and total has already been entered.", code = "possible_duplicate" });
+            }
+
             var user = GetUserNameFromRequestHeader();
             return BillAction(id, () => _purchasingService.ApproveBill(id, user, DateTime.UtcNow), "approve");
         }
@@ -915,6 +935,8 @@ namespace Api.Controllers
                 return BadRequest(new { message = "Bill id is required." });
             if (!voidDate.HasValue || voidDate.Value == default)
                 return BadRequest(new { message = "Void date is required." });
+            if (string.IsNullOrWhiteSpace(voidReason))
+                return BadRequest(new { message = "A reason is required to void a bill." });
 
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(billId, nameof(billId));
             var user = GetUserNameFromRequestHeader();
