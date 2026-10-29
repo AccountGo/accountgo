@@ -412,6 +412,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("LegalName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("MfaGracePeriodEndsAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MfaPolicy")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime?>("OnboardingChecklistDismissedAt")
                         .HasColumnType("datetime2");
 
@@ -422,6 +430,11 @@ namespace Api.Data.Migrations.ApiDb
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(1);
+
+                    b.Property<bool>("RequireMfaEveryLogin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("SalesInvoiceSettingsJson")
                         .HasColumnType("nvarchar(max)");
@@ -1826,6 +1839,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime?>("ArchivedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("BillToContactId")
+                        .HasColumnType("int");
+
                     b.Property<string>("City")
                         .HasColumnType("nvarchar(max)");
 
@@ -1854,9 +1870,6 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("PrimaryContactId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("BillToContactId")
                         .HasColumnType("int");
 
                     b.Property<string>("Province")
@@ -1970,6 +1983,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime?>("ArchivedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("BillToContactId")
+                        .HasColumnType("int");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -1986,9 +2002,6 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.Property<int?>("PrimaryContactId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("BillToContactId")
                         .HasColumnType("int");
 
                     b.Property<int?>("PromptPaymentDiscountAccountId")
@@ -3585,6 +3598,11 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany()
                         .HasForeignKey("AccountsPayableAccountId");
 
+                    b.HasOne("Core.Domain.Contact", "BillToContact")
+                        .WithMany()
+                        .HasForeignKey("BillToContactId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Core.Domain.Party", "Party")
                         .WithMany()
                         .HasForeignKey("PartyId");
@@ -3596,11 +3614,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Contact", "PrimaryContact")
                         .WithMany()
                         .HasForeignKey("PrimaryContactId");
-
-                    b.HasOne("Core.Domain.Contact", "BillToContact")
-                        .WithMany()
-                        .HasForeignKey("BillToContactId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Core.Domain.Financials.Account", "PurchaseAccount")
                         .WithMany()
@@ -3666,6 +3679,11 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany()
                         .HasForeignKey("AccountsReceivableAccountId");
 
+                    b.HasOne("Core.Domain.Contact", "BillToContact")
+                        .WithMany()
+                        .HasForeignKey("BillToContactId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Core.Domain.Financials.Account", "CustomerAdvancesAccount")
                         .WithMany()
                         .HasForeignKey("CustomerAdvancesAccountId");
@@ -3681,11 +3699,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Contact", "PrimaryContact")
                         .WithMany()
                         .HasForeignKey("PrimaryContactId");
-
-                    b.HasOne("Core.Domain.Contact", "BillToContact")
-                        .WithMany()
-                        .HasForeignKey("BillToContactId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Core.Domain.Financials.Account", "PromptPaymentDiscountAccount")
                         .WithMany()
