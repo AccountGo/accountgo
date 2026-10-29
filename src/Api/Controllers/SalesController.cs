@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Services.Administration;
+using Services.Banking;
 using Services.Financial;
 using Services.Inventory;
 using Services.Sales;
@@ -23,6 +24,7 @@ namespace Api.Controllers
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
+        private readonly IBankAccountService _bankAccounts;
         private readonly ILogger<SalesController> _logger;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
@@ -35,6 +37,7 @@ namespace Api.Controllers
             IFinancialService financialService,
             IInventoryService inventoryService,
             ITaxService taxService,
+            IBankAccountService bankAccounts,
             ILogger<SalesController> logger,
             Core.Tenancy.ITenantContext tenantContext,
             Core.Tenancy.ITenantGuard tenantGuard,
@@ -47,6 +50,7 @@ namespace Api.Controllers
             _financialService = financialService;
             _inventoryService = inventoryService;
             _taxService = taxService;
+            _bankAccounts = bankAccounts;
             _logger = logger;
             _tenantContext = tenantContext;
             _tenantGuard = tenantGuard;
@@ -2152,17 +2156,8 @@ namespace Api.Controllers
                     }
                 }
 
-                // Summary accounts such as 10110 can't take postings, so only postable cash accounts qualify.
-                var postable = _financialService.GetAccounts().Where(a => a.CanPost()).ToList();
-                var bankAccountId = _financialService.GetCashAndBanks()
-                    .Select(b => b.AccountId)
-                    .FirstOrDefault(id => id.HasValue && postable.Any(a => a.Id == id));
-                var cashAccount = postable
-                    .Where(a => a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash))
-                    .OrderBy(a => a.AccountCode)
-                    .FirstOrDefault();
-                int accountToDebitId = bankAccountId ?? cashAccount?.Id
-                    ?? throw new Exception("No cash or bank account is set up to receive payments.");
+                // #413 1C: deposit-to bank → receipt default → unlinked cash only when no banks exist.
+                int accountToDebitId = _bankAccounts.ResolveDepositAccountId(paymentDto.BankAccountId);
 
                 int accountToCreditId = invoice.Customer?.AccountsReceivableAccountId ?? 
                     _financialService.GetAccountByAccountCode("10120")?.Id ?? 
@@ -2224,6 +2219,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 _logger.LogError(ex, "Failed to record payment for invoice {InvoiceId}", paymentDto.InvoiceId);
                 return BadRequest(new { message = ex.InnerException != null ? ex.InnerException.Message : ex.Message });
             }
@@ -2469,7 +2465,8 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                var bank = _tenantGuard.EnsureOwned<Core.Domain.Financials.Bank>((int)receiptDto.AccountToDebitId, "AccountToDebitId");
+                // AccountToDebitId is a Bank id; refuse archived / cross-tenant (#413 1C).
+                var bank = _bankAccounts.RequireActiveBank((int)receiptDto.AccountToDebitId);
                 var customer = _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>((int)receiptDto.CustomerId, "CustomerId");
                 _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>((int)receiptDto.AccountToCreditId, "AccountToCreditId");
 
@@ -2562,11 +2559,12 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(new string[] { $"Receipt amount cannot be less than allocated amount ({totalAllocated:0.00})." });
                 }
 
-                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == receiptDto.AccountToDebitId).FirstOrDefault();
+                // AccountToDebitId is a Bank id; refuse archived / cross-tenant (#413 1C).
+                var bank = _bankAccounts.RequireActiveBank(receiptDto.AccountToDebitId);
 
                 existingReceipt.Date = receiptDto.ReceiptDate;
                 existingReceipt.CustomerId = receiptDto.CustomerId;
-                existingReceipt.AccountToDebitId = bank!.AccountId;
+                existingReceipt.AccountToDebitId = bank.AccountId;
                 existingReceipt.Amount = receiptDto.Amount;
                 existingReceipt.PaymentMethod = receiptDto.PaymentMethod;
                 existingReceipt.ReferenceNo = receiptDto.ReferenceNo;

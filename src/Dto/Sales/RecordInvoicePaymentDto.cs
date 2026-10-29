@@ -18,5 +18,8 @@ namespace Dto.Sales
         public string? ReferenceNo { get; set; }
 
         public string? Notes { get; set; }
+
+        /// <summary>Deposit-to bank account (Bank.Id). Null uses the receiving default, or cash when no banks exist.</summary>
+        public int? BankAccountId { get; set; }
     }
 }
