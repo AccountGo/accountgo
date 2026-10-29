@@ -47,6 +47,13 @@ namespace Dto.Sales
         public decimal BalanceDue { get; set; }
         public string? Notes { get; set; }
         public string? PaymentInstructions { get; set; }
+        /// <summary>
+        /// What the PDF, email, and detail page print: the invoice's own text, else the workspace's payment bank details,
+        /// else the default text. <see cref="PaymentInstructions"/> stays the stored value so editing never freezes this.
+        /// </summary>
+        public string? EffectivePaymentInstructions { get; set; }
+
+        public string? PaymentInstructionsToPrint() => EffectivePaymentInstructions ?? PaymentInstructions;
         public string? CustomerAddress { get; set; }
         public string? CustomerPhone { get; set; }
         public SellerInfo Seller { get; set; } = new SellerInfo();

@@ -62,6 +62,8 @@ export interface Invoice {
   statusId?: number;
   notes?: string;
   paymentInstructions?: string;
+  /** What prints on the PDF and email: own text, else payment bank details, else the default text. */
+  effectivePaymentInstructions?: string | null;
   companyName?: string;
   seller?: InvoiceSeller;
   display?: InvoiceDisplay;
@@ -106,6 +108,8 @@ export interface SalesInvoiceSettings {
   showPaymentInstructions: boolean;
   defaultNotes: string | null;
   defaultPaymentInstructions: string | null;
+  /** Bank account whose details print as payment instructions; null uses the free-text default. */
+  paymentBankId: number | null;
 }
 
 export interface PostalAddress {
