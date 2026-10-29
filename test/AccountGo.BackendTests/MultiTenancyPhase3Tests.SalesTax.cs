@@ -307,7 +307,7 @@ namespace AccountGo.BackendTests
             Assert.Contains(entry, l => l.AccountId == AccountId("10800") && l.DrCr == DrOrCrSide.Cr && l.Amount == 25m);
             AssertBalancedSalesTax(entry);
             AssertStockState(itemId, 5, 5);
-            var response = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={saved.Id}");
+            var response = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
             var both = entry.Concat(Ledger(InvoiceVoidLedgerId(saved.Id))).ToList();
             Assert.All(both.Select(l => l.AccountId).Distinct(), account =>

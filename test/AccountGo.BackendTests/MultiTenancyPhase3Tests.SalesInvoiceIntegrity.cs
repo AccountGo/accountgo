@@ -59,7 +59,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(no, reloaded.No);
 
             // Void it
-            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}");
             Assert.Equal(HttpStatusCode.OK, voidRes.StatusCode);
 
             // Calling issue on Void invoice is rejected
@@ -87,7 +87,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("Paid", paidInvoice.Status);
 
             // Attempting to void paid invoice is rejected
-            var voidPaidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}");
+            var voidPaidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}");
             Assert.Equal(HttpStatusCode.BadRequest, voidPaidRes.StatusCode);
             var voidPaidMsg = await voidPaidRes.Content.ReadAsStringAsync();
             Assert.Contains("Cannot void a paid invoice", voidPaidMsg);
@@ -302,7 +302,7 @@ namespace AccountGo.BackendTests
             // 1. Post on Void is rejected and remains Void
             var draftId = await SaveDraft();
             await Issue(draftId);
-            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}");
             Assert.True(voidRes.IsSuccessStatusCode);
             var voidPostRes = await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", new Dto.Sales.SalesInvoice { Id = draftId });
             Assert.Equal(HttpStatusCode.BadRequest, voidPostRes.StatusCode);
@@ -361,7 +361,7 @@ namespace AccountGo.BackendTests
         public async Task SalesInvoice_VoidSalesInvoice_RejectsDraft()
         {
             var draftId = await SaveDraft();
-            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}");
             Assert.Equal(HttpStatusCode.BadRequest, voidRes.StatusCode);
             var msg = await voidRes.Content.ReadAsStringAsync();
             Assert.Contains("Draft invoices cannot be voided. Delete the draft instead.", msg);

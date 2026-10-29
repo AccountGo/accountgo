@@ -5,8 +5,9 @@ import { PageHeader, HeaderButton, HeaderMenu } from '../components/PageHeader';
 import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { PayBillDialog } from '../components/PayBillDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { VoidDialog } from '../components/VoidDialog';
 import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
-import { Bill, PaymentTermOption, TenantContextType } from '../types';
+import { Bill, BillPayment, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
@@ -39,7 +40,13 @@ export const BillDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<'approve' | 'void' | 'delete' | null>(null);
-  const [confirm, setConfirm] = useState<'void' | 'delete' | null>(null);
+  const [confirm, setConfirm] = useState<'delete' | null>(null);
+  const [duplicateConfirmApprove, setDuplicateConfirmApprove] = useState(false);
+  const [voidTarget, setVoidTarget] = useState<
+    | { type: 'bill' }
+    | { type: 'payment'; payment: BillPayment }
+    | null
+  >(null);
   const [isPaying, setIsPaying] = useState(false);
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
@@ -78,21 +85,75 @@ export const BillDetail: React.FC = () => {
     };
   }, [authFetch, billId]);
 
-  const act = async (kind: 'approve' | 'void', path: string, done: string) => {
+  const act = async (kind: 'approve', path: string, done: string, confirmDuplicate = false) => {
     if (!bill) return;
     setBusy(kind);
     setError(null);
     try {
-      const res = await authFetch(`${path}?id=${bill.id}`, { method: 'POST' });
+      const url = `${path}?id=${bill.id}${confirmDuplicate ? '&confirmDuplicate=true' : ''}`;
+      const res = await authFetch(url, { method: 'POST' });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
+      if (!res.ok) {
+        if (res.status === 409 && data?.code === 'possible_duplicate') {
+          setDuplicateConfirmApprove(true);
+          return;
+        }
+        throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
+      }
       setBill(data);
       setNotice(done);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setBusy(null);
-      setConfirm(null);
+    }
+  };
+
+  const handleVoidBill = async (date: string, reason: string) => {
+    if (!bill) return;
+    setBusy('void');
+    setError(null);
+    try {
+      const res = await authFetch('/api/Purchasing/VoidBill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: bill.id, date, reason }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || 'The bill could not be voided.');
+      }
+      setBill(data);
+      setNotice(`${BillTitle(bill)} is void.`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusy(null);
+      setVoidTarget(null);
+    }
+  };
+
+  const handleVoidPayment = async (paymentId: number, date: string, reason: string) => {
+    if (!bill) return;
+    setBusy('void');
+    setError(null);
+    try {
+      const res = await authFetch('/api/Purchasing/VoidPayment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: paymentId, date, reason }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || 'The payment could not be voided.');
+      }
+      setBill(data);
+      setNotice('Payment voided.');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusy(null);
+      setVoidTarget(null);
     }
   };
 
@@ -139,7 +200,8 @@ export const BillDetail: React.FC = () => {
 
   const isDraft = bill.status === 'Draft';
   const isVoid = bill.status === 'Void';
-  const canVoid = canApprove && bill.approved && !isVoid && bill.amountPaid === 0;
+  const hasActivePayments = bill.payments.some((p) => !p.isVoid);
+  const canVoid = canApprove && bill.approved && !isVoid;
   const term = paymentTerms.find((t) => t.id === bill.paymentTermId);
   const hasTax = bill.totalTax > 0 || bill.lines.some((l) => l.taxAmount > 0);
   const vendorPath = `/org/${orgSlug}/purchases/vendors/${bill.vendorId}`;
@@ -170,7 +232,14 @@ export const BillDetail: React.FC = () => {
                 items={[
                   canCreate && { label: 'Duplicate', icon: Copy, onSelect: () => navigate(duplicatePath) },
                   canVoid && 'separator',
-                  canVoid && { label: 'Void bill', icon: Ban, danger: true, onSelect: () => setConfirm('void') },
+                  canVoid && {
+                    label: 'Void bill',
+                    icon: Ban,
+                    danger: true,
+                    disabled: hasActivePayments,
+                    title: hasActivePayments ? 'Void all payments before voiding this bill' : undefined,
+                    onSelect: () => setVoidTarget({ type: 'bill' }),
+                  },
                   isDraft && canEdit && 'separator',
                   isDraft && canEdit && { label: 'Delete draft', icon: Trash2, danger: true, onSelect: () => setConfirm('delete') },
                 ]}
@@ -246,6 +315,13 @@ export const BillDetail: React.FC = () => {
               ['Bill date', formatDate(bill.date)],
               ['Due date', formatDate(bill.dueDate)],
               ['Terms', term?.description ?? 'Custom'],
+              ...(bill.approvedBy
+                ? [['Approved by', `${bill.approvedBy}${bill.approvedAt ? ` on ${formatDate(bill.approvedAt)}` : ''}`]]
+                : []),
+              ...(isVoid && bill.voidedBy
+                ? [['Voided by', `${bill.voidedBy}${bill.voidedAt ? ` on ${formatDate(bill.voidedAt)}` : ''}`]]
+                : []),
+              ...(isVoid && bill.voidReason ? [['Void reason', bill.voidReason]] : []),
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-xs text-[var(--text-muted)]">{label}</dt>
@@ -329,19 +405,53 @@ export const BillDetail: React.FC = () => {
                   <th className="hidden sm:table-cell py-3 px-4">Method</th>
                   <th className="hidden sm:table-cell py-3 px-4">Reference</th>
                   <th className="py-3 px-4 text-right">Amount</th>
+                  {canPay && <th className="py-3 px-4 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)]">
                 {bill.payments.map((p) => (
-                  <tr key={p.id}>
-                    <td className="py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(p.date)}</td>
+                  <tr key={p.id} className={p.isVoid ? 'opacity-75' : undefined}>
+                    <td className="py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">
+                      {formatDate(p.date)}
+                      {p.isVoid && (
+                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                          Void
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-[var(--text-main)]">
                       {p.accountName ?? '—'}
                       {p.memo && <div className="text-[10px] text-[var(--text-secondary)]">{p.memo}</div>}
+                      {p.isVoid && (
+                        <div className="text-[10px] text-rose-500">
+                          Voided{p.voidedBy ? ` by ${p.voidedBy}` : ''}
+                          {p.voidedAt ? ` on ${formatDate(p.voidedAt)}` : ''}
+                          {p.voidReason ? `: ${p.voidReason}` : ''}
+                        </div>
+                      )}
                     </td>
                     <td className="hidden sm:table-cell py-3 px-4 text-[var(--text-secondary)]">{p.paymentMethod ?? '—'}</td>
                     <td className="hidden sm:table-cell py-3 px-4 text-[var(--text-secondary)]">{p.referenceNo ?? '—'}</td>
-                    <td className="py-3 px-4 text-right font-medium text-[var(--text-main)] whitespace-nowrap">{formatCurrency(p.amount)}</td>
+                    <td className="py-3 px-4 text-right font-medium text-[var(--text-main)] whitespace-nowrap">
+                      {p.isVoid ? (
+                        <span className="line-through text-[var(--text-muted)]">{formatCurrency(p.amount)}</span>
+                      ) : (
+                        formatCurrency(p.amount)
+                      )}
+                    </td>
+                    {canPay && (
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        {!p.isVoid && !isVoid && (
+                          <button
+                            type="button"
+                            onClick={() => setVoidTarget({ type: 'payment', payment: p })}
+                            className="text-xs font-medium text-rose-600 hover:text-rose-700 hover:underline"
+                          >
+                            Void
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -371,15 +481,51 @@ export const BillDetail: React.FC = () => {
         />
       )}
 
-      {confirm === 'void' && (
-        <ConfirmDialog
+      {voidTarget?.type === 'bill' && (
+        <VoidDialog
           title={`Void ${billTitle(bill)}?`}
           message="Voiding reverses what approving it posted, so it no longer counts as owed or spent. Stock received on this bill is removed. It stays listed as void. This can't be undone."
           confirmLabel="Void bill"
-          destructive
+          minDate={bill.date ? bill.date.slice(0, 10) : undefined}
+          requireReason
+          error={error}
           busy={busy === 'void'}
-          onConfirm={() => act('void', '/api/Purchasing/VoidBill', `${BillTitle(bill)} is void.`)}
-          onCancel={() => setConfirm(null)}
+          onConfirm={(date, reason) => handleVoidBill(date, reason)}
+          onCancel={() => {
+            setVoidTarget(null);
+            setError(null);
+          }}
+        />
+      )}
+
+      {voidTarget?.type === 'payment' && (
+        <VoidDialog
+          title={`Void payment of ${formatCurrency(voidTarget.payment.amount)}?`}
+          message="Voiding reverses the payment posting and reopens the bill if it was paid in full. This can't be undone."
+          confirmLabel="Void payment"
+          minDate={voidTarget.payment.date ? voidTarget.payment.date.slice(0, 10) : undefined}
+          requireReason
+          error={error}
+          busy={busy === 'void'}
+          onConfirm={(date, reason) => handleVoidPayment(voidTarget.payment.id, date, reason)}
+          onCancel={() => {
+            setVoidTarget(null);
+            setError(null);
+          }}
+        />
+      )}
+
+      {duplicateConfirmApprove && (
+        <ConfirmDialog
+          title="Possible duplicate bill"
+          message="A bill from this vendor with the same date and total has already been entered. Do you want to approve this bill anyway?"
+          confirmLabel="Approve anyway"
+          busy={busy === 'approve'}
+          onConfirm={() => {
+            setDuplicateConfirmApprove(false);
+            act('approve', '/api/Purchasing/ApproveBill', 'The bill has been approved and posted.', true);
+          }}
+          onCancel={() => setDuplicateConfirmApprove(false)}
         />
       )}
 

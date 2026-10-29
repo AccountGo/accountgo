@@ -99,13 +99,13 @@ namespace AccountGo.BackendTests
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
             var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Sales/VoidSalesInvoice?id=" + invoiceId)).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invoiceId}&date={IsoDate(DateTime.UtcNow)}")).StatusCode);
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Ledger supplier" });
             var bill = NewBill(vendor.Id, ("Ledger expense", 1, 100m, null));
             bill.Status = "Open";
             var approved = await SaveBillOk(bill);
             var paid = await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
-                new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 100m }));
+                new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 100m, Date = DateTime.UtcNow }));
             var response = await Send(HttpMethod.Get, "/api/Financials/GeneralLedger");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
             var rows = (await Json(response)).GetProperty("items").EnumerateArray().ToList();
