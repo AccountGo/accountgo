@@ -91,5 +91,38 @@ namespace Dto.Banking
         public bool IsDefaultForPayments { get; set; }
         public int? PostingAccountId { get; set; }
         public string? CurrencyCode { get; set; }
+        public decimal? OpeningBalance { get; set; }
+        public DateTime? OpeningBalanceDate { get; set; }
+    }
+
+    public class BankRegisterDto
+    {
+        public decimal BroughtForward { get; set; }
+        public IReadOnlyList<BankRegisterLineDto> Lines { get; set; } = Array.Empty<BankRegisterLineDto>();
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalCount { get; set; }
+    }
+
+    public class BankRegisterLineDto
+    {
+        public int LineId { get; set; }
+        public int HeaderId { get; set; }
+        public DateTime Date { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string? Payee { get; set; }
+        public string? Reference { get; set; }
+        public BankRegisterSourceDocDto? SourceDoc { get; set; }
+        public decimal In { get; set; }
+        public decimal Out { get; set; }
+        public decimal Balance { get; set; }
+        public int? ReconciliationId { get; set; }
+    }
+
+    public class BankRegisterSourceDocDto
+    {
+        public string Type { get; set; } = string.Empty;
+        public int Id { get; set; }
+        public string? No { get; set; }
     }
 }
