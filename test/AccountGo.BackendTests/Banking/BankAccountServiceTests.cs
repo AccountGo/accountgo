@@ -279,6 +279,78 @@ public class BankAccountServiceTests
             harness.Service.Get(created.Id, includeFullNumbers: false));
     }
 
+    [Fact]
+    public void ResolveDepositAccountId_UsesReceiptDefault_WhenBankAccountIdOmitted()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        var first = harness.Service.Create(new CreateBankAccountRequest { Name = "A", Type = 1 }, includeFullNumbers: false);
+        var second = harness.Service.Create(new CreateBankAccountRequest { Name = "B", Type = 1 }, includeFullNumbers: false);
+        harness.Service.SetDefault(second.Id, "receipts", includeFullNumbers: false);
+
+        Assert.Equal(second.AccountId, harness.Service.ResolveDepositAccountId(bankAccountId: null));
+        Assert.Equal(first.AccountId, harness.Service.ResolveDepositAccountId(first.Id));
+    }
+
+    [Fact]
+    public void ResolveDepositAccountId_FallsBackToCash_OnlyWhenNoActiveBanks()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+
+        Assert.Equal(harness.RequireAccount("10111").Id, harness.Service.ResolveDepositAccountId(null));
+
+        var bank = harness.Service.Create(new CreateBankAccountRequest { Name = "Only", Type = 1 }, includeFullNumbers: false);
+        Assert.Equal(bank.AccountId, harness.Service.ResolveDepositAccountId(null));
+    }
+
+    [Fact]
+    public void ResolveDepositAccountId_RefusesArchivedAndCrossTenant()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        var keep = harness.Service.Create(new CreateBankAccountRequest { Name = "Keep", Type = 1 }, includeFullNumbers: false);
+        var gone = harness.Service.Create(new CreateBankAccountRequest { Name = "Gone", Type = 1 }, includeFullNumbers: false);
+        harness.Service.Archive(gone.Id, includeFullNumbers: false);
+
+        var archived = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.ResolveDepositAccountId(gone.Id));
+        Assert.Equal("That bank account is archived.", archived.Message);
+
+        var foreign = harness.Banks.GetById(keep.Id)!;
+        foreign.CompanyId = 99;
+        Assert.Throws<TenantEntityNotFoundException>(() =>
+            harness.Service.ResolveDepositAccountId(keep.Id));
+    }
+
+    [Fact]
+    public void ResolvePaymentAccountId_PrefersBankThenGlAccountThenPaymentDefault()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        var first = harness.Service.Create(new CreateBankAccountRequest { Name = "A", Type = 1 }, includeFullNumbers: false);
+        var second = harness.Service.Create(new CreateBankAccountRequest { Name = "B", Type = 1 }, includeFullNumbers: false);
+        harness.Service.SetDefault(second.Id, "payments", includeFullNumbers: false);
+        var unlinkedCash = harness.RequireAccount("10113");
+
+        Assert.Equal(first.AccountId, harness.Service.ResolvePaymentAccountId(first.Id, accountId: unlinkedCash.Id));
+        Assert.Equal(unlinkedCash.Id, harness.Service.ResolvePaymentAccountId(null, unlinkedCash.Id));
+        Assert.Equal(second.AccountId, harness.Service.ResolvePaymentAccountId(null, null));
+    }
+
+    [Fact]
+    public void RequireActiveBank_RefusesArchived()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.Service.Create(new CreateBankAccountRequest { Name = "Keep", Type = 1 }, includeFullNumbers: false);
+        var gone = harness.Service.Create(new CreateBankAccountRequest { Name = "Gone", Type = 1 }, includeFullNumbers: false);
+        harness.Service.Archive(gone.Id, includeFullNumbers: false);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => harness.Service.RequireActiveBank(gone.Id));
+        Assert.Equal("That bank account is archived.", ex.Message);
+    }
+
     private sealed class Harness : IDisposable
     {
         private readonly InMemoryRepos _repos;

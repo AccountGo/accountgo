@@ -84,7 +84,9 @@ namespace Dto.Purchasing
         public int BillId { get; set; }
         public decimal Amount { get; set; }
         public DateTime? Date { get; set; }
-        /// <summary>The cash or bank account paid from; null for the workspace's first bank account.</summary>
+        /// <summary>Pay-from bank account (Bank.Id). Preferred over <see cref="AccountId"/> when set.</summary>
+        public int? BankAccountId { get; set; }
+        /// <summary>Accounting: any postable cash GL account. Used when <see cref="BankAccountId"/> is null.</summary>
         public int? AccountId { get; set; }
         public string? PaymentMethod { get; set; }
         public string? ReferenceNo { get; set; }

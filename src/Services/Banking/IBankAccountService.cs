@@ -29,5 +29,20 @@ namespace Services.Banking
         Account EnsureEligiblePostingAccount(int accountId, int? exceptBankId);
         void SyncBankNameFromAccount(Account account);
         void EnsureAccountMayChangeWhileBackingBank(Account account, Account? proposedParent, string? proposedCode, bool becomingSummary, bool archiving);
+
+        /// <summary>
+        /// GL cash account to debit for an invoice/customer receipt (1C).
+        /// Explicit bank → receipt default → unlinked cash only when no banks exist.
+        /// </summary>
+        int ResolveDepositAccountId(int? bankAccountId);
+
+        /// <summary>
+        /// GL cash account to credit for a bill payment (1C).
+        /// Explicit bank → optional Accounting GL account → payment default → unlinked cash only when no banks exist.
+        /// </summary>
+        int ResolvePaymentAccountId(int? bankAccountId, int? accountId);
+
+        /// <summary>Active bank used as AccountToDebitId on legacy sales receipts; refuses archived banks.</summary>
+        Bank RequireActiveBank(int bankId);
     }
 }
