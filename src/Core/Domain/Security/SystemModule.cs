@@ -36,8 +36,13 @@ namespace Core.Domain.Security
         public const string FinancialsJournalView = "financials.journal.view";
         public const string FinancialsJournalCreate = "financials.journal.create";
         public const string FinancialsJournalPost = "financials.journal.post";
-        public const string FinancialsCashBanksView = "financials.cashbanks.view";
-        public const string FinancialsCashBanksManage = "financials.cashbanks.manage";
+
+        // Banking (#413)
+        public const string BankingAccountsView = "banking.accounts.view";
+        public const string BankingAccountsManage = "banking.accounts.manage";
+        public const string BankingTransactionsCreate = "banking.transactions.create";
+        public const string BankingReconcile = "banking.reconcile";
+        public const string BankingReconcileUndo = "banking.reconcile.undo";
 
         // Purchases
         public const string PurchasesVendorsView = "purchases.vendors.view";

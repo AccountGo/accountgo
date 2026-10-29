@@ -1,11 +1,13 @@
 using Api.Data;
 using Api.Filters;
 using Core.Domain.Security;
+using Dto.Banking;
 using Dto.Financial;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Services.Administration;
+using Services.Banking;
 using Services.Financial;
 using System;
 using System.Collections.Generic;
@@ -35,6 +37,7 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
         private readonly IAccountService _accountService;
+        private readonly IBankAccountService _bankAccountService;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly ApiDbContext _db;
@@ -42,6 +45,7 @@ namespace Api.Controllers
         public FinancialsController(IAdministrationService adminService,
             IFinancialService financialService,
             IAccountService accountService,
+            IBankAccountService bankAccountService,
             Core.Tenancy.ITenantGuard tenantGuard,
             Core.Tenancy.ITenantContext tenantContext,
             ApiDbContext db)
@@ -49,6 +53,7 @@ namespace Api.Controllers
             _adminService = adminService;
             _financialService = financialService;
             _accountService = accountService;
+            _bankAccountService = bankAccountService;
             _tenantGuard = tenantGuard;
             _tenantContext = tenantContext;
             _db = db;
@@ -58,20 +63,19 @@ namespace Api.Controllers
         [Route("CashBanks")] // api/Financials/CashBanks
         public IActionResult CashBanks()
         {
-            var cashAndBanks = _financialService.GetCashAndBanks();
-            var cashAndBanksDto = new List<Bank>();
-
-            foreach (var bank in cashAndBanks)
+            // #413 1B: delegate to BankAccountService; keep the legacy DTO shape for Settings.
+            var list = _bankAccountService.List(
+                includeArchived: false,
+                includeFullNumbers: false,
+                includeCashHistoryCodes: true);
+            var cashAndBanksDto = list.Accounts.Select(bank => new Bank
             {
-                cashAndBanksDto.Add(new Bank()
-                {
-                    Id = bank.Id,
-                    Name = bank.Name,
-                    AccountNo = bank.Number,
-                    BankName = bank.BankName,
-                    AccountId = bank.AccountId
-                });
-            }
+                Id = bank.Id,
+                Name = bank.Name,
+                AccountNo = bank.AccountNumberMasked,
+                BankName = bank.BankName,
+                AccountId = bank.AccountId
+            }).ToList();
 
             return new ObjectResult(cashAndBanksDto);
         }
@@ -1221,20 +1225,12 @@ namespace Api.Controllers
         {
             try
             {
-                var bank = _financialService.GetBank(id);
-                if (bank == null)
-                    return NotFound(new { message = "Bank not found" });
-
-                var bankDto = new Dto.Financial.Bank()
-                {
-                    Id = bank.Id,
-                    Name = bank.Name,
-                    AccountNo = bank.Number,
-                    BankName = bank.BankName,
-                    AccountId = bank.AccountId
-                };
-
-                return Ok(bankDto);
+                var bank = _bankAccountService.Get(id, includeFullNumbers: false);
+                return Ok(ToLegacyBankDto(bank));
+            }
+            catch (Core.Tenancy.TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank not found" });
             }
             catch (Exception ex)
             {
@@ -1246,6 +1242,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("Bank")] // api/Financials/Bank
         [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult CreateBank([FromBody] Dto.Financial.Bank bankDto)
         {
             try
@@ -1253,33 +1250,18 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(bankDto.AccountId, nameof(bankDto.AccountId));
-                var account = GetEligibleBankAccount(bankDto.AccountId);
-                if (account == null)
-                    return BadRequest(new { message = "Select an account with a code between 10100 and 10999." });
-
-                var bank = new Core.Domain.Financials.Bank()
+                using var tx = RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, System.Data.IsolationLevel.Serializable);
+                var created = _bankAccountService.Create(new CreateBankAccountRequest
                 {
-                    Name = account.AccountName,
+                    Name = string.IsNullOrWhiteSpace(bankDto.Name) ? (bankDto.BankName ?? "Bank account") : bankDto.Name!,
                     BankName = bankDto.BankName,
-                    Number = bankDto.AccountNo,
-                    AccountId = bankDto.AccountId,
-                    Type = Core.Domain.BankTypes.CheckingAccount,
-                    IsActive = true
-                };
+                    AccountNumber = bankDto.AccountNo,
+                    PostingAccountId = bankDto.AccountId,
+                    Type = (int)Core.Domain.BankTypes.CheckingAccount
+                }, includeFullNumbers: false);
+                tx.Commit();
 
-                _financialService.SaveBank(bank);
-
-                var result = new Dto.Financial.Bank()
-                {
-                    Id = bank.Id,
-                    Name = bank.Name,
-                    AccountNo = bank.Number,
-                    BankName = bank.BankName,
-                    AccountId = bank.AccountId
-                };
-
-                return CreatedAtAction(nameof(GetBank), new { id = bank.Id }, result);
+                return CreatedAtAction(nameof(GetBank), new { id = created.Id }, ToLegacyBankDto(created));
             }
             catch (Exception ex)
             {
@@ -1291,6 +1273,7 @@ namespace Api.Controllers
         [HttpPut]
         [Route("Bank/{id}")] // api/Financials/Bank/1
         [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult UpdateBank(int id, [FromBody] Dto.Financial.Bank bankDto)
         {
             try
@@ -1298,30 +1281,29 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(bankDto.AccountId, nameof(bankDto.AccountId));
-                var account = GetEligibleBankAccount(bankDto.AccountId);
-                if (account == null)
-                    return BadRequest(new { message = "Select an account with a code between 10100 and 10999." });
-
-                var bank = _tenantGuard.EnsureOwned<Core.Domain.Financials.Bank>(id, nameof(id));
-
-                bank.Name = account.AccountName;
-                bank.BankName = bankDto.BankName;
-                bank.Number = bankDto.AccountNo;
-                bank.AccountId = bankDto.AccountId;
-
-                _financialService.SaveBank(bank);
-
-                var result = new Dto.Financial.Bank()
+                using var tx = RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, System.Data.IsolationLevel.Serializable);
+                var existing = _bankAccountService.Get(id, includeFullNumbers: true);
+                var updated = _bankAccountService.Update(id, new UpdateBankAccountRequest
                 {
-                    Id = bank.Id,
-                    Name = bank.Name,
-                    AccountNo = bank.Number,
-                    BankName = bank.BankName,
-                    AccountId = bank.AccountId
-                };
+                    Name = string.IsNullOrWhiteSpace(bankDto.Name) ? existing.Name : bankDto.Name!,
+                    Type = existing.Type,
+                    BankName = bankDto.BankName,
+                    AccountNumber = bankDto.AccountNo,
+                    RoutingNumber = existing.RoutingNumber,
+                    Iban = existing.Iban,
+                    Swift = existing.Swift,
+                    IsDefaultForReceipts = existing.IsDefaultForReceipts,
+                    IsDefaultForPayments = existing.IsDefaultForPayments,
+                    PostingAccountId = bankDto.AccountId,
+                    CurrencyCode = existing.CurrencyCode
+                }, includeFullNumbers: false);
+                tx.Commit();
 
-                return Ok(result);
+                return Ok(ToLegacyBankDto(updated));
+            }
+            catch (Core.Tenancy.TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank not found" });
             }
             catch (Exception ex)
             {
@@ -1333,17 +1315,22 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("Bank/{id}")] // api/Financials/Bank/1
         [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult DeleteBank(int id)
         {
             try
             {
-                var bank = _financialService.GetBank(id);
-                if (bank == null)
-                    return NotFound(new { message = "Bank not found" });
-
-                _financialService.DeleteBank(id);
-
-                return Ok(new { message = "Bank deleted successfully" });
+                using var tx = RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, System.Data.IsolationLevel.Serializable);
+                var archived = _bankAccountService.DeleteOrArchive(id);
+                tx.Commit();
+                return Ok(new
+                {
+                    message = archived ? "Bank archived successfully" : "Bank deleted successfully"
+                });
+            }
+            catch (Core.Tenancy.TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank not found" });
             }
             catch (Exception ex)
             {
@@ -1352,21 +1339,14 @@ namespace Api.Controllers
             }
         }
 
-        private Core.Domain.Financials.Account? GetEligibleBankAccount(int? accountId)
+        private static Bank ToLegacyBankDto(BankAccountDto bank) => new()
         {
-            if (!accountId.HasValue)
-                return null;
-
-            var account = _financialService.GetAccounts().FirstOrDefault(a => a.Id == accountId.Value);
-            int accountCode;
-            if (account == null
-                || !int.TryParse(account.AccountCode, out accountCode)
-                || accountCode < 10100
-                || accountCode > 10999)
-                return null;
-
-            return account;
-        }
+            Id = bank.Id,
+            Name = bank.Name,
+            AccountNo = bank.AccountNumberMasked ?? bank.AccountNumber,
+            BankName = bank.BankName,
+            AccountId = bank.AccountId
+        };
         #endregion
     }
 }

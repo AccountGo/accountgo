@@ -149,7 +149,8 @@ namespace Services.Security
             var groups = new Dictionary<string, string>
             {
                 ["Sales"] = "Sales & Invoicing",
-                ["Financials"] = "General Ledger & Banking",
+                ["Financials"] = "General Ledger",
+                ["Banking"] = "Banking",
                 ["Purchasing"] = "Purchases & Bills",
                 ["Inventory"] = "Inventory & Items",
                 ["Reports"] = "Reports & Analytics",
@@ -186,8 +187,12 @@ namespace Services.Security
                 ("Financials", SystemPermissions.FinancialsJournalView, "View Journal"),
                 ("Financials", SystemPermissions.FinancialsJournalCreate, "Create Journal Entries"),
                 ("Financials", SystemPermissions.FinancialsJournalPost, "Post Journal Entries"),
-                ("Financials", SystemPermissions.FinancialsCashBanksView, "View Cash & Banks"),
-                ("Financials", SystemPermissions.FinancialsCashBanksManage, "Manage Cash & Banks"),
+
+                ("Banking", SystemPermissions.BankingAccountsView, "View Bank Accounts"),
+                ("Banking", SystemPermissions.BankingAccountsManage, "Manage Bank Accounts"),
+                ("Banking", SystemPermissions.BankingTransactionsCreate, "Create Bank Transactions"),
+                ("Banking", SystemPermissions.BankingReconcile, "Reconcile Bank Accounts"),
+                ("Banking", SystemPermissions.BankingReconcileUndo, "Undo Bank Reconciliation"),
 
                 ("Purchasing", SystemPermissions.PurchasesVendorsView, "View Vendors"),
                 ("Purchasing", SystemPermissions.PurchasesVendorsManage, "Manage Vendors"),
@@ -247,6 +252,20 @@ namespace Services.Security
                 _securityPermissionRepo.Delete(legacyStockPermission);
             }
 
+            // #413 D7: migrate financials.cashbanks.* → banking.* then drop the legacy rows.
+            MigrateLegacyCashBanksPermission(
+                "financials.cashbanks.view",
+                new[] { SystemPermissions.BankingAccountsView });
+            MigrateLegacyCashBanksPermission(
+                "financials.cashbanks.manage",
+                new[]
+                {
+                    SystemPermissions.BankingAccountsManage,
+                    SystemPermissions.BankingTransactionsCreate,
+                    SystemPermissions.BankingReconcile
+                });
+
+
             // Ensure standard business roles with permissions
             var standardRoles = new List<(string Name, string DisplayName, bool SysAdmin, string[] Perms)>
             {
@@ -265,8 +284,10 @@ namespace Services.Security
                     SystemPermissions.FinancialsJournalView,
                     SystemPermissions.FinancialsJournalCreate,
                     SystemPermissions.FinancialsJournalPost,
-                    SystemPermissions.FinancialsCashBanksView,
-                    SystemPermissions.FinancialsCashBanksManage,
+                    SystemPermissions.BankingAccountsView,
+                    SystemPermissions.BankingAccountsManage,
+                    SystemPermissions.BankingTransactionsCreate,
+                    SystemPermissions.BankingReconcile,
                     SystemPermissions.PurchasesVendorsView,
                     SystemPermissions.PurchasesVendorsManage,
                     SystemPermissions.PurchasesBillsView,
@@ -304,7 +325,7 @@ namespace Services.Security
                     SystemPermissions.SalesInvoicesView,
                     SystemPermissions.FinancialsAccountsView,
                     SystemPermissions.FinancialsJournalView,
-                    SystemPermissions.FinancialsCashBanksView,
+                    SystemPermissions.BankingAccountsView,
                     SystemPermissions.PurchasesVendorsView,
                     SystemPermissions.PurchasesBillsView,
                     SystemPermissions.ReportsView,
@@ -508,6 +529,35 @@ namespace Services.Security
 
         //    _securityRolePermissionRepo.Delete(rolePermission);
         //}
+
+        private void MigrateLegacyCashBanksPermission(string legacyName, string[] replacementPermissionNames)
+        {
+            var legacy = _securityPermissionRepo.Table.FirstOrDefault(p => p.Name == legacyName);
+            if (legacy == null)
+                return;
+
+            var replacements = _securityPermissionRepo.Table
+                .Where(p => replacementPermissionNames.Contains(p.Name))
+                .ToList();
+            foreach (var grant in _securityRolePermissionRepo.Table.Where(rp => rp.SecurityPermissionId == legacy.Id).ToList())
+            {
+                foreach (var replacement in replacements)
+                {
+                    if (!_securityRolePermissionRepo.Table.Any(rp =>
+                            rp.SecurityRoleId == grant.SecurityRoleId
+                            && rp.SecurityPermissionId == replacement.Id))
+                    {
+                        _securityRolePermissionRepo.Insert(new SecurityRolePermission
+                        {
+                            SecurityRoleId = grant.SecurityRoleId,
+                            SecurityPermissionId = replacement.Id
+                        });
+                    }
+                }
+                _securityRolePermissionRepo.Delete(grant);
+            }
+            _securityPermissionRepo.Delete(legacy);
+        }
 
         public IEnumerable<User> GetAllUser()
         {
