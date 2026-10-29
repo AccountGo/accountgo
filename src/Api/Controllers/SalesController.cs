@@ -867,8 +867,9 @@ namespace Api.Controllers
             int id,
             [FromServices] Api.Service.IEmailSender emailSender,
             bool attachPdf = false,
-            [FromQuery] string[]? additionalRecipients = null) =>
-            SendInvoiceEmailAsync(id, emailSender, followUp: false, attachPdf, additionalRecipients);
+            [FromQuery] string[]? additionalRecipients = null,
+            [FromQuery] string[]? cc = null) =>
+            SendInvoiceEmailAsync(id, emailSender, followUp: false, attachPdf, additionalRecipients, cc);
 
         /// <summary>
         /// Sends a follow-up reminder for an unpaid invoice: same PDF link/BCC as the original send, different copy.
@@ -880,15 +881,17 @@ namespace Api.Controllers
             int id,
             [FromServices] Api.Service.IEmailSender emailSender,
             bool attachPdf = false,
-            [FromQuery] string[]? additionalRecipients = null) =>
-            SendInvoiceEmailAsync(id, emailSender, followUp: true, attachPdf, additionalRecipients);
+            [FromQuery] string[]? additionalRecipients = null,
+            [FromQuery] string[]? cc = null) =>
+            SendInvoiceEmailAsync(id, emailSender, followUp: true, attachPdf, additionalRecipients, cc);
 
         private async Task<IActionResult> SendInvoiceEmailAsync(
             int id,
             Api.Service.IEmailSender emailSender,
             bool followUp,
             bool attachPdf,
-            string[]? additionalRecipients = null)
+            string[]? additionalRecipients = null,
+            string[]? cc = null)
         {
             var invoice = BuildSalesInvoiceDto(id);
             if (invoice == null)
@@ -914,24 +917,30 @@ namespace Api.Controllers
             if (to == null)
                 return BadRequest(new { message = "This customer has no valid email address on record." });
 
-            var rawAdditional = (additionalRecipients ?? Array.Empty<string>())
+            static List<string> Split(string[]? values) => (values ?? Array.Empty<string>())
                 .SelectMany(r => r.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .Select(r => r.Trim())
                 .Where(r => !string.IsNullOrEmpty(r))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            var rawAdditional = Split(additionalRecipients);
+            var rawCc = Split(cc);
 
-            if (rawAdditional.Count > 2)
+            if (rawAdditional.Count + rawCc.Count > 2)
                 return BadRequest(new { message = "A maximum of 3 recipients (including the customer) can be specified." });
 
+            // Each address is sent once: To wins over Cc.
             var validAdditional = new List<string>();
-            foreach (var recipient in rawAdditional)
+            var validCc = new List<string>();
+            foreach (var (recipient, list) in rawAdditional.Select(r => (r, validAdditional)).Concat(rawCc.Select(r => (r, validCc))))
             {
                 var valid = ValidEmail(recipient);
                 if (valid == null)
                     return BadRequest(new { message = $"'{recipient}' is not a valid email address." });
-                if (!string.Equals(valid, to, StringComparison.OrdinalIgnoreCase) && !validAdditional.Contains(valid, StringComparer.OrdinalIgnoreCase))
-                    validAdditional.Add(valid);
+                if (!string.Equals(valid, to, StringComparison.OrdinalIgnoreCase)
+                    && !validAdditional.Contains(valid, StringComparer.OrdinalIgnoreCase)
+                    && !validCc.Contains(valid, StringComparer.OrdinalIgnoreCase))
+                    list.Add(valid);
             }
 
             // Customer addresses are whatever the workspace typed in, so cap sends to protect our domain's sending reputation.
@@ -970,6 +979,7 @@ namespace Api.Controllers
             {
                 To = to,
                 AdditionalTo = validAdditional,
+                Cc = validCc,
                 Subject = content.Subject,
                 Html = content.Html,
                 Text = content.Text,
@@ -988,7 +998,7 @@ namespace Api.Controllers
             }
             if (senderEmail != null
                 && !string.Equals(senderEmail, to, StringComparison.OrdinalIgnoreCase)
-                && !validAdditional.Any(r => string.Equals(senderEmail, r, StringComparison.OrdinalIgnoreCase)))
+                && !validAdditional.Concat(validCc).Any(r => string.Equals(senderEmail, r, StringComparison.OrdinalIgnoreCase)))
             {
                 message.Bcc.Add(senderEmail);
             }
@@ -1037,7 +1047,7 @@ namespace Api.Controllers
                     ? "Invoice {InvoiceId} follow-up emailed by {Sender} for workspace {CompanyId}"
                     : "Invoice {InvoiceId} emailed by {Sender} for workspace {CompanyId}",
                 id, senderEmail, _tenantContext.CompanyId);
-            return Ok(new { success = true, to, additionalRecipients = validAdditional, bcc = message.Bcc, email = ToEmailItem(record) });
+            return Ok(new { success = true, to, additionalRecipients = validAdditional, cc = validCc, bcc = message.Bcc, email = ToEmailItem(record) });
         }
 
         private const int InvoiceEmailsPerHour = 30;

@@ -67,7 +67,7 @@ namespace Api.Service
                     column.Item().Text(SellerName).FontSize(18).Bold();
                     foreach (var line in seller.AddressLines)
                         column.Item().Text(line).FontSize(8.5f).FontColor(Secondary);
-                    var contact = string.Join(" · ", new[] { seller.Email, seller.Phone }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                    var contact = string.Join(" · ", new[] { seller.Phone, seller.Email }.Where(s => !string.IsNullOrWhiteSpace(s)));
                     if (contact.Length > 0)
                         column.Item().Text(contact).FontSize(8.5f).FontColor(Secondary);
                     if (!string.IsNullOrWhiteSpace(seller.TaxId))
@@ -126,15 +126,16 @@ namespace Api.Service
                 {
                     column.Spacing(2);
                     column.Item().Text("BILLED TO").FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
+                    // Same order as the seller block: name, address, phone, email; the attention line follows a blank line.
                     column.Item().PaddingTop(2).Text(_invoice.CustomerName ?? "Customer").FontSize(11).Bold();
-                    if (!string.IsNullOrWhiteSpace(_invoice.CustomerAttention))
-                        column.Item().Text(_invoice.CustomerAttention).FontColor(Secondary);
                     if (!string.IsNullOrWhiteSpace(_invoice.CustomerAddress))
                         column.Item().Text(_invoice.CustomerAddress).FontColor(Secondary);
-                    if (_invoice.Display.ShowCustomerEmail && !string.IsNullOrWhiteSpace(_invoice.CustomerEmail))
-                        column.Item().Text(_invoice.CustomerEmail).FontColor(Secondary);
                     if (!string.IsNullOrWhiteSpace(_invoice.CustomerPhone))
                         column.Item().Text(_invoice.CustomerPhone).FontColor(Secondary);
+                    if (_invoice.Display.ShowCustomerEmail && !string.IsNullOrWhiteSpace(_invoice.CustomerEmail))
+                        column.Item().Text(_invoice.CustomerEmail).FontColor(Secondary);
+                    if (_invoice.Display.ShowAttention && !string.IsNullOrWhiteSpace(_invoice.CustomerAttention))
+                        column.Item().PaddingTop(10).Text(_invoice.CustomerAttention).FontColor(Secondary);
                 });
 
                 row.ConstantItem(210).Table(table =>

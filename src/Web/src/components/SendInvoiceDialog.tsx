@@ -9,6 +9,8 @@ interface SendInvoiceDialogProps {
   /** The draft has no number yet; `invoiceNumber` is the one it takes when issued. */
   numberOnIssue?: boolean;
   to: string;
+  /** The Bill To contact named in the "Attn:" line, copied by default; the user can remove it. */
+  cc?: string;
   /** The signed-in user, who receives a blind copy. */
   bcc?: string;
   /** When the invoice was already emailed from AccountGo, so a second send is a follow-up. */
@@ -22,7 +24,7 @@ interface SendInvoiceDialogProps {
   busy: boolean;
   error: string | null;
   onIssueOnly: () => void;
-  onSend: (followUp: boolean, attachPdf: boolean, additionalRecipients?: string[]) => void;
+  onSend: (followUp: boolean, attachPdf: boolean, additionalRecipients?: string[], cc?: string[]) => void;
   onCancel: () => void;
 }
 
@@ -38,6 +40,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   invoiceNumber,
   numberOnIssue = false,
   to,
+  cc,
   bcc,
   lastSent,
   followUpEligible = false,
@@ -57,6 +60,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [attachPdf, setAttachPdf] = useState(false);
   const [additionalRecipients, setAdditionalRecipients] = useState<string[]>([]);
+  const [ccRecipient, setCcRecipient] = useState<string | null>(cc ?? null);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const inputId = useId();
@@ -67,7 +71,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   const asFollowUp = followUpFromHistory || markAsFollowUp;
 
   const maxRecipients = 3;
-  const canAddRecipient = 1 + additionalRecipients.length < maxRecipients;
+  const canAddRecipient = 1 + (ccRecipient ? 1 : 0) + additionalRecipients.length < maxRecipients;
 
   const isValidEmail = (email: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -95,6 +99,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
     if (!trimmed) return false;
     if (!isValidEmail(trimmed)) return true;
     if (trimmed.toLowerCase() === to.toLowerCase()) return true;
+    if (ccRecipient && trimmed.toLowerCase() === ccRecipient.toLowerCase()) return true;
     return additionalRecipients.some(
       (other, otherIdx) => otherIdx !== idx && other.trim().toLowerCase() === trimmed.toLowerCase(),
     );
@@ -110,7 +115,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
       const validExtras = additionalRecipients
         .map((r) => r.trim())
         .filter((r) => r.length > 0 && isValidEmail(r) && r.toLowerCase() !== to.toLowerCase());
-      onSend(asFollowUp, attachPdf, validExtras);
+      onSend(asFollowUp, attachPdf, validExtras, ccRecipient ? [ccRecipient] : []);
     }
   };
 
@@ -219,6 +224,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
                   const isDuplicate =
                     trimmed.length > 0 &&
                     (trimmed.toLowerCase() === to.toLowerCase() ||
+                      (!!ccRecipient && trimmed.toLowerCase() === ccRecipient.toLowerCase()) ||
                       additionalRecipients.some(
                         (other, i) => i !== index && other.trim().toLowerCase() === trimmed.toLowerCase(),
                       ));
@@ -270,6 +276,24 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
                 })}
               </dd>
             </div>
+            {ccRecipient && (
+              <div className="flex items-center gap-3 px-4 py-2.5">
+                <dt className="w-12 shrink-0 text-[var(--text-muted)]">Cc</dt>
+                <dd className="min-w-0 flex-1 flex items-center justify-between gap-2">
+                  <span className="min-w-0 break-all text-[var(--text-secondary)]">{ccRecipient}</span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setCcRecipient(null)}
+                    className="p-1 rounded-md text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--bg-surface)] transition shrink-0 disabled:opacity-50"
+                    title="Don't copy this contact"
+                    aria-label={`Remove ${ccRecipient} from Cc`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </dd>
+              </div>
+            )}
             {bcc && (
               <div className="flex gap-3 px-4 py-2.5">
                 <dt className="w-12 shrink-0 text-[var(--text-muted)]">Bcc</dt>

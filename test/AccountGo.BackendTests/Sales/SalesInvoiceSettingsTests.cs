@@ -24,6 +24,7 @@ public class SalesInvoiceSettingsTests
         var settings = SalesInvoiceSettings.FromJson("{\"showCustomerEmail\":false,\"futureOption\":42}");
 
         Assert.False(settings.ShowCustomerEmail);
+        Assert.True(settings.ShowAttention);
         Assert.True(settings.ShowSellerAddress);
         Assert.True(settings.ShowNotes);
         Assert.True(settings.ShowPaymentInstructions);
@@ -44,6 +45,7 @@ public class SalesInvoiceSettingsTests
             SellerName = SalesInvoiceSettings.LegalName,
             ShowSellerAddress = false,
             ShowCustomerEmail = false,
+            ShowAttention = false,
             ShowNotes = false,
             ShowPaymentInstructions = false,
             DefaultNotes = "Thanks!",
@@ -57,6 +59,7 @@ public class SalesInvoiceSettingsTests
         Assert.Equal(original.SellerName, copy.SellerName);
         Assert.False(copy.ShowSellerAddress);
         Assert.False(copy.ShowCustomerEmail);
+        Assert.False(copy.ShowAttention);
         Assert.False(copy.ShowNotes);
         Assert.False(copy.ShowPaymentInstructions);
         Assert.Equal("Thanks!", copy.DefaultNotes);
@@ -116,6 +119,7 @@ public class SalesInvoiceSettingsTests
         Assert.Equal(SalesInvoiceSettings.TradingName, settings.SellerName);
         Assert.True(settings.ShowSellerAddress);
         Assert.True(settings.ShowCustomerEmail);
+        Assert.True(settings.ShowAttention);
         Assert.True(settings.ShowNotes);
         Assert.True(settings.ShowPaymentInstructions);
         Assert.Null(settings.DefaultNotes);

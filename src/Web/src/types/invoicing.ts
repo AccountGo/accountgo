@@ -40,8 +40,10 @@ export interface Invoice {
   customerAttention?: string;
   /** As printed on the invoice: recorded when it was issued. */
   customerEmail?: string;
-  /** Where emails go: Bill To contact email when set, else the company email on file now. */
+  /** Where emails go: the company email on file, else the Bill To contact's when the company has none. */
   recipientEmail?: string;
+  /** The Bill To contact's email, copied on invoice emails; absent when it is already the recipient. */
+  recipientCcEmail?: string;
   customerPhone?: string;
   customerAddress?: string;
   invoiceDate: string;
@@ -88,6 +90,7 @@ export interface InvoiceSeller {
 
 export interface InvoiceDisplay {
   showCustomerEmail: boolean;
+  showAttention: boolean;
   showNotes: boolean;
   showPaymentInstructions: boolean;
 }
@@ -98,6 +101,7 @@ export interface SalesInvoiceSettings {
   sellerName: SellerNameSource;
   showSellerAddress: boolean;
   showCustomerEmail: boolean;
+  showAttention: boolean;
   showNotes: boolean;
   showPaymentInstructions: boolean;
   defaultNotes: string | null;

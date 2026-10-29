@@ -19,8 +19,10 @@ namespace Dto.Sales
         public string? CustomerAttention { get; set; }
         /// <summary>The customer's email as printed on the invoice.</summary>
         public string? CustomerEmail { get; set; }
-        /// <summary>Where the invoice is emailed: Bill To contact email when set, else the company email.</summary>
+        /// <summary>Where the invoice is emailed: the company email, else the Bill To contact's when the company has none.</summary>
         public string? RecipientEmail { get; set; }
+        /// <summary>The Bill To contact's email, copied on the invoice email; null when it is already the recipient or there is none.</summary>
+        public string? RecipientCcEmail { get; set; }
         public decimal Amount { get { return GetTotalAmount(); } }
         public decimal TotalAllocatedAmount { get; set; }
         public string? ReferenceNo { get; set; }
@@ -140,6 +142,7 @@ namespace Dto.Sales
     public class DisplayFlags
     {
         public bool ShowCustomerEmail { get; set; } = true;
+        public bool ShowAttention { get; set; } = true;
         public bool ShowNotes { get; set; } = true;
         public bool ShowPaymentInstructions { get; set; } = true;
     }
