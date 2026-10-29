@@ -659,14 +659,14 @@ public class BankAccountServiceTests
                     }
                 });
             Financial
-                .Setup(f => f.CreateReversingEntry(It.IsAny<int>(), It.IsAny<string>()))
-                .Returns((int headerId, string desc) =>
+                .Setup(f => f.CreateReversingEntry(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+                .Returns((int headerId, string desc, DateTime reversalDate) =>
                 {
                     var original = GlHeaders.GetById(headerId);
                     var reversal = new GeneralLedgerHeader
                     {
                         DocumentType = original.DocumentType,
-                        Date = original.Date,
+                        Date = reversalDate.Date,
                         Description = desc,
                         ReversedGeneralLedgerHeaderId = headerId
                     };
