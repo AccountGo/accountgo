@@ -25,6 +25,7 @@ import Reports from './pages/Reports';
 import ChartOfAccounts from './pages/ChartOfAccounts';
 import Banking from './pages/Banking';
 import BankRegisterPage from './pages/BankRegister';
+import BankStatementImportPage from './pages/BankStatementImport';
 import BankingTransactionsPage from './pages/BankingTransactions';
 import ReconciliationHistoryPage from './pages/ReconciliationHistory';
 import ReconcilePage from './pages/Reconcile';
@@ -187,6 +188,14 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="financials">
                 <ReconcilePage />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'banking/:bankId/statement-import',
+            element: (
+              <RequiresModule module="financials">
+                <BankStatementImportPage />
               </RequiresModule>
             ),
           },

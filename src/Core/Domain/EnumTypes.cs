@@ -139,6 +139,14 @@ namespace Core.Domain
         Undone = 3
     }
 
+    /// <summary>Origin of a <see cref="Financials.BankStatementLine"/> (Phase 3A).</summary>
+    public enum BankStatementSources
+    {
+        Csv = 1,
+        Ofx = 2,
+        Manual = 3
+    }
+
     public enum AddressTypes
     {
         Office,

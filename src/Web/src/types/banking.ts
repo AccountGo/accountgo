@@ -302,3 +302,92 @@ export interface BankBalanceCheck {
   message: string;
   recentLines: BankBalanceCheckLine[];
 }
+
+export const BANK_STATEMENT_SOURCE = {
+  Csv: 1,
+  Ofx: 2,
+  Manual: 3,
+} as const;
+
+export interface BankStatementColumnMap {
+  hasHeaderRow: boolean;
+  delimiter?: string | null;
+  dateFormat?: string | null;
+  dateColumn: number;
+  amountColumn?: number | null;
+  depositColumn?: number | null;
+  withdrawalColumn?: number | null;
+  payeeColumn?: number | null;
+  memoColumn?: number | null;
+  referenceColumn?: number | null;
+  externalIdColumn?: number | null;
+  invertSign: boolean;
+}
+
+export interface BankStatementImportPayload {
+  source: number;
+  fileName?: string | null;
+  content: string;
+  columnMap?: BankStatementColumnMap | null;
+}
+
+export interface BankStatementPreviewRow {
+  rowNumber: number;
+  postedDate?: string | null;
+  amount?: number | null;
+  payee?: string | null;
+  memo?: string | null;
+  reference?: string | null;
+  externalId?: string | null;
+  status: 'ok' | 'duplicate' | 'error';
+  error?: string | null;
+}
+
+export interface BankStatementPreview {
+  source: number;
+  totalRows: number;
+  readyRows: number;
+  duplicateRows: number;
+  errorRows: number;
+  rows: BankStatementPreviewRow[];
+}
+
+export interface BankStatementCommitResult {
+  importId: number;
+  imported: number;
+  duplicates: number;
+  errors: number;
+  autoMatched: number;
+}
+
+export interface BankStatementMatchCandidate {
+  generalLedgerLineId: number;
+  generalLedgerHeaderId: number;
+  date: string;
+  description?: string | null;
+  amount: number;
+}
+
+export interface BankStatementLine {
+  id: number;
+  bankId: number;
+  bankStatementImportId: number;
+  source: number;
+  externalId?: string | null;
+  postedDate: string;
+  amount: number;
+  payee?: string | null;
+  memo?: string | null;
+  reference?: string | null;
+  matchedGeneralLedgerLineId?: number | null;
+  isMatched: boolean;
+  candidates: BankStatementMatchCandidate[];
+}
+
+export interface BankStatementLineList {
+  lines: BankStatementLine[];
+  unmatchedCount: number;
+  matchedCount: number;
+}
+
+export type StatementLineStatus = 'unmatched' | 'matched' | 'all';

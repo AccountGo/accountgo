@@ -672,6 +672,42 @@ namespace Api.Data
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
+            builder.Entity<BankStatementImport>(entity =>
+            {
+                entity.Property(e => e.FileName).HasMaxLength(260);
+                entity.Property(e => e.ImportedBy).HasMaxLength(100);
+
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => new { e.CompanyId, e.BankId }, "IX_BankStatementImport_Company_Bank");
+
+                entity.HasOne(e => e.Bank).WithMany().HasForeignKey(e => e.BankId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<BankStatementLine>(entity =>
+            {
+                entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+                entity.Property(e => e.ExternalId).HasMaxLength(200);
+                entity.Property(e => e.Payee).HasMaxLength(200);
+                entity.Property(e => e.Memo).HasMaxLength(500);
+                entity.Property(e => e.Reference).HasMaxLength(100);
+
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => e.BankStatementImportId);
+                entity.HasIndex(e => e.MatchedGeneralLedgerLineId);
+                entity.HasIndex(e => new { e.CompanyId, e.BankId, e.PostedDate }, "IX_BankStatementLine_Company_Bank_PostedDate");
+                entity.HasIndex(e => new { e.CompanyId, e.BankId, e.Source, e.ExternalId }, "UX_BankStatementLine_Company_Bank_Source_External")
+                    .IsUnique()
+                    .HasFilter("[ExternalId] IS NOT NULL");
+
+                entity.HasOne(e => e.Bank).WithMany().HasForeignKey(e => e.BankId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.BankStatementImport).WithMany(i => i.Lines)
+                    .HasForeignKey(e => e.BankStatementImportId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.MatchedGeneralLedgerLine).WithMany()
+                    .HasForeignKey(e => e.MatchedGeneralLedgerLineId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
             builder.Entity<GeneralLedgerLine>(entity =>
             {
                 entity.HasIndex(e => new { e.CompanyId, e.BankReconciliationId }, "IX_GeneralLedgerLine_Company_BankReconciliationId");
@@ -698,6 +734,8 @@ namespace Api.Data
         public virtual DbSet<BankTransaction> BankTransactions { get; set; }
         public virtual DbSet<BankReconciliation> BankReconciliations { get; set; }
         public virtual DbSet<BankReconciliationItem> BankReconciliationItems { get; set; }
+        public virtual DbSet<BankStatementImport> BankStatementImports { get; set; }
+        public virtual DbSet<BankStatementLine> BankStatementLines { get; set; }
         public virtual DbSet<Company> Companies { get; set; }
         public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }

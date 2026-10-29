@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { AlertTriangle, Archive, Loader2, Pencil, Plus, Scale, Star } from 'lucide-react';
+import { AlertTriangle, Archive, FileUp, Loader2, Pencil, Plus, Scale, Star } from 'lucide-react';
 import { PageHeader, HeaderButton, HeaderMenu } from '../components/PageHeader';
 import { BankAccountFormDialog } from '../components/BankAccountFormDialog';
 import { BankTransactionDialog } from '../components/BankTransactionDialog';
@@ -206,6 +206,14 @@ const BankRegisterPage: React.FC = () => {
                 icon={Scale}
                 variant="secondary"
                 onClick={() => navigate(`/org/${currentOrg.slug}/banking/${account.id}/reconcile`)}
+              />
+            )}
+            {hasFinancials && canReconcile && !account.archivedAt && (
+              <HeaderButton
+                label="Import statement"
+                icon={FileUp}
+                variant="secondary"
+                onClick={() => navigate(`/org/${currentOrg.slug}/banking/${account.id}/statement-import`)}
               />
             )}
             {canShowBalanceCheck({ hasFinancials, canView: canViewAccounts, archived: !!account.archivedAt }) && (
