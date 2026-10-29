@@ -15,6 +15,10 @@ import {
 import { OrgDetails, SidebarMode } from '../types';
 import { useAssistant } from '../assistant';
 
+// Not wired up yet: hidden until quick search and notifications have something behind them.
+const SHOW_QUICK_SEARCH = false;
+const SHOW_NOTIFICATIONS = false;
+
 interface HeaderProps {
   currentOrg: OrgDetails;
   sidebarMode?: SidebarMode;
@@ -147,17 +151,19 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Quick Search trigger */}
-        <button
-          type="button"
-          aria-label="Quick search (Press Command+K)"
-          className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-muted)] text-xs cursor-pointer transition-colors shadow-inner"
-        >
-          <Search className="w-3.5 h-3.5" />
-          <span>Search...</span>
-          <kbd className="ml-1 font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-canvas)] text-[var(--text-secondary)]">
-            ⌘K
-          </kbd>
-        </button>
+        {SHOW_QUICK_SEARCH && (
+          <button
+            type="button"
+            aria-label="Quick search (Press Command+K)"
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-muted)] text-xs cursor-pointer transition-colors shadow-inner"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Search...</span>
+            <kbd className="ml-1 font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-canvas)] text-[var(--text-secondary)]">
+              ⌘K
+            </kbd>
+          </button>
+        )}
 
         {/* AccountGo Assistant */}
         <button
@@ -176,14 +182,16 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Notifications */}
-        <button
-          type="button"
-          className="relative p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] active:scale-95 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
-          aria-label="View notifications"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[var(--brand-primary)] ring-2 ring-[var(--bg-canvas)]" />
-        </button>
+        {SHOW_NOTIFICATIONS && (
+          <button
+            type="button"
+            className="relative p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] active:scale-95 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+            aria-label="View notifications"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[var(--brand-primary)] ring-2 ring-[var(--bg-canvas)]" />
+          </button>
+        )}
       </div>
     </header>
   );
