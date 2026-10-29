@@ -196,19 +196,31 @@ export const InvoiceDetail: React.FC = () => {
     try {
       const { blob } = await fetchInvoicePdf(invoice.id, invoice.no);
       const url = URL.createObjectURL(blob);
+      // Safari/Firefox: prefer a tab opened under the user gesture. If the popup was blocked
+      // (tab is null), fall through to the iframe path and tell the user if that can't print either.
       if (tab) {
         tab.location.href = url;
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         return;
       }
+      if (!framePrint) {
+        // Popup was blocked; iframe PDF printing is unreliable outside Chromium.
+        setErrorBanner('Allow pop-ups to print this invoice, or use Download PDF.');
+      }
       removePrintFrame();
       const frame = document.createElement('iframe');
       frame.setAttribute('aria-hidden', 'true');
       frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-      // Chrome's PDF viewer can fire onload before the plugin is ready; wait briefly then print.
+      // Chrome fires onload before the PDF plugin is ready (blank page). Wait, then print once.
       frame.onload = () => {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
+        window.setTimeout(() => {
+          try {
+            frame.contentWindow?.focus();
+            frame.contentWindow?.print();
+          } catch {
+            setErrorBanner('Could not open the print dialog. Try Download PDF, then print from your PDF viewer.');
+          }
+        }, 500);
       };
       frame.src = url;
       document.body.appendChild(frame);
