@@ -195,6 +195,32 @@ const ReconciliationHistoryPage: React.FC = () => {
                     >
                       Open
                     </Link>
+                    {item.status === BANK_RECONCILIATION_STATUS.Finished && (
+                      <a
+                        href={`/api/Banking/Reconciliations/${item.id}/Report.pdf`}
+                        className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          void (async () => {
+                            const res = await authFetch(`/api/Banking/Reconciliations/${item.id}/Report.pdf`);
+                            if (!res.ok) {
+                              const body = await res.json().catch(() => null);
+                              setError(body?.message || 'Could not download the report.');
+                              return;
+                            }
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const anchor = document.createElement('a');
+                            anchor.href = url;
+                            anchor.download = `BankReconciliation-${String(item.statementEndDate).slice(0, 10)}.pdf`;
+                            anchor.click();
+                            URL.revokeObjectURL(url);
+                          })();
+                        }}
+                      >
+                        Report PDF
+                      </a>
+                    )}
                     {item.status === BANK_RECONCILIATION_STATUS.Finished &&
                       item.id === latestFinishedId &&
                       canUndo && (
