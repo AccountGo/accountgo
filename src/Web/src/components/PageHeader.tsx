@@ -108,7 +108,7 @@ export const HeaderButton: React.FC<HeaderButtonProps> = ({
 };
 
 export type HeaderMenuItem =
-  | { label: string; icon?: LucideIcon; onSelect?: () => void; to?: string; danger?: boolean }
+  | { label: string; icon?: LucideIcon; onSelect?: () => void; to?: string; danger?: boolean; disabled?: boolean; title?: string }
   | 'separator';
 
 /** The "More" menu for actions that don't need a button of their own. Keyboard: arrows, Home/End, Escape. */
@@ -211,7 +211,7 @@ export const HeaderMenu: React.FC<{ items: (HeaderMenuItem | false | null | unde
               </>
             );
             return item.to ? (
-              <Link key={item.label} to={item.to} role="menuitem" tabIndex={-1} onClick={() => close(false)} className={itemClass(item.danger)}>
+              <Link key={item.label} to={item.to} title={item.title} role="menuitem" tabIndex={-1} onClick={() => close(false)} className={itemClass(item.danger)}>
                 {inner}
               </Link>
             ) : (
@@ -219,12 +219,15 @@ export const HeaderMenu: React.FC<{ items: (HeaderMenuItem | false | null | unde
                 key={item.label}
                 type="button"
                 role="menuitem"
+                title={item.title}
+                disabled={item.disabled}
                 tabIndex={-1}
                 onClick={() => {
+                  if (item.disabled) return;
                   close(false);
                   item.onSelect?.();
                 }}
-                className={itemClass(item.danger)}
+                className={`${itemClass(item.danger)} ${item.disabled ? 'opacity-50 cursor-not-allowed hover:bg-transparent' : ''}`}
               >
                 {inner}
               </button>

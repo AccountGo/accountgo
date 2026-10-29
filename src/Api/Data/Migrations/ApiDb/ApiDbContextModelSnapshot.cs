@@ -1576,6 +1576,12 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("BillFromJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -1600,6 +1606,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("PayableAccountId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
@@ -1619,9 +1628,20 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("VoidGeneralLedgerHeaderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("VoidReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("VoidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VoidedBy")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PayableAccountId");
 
                     b.HasIndex("VendorId");
 
@@ -2004,6 +2024,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("VendorId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VoidReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("VoidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VoidedBy")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
@@ -2013,6 +2045,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("PurchaseInvoiceHeaderId");
 
                     b.HasIndex("VendorId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
 
                     b.ToTable("VendorPayment");
                 });
@@ -3494,6 +3528,10 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany()
                         .HasForeignKey("GeneralLedgerHeaderId");
 
+                    b.HasOne("Core.Domain.Financials.Account", "PayableAccount")
+                        .WithMany()
+                        .HasForeignKey("PayableAccountId");
+
                     b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
                         .WithMany("PurchaseInvoices")
                         .HasForeignKey("VendorId");
@@ -3503,6 +3541,8 @@ namespace Api.Data.Migrations.ApiDb
                         .HasForeignKey("VoidGeneralLedgerHeaderId");
 
                     b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("PayableAccount");
 
                     b.Navigation("Vendor");
 
@@ -3712,6 +3752,10 @@ namespace Api.Data.Migrations.ApiDb
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId");
+
                     b.Navigation("Account");
 
                     b.Navigation("GeneralLedgerHeader");
@@ -3719,6 +3763,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("PurchaseInvoiceHeader");
 
                     b.Navigation("Vendor");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.Customer", b =>
