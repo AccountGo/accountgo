@@ -161,7 +161,7 @@ export function applyPendingTicksToRecon<
     ...recon,
     deposits: applyPendingTicksToLines(recon.deposits, pending),
     payments: applyPendingTicksToLines(recon.payments, pending),
-  };
+  } as T;
 }
 
 export type TickSavePutResult<T> =
@@ -174,7 +174,14 @@ export type TickSavePutResult<T> =
  * and re-run if new pending ticks arrived afterward. On 409, reloads, re-applies pending,
  * and retries the put once.
  */
-export class TickSaveController<T extends { id: number; version: number }> {
+export type TickSaveRecon = {
+  id: number;
+  version: number;
+  deposits: { lineId: number; ticked: boolean }[];
+  payments: { lineId: number; ticked: boolean }[];
+};
+
+export class TickSaveController<T extends TickSaveRecon> {
   readonly pending: PendingTickSets = createEmptyPendingTicks();
   private inFlight: Promise<T | null> | null = null;
   private readonly getRecon: () => T | null;
