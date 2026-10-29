@@ -304,6 +304,10 @@ namespace Services.Sales
                 salesReceipt.No = GetNextNumber(SequenceNumberTypes.SalesReceipt).ToString();
                 _salesReceiptRepo.Insert(salesReceipt);
             }
+            else
+            {
+                throw new InvalidOperationException("General ledger entry for sales receipt failed validation.");
+            }
         }
 
         /// <summary>
@@ -329,6 +333,10 @@ namespace Services.Sales
 
                 salesReceipt.No = GetNextNumber(SequenceNumberTypes.SalesReceipt).ToString();
                 _salesReceiptRepo.Insert(salesReceipt);
+            }
+            else
+            {
+                throw new InvalidOperationException("General ledger entry for sales receipt failed validation.");
             }
         }
 
@@ -576,6 +584,20 @@ namespace Services.Sales
             var receipt = GetSalesReceiptById(allocation.SalesReceiptHeaderId)
                 ?? throw new InvalidOperationException($"Receipt #{allocation.SalesReceiptHeaderId} was not found.");
 
+            if (invoice.CustomerId != allocation.CustomerId)
+                throw new InvalidOperationException("Invoice customer does not match allocation customer.");
+            if (receipt.CustomerId != allocation.CustomerId)
+                throw new InvalidOperationException("Receipt customer does not match allocation customer.");
+
+            if (invoice.Status == SalesInvoiceStatus.Draft)
+                throw new InvalidOperationException("Cannot allocate to a draft invoice.");
+            if (invoice.Status == SalesInvoiceStatus.Void)
+                throw new InvalidOperationException("Cannot allocate to a void invoice.");
+
+            var invoiceBalance = invoice.BalanceDue();
+            if (allocation.Amount > invoiceBalance + 0.005m)
+                throw new InvalidOperationException($"Allocation amount ({allocation.Amount:0.00}) exceeds invoice balance due ({invoiceBalance:0.00}).");
+
             var receiptTotal = receipt.SalesReceiptLines != null && receipt.SalesReceiptLines.Any()
                 ? receipt.SalesReceiptLines.Sum(a => a.AmountPaid)
                 : receipt.Amount;
@@ -604,12 +626,20 @@ namespace Services.Sales
                 _financialService.SaveGeneralLedgerEntry(glHeader);
                 allocation.GeneralLedgerHeaderId = glHeader.Id;
                 invoice.CustomerAllocations.Add(allocation);
+
+                var remainingBalance = invoice.BalanceDue();
+                invoice.Status = remainingBalance <= 0.005m ? SalesInvoiceStatus.Closed : SalesInvoiceStatus.Open;
+
                 _salesInvoiceRepo.Update(invoice);
                 if (allocation.Id > 0)
                 {
                     glHeader.SourceDocumentId = allocation.Id;
                     _financialService.UpdateGeneralLedgerHeader(glHeader);
                 }
+            }
+            else
+            {
+                throw new InvalidOperationException("General ledger entry for allocation failed validation.");
             }
         }
 
@@ -859,13 +889,14 @@ namespace Services.Sales
                 return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
             }
 
-            if (salesInvoice.GeneralLedgerHeaderId.HasValue)
-                throw new Exception("Invoice is already posted. Update is not allowed.");
+            if (salesInvoice.Status != SalesInvoiceStatus.Draft || salesInvoice.GeneralLedgerHeaderId.HasValue)
+                return Result<Dto.Sales.SalesInvoice>.Failure(Error.ValidationError("Issued invoices can't be edited. Void it and issue a new one."));
 
             var currentNo = salesInvoice.No;
             var currentStatus = salesInvoice.Status;
             _mapper.Map<Dto.Sales.SalesInvoice, Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto, salesInvoice);
             salesInvoice.No = InvoiceNumber.ForSave(currentNo, currentStatus, exists: true, salesInvoiceDto.No);
+            salesInvoice.Status = currentStatus;
 
             int existingOrderLineId = salesInvoice.SalesInvoiceLines.FirstOrDefault().SalesOrderLineId ??= 0;
             foreach (var invoiceLine in salesInvoice.SalesInvoiceLines!)
@@ -927,8 +958,8 @@ namespace Services.Sales
 
         public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
         {
-            if (salesInvoice.GeneralLedgerHeaderId.HasValue)
-                throw new InvalidOperationException("Invoice is already posted. Update is not allowed.");
+            if (salesInvoice.Id != 0 && (salesInvoice.Status != SalesInvoiceStatus.Draft || salesInvoice.GeneralLedgerHeaderId.HasValue))
+                throw new InvalidOperationException("Issued invoices can't be edited. Void it and issue a new one.");
 
             // Checked before anything is written, so a blocked invoice leaves no sales order behind.
             var isNewInvoice = salesInvoice.Id == 0;
@@ -1102,8 +1133,6 @@ namespace Services.Sales
             int arAccountId = customer.AccountsReceivableAccountId ?? customer.AccountsReceivableAccount?.Id ??
                 _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "10120")?.Id ??
                 _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
-            var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, arAccountId, salesInvoice.GrandTotal());
-            glHeader.GeneralLedgerLines.Add(debitCustomerAR);
 
             var groupedSalesAccount = from s in sales
                                       group s by s.Key into grouped
@@ -1118,7 +1147,7 @@ namespace Services.Sales
                 var salesAmount = salesAccount.Value;
                 if (salesAmount == 0)
                     continue;
-                var creditSalesAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, salesAccount.Key, Math.Round(salesAmount, 2, MidpointRounding.ToEven));
+                var creditSalesAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, salesAccount.Key, Math.Round(salesAmount, 2, MidpointRounding.AwayFromZero));
                 glHeader.GeneralLedgerLines.Add(creditSalesAccount);
             }
 
@@ -1134,13 +1163,13 @@ namespace Services.Sales
 
                 foreach (var tax in groupedTaxes)
                 {
-                    var creditSalesTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, tax.Key, tax.Value);
+                    var creditSalesTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, tax.Key, Math.Round(tax.Value, 2, MidpointRounding.AwayFromZero));
                     glHeader.GeneralLedgerLines.Add(creditSalesTaxAccount);
                 }
             }
 
             if (totalDiscount != 0)
-                glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, salesDiscountAccountId!.Value, totalDiscount));
+                glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, salesDiscountAccountId!.Value, Math.Round(totalDiscount, 2, MidpointRounding.AwayFromZero)));
 
             if (salesInvoice.ShippingHandlingCharge > 0)
             {
@@ -1149,6 +1178,13 @@ namespace Services.Sales
                 var creditShippingHandlingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, shippingAccountId, Math.Round(salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero));
                 glHeader.GeneralLedgerLines.Add(creditShippingHandlingAccount);
             }
+
+            // The receivables debit equals the rounded sum of the credits minus any other debits,
+            // guaranteeing that Dr and Cr balance to the exact cent.
+            var totalCredits = glHeader.GeneralLedgerLines.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount);
+            var otherDebits = glHeader.GeneralLedgerLines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount);
+            var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, arAccountId, Math.Max(0, totalCredits - otherDebits));
+            glHeader.GeneralLedgerLines.Add(debitCustomerAR);
 
             _financialService.ValidateGeneralLedgerEntry(glHeader);
             salesInvoice.No = InvoiceNumber.Normalize(salesInvoice.No) ?? AllocateInvoiceNumber(salesInvoice.Id);

@@ -575,7 +575,7 @@ export const Invoices: React.FC = () => {
                           )}
 
                           {/* Void Action */}
-                          {canVoidInvoices && inv.status !== 'Void' && inv.status !== 'Paid' && (
+                          {canVoidInvoices && inv.status !== 'Void' && inv.status !== 'Paid' && inv.status !== 'Draft' && (inv.paidAmount ?? 0) === 0 && (inv.balanceDue ?? 0) > 0 && (
                             <button
                               onClick={() => handleOpenVoid(inv)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"

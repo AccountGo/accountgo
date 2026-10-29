@@ -88,17 +88,14 @@ namespace Core.Domain.Sales
             return totalDiscount;
         }
 
-        public bool IsFullPaid()
-        {
-            decimal totalInvoiceAmount = GrandTotal();
-            decimal totalPaidAmount = 0;
-            decimal totalAllocation = CustomerAllocations.Sum(a => a.Amount);
-            foreach (var line in SalesInvoiceLines)
-            {
-                totalPaidAmount += line.GetAmountPaid();
-            }
-            return (totalPaidAmount + totalAllocation) >= totalInvoiceAmount;
-        }
+        public decimal TotalAllocated() =>
+            Math.Round(CustomerAllocations?.Sum(a => a.Amount) ?? 0, 2, MidpointRounding.AwayFromZero);
+
+        public decimal BalanceDue() =>
+            Math.Round(Math.Max(0, GrandTotal() - TotalAllocated()), 2, MidpointRounding.AwayFromZero);
+
+        public bool IsFullPaid() =>
+            TotalAllocated() >= GrandTotal() - 0.005m;
 
         public decimal ComputeTotalAmount()
         {

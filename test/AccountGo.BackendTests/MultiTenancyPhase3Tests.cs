@@ -1058,11 +1058,11 @@ namespace AccountGo.BackendTests
             Assert.Equal("Phase Three", draft.Seller.Name);
             Assert.Equal(new[] { "9 New St", "Makati" }, draft.Seller.AddressLines);
 
-            // Editing an issued invoice keeps the seller it was sent with.
+            // Editing an issued invoice is rejected.
             var edit = await GetInvoice(issuedId);
             edit.ReferenceNo = "PO-1";
             var edited = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", edit);
-            Assert.True(edited.IsSuccessStatusCode, await edited.Content.ReadAsStringAsync());
+            Assert.Equal(HttpStatusCode.BadRequest, edited.StatusCode);
             Assert.Equal(new[] { "1 Old St", "Makati" }, (await GetInvoice(issuedId)).Seller.AddressLines);
 
             // A draft records the seller when it is issued, not when it was drafted.
@@ -1586,10 +1586,11 @@ namespace AccountGo.BackendTests
             Assert.Equal("New Name Inc", draft.CustomerName);
             Assert.Equal("new@example.com", draft.CustomerEmail);
 
-            // Editing an issued invoice keeps its bill-to.
+            // Editing an issued invoice is rejected.
             var edit = await GetInvoice(issuedId);
             edit.ReferenceNo = "PO-1";
-            Assert.True((await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", edit)).IsSuccessStatusCode);
+            var editRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", edit);
+            Assert.Equal(HttpStatusCode.BadRequest, editRes.StatusCode);
             Assert.Equal("Old Name Ltd", (await GetInvoice(issuedId)).CustomerName);
         }
 
@@ -2063,14 +2064,35 @@ namespace AccountGo.BackendTests
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
                 {
+                    var advancesAccount = db.Accounts.FirstOrDefault(a => a.AccountCode == "20120") ?? db.Accounts.First(a => a.AccountClassId == 2);
                     var customer = new Customer
                     {
                         No = Guid.NewGuid().ToString("N"), Party = new Party { Name = "Real customer", PartyType = PartyTypes.Customer, Email = customerEmail },
                         PrimaryContact = new Contact { FirstName = "Customer", LastName = "Contact", Party = new Party { Name = "Contact", PartyType = PartyTypes.Contact } },
                         AccountsReceivableAccount = db.Accounts.Single(a => a.AccountCode == "10120"),
-                        SalesAccount = db.Accounts.Single(a => a.AccountCode == "40100")
+                        SalesAccount = db.Accounts.Single(a => a.AccountCode == "40100"),
+                        CustomerAdvancesAccount = advancesAccount,
+                        CustomerAdvancesAccountId = advancesAccount.Id
                     };
+                    var glSetting = db.GeneralLedgerSettings.FirstOrDefault();
+                    if (glSetting != null && !glSetting.ShippingChargeAccountId.HasValue)
+                    {
+                        glSetting.ShippingChargeAccountId = customer.SalesAccount.Id;
+                    }
+                    var serviceCat = db.ItemCategories.FirstOrDefault(c => c.ItemType == ItemTypes.Service);
+                    if (serviceCat == null)
+                    {
+                        serviceCat = new ItemCategory
+                        {
+                            Name = "Services",
+                            ItemType = ItemTypes.Service,
+                            MeasurementId = db.Measurements.First().Id,
+                            SalesAccountId = customer.SalesAccount.Id
+                        };
+                        db.ItemCategories.Add(serviceCat);
+                    }
                     var item = new Item { No = Guid.NewGuid().ToString("N"), Code = "CONSULTING", Description = "Consulting", Price = 100,
+                        ItemCategory = serviceCat,
                         SmallestMeasurementId = db.Measurements.First().Id, SalesAccount = customer.SalesAccount };
                     db.Customers.Add(customer);
                     db.Items.Add(item);
