@@ -99,10 +99,11 @@ namespace Services.Banking
             };
             _recons.Insert(recon);
 
-            // §6: opening-balance lines are pre-ticked deposits on the first (and later) reconciliations.
-            foreach (var line in CandidateLines(bank, endDate).Where(IsOpeningBalanceLine))
+            // §6: current opening-balance line only (Bank.OpeningBalanceGeneralLedgerHeaderId).
+            foreach (var line in CandidateLines(bank, endDate).Where(l => IsOpeningBalanceLine(bank, l)))
                 InsertItem(recon, line);
 
+            EnsureVoidPairItems(recon, bank);
             return ToDetail(recon);
         }
 
@@ -111,11 +112,15 @@ namespace Services.Banking
             EnsureCompany();
             var recon = RequireDraft(id, request.Version);
             var bank = RequireBank(recon.BankId);
-            var candidates = CandidateLines(bank, recon.StatementEndDate.Date)
-                .ToDictionary(l => l.Id);
+            var endDate = recon.StatementEndDate.Date;
+            var candidates = CandidateLines(bank, endDate).ToDictionary(l => l.Id);
+            var autoClearIds = AutoClearVoidPairLineIds(bank, endDate);
 
             foreach (var lineId in request.Remove ?? Array.Empty<int>())
             {
+                if (autoClearIds.Contains(lineId))
+                    throw new InvalidOperationException(
+                        "Voided transactions and their reversals are cleared together.");
                 var item = _items.Table.FirstOrDefault(i =>
                     i.BankReconciliationId == recon.Id && i.GeneralLedgerLineId == lineId);
                 if (item != null)
@@ -132,6 +137,7 @@ namespace Services.Banking
                 InsertItem(recon, line);
             }
 
+            EnsureVoidPairItems(recon, bank);
             BumpVersion(recon);
             return ToDetail(recon);
         }
@@ -201,6 +207,9 @@ namespace Services.Banking
                     BankReconciliationConflictException.NotLatestCode,
                     "This is no longer the latest reconciliation for the account.");
 
+            // Pick up void/reversal pairs created while the draft was open (net zero; hidden from the UI).
+            EnsureVoidPairItems(recon, bank);
+
             var totals = ComputeTotals(recon);
             if (totals.Difference != 0m)
                 throw new InvalidOperationException(
@@ -246,6 +255,10 @@ namespace Services.Banking
                 throw new BankReconciliationConflictException(
                     BankReconciliationConflictException.NotLatestCode,
                     "Only the latest finished reconciliation for the account can be undone.");
+
+            if (_recons.Table.Any(r =>
+                    r.BankId == recon.BankId && r.Status == BankReconciliationStatuses.Draft))
+                throw new InvalidOperationException("Discard or finish the draft first.");
 
             var stamped = _glLines.Table.Where(l => l.BankReconciliationId == recon.Id).ToList();
             foreach (var line in stamped)
@@ -353,14 +366,70 @@ namespace Services.Banking
             ).ToList();
         }
 
-        private bool IsOpeningBalanceLine(GeneralLedgerLine line)
+        /// <summary>
+        /// Current opening balance only — never prior voided OB posts identified by description alone.
+        /// </summary>
+        private static bool IsOpeningBalanceLine(Bank bank, GeneralLedgerLine line) =>
+            bank.OpeningBalanceGeneralLedgerHeaderId.HasValue
+            && line.GeneralLedgerHeaderId == bank.OpeningBalanceGeneralLedgerHeaderId.Value;
+
+        /// <summary>
+        /// When both a voided entry and its reversing entry are uncleared and dated on or before the
+        /// statement end, clear them together (net zero; they never appear on a bank statement).
+        /// </summary>
+        private HashSet<int> AutoClearVoidPairLineIds(Bank bank, DateTime endDate)
         {
-            var header = _glHeaders.GetById(line.GeneralLedgerHeaderId);
-            if (header == null)
-                return false;
-            if (header.DocumentType != DocumentTypes.BankTransaction)
-                return false;
-            return string.Equals(header.Description, BankAccountService.OpeningBalanceDescription, StringComparison.Ordinal);
+            var lines = CandidateLines(bank, endDate);
+            if (lines.Count == 0)
+                return new HashSet<int>();
+
+            var headerIds = lines.Select(l => l.GeneralLedgerHeaderId).ToHashSet();
+            var headers = _glHeaders.Table
+                .Where(h => headerIds.Contains(h.Id))
+                .ToDictionary(h => h.Id);
+
+            var pairedHeaderIds = new HashSet<int>();
+            foreach (var headerId in headerIds)
+            {
+                if (!headers.TryGetValue(headerId, out var header))
+                    continue;
+                if (!header.ReversedGeneralLedgerHeaderId.HasValue)
+                    continue;
+                var originalId = header.ReversedGeneralLedgerHeaderId.Value;
+                if (!headerIds.Contains(originalId))
+                    continue;
+                pairedHeaderIds.Add(headerId);
+                pairedHeaderIds.Add(originalId);
+            }
+
+            if (pairedHeaderIds.Count == 0)
+                return new HashSet<int>();
+
+            return lines
+                .Where(l => pairedHeaderIds.Contains(l.GeneralLedgerHeaderId))
+                .Select(l => l.Id)
+                .ToHashSet();
+        }
+
+        private void EnsureVoidPairItems(BankReconciliation recon, Bank bank)
+        {
+            var autoClearIds = AutoClearVoidPairLineIds(bank, recon.StatementEndDate.Date);
+            if (autoClearIds.Count == 0)
+                return;
+
+            var existing = _items.Table
+                .Where(i => i.BankReconciliationId == recon.Id)
+                .Select(i => i.GeneralLedgerLineId)
+                .ToHashSet();
+
+            foreach (var lineId in autoClearIds)
+            {
+                if (existing.Contains(lineId))
+                    continue;
+                var line = _glLines.GetById(lineId);
+                if (line != null)
+                    InsertItem(recon, line);
+            }
         }
 
         private (decimal ClearedDeposits, decimal ClearedPayments, decimal ClearedBalance, decimal Difference) ComputeTotals(BankReconciliation recon)
@@ -386,24 +455,33 @@ namespace Services.Banking
                 ? CandidateLines(bank, recon.StatementEndDate.Date)
                 : FinishedSnapshotLines(recon);
 
+            // Void/reversal pairs are stamped but hidden — they never appear on a bank statement.
+            var hiddenLineIds = bank == null
+                ? new HashSet<int>()
+                : HiddenVoidPairLineIds(bank, recon, candidates);
+
             var deposits = new List<BankReconciliationCandidateLineDto>();
             var payments = new List<BankReconciliationCandidateLineDto>();
             foreach (var line in candidates)
             {
+                if (hiddenLineIds.Contains(line.Id))
+                    continue;
+
                 var header = _glHeaders.GetById(line.GeneralLedgerHeaderId);
+                var isOpeningBalance = bank != null && IsOpeningBalanceLine(bank, line);
                 var dto = new BankReconciliationCandidateLineDto
                 {
                     LineId = line.Id,
                     HeaderId = line.GeneralLedgerHeaderId,
                     Date = header?.Date ?? DateTime.MinValue,
-                    Type = IsOpeningBalanceLine(line) && header != null
+                    Type = isOpeningBalance && header != null
                         ? $"Opening balance (as of {header.Date:yyyy-MM-dd})"
                         : (header?.DocumentType.ToString() ?? "Line"),
                     Reference = header?.Description,
                     In = line.DrCr == DrOrCrSide.Dr ? line.Amount : 0m,
                     Out = line.DrCr == DrOrCrSide.Cr ? line.Amount : 0m,
                     Ticked = ticked.Contains(line.Id) || recon.Status != BankReconciliationStatuses.Draft,
-                    IsOpeningBalance = IsOpeningBalanceLine(line)
+                    IsOpeningBalance = isOpeningBalance
                 };
                 if (line.DrCr == DrOrCrSide.Dr)
                     deposits.Add(dto);
@@ -451,6 +529,46 @@ namespace Services.Banking
             if (lineIds.Count == 0)
                 return Array.Empty<GeneralLedgerLine>();
             return _glLines.Table.Where(l => lineIds.Contains(l.Id)).ToList();
+        }
+
+        private HashSet<int> HiddenVoidPairLineIds(
+            Bank bank,
+            BankReconciliation recon,
+            IReadOnlyList<GeneralLedgerLine> displayedLines)
+        {
+            if (recon.Status == BankReconciliationStatuses.Draft)
+                return AutoClearVoidPairLineIds(bank, recon.StatementEndDate.Date);
+
+            // Finished/undone snapshot: hide lines whose void partner is also in the snapshot.
+            var headerIds = displayedLines.Select(l => l.GeneralLedgerHeaderId).ToHashSet();
+            if (headerIds.Count == 0)
+                return new HashSet<int>();
+
+            var headers = _glHeaders.Table
+                .Where(h => headerIds.Contains(h.Id))
+                .ToDictionary(h => h.Id);
+
+            var pairedHeaderIds = new HashSet<int>();
+            foreach (var headerId in headerIds)
+            {
+                if (!headers.TryGetValue(headerId, out var header))
+                    continue;
+                if (!header.ReversedGeneralLedgerHeaderId.HasValue)
+                    continue;
+                var originalId = header.ReversedGeneralLedgerHeaderId.Value;
+                if (!headerIds.Contains(originalId))
+                    continue;
+                pairedHeaderIds.Add(headerId);
+                pairedHeaderIds.Add(originalId);
+            }
+
+            if (pairedHeaderIds.Count == 0)
+                return new HashSet<int>();
+
+            return displayedLines
+                .Where(l => pairedHeaderIds.Contains(l.GeneralLedgerHeaderId))
+                .Select(l => l.Id)
+                .ToHashSet();
         }
 
         private BankReconciliationListItemDto ToListItem(BankReconciliation recon)

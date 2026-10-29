@@ -131,6 +131,142 @@ public class BankReconciliationServiceTests
     }
 
     [Fact]
+    public void Undo_RefusesWhileDraftExists()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        var bank = harness.CreateBankWithOpeningBalance(50m);
+
+        var first = harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = new DateTime(2024, 1, 31, 0, 0, 0, DateTimeKind.Utc),
+            StatementEndingBalance = 50m
+        }, "tester");
+        first = harness.Reconciliations.Finish(first.Id, new FinishBankReconciliationRequest
+        {
+            Version = first.Version
+        }, "tester");
+
+        harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = new DateTime(2024, 2, 29, 0, 0, 0, DateTimeKind.Utc),
+            StatementEndingBalance = 50m
+        }, "tester");
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Reconciliations.Undo(first.Id, new UndoBankReconciliationRequest
+            {
+                Reason = "Should refuse"
+            }, "tester"));
+        Assert.Contains("Discard or finish the draft first", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Start_PreTicksOnlyCurrentOpeningBalance_NotPriorVoidedOb()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        var bank = harness.CreateBankWithOpeningBalance(100m);
+        var firstObHeaderId = harness.Repos.Banks.GetById(bank.Id).OpeningBalanceGeneralLedgerHeaderId;
+        Assert.NotNull(firstObHeaderId);
+
+        bank = harness.Banks.Update(bank.Id, new UpdateBankAccountRequest
+        {
+            Name = bank.Name,
+            Type = bank.Type,
+            OpeningBalance = 150m,
+            OpeningBalanceDate = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        }, includeFullNumbers: false);
+
+        var currentObHeaderId = harness.Repos.Banks.GetById(bank.Id).OpeningBalanceGeneralLedgerHeaderId;
+        Assert.NotNull(currentObHeaderId);
+        Assert.NotEqual(firstObHeaderId, currentObHeaderId);
+
+        var draft = harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = DateTime.UtcNow.Date,
+            StatementEndingBalance = 150m
+        }, "tester");
+
+        var openingDeposit = Assert.Single(draft.Deposits, d => d.IsOpeningBalance);
+        Assert.Equal(currentObHeaderId, openingDeposit.HeaderId);
+        Assert.DoesNotContain(draft.Deposits, d => d.HeaderId == firstObHeaderId);
+        Assert.DoesNotContain(draft.Payments, p => p.HeaderId == firstObHeaderId);
+        Assert.Equal(0m, draft.Difference);
+
+        // Prior OB + its reversal are auto-cleared (items exist, hidden from UI).
+        var tickedHeaderIds = harness.Repos.ReconciliationItems.Table
+            .Where(i => i.BankReconciliationId == draft.Id)
+            .Select(i => harness.Repos.GlLines.GetById(i.GeneralLedgerLineId).GeneralLedgerHeaderId)
+            .ToHashSet();
+        Assert.Contains(firstObHeaderId!.Value, tickedHeaderIds);
+        Assert.Contains(currentObHeaderId!.Value, tickedHeaderIds);
+        Assert.Contains(
+            harness.Repos.GlHeaders.Table.Where(h => h.ReversedGeneralLedgerHeaderId == firstObHeaderId).Select(h => h.Id),
+            id => tickedHeaderIds.Contains(id));
+    }
+
+    [Fact]
+    public void Start_AutoClearsVoidAndReversalPair_HiddenFromCandidates()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        var bank = harness.CreateBank("Ops");
+        var moneyOut = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.MoneyOut,
+            BankId = bank.Id,
+            ContraAccountId = harness.RequireAccount("50100").Id,
+            Date = DateTime.UtcNow.Date,
+            Amount = 40m
+        });
+        harness.Transactions.Void(moneyOut.Id, new VoidBankTransactionRequest
+        {
+            VoidDate = DateTime.UtcNow.Date
+        });
+
+        var draft = harness.Reconciliations.Start(new StartBankReconciliationRequest
+        {
+            BankId = bank.Id,
+            StatementEndDate = DateTime.UtcNow.Date,
+            StatementEndingBalance = 0m
+        }, "tester");
+
+        Assert.Empty(draft.Deposits);
+        Assert.Empty(draft.Payments);
+        Assert.Equal(0m, draft.Difference);
+
+        var originalHeaderId = moneyOut.GeneralLedgerHeaderId!.Value;
+        var voidHeaderId = harness.Repos.BankTransactions.GetById(moneyOut.Id).VoidGeneralLedgerHeaderId;
+        Assert.NotNull(voidHeaderId);
+
+        var tickedHeaderIds = harness.Repos.ReconciliationItems.Table
+            .Where(i => i.BankReconciliationId == draft.Id)
+            .Select(i => harness.Repos.GlLines.GetById(i.GeneralLedgerLineId).GeneralLedgerHeaderId)
+            .ToHashSet();
+        Assert.Contains(originalHeaderId, tickedHeaderIds);
+        Assert.Contains(voidHeaderId.Value, tickedHeaderIds);
+
+        var finished = harness.Reconciliations.Finish(draft.Id, new FinishBankReconciliationRequest
+        {
+            Version = draft.Version
+        }, "tester");
+        Assert.Equal((int)BankReconciliationStatuses.Finished, finished.Status);
+        Assert.Empty(finished.Deposits);
+        Assert.Empty(finished.Payments);
+        Assert.All(
+            harness.Repos.GlLines.Table.Where(l =>
+                l.AccountId == bank.AccountId
+                && (l.GeneralLedgerHeaderId == originalHeaderId || l.GeneralLedgerHeaderId == voidHeaderId)),
+            l => Assert.Equal(finished.Id, l.BankReconciliationId));
+    }
+
+    [Fact]
     public void MoneyOut_RefusesCustomerArAndVendorApContra()
     {
         using var harness = new Harness();
