@@ -207,6 +207,8 @@ export interface BankReconciliationListItem {
   statusLabel: string;
   finishedAt?: string | null;
   finishedBy?: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
   version: number;
 }
 
@@ -228,6 +230,8 @@ export interface BankReconciliation {
   createdAt: string;
   finishedBy?: string | null;
   finishedAt?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
   deposits: BankReconciliationCandidateLine[];
   payments: BankReconciliationCandidateLine[];
 }

@@ -16,6 +16,8 @@ namespace Services.Banking
         BankReconciliationDto AddAdjustment(int id, CreateReconciliationAdjustmentRequest request);
         BankReconciliationDto Finish(int id, FinishBankReconciliationRequest request, string actor);
         BankReconciliationDto Undo(int id, UndoBankReconciliationRequest request, string actor);
+        /// <summary>Second-person sign-off on a finished reconciliation; the reviewer must differ from the preparer (3D).</summary>
+        BankReconciliationDto Review(int id, string actor);
         void DiscardDraft(int id);
         /// <summary>Finished reconciliation report figures (statement + outstanding → books).</summary>
         BankReconciliationReportDto GetReport(int id);

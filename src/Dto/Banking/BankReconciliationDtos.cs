@@ -57,6 +57,8 @@ namespace Dto.Banking
         public string StatusLabel { get; set; } = string.Empty;
         public DateTime? FinishedAt { get; set; }
         public string? FinishedBy { get; set; }
+        public string? ReviewedBy { get; set; }
+        public DateTime? ReviewedAt { get; set; }
         public long Version { get; set; }
     }
 
@@ -93,6 +95,8 @@ namespace Dto.Banking
         public DateTime CreatedAt { get; set; }
         public string? FinishedBy { get; set; }
         public DateTime? FinishedAt { get; set; }
+        public string? ReviewedBy { get; set; }
+        public DateTime? ReviewedAt { get; set; }
         public IReadOnlyList<BankReconciliationCandidateLineDto> Deposits { get; set; } = Array.Empty<BankReconciliationCandidateLineDto>();
         public IReadOnlyList<BankReconciliationCandidateLineDto> Payments { get; set; } = Array.Empty<BankReconciliationCandidateLineDto>();
     }
