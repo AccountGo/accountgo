@@ -8,6 +8,7 @@ using Services.Purchasing;
 using Services.Sales;
 using System.Collections.Generic;
 using Services.Financial;
+using Services.Banking;
 using Dto.Financial;
 using System.Linq;
 using System;
@@ -24,18 +25,21 @@ namespace Api.Controllers
         private readonly IInventoryService _inventoryService;
         private readonly IPurchasingService _purchasingService;
         private readonly IFinancialService _financialService;
+        private readonly IBankAccountService _bankAccountService;
 
         public CommonController(ISalesService salesService,
             IAdministrationService administrationService,
             IInventoryService inventoryService,
             IPurchasingService purchasingService,
-            IFinancialService financialService)
+            IFinancialService financialService,
+            IBankAccountService bankAccountService)
         {
             _salesService = salesService;
             _administrationService = administrationService;
             _inventoryService = inventoryService;
             _purchasingService = purchasingService;
             _financialService = financialService;
+            _bankAccountService = bankAccountService;
         }
 
         [HttpGet]
@@ -120,7 +124,8 @@ namespace Api.Controllers
         [Route("CashBanks")] // api/Common/CashBanks
         public IActionResult CashBanks()
         {
-            var banks = _financialService.GetCashAndBanks();
+            // #413 1B: active banks only via BankAccountService (archived excluded).
+            var banks = _bankAccountService.List(includeArchived: false, includeFullNumbers: false).Accounts;
             ICollection<Bank> cashbanksDto = new HashSet<Bank>();
 
             foreach (var bank in banks)
