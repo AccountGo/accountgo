@@ -64,7 +64,10 @@ namespace Api.Controllers
         public IActionResult CashBanks()
         {
             // #413 1B: delegate to BankAccountService; keep the legacy DTO shape for Settings.
-            var list = _bankAccountService.List(includeArchived: false, includeFullNumbers: false);
+            var list = _bankAccountService.List(
+                includeArchived: false,
+                includeFullNumbers: false,
+                includeCashHistoryCodes: true);
             var cashAndBanksDto = list.Accounts.Select(bank => new Bank
             {
                 Id = bank.Id,

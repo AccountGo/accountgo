@@ -125,7 +125,10 @@ namespace Api.Controllers
         public IActionResult CashBanks()
         {
             // #413 1B: active banks only via BankAccountService (archived excluded).
-            var banks = _bankAccountService.List(includeArchived: false, includeFullNumbers: false).Accounts;
+            var banks = _bankAccountService.List(
+                includeArchived: false,
+                includeFullNumbers: false,
+                includeCashHistoryCodes: false).Accounts;
             ICollection<Bank> cashbanksDto = new HashSet<Bank>();
 
             foreach (var bank in banks)

@@ -10,17 +10,20 @@ namespace Services.Banking
 {
     public interface IBankAccountService
     {
-        BankAccountsListDto List(bool includeArchived, bool includeFullNumbers);
+        BankAccountsListDto List(bool includeArchived, bool includeFullNumbers, bool includeCashHistoryCodes);
         BankAccountDto Get(int id, bool includeFullNumbers);
         IReadOnlyList<BankAccountPickerItemDto> Picker(bool includeOtherCashAccounts);
         IReadOnlyList<UnassignedCashDto> GetCashHistory(bool includeCodes);
         IReadOnlyList<object> EligiblePostingAccounts();
         BankAccountDto Create(CreateBankAccountRequest request, bool includeFullNumbers);
         BankAccountDto Update(int id, UpdateBankAccountRequest request, bool includeFullNumbers);
-        BankAccountDto Archive(int id, bool includeFullNumbers);
+        BankAccountDto Archive(int id, bool includeFullNumbers, bool confirmNonZeroBalance = false);
         BankAccountDto Unarchive(int id, bool includeFullNumbers);
         BankAccountDto SetDefault(int id, string forKind, bool includeFullNumbers);
-        /// <summary>Hard-delete only when there is no GL / bank-transaction history; otherwise archives (D9).</summary>
+        /// <summary>
+        /// Hard-delete the bank row when it has no GL history; otherwise archives (D9).
+        /// Never deletes the linked GL account in 1B (takeover renames make "dedicated" unsafe).
+        /// </summary>
         void DeleteOrArchive(int id);
         Account EnsureEligiblePostingAccount(int accountId, int? exceptBankId);
         void SyncBankNameFromAccount(Account account);

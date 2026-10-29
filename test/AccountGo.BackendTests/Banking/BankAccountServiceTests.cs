@@ -8,6 +8,7 @@ using System.Linq;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Security;
 using Core.Entitlements;
 using Core.Tenancy;
 using Dto.Banking;
@@ -134,29 +135,78 @@ public class BankAccountServiceTests
             AccountNumber = "1234567890"
         }, includeFullNumbers: true);
 
-        var view = harness.Service.List(includeArchived: false, includeFullNumbers: false).Accounts.Single();
+        var view = harness.Service.List(includeArchived: false, includeFullNumbers: false, includeCashHistoryCodes: false)
+            .Accounts.Single();
         Assert.Equal("•••• 7890", view.AccountNumberMasked);
         Assert.Null(view.AccountNumber);
 
-        var manage = harness.Service.List(includeArchived: false, includeFullNumbers: true).Accounts.Single();
+        var manage = harness.Service.List(includeArchived: false, includeFullNumbers: true, includeCashHistoryCodes: true)
+            .Accounts.Single();
         Assert.Equal("1234567890", manage.AccountNumber);
     }
 
     [Fact]
-    public void DeleteOrArchive_HardDeletesBankWithNoHistory()
+    public void DeleteOrArchive_UnlinksBank_NeverDeletesAccount()
     {
         using var harness = new Harness();
         harness.SeedCashTree();
         var created = harness.Service.Create(new CreateBankAccountRequest { Name = "Temp", Type = 1 }, includeFullNumbers: false);
-        // First bank adopted 10111; create a second dedicated account then delete it.
         var dedicated = harness.Service.Create(new CreateBankAccountRequest { Name = "Disposable", Type = 1 }, includeFullNumbers: false);
         var accountId = dedicated.AccountId!.Value;
 
         harness.Service.DeleteOrArchive(dedicated.Id);
 
         Assert.Null(harness.Banks.GetById(dedicated.Id));
-        Assert.Null(harness.Accounts.GetById(accountId));
+        Assert.NotNull(harness.Accounts.GetById(accountId));
         Assert.NotNull(harness.Banks.GetById(created.Id));
+    }
+
+    [Fact]
+    public void Archive_Accounting_RefusesNonZeroBalance()
+    {
+        using var harness = new Harness(hasFinancials: true);
+        harness.SeedCashTree();
+        var first = harness.Service.Create(new CreateBankAccountRequest { Name = "A", Type = 1 }, includeFullNumbers: false);
+        harness.Service.Create(new CreateBankAccountRequest { Name = "B", Type = 1 }, includeFullNumbers: false);
+        harness.PostDebit(first.AccountId!.Value, 125.50m);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.Archive(first.Id, includeFullNumbers: false));
+        Assert.Equal("Move the remaining 125.50 to another account first.", ex.Message);
+    }
+
+    [Fact]
+    public void Archive_InvoicingAndBills_RequiresConfirmAndReturnsBalance()
+    {
+        using var harness = new Harness(hasFinancials: false);
+        harness.SeedCashTree();
+        var first = harness.Service.Create(new CreateBankAccountRequest { Name = "A", Type = 1 }, includeFullNumbers: false);
+        harness.Service.Create(new CreateBankAccountRequest { Name = "B", Type = 1 }, includeFullNumbers: false);
+        harness.PostDebit(first.AccountId!.Value, 40m);
+
+        var pending = Assert.Throws<BankArchiveConfirmationRequiredException>(() =>
+            harness.Service.Archive(first.Id, includeFullNumbers: false, confirmNonZeroBalance: false));
+        Assert.Equal(40m, pending.Balance);
+
+        var archived = harness.Service.Archive(first.Id, includeFullNumbers: false, confirmNonZeroBalance: true);
+        Assert.NotNull(archived.ArchivedAt);
+    }
+
+    [Fact]
+    public void Create_RefusesPostingAccountIdWithoutFinancials()
+    {
+        using var harness = new Harness(hasFinancials: false);
+        harness.SeedCashTree();
+        var checking = harness.RequireAccount("10111");
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Service.Create(new CreateBankAccountRequest
+            {
+                Name = "Linked",
+                Type = 1,
+                PostingAccountId = checking.Id
+            }, includeFullNumbers: false));
+        Assert.Contains("Financials", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -211,12 +261,18 @@ public class BankAccountServiceTests
         public IRepository<Account> Accounts => _repos.Accounts;
         public IRepository<Bank> Banks => _repos.Banks;
 
-        public Harness()
+        public Harness(bool hasFinancials = true)
         {
             _repos = new InMemoryRepos();
             var tenant = new FakeTenant(companyId: 1);
             var entitlements = new Mock<IEntitlementService>();
             entitlements.Setup(e => e.EnsureCanCreate(It.IsAny<MeteredResource>(), It.IsAny<int>()));
+            entitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
+                .Returns((int _, EntitlementAction action) =>
+                    action is EntitlementAction.Module module
+                    && module.AnyOf.Contains(SystemModules.Financials, StringComparer.OrdinalIgnoreCase)
+                        ? new EntitlementDecision(hasFinancials, null, null)
+                        : new EntitlementDecision(true, null, null));
             Service = new BankAccountService(
                 _repos.Banks,
                 _repos.Accounts,
@@ -226,6 +282,27 @@ public class BankAccountServiceTests
                 entitlements.Object,
                 tenant);
             _repos.Settings.Insert(new CompanySetting { CompanyId = 1, CoaTemplateId = CoaTemplates.Legacy });
+        }
+
+        public void PostDebit(int accountId, decimal amount)
+        {
+            var header = new GeneralLedgerHeader
+            {
+                Id = _repos.NextGlHeaderId(),
+                CompanyId = 1,
+                Date = DateTime.UtcNow,
+                DocumentType = DocumentTypes.JournalEntry
+            };
+            _repos.GlHeaders.Insert(header);
+            _repos.GlLines.Insert(new GeneralLedgerLine
+            {
+                Id = _repos.NextGlLineId(),
+                CompanyId = 1,
+                AccountId = accountId,
+                GeneralLedgerHeaderId = header.Id,
+                DrCr = DrOrCrSide.Dr,
+                Amount = amount
+            });
         }
 
         public void SeedCashTree()
@@ -296,6 +373,8 @@ public class BankAccountServiceTests
     {
         private int _accountId = 100;
         private int _bankId = 100;
+        private int _glHeaderId = 100;
+        private int _glLineId = 100;
         public MemoryRepo<Account> Accounts { get; } = new();
         public MemoryRepo<Bank> Banks { get; } = new();
         public MemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
@@ -303,6 +382,8 @@ public class BankAccountServiceTests
         public MemoryRepo<CompanySetting> Settings { get; } = new();
         public int NextAccountId() => ++_accountId;
         public int NextBankId() => ++_bankId;
+        public int NextGlHeaderId() => ++_glHeaderId;
+        public int NextGlLineId() => ++_glLineId;
     }
 
     private sealed class MemoryRepo<T> : IRepository<T> where T : BaseEntity
