@@ -43,6 +43,11 @@ namespace Dto.Banking
         public int? PartyId { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Memo { get; set; }
+        /// <summary>
+        /// Required for <c>Adjustment</c>: true increases the bank balance (DR bank), false decreases it (CR bank).
+        /// Ignored for other kinds (Fee/MoneyOut decrease; Interest/MoneyIn increase).
+        /// </summary>
+        public bool? IncreaseBalance { get; set; }
     }
 
     public class VoidBankTransactionRequest

@@ -15,9 +15,9 @@ namespace Services.Banking
         private const string OpeningBalanceEquityCode = "30700";
 
         /// <summary>
-        /// Stores opening balance on the bank, posts DR bank / CR 30700 (or reverse if negative),
-        /// and keeps a <see cref="BankTransaction"/> of kind OpeningBalance. GL
-        /// <c>SourceDocumentId</c> is the bank id so migrations can map headers to banks.
+        /// Stores opening balance on the bank (signed; negative = overdraft), posts DR bank / CR 30700
+        /// (or reverse if negative), and keeps a <see cref="BankTransaction"/> of kind OpeningBalance.
+        /// GL <c>SourceDocumentId</c> is the BankTransaction id, like every other bank-transaction kind.
         /// </summary>
         private void ApplyOpeningBalance(
             Bank bank,
@@ -92,21 +92,24 @@ namespace Services.Banking
             var equitySide = rounded > 0m ? DrOrCrSide.Cr : DrOrCrSide.Dr;
             var abs = Math.Abs(rounded);
 
-            // SourceDocumentId = bank.Id so a BankTransaction backfill can map the header (2A / #420).
+            // Insert the BankTransaction first so the GL header can point at it (same as MoneyIn/Fee/…).
+            var tx = InsertOpeningBalanceTransaction(bank, rounded, date);
+
             var header = _financial.CreateGeneralLedgerHeader(
                 DocumentTypes.BankTransaction,
                 date,
                 OpeningBalanceDescription,
-                sourceDocumentId: bank.Id);
+                sourceDocumentId: tx.Id);
             header.GeneralLedgerLines.Add(_financial.CreateGeneralLedgerLine(bankSide, bank.AccountId.Value, abs));
             header.GeneralLedgerLines.Add(_financial.CreateGeneralLedgerLine(equitySide, equity.Id, abs));
             _financial.SaveGeneralLedgerEntry(header);
             bank.OpeningBalanceGeneralLedgerHeaderId = header.Id;
 
-            InsertOpeningBalanceTransaction(bank, abs, date, header.Id);
+            tx.GeneralLedgerHeaderId = header.Id;
+            _bankTransactions.Update(tx);
         }
 
-        private void InsertOpeningBalanceTransaction(Bank bank, decimal absAmount, DateTime date, int headerId)
+        private BankTransaction InsertOpeningBalanceTransaction(Bank bank, decimal signedAmount, DateTime date)
         {
             var existing = _bankTransactions.Table.FirstOrDefault(t =>
                 t.BankId == bank.Id
@@ -115,24 +118,27 @@ namespace Services.Banking
             if (existing != null)
             {
                 existing.Date = date;
-                existing.Amount = absAmount;
-                existing.GeneralLedgerHeaderId = headerId;
+                existing.Amount = signedAmount;
+                existing.GeneralLedgerHeaderId = null;
                 existing.Memo = OpeningBalanceDescription;
                 _bankTransactions.Update(existing);
-                return;
+                return existing;
             }
 
-            _bankTransactions.Insert(new BankTransaction
+            var priorCount = _bankTransactions.Table.Count(t =>
+                t.BankId == bank.Id && t.Kind == BankTransactionKinds.OpeningBalance);
+            var tx = new BankTransaction
             {
                 CompanyId = bank.CompanyId,
                 Kind = BankTransactionKinds.OpeningBalance,
                 BankId = bank.Id,
                 Date = date,
-                Amount = absAmount,
-                No = $"OB-{bank.Id}",
-                Memo = OpeningBalanceDescription,
-                GeneralLedgerHeaderId = headerId
-            });
+                Amount = signedAmount,
+                No = $"OB-{bank.Id}-{priorCount + 1}",
+                Memo = OpeningBalanceDescription
+            };
+            _bankTransactions.Insert(tx);
+            return tx;
         }
 
         private void MarkOpeningBalanceTransactionVoided(int bankId, int previousHeaderId, int voidHeaderId)

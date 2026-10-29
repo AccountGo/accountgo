@@ -67,6 +67,114 @@ public class BankTransactionServiceTests
     }
 
     [Fact]
+    public void MoneyOut_RefusesCashBankArApAndOpeningBalanceEquity()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedContraRefuseAccounts();
+        var bank = harness.CreateBank("Ops");
+        var other = harness.CreateBank("Savings");
+
+        InvalidOperationException Refuse(int contraId) =>
+            Assert.Throws<InvalidOperationException>(() =>
+                harness.Transactions.Create(new CreateBankTransactionRequest
+                {
+                    Kind = (int)BankTransactionKinds.MoneyOut,
+                    BankId = bank.Id,
+                    ContraAccountId = contraId,
+                    Date = DateTime.UtcNow.Date,
+                    Amount = 10m
+                }));
+
+        Assert.Contains("Transfer", Refuse(other.AccountId!.Value).Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Transfer", Refuse(harness.RequireAccount("10113").Id).Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("AR and AP", Refuse(harness.RequireAccount("10120").Id).Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("AR and AP", Refuse(harness.RequireAccount("20110").Id).Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Opening Balance Equity", Refuse(harness.RequireAccount("30700").Id).Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Adjustment_RequiresDirection_AndCanIncreaseBalance()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        var bank = harness.CreateBank("Ops");
+        harness.PostDebit(bank.AccountId!.Value, 50m);
+        var expenseId = harness.RequireAccount("50100").Id;
+
+        var missing = Assert.Throws<InvalidOperationException>(() =>
+            harness.Transactions.Create(new CreateBankTransactionRequest
+            {
+                Kind = (int)BankTransactionKinds.Adjustment,
+                BankId = bank.Id,
+                ContraAccountId = expenseId,
+                Date = DateTime.UtcNow.Date,
+                Amount = 5m
+            }));
+        Assert.Contains("increases or decreases", missing.Message, StringComparison.OrdinalIgnoreCase);
+
+        var increased = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.Adjustment,
+            BankId = bank.Id,
+            ContraAccountId = expenseId,
+            Date = DateTime.UtcNow.Date,
+            Amount = 5m,
+            IncreaseBalance = true
+        });
+        Assert.Equal(55m, harness.AccountBalance(bank.AccountId!.Value));
+        Assert.False(increased.IsVoid);
+    }
+
+    [Fact]
+    public void Void_RefusesDateBeforeTransaction()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedFeeAccount();
+        var bank = harness.CreateBank("Ops");
+        harness.PostDebit(bank.AccountId!.Value, 50m);
+        var txDate = new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc);
+        var created = harness.Transactions.Create(new CreateBankTransactionRequest
+        {
+            Kind = (int)BankTransactionKinds.Fee,
+            BankId = bank.Id,
+            Date = txDate,
+            Amount = 5m
+        });
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Transactions.Void(created.Id, new VoidBankTransactionRequest
+            {
+                VoidDate = txDate.AddDays(-1)
+            }));
+        Assert.Contains("on or after the transaction date", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Create_RefusesPartyFromAnotherWorkspace()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        var bank = harness.CreateBank("Ops");
+        var foreign = new Party { Id = 99, CompanyId = 2, Name = "Other co", PartyType = PartyTypes.Customer };
+        harness.InsertParty(foreign);
+
+        Assert.Throws<TenantEntityNotFoundException>(() =>
+            harness.Transactions.Create(new CreateBankTransactionRequest
+            {
+                Kind = (int)BankTransactionKinds.MoneyOut,
+                BankId = bank.Id,
+                ContraAccountId = harness.RequireAccount("50100").Id,
+                PartyId = foreign.Id,
+                Date = DateTime.UtcNow.Date,
+                Amount = 10m
+            }));
+    }
+
+    [Fact]
     public void Void_ReversesLedgerAndMarksVoid()
     {
         using var harness = new Harness();
@@ -172,6 +280,20 @@ public class BankTransactionServiceTests
 
         public void SeedFeeAccount() =>
             AddAccount("50121", "Bank Charges", null, isCash: false, id: 60);
+
+        public void SeedExpenseAccount() =>
+            AddAccount("50100", "Office expense", null, isCash: false, id: 61);
+
+        public void SeedContraRefuseAccounts()
+        {
+            AddAccount("10120", "Accounts Receivable", null, isCash: false, id: 20);
+            AddAccount("20110", "Accounts Payable", null, isCash: false, id: 21);
+        }
+
+        public Account RequireAccount(string code) =>
+            _repos.Accounts.Table.Single(a => a.AccountCode == code);
+
+        public void InsertParty(Party party) => _repos.Parties.Insert(party);
 
         public BankAccountDto CreateBank(string name) =>
             Banks.Create(new CreateBankAccountRequest { Name = name, Type = 1 }, includeFullNumbers: false);

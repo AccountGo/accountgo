@@ -18,6 +18,9 @@ namespace Services.Banking
     {
         internal const string FeeAccountCode = "50121";
         internal const string InterestIncomeAccountCode = "40300";
+        internal const string OpeningBalanceEquityCode = "30700";
+        internal const string AccountsReceivableControlCode = "10120";
+        internal const string AccountsPayableControlCode = "20110";
 
         private readonly IRepository<BankTransaction> _transactions;
         private readonly IRepository<Bank> _banks;
@@ -82,6 +85,8 @@ namespace Services.Banking
             if (!bank.AccountId.HasValue)
                 throw new InvalidOperationException("That bank account has no posting account.");
 
+            EnsurePartyInWorkspace(request.PartyId);
+
             var date = request.Date.Date;
             BankTransaction tx;
             switch (kind)
@@ -95,8 +100,12 @@ namespace Services.Banking
                     break;
                 case BankTransactionKinds.MoneyOut:
                 case BankTransactionKinds.Fee:
-                case BankTransactionKinds.Adjustment:
                     tx = CreateTwoSided(bank, kind, request, amount, date, moneyIn: false);
+                    break;
+                case BankTransactionKinds.Adjustment:
+                    if (!request.IncreaseBalance.HasValue)
+                        throw new InvalidOperationException("Pick whether the adjustment increases or decreases the bank balance.");
+                    tx = CreateTwoSided(bank, kind, request, amount, date, moneyIn: request.IncreaseBalance.Value);
                     break;
                 default:
                     throw new InvalidOperationException("Pick a valid transaction kind.");
@@ -117,6 +126,9 @@ namespace Services.Banking
                 throw new InvalidOperationException("That transaction has no ledger entry to reverse.");
 
             var voidDate = (request.VoidDate ?? DateTime.UtcNow).Date;
+            if (voidDate < tx.Date.Date)
+                throw new InvalidOperationException("Void date must be on or after the transaction date.");
+
             var reversal = _financial.CreateReversingEntry(
                 tx.GeneralLedgerHeaderId.Value,
                 string.IsNullOrWhiteSpace(request.Reason)
@@ -216,12 +228,48 @@ namespace Services.Banking
         private void EnsurePostableContra(Account account, int bankAccountId)
         {
             if (account.Id == bankAccountId)
-                throw new InvalidOperationException("Contra account cannot be the same as the bank account.");
+                throw new InvalidOperationException("Contra account cannot be the same as the bank account. Use a Transfer instead.");
             if (account.ArchivedAt.HasValue)
                 throw new InvalidOperationException("Pick a postable account.");
             var hasChildren = _accounts.Table.Any(a => a.ParentAccountId == account.Id);
             if (hasChildren || !account.CanPost())
                 throw new InvalidOperationException("Pick a postable account.");
+
+            if (string.Equals(account.AccountCode, OpeningBalanceEquityCode, StringComparison.Ordinal))
+                throw new InvalidOperationException("Opening Balance Equity can't be used as a contra account.");
+
+            if (string.Equals(account.AccountCode, AccountsReceivableControlCode, StringComparison.Ordinal)
+                || string.Equals(account.AccountCode, AccountsPayableControlCode, StringComparison.Ordinal))
+                throw new InvalidOperationException("AR and AP control accounts can't be used as a contra account.");
+
+            var glSetting = GetGeneralLedgerSetting();
+            if (glSetting?.PayableAccountId == account.Id)
+                throw new InvalidOperationException("AR and AP control accounts can't be used as a contra account.");
+
+            if (IsCashOrBankLinked(account))
+                throw new InvalidOperationException("Cash and bank accounts can't be used as a contra account. Use a Transfer instead.");
+        }
+
+        private bool IsCashOrBankLinked(Account account)
+        {
+            if (account.IsCash)
+                return true;
+            if (account.ParentAccountId.HasValue)
+            {
+                var parent = _accounts.GetById(account.ParentAccountId.Value);
+                if (parent != null && parent.IsCash)
+                    return true;
+            }
+            return _banks.Table.Any(b => b.AccountId == account.Id);
+        }
+
+        private void EnsurePartyInWorkspace(int? partyId)
+        {
+            if (!partyId.HasValue)
+                return;
+            var party = _parties.GetById(partyId.Value);
+            if (party == null || party.CompanyId != _tenant.CompanyId)
+                throw new TenantEntityNotFoundException(nameof(Party), partyId.Value);
         }
 
         private BankTransaction NewTransaction(

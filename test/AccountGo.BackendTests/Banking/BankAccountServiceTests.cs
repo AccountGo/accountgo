@@ -265,13 +265,14 @@ public class BankAccountServiceTests
         Assert.Equal(asOf.Date, created.OpeningBalanceDate!.Value.Date);
         Assert.NotNull(saved);
         Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
-        Assert.Equal(created.Id, saved.SourceDocumentId);
-        Assert.Equal(2, saved.GeneralLedgerLines.Count);
-        Assert.Contains(saved.GeneralLedgerLines, l => l.AccountId == created.AccountId && l.DrCr == DrOrCrSide.Dr && l.Amount == 500m);
-        Assert.Contains(harness.BankTransactions.Table, t =>
+        var obTx = Assert.Single(harness.BankTransactions.Table.Where(t =>
             t.BankId == created.Id
             && t.Kind == BankTransactionKinds.OpeningBalance
-            && t.GeneralLedgerHeaderId == saved.Id);
+            && t.GeneralLedgerHeaderId == saved.Id));
+        Assert.Equal(obTx.Id, saved.SourceDocumentId);
+        Assert.Equal(500m, obTx.Amount);
+        Assert.Equal(2, saved.GeneralLedgerLines.Count);
+        Assert.Contains(saved.GeneralLedgerLines, l => l.AccountId == created.AccountId && l.DrCr == DrOrCrSide.Dr && l.Amount == 500m);
 
         harness.PostDebit(created.AccountId!.Value, 50m, asOf.AddDays(5));
         var register = harness.Service.GetRegister(created.Id, from: asOf.AddDays(1), to: null, page: 1, pageSize: 50);
@@ -282,7 +283,7 @@ public class BankAccountServiceTests
         var obLine = harness.Service.GetRegister(created.Id, from: asOf, to: asOf, page: 1, pageSize: 50).Lines.Single();
         Assert.Equal("Opening balance", obLine.Type);
         Assert.Equal(nameof(DocumentTypes.BankTransaction), obLine.SourceDoc!.Type);
-        Assert.Equal(created.Id, obLine.SourceDoc.Id);
+        Assert.Equal(obTx.Id, obLine.SourceDoc.Id);
     }
 
     [Fact]
@@ -322,7 +323,9 @@ public class BankAccountServiceTests
         Assert.Equal(100m, created.OpeningBalance);
         Assert.NotNull(saved);
         Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
-        Assert.Equal(created.Id, saved.SourceDocumentId);
+        var obTx = Assert.Single(harness.BankTransactions.Table.Where(t =>
+            t.BankId == created.Id && t.Kind == BankTransactionKinds.OpeningBalance));
+        Assert.Equal(obTx.Id, saved.SourceDocumentId);
         harness.Financial.Verify(f => f.SaveGeneralLedgerEntry(It.IsAny<GeneralLedgerHeader>()), Times.Once);
     }
 
@@ -449,6 +452,10 @@ public class BankAccountServiceTests
         Assert.Equal(-25.50m, created.OpeningBalance);
         Assert.Equal(DocumentTypes.BankTransaction, saved!.DocumentType);
         Assert.Contains(saved.GeneralLedgerLines, l => l.AccountId == created.AccountId && l.DrCr == DrOrCrSide.Cr && l.Amount == 25.50m);
+        var obTx = Assert.Single(harness.BankTransactions.Table.Where(t =>
+            t.BankId == created.Id && t.Kind == BankTransactionKinds.OpeningBalance));
+        Assert.Equal(-25.50m, obTx.Amount);
+        Assert.Equal(obTx.Id, saved.SourceDocumentId);
     }
 
     [Fact]
