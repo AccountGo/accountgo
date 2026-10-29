@@ -811,6 +811,26 @@ namespace AccountGo.BackendTests
             Assert.Contains("ap@customer.example", payload);
             Assert.Contains("cfo@customer.example", payload);
 
+            // Cc counts toward the cap and is sent as a real copy, not another To.
+            var ccTooMany = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=ap@customer.example&additionalRecipients=cfo@customer.example&cc=jane@customer.example");
+            Assert.Equal(HttpStatusCode.BadRequest, ccTooMany.StatusCode);
+
+            var withCc = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=ap@customer.example&cc=jane@customer.example");
+            Assert.True(withCc.IsSuccessStatusCode, await withCc.Content.ReadAsStringAsync());
+            var ccMessage = _emails.Messages.Last().Raw;
+            Assert.Equal(new[] { "ap@customer.example" }, ccMessage.AdditionalTo);
+            Assert.Equal(new[] { "jane@customer.example" }, ccMessage.Cc);
+            using (var ccPayload = JsonDocument.Parse(ResendEmailSender.BuildPayload("billing@accountgo.dev", ccMessage)))
+            {
+                Assert.Equal("jane@customer.example", ccPayload.RootElement.GetProperty("cc")[0].GetString());
+                Assert.DoesNotContain(ccPayload.RootElement.GetProperty("to").EnumerateArray(), r => r.GetString() == "jane@customer.example");
+            }
+
+            // A Cc that is already the To address is sent once, as To.
+            var ccIsTo = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&cc=billing@customer.example");
+            Assert.True(ccIsTo.IsSuccessStatusCode, await ccIsTo.Content.ReadAsStringAsync());
+            Assert.Empty(_emails.Messages.Last().Raw.Cc);
+
             // Database invoice recipient email is NOT changed (remains on-demand only)
             var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("billing@customer.example", reloaded.GetProperty("recipientEmail").GetString());
@@ -935,7 +955,7 @@ namespace AccountGo.BackendTests
 
             var settings = new
             {
-                sellerName = "LegalName", showSellerAddress = false, showCustomerEmail = false, showNotes = false,
+                sellerName = "LegalName", showSellerAddress = false, showCustomerEmail = false, showAttention = false, showNotes = false,
                 showPaymentInstructions = true, defaultNotes = "  Thanks!  ", defaultPaymentInstructions = " "
             };
             var saved = await Send(HttpMethod.Put, Current + "/sales-invoice-settings", settings);
@@ -944,6 +964,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("LegalName", read.GetProperty("sellerName").GetString());
             Assert.False(read.GetProperty("showSellerAddress").GetBoolean());
             Assert.False(read.GetProperty("showCustomerEmail").GetBoolean());
+            Assert.False(read.GetProperty("showAttention").GetBoolean());
             Assert.False(read.GetProperty("showNotes").GetBoolean());
             Assert.True(read.GetProperty("showPaymentInstructions").GetBoolean());
             Assert.Equal("Thanks!", read.GetProperty("defaultNotes").GetString());
@@ -988,7 +1009,7 @@ namespace AccountGo.BackendTests
             var before = await GetInvoice(invoiceId);
             Assert.Equal("Phase Three", before.Seller.Name);
             Assert.Empty(before.Seller.AddressLines);
-            Assert.True(before.Display.ShowCustomerEmail && before.Display.ShowNotes && before.Display.ShowPaymentInstructions);
+            Assert.True(before.Display.ShowCustomerEmail && before.Display.ShowAttention && before.Display.ShowNotes && before.Display.ShowPaymentInstructions);
 
             using (var scope = _factory.Services.CreateScope())
             {
@@ -1003,7 +1024,7 @@ namespace AccountGo.BackendTests
             })).IsSuccessStatusCode);
             Assert.True((await Send(HttpMethod.Put, Current + "/sales-invoice-settings", new
             {
-                sellerName = "LegalName", showSellerAddress = true, showCustomerEmail = false, showNotes = false, showPaymentInstructions = true
+                sellerName = "LegalName", showSellerAddress = true, showCustomerEmail = false, showAttention = false, showNotes = false, showPaymentInstructions = true
             })).IsSuccessStatusCode);
 
             var after = await GetInvoice(invoiceId);
@@ -1013,6 +1034,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("+63 917 000 0000", after.Seller.Phone);
             Assert.Equal(new[] { "12 Main St", "Makati 1200", "Philippines" }, after.Seller.AddressLines);
             Assert.False(after.Display.ShowCustomerEmail);
+            Assert.False(after.Display.ShowAttention);
             Assert.False(after.Display.ShowNotes);
             Assert.True(after.Display.ShowPaymentInstructions);
             // The flags only affect rendering; the editor still receives the invoice's own values.
@@ -1662,7 +1684,7 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public void InvoiceBillTo_FromParty_UsesBillToContactAttentionAddressAndFallbacks()
+        public void InvoiceBillTo_FromParty_PrintsCompanyDetailsWithContactOnlyAsAttention()
         {
             var company = new Party
             {
@@ -1694,9 +1716,10 @@ namespace AccountGo.BackendTests
             Assert.Equal("Acme Corp", withContact.Name);
             Assert.Equal("Attn: Jane Doe", withContact.Attention);
             Assert.Equal(42, withContact.ContactId);
-            Assert.Equal("jane@acme.test", withContact.Email);
+            // Bill To is the company being billed: the contact's own email and address never replace the company's.
+            Assert.Equal("billing@acme.test", withContact.Email);
             Assert.Equal("+1 555 0100", withContact.Phone);
-            Assert.Equal(new[] { "9 Contact Ave", "Quezon City", "1100", "PH" }, withContact.AddressLines);
+            Assert.Equal(new[] { "1 Main St", "Makati", "1226", "PH" }, withContact.AddressLines);
 
             var contactWithoutAddress = new Contact
             {
@@ -1708,7 +1731,7 @@ namespace AccountGo.BackendTests
             var fallback = InvoiceBillTo.FromParty(company, contactWithoutAddress);
             Assert.Equal("Attn: Bob Smith", fallback.Attention);
             Assert.Equal("billing@acme.test", fallback.Email);
-            Assert.Equal("+1 555 0199", fallback.Phone);
+            Assert.Equal("+1 555 0100", fallback.Phone);
             Assert.Equal(new[] { "1 Main St", "Makati", "1226", "PH" }, fallback.AddressLines);
 
             var companyOnly = InvoiceBillTo.FromParty(company);
@@ -1761,9 +1784,11 @@ namespace AccountGo.BackendTests
             var printed = await GetInvoice(invoiceId);
             Assert.Equal("Acme Corp", printed.CustomerName);
             Assert.Equal("Attn: Jane Doe", printed.CustomerAttention);
-            Assert.Equal("jane@acme.test", printed.CustomerEmail);
-            Assert.Contains("9 Contact Ave", printed.CustomerAddress);
-            Assert.Equal("jane@acme.test", printed.RecipientEmail);
+            Assert.Equal("billing@acme.test", printed.CustomerEmail);
+            Assert.Contains("1 Main St", printed.CustomerAddress);
+            Assert.DoesNotContain("9 Contact Ave", printed.CustomerAddress);
+            Assert.Equal("billing@acme.test", printed.RecipientEmail);
+            Assert.Equal("jane@acme.test", printed.RecipientCcEmail);
 
             var other = await (await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={client.Id}", new Dto.Common.ContactPersonDto
             {
@@ -1775,7 +1800,10 @@ namespace AccountGo.BackendTests
             var switched = await (await Send(HttpMethod.Post, $"/api/Sales/SetClientBillToContact?clientId={client.Id}&contactId={bobId}"))
                 .Content.ReadFromJsonAsync<Dto.Sales.Client>();
             Assert.Equal(bobId, switched.BillToContactId);
-            Assert.Equal("jane@acme.test", (await GetInvoice(invoiceId)).CustomerEmail);
+            // The issued invoice still names Jane, so she stays the one copied.
+            var afterSwitch = await GetInvoice(invoiceId);
+            Assert.Equal("Attn: Jane Doe", afterSwitch.CustomerAttention);
+            Assert.Equal("jane@acme.test", afterSwitch.RecipientCcEmail);
 
             var janeId = switched.Contacts.Single(c => c.FirstName == "Jane").Id;
             var afterDelete = await (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClientContact?clientId={client.Id}&contactId={janeId}"))
@@ -1796,9 +1824,12 @@ namespace AccountGo.BackendTests
             Assert.Null(cleared.BillToContactId);
             Assert.DoesNotContain(cleared.Contacts, c => c.IsBillTo);
 
-            // Issued invoice stays sendable from frozen bill-to email after company email is cleared.
+            // Issued invoice stays sendable from the frozen bill-to email after the company email is cleared.
             await EditCustomer(client.Id, "Acme Corp", email: null, street: "1 Main St");
-            Assert.Equal("jane@acme.test", (await GetInvoice(invoiceId)).RecipientEmail);
+            var afterClear = await GetInvoice(invoiceId);
+            Assert.Equal("billing@acme.test", afterClear.RecipientEmail);
+            Assert.Null(afterClear.RecipientCcEmail);
+
         }
 
         [Fact]
@@ -1840,7 +1871,8 @@ namespace AccountGo.BackendTests
             var printed = await GetInvoice(invoiceId);
             Assert.Equal("Acme Corp", printed.CustomerName);
             Assert.Equal("billing@acme.test", printed.CustomerEmail);
-            Assert.Null(printed.RecipientEmail);
+            // Still sendable to the email it was issued with.
+            Assert.Equal("billing@acme.test", printed.RecipientEmail);
 
             // Archived: still listed and still on its invoices, flagged for the picker; restoring clears it.
             var archived = await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={created.Id}");
