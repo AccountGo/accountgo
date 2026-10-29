@@ -62,9 +62,11 @@ namespace Services.Banking
 
             if (previousHeaderId.HasValue)
             {
+                var reversalDate = previousDate ?? date;
                 var reversal = _financial.CreateReversingEntry(
                     previousHeaderId.Value,
-                    $"Reversal of opening balance for {bank.Name}");
+                    $"Reversal of opening balance for {bank.Name}",
+                    reversalDate);
                 _financial.SaveGeneralLedgerEntry(reversal);
                 bank.OpeningBalanceGeneralLedgerHeaderId = null;
             }
