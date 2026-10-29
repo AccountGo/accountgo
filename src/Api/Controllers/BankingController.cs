@@ -23,17 +23,20 @@ namespace Api.Controllers
     public class BankingController : BaseController
     {
         private readonly IBankAccountService _banks;
+        private readonly IBankTransactionService _transactions;
         private readonly ITenantContext _tenant;
         private readonly IEntitlementService _entitlements;
         private readonly ApiDbContext _db;
 
         public BankingController(
             IBankAccountService banks,
+            IBankTransactionService transactions,
             ITenantContext tenant,
             IEntitlementService entitlements,
             ApiDbContext db)
         {
             _banks = banks;
+            _transactions = transactions;
             _tenant = tenant;
             _entitlements = entitlements;
             _db = db;
@@ -223,6 +226,75 @@ namespace Api.Controllers
             catch (TenantEntityNotFoundException)
             {
                 return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("Transactions")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        public IActionResult ListTransactions(
+            [FromQuery] int bankId,
+            [FromQuery] string? from = null,
+            [FromQuery] string? to = null)
+        {
+            try
+            {
+                return Ok(new BankTransactionListDto
+                {
+                    Transactions = _transactions.List(bankId, ParseRegisterDate(from), ParseRegisterDate(to))
+                });
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or FormatException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Transactions")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
+        public IActionResult CreateTransaction([FromBody] CreateBankTransactionRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var created = _transactions.Create(request);
+                tx.Commit();
+                return Ok(created);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Transactions/{id:int}/Void")]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
+        public IActionResult VoidTransaction(int id, [FromBody] VoidBankTransactionRequest? request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var voided = _transactions.Void(id, request ?? new VoidBankTransactionRequest());
+                tx.Commit();
+                return Ok(voided);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank transaction not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {

@@ -564,6 +564,26 @@ namespace Api.Data
                     .HasFilter("[IsDefaultForPayments] = 1");
             });
 
+            builder.Entity<BankTransaction>(entity =>
+            {
+                entity.Property(e => e.No).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.ReferenceNo).HasMaxLength(100);
+                entity.Property(e => e.Memo).HasMaxLength(500);
+                entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => new { e.CompanyId, e.BankId, e.Date }, "IX_BankTransaction_Company_Bank_Date");
+                entity.HasIndex(e => e.GeneralLedgerHeaderId);
+                entity.HasIndex(e => new { e.CompanyId, e.No }, "UX_BankTransaction_Company_No").IsUnique();
+
+                entity.HasOne(e => e.Bank).WithMany().HasForeignKey(e => e.BankId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ToBank).WithMany().HasForeignKey(e => e.ToBankId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ContraAccount).WithMany().HasForeignKey(e => e.ContraAccountId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Party).WithMany().HasForeignKey(e => e.PartyId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.GeneralLedgerHeader).WithMany().HasForeignKey(e => e.GeneralLedgerHeaderId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.VoidGeneralLedgerHeader).WithMany().HasForeignKey(e => e.VoidGeneralLedgerHeaderId).OnDelete(DeleteBehavior.Restrict);
+            });
+
             builder.Seed();
             /* Medhat END */
         }
@@ -579,6 +599,7 @@ namespace Api.Data
         public virtual DbSet<AuditableAttribute> AuditableAttributes { get; set; }
         public virtual DbSet<AuditableEntity> AuditableEntities { get; set; }
         public virtual DbSet<Bank> Banks { get; set; }
+        public virtual DbSet<BankTransaction> BankTransactions { get; set; }
         public virtual DbSet<Company> Companies { get; set; }
         public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }

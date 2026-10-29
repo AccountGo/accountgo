@@ -140,20 +140,66 @@ namespace Services.Banking
                     openingBalanceHeaderIds.Add(id);
             }
 
+            // SourceDocumentId on OB headers is the BankTransaction id (same as other kinds).
             foreach (var m in pageItems)
             {
                 if (openingBalanceHeaderIds.Contains(m.HeaderId))
                 {
-                    result[m.HeaderId] = OpeningBalanceEnrichment(bank.Id, isReversal: false);
+                    var sourceId = m.SourceDocumentId
+                        ?? _bankTransactions.Table
+                            .Where(t => t.GeneralLedgerHeaderId == m.HeaderId)
+                            .Select(t => (int?)t.Id)
+                            .FirstOrDefault()
+                        ?? bank.Id;
+                    result[m.HeaderId] = OpeningBalanceEnrichment(sourceId, isReversal: false);
                     continue;
                 }
 
                 if (m.ReversedGeneralLedgerHeaderId.HasValue
                     && openingBalanceHeaderIds.Contains(m.ReversedGeneralLedgerHeaderId.Value))
-                    result[m.HeaderId] = OpeningBalanceEnrichment(bank.Id, isReversal: true);
+                {
+                    var originalSourceId = _glHeaders.Table
+                        .Where(h => h.Id == m.ReversedGeneralLedgerHeaderId.Value)
+                        .Select(h => h.SourceDocumentId)
+                        .FirstOrDefault();
+                    if (!originalSourceId.HasValue)
+                    {
+                        originalSourceId = _bankTransactions.Table
+                            .Where(t => t.GeneralLedgerHeaderId == m.ReversedGeneralLedgerHeaderId.Value)
+                            .Select(t => (int?)t.Id)
+                            .FirstOrDefault();
+                    }
+                    result[m.HeaderId] = OpeningBalanceEnrichment(originalSourceId ?? bank.Id, isReversal: true);
+                }
             }
 
             var headerIds = pageItems.Select(m => m.HeaderId).Distinct().ToList();
+
+            var bankTxs = _bankTransactions.Table
+                .Where(t => t.GeneralLedgerHeaderId != null && headerIds.Contains(t.GeneralLedgerHeaderId.Value))
+                .ToList();
+            var bankTxPartyIds = bankTxs.Where(t => t.PartyId != null).Select(t => t.PartyId!.Value).Distinct().ToList();
+            var bankTxParties = bankTxPartyIds.Count == 0
+                ? new Dictionary<int, Party>()
+                : _parties.Table.Where(p => bankTxPartyIds.Contains(p.Id)).ToDictionary(p => p.Id);
+            foreach (var tx in bankTxs)
+            {
+                if (result.ContainsKey(tx.GeneralLedgerHeaderId!.Value))
+                    continue;
+                string? payee = null;
+                if (tx.PartyId.HasValue && bankTxParties.TryGetValue(tx.PartyId.Value, out var party))
+                    payee = party.Name;
+                result[tx.GeneralLedgerHeaderId.Value] = new RegisterEnrichment(
+                    BankTransactionService.KindLabel(tx.Kind),
+                    payee,
+                    tx.ReferenceNo ?? tx.Memo,
+                    new BankRegisterSourceDocDto
+                    {
+                        Type = nameof(DocumentTypes.BankTransaction),
+                        Id = tx.Id,
+                        No = tx.No
+                    });
+            }
 
             var receipts = _receipts.Table
                 .Where(r => r.GeneralLedgerHeaderId != null && headerIds.Contains(r.GeneralLedgerHeaderId.Value))
@@ -291,7 +337,7 @@ namespace Services.Banking
             return result;
         }
 
-        private static RegisterEnrichment OpeningBalanceEnrichment(int bankId, bool isReversal) =>
+        private static RegisterEnrichment OpeningBalanceEnrichment(int bankTransactionId, bool isReversal) =>
             new(
                 isReversal ? "Opening balance reversal" : "Opening balance",
                 null,
@@ -299,7 +345,7 @@ namespace Services.Banking
                 new BankRegisterSourceDocDto
                 {
                     Type = nameof(DocumentTypes.BankTransaction),
-                    Id = bankId,
+                    Id = bankTransactionId,
                     No = null
                 });
 
