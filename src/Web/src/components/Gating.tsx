@@ -160,13 +160,20 @@ const MODULE_METADATA: Record<ModuleKey, { title: string; desc: string; required
   },
 };
 
+/** True when the snapshot lists at least one self-service plan change. */
+export function shouldShowUpgradeAvailableBadge(
+  entitlements: { allowedTransitions?: readonly string[] } | null | undefined,
+): boolean {
+  return (entitlements?.allowedTransitions?.length ?? 0) > 0;
+}
+
 export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }> = ({
   module,
   orgSlug,
 }) => {
   const { hasModule } = useTenantContext();
   const { entitlements } = useCapabilities();
-  const upgradeAvailable = !!entitlements?.upgrade?.available;
+  const upgradeAvailable = shouldShowUpgradeAvailableBadge(entitlements);
   const info = MODULE_METADATA[module] || {
     title: module,
     desc: 'This module is not active in your current subscription plan.',
