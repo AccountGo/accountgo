@@ -10,6 +10,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 10121,Allowance for Doubtful Accounts,10100,1,TRUE,FALSE,100,CR
 10140,Prepaid Expenses,10100,1,FALSE,FALSE,100,DR
 10150,Employee Advances,10100,1,FALSE,FALSE,100,DR
+10160,Input Tax Receivable,10100,1,FALSE,FALSE,100,DR
 10700,Other Current Assets,10100,1,FALSE,FALSE,100,DR
 10800,Inventory,10100,1,FALSE,FALSE,100,DR
 10810,Goods Received Clearing Account,10100,1,FALSE,FALSE,100,DR
@@ -51,6 +52,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 30400,Accumulated Profits,30000,3,FALSE,FALSE,100,CR
 30500,Accumulated Losses,30000,3,FALSE,FALSE,100,CR
 30600,Other Reserves,30000,3,FALSE,FALSE,100,CR
+30700,Opening Balance Equity,30000,3,FALSE,FALSE,100,CR
 40000,Revenues,,4,FALSE,FALSE,100,CR
 40100,Sales A/C,40000,4,FALSE,FALSE,100,CR
 40200,Home Owners,40000,4,FALSE,FALSE,100,CR
@@ -87,6 +89,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 50121,Bank Charges,50100,5,FALSE,FALSE,100,DR
 50200,Purchase A/C,50000,5,FALSE,FALSE,100,DR
 50300,Cost of Goods Sold,50000,5,FALSE,FALSE,100,DR
+50310,Inventory Adjustments,50000,5,FALSE,FALSE,100,DR
 50400,Purchase Discounts,50000,5,FALSE,FALSE,100,DR
 50500,Purchase price Variance,50000,5,FALSE,FALSE,100,DR
 50600,Other Expenses,50000,5,FALSE,FALSE,100,DR

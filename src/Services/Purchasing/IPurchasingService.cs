@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="IPurchasingService.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -28,8 +29,11 @@ namespace Services.Purchasing
         void UpdateVendor(Vendor vendor);
         IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices();
         PurchaseInvoiceHeader GetPurchaseInvoiceById(int id);
-        void SavePayment(int invoiceId, int vendorId, int accountId, decimal amount, DateTime date);
-        void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseOrderHeader purchaseOrder);
-        void PostPurchaseInvoice(int invoiceId);
+        void SaveBill(PurchaseInvoiceHeader bill);
+        int DefaultLineAccountId(int itemId, Vendor vendor);
+        void ApproveBill(int billId);
+        void VoidBill(int billId);
+        VendorPayment PayBill(int billId, int accountId, decimal amount, DateTime date,
+            string paymentMethod = null, string referenceNo = null, string memo = null);
     }
 }

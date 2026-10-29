@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="ItemTaxGroup.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -13,13 +14,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.TaxSystem
 {
     [Table("ItemTaxGroup")]
-    public partial class ItemTaxGroup : BaseEntity
+    public partial class ItemTaxGroup : BaseEntity, ICompanyOwned
     {
         public ItemTaxGroup()
         {
             ItemTaxGroupTax = new HashSet<ItemTaxGroupTax>();
         }
 
+        public int CompanyId { get; set; }
         public string Name { get; set; }
 
         [Display(Name = "Fully Exempt")]
@@ -29,8 +31,9 @@ namespace Core.Domain.TaxSystem
     }
 
     [Table("ItemTaxGroupTax")]
-    public partial class ItemTaxGroupTax : BaseEntity
+    public partial class ItemTaxGroupTax : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int TaxId { get; set; }
         public int ItemTaxGroupId { get; set; }
         public bool IsExempt { get; set; }

@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="SalesQuoteLine.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -12,8 +13,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesQuoteLine")]
-    public partial class SalesQuoteLine : BaseEntity
+    public partial class SalesQuoteLine : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int SalesQuoteHeaderId { get; set; }
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }

@@ -9,16 +9,6 @@ services:
             - "8001:8001"
         environment:
             - ASPNETCORE_URLS=http://+:8001
-    web:
-        image: accountgo/accountgoweb
-        build: 
-            dockerfile: ./src/AccountGoWeb/Dockerfile
-            context: .
-        ports:
-            - "8000:8000"
-        environment:
-            - ASPNETCORE_URLS=http://+:8000
-            - APIHOST=api
     sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
         container_name: gdb-sql-server

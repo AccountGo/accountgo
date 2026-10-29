@@ -39,7 +39,6 @@ namespace Services.Dashboard
             var ledger = _financialService.MasterGeneralLedger(rangeStart, rangeEnd).ToList();
             var balanceSheet = _financialService.BalanceSheet().ToList();
             var customers = _salesService.GetCustomers().ToList();
-            var vendors = _purchasingService.GetVendors().ToList();
             var salesInvoices = _salesService.GetSalesInvoices().ToList();
             var salesReceipts = _salesService.GetSalesReceipts().ToList();
             var purchaseInvoices = _purchasingService.GetPurchaseInvoices().ToList();
@@ -54,10 +53,13 @@ namespace Services.Dashboard
                 .Select(a => a.Id)
                 .ToHashSet();
 
+            // Workspaces without bank records still hold cash in the postable cash accounts (e.g. 10111).
             var bankAccountIds = _financialService.GetCashAndBanks()
                 .Where(b => b.AccountId.HasValue)
                 .Select(b => b.AccountId!.Value)
-                .Distinct()
+                .Concat(accounts
+                    .Where(a => a.CanPost() && (a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash)))
+                    .Select(a => a.Id))
                 .ToHashSet();
 
             var totalSalesYtd = ComputeNetAmount(ledger, revenueAccountIds, normalBalanceIsDebit: false);
@@ -68,9 +70,9 @@ namespace Services.Dashboard
             {
                 Kpis = new DashboardKpiDto
                 {
-                    MoneyInBank = bankAccountIds.Sum(accountId => _financialService.GetAccount(accountId)?.Balance ?? 0m),
+                    MoneyInBank = accounts.Where(a => bankAccountIds.Contains(a.Id)).Sum(a => a.Balance),
                     OutstandingReceivables = customers.Sum(c => c.Balance),
-                    TotalPayables = vendors.Sum(v => v.GetBalance()),
+                    TotalPayables = purchaseInvoices.Where(i => i.IsPayable).Sum(i => i.BalanceDue()),
                     TotalAssets = balanceSheet
                         .Where(item => item.AccountClassId == (int)AccountClasses.Assets)
                         .Sum(item => item.Amount),
@@ -114,22 +116,18 @@ namespace Services.Dashboard
                         Balance = c.Balance
                     })
                     .ToList(),
+                // Approved bills still owed, soonest due first.
                 UpcomingPayables = purchaseInvoices
-                    .Select(invoice => new
-                    {
-                        Invoice = invoice,
-                        Remaining = invoice.PurchaseInvoiceLines.Sum(line => line.Amount * line.Quantity) - invoice.AmountPaid()
-                    })
-                    .Where(x => x.Remaining > 0)
-                    .OrderBy(x => x.Invoice.Date)
+                    .Where(invoice => invoice.IsPayable && invoice.BalanceDue() > 0)
+                    .OrderBy(invoice => invoice.DueDate ?? invoice.Date)
                     .Take(topPayables)
-                    .Select(x => new DashboardPayableItemDto
+                    .Select(invoice => new DashboardPayableItemDto
                     {
-                        PurchaseInvoiceId = x.Invoice.Id,
-                        VendorName = x.Invoice.Vendor?.Party?.Name ?? $"Vendor {x.Invoice.VendorId}",
-                        InvoiceNo = x.Invoice.No ?? x.Invoice.VendorInvoiceNo ?? string.Empty,
-                        RemainingAmount = x.Remaining,
-                        InvoiceDate = x.Invoice.Date
+                        PurchaseInvoiceId = invoice.Id,
+                        VendorName = invoice.Vendor?.Party?.Name ?? $"Vendor {invoice.VendorId}",
+                        InvoiceNo = string.IsNullOrWhiteSpace(invoice.VendorInvoiceNo) ? invoice.No ?? string.Empty : invoice.VendorInvoiceNo,
+                        RemainingAmount = invoice.BalanceDue(),
+                        InvoiceDate = invoice.Date
                     })
                     .ToList(),
                 RecentActivity = BuildRecentActivity(
@@ -226,10 +224,10 @@ namespace Services.Dashboard
                 Date = receipt.Date
             }));
 
-            items.AddRange(purchaseInvoices.Select(invoice => new DashboardActivityItemDto
+            items.AddRange(purchaseInvoices.Where(invoice => !invoice.IsDraft).Select(invoice => new DashboardActivityItemDto
             {
                 Type = "Purchase Invoice",
-                Description = $"Purchase invoice {invoice.No} from {invoice.Vendor?.Party?.Name ?? "vendor"}",
+                Description = $"Bill {invoice.No} from {invoice.Vendor?.Party?.Name ?? "vendor"}",
                 Date = invoice.Date
             }));
 

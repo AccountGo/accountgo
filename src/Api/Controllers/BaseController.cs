@@ -1,18 +1,23 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers
 {
     public class BaseController : Controller
     {
-        protected string GetUserNameFromRequestHeader()
+        protected string? GetCurrentUserName()
         {
-            string username = string.Empty;
-            Microsoft.Extensions.Primitives.StringValues val = new Microsoft.Extensions.Primitives.StringValues();
+            var user = HttpContext.User;
+            if (user?.Identity?.IsAuthenticated == true)
+            {
+                return user.Identity.Name
+                    ?? user.FindFirst(ClaimTypes.Email)?.Value
+                    ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            }
 
-            if (HttpContext.Request.Headers.TryGetValue("UserName", out val))
-                username = val[0]!.ToString();
-
-            return username;
+            return null;
         }
+
+        protected string? GetUserNameFromRequestHeader() => GetCurrentUserName();
     }
 }

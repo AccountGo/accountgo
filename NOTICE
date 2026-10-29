@@ -1,0 +1,62 @@
+AccountGo
+Copyright (C) 2015-2026 Marvin Perez and AccountGo contributors
+
+AccountGo is licensed under the GNU Affero General Public License, version 3
+only (AGPL-3.0-only). See the LICENSE file for the full license text.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+-------------------------------------------------------------------------------
+License history
+-------------------------------------------------------------------------------
+
+- 2015-01-25 to 2018-02-14: GNU General Public License v3.
+- 2018-02-14 to 2026-10-26: MIT License.
+- 2026-10-26 onward: GNU Affero General Public License v3 only.
+
+Copies of AccountGo obtained before the change to AGPL-3.0-only remain
+available under the license they were released with. Portions of this software
+originally contributed under the MIT License remain subject to the following
+notice, which is retained as that license requires:
+
+    MIT License
+
+    Copyright (c) 2018 Marvin Perez
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+Third-party components bundled with or referenced by AccountGo are subject to
+their own licenses.
+
+-------------------------------------------------------------------------------
+Trademarks
+-------------------------------------------------------------------------------
+
+"AccountGo", "AccountGo Cloud", and the AccountGo logos are trademarks of
+Marvin Perez. The AGPL-3.0 license does not grant any rights to use these
+trademarks; per section 7(e) of the AGPL, those rights are withheld. See
+TRADEMARKS.md for the trademark policy, including the requirement that
+modified versions and third-party hosted services use a different name and
+remove the AccountGo logos.

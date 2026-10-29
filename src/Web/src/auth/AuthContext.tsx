@@ -1,0 +1,401 @@
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType, VerifyOtpResult, MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
+import { announceEntitlementDenial } from '../lib/entitlementEvents';
+import { ENTITLEMENTS_VERSION_HEADER, observeEntitlementsVersionHeader } from '../lib/entitlementVersion';
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const ORG_HEADER = 'X-AccountGo-Org';
+
+// Reads the workspace slug from the current URL (/org/:orgSlug/...). Returns null outside a workspace.
+export function getOrgSlugFromLocation(pathname: string = window.location.pathname): string | null {
+  const match = /^\/org\/([^/?#]+)/.exec(pathname);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchWith503Retry(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    const res = await fetch(input, init);
+    if (res.status === 503 && attempt < maxRetries) {
+      attempt++;
+      const retryAfterHeader = res.headers.get('Retry-After');
+      let delaySec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
+      if (isNaN(delaySec) || delaySec <= 0) delaySec = 5;
+      delaySec = Math.min(delaySec, 10);
+      await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
+      continue;
+    }
+    return res;
+  }
+}
+
+// How long to keep retrying a refresh while the API is starting before giving up on the session. A cold start on the
+// smallest container can take several minutes.
+const REFRESH_STARTUP_DEADLINE_MS = 15 * 60 * 1000;
+
+/** Lock name shared across bundle versions — do not rename (old/new tabs must coordinate during rollout). */
+export const SESSION_REFRESH_LOCK_NAME = 'accountgo-session-refresh';
+
+// Only one tab refreshes at a time. Refresh tokens are single-use and every tab shares the cookie, so two tabs
+// refreshing together would present the same token twice. After the lock, the next tab sends the already-rotated
+// cookie and does a normal rotation (tokens stay in memory only — never localStorage / BroadcastChannel).
+export function withRefreshLock<T>(work: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
+  return locks ? locks.request(SESSION_REFRESH_LOCK_NAME, work) : work();
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<UserDto | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isStarting, setIsStarting] = useState<boolean>(false);
+
+  // Ref to hold current token synchronously for fetch interceptor & refresh loops
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = accessToken;
+
+  // Single-flight refresh promise to prevent multiple concurrent refresh calls
+  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
+
+  // Silent refresh helper
+  const performRefresh = useCallback(async (): Promise<string | null> => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
+
+    refreshPromiseRef.current = withRefreshLock(async () => {
+      // Only a refusal from the API ends the session. While the API is starting (503, a gateway timeout) or can't be
+      // reached, keep the session and try again: ending it then would sign everyone out after every update.
+      const deadline = Date.now() + REFRESH_STARTUP_DEADLINE_MS;
+      try {
+        while (true) {
+          let res: Response | null = null;
+          try {
+            res = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+            });
+          } catch {
+            res = null;
+          }
+
+          if (res?.ok) {
+            const data: AuthResponse = await res.json();
+            setAccessToken(data.accessToken);
+            setUser(data.user);
+            return data.accessToken;
+          }
+          if (res && res.status < 500) {
+            setAccessToken(null);
+            setUser(null);
+            return null;
+          }
+          if (Date.now() >= deadline) {
+            setAccessToken(null);
+            setUser(null);
+            return null;
+          }
+
+          setIsStarting(true);
+          const retryAfter = Number(res?.headers.get('Retry-After'));
+          await wait(Math.min(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5, 10) * 1000);
+        }
+      } finally {
+        setIsStarting(false);
+        refreshPromiseRef.current = null;
+      }
+    });
+
+    return refreshPromiseRef.current;
+  }, []);
+
+  // Initialize session on mount via httpOnly refresh cookie
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        await performRefresh();
+      } catch {
+        // user remains unauthenticated
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [performRefresh]);
+
+  // Request 6-digit OTP code
+  const sendOtp = useCallback(async (email: string, turnstileToken?: string): Promise<OtpSendResponse> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (turnstileToken) {
+      headers['cf-turnstile-response'] = turnstileToken;
+    }
+    const res = await fetchWith503Retry('/api/auth/send-otp', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: email.trim(),
+        ...(turnstileToken ? { 'cf-turnstile-response': turnstileToken } : {}),
+      }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      if (res.status === 429) {
+        throw new Error('Too many sign-in code requests. Please wait a few minutes before trying again.');
+      }
+      if (res.status === 503 || res.status === 504) {
+        throw new Error(data?.detail || 'Service is starting up, please retry in a few seconds');
+      }
+      const errorMsg = data?.detail || data?.title || 'Unable to send verification code. Please try again.';
+      throw new Error(errorMsg);
+    }
+
+    return {
+      message: data.message || 'If an account exists, a code has been sent.',
+      expiresInSeconds: data.expiresInSeconds || 300,
+      devCode: data.devCode,
+    };
+  }, []);
+
+  // Register a new user & request activation code
+  const signUp = useCallback(async (payload: SignUpPayload): Promise<SignUpResponse> => {
+    const turnstileToken = payload['cf-turnstile-response'];
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (turnstileToken) {
+      headers['cf-turnstile-response'] = turnstileToken;
+    }
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: payload.email.trim(),
+        firstName: payload.firstName.trim(),
+        lastName: payload.lastName.trim(),
+        organizationName: payload.organizationName?.trim() || undefined,
+        organizationSlug: payload.organizationSlug?.trim() || undefined,
+        currency: payload.currency || 'USD',
+        invitationToken: payload.invitationToken || undefined,
+        ...(turnstileToken ? { 'cf-turnstile-response': turnstileToken } : {}),
+      }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      if (res.status === 429) {
+        throw new Error('Too many requests. Please wait a few minutes before trying again.');
+      }
+      if (res.status === 503 || res.status === 504) {
+        throw new Error(data?.detail || 'Service is starting up, please retry in a few seconds');
+      }
+      const errorMsg = data?.detail || data?.title || 'Unable to complete registration. Please try again.';
+      throw new Error(errorMsg);
+    }
+
+    return {
+      success: true,
+      message: data.message || 'Verification code sent to your email.',
+      email: data.email || payload.email,
+      orgSlug: data.orgSlug,
+      expiresInSeconds: data.expiresInSeconds || 300,
+      devCode: data.devCode,
+    };
+  }, []);
+
+  // Verify OTP code & establish session (or return MFA challenge)
+  const verifyOtp = useCallback(async (email: string, otp: string, turnstileToken?: string): Promise<VerifyOtpResult> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (turnstileToken) {
+      headers['cf-turnstile-response'] = turnstileToken;
+    }
+    const res = await fetchWith503Retry('/api/auth/verify-otp', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: email.trim(),
+        otp: otp.trim(),
+        ...(turnstileToken ? { 'cf-turnstile-response': turnstileToken } : {}),
+      }),
+      credentials: 'include',
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      if (res.status === 503 || res.status === 504) {
+        throw new Error(data?.detail || 'Service is starting up, please retry in a few seconds');
+      }
+      const errorMsg = data?.detail || data?.title || 'Invalid or expired verification code.';
+      throw new Error(errorMsg);
+    }
+
+    if (data?.status === 'mfa_required') {
+      return { type: 'mfa_required', data: data as MfaRequiredResponse };
+    }
+
+    if (data?.status === 'mfa_enrollment_required') {
+      return { type: 'mfa_enrollment_required', data: data as MfaEnrollmentRequiredResponse };
+    }
+
+    const authData = data as AuthResponse;
+    tokenRef.current = authData.accessToken;
+    setAccessToken(authData.accessToken);
+    setUser(authData.user);
+    return { type: 'success', data: authData };
+  }, []);
+
+  const completeSession = useCallback((authData: AuthResponse) => {
+    tokenRef.current = authData.accessToken;
+    setAccessToken(authData.accessToken);
+    setUser(authData.user);
+  }, []);
+
+  const completeStepUp = useCallback((newToken: string) => {
+    tokenRef.current = newToken;
+    setAccessToken(newToken);
+  }, []);
+
+  // Logout session
+  const clearSession = useCallback(() => {
+    tokenRef.current = null;
+    setAccessToken(null);
+    setUser(null);
+  }, []);
+
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      const currentToken = tokenRef.current;
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
+        credentials: 'include',
+      });
+    } catch {
+      // ignore network errors on logout
+    } finally {
+      setAccessToken(null);
+      setUser(null);
+    }
+  }, []);
+
+  // Authenticated fetch wrapper with automatic Bearer injection and single-flight silent refresh on 401
+  const authFetch = useCallback(
+    async (url: string, init?: RequestInit): Promise<Response> => {
+      let token = tokenRef.current;
+
+      const headers = new Headers(init?.headers || {});
+      if (token && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      const requestPath = new URL(url.toString(), window.location.origin).pathname;
+      const isTenantFreeRequest =
+        requestPath.startsWith('/api/auth/') ||
+        requestPath === '/api/organizations' ||
+        requestPath.startsWith('/api/invitations/');
+      const orgSlug = isTenantFreeRequest ? null : getOrgSlugFromLocation();
+      if (orgSlug && !headers.has(ORG_HEADER)) {
+        headers.set(ORG_HEADER, orgSlug);
+      }
+
+      const method = (init?.method || 'GET').toUpperCase();
+      const shouldRetry503 = method === 'GET';
+
+      let res = shouldRetry503
+        ? await fetchWith503Retry(url, { ...init, headers, credentials: 'include' })
+        : await fetch(url, { ...init, headers, credentials: 'include' });
+
+      // Plan denials (limits, modules, plans) get one shared explanation; callers still handle the response.
+      void announceEntitlementDenial(res);
+      // Hook adopts /api/entitlements versions itself — observing here would duplicate the reload.
+      if (requestPath !== '/api/entitlements') {
+        observeEntitlementsVersionHeader(
+          orgSlug,
+          getOrgSlugFromLocation(),
+          res.headers.get(ENTITLEMENTS_VERSION_HEADER),
+        );
+      }
+
+      // Handle 401 with silent refresh & request retry
+      if (res.status === 401) {
+        const newToken = await performRefresh();
+        if (newToken) {
+          const retryHeaders = new Headers(init?.headers || {});
+          retryHeaders.set('Authorization', `Bearer ${newToken}`);
+          if (orgSlug && !retryHeaders.has(ORG_HEADER)) {
+            retryHeaders.set(ORG_HEADER, orgSlug);
+          }
+          res = shouldRetry503
+            ? await fetchWith503Retry(url, { ...init, headers: retryHeaders, credentials: 'include' })
+            : await fetch(url, { ...init, headers: retryHeaders, credentials: 'include' });
+          if (requestPath !== '/api/entitlements') {
+            observeEntitlementsVersionHeader(
+              orgSlug,
+              getOrgSlugFromLocation(),
+              res.headers.get(ENTITLEMENTS_VERSION_HEADER),
+            );
+          }
+        }
+      }
+
+      return res;
+    },
+    [performRefresh]
+  );
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/auth/me');
+      if (res.ok) {
+        const data: UserDto = await res.json();
+        setUser(data);
+      }
+    } catch {}
+  }, [authFetch]);
+
+  const value: AuthContextType = {
+    user,
+    accessToken,
+    isAuthenticated: !!user && !!accessToken,
+    isLoading,
+    isStarting,
+    sendOtp,
+    signUp,
+    verifyOtp,
+    completeSession,
+    completeStepUp,
+    logout,
+    clearSession,
+    authFetch,
+    refreshUser,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

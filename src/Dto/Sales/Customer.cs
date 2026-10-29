@@ -22,6 +22,7 @@ namespace Dto.Sales
         public int? SalesDiscountAccountId { get; set; }
         public int? TaxGroupId { get; set; }
         public int? PaymentTermId { get; set; }
+        public bool Archived { get; set; }
         public decimal Balance { get; set; }
         public string? Contact { get; set; }
         public string? TaxGroup { get; set; }

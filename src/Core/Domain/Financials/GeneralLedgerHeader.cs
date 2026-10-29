@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="GeneralLedgerHeader.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -15,7 +16,7 @@ using System.Linq;
 namespace Core.Domain.Financials
 {
     [Table("GeneralLedgerHeader")]
-    public partial class GeneralLedgerHeader : BaseEntity
+    public partial class GeneralLedgerHeader : BaseEntity, ICompanyOwned
     {
         public GeneralLedgerHeader()
         {
@@ -23,9 +24,13 @@ namespace Core.Domain.Financials
             PurchaseOrderReceipts = new HashSet<PurchaseReceiptHeader>();
         }
 
+        public int CompanyId { get; set; }
+
         public DateTime Date { get; set; }
         public DocumentTypes DocumentType { get; set; }
         public string Description { get; set; }
+        public int? SourceDocumentId { get; set; }
+        public int? ReversedGeneralLedgerHeaderId { get; set; }
 
         public virtual ICollection<GeneralLedgerLine> GeneralLedgerLines { get; set; }
         public virtual ICollection<PurchaseReceiptHeader> PurchaseOrderReceipts { get; set; }

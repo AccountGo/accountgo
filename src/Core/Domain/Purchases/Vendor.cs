@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="Vendor.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -15,7 +16,7 @@ using System.Linq;
 namespace Core.Domain.Purchases
 {
     [Table("Vendor")]
-    public partial class Vendor : BaseEntity
+    public partial class Vendor : BaseEntity, ICompanyOwned
     {
         public Vendor()
         {
@@ -25,12 +26,15 @@ namespace Core.Domain.Purchases
             VendorPayments = new HashSet<VendorPayment>();
         }
 
+        public int CompanyId { get; set; }
         public string No { get; set; }
         public int? PartyId { get; set; }
         public int? AccountsPayableAccountId { get; set; }
         public int? PurchaseAccountId { get; set; }
         public int? PurchaseDiscountAccountId { get; set; }        
         public int? PrimaryContactId { get; set; }
+        /// <summary>Contact person used as Bill From / payee attention on bills; null uses the company party alone.</summary>
+        public int? BillToContactId { get; set; }
         public int? PaymentTermId { get; set; }
         public int? PaymentMethod { get; set; }
         public int? TaxGroupId { get; set; }
@@ -41,12 +45,15 @@ namespace Core.Domain.Purchases
         public string Province { get; set; }
         public string PostalCode { get; set; }
         public string Country { get; set; }
+        /// <summary>When the vendor was archived: hidden when picking a vendor, its bills untouched. Null while active.</summary>
+        public System.DateTime? ArchivedAt { get; set; }
 
         public virtual Party Party { get; set; }
         public virtual Account AccountsPayableAccount { get; set; }
         public virtual Account PurchaseAccount { get; set; }
         public virtual Account PurchaseDiscountAccount { get; set; }
         public virtual Contact PrimaryContact { get; set; }
+        public virtual Contact BillToContact { get; set; }
         public virtual PaymentTerm PaymentTerm { get; set; }
         public virtual TaxGroup TaxGroup { get; set; }
 
@@ -55,20 +62,7 @@ namespace Core.Domain.Purchases
         public virtual ICollection<PurchaseInvoiceHeader> PurchaseInvoices { get; set; }
         public virtual ICollection<VendorPayment> VendorPayments { get; set; }
         public virtual IList<VendorContact> VendorContact { get; set; }
-        public decimal GetBalance()
-        {
-            decimal balance = 0;
-            decimal totalInvoiceAmount = 0;
-            decimal totalInvoicePayment = 0;
-
-            foreach (var invoice in PurchaseInvoices)
-                totalInvoiceAmount += invoice.PurchaseInvoiceLines.Sum(a => a.Amount * a.Quantity);
-
-            foreach (var payment in VendorPayments)
-                totalInvoicePayment += payment.Amount;
-
-            balance = totalInvoiceAmount - totalInvoicePayment;
-            return balance;
-        }
+        /// <summary>What the workspace still owes the vendor on its approved bills.</summary>
+        public decimal GetBalance() => PurchaseInvoices.Where(i => i.IsPayable).Sum(i => i.BalanceDue());
     }
 }

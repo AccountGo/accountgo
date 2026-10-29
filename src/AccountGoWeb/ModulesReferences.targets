@@ -1,9 +1,0 @@
-<Project>
-
-  <Target Name="BuildModules" AfterTargets="Build">
-  </Target>
-
-  <Target Name="PublishModules" AfterTargets="Publish">
-  </Target>
-
-</Project>

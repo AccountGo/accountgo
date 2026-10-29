@@ -19,11 +19,6 @@ var apiService = builder.AddProject<Projects.Api>("api")
         .WithHttpEndpoint(port: 8001, name: "api-http")
         .WaitFor(sqlServer);
 
-builder.AddProject<Projects.AccountGoWeb>("mvc")
-        .WithHttpEndpoint(port: 8000, name: "mvc-http")
-        .WithReference(apiService)
-        .WaitFor(apiService);
-
 builder.AddProject<Projects.MigrationService>("migrations")
     .WithReference(sqlServer)
     .WaitFor(sqlServer);

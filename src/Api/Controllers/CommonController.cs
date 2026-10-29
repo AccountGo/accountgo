@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Dto.Inventory;
 using Dto.Purchasing;
 using Dto.Sales;
@@ -15,6 +15,7 @@ using Core.Domain;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     public class CommonController : BaseController
     {
@@ -67,12 +68,21 @@ namespace Api.Controllers
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems().OrderBy(i => i.Description);
-            ICollection<Item> itemsDto = new HashSet<Item>();
-
-            foreach (var item in items)
-                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description, Code = item.Code, Price = item.Price, SellMeasurementId = item.SellMeasurementId });
-
-            return new ObjectResult(itemsDto);
+            return new ObjectResult(items.Select(item => new
+            {
+                item.Id,
+                item.Description,
+                item.Code,
+                item.Price,
+                item.SellMeasurementId,
+                Archived = item.ArchivedAt.HasValue,
+                TrackStock = item.ItemCategory?.ItemType == Core.Domain.ItemTypes.Purchased,
+                item.QuantityOnHand,
+                item.AverageCost,
+                item.SalesAccountId,
+                SalesAccountCode = item.SalesAccount?.AccountCode,
+                SalesAccountName = item.SalesAccount?.AccountName
+            }).ToList());
         }
 
         [HttpGet]
@@ -133,26 +143,6 @@ namespace Api.Controllers
                 accountsDto.Add(new Account() { Id = account.Id, AccountCode = account.AccountCode, AccountName = account.AccountName });
 
             return Ok(accountsDto);
-        }
-
-        [HttpGet]
-        [Route("SalesQuotationStatus")] // api/Common/SalesQuotationStatus
-        public IActionResult SalesQuotationStatus()
-        {
-
-            List<int> quoteStatuses = new List<int>(new int[] { 0, 1, 3 });
-
-            var salesQuotationsDto = new List<Dto.Common.Status>();
-            foreach (var item in Enum.GetValues(typeof(SalesQuoteStatus)))
-            {
-                if (quoteStatuses.Contains((int)item))
-                {
-                    salesQuotationsDto.Add(new Dto.Common.Status { Id = (int)item, Description = Enum.GetName(typeof(SalesQuoteStatus), item) });
-                }
-
-            }
-            return Json(salesQuotationsDto);
-
         }
 
         [HttpGet]

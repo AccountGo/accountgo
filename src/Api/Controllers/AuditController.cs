@@ -11,6 +11,7 @@ namespace Api.Controllers
         This controller provides API endpoints for managing auditable entities and attributes.
         NOTE: Manages both Auditable Entities and Auditable Attributes.
     */
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     public class AuditController : BaseController
     {

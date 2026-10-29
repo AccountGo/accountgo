@@ -6,6 +6,7 @@ using DonorEntity = Core.Domain.Donations.Donor;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [ApiController]
     [Route("api/donors")]
     public class DonorsController : BaseController

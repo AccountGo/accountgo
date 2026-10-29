@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="EnumTypes.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -36,7 +37,8 @@ namespace Core.Domain
         PurchaseCreditMemo,
         PurchaseInvoicePayment,
         JournalEntry,
-        CustomerAllocation
+        CustomerAllocation,
+        InventoryAdjustment
     }
 
     public enum AccountTypes
@@ -89,7 +91,9 @@ namespace Core.Domain
     {
         Draft = 0,
         Open = 1,
-        Paid = 2
+        Paid = 2,
+        Overdue = 3,
+        Void = 4
     }
 
     public enum SequenceNumberTypes
@@ -108,7 +112,8 @@ namespace Core.Domain
         Customer,
         Vendor,
         Contact,
-        DonationInvoice
+        DonationInvoice,
+        InventoryAdjustment
     }
 
     public enum AddressTypes
@@ -185,5 +190,48 @@ namespace Core.Domain
         Void = 4,
         [Display(Name = "Closed - Order Created")]
         ClosedOrderCreated = 5
+    }
+
+    public enum AccountingBasis
+    {
+        Accrual = 1,
+        Cash = 2
+    }
+
+    public enum ReportingFramework
+    {
+        IfrsForSmes = 1,
+        UsGaapPrivate = 2,
+        Ifrs = 3,
+        CashBasis = 4
+    }
+
+    public enum TaxRegime
+    {
+        None = 0,
+        SalesTax = 1,
+        VatGst = 2
+    }
+
+    public enum FiscalYearPattern
+    {
+        Calendar = 1,
+        AprMar = 2,
+        JulJun = 3,
+        Custom = 4
+    }
+
+    public enum IndustryTemplate
+    {
+        Services = 1,
+        ProductRetail = 2,
+        Mixed = 3
+    }
+
+    public enum InventoryCostingMethod
+    {
+        None = 0,
+        Fifo = 1,
+        WeightedAverage = 2
     }
 }

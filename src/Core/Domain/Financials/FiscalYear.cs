@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="FiscalYear.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -13,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("FinancialYear")]
-    public partial class FinancialYear : BaseEntity
+    public partial class FinancialYear : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
+
         [Required]
         [StringLength(10)]
         public string FiscalYearCode { get; set; }

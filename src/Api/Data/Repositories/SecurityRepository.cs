@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Core.Data;
@@ -45,6 +45,16 @@ namespace Api.Data.Repositories
                 .FirstOrDefault();
         }
 
+        public User? GetUserById(int id)
+        {
+            return _context.Users
+                .Include(u => u.Roles)
+                .ThenInclude(u => u.SecurityRole.Permissions)
+                .ThenInclude(u => u.SecurityPermission.Group)
+                .Where(u => u.Id == id)
+                .FirstOrDefault();
+        }
+
         public IEnumerable<User> GetAllUsers()
         {
             var users = _context.Users.Include(u => u.Roles)
@@ -54,13 +64,27 @@ namespace Api.Data.Repositories
             return users;
         }
 
+        public void DeleteUser(int id)
+        {
+            var user = _context.Users.Include(u => u.Roles).FirstOrDefault(u => u.Id == id);
+            if (user != null)
+            {
+                if (user.Roles != null && user.Roles.Any())
+                {
+                    _context.SecurityUserRoles.RemoveRange(user.Roles);
+                }
+                _context.Users.Remove(user);
+                _context.SaveChanges();
+            }
+        }
+
         public IEnumerable<SecurityRole> GetAllRoles()
         {
-            // Commented out the additional ThenInclude below because of the error encountered as copied below
-            // An error was generated for warning 'Microsoft.EntityFrameworkCore.Query.NavigationBaseIncludeIgnored': The navigation 'SecurityRolePermission.SecurityPermission' was ignored from 'Include' in the query since the fix-up will automatically populate it. If any further navigations are specified in 'Include' afterwards then they will be ignored. Walking back include tree is not allowed. This exception can be suppressed or logged by passing event ID 'CoreEventId.NavigationBaseIncludeIgnored' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
-            var roles = _context.SecurityRoles.Include(r => r.Permissions);
-                // .ThenInclude(r => r.SecurityPermission.RolePermissions)
-                // .ThenInclude(r => r.SecurityPermission.Group);
+            var roles = _context.SecurityRoles
+                .Include(r => r.Permissions)
+                .ThenInclude(rp => rp.SecurityPermission)
+                .ThenInclude(sp => sp.Group)
+                .Include(r => r.Users);
             return roles;
         }
 

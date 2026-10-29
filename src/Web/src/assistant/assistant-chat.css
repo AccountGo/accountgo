@@ -1,0 +1,64 @@
+/*
+ * ChatProvider renders <div data-chat-provider="ai-chat-sdk"> with no className prop.
+ * That node is the flex child of the AccountGo content column and must fill the row
+ * with a definite height so the SDK's height:100% chain resolves to the viewport.
+ */
+[data-chat-provider="ai-chat-sdk"] {
+  flex: 1 1 0%;
+  min-width: 0;
+  height: 100vh;
+  isolation: isolate;
+}
+
+@supports (height: 100dvh) {
+  [data-chat-provider="ai-chat-sdk"] {
+    height: 100dvh;
+  }
+}
+
+.accountgo-assistant-layout.ais-desktop.ais-panel-open .ais-sidepanel-host-pane {
+  min-width: 0;
+}
+
+.accountgo-assistant-layout.ais-desktop.ais-panel-open .ais-sidepanel-resize-handle {
+  background: var(--border-subtle);
+}
+
+.accountgo-assistant-layout.ais-desktop.ais-panel-open .ais-sidepanel-chat-pane {
+  border-left: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.accountgo-assistant-sidepanel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/*
+ * Contingency only: when panelSizing reports compactHost (host would fall below
+ * HOST_MIN even at 30% viewport). Prefer avoiding this via host-floor clamp.
+ */
+.accountgo-assistant-compact .sm\:hidden {
+  display: block !important;
+}
+
+.accountgo-assistant-compact .hidden.sm\:block {
+  display: none !important;
+}
+
+.accountgo-assistant-compact .hidden.sm\:table-cell,
+.accountgo-assistant-compact .hidden.md\:table-cell,
+.accountgo-assistant-compact .hidden.lg\:table-cell {
+  display: none !important;
+}
+
+.accountgo-assistant-compact .lg\:grid-cols-4,
+.accountgo-assistant-compact .lg\:grid-cols-3,
+.accountgo-assistant-compact .sm\:grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
