@@ -125,4 +125,89 @@ namespace Dto.Banking
         public int Id { get; set; }
         public string? No { get; set; }
     }
+
+    public class OutstandingAgingBucketDto
+    {
+        /// <summary>0-30, 31-60, 61-90, or 90+.</summary>
+        public string Label { get; set; } = string.Empty;
+        public int MinDays { get; set; }
+        /// <summary>Null for the open-ended last bucket.</summary>
+        public int? MaxDays { get; set; }
+        public int Count { get; set; }
+        public decimal DepositsInTransit { get; set; }
+        public decimal OutstandingPayments { get; set; }
+        /// <summary>Deposits minus payments.</summary>
+        public decimal Net { get; set; }
+        /// <summary>The 90+ bucket: items old enough to need a look.</summary>
+        public bool IsStale { get; set; }
+    }
+
+    public class OutstandingAgingDto
+    {
+        public int BankId { get; set; }
+        public DateTime AsOfDate { get; set; }
+        public IReadOnlyList<OutstandingAgingBucketDto> Buckets { get; set; } = Array.Empty<OutstandingAgingBucketDto>();
+        public int TotalCount { get; set; }
+        public decimal TotalDepositsInTransit { get; set; }
+        public decimal TotalOutstandingPayments { get; set; }
+        public int StaleCount { get; set; }
+        public bool HasStale { get; set; }
+    }
+
+    public class BankCloseStatusBankDto
+    {
+        public int BankId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public DateTime? ReconciledThrough { get; set; }
+        public bool IsReconciled { get; set; }
+    }
+
+    /// <summary>How many active bank accounts are reconciled through the end of the previous month (3C).</summary>
+    public class BankCloseStatusDto
+    {
+        /// <summary>Last day of the previous month.</summary>
+        public DateTime PeriodEnd { get; set; }
+        /// <summary>For example "September 2026".</summary>
+        public string PeriodLabel { get; set; } = string.Empty;
+        public int ReconciledCount { get; set; }
+        public int TotalCount { get; set; }
+        public bool IsComplete { get; set; }
+        public IReadOnlyList<BankCloseStatusBankDto> Banks { get; set; } = Array.Empty<BankCloseStatusBankDto>();
+    }
+
+    public class BankBalanceCheckRequest
+    {
+        /// <summary>The balance the bank shows (statement, app, or online banking).</summary>
+        public decimal AsOfBalance { get; set; }
+        /// <summary>Defaults to today.</summary>
+        public DateTime? AsOfDate { get; set; }
+    }
+
+    public class BankBalanceCheckLineDto
+    {
+        public int LineId { get; set; }
+        public int HeaderId { get; set; }
+        public DateTime Date { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string? Payee { get; set; }
+        public string? Reference { get; set; }
+        public decimal In { get; set; }
+        public decimal Out { get; set; }
+        /// <summary>The amount equals the difference, so this entry is a likely culprit.</summary>
+        public bool MayExplainDifference { get; set; }
+    }
+
+    /// <summary>Compares a balance the user types in with the book balance. Nothing is posted (3F).</summary>
+    public class BankBalanceCheckDto
+    {
+        public int BankId { get; set; }
+        public DateTime AsOfDate { get; set; }
+        public decimal BankBalance { get; set; }
+        public decimal BookBalance { get; set; }
+        /// <summary>Bank balance minus book balance.</summary>
+        public decimal Difference { get; set; }
+        public bool IsMatch { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public IReadOnlyList<BankBalanceCheckLineDto> RecentLines { get; set; } = Array.Empty<BankBalanceCheckLineDto>();
+    }
 }

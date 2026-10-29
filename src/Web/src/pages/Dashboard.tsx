@@ -19,6 +19,8 @@ import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
+import { BankCloseStatusCard } from '../components/BankCloseStatusCard';
+import type { BankCloseStatus } from '../types/banking';
 
 interface DashboardSummary {
   kpis: {
@@ -55,6 +57,7 @@ interface DashboardSummary {
     description: string;
     date: string;
   }>;
+  bankCloseStatus?: BankCloseStatus | null;
 }
 
 export const Dashboard: React.FC = () => {
@@ -160,6 +163,8 @@ export const Dashboard: React.FC = () => {
         hasFinancialsModule={hasModule('financials')}
         canManage={currentOrg.role === 'Owner' || currentOrg.role === 'Admin'}
       />
+
+      <BankCloseStatusCard status={summary?.bankCloseStatus} orgSlug={currentOrg.slug} />
 
       {/* Financial Metric Cards Grid (Border-Less with Ambient Elevation) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

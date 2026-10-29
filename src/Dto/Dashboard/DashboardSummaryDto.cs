@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Dto.Banking;
 
 namespace Dto.Dashboard
 {
@@ -11,5 +12,8 @@ namespace Dto.Dashboard
         public List<DashboardReceivableItemDto> TopReceivables { get; set; } = new();
         public List<DashboardPayableItemDto> UpcomingPayables { get; set; } = new();
         public List<DashboardActivityItemDto> RecentActivity { get; set; } = new();
+
+        /// <summary>Null unless the Financials module is on and the caller can view bank accounts.</summary>
+        public BankCloseStatusDto? BankCloseStatus { get; set; }
     }
 }

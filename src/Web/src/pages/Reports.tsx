@@ -4,6 +4,7 @@ import { Download, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
+import { BankCloseStatusLoader } from '../components/BankCloseStatusCard';
 import { currencySymbol, DEFAULT_CURRENCY } from '../lib/currency';
 
 export interface FinancialYear {
@@ -286,9 +287,10 @@ export function statementCsv(statement: Statement, rows: StatementRow[], metadat
 }
 
 export default function Reports() {
-  const { currentOrg, hasPermission } = useTenantContext();
+  const { currentOrg, hasPermission, hasModule } = useTenantContext();
   const { authFetch } = useAuth();
   const allowed = hasPermission('reports.view');
+  const showBankCloseStatus = hasModule('financials') && hasPermission('banking.accounts.view');
   const [statement, setStatement] = useState<Statement>('trialBalance');
   const [basis, setBasis] = useState<AccountingBasis>('accrual');
   const [preset, setPreset] = useState<Preset>('month');
@@ -357,6 +359,7 @@ export default function Reports() {
           <HeaderButton label="Export CSV" icon={Download} disabled={!data || !validRange || !!error} onClick={exportCsv} />
         </>}
       />
+      {showBankCloseStatus && <BankCloseStatusLoader orgSlug={currentOrg.slug} />}
       <div className="flex flex-wrap items-end gap-4 rounded-2xl bg-[var(--bg-surface)] p-4">
         <label className="grid gap-1 text-xs text-[var(--text-secondary)]">Accounting Basis
           <select className={inputClass} value={basis} onChange={event => setBasis(event.target.value as AccountingBasis)}>

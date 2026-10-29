@@ -3,6 +3,8 @@ import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { ModalShell } from '../components/ModalShell';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { canReviewReconciliation, reviewStatusText } from '../lib/reconciliationReview';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import type { TenantContextType } from '../types';
@@ -13,7 +15,7 @@ import { BankingTabs } from '../components/BankingTabs';
 const ReconciliationHistoryPage: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const navigate = useNavigate();
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const { hasPermission } = useTenantContext();
   const canReconcile = hasPermission('banking.reconcile');
   const canUndo = hasPermission('banking.reconcile.undo');
@@ -25,6 +27,7 @@ const ReconciliationHistoryPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [undoTarget, setUndoTarget] = useState<BankReconciliationListItem | null>(null);
   const [undoReason, setUndoReason] = useState('');
+  const [reviewTarget, setReviewTarget] = useState<BankReconciliationListItem | null>(null);
   const [busy, setBusy] = useState(false);
 
   const formatCurrency = useCallback(
@@ -112,6 +115,26 @@ const ReconciliationHistoryPage: React.FC = () => {
     }
   };
 
+  const review = async () => {
+    if (!reviewTarget) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await authFetch(`/api/Banking/Reconciliations/${reviewTarget.id}/Review`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || 'Could not sign off.');
+      }
+      setReviewTarget(null);
+      await loadHistory();
+    } catch (err: unknown) {
+      setReviewTarget(null);
+      setError(err instanceof Error ? err.message : 'Could not sign off.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -174,6 +197,7 @@ const ReconciliationHistoryPage: React.FC = () => {
                 <th className="px-4 py-3 font-semibold">Ending balance</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold">Finished</th>
+                <th className="px-4 py-3 font-semibold">Reviewed</th>
                 <th className="px-4 py-3 font-semibold text-right">Actions</th>
               </tr>
             </thead>
@@ -187,6 +211,9 @@ const ReconciliationHistoryPage: React.FC = () => {
                     {item.finishedAt
                       ? `${String(item.finishedAt).slice(0, 10)}${item.finishedBy ? ` · ${item.finishedBy}` : ''}`
                       : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-[var(--text-muted)] text-xs">
+                    {item.status === BANK_RECONCILIATION_STATUS.Finished ? reviewStatusText(item) : '—'}
                   </td>
                   <td className="px-4 py-3 text-right space-x-2">
                     <Link
@@ -221,6 +248,15 @@ const ReconciliationHistoryPage: React.FC = () => {
                         Report PDF
                       </a>
                     )}
+                    {canReviewReconciliation(item, user?.email, canReconcile) && (
+                      <button
+                        type="button"
+                        onClick={() => setReviewTarget(item)}
+                        className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
+                      >
+                        Sign off
+                      </button>
+                    )}
                     {item.status === BANK_RECONCILIATION_STATUS.Finished &&
                       item.id === latestFinishedId &&
                       canUndo && (
@@ -240,7 +276,7 @@ const ReconciliationHistoryPage: React.FC = () => {
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={6} className="px-4 py-8 text-center text-[var(--text-muted)]">
                     {bankId === '' ? 'Pick a bank account.' : 'No reconciliations yet for this account.'}
                   </td>
                 </tr>
@@ -248,6 +284,17 @@ const ReconciliationHistoryPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+      )}
+
+      {reviewTarget && (
+        <ConfirmDialog
+          title="Sign off this reconciliation?"
+          message={`Confirms you reviewed the statement ending ${String(reviewTarget.statementEndDate).slice(0, 10)}. The preparer cannot sign off their own work.`}
+          confirmLabel="Sign off"
+          busy={busy}
+          onConfirm={() => void review()}
+          onCancel={() => setReviewTarget(null)}
+        />
       )}
 
       {undoTarget && (

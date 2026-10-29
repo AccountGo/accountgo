@@ -5,6 +5,7 @@ import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { BankAccountFormDialog } from '../components/BankAccountFormDialog';
 import { CashHistoryStep } from '../components/CashHistoryStep';
 import { BankingTabs } from '../components/BankingTabs';
+import { OutstandingAgingCard } from '../components/OutstandingAgingCard';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import { needsCashHistoryStep } from '../lib/bankingForm';
@@ -214,6 +215,10 @@ const Banking: React.FC = () => {
             ))}
           </ul>
         </div>
+      )}
+
+      {hasFinancials && !loading && accounts.length > 0 && (
+        <OutstandingAgingCard accounts={accounts} orgSlug={currentOrg.slug} formatCurrency={formatCurrency} />
       )}
 
       {formOpen && (
