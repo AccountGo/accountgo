@@ -23,17 +23,7 @@ namespace Api.Data.Migrations.ApiDb
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             // Keep IX_Bank_AccountId for the Account FK; add unique composites alongside it.
-
-            migrationBuilder.AlterColumn<string>(
-                name: "Name",
-                table: "Bank",
-                type: "nvarchar(200)",
-                maxLength: 200,
-                nullable: false,
-                defaultValue: "",
-                oldClrType: typeof(string),
-                oldType: "nvarchar(max)",
-                oldNullable: true);
+            // Name stays nullable until blank names are filled and defaults collapsed.
 
             migrationBuilder.AddColumn<string>(
                 name: "RoutingNumber",
@@ -99,9 +89,61 @@ namespace Api.Data.Migrations.ApiDb
                 nullable: true);
 
             migrationBuilder.Sql(@"
-UPDATE Bank SET IsDefaultForReceipts = 1 WHERE IsDefault = 1;
+-- One receipts default per company (lowest Id keeps IsDefault / IsDefaultForReceipts).
+UPDATE b SET IsDefaultForReceipts = 1
+FROM Bank AS b
+WHERE b.IsDefault = 1
+  AND b.IsDefaultForReceipts = 0
+  AND NOT EXISTS (
+      SELECT 1 FROM Bank AS other
+      WHERE other.CompanyId = b.CompanyId AND other.IsDefaultForReceipts = 1);
+
 UPDATE Bank SET ArchivedAt = SYSUTCDATETIME() WHERE IsActive = 0 AND ArchivedAt IS NULL;
+
+UPDATE b SET Name = a.AccountName
+FROM Bank AS b
+INNER JOIN Account AS a ON a.Id = b.AccountId AND a.CompanyId = b.CompanyId
+WHERE (b.Name IS NULL OR LTRIM(RTRIM(b.Name)) = '')
+  AND a.AccountName IS NOT NULL
+  AND LTRIM(RTRIM(a.AccountName)) <> '';
+
+UPDATE Bank
+SET Name = 'Bank ' + CAST(Id AS nvarchar(20))
+WHERE Name IS NULL OR LTRIM(RTRIM(Name)) = '';
+
+UPDATE b
+SET Name = b.Name + ' (' + CAST(b.Id AS nvarchar(20)) + ')'
+FROM Bank AS b
+WHERE EXISTS (
+    SELECT 1 FROM Bank AS other
+    WHERE other.CompanyId = b.CompanyId
+      AND LOWER(other.Name) = LOWER(b.Name)
+      AND other.Id < b.Id);
+
+UPDATE Bank SET IsDefaultForReceipts = 0
+WHERE IsDefaultForReceipts = 1
+  AND Id NOT IN (
+      SELECT MinId FROM (
+          SELECT MIN(Id) AS MinId FROM Bank WHERE IsDefaultForReceipts = 1 GROUP BY CompanyId
+      ) AS keepers);
+
+UPDATE Bank SET IsDefaultForPayments = 0
+WHERE IsDefaultForPayments = 1
+  AND Id NOT IN (
+      SELECT MinId FROM (
+          SELECT MIN(Id) AS MinId FROM Bank WHERE IsDefaultForPayments = 1 GROUP BY CompanyId
+      ) AS keepers);
 ");
+
+            migrationBuilder.AlterColumn<string>(
+                name: "Name",
+                table: "Bank",
+                type: "nvarchar(200)",
+                maxLength: 200,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "nvarchar(max)",
+                oldNullable: true);
 
             migrationBuilder.CreateIndex(
                 name: "UX_Bank_Company_Account",

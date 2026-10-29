@@ -18,7 +18,10 @@ ALTER TABLE "Bank" ADD COLUMN "CurrencyCode" TEXT NULL;
 UPDATE "Bank" SET "IsDefaultForReceipts" = 1 WHERE "IsDefault" = 1 AND "IsDefaultForReceipts" = 0 AND NOT EXISTS (SELECT 1 FROM "Bank" AS other WHERE other."CompanyId" = "Bank"."CompanyId" AND other."IsDefaultForReceipts" = 1);
 UPDATE "Bank" SET "ArchivedAt" = CURRENT_TIMESTAMP WHERE "IsActive" = 0 AND "ArchivedAt" IS NULL;
 
-UPDATE "Bank" SET "Name" = "Name" || ' (' || (SELECT CAST(COUNT(*) AS TEXT) FROM "Bank" AS b2 WHERE b2."CompanyId" = "Bank"."CompanyId" AND lower(b2."Name") = lower("Bank"."Name") AND b2."Id" <= "Bank"."Id") || ')' WHERE EXISTS (SELECT 1 FROM "Bank" AS other WHERE other."CompanyId" = "Bank"."CompanyId" AND lower(other."Name") = lower("Bank"."Name") AND other."Id" < "Bank"."Id");
+UPDATE "Bank" SET "Name" = (SELECT a."AccountName" FROM "Account" AS a WHERE a."Id" = "Bank"."AccountId" AND a."CompanyId" = "Bank"."CompanyId") WHERE ("Name" IS NULL OR TRIM("Name") = '') AND "AccountId" IS NOT NULL AND EXISTS (SELECT 1 FROM "Account" AS a WHERE a."Id" = "Bank"."AccountId" AND a."CompanyId" = "Bank"."CompanyId" AND a."AccountName" IS NOT NULL AND TRIM(a."AccountName") != '');
+UPDATE "Bank" SET "Name" = 'Bank ' || CAST("Id" AS TEXT) WHERE "Name" IS NULL OR TRIM("Name") = '';
+
+UPDATE "Bank" SET "Name" = "Name" || ' (' || CAST("Id" AS TEXT) || ')' WHERE EXISTS (SELECT 1 FROM "Bank" AS other WHERE other."CompanyId" = "Bank"."CompanyId" AND lower(other."Name") = lower("Bank"."Name") AND other."Id" < "Bank"."Id");
 
 UPDATE "Bank" SET "IsDefaultForReceipts" = 0 WHERE "IsDefaultForReceipts" = 1 AND "Id" NOT IN (SELECT "Id" FROM (SELECT MIN("Id") AS "Id" FROM "Bank" WHERE "IsDefaultForReceipts" = 1 GROUP BY "CompanyId"));
 UPDATE "Bank" SET "IsDefaultForPayments" = 0 WHERE "IsDefaultForPayments" = 1 AND "Id" NOT IN (SELECT "Id" FROM (SELECT MIN("Id") AS "Id" FROM "Bank" WHERE "IsDefaultForPayments" = 1 GROUP BY "CompanyId"));

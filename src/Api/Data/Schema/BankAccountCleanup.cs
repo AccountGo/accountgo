@@ -8,6 +8,7 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
+using Services.Banking;
 
 namespace Api.Data.Schema
 {
@@ -18,17 +19,13 @@ namespace Api.Data.Schema
     /// </summary>
     public static class BankAccountCleanup
     {
-        private const int CashCodeMin = 10100;
-        private const int CashCodeMax = 10999;
-        private const int PreferredCodeMin = 10114;
-        private const int PreferredCodeMax = 10119;
-
         public static void Apply(DbConnection connection, DbTransaction? tx = null, ILogger? logger = null)
         {
             if (!TableExists(connection, "Bank", tx))
                 return;
 
             BackfillDefaultsAndArchive(connection, tx);
+            FillBlankNames(connection, tx);
             DeduplicateNames(connection, tx);
             CollapseMultipleDefaults(connection, tx);
             RepairInvalidAndSharedAccounts(connection, tx, logger);
@@ -76,18 +73,41 @@ WHERE ""IsDefault"" = 1
                 @"UPDATE ""Bank"" SET ""ArchivedAt"" = CURRENT_TIMESTAMP WHERE ""IsActive"" = 0 AND ""ArchivedAt"" IS NULL;");
         }
 
-        private static void DeduplicateNames(DbConnection connection, DbTransaction? tx)
+        private static void FillBlankNames(DbConnection connection, DbTransaction? tx)
         {
-            // Same predicate as D1 0032: append " (n)" to every duplicate after the lowest id.
+            if (TableExists(connection, "Account", tx))
+            {
+                Execute(connection, tx, @"
+UPDATE ""Bank""
+SET ""Name"" = (
+  SELECT a.""AccountName""
+  FROM ""Account"" AS a
+  WHERE a.""Id"" = ""Bank"".""AccountId""
+    AND a.""CompanyId"" = ""Bank"".""CompanyId""
+)
+WHERE (""Name"" IS NULL OR TRIM(""Name"") = '')
+  AND ""AccountId"" IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM ""Account"" AS a
+    WHERE a.""Id"" = ""Bank"".""AccountId""
+      AND a.""CompanyId"" = ""Bank"".""CompanyId""
+      AND a.""AccountName"" IS NOT NULL
+      AND TRIM(a.""AccountName"") != ''
+  );");
+            }
+
             Execute(connection, tx, @"
 UPDATE ""Bank""
-SET ""Name"" = ""Name"" || ' (' || (
-  SELECT CAST(COUNT(*) AS TEXT)
-  FROM ""Bank"" AS b2
-  WHERE b2.""CompanyId"" = ""Bank"".""CompanyId""
-    AND lower(b2.""Name"") = lower(""Bank"".""Name"")
-    AND b2.""Id"" <= ""Bank"".""Id""
-) || ')'
+SET ""Name"" = 'Bank ' || CAST(""Id"" AS TEXT)
+WHERE ""Name"" IS NULL OR TRIM(""Name"") = '';");
+        }
+
+        private static void DeduplicateNames(DbConnection connection, DbTransaction? tx)
+        {
+            // Append " ({Id})" so renames never collide with an existing "X (2)" or each other.
+            Execute(connection, tx, @"
+UPDATE ""Bank""
+SET ""Name"" = ""Name"" || ' (' || CAST(""Id"" AS TEXT) || ')'
 WHERE EXISTS (
   SELECT 1 FROM ""Bank"" AS other
   WHERE other.""CompanyId"" = ""Bank"".""CompanyId""
@@ -123,20 +143,23 @@ WHERE ""IsDefaultForPayments"" = 1
 
             var banks = LoadBanks(connection, tx);
             var usedCodesByCompany = LoadUsedAccountCodes(connection, tx);
+            var templateByCompany = LoadCoaTemplateIds(connection, tx);
             var banksByAccount = new Dictionary<(int CompanyId, int AccountId), List<BankRow>>();
 
             foreach (var bank in banks)
             {
                 if (!bank.AccountId.HasValue)
                 {
-                    TryAssignDedicatedAccount(connection, tx, bank, usedCodesByCompany, logger, reason: "null AccountId");
+                    TryAssignDedicatedAccount(connection, tx, bank, usedCodesByCompany, templateByCompany, logger,
+                        reason: "null AccountId");
                     continue;
                 }
 
                 var account = LoadAccount(connection, tx, bank.CompanyId, bank.AccountId.Value);
                 if (account == null)
                 {
-                    TryAssignDedicatedAccount(connection, tx, bank, usedCodesByCompany, logger, reason: "missing Account row");
+                    TryAssignDedicatedAccount(connection, tx, bank, usedCodesByCompany, templateByCompany, logger,
+                        reason: "missing Account row");
                     continue;
                 }
 
@@ -154,7 +177,7 @@ WHERE ""IsDefaultForPayments"" = 1
                         continue;
                     }
 
-                    TryAssignDedicatedAccount(connection, tx, bank, usedCodesByCompany, logger,
+                    TryAssignDedicatedAccount(connection, tx, bank, usedCodesByCompany, templateByCompany, logger,
                         reason: isSummary ? "summary account" : "non-cash account");
                     continue;
                 }
@@ -177,7 +200,7 @@ WHERE ""IsDefaultForPayments"" = 1
                 // Lowest id keeps the shared account; others get a dedicated empty account.
                 for (var i = 1; i < pair.Value.Count; i++)
                 {
-                    TryAssignDedicatedAccount(connection, tx, pair.Value[i], usedCodesByCompany, logger,
+                    TryAssignDedicatedAccount(connection, tx, pair.Value[i], usedCodesByCompany, templateByCompany, logger,
                         reason: "shared account");
                 }
             }
@@ -188,6 +211,7 @@ WHERE ""IsDefaultForPayments"" = 1
             DbTransaction? tx,
             BankRow bank,
             Dictionary<int, HashSet<string>> usedCodesByCompany,
+            Dictionary<int, string> templateByCompany,
             ILogger? logger,
             string reason)
         {
@@ -206,7 +230,8 @@ WHERE ""IsDefaultForPayments"" = 1
                 usedCodesByCompany[bank.CompanyId] = used;
             }
 
-            var code = AllocateAccountCode(used);
+            templateByCompany.TryGetValue(bank.CompanyId, out var templateId);
+            var code = BankCashAccountCodeAllocator.Allocate(used, templateId);
             used.Add(code);
 
             var displayName = string.IsNullOrWhiteSpace(bank.Name)
@@ -235,25 +260,6 @@ WHERE ""IsDefaultForPayments"" = 1
                 throw new InvalidOperationException(
                     "Bank.AccountId still NULL after cleanup; run scripts/d1/bank-preflight.sql and fix before deploying 0032.");
             }
-        }
-
-        private static string AllocateAccountCode(HashSet<string> used)
-        {
-            for (var code = PreferredCodeMin; code <= PreferredCodeMax; code++)
-            {
-                var text = code.ToString(CultureInfo.InvariantCulture);
-                if (!used.Contains(text))
-                    return text;
-            }
-
-            for (var code = CashCodeMin; code <= CashCodeMax; code++)
-            {
-                var text = code.ToString(CultureInfo.InvariantCulture);
-                if (!used.Contains(text))
-                    return text;
-            }
-
-            throw new InvalidOperationException("No free account code left in 10100–10999 for a dedicated bank cash account.");
         }
 
         private static int InsertAccount(
@@ -346,6 +352,28 @@ LIMIT 1;";
                     map[companyId] = set;
                 }
                 set.Add(code);
+            }
+            return map;
+        }
+
+        private static Dictionary<int, string> LoadCoaTemplateIds(DbConnection connection, DbTransaction? tx)
+        {
+            var map = new Dictionary<int, string>();
+            if (!TableExists(connection, "CompanySetting", tx)
+                || !ColumnExists(connection, "CompanySetting", "CoaTemplateId", tx))
+            {
+                return map;
+            }
+
+            using var cmd = connection.CreateCommand();
+            if (tx != null) cmd.Transaction = tx;
+            cmd.CommandText = @"SELECT ""CompanyId"", ""CoaTemplateId"" FROM ""CompanySetting"";";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                if (reader.IsDBNull(1))
+                    continue;
+                map[reader.GetInt32(0)] = reader.GetString(1);
             }
             return map;
         }

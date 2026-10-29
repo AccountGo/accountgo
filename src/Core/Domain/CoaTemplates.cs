@@ -42,5 +42,29 @@ namespace Core.Domain
         /// <summary>Base-chart account codes the template leaves out.</summary>
         public static ISet<string> OmittedAccountCodes(string templateId) =>
             templateId == ServicesSme ? ServicesOmitted : None;
+
+        /// <summary>
+        /// Base-chart codes in 10100–10999 that the template keeps (not omitted).
+        /// Bank cash-account allocation must skip these (D4 / #413).
+        /// </summary>
+        public static ISet<string> ReservedCashRangeAccountCodes(string templateId)
+        {
+            var omitted = OmittedAccountCodes(templateId);
+            var reserved = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var code in BaseCashRangeAccountCodes)
+            {
+                if (!omitted.Contains(code))
+                    reserved.Add(code);
+            }
+            return reserved;
+        }
+
+        /// <summary>Account codes from <c>coa.csv</c> that fall in 10100–10999.</summary>
+        public static readonly IReadOnlyList<string> BaseCashRangeAccountCodes = new[]
+        {
+            "10100", "10110", "10111", "10112", "10113",
+            "10120", "10121", "10130", "10140", "10150", "10160",
+            "10700", "10800", "10810", "10900"
+        };
     }
 }

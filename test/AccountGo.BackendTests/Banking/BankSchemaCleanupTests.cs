@@ -131,6 +131,109 @@ VALUES (1, 1, 'Null account', NULL, 0, 1, 0, 0);
         Assert.Contains("Bank.AccountId is required", ex.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void DeduplicateNames_ThreeCaseVariants_AppendIdWithoutColliding()
+    {
+        using var connection = OpenLegacyBankDb();
+        SeedCashChart(connection);
+        Execute(connection, @"
+INSERT INTO ""Bank"" (""Id"", ""CompanyId"", ""Type"", ""Name"", ""AccountId"", ""IsDefault"", ""IsActive"")
+VALUES
+ (1, 1, 1, 'BDO', 16, 0, 1),
+ (2, 1, 1, 'bdo', 17, 0, 1),
+ (3, 1, 1, 'BDO', 18, 0, 1);
+");
+        AddBankColumns(connection);
+
+        BankAccountCleanup.Apply(connection);
+        BankAccountCleanup.EnsureIndexesAndTriggers(connection);
+
+        Assert.Equal("BDO", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 1;"));
+        Assert.Equal("bdo (2)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 2;"));
+        Assert.Equal("BDO (3)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 3;"));
+        AssertCleanupNameUniqueness(connection);
+    }
+
+    [Fact]
+    public void DeduplicateNames_ExistingSuffix_DoesNotCollideWithCountStyle()
+    {
+        // Old count-based rename would turn the second "BDO" into "BDO (2)" and clash
+        // with the pre-existing "BDO (2)" row. Id-based suffixes stay unique.
+        using var connection = OpenLegacyBankDb();
+        SeedCashChart(connection);
+        Execute(connection, @"
+INSERT INTO ""Bank"" (""Id"", ""CompanyId"", ""Type"", ""Name"", ""AccountId"", ""IsDefault"", ""IsActive"")
+VALUES
+ (1, 1, 1, 'BDO', 16, 0, 1),
+ (2, 1, 1, 'BDO (2)', 17, 0, 1),
+ (3, 1, 1, 'bdo', 18, 0, 1),
+ (4, 1, 1, 'BDO', 20, 0, 1);
+");
+        AddBankColumns(connection);
+
+        var ex = Record.Exception(() =>
+        {
+            BankAccountCleanup.Apply(connection);
+            BankAccountCleanup.EnsureIndexesAndTriggers(connection);
+        });
+        Assert.Null(ex);
+
+        Assert.Equal("BDO", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 1;"));
+        Assert.Equal("BDO (2)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 2;"));
+        Assert.Equal("bdo (3)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 3;"));
+        Assert.Equal("BDO (4)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 4;"));
+        AssertCleanupNameUniqueness(connection);
+    }
+
+    [Fact]
+    public void D1_0032_DeduplicateNames_ThreeVariantsAndExistingSuffix()
+    {
+        using var connection = OpenLegacyBankDb();
+        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+        SeedCashChart(connection);
+        Execute(connection, @"
+INSERT INTO ""Bank"" (""Id"", ""CompanyId"", ""Type"", ""Name"", ""AccountId"", ""IsDefault"", ""IsActive"")
+VALUES
+ (1, 1, 1, 'BDO', 16, 0, 1),
+ (2, 1, 1, 'BDO (2)', 17, 0, 1),
+ (3, 1, 1, 'bdo', 18, 0, 1),
+ (4, 1, 1, 'BDO', 20, 0, 1);
+");
+
+        var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0032_bank_accounts.sql"));
+        var ex = Record.Exception(() => ExecuteScript(connection, migration));
+        Assert.Null(ex);
+
+        Assert.Equal("BDO", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 1;"));
+        Assert.Equal("BDO (2)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 2;"));
+        Assert.Equal("bdo (3)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 3;"));
+        Assert.Equal("BDO (4)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 4;"));
+        AssertCleanupNameUniqueness(connection);
+    }
+
+    [Fact]
+    public void FillBlankNames_UsesAccountNameThenBankId()
+    {
+        using var connection = OpenLegacyBankDb();
+        SeedCashChart(connection);
+        Execute(connection, @"
+INSERT INTO ""Bank"" (""Id"", ""CompanyId"", ""Type"", ""Name"", ""AccountId"", ""IsDefault"", ""IsActive"")
+VALUES
+ (1, 1, 1, NULL, 16, 0, 1),
+ (2, 1, 1, '   ', 17, 0, 1),
+ (3, 1, 1, '', NULL, 0, 1);
+");
+        // Give bank 3 a cash summary so null AccountId can be repaired after naming.
+        AddBankColumns(connection);
+
+        BankAccountCleanup.Apply(connection);
+
+        Assert.Equal("Regular Checking Account", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 1;"));
+        Assert.Equal("Savings Account", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 2;"));
+        Assert.Equal("Bank 3", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 3;"));
+        Assert.True(ScalarLong(connection, @"SELECT ""AccountId"" FROM ""Bank"" WHERE ""Id"" = 3;") > 0);
+    }
+
     private static void AssertCleanupResults(SqliteConnection connection)
     {
         Assert.Equal(0L, ScalarLong(connection, @"SELECT COUNT(*) FROM ""Bank"" WHERE ""AccountId"" IS NULL;"));
@@ -230,7 +333,17 @@ ALTER TABLE ""Bank"" ADD COLUMN ""CurrencyCode"" TEXT NULL;
 ");
     }
 
-    private static void SeedEligibleBanks(SqliteConnection connection)
+    private static void AssertCleanupNameUniqueness(SqliteConnection connection)
+    {
+        Assert.Equal(0L, ScalarLong(connection, @"
+SELECT COUNT(*) FROM (
+  SELECT ""CompanyId"", lower(""Name"") FROM ""Bank""
+  GROUP BY ""CompanyId"", lower(""Name"")
+  HAVING COUNT(*) > 1
+);"));
+    }
+
+    private static void SeedCashChart(SqliteConnection connection)
     {
         Execute(connection, @"
 INSERT INTO ""Account"" (""Id"", ""AccountClassId"", ""ParentAccountId"", ""DrOrCrSide"", ""CompanyId"", ""AccountCode"", ""AccountName"", ""IsCash"", ""IsContraAccount"")
@@ -239,7 +352,16 @@ VALUES
  (2, 1, 1, 1, 1, '10100', 'Current Assets', 0, 0),
  (5, 1, 2, 1, 1, '10110', 'Cash in Hand and in Bank', 1, 0),
  (16, 1, 5, 1, 1, '10111', 'Regular Checking Account', 0, 0),
- (18, 1, 5, 1, 1, '10113', 'Cash in Hand A/C', 0, 0);
+ (17, 1, 5, 1, 1, '10112', 'Savings Account', 0, 0),
+ (18, 1, 5, 1, 1, '10113', 'Cash in Hand A/C', 0, 0),
+ (20, 1, 5, 1, 1, '10114', 'Extra Cash Slot', 0, 0);
+");
+    }
+
+    private static void SeedEligibleBanks(SqliteConnection connection)
+    {
+        SeedCashChart(connection);
+        Execute(connection, @"
 INSERT INTO ""Bank"" (""Id"", ""CompanyId"", ""Type"", ""Name"", ""AccountId"", ""IsDefault"", ""IsActive"")
 VALUES
  (1, 1, 1, 'General Fund', 16, 1, 1),
@@ -326,6 +448,13 @@ VALUES (6, 1, 1, 'No Account', NULL, 0, 1);
         using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    private static string ScalarString(SqliteConnection connection, string sql)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        return Assert.IsType<string>(cmd.ExecuteScalar());
     }
 
     private static bool ColumnExists(DbConnection connection, string table, string column)

@@ -39,15 +39,20 @@ WHERE b."AccountId" IS NOT NULL
 GROUP BY b."CompanyId", b."AccountId"
 HAVING COUNT(*) > 1;
 
--- 5. Duplicate bank names within a company (case-insensitive)
+-- 5. NULL or blank bank names (0032 fills these from the account name or "Bank {Id}")
+SELECT 'blank_name' AS violation, b."Id" AS bank_id, b."CompanyId", b."Name", b."AccountId"
+FROM "Bank" b
+WHERE b."Name" IS NULL OR TRIM(b."Name") = '';
+
+-- 6. Duplicate bank names within a company (case-insensitive)
 SELECT 'duplicate_name' AS violation, b."CompanyId", lower(b."Name") AS name_key, COUNT(*) AS bank_count,
        GROUP_CONCAT(b."Id") AS bank_ids
 FROM "Bank" b
-WHERE b."Name" IS NOT NULL
+WHERE b."Name" IS NOT NULL AND TRIM(b."Name") != ''
 GROUP BY b."CompanyId", lower(b."Name")
 HAVING COUNT(*) > 1;
 
--- 6. More than one default for receipts / payments per company
+-- 7. More than one default for receipts / payments per company
 SELECT 'multiple_default_receipts' AS violation, b."CompanyId", COUNT(*) AS bank_count,
        GROUP_CONCAT(b."Id") AS bank_ids
 FROM "Bank" b
