@@ -245,7 +245,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -373,7 +373,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -1234,7 +1234,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -1265,7 +1265,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -1307,7 +1307,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -1334,7 +1334,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                if (ex is Core.Tenancy.TenantException) throw;
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }

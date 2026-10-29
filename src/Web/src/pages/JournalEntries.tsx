@@ -5,6 +5,8 @@ import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, ReadOnlyModuleBanner, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { currencySymbol } from '../lib/currency';
+import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
+import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 import { getDateRange } from './Reports';
 
 interface JournalLine { id: number; accountId: number; drCr: number; amount: number; memo: string | null }
@@ -51,12 +53,22 @@ export function JournalEditor({ initial, accounts, canCreate, canPost, fetcher, 
   const update = (next: JournalEntry) => { setEntry(next); setDirty(true); setError(''); };
   const updateLine = (index: number, values: Partial<JournalLine>) =>
     update({ ...entry, journalEntryLines: entry.journalEntryLines.map((line, i) => i === index ? { ...line, ...values } : line) });
-  const submit = async (post: boolean) => {
+  const periodConfirm = useReconciledPeriodConfirm();
+  const submit = async (post: boolean, confirmReconciledPeriod = false) => {
     setBusy(true); setError('');
     try {
-      const result = await read<{ id: number }>(fetcher, `/api/Financials/${post ? 'PostJournalEntry' : 'SaveJournalEntry'}`, {
+      const path = post
+        ? withConfirmReconciledPeriod('/api/Financials/PostJournalEntry', confirmReconciledPeriod)
+        : '/api/Financials/SaveJournalEntry';
+      const response = await fetcher(path, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry),
       });
+      if (post && await periodConfirm.handleConflict(response, () => void submit(true, true))) {
+        setBusy(false);
+        return;
+      }
+      if (!response.ok) throw new Error(`Journal request failed (HTTP ${response.status}): ${await response.text()}`);
+      const result: { id: number } = await response.json();
       onSaved(post ? entry.id : result.id);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to save journal.');
@@ -64,7 +76,8 @@ export function JournalEditor({ initial, accounts, canCreate, canPost, fetcher, 
     }
   };
   const money = (cents: number) => `${currencySymbol(currency)}${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  return <section aria-label="Journal entry" className="space-y-4 rounded-2xl bg-[var(--bg-surface)] p-5">
+  return <>
+  <section aria-label="Journal entry" className="space-y-4 rounded-2xl bg-[var(--bg-surface)] p-5">
     <h2 className="text-lg font-semibold">{entry.id ? `Journal #${entry.id}` : 'New Journal Entry'} - {entry.posted ? 'Posted (read-only)' : 'Draft'}</h2>
     <form className="space-y-4" onSubmit={event => { event.preventDefault(); void submit(false); }}>
       <fieldset disabled={!editable} className="grid gap-4 sm:grid-cols-2">
@@ -108,7 +121,9 @@ export function JournalEditor({ initial, accounts, canCreate, canPost, fetcher, 
       </div>}
       {!entry.posted && canPost && (!entry.id || dirty) && <p className="text-sm text-[var(--text-secondary)]">Save the draft before posting.</p>}
     </form>
-  </section>;
+  </section>
+  {periodConfirm.dialog}
+  </>;
 }
 
 export default function JournalEntries() {

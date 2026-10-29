@@ -3,6 +3,8 @@ import { ArrowLeftRight, Landmark, X } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
+import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
+import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 import type { BankAccount, BankReconciliation, CreateBankTransactionPayload } from '../types/banking';
 
 interface PostableAccount {
@@ -99,8 +101,10 @@ export const BankTransactionDialog: React.FC<BankTransactionDialogProps> = ({
   // Fee/Interest use default contra when omitted; Money in/out and Adjustment need an account.
   const contraRequired = kind === 1 || kind === 2 || kind === 6;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const periodConfirm = useReconciledPeriodConfirm();
+
+  const submit = async (e: React.FormEvent | null, confirmReconciledPeriod = false) => {
+    e?.preventDefault();
     setBusy(true);
     setError(null);
     try {
@@ -151,11 +155,12 @@ export const BankTransactionDialog: React.FC<BankTransactionDialogProps> = ({
       if (contraAccountId) payload.contraAccountId = Number(contraAccountId);
       if (kind === 6) payload.increaseBalance = increaseBalance;
 
-      const res = await authFetch('/api/Banking/Transactions', {
+      const res = await authFetch(withConfirmReconciledPeriod('/api/Banking/Transactions', confirmReconciledPeriod), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      if (await periodConfirm.handleConflict(res, () => void submit(null, true))) return;
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || 'Could not record the transaction.');
@@ -169,6 +174,7 @@ export const BankTransactionDialog: React.FC<BankTransactionDialogProps> = ({
   };
 
   return (
+    <>
     <ModalShell
       open
       onClose={() => {
@@ -359,6 +365,8 @@ export const BankTransactionDialog: React.FC<BankTransactionDialogProps> = ({
         </div>
       </form>
     </ModalShell>
+    {periodConfirm.dialog}
+    </>
   );
 };
 
