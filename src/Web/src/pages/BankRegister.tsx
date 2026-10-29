@@ -3,6 +3,7 @@ import { Link, useOutletContext, useParams } from 'react-router-dom';
 import { AlertTriangle, Archive, Loader2, Pencil, Star } from 'lucide-react';
 import { PageHeader, HeaderButton, HeaderMenu } from '../components/PageHeader';
 import { BankAccountFormDialog } from '../components/BankAccountFormDialog';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import { localToday } from '../lib/businessDays';
@@ -42,6 +43,7 @@ const BankRegisterPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [archiveConfirmMessage, setArchiveConfirmMessage] = useState<string | null>(null);
 
   const formatCurrency = useCallback(
     (n: number) =>
@@ -84,23 +86,28 @@ const BankRegisterPage: React.FC = () => {
     void load();
   }, [load]);
 
-  const archive = async () => {
+  const archive = async (confirm = false) => {
     if (!account || !canManage) return;
     setBusy(true);
+    setError(null);
     try {
-      const res = await authFetch(`/api/Banking/Accounts/${account.id}/Archive`, { method: 'POST' });
+      const url = confirm
+        ? `/api/Banking/Accounts/${account.id}/Archive?confirm=true`
+        : `/api/Banking/Accounts/${account.id}/Archive`;
+      const res = await authFetch(url, { method: 'POST' });
       if (res.status === 409) {
         const body = await res.json().catch(() => null);
-        if (body?.code === 'ARCHIVE_CONFIRM_REQUIRED') {
-          const ok = window.confirm(`${body.message}\n\nArchive anyway?`);
-          if (!ok) return;
-          const again = await authFetch(`/api/Banking/Accounts/${account.id}/Archive?confirm=true`, { method: 'POST' });
-          if (!again.ok) throw new Error('Could not archive.');
+        if (body?.code === 'ARCHIVE_CONFIRM_REQUIRED' && !confirm) {
+          setArchiveConfirmMessage(body.message || 'This account still has a balance. Archive anyway?');
+          return;
         }
-      } else if (!res.ok) {
+        throw new Error(body?.message || 'Could not archive.');
+      }
+      if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || 'Could not archive.');
       }
+      setArchiveConfirmMessage(null);
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not archive.');
@@ -109,9 +116,28 @@ const BankRegisterPage: React.FC = () => {
     }
   };
 
+  const unarchive = async () => {
+    if (!account || !canManage) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await authFetch(`/api/Banking/Accounts/${account.id}/Unarchive`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || 'Could not unarchive.');
+      }
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not unarchive.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const setDefault = async (forKind: 'receipts' | 'payments') => {
     if (!account || !canManage) return;
     setBusy(true);
+    setError(null);
     try {
       const res = await authFetch(`/api/Banking/Accounts/${account.id}/SetDefault?for=${forKind}`, { method: 'POST' });
       if (!res.ok) {
@@ -166,14 +192,8 @@ const BankRegisterPage: React.FC = () => {
                   label: account.archivedAt ? 'Unarchive' : 'Archive',
                   icon: Archive,
                   onSelect: () => {
-                    if (account.archivedAt) {
-                      void (async () => {
-                        setBusy(true);
-                        await authFetch(`/api/Banking/Accounts/${account.id}/Unarchive`, { method: 'POST' });
-                        await load();
-                        setBusy(false);
-                      })();
-                    } else void archive();
+                    if (account.archivedAt) void unarchive();
+                    else void archive(false);
                   },
                 },
               ]}
@@ -274,6 +294,18 @@ const BankRegisterPage: React.FC = () => {
             await load();
           }}
           onClose={() => setEditOpen(false)}
+        />
+      )}
+
+      {archiveConfirmMessage && (
+        <ConfirmDialog
+          title="Archive with a balance?"
+          message={archiveConfirmMessage}
+          confirmLabel="Archive anyway"
+          destructive
+          busy={busy}
+          onConfirm={() => void archive(true)}
+          onCancel={() => setArchiveConfirmMessage(null)}
         />
       )}
     </div>
