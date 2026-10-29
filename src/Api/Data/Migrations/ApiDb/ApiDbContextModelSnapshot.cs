@@ -816,11 +816,21 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Address")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("BankName")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("Iban")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -828,10 +838,33 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsDefaultForPayments")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefaultForReceipts")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Name")
-                        .HasColumnType("nvarchar(max)");
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Number")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("OpeningBalance")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<DateTime?>("OpeningBalanceDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("OpeningBalanceGeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RoutingNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Swift")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Type")
@@ -840,6 +873,21 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
+
+                    b.HasIndex(new[] { "CompanyId", "AccountId" }, "UX_Bank_Company_Account")
+                        .IsUnique()
+                        .HasFilter("[AccountId] IS NOT NULL");
+
+                    b.HasIndex(new[] { "CompanyId", "Name" }, "UX_Bank_Company_Name")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "CompanyId" }, "UX_Bank_DefaultPayments")
+                        .IsUnique()
+                        .HasFilter("[IsDefaultForPayments] = 1");
+
+                    b.HasIndex(new[] { "CompanyId" }, "UX_Bank_DefaultReceipts")
+                        .IsUnique()
+                        .HasFilter("[IsDefaultForReceipts] = 1");
 
                     b.ToTable("Bank");
                 });
