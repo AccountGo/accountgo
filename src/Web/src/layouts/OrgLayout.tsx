@@ -119,6 +119,7 @@ export const OrgLayout: React.FC = () => {
           role: OrgDetails['role'];
           permissions: string[];
           currency: string;
+          fiscalYearEnd?: string;
         };
         if (mounted) {
           const resolvedOrg: OrgDetails = {
@@ -130,6 +131,7 @@ export const OrgLayout: React.FC = () => {
             plan: current.plan,
             role: current.role,
             currency: current.currency,
+            fiscalYearEnd: current.fiscalYearEnd,
             permissions: current.permissions,
             subscription: {
               planId: current.plan,

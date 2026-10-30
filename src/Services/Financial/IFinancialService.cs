@@ -44,6 +44,11 @@ namespace Services.Financial
             DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null,
             DocumentTypes? documentType = null, int skip = 0, int take = 100);
         FinancialYear CurrentFiscalYear();
+        /// <summary>
+        /// Creates every missing open fiscal year from the books start through the year containing <paramref name="date"/>.
+        /// Idempotent: never duplicates or mutates existing years. No-op when <paramref name="date"/> is before the books start.
+        /// </summary>
+        void EnsureFiscalYearsThrough(DateTime date);
         IEnumerable<Tax> GetTaxes();
         IEnumerable<ItemTaxGroup> GetItemTaxGroups();
         IEnumerable<TaxGroup> GetTaxGroups();

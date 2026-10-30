@@ -208,11 +208,47 @@ namespace Services.Financial
 
         public FinancialYear CurrentFiscalYear()
         {
-            var query = (from fy in _fiscalYearRepo.Table
-                         where fy.IsActive == true
-                         select fy).FirstOrDefault();
+            var today = DateTime.UtcNow.Date;
+            EnsureFiscalYearsThrough(today);
+            return _fiscalYearRepo.Table
+                .FirstOrDefault(fy => fy.IsActive
+                    && today >= fy.StartDate.Date
+                    && today <= fy.EndDate.Date);
+        }
 
-            return query;
+        /// <inheritdoc />
+        public void EnsureFiscalYearsThrough(DateTime date)
+        {
+            var setting = _companySettingRepo.Table.FirstOrDefault();
+            if (setting == null)
+                return;
+
+            var booksStart = setting.BooksStartDate.Date;
+            if (date.Date < booksStart)
+                return;
+
+            var pattern = setting.FiscalYearPattern;
+            var startMonth = setting.FiscalYearStartMonth;
+            var target = FiscalYearCalculator.Containing(date, pattern, startMonth);
+            var cursor = FiscalYearCalculator.Containing(booksStart, pattern, startMonth);
+
+            while (cursor.Start <= target.Start)
+            {
+                if (!_fiscalYearRepo.Table.Any(fy => fy.FiscalYearCode == cursor.Code))
+                {
+                    _fiscalYearRepo.Insert(new FinancialYear
+                    {
+                        CompanyId = setting.CompanyId,
+                        FiscalYearCode = cursor.Code,
+                        FiscalYearName = cursor.Code,
+                        StartDate = cursor.Start,
+                        EndDate = cursor.End,
+                        IsActive = true
+                    });
+                }
+
+                cursor = FiscalYearCalculator.Containing(cursor.Start.AddYears(1), pattern, startMonth);
+            }
         }
 
         /// <summary>Rejects postings dated before the company's books start date (resolved in the current tenant scope).</summary>
@@ -330,6 +366,8 @@ namespace Services.Financial
                 throw new InvalidOperationException("One or more line(s) amount is zero.");
 
             _reconciledPeriodGuard?.EnsurePostingAllowed(glEntry);
+
+            EnsureFiscalYearsThrough(glEntry.Date);
 
             var activeFiscalYear = _fiscalYearRepo.Table
                 .FirstOrDefault(fy => fy.IsActive && glEntry.Date >= fy.StartDate && glEntry.Date <= fy.EndDate);

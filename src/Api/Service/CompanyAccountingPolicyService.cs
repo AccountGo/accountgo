@@ -117,12 +117,11 @@ namespace Api.Service
             groups[0].Description = taxed ? label : "No tax";
         }
 
-        // Safe only while the ledger is empty: nothing can reference the old year.
+        // Safe only while the ledger is empty: nothing can reference the rewritten year.
+        // Several years may be open at once; do not deactivate siblings when replacing the books-start year.
         private void ReplaceActiveFiscalYear(CompanySetting setting)
         {
             var fy = FiscalYearCalculator.Containing(setting.BooksStartDate, setting.FiscalYearPattern, setting.FiscalYearStartMonth);
-            foreach (var old in _db.FinancialYears.Where(f => f.IsActive).ToList())
-                old.IsActive = false;
             var existing = _db.FinancialYears.FirstOrDefault(f => f.FiscalYearCode == fy.Code);
             if (existing != null)
             {

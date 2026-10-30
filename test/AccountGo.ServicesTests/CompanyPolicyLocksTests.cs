@@ -57,7 +57,8 @@ public class CompanyPolicyLocksTests : IDisposable
             _db,
             new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenant)),
             new CompanyAccountingPolicyService(_db),
-            new Services.Billing.CommunityPlanCatalog());
+            new Services.Billing.CommunityPlanCatalog(),
+            Mock.Of<Services.Financial.IFinancialService>());
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -84,9 +85,8 @@ public class CompanyPolicyLocksTests : IDisposable
         });
 
         Assert.IsType<OkObjectResult>(result);
-        var active = _db.FinancialYears.Where(f => f.IsActive).ToList();
-        var only = Assert.Single(active);
-        Assert.Equal("FY2025-26", only.FiscalYearCode);
+        var aprMar = Assert.Single(_db.FinancialYears, f => f.FiscalYearCode == "FY2025-26");
+        Assert.True(aprMar.IsActive);
         Assert.Equal(FiscalYearPattern.AprMar, _db.CompanySettings.Single().FiscalYearPattern);
     }
 

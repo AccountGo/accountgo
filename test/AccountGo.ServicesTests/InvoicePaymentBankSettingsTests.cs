@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using Xunit;
 
 namespace AccountGo.ServicesTests;
@@ -52,7 +53,8 @@ public class InvoicePaymentBankSettingsTests : IDisposable
             _db,
             new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenant)),
             new CompanyAccountingPolicyService(_db),
-            new Services.Billing.CommunityPlanCatalog());
+            new Services.Billing.CommunityPlanCatalog(),
+            Mock.Of<Services.Financial.IFinancialService>());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

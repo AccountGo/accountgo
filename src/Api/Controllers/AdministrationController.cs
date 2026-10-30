@@ -133,6 +133,7 @@ namespace Api.Controllers
         [HttpGet("financialyears")]
         public IActionResult FinancialYears()
         {
+            _financialService.EnsureFiscalYearsThrough(DateTime.UtcNow.Date);
             var years = _adminService.GetFinancialYears();
             return Ok(years.Select(f => new
             {
