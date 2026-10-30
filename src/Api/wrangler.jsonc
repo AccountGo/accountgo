@@ -43,15 +43,6 @@
       }
     ]
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "accountgo-db",
-      // Local/dev placeholder. Production D1 id lives only in AccountGo/accountgo-ops.
-      "database_id": "00000000-0000-0000-0000-000000000001",
-      "migrations_dir": "d1/migrations"
-    }
-  ],
   "migrations": [
     {
       "tag": "v1",
@@ -71,7 +62,7 @@
     "CONTAINER_NAME": "local",
     "TIERED_CAPACITY_ENABLED": "false",
     "CONTAINER_INSTANCE_TYPE": "standard-1",
-    "DatabaseProvider": "Sqlite",
+    "DatabaseProvider": "Postgres",
     "EMAIL_PROVIDER": "Console",
     "PUBLIC_WEB_URL": "http://localhost:3000",
     "PUBLIC_API_URL": "http://localhost:8001",

@@ -139,7 +139,6 @@ namespace AccountGo.BackendTests
             var invoice = await NewInvoice();
             var response = await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice);
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            Assert.NotEmpty(SyncSql(response));
         }
 
         [Fact]
@@ -575,64 +574,21 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={draft}")).StatusCode);
         }
 
-        [SqliteFact]
-        public async Task InvoiceNumber_UniqueIndex_RejectsADuplicate_LocallyAndOnD1Replay()
+        [Fact]
+        public async Task InvoiceNumber_UniqueIndex_RejectsADuplicate()
         {
             var draft = await SaveDraft();
-            var elsewhere = await SaveDraft();
-            var next = await NextNumber();
+            await Issue(draft);
 
-            using (var source = new SqliteConnection("Data Source=" + _path))
-            using (var replica = new SqliteConnection("Data Source=:memory:;Foreign Keys=True"))
+            // A second invoice with an existing number can't be stored.
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
             {
-                source.Open();
-                replica.Open();
-                source.BackupDatabase(replica);
-                using (var command = replica.CreateCommand())
-                {
-                    // The D1 migration applies cleanly on top of the existing schema.
-                    command.CommandText = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0008_invoice_number_unique.sql"));
-                    command.ExecuteNonQuery();
-                    // Another container already issued the same number into D1.
-                    command.CommandText = $"UPDATE SalesInvoiceHeader SET No = '{next}', Status = 1 WHERE Id = {elsewhere}";
-                    Assert.Equal(1, command.ExecuteNonQuery());
-                }
-
-                var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draft}");
-                Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
-                var statements = AllSyncStatements(issued);
-                Assert.Contains(statements, s => s.StartsWith("INSERT INTO \"SalesInvoiceHeader\"") && s.Contains($"'{next}'"));
-
-                // The worker applies the batch in one transaction; the clash fails it instead of keeping two #next.
-                using (var tx = replica.BeginTransaction())
-                using (var command = replica.CreateCommand())
-                {
-                    command.Transaction = tx;
-                    command.CommandText = "PRAGMA defer_foreign_keys=ON";
-                    command.ExecuteNonQuery();
-                    var error = Assert.Throws<SqliteException>(() =>
-                    {
-                        foreach (var statement in statements)
-                        {
-                            command.CommandText = statement;
-                            command.ExecuteNonQuery();
-                        }
-                    });
-                    Assert.Contains("UNIQUE constraint failed: SalesInvoiceHeader.CompanyId, SalesInvoiceHeader.No", error.Message);
-                }
-            }
-
-            // And locally, a second invoice with an existing number can't be stored.
-            using (var scope = _factory.Services.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-                {
-                    var copy = db.SalesInvoiceHeaders.AsNoTracking().Single(i => i.Id == draft);
-                    copy.Id = 0;
-                    db.SalesInvoiceHeaders.Add(copy);
-                    Assert.Throws<DbUpdateException>(() => db.SaveChanges());
-                }
+                var copy = db.SalesInvoiceHeaders.AsNoTracking().Single(i => i.Id == draft);
+                copy.Id = 0;
+                db.SalesInvoiceHeaders.Add(copy);
+                Assert.Throws<DbUpdateException>(() => db.SaveChanges());
             }
         }
 
@@ -683,7 +639,7 @@ namespace AccountGo.BackendTests
         private static string RepoRoot()
         {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
-            while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "src", "Api", "d1")))
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "accountgo.sln")))
                 dir = dir.Parent;
             return dir?.FullName ?? throw new DirectoryNotFoundException("Repository root not found.");
         }
@@ -958,78 +914,6 @@ namespace AccountGo.BackendTests
             Assert.Equal("Juan Dela Cruz", (await Json(await Send(HttpMethod.Get, Current + "/business-profile"))).GetProperty("legalName").GetString());
         }
 
-        [SqliteFact]
-        public async Task BusinessProfileAndInvoiceSettings_SyncToD1_ReplaysToTheSameRow()
-        {
-            // A copy of the database stands in for D1; every response's sync SQL is replayed on it like the worker does.
-            var mirror = _path + ".mirror";
-            using (var source = new SqliteConnection("Data Source=" + _path))
-            {
-                source.Open();
-                using var vacuum = source.CreateCommand();
-                vacuum.CommandText = $"VACUUM INTO '{mirror}'";
-                vacuum.ExecuteNonQuery();
-            }
-
-            try
-            {
-                var saves = new (string Path, object Body)[]
-                {
-                    (Current + "/business-profile", new { legalName = "Marvin Perez", address = new { line1 = "1 First St", city = "Makati" } }),
-                    // Replacing the address: EF deletes the old owned instance and adds a new one.
-                    (Current + "/business-profile", new { legalName = "Marvin Perez", businessEmail = "m@example.com",
-                        address = new { line1 = "2 Second St", city = "Makati", postalCode = "1200", countryCode = "Philippines" } }),
-                    (Current + "/sales-invoice-settings", new { sellerName = "LegalName", showNotes = true, showPaymentInstructions = true }),
-                };
-                foreach (var (path, body) in saves)
-                {
-                    var response = await Send(HttpMethod.Put, path, body);
-                    Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-                    ReplayOnMirror(mirror, AllSyncStatements(response));
-                }
-                Assert.Equal(CompanySettingRow(_path), CompanySettingRow(mirror));
-                Assert.Contains("2 Second St", CompanySettingRow(mirror));
-
-                var cleared = await Send(HttpMethod.Put, Current + "/business-profile", new { legalName = "Marvin Perez" });
-                Assert.True(cleared.IsSuccessStatusCode);
-                ReplayOnMirror(mirror, AllSyncStatements(cleared));
-                Assert.Equal(CompanySettingRow(_path), CompanySettingRow(mirror));
-                Assert.DoesNotContain("2 Second St", CompanySettingRow(mirror));
-                Assert.Contains("USD", CompanySettingRow(mirror));
-            }
-            finally
-            {
-                SqliteConnection.ClearAllPools();
-                if (File.Exists(mirror)) File.Delete(mirror);
-            }
-        }
-
-        private static void ReplayOnMirror(string mirror, List<string> statements)
-        {
-            using var connection = new SqliteConnection("Data Source=" + mirror);
-            connection.Open();
-            using var tx = connection.BeginTransaction();
-            foreach (var sql in new[] { "PRAGMA defer_foreign_keys = on" }.Concat(statements))
-            {
-                using var command = connection.CreateCommand();
-                command.Transaction = tx;
-                command.CommandText = sql;
-                command.ExecuteNonQuery();
-            }
-            tx.Commit();
-        }
-
-        private string CompanySettingRow(string path)
-        {
-            using var connection = new SqliteConnection("Data Source=" + path);
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM \"CompanySetting\" WHERE \"CompanyId\" = " + _companyId;
-            using var reader = command.ExecuteReader();
-            Assert.True(reader.Read(), "CompanySetting row missing in " + path);
-            return string.Join("|", Enumerable.Range(0, reader.FieldCount).Select(i => reader.GetName(i) + "=" + (reader.IsDBNull(i) ? "NULL" : reader.GetValue(i))));
-        }
-
         [Fact]
         public async Task SalesInvoiceSettings_RoundTrip_Validate_AdminOnly_AndStayInTheirWorkspace()
         {
@@ -1146,7 +1030,6 @@ namespace AccountGo.BackendTests
             var issuedDto = await NewInvoice();
             var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", issuedDto);
             Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
-            Assert.Contains(AllSyncStatements(issuedResponse), sql => sql.Contains("SellerJson") && sql.Contains("1 Old St"));
             var issuedId = (await issuedResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
 
             var draftDto = await NewInvoice();
@@ -1471,57 +1354,6 @@ namespace AccountGo.BackendTests
         }
 
         [SqliteFact]
-        public async Task Create_SyncPayload_HeadersUnder32KB_AndReplaysAllDefaults()
-        {
-            using (var source = new SqliteConnection("Data Source=" + _path))
-            using (var replica = new SqliteConnection("Data Source=:memory:;Foreign Keys=True"))
-            {
-                source.Open();
-                replica.Open();
-                source.BackupDatabase(replica);
-                var response = await Send(HttpMethod.Post, "/api/organizations",
-                    new { name = "Durable Workspace", slug = "durable-workspace", currency = "EUR" }, scoped: false);
-                Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-                Assert.Equal("gzip", response.Headers.GetValues("x-d1-sync-encoding").Single());
-                var syncHeaderBytes = response.Headers
-                    .Where(h => h.Key.StartsWith("x-d1-sync-", StringComparison.OrdinalIgnoreCase))
-                    .Sum(h => Encoding.UTF8.GetByteCount(h.Key + ": " + string.Join(", ", h.Value) + "\r\n"));
-                var totalHeaderBytes = TotalResponseHeaderBytes(response);
-                _output.WriteLine($"POST /api/organizations: sync headers = {syncHeaderBytes} bytes; total response headers = {totalHeaderBytes} bytes.");
-                Assert.True(syncHeaderBytes < 32768, $"Sync headers total {syncHeaderBytes} bytes; must be under 32 KB.");
-                Assert.True(totalHeaderBytes < 32768, $"Response headers total {totalHeaderBytes} bytes; must be under 32 KB.");
-                var id = int.Parse((await Json(response)).GetProperty("id").GetString());
-                var statements = AllSyncStatements(response);
-                Assert.Contains(statements, s => s.StartsWith("INSERT INTO \"Company\""));
-                Assert.Contains(statements, s => s.StartsWith("INSERT INTO \"CompanyMember\""));
-                using (var tx = replica.BeginTransaction())
-                using (var command = replica.CreateCommand())
-                {
-                    command.Transaction = tx;
-                    command.CommandText = "PRAGMA defer_foreign_keys=ON";
-                    command.ExecuteNonQuery();
-                    foreach (var statement in statements)
-                    {
-                        command.CommandText = statement;
-                        command.ExecuteNonQuery();
-                    }
-                    tx.Commit();
-                }
-                using (var command = replica.CreateCommand())
-                {
-                    command.CommandText = "SELECT COUNT(*) FROM Account WHERE CompanyId=" + id;
-                    Assert.True(Convert.ToInt32(command.ExecuteScalar()) > 50);
-                    command.CommandText = "SELECT Currency FROM CompanySetting WHERE CompanyId=" + id;
-                    Assert.Equal("EUR", command.ExecuteScalar());
-                    command.CommandText = "SELECT COUNT(*) FROM SequenceNumber WHERE CompanyId=" + id;
-                    Assert.Equal(Enum.GetValues(typeof(SequenceNumberTypes)).Length, Convert.ToInt32(command.ExecuteScalar()));
-                    command.CommandText = "SELECT COUNT(*) FROM GeneralLedgerSetting WHERE CompanyId=" + id;
-                    Assert.Equal(1, Convert.ToInt32(command.ExecuteScalar()));
-                }
-            }
-        }
-
-        [SqliteFact]
         public async Task Create_ProvisioningFailure_RollsBackCompanyAndMembership()
         {
             using (var scope = _factory.Services.CreateScope())
@@ -1529,7 +1361,6 @@ namespace AccountGo.BackendTests
                     "CREATE TRIGGER reject_provisioning BEFORE INSERT ON GeneralLedgerSetting BEGIN SELECT RAISE(ABORT, 'simulated provisioning failure'); END;");
             var response = await Send(HttpMethod.Post, "/api/organizations", new { name = "Rejected", slug = "rejected" }, scoped: false);
             Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-            Assert.False(response.Headers.Contains("x-d1-sync-sql"));
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -1652,7 +1483,6 @@ namespace AccountGo.BackendTests
             issuedDto.SalesInvoiceLines[0].ItemDescription = "Consulting, March";
             var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", issuedDto);
             Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
-            Assert.Contains(AllSyncStatements(issuedResponse), sql => sql.Contains("BillToJson") && sql.Contains("Old Name Ltd"));
             var issuedId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
 
             // A draft for the same customer, its line left blank: it takes the item's description as it is now.
@@ -1700,47 +1530,6 @@ namespace AccountGo.BackendTests
             var editRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", edit);
             Assert.Equal(HttpStatusCode.BadRequest, editRes.StatusCode);
             Assert.Equal("Old Name Ltd", (await GetInvoice(issuedId)).CustomerName);
-        }
-
-        [SqliteFact]
-        public async Task InvoiceHistoryMigration_BackfillsIssuedInvoices_AndLineText()
-        {
-            var issuedDto = await NewInvoice("billing@example.com");
-            await EditCustomer(issuedDto.CustomerId, "Backfilled Co", "billing@example.com", null);
-            var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", issuedDto);
-            Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
-            var issuedId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
-            var draftId = await SaveDraft();
-
-            using (var source = new SqliteConnection("Data Source=" + _path))
-            using (var replica = new SqliteConnection("Data Source=:memory:"))
-            {
-                source.Open();
-                replica.Open();
-                source.BackupDatabase(replica);
-                using (var command = replica.CreateCommand())
-                {
-                    // D1 as it is before the migration.
-                    command.CommandText = @"ALTER TABLE ""SalesInvoiceLine"" DROP COLUMN ""Description"";
-                                            ALTER TABLE ""SalesInvoiceHeader"" DROP COLUMN ""BillToJson"";";
-                    command.ExecuteNonQuery();
-                    command.CommandText = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0009_invoice_history.sql"));
-                    command.ExecuteNonQuery();
-
-                    command.CommandText = $@"SELECT ""BillToJson"" FROM ""SalesInvoiceHeader"" WHERE ""Id"" = {issuedId}";
-                    var billTo = InvoiceBillTo.FromJson(command.ExecuteScalar() as string);
-                    Assert.NotNull(billTo);
-                    Assert.Equal("Backfilled Co", billTo.Name);
-                    Assert.Equal("billing@example.com", billTo.Email);
-                    Assert.Empty(billTo.AddressLines);
-
-                    command.CommandText = $@"SELECT ""BillToJson"" FROM ""SalesInvoiceHeader"" WHERE ""Id"" = {draftId}";
-                    Assert.IsType<DBNull>(command.ExecuteScalar());
-
-                    command.CommandText = $@"SELECT ""Description"" FROM ""SalesInvoiceLine"" WHERE ""SalesInvoiceHeaderId"" = {issuedId}";
-                    Assert.Equal("Consulting", command.ExecuteScalar());
-                }
-            }
         }
 
         [Fact]
@@ -1998,14 +1787,6 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Sales/Client?id={client.Id}")).StatusCode);
 
-            // D1 replays the statements in order and enforces foreign keys: the customer goes before its parties.
-            var statements = AllSyncStatements(deleted);
-            var customer = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"Customer\""));
-            var contact = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"Contact\""));
-            var party = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"Party\""));
-            Assert.True(customer >= 0 && contact > customer && party > contact, string.Join("\n", statements));
-            Assert.Equal(2, statements.Count(sql => sql.StartsWith("DELETE FROM \"Party\"")));
-
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
             using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
@@ -2064,13 +1845,6 @@ namespace AccountGo.BackendTests
 
             var deleted = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={draftId}");
             Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
-            // D1 replays in order and enforces foreign keys: the invoice lines go before the order lines they point to,
-            // and those before their order.
-            var statements = AllSyncStatements(deleted);
-            var invoiceLine = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"SalesInvoiceLine\""));
-            var orderLine = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"SalesOrderLine\""));
-            var order = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"SalesOrderHeader\""));
-            Assert.True(invoiceLine >= 0 && orderLine > invoiceLine && order > orderLine, string.Join("\n", statements));
 
             Assert.True((await GetClient(client.Id)).CanDelete);
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={client.Id}")).StatusCode);
@@ -2252,28 +2026,6 @@ namespace AccountGo.BackendTests
             var headersBytes = response.Headers.Concat(response.Content.Headers)
                 .Sum(h => Encoding.UTF8.GetByteCount(h.Key + ": " + string.Join(", ", h.Value) + "\r\n"));
             return statusLineBytes + headersBytes + 2;
-        }
-
-        private static string SyncSql(HttpResponseMessage response)
-        {
-            return JsonSerializer.Serialize(AllSyncStatements(response));
-        }
-
-        private static List<string> AllSyncStatements(HttpResponseMessage response)
-        {
-            var chunks = new List<string>();
-            var count = response.Headers.Contains("x-d1-sync-sql-count")
-                ? int.Parse(response.Headers.GetValues("x-d1-sync-sql-count").Single()) : 1;
-            for (var i = 0; i < count; i++)
-            {
-                var key = response.Headers.Contains("x-d1-sync-sql") ? "x-d1-sync-sql" : "x-d1-sync-sql-" + i;
-                chunks.Add(response.Headers.GetValues(key).Single());
-            }
-            Assert.Equal("gzip", response.Headers.GetValues("x-d1-sync-encoding").Single());
-            using (var input = new MemoryStream(Convert.FromBase64String(string.Concat(chunks))))
-            using (var gzip = new GZipStream(input, CompressionMode.Decompress))
-            using (var reader = new StreamReader(gzip, Encoding.UTF8))
-                return JsonSerializer.Deserialize<List<string>>(reader.ReadToEnd());
         }
 
         private class FakeEmailSender : IEmailSender

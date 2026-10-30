@@ -29,7 +29,7 @@ flowchart TD
 
     subgraph Storage["Persistence & Data Tier"]
         SQLite["Local SQLite (Development / Standalone)"]
-        D1["Cloudflare D1 (Serverless Distributed SQL)"]
+        PG["PostgreSQL (Cloudflare Containers / hosted)"]
         MSSQL["Microsoft SQL Server (Enterprise Deployments)"]
     end
 
@@ -41,7 +41,7 @@ flowchart TD
     API --> Infra
     API --> ServiceDefaults
     Infra --> SQLite
-    Infra --> D1
+    Infra --> PG
     Infra --> MSSQL
 ```
 
@@ -55,14 +55,14 @@ The backend follows the principles of **Clean Architecture** and **Domain-Driven
 src/
 ├── Api/                 # Presentation layer: ASP.NET Core controllers, middleware, auth handlers
 ├── Core/                # Domain layer: Entities, value objects, domain interfaces, business rules
-├── Services/            # Application services and repositories over EF Core (SQLite, Cloudflare D1, SQL Server)
+├── Services/            # Application services and repositories over EF Core (SQLite, PostgreSQL, SQL Server)
 ├── Aspire/              # Orchestration & App Host (.NET Aspire 10)
 └── src.ServiceDefaults/ # Shared telemetry, OpenTelemetry, logging, and health check endpoints
 ```
 
 ### Dependency Rules
 - **AccountGo.Core**: Has **zero** external dependencies on databases or UI frameworks. Contains core accounting rules (double-entry bookkeeping, ledger validation, tax calculation, financial year boundaries).
-- **AccountGo.Services**: Implements business services and repositories using Entity Framework Core. Handles connection multiplexing across SQLite, Cloudflare D1, and SQL Server.
+- **AccountGo.Services**: Implements business services and repositories using Entity Framework Core. Handles connection multiplexing across SQLite, PostgreSQL, and SQL Server.
 - **AccountGo.Api**: Orchestrates incoming HTTP requests, performs authentication and claims resolution, binds multi-tenant context, and delegates business operations to domain services.
 
 ---
@@ -132,5 +132,5 @@ src/Web/src/
 
 AccountGo supports pluggable database backends:
 - **SQLite (Default)**: Zero-configuration file database (`accountgo.db`) with Write-Ahead Logging (`WAL`) enabled for fast concurrent reads and writes.
-- **Cloudflare D1**: Serverless SQLite distributed database matching the local schema for edge operations.
+- **PostgreSQL**: Required on Cloudflare Containers (the container's disk is not persistent); own EF migrations in `src/Api/Data/Migrations/Postgres`.
 - **Microsoft SQL Server**: Enterprise production storage for high-volume transactions.

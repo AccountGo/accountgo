@@ -3,12 +3,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Api.Data.Postgres
 {
     /// <summary>
-    /// <see cref="ApplicationIdentityDbContext"/> on PostgreSQL; exists for its own migration set. Never syncs to D1.
+    /// <see cref="ApplicationIdentityDbContext"/> on PostgreSQL; exists for its own migration set.
     /// </summary>
     public sealed class PostgresIdentityDbContext : ApplicationIdentityDbContext
     {
         public PostgresIdentityDbContext(DbContextOptions<PostgresIdentityDbContext> options)
-            : base(options, d1SyncContext: null)
+            : base(options)
         {
         }
 

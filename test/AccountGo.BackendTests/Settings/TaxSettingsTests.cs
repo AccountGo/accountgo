@@ -328,36 +328,6 @@ namespace AccountGo.BackendTests.Settings
             Assert.Contains(db.Accounts.IgnoreQueryFilters(), a => a.AccountCode == "50700");
         }
 
-        [Fact]
-        public void Migration_AddsTheAccountPermissionAndRepointsNoTax_AndIsIdempotent()
-        {
-            using var source = new SqliteConnection("Data Source=" + _fixture.Path);
-            using var replica = new SqliteConnection("Data Source=:memory:");
-            source.Open();
-            replica.Open();
-            source.BackupDatabase(replica);
-            SQLitePCL.raw.sqlite3_limit(replica.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-            using var command = replica.CreateCommand();
-            command.CommandText = @"
-                UPDATE ""Tax"" SET ""PurchasingAccountId"" = (
-                    SELECT old.""Id"" FROM ""Account"" old
-                    WHERE old.""CompanyId"" = ""Tax"".""CompanyId"" AND old.""AccountCode"" = '50700'
-                ) WHERE ""PurchasingAccountId"" IN (SELECT ""Id"" FROM ""Account"" WHERE ""AccountCode"" = '10160');
-                DELETE FROM ""Account"" WHERE ""AccountCode"" = '10160';
-                DELETE FROM ""SecurityRolePermission"" WHERE ""SecurityPermissionId"" IN
-                    (SELECT ""Id"" FROM ""SecurityPermission"" WHERE ""Name"" = 'admin.taxes.manage');
-                DELETE FROM ""SecurityPermission"" WHERE ""Name"" = 'admin.taxes.manage';";
-            command.ExecuteNonQuery();
-
-            var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0020_tax_settings.sql"));
-            command.CommandText = migration;
-            command.ExecuteNonQuery();
-            AssertMigrated(command);
-            command.CommandText = migration;
-            command.ExecuteNonQuery();
-            AssertMigrated(command);
-        }
-
         private static void AssertMigrated(SqliteCommand command)
         {
             command.CommandText = @"SELECT COUNT(*) FROM ""Company"" c
@@ -425,7 +395,7 @@ namespace AccountGo.BackendTests.Settings
         private static string RepoRoot()
         {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
-            while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "src", "Api", "d1")))
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "accountgo.sln")))
                 dir = dir.Parent;
             return dir?.FullName ?? throw new DirectoryNotFoundException("Repository root not found.");
         }

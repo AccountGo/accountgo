@@ -1,5 +1,4 @@
 using Api.Data.Seed;
-using Api.Service.D1Sync;
 using Core.Domain;
 using Core.Domain.Auditing;
 using Core.Domain.Donations;
@@ -20,28 +19,20 @@ namespace Api.Data
 {
     public class ApiDbContext : DbContext
     {
-        private readonly ID1SyncContext? _d1SyncContext;
         private readonly ITenantContext? _tenantContext;
         private readonly AuditLogHelper _auditLogHelper = new();
 
         public int CurrentTenantCompanyId => _tenantContext?.CompanyId ?? -1;
 
-        public ApiDbContext(
-            DbContextOptions<ApiDbContext> options,
-            ID1SyncContext? d1SyncContext = null,
-            ITenantContext? tenantContext = null)
-            : this((DbContextOptions)options, d1SyncContext, tenantContext)
+        public ApiDbContext(DbContextOptions<ApiDbContext> options, ITenantContext? tenantContext = null)
+            : this((DbContextOptions)options, tenantContext)
         {
         }
 
         // Provider subclasses (Postgres) that carry their own migrations.
-        protected ApiDbContext(
-            DbContextOptions options,
-            ID1SyncContext? d1SyncContext,
-            ITenantContext? tenantContext)
+        protected ApiDbContext(DbContextOptions options, ITenantContext? tenantContext)
             : base(options)
         {
-            _d1SyncContext = d1SyncContext;
             _tenantContext = tenantContext;
         }
 
@@ -123,15 +114,7 @@ namespace Api.Data
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
-
-            if (_d1SyncContext == null)
-                return base.SaveChanges(acceptAllChangesOnSuccess);
-
-            // Capture states before saving: EF resets them to Unchanged/Detached afterwards.
-            var pending = D1SqlGenerator.Capture(ChangeTracker);
-            var result = base.SaveChanges(acceptAllChangesOnSuccess);
-            pending.FlushTo(_d1SyncContext);
-            return result;
+            return base.SaveChanges(acceptAllChangesOnSuccess);
         }
 
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
@@ -139,15 +122,7 @@ namespace Api.Data
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
-
-            if (_d1SyncContext == null)
-                return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-
-            // Capture states before saving: EF resets them to Unchanged/Detached afterwards.
-            var pending = D1SqlGenerator.Capture(ChangeTracker);
-            var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-            pending.FlushTo(_d1SyncContext);
-            return result;
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         }
 
         /// <summary>

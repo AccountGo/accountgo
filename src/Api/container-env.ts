@@ -1,12 +1,24 @@
 // Kept free of imports so the node tests can load it directly.
 
+/** The Worker's configuration cannot run the container safely (see requirePersistentDatabase). */
+export class ContainerConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ContainerConfigError";
+  }
+}
+
 /**
- * True when the container keeps its data in container SQLite, restored from D1 and synced back after each write.
- * With `DatabaseProvider = "Postgres"` the container talks to Postgres itself: no restore and no sync.
+ * The container's disk is thrown away on every restart and deploy, so its data must live in Postgres. Refuse to start
+ * with any other provider instead of serving from an empty SQLite file.
  */
-export function usesD1Copy(env: { DatabaseProvider?: unknown }): boolean {
+export function requirePersistentDatabase(env: { DatabaseProvider?: unknown }): void {
   const provider = typeof env.DatabaseProvider === "string" ? env.DatabaseProvider.trim() : "";
-  return !/^postgres(ql)?$/i.test(provider);
+  if (!/^postgres(ql)?$/i.test(provider)) {
+    throw new ContainerConfigError(
+      `DatabaseProvider must be Postgres on Cloudflare (got "${provider || "unset"}"): container storage is not persistent.`
+    );
+  }
 }
 
 export function buildContainerEnvVars(
@@ -16,12 +28,7 @@ export function buildContainerEnvVars(
   const envVars: Record<string, string> = {
     ASPNETCORE_URLS: `http://+:${containerPort}`,
     ASPNETCORE_ENVIRONMENT: "Production",
-    DatabaseProvider: "Sqlite",
   };
-  if (usesD1Copy(env)) {
-    // The data is restored from D1 once the container is up, so it must not seed its own demo data first.
-    envVars.RESTORE_FROM_D1 = "true";
-  }
   for (const [key, value] of Object.entries(env)) {
     if (typeof value === "string") {
       envVars[key] = value;

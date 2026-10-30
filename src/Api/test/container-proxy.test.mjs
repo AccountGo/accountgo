@@ -2,10 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   LIBRARY_FAILURE_PREFIXES,
-  RestoreError,
-  RestoreInterruptedError,
+  StartupInterruptedError,
   failureReach,
-  isRestoreTransient,
+  isStartupTransient,
   libraryFailureText,
 } from "../container-errors.ts";
 import {
@@ -297,16 +296,12 @@ test("a restore interrupted by an invalidation does not commit", () => {
   assert.equal(state.restored, true);
 });
 
-test("an interrupted restore is retryable by type, not by its message", () => {
-  const err = new RestoreInterruptedError();
-  assert.ok(err instanceof RestoreError);
+test("an interrupted start-up is retryable by type, not by its message", () => {
+  const err = new StartupInterruptedError();
   assert.doesNotMatch(err.message, /not running/i);
-  assert.equal(isRestoreTransient(err), true);
-  assert.equal(isRestoreTransient(new RestoreError("Batch count mismatch: restored 1 of 2")), false);
-  assert.equal(
-    isRestoreTransient(new RestoreError("Restore batch 1 failed (500): The container is not running")),
-    true
-  );
+  assert.equal(isStartupTransient(err), true);
+  assert.equal(isStartupTransient(new Error("Build check failed with status 500")), false);
+  assert.equal(isStartupTransient(new Error("The container is not running")), true);
 });
 
 test("a monitor that settles while the container is still running does not invalidate", async () => {

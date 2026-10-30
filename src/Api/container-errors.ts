@@ -9,7 +9,7 @@ export function errorText(err: unknown): string {
 
 /**
  * Cloudflare Containers often surfaces these while the process is still coming up
- * or was just recycled (cold start / D1 restore races).
+ * or was just recycled (cold start races).
  */
 export function isTransientContainerError(err: unknown): boolean {
   const msg = errorText(err).toLowerCase();
@@ -77,28 +77,16 @@ export class BuildMismatchError extends Error {
   }
 }
 
-export class RestoreError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "RestoreError";
-  }
-}
-
-/** The restore ran, but a container start or exit invalidated it before it could commit. */
-export class RestoreInterruptedError extends RestoreError {
+/** The container changed (exit, rollout) while its start-up check was running; the check is redone. */
+export class StartupInterruptedError extends Error {
   constructor() {
-    super("Database restore was interrupted by a container change; it will be retried");
-    this.name = "RestoreInterruptedError";
+    super("The container changed during start-up; it will be retried");
+    this.name = "StartupInterruptedError";
   }
 }
 
-/** Restore failures worth one more full attempt (ensureInitialized). */
-export function isRestoreTransient(err: unknown): boolean {
-  return (
-    err instanceof RestoreInterruptedError ||
-    isTransientContainerError(err) ||
-    (err instanceof RestoreError && isTransientContainerError(err.message))
-  );
+export function isStartupTransient(err: unknown): boolean {
+  return err instanceof StartupInterruptedError || isTransientContainerError(err);
 }
 
 export function serviceUnavailable(detail: string, retryAfterSec = 5): Response {
