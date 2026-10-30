@@ -2439,6 +2439,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("CustomerAdvancesAccountId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit");
+
                     b.Property<string>("No")
                         .HasColumnType("nvarchar(450)");
 
@@ -2706,6 +2709,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("Origin")
+                        .HasColumnType("int");
+
                     b.Property<string>("PaymentInstructions")
                         .HasColumnType("nvarchar(max)");
 
@@ -2739,6 +2745,8 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique()
                         .HasDatabaseName("IX_SalesInvoiceHeader_CompanyId_No")
                         .HasFilter("[No] IS NOT NULL");
+
+                    b.HasIndex(new[] { "CompanyId", "Origin" }, "IX_SalesInvoiceHeader_Company_Origin");
 
                     b.ToTable("SalesInvoiceHeader");
                 });

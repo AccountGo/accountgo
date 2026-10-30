@@ -21,6 +21,7 @@ namespace Services.Banking
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly ISalesService _sales;
         private readonly IBankAccountService _bankAccounts;
+        private readonly IInvoicePaymentRecorder _invoicePayments;
         private readonly ITenantContext _tenant;
 
         public StatementLineInvoiceService(
@@ -29,6 +30,7 @@ namespace Services.Banking
             IRepository<GeneralLedgerLine> glLines,
             ISalesService sales,
             IBankAccountService bankAccounts,
+            IInvoicePaymentRecorder invoicePayments,
             ITenantContext tenant)
         {
             _lines = lines;
@@ -36,6 +38,7 @@ namespace Services.Banking
             _glLines = glLines;
             _sales = sales;
             _bankAccounts = bankAccounts;
+            _invoicePayments = invoicePayments;
             _tenant = tenant;
         }
 
@@ -70,36 +73,15 @@ namespace Services.Banking
             var arAccountId = invoice.Customer?.AccountsReceivableAccountId
                 ?? throw new InvalidOperationException("That invoice's customer has no accounts receivable account.");
 
-            var receipt = new SalesReceiptHeader
-            {
-                CustomerId = invoice.CustomerId,
-                Date = line.PostedDate.Date,
-                Amount = amount,
-                AccountToDebitId = depositAccountId,
-                PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "Bank Transfer" : request.PaymentMethod.Trim(),
-                ReferenceNo = FirstNonBlank(line.Reference, invoice.No),
-                Memo = FirstNonBlank(request.Memo, line.Memo, line.Payee)
-            };
-            receipt.SalesReceiptLines.Add(new SalesReceiptLine
-            {
-                Quantity = 1,
-                Amount = amount,
-                AmountPaid = amount,
-                AccountToCreditId = arAccountId
-            });
-
-            _sales.AddSalesReceipt(receipt);
-
-            var allocation = new CustomerAllocation
-            {
-                CustomerId = invoice.CustomerId,
-                Date = line.PostedDate.Date,
-                SalesInvoiceHeaderId = invoice.Id,
-                SalesReceiptHeaderId = receipt.Id,
-                Amount = amount
-            };
-            invoice.CustomerAllocations.Add(allocation);
-            invoice.RefreshPaymentStatus();
+            var receipt = _invoicePayments.RecordAllocatedReceipt(
+                invoice,
+                amount,
+                line.PostedDate.Date,
+                depositAccountId,
+                arAccountId,
+                request.PaymentMethod,
+                FirstNonBlank(line.Reference, invoice.No),
+                FirstNonBlank(request.Memo, line.Memo, line.Payee));
             _sales.UpdateSalesInvoice(invoice);
 
             LinkLineToBankDebit(line, bank, receipt);
