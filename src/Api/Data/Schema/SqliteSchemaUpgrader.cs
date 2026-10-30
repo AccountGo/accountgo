@@ -138,6 +138,8 @@ namespace Api.Data.Schema
                 EnsureAllIndexes(connection, logger);
                 EnsureLifecycleColumns(connection);
                 EnsureTables(connection);
+                // Outside EnsureTables so JournalEntryHeader upgrades even when optional later tables are absent.
+                EnsurePriorPeriodAdjustment(connection);
                 EnsureSecurityTables(connection);
             }
             finally
@@ -666,6 +668,12 @@ WHERE ""DisabledModulesJson"" IS NULL
             cmd.ExecuteNonQuery();
             cmd.CommandText = EntityTypeYearEndPermanentAccountBackfillSql;
             cmd.ExecuteNonQuery();
+        }
+
+        // #455 Phase 2b-2: prior-period adjustment journals link to the closed fiscal year they correct.
+        private static void EnsurePriorPeriodAdjustment(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "JournalEntryHeader", "AdjustsFiscalYearId", "INTEGER NULL");
         }
 
         // D1 0042_statement_other_income.sql (#436 I5)

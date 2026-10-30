@@ -22,6 +22,16 @@ namespace AccountGo.BackendTests.Banking;
 public class BankSchemaCleanupTests
 {
     [Fact]
+    public void SqliteSchemaUpgrader_Defines_PriorPeriodAdjustment_Column()
+    {
+        // D1 migrations were removed (#462); SQLite upgrades go through SqliteSchemaUpgrader.
+        var upgrader = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/Data/Schema/SqliteSchemaUpgrader.cs"));
+        Assert.Contains("EnsurePriorPeriodAdjustment", upgrader, StringComparison.Ordinal);
+        Assert.Contains("AdjustsFiscalYearId", upgrader, StringComparison.Ordinal);
+        Assert.Contains("EnsurePriorPeriodAdjustment(connection)", upgrader, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SqliteSchemaUpgrader_BankCleanup_IsIdempotent()
     {
         using var connection = OpenLegacyBankDb();
