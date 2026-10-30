@@ -49,8 +49,6 @@ namespace Services.Banking
             "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyyMMdd"
         };
 
-        private const int MaxDecimalCommaFractionDigits = 2;
-
         private static readonly char[] CandidateDelimiters = { ',', ';', '\t' };
 
         public static IReadOnlyList<ParsedStatementRow> Parse(BankStatementSources source, string content, BankStatementColumnMap? map)
@@ -413,30 +411,80 @@ namespace Services.Banking
 
         private static decimal ParseOfxAmount(string? raw)
         {
-            var amount = Math.Round(ParseAmount(NormalizeOfxDecimalComma(raw), "Amount"), 2, MidpointRounding.AwayFromZero);
+            var amount = Math.Round(ParseAmount(NormalizeOfxNumber(raw), "Amount"), 2, MidpointRounding.AwayFromZero);
             if (amount == 0m)
                 throw new FormatException("Amount is zero.");
             return amount;
         }
 
         /// <summary>
-        /// Some OFX 1.x files write the decimal separator as a comma ("12,50"). A comma is only a decimal separator when
-        /// it is the single separator and one or two digits follow it; every other comma is a thousands separator
-        /// ("1,234" is 1234) and ParseAmount drops it.
+        /// OFX 1.x amounts mix US and European grouping. Rules:
+        /// <list type="bullet">
+        /// <item>Both <c>.</c> and <c>,</c> present: the last one is the decimal point; the others are grouping.</item>
+        /// <item>Only <c>.</c>: once = decimal; repeated = grouping (strip all).</item>
+        /// <item>Only <c>,</c>: repeated = grouping; once = decimal unless exactly three digits follow (thousands).</item>
+        /// </list>
         /// </summary>
-        private static string? NormalizeOfxDecimalComma(string? raw)
+        internal static string? NormalizeOfxNumber(string? raw)
         {
-            if (raw == null || raw.Contains('.'))
-                return raw;
+            if (raw == null)
+                return null;
 
+            var firstDot = raw.IndexOf('.');
+            var lastDot = raw.LastIndexOf('.');
+            var firstComma = raw.IndexOf(',');
             var lastComma = raw.LastIndexOf(',');
-            if (lastComma < 0 || lastComma != raw.IndexOf(','))
-                return raw;
+            var hasDot = firstDot >= 0;
+            var hasComma = firstComma >= 0;
 
-            var fractionDigits = raw.Length - lastComma - 1;
-            return fractionDigits is >= 1 and <= MaxDecimalCommaFractionDigits
-                ? string.Concat(raw.AsSpan(0, lastComma), ".", raw.AsSpan(lastComma + 1))
-                : raw;
+            int? decimalAt = null;
+            if (hasDot && hasComma)
+            {
+                decimalAt = Math.Max(lastDot, lastComma);
+            }
+            else if (hasDot)
+            {
+                if (firstDot == lastDot)
+                    decimalAt = firstDot;
+            }
+            else if (hasComma)
+            {
+                if (firstComma != lastComma)
+                {
+                    // Repeated commas are thousands grouping.
+                }
+                else
+                {
+                    var digitsAfter = 0;
+                    var allDigits = true;
+                    for (var i = firstComma + 1; i < raw.Length; i++)
+                    {
+                        if (!char.IsDigit(raw[i]))
+                        {
+                            allDigits = false;
+                            break;
+                        }
+                        digitsAfter++;
+                    }
+                    // A single comma with exactly three trailing digits is thousands ("1,234"), not a decimal.
+                    if (!(allDigits && digitsAfter == 3))
+                        decimalAt = firstComma;
+                }
+            }
+
+            var cleaned = new StringBuilder(raw.Length);
+            for (var i = 0; i < raw.Length; i++)
+            {
+                var ch = raw[i];
+                if (ch is '.' or ',')
+                {
+                    if (decimalAt == i)
+                        cleaned.Append('.');
+                    continue;
+                }
+                cleaned.Append(ch);
+            }
+            return cleaned.ToString();
         }
 
         private static string? Truncate(string? value, int max)
