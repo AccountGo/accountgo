@@ -134,7 +134,7 @@ namespace Services.Banking
 
             result.ImportId = import.Id;
             result.Imported = ready.Count;
-            result.AutoMatched = ApplyAutoMatches(bank);
+            result.AutoMatched = ApplyAutoMatches(bank, newLines);
             return result;
         }
 
@@ -271,7 +271,12 @@ namespace Services.Banking
             string? Description,
             decimal SignedAmount);
 
-        private int ApplyAutoMatches(Bank bank)
+        /// <summary>
+        /// Auto-match every unmatched line on the bank (so an earlier import can still pick up a ledger
+        /// entry that arrived later), but return only how many lines from <paramref name="importedLines"/>
+        /// were matched — the commit result must not credit this import for older rows.
+        /// </summary>
+        private int ApplyAutoMatches(Bank bank, IReadOnlyList<BankStatementLine> importedLines)
         {
             var unmatched = UnmatchedLines(bank);
             if (unmatched.Count == 0)
@@ -289,7 +294,9 @@ namespace Services.Banking
             // The repository saves every tracked change, so one Update persists the whole plan.
             if (lastMatched != null)
                 _lines.Update(lastMatched);
-            return plan.Count;
+
+            var importedIds = new HashSet<int>(importedLines.Select(l => l.Id));
+            return plan.Keys.Count(id => importedIds.Contains(id));
         }
 
         /// <summary>

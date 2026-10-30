@@ -470,6 +470,24 @@ public class BankStatementImportServiceTests
             new BankingTestHarness.FakeTenant(1));
 
     [Fact]
+    public void Commit_AutoMatchedCount_OnlyIncludesThisImport()
+    {
+        using var harness = NewHarness(out var bank);
+        // Earlier import left an unmatched fee; the ledger entry that clears it arrives before the next file.
+        harness.Statements.Commit(bank.Id, Csv("2026-10-01,-7.25,Bank,Fee,\n"), "t1");
+        harness.Post(bank.AccountId, DrOrCrSide.Cr, 7.25m, BankingTestHarness.Utc(2026, 10, 1));
+        harness.Post(bank.AccountId, DrOrCrSide.Dr, 50m, BankingTestHarness.Utc(2026, 10, 2));
+
+        var second = harness.Statements.Commit(bank.Id, Csv("2026-10-02,50.00,Customer,Deposit,\n"), "t2");
+
+        Assert.Equal(1, second.Imported);
+        Assert.Equal(1, second.AutoMatched);
+        var list = harness.Statements.ListLines(bank.Id, "all");
+        Assert.Equal(2, list.MatchedCount);
+        Assert.Equal(0, list.UnmatchedCount);
+    }
+
+    [Fact]
     public void Commit_InsertsAllLinesInOneBatch()
     {
         using var harness = NewHarness(out var bank);
