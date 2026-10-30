@@ -31,7 +31,7 @@ test('Login page includes privacy and terms acceptance checkbox and excludes edg
     );
 
     assert.ok(signinHtml.includes('signin-accept-terms'));
-    assert.match(signinHtml, /By signing in, you accept the.*Privacy and Terms/i);
+    assert.match(signinHtml, /By signing in, you accept the.*Privacy Policy.*Terms of Use/i);
     assert.ok(!signinHtml.includes('Enterprise Multi-Tenant Isolation & Cloudflare Edge Resilience.'));
 
     // Test signup mode
@@ -44,7 +44,7 @@ test('Login page includes privacy and terms acceptance checkbox and excludes edg
     );
 
     assert.ok(signupHtml.includes('signup-accept-terms'));
-    assert.match(signupHtml, /By signing up, you accept the.*Privacy and Terms/i);
+    assert.match(signupHtml, /By signing up, you accept the.*Privacy Policy.*Terms of Use/i);
     assert.ok(!signupHtml.includes('Enterprise Multi-Tenant Isolation & Cloudflare Edge Resilience.'));
   } finally {
     await server.close();
