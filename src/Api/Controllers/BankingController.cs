@@ -746,15 +746,24 @@ namespace Api.Controllers
         /// <summary>Curated expense categories (name only) plus More… for Record expense (#436 I2).</summary>
         [HttpGet("StatementExpenseCategories")]
         [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesBillsView)]
         public IActionResult StatementExpenseCategories() =>
             Ok(_statementExpenses.ListExpenseCategories());
 
         [HttpPost("StatementLines/{id:int}/RecordExpense")]
         [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesBillsCreate)]
+        [RequirePermission(SystemPermissions.PurchasesBillsPost)]
+        [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
         public IActionResult RecordExpenseFromStatementLine(int id, [FromBody] RecordExpenseFromStatementLineRequest request)
         {
+            if (request?.NewVendor != null && !string.IsNullOrWhiteSpace(request.NewVendor.Name)
+                && !_tenant.Permissions.Contains(SystemPermissions.PurchasesVendorsManage))
+                return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesVendorsManage);
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -774,7 +783,9 @@ namespace Api.Controllers
 
         [HttpPost("StatementLines/{id:int}/PayOpenBill")]
         [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
         public IActionResult PayOpenBillFromStatementLine(int id, [FromBody] PayOpenBillFromStatementLineRequest request)
         {
             try

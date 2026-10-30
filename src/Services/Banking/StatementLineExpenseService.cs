@@ -9,9 +9,11 @@ using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Purchases;
+using Core.Domain.TaxSystem;
 using Core.Entitlements;
 using Core.Tenancy;
 using Dto.Banking;
+using Services.Financial;
 using Services.Purchasing;
 
 namespace Services.Banking
@@ -30,41 +32,44 @@ namespace Services.Banking
             ("Office supplies", "50111"),
             ("Bank fees", "50121"),
             ("Professional fees", "50120"),
-            ("Equipment", "13302"),
+            ("Equipment (asset)", "13302"),
             ("Other expenses", "50600"),
         };
 
         private readonly IRepository<BankStatementLine> _lines;
         private readonly IRepository<Bank> _banks;
-        private readonly IRepository<Account> _accounts;
         private readonly IRepository<Vendor> _vendors;
         private readonly IRepository<PurchaseInvoiceHeader> _bills;
         private readonly IRepository<GeneralLedgerLine> _glLines;
+        private readonly IRepository<Tax> _taxes;
         private readonly IPurchasingService _purchasing;
         private readonly IBankAccountService _bankAccounts;
+        private readonly IDocumentLineAccountCatalog _lineAccounts;
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
 
         public StatementLineExpenseService(
             IRepository<BankStatementLine> lines,
             IRepository<Bank> banks,
-            IRepository<Account> accounts,
             IRepository<Vendor> vendors,
             IRepository<PurchaseInvoiceHeader> bills,
             IRepository<GeneralLedgerLine> glLines,
+            IRepository<Tax> taxes,
             IPurchasingService purchasing,
             IBankAccountService bankAccounts,
+            IDocumentLineAccountCatalog lineAccounts,
             IEntitlementService entitlements,
             ITenantContext tenant)
         {
             _lines = lines;
             _banks = banks;
-            _accounts = accounts;
             _vendors = vendors;
             _bills = bills;
             _glLines = glLines;
+            _taxes = taxes;
             _purchasing = purchasing;
             _bankAccounts = bankAccounts;
+            _lineAccounts = lineAccounts;
             _entitlements = entitlements;
             _tenant = tenant;
         }
@@ -72,25 +77,7 @@ namespace Services.Banking
         public StatementExpenseCategoriesDto ListExpenseCategories()
         {
             EnsureCompany();
-            var companyId = _tenant.RequireCompanyId();
-            // Same universe as Purchasing BillAccounts: leaf expense/asset, not cash or cash-child.
-            var leaves = _accounts.Table
-                .Where(a => a.CompanyId == companyId
-                    && a.ArchivedAt == null
-                    && !a.IsContraAccount
-                    && (a.AccountClassId == (int)AccountClasses.Expense
-                        || a.AccountClassId == (int)AccountClasses.Assets)
-                    && !a.IsCash
-                    && a.AccountCode != "10120")
-                .ToList()
-                .Where(a => !_accounts.Table.Any(c => c.ParentAccountId == a.Id && c.CompanyId == companyId))
-                .Where(a =>
-                {
-                    if (!a.ParentAccountId.HasValue) return true;
-                    var parent = _accounts.Table.FirstOrDefault(p => p.Id == a.ParentAccountId.Value);
-                    return parent == null || !parent.IsCash;
-                })
-                .ToList();
+            var leaves = _lineAccounts.ListBillLineAccounts();
 
             var curated = new List<StatementExpenseCategoryDto>();
             var usedIds = new HashSet<int>();
@@ -137,7 +124,15 @@ namespace Services.Banking
             var bank = RequireActiveBank(line.BankId);
             var amount = Math.Abs(line.Amount);
             var vendorId = ResolveVendorId(request);
-            EnsureExpenseAccount(request.ExpenseAccountId);
+            _lineAccounts.EnsureBillLineAccount(request.ExpenseAccountId);
+
+            var taxId = request.TaxId is > 0 ? request.TaxId : null;
+            var lineAmount = amount;
+            if (taxId.HasValue)
+            {
+                var tax = RequireActiveTax(taxId.Value);
+                lineAmount = PurchaseInvoiceLine.NetOfInclusive(amount, tax.Rate);
+            }
 
             var description = FirstNonBlank(request.Description, line.Payee, line.Memo) ?? "Expense";
             var bill = new PurchaseInvoiceHeader
@@ -154,9 +149,9 @@ namespace Services.Banking
                     new PurchaseInvoiceLine
                     {
                         Quantity = 1m,
-                        Amount = amount,
+                        Amount = lineAmount,
                         AccountId = request.ExpenseAccountId,
-                        TaxId = request.TaxId,
+                        TaxId = taxId,
                         Description = description
                     }
                 }
@@ -168,6 +163,12 @@ namespace Services.Banking
                 _purchasing.SaveBill(bill);
                 _purchasing.ApproveBill(bill.Id, string.IsNullOrWhiteSpace(actor) ? null : actor.Trim(), DateTime.UtcNow);
             }
+
+            var savedForPay = _bills.GetById(bill.Id) ?? bill;
+            // Bill tax is on top of the line amount — net + tax must equal the bank gross before PayBill.
+            if (savedForPay.Total() != amount)
+                throw new InvalidOperationException(
+                    $"The bill total ({savedForPay.Total()}) must equal the statement amount ({amount}).");
 
             var payment = PayFromBank(bill.Id, bank, amount, line, request.PaymentMethod, request.Memo);
             LinkLineToBankCredit(line, bank, payment);
@@ -313,18 +314,14 @@ namespace Services.Banking
             return vendor.Id;
         }
 
-        private void EnsureExpenseAccount(int accountId)
+        private Tax RequireActiveTax(int taxId)
         {
-            if (accountId <= 0)
-                throw new InvalidOperationException("Pick an expense category.");
             var companyId = _tenant.RequireCompanyId();
-            var account = _accounts.Table.FirstOrDefault(a => a.Id == accountId && a.CompanyId == companyId)
-                ?? throw new TenantEntityNotFoundException(typeof(Account).Name, accountId);
-            if (account.IsCash)
-                throw new InvalidOperationException("Pick an expense or asset category, not a cash account.");
-            if (account.AccountClassId != (int)AccountClasses.Expense
-                && account.AccountClassId != (int)AccountClasses.Assets)
-                throw new InvalidOperationException("Pick an expense or asset category.");
+            var tax = _taxes.Table.FirstOrDefault(t => t.Id == taxId && t.CompanyId == companyId)
+                ?? throw new TenantEntityNotFoundException(typeof(Tax).Name, taxId);
+            if (!tax.IsActive)
+                throw new InvalidOperationException("That tax rate is inactive.");
+            return tax;
         }
 
         private BankStatementLine RequireUnmatchedPaymentLine(int lineId)

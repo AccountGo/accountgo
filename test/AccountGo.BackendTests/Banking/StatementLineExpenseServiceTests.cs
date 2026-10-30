@@ -7,11 +7,13 @@ using System.Linq;
 using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Purchases;
+using Core.Domain.TaxSystem;
 using Core.Entitlements;
 using Core.Tenancy;
 using Dto.Banking;
 using Moq;
 using Services.Banking;
+using Services.Financial;
 using Services.Purchasing;
 using Xunit;
 
@@ -30,6 +32,7 @@ public class StatementLineExpenseServiceTests
         var dto = service.ListExpenseCategories();
 
         Assert.Contains(dto.Curated, c => c.Name == "Travel" && c.Curated);
+        Assert.Contains(dto.Curated, c => c.Name == "Equipment (asset)" && c.Curated);
         Assert.Contains(dto.Curated, c => c.Name == "Bank fees" && c.Curated);
         Assert.DoesNotContain(dto.Curated, c => c.Name.Contains("50118"));
         Assert.Contains(dto.More, m => m.Name == "Telephone Expenses" && !m.Curated);
@@ -205,18 +208,110 @@ public class StatementLineExpenseServiceTests
         Assert.Throws<InvalidOperationException>(() => service.RecordExpense(matched.Id, request, "t"));
     }
 
+
+    [Fact]
+    public void RecordExpense_with_12_percent_vat_splits_gross_so_bill_total_equals_bank_amount()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        SeedExpenseTree(harness);
+        var bank = harness.CreateBank("Checking");
+        var gross = 112m;
+        var line = ImportPayment(harness, bank.Id, -gross, "Vendor VAT", BankingTestHarness.Utc(2026, 6, 1));
+        var expenseAccountId = harness.RequireAccount("50115").Id;
+        harness.Repos.Taxes.Insert(new Tax
+        {
+            Id = 12,
+            CompanyId = 1,
+            TaxName = "VAT 12%",
+            TaxCode = "VAT12",
+            Rate = 12m,
+            IsActive = true
+        });
+        harness.Repos.Vendors.Insert(new Vendor { Id = 1, CompanyId = 1 });
+
+        var purchasing = new Mock<IPurchasingService>(MockBehavior.Strict);
+        PurchaseInvoiceHeader? savedBill = null;
+        purchasing
+            .Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>()))
+            .Callback<PurchaseInvoiceHeader>(b =>
+            {
+                savedBill = b;
+                b.Id = 90;
+                b.No = "B-90";
+                b.CompanyId = 1;
+                var billLine = b.PurchaseInvoiceLines.Single();
+                billLine.TaxAmount = PurchaseInvoiceLine.TaxOf(billLine.Amount, 12m);
+                harness.Repos.PurchaseInvoices.Insert(b);
+            });
+        purchasing.Setup(p => p.ApproveBill(90, "tester", It.IsAny<DateTime>()));
+
+        var headerId = harness.Repos.NextGlHeaderId();
+        var bankCr = new GeneralLedgerLine
+        {
+            Id = harness.Repos.NextGlLineId(),
+            CompanyId = 1,
+            GeneralLedgerHeaderId = headerId,
+            AccountId = bank.AccountId!.Value,
+            DrCr = DrOrCrSide.Cr,
+            Amount = gross
+        };
+        harness.Repos.GlLines.Insert(bankCr);
+        harness.Repos.GlHeaders.Insert(new GeneralLedgerHeader
+        {
+            Id = headerId,
+            CompanyId = 1,
+            DocumentType = DocumentTypes.PurchaseInvoicePayment,
+            Date = BankingTestHarness.Utc(2026, 6, 1)
+        });
+        purchasing
+            .Setup(p => p.PayBill(90, bank.AccountId!.Value, gross, BankingTestHarness.Utc(2026, 6, 1).Date,
+                It.IsAny<string?>(), "REF-1", It.IsAny<string?>()))
+            .Returns(new VendorPayment
+            {
+                Id = 56,
+                No = "VP-56",
+                CompanyId = 1,
+                GeneralLedgerHeaderId = headerId,
+                Amount = gross
+            });
+        harness.Entitlements.Setup(e => e.Bypass()).Returns(Mock.Of<IDisposable>());
+
+        var service = Build(harness, purchasing);
+        var result = service.RecordExpense(line.Id, new RecordExpenseFromStatementLineRequest
+        {
+            VendorId = 1,
+            ExpenseAccountId = expenseAccountId,
+            TaxId = 12
+        }, "tester");
+
+        Assert.NotNull(savedBill);
+        var billLine = savedBill!.PurchaseInvoiceLines.Single();
+        Assert.Equal(100m, billLine.Amount);
+        Assert.Equal(12m, billLine.TaxAmount);
+        Assert.Equal(gross, savedBill.Total());
+        Assert.Equal(56, result.Payment.Id);
+        purchasing.Verify(p => p.PayBill(90, bank.AccountId!.Value, gross, BankingTestHarness.Utc(2026, 6, 1).Date,
+            It.IsAny<string?>(), "REF-1", It.IsAny<string?>()), Times.Once);
+    }
+
     private static StatementLineExpenseService Build(BankingTestHarness harness, Mock<IPurchasingService> purchasing)
     {
         var tenant = new BankingTestHarness.FakeTenant(1);
+        var catalog = new DocumentLineAccountCatalog(
+            harness.Repos.Accounts,
+            harness.Repos.Customers,
+            tenant);
         return new StatementLineExpenseService(
             harness.Repos.StatementLines,
             harness.Repos.Banks,
-            harness.Repos.Accounts,
             harness.Repos.Vendors,
             harness.Repos.PurchaseInvoices,
             harness.Repos.GlLines,
+            harness.Repos.Taxes,
             purchasing.Object,
             harness.Banks,
+            catalog,
             harness.Entitlements.Object,
             tenant);
     }
