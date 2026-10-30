@@ -40,6 +40,10 @@ namespace Core.Domain.Sales
         public int? CustomerAdvancesAccountId { get; set; }
         /// <summary>When it was archived: hidden when picking a client, its invoices untouched. Null while active.</summary>
         public System.DateTime? ArchivedAt { get; set; }
+        /// <summary>
+        /// Workspace-managed customer (e.g. "Other income") hidden from the Clients picker by default (#436 I5).
+        /// </summary>
+        public bool IsSystem { get; set; }
 
         public virtual Party Party { get; set; }
         public virtual TaxGroup TaxGroup { get; set; }

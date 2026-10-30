@@ -219,6 +219,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Services.Financial.IDocumentLineAccountCatalog, Services.Financial.DocumentLineAccountCatalog>();
         builder.Services.AddScoped<Services.Banking.IStatementLineExpenseService, Services.Banking.StatementLineExpenseService>();
         builder.Services.AddScoped<Services.Banking.IStatementLineInvoiceService, Services.Banking.StatementLineInvoiceService>();
+        builder.Services.AddScoped<Services.Banking.IStatementIncomeRecorder, Services.Banking.StatementIncomeRecorder>();
         builder.Services.AddScoped(typeof(Services.Inventory.IInventoryService), typeof(Services.Inventory.InventoryService));
         builder.Services.AddScoped(typeof(Services.Inventory.IStockService), typeof(Services.Inventory.StockService));
         builder.Services.AddScoped(typeof(Services.Purchasing.IPurchasingService), typeof(Services.Purchasing.PurchasingService));
