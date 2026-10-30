@@ -64,5 +64,39 @@ namespace AccountGo.BackendTests
             WithDb(db => Assert.Contains(db.FinancialYears, y =>
                 y.IsActive && y.StartDate.Date <= later.Date && y.EndDate.Date >= later.Date));
         }
+
+        [Fact]
+        public async Task FinancialYearsAndCurrentOrg_OnMissingCurrentYear_DoNotInsertRows()
+        {
+            var today = DateTime.UtcNow.Date;
+            int countBefore = 0;
+            string expectedCode = null;
+            WithDb(db =>
+            {
+                var setting = db.CompanySettings.Single();
+                var computed = Core.Domain.FiscalYearCalculator.Containing(
+                    today, setting.FiscalYearPattern, setting.FiscalYearStartMonth);
+                expectedCode = computed.Code;
+                db.FinancialYears.RemoveRange(db.FinancialYears.Where(y => y.FiscalYearCode == expectedCode));
+                db.SaveChanges();
+                countBefore = db.FinancialYears.Count();
+            });
+
+            var yearsResponse = await Send(HttpMethod.Get, "/api/Administration/financialyears");
+            Assert.True(yearsResponse.IsSuccessStatusCode, await yearsResponse.Content.ReadAsStringAsync());
+            var years = await yearsResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(JsonValueKind.Array, years.ValueKind);
+            Assert.Contains(years.EnumerateArray(), y =>
+                y.GetProperty("fiscalYearCode").GetString() == expectedCode
+                && y.GetProperty("isActive").GetBoolean());
+
+            var currentResponse = await Send(HttpMethod.Get, "/api/organizations/current");
+            Assert.True(currentResponse.IsSuccessStatusCode, await currentResponse.Content.ReadAsStringAsync());
+            var current = await currentResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(current.TryGetProperty("fiscalYearEnd", out var fyEnd));
+            Assert.False(string.IsNullOrEmpty(fyEnd.GetString()));
+
+            WithDb(db => Assert.Equal(countBefore, db.FinancialYears.Count()));
+        }
     }
 }

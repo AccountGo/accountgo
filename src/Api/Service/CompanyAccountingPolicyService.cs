@@ -118,10 +118,12 @@ namespace Api.Service
         }
 
         // Safe only while the ledger is empty: nothing can reference the rewritten year.
-        // Several years may be open at once; do not deactivate siblings when replacing the books-start year.
+        // Deactivate every other code so a pattern change never leaves overlapping active years.
         private void ReplaceActiveFiscalYear(CompanySetting setting)
         {
             var fy = FiscalYearCalculator.Containing(setting.BooksStartDate, setting.FiscalYearPattern, setting.FiscalYearStartMonth);
+            foreach (var old in _db.FinancialYears.Where(f => f.FiscalYearCode != fy.Code).ToList())
+                old.IsActive = false;
             var existing = _db.FinancialYears.FirstOrDefault(f => f.FiscalYearCode == fy.Code);
             if (existing != null)
             {

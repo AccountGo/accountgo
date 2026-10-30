@@ -191,4 +191,37 @@ public class FiscalYearRolloverTests
             fy.IsActive && D(2025, 6, 1) >= fy.StartDate && D(2025, 6, 1) <= fy.EndDate);
         Assert.Null(covered);
     }
+
+    [Fact]
+    public void PostingTenYearsAhead_FailsOutOfRange_CreatesNoYears()
+    {
+        using var harness = new Harness(
+            D(2026, 1, 1),
+            seedYears: Year("FY2026", D(2026, 1, 1), Parse("2026-12-31").Date.AddDays(1).AddTicks(-1)));
+        var before = harness.FiscalYears.Table.Count();
+        var far = DateTime.UtcNow.Date.AddYears(10);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Financial.ValidateGeneralLedgerEntry(harness.BalancedEntry(far)));
+
+        Assert.Contains("out of range", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(before, harness.FiscalYears.Table.Count());
+    }
+
+    [Fact]
+    public void CurrentFiscalYear_WhenMissing_ReturnsUnsavedComputedYear_WithoutInsert()
+    {
+        using var harness = new Harness(
+            D(2020, 1, 1),
+            seedYears: Year("FY2020", D(2020, 1, 1), Parse("2020-12-31").Date.AddDays(1).AddTicks(-1)));
+        var before = harness.FiscalYears.Table.Count();
+
+        var current = harness.Financial.CurrentFiscalYear();
+
+        Assert.NotNull(current);
+        Assert.Equal(0, current.Id);
+        Assert.True(current.IsActive);
+        Assert.Equal(before, harness.FiscalYears.Table.Count());
+        Assert.True(DateTime.UtcNow.Date >= current.StartDate.Date && DateTime.UtcNow.Date <= current.EndDate.Date);
+    }
 }

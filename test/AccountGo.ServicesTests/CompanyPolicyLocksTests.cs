@@ -85,8 +85,9 @@ public class CompanyPolicyLocksTests : IDisposable
         });
 
         Assert.IsType<OkObjectResult>(result);
-        var aprMar = Assert.Single(_db.FinancialYears, f => f.FiscalYearCode == "FY2025-26");
-        Assert.True(aprMar.IsActive);
+        var active = _db.FinancialYears.Where(f => f.IsActive).ToList();
+        var only = Assert.Single(active);
+        Assert.Equal("FY2025-26", only.FiscalYearCode);
         Assert.Equal(FiscalYearPattern.AprMar, _db.CompanySettings.Single().FiscalYearPattern);
     }
 

@@ -209,11 +209,30 @@ namespace Services.Financial
         public FinancialYear CurrentFiscalYear()
         {
             var today = DateTime.UtcNow.Date;
-            EnsureFiscalYearsThrough(today);
-            return _fiscalYearRepo.Table
+            var setting = _companySettingRepo.Table.FirstOrDefault();
+            if (setting == null)
+                return null;
+            if (today < setting.BooksStartDate.Date)
+                return null;
+
+            var stored = _fiscalYearRepo.Table
                 .FirstOrDefault(fy => fy.IsActive
                     && today >= fy.StartDate.Date
                     && today <= fy.EndDate.Date);
+            if (stored != null)
+                return stored;
+
+            var computed = FiscalYearCalculator.Containing(
+                today, setting.FiscalYearPattern, setting.FiscalYearStartMonth);
+            return new FinancialYear
+            {
+                CompanyId = setting.CompanyId,
+                FiscalYearCode = computed.Code,
+                FiscalYearName = computed.Code,
+                StartDate = computed.Start,
+                EndDate = computed.End,
+                IsActive = true
+            };
         }
 
         /// <inheritdoc />
@@ -229,10 +248,14 @@ namespace Services.Financial
 
             var pattern = setting.FiscalYearPattern;
             var startMonth = setting.FiscalYearStartMonth;
-            var target = FiscalYearCalculator.Containing(date, pattern, startMonth);
-            var cursor = FiscalYearCalculator.Containing(booksStart, pattern, startMonth);
+            var requested = FiscalYearCalculator.Containing(date, pattern, startMonth);
+            var max = FiscalYearCalculator.Containing(DateTime.UtcNow.Date.AddYears(1), pattern, startMonth);
+            // Horizon is next fiscal year from today; later dates create nothing.
+            if (requested.Start > max.Start)
+                return;
 
-            while (cursor.Start <= target.Start)
+            var cursor = FiscalYearCalculator.Containing(booksStart, pattern, startMonth);
+            while (cursor.Start <= requested.Start)
             {
                 if (!_fiscalYearRepo.Table.Any(fy => fy.FiscalYearCode == cursor.Code))
                 {
