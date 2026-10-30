@@ -412,11 +412,26 @@ export default function Reports() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await loadReportData(authFetch, range, basis);
+        const [data, policyRes] = await Promise.all([
+          loadReportData(authFetch, range, basis),
+          authFetch('/api/organizations/current/accounting-policy'),
+        ]);
+        let booksStart: string | null = null;
+        if (policyRes.ok) {
+          const policy: { booksStartDate?: string } = await policyRes.json();
+          if (typeof policy.booksStartDate === 'string' && policy.booksStartDate)
+            booksStart = policy.booksStartDate.slice(0, 10);
+        }
         let comparative: ReportData | undefined;
         let prior: DateRange | null = null;
         if (compare && canCompare) {
-          prior = comparativeRange(range, preset, data.years, statement === 'balanceSheet' ? 'balanceSheet' : 'income');
+          prior = comparativeRange(
+            range,
+            preset,
+            data.years,
+            statement === 'balanceSheet' ? 'balanceSheet' : 'income',
+            booksStart,
+          );
           if (prior) comparative = await loadReportData(authFetch, prior, basis);
         }
         if (!cancelled) {
