@@ -175,4 +175,43 @@ public class BalanceSheetRetainedEarningsSplitTests
         Assert.DoesNotContain(sheet, r => r.AccountName == "Retained earnings (opening)");
         Assert.Equal(50m, Assert.Single(sheet, r => r.AccountName == "Profit for the year").Amount);
     }
+
+    [Fact]
+    public void BalanceSheet_IgnoresDeactivatedOverlappingCalendarYear_UsesActiveAprilMarchStart()
+    {
+        using var harness = new Harness(FiscalYearPattern.AprMar);
+        // Stale calendar year left after a pattern change must never drive the split.
+        harness.FiscalYears.Insert(new FinancialYear
+        {
+            Id = 1,
+            CompanyId = 1,
+            FiscalYearCode = "FY2026",
+            FiscalYearName = "Calendar 2026",
+            StartDate = D(2026, 1, 1),
+            EndDate = D(2026, 12, 31),
+            IsActive = false
+        });
+        harness.FiscalYears.Insert(new FinancialYear
+        {
+            Id = 2,
+            CompanyId = 1,
+            FiscalYearCode = "FY2026-27",
+            FiscalYearName = "Apr–Mar 2026-27",
+            StartDate = D(2026, 4, 1),
+            EndDate = D(2027, 3, 31),
+            IsActive = true
+        });
+
+        // Pre–April → opening retained earnings; post–April → profit for the year
+        harness.Post(D(2026, 2, 1), harness.CashId, harness.RevenueId, 100m);
+        harness.Post(D(2026, 4, 15), harness.CashId, harness.RevenueId, 50m);
+
+        var sheet = harness.Financial.BalanceSheet(to: D(2026, 5, 15)).ToList();
+        Assert.Equal(100m, Assert.Single(sheet, r => r.AccountName == "Retained earnings (opening)").Amount);
+        Assert.Equal(50m, Assert.Single(sheet, r => r.AccountName == "Profit for the year").Amount);
+
+        var assets = sheet.Where(r => r.AccountClassId == 1).Sum(r => r.Amount);
+        var liabilitiesAndEquity = sheet.Where(r => r.AccountClassId == 2 || r.AccountClassId == 3).Sum(r => r.Amount);
+        Assert.Equal(assets, liabilitiesAndEquity);
+    }
 }

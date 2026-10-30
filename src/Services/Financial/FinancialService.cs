@@ -910,6 +910,7 @@ namespace Services.Financial
             // Split unclosed P&L into opening retained earnings (prior years) and profit for the year
             // containing `to`. Totals match the former single unclosed-net-income line.
             // Keep the full `to` timestamp (not .Date) so same-day entries after midnight are included.
+            // One extra TrialBalance for the year; opening = cumulative income/expense net minus that.
             var asOf = to ?? DateTime.UtcNow;
             var fyStart = ResolveFiscalYearStartContaining(asOf.Date);
             var incomeExpenseIds = accounts.Where(a => a.AccountClassId == 4 || a.AccountClassId == 5)
@@ -919,10 +920,9 @@ namespace Services.Financial
             decimal SumIncomeExpenseNet(IDictionary<int, TrialBalance> tb) =>
                 incomeExpenseIds.Sum(id => tb.ContainsKey(id) ? tb[id].Credit - tb[id].Debit : 0m);
 
-            var openingRetainedEarnings = SumIncomeExpenseNet(
-                TrialBalance(null, fyStart.AddTicks(-1), basis).ToDictionary(a => a.AccountId));
             var profitForTheYear = SumIncomeExpenseNet(
                 TrialBalance(fyStart, asOf, basis).ToDictionary(a => a.AccountId));
+            var openingRetainedEarnings = SumIncomeExpenseNet(balances) - profitForTheYear;
 
             if (openingRetainedEarnings != 0m)
                 balanceSheet.Add(new BalanceSheet
@@ -948,7 +948,9 @@ namespace Services.Financial
         private DateTime ResolveFiscalYearStartContaining(DateTime asOf)
         {
             var stored = _fiscalYearRepo.Table
-                .FirstOrDefault(fy => asOf >= fy.StartDate.Date && asOf <= fy.EndDate.Date);
+                .FirstOrDefault(fy => fy.IsActive
+                    && asOf >= fy.StartDate.Date
+                    && asOf <= fy.EndDate.Date);
             if (stored != null)
                 return stored.StartDate.Date;
 

@@ -991,6 +991,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult ExcludeStatementLinesBeforeBooksStart(int bankId)
         {
+            // Intentionally unguarded: lines before the books start can never post and are always on or before any lock date, so guarding would block the cleanup forever.
             try
             {
                 using var tx = BeginWriteTransaction();

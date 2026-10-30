@@ -2592,6 +2592,11 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(new string[] { "Sales receipt not found." });
                 }
 
+                if (RefuseIfBooksLocked(existingReceipt.Date) is { } existingLocked)
+                    return existingLocked;
+                if (RefuseIfBooksLocked(receiptDto.ReceiptDate) is { } newLocked)
+                    return newLocked;
+
                 if (existingReceipt.GeneralLedgerHeaderId.HasValue || (existingReceipt.CustomerAllocations != null && existingReceipt.CustomerAllocations.Any(a => a.Amount > 0)))
                 {
                     return new BadRequestObjectResult(new string[] { "Posted or allocated receipts cannot be edited." });
@@ -2671,6 +2676,9 @@ namespace Api.Controllers
                         .ToArray();
                     return new BadRequestObjectResult(errors);
                 }
+
+                if (RefuseIfBooksLocked(allocationDto.Date) is { } locked)
+                    return locked;
 
                 using var tx = BeginInvoiceNumberingTransaction();
 
