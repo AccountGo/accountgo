@@ -41,7 +41,11 @@ namespace Api.Filters
 
             var companyId = tenantContext.RequireCompanyId();
             var entitlements = context.HttpContext.RequestServices.GetRequiredService<IEntitlementService>();
-            var decision = StatementImportAccess.Evaluate(entitlements, companyId);
+            var method = context.HttpContext.Request.Method;
+            var financialsAccess = HttpMethods.IsGet(method) || HttpMethods.IsHead(method)
+                ? ModuleAccess.Read
+                : ModuleAccess.Write;
+            var decision = StatementImportAccess.Evaluate(entitlements, companyId, financialsAccess);
             if (!decision.Allowed)
             {
                 var support = entitlements.Options.SupportEmail;

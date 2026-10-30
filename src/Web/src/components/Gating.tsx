@@ -99,20 +99,24 @@ export const RequiresStatementImport: React.FC<{ children: React.ReactNode; fall
     return <>{fallback}</>;
   }
 
-  return <ModuleLockedCard module="financials" orgSlug={currentOrg.slug} />;
+  return <StatementImportUpgradeCard orgSlug={currentOrg.slug} />;
 };
 
 /** Opens the plan-limit dialog for hosted Free workspaces that lack statement import. */
-export function announceStatementImportUpgrade(effectivePlan?: string | null): void {
+export function announceStatementImportUpgrade(options?: {
+  effectivePlan?: string | null;
+  upgradeAvailable?: boolean;
+  canManageBilling?: boolean;
+}): void {
   if (typeof window === 'undefined') return;
   const detail: EntitlementProblem = {
     code: 'FEATURE_NOT_ENTITLED',
     title: 'Feature not included in your plan',
     detail: 'Statement import is available on Invoicing Pro and Accounting plans.',
     requiredFeature: FEATURE_BANKING_STATEMENT_IMPORT,
-    effectivePlan: effectivePlan ?? undefined,
-    upgradeAvailable: true,
-    canManageBilling: true,
+    effectivePlan: options?.effectivePlan ?? undefined,
+    upgradeAvailable: !!options?.upgradeAvailable,
+    canManageBilling: !!options?.canManageBilling,
   };
   window.dispatchEvent(new CustomEvent<EntitlementProblem>(ENTITLEMENT_DENIED_EVENT, { detail }));
 }
@@ -207,6 +211,76 @@ export function shouldShowUpgradeAvailableBadge(
 ): boolean {
   return (entitlements?.allowedTransitions?.length ?? 0) > 0;
 }
+
+/** Locked state for the statement-import route when the plan lacks the feature (#436 I1). */
+export const StatementImportUpgradeCard: React.FC<{ orgSlug?: string }> = ({ orgSlug }) => {
+  const { hasPermission } = useTenantContext();
+  const { entitlements, canManageBilling } = useCapabilities();
+  const upgradeAvailable = shouldShowUpgradeAvailableBadge(entitlements);
+  const billingManage = canManageBilling || hasPermission('admin.subscription.manage');
+
+  return (
+    <div className="space-y-6 w-full animate-in fade-in duration-200 text-[var(--text-main)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[var(--bg-surface)] via-[var(--bg-surface)] to-[var(--brand-subtle)] shadow-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-amber-400">
+              Plan Feature
+            </span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
+            Statement import
+          </h1>
+          <p className="text-xs text-[var(--text-muted)]">
+            Available on <strong className="text-[var(--text-main)]">Invoicing Pro</strong> and Accounting.
+          </p>
+        </div>
+        {orgSlug && upgradeAvailable && (
+          <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-xs text-amber-400 font-medium">
+            Upgrade Available
+          </div>
+        )}
+      </div>
+
+      <div className="w-full max-w-xl mx-auto my-8 p-8 rounded-3xl bg-[var(--bg-surface)] backdrop-blur-2xl shadow-2xl shadow-black/20 text-center animate-fade-in border border-transparent">
+        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] flex items-center justify-center shadow-inner">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--bg-subtle)] text-[var(--brand-primary)] text-xs font-semibold uppercase tracking-wider mb-3">
+          <Sparkles className="w-3.5 h-3.5" />
+          Invoicing Pro Feature
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)] mb-2">
+          Statement import is locked
+        </h2>
+        <p className="text-sm text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto mb-8">
+          Import CSV or OFX bank statements, match lines, and record expenses without leaving Banking.
+          Upgrade to unlock statement import on this workspace.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          {orgSlug && billingManage && (
+            <Link
+              to={`/org/${orgSlug}/settings?tab=subscription`}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[var(--brand-primary)] text-white text-sm font-semibold shadow-lg shadow-[var(--brand-primary)]/25 hover:brightness-110 active:scale-[0.98] transition-all"
+            >
+              Manage Subscription
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          )}
+          {orgSlug && (
+            <Link
+              to={`/org/${orgSlug}/banking`}
+              className="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition-all"
+            >
+              Back to Banking
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }> = ({
   module,
