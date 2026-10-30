@@ -6,11 +6,14 @@ export interface Env {
   CONTAINER: DurableObjectNamespace;
   CONTAINER_V2?: DurableObjectNamespace;
   ENVIRONMENT?: string;
+  /** Must be "Postgres" on Cloudflare (requirePersistentDatabase). */
+  DatabaseProvider?: string;
   CONTAINER_NAME?: string;
   /** Phase 0: when "true", route to CONTAINER_V2 (still one shared writer). */
   TIERED_CAPACITY_ENABLED?: string;
-  /** Phase 0 V2 start() instance: lite | standard-1 … standard-4. */
-  CONTAINER_INSTANCE_TYPE?: string;
+  /** V2 start() instance for the paid pool (default standard-1) and the free pool (default lite). */
+  CONTAINER_INSTANCE_TYPE_PAID?: string;
+  CONTAINER_INSTANCE_TYPE_FREE?: string;
   /** Dedicated key for container-loopback internal sync; prefer over SECRET_KEY. */
   INTERNAL_SYNC_KEY?: string;
   SECRET_KEY?: string;

@@ -1,6 +1,12 @@
 import { Container, StopParams } from "@cloudflare/containers";
 import {
+  CAPACITY_HINT_HEADER,
+  CAPACITY_POOL_HEADER,
+  CapacityRouter,
+  WORKSPACE_HEADER,
   isTieredCapacityEnabled,
+  parseCapacityPool,
+  resolvePoolContainerName,
   resolveWriterContainerName,
 } from "./container-capacity";
 import {
@@ -385,6 +391,8 @@ export class AccountGoApiContainer extends Container<Env> {
   }
 }
 
+/** Workspace slug → capacity pool, learnt from API responses (per isolate). */
+const capacityRouter = new CapacityRouter();
 let loggedContainerName = false;
 
 interface TurnstileVerifyResponse {
@@ -563,9 +571,24 @@ export default {
         );
         return serviceUnavailable("Tiered capacity is misconfigured", 30);
       }
-      const id = binding.idFromName(containerName);
-      const stub = binding.get(id, { locationHint: "enam" });
-      return stub.fetch(request);
+      // Pool by workspace plan: paid workspaces get the bigger container. A slug the router has not learnt yet,
+      // or no workspace at all (sign-in, refresh, workspace list), goes to the free pool.
+      const slug = request.headers.get(WORKSPACE_HEADER);
+      const pool = isAdminRequest
+        ? parseCapacityPool(request.headers.get(CAPACITY_POOL_HEADER)) ?? "free"
+        : capacityRouter.poolFor(slug);
+      const versionId = env.CF_VERSION_METADATA?.id || "dev";
+      const poolContainerName =
+        isAdminRequest && request.headers.get("x-container-name")
+          ? containerName
+          : resolvePoolContainerName(env.CONTAINER_NAME, pool, versionId);
+      const headers = new Headers(request.headers);
+      headers.set(CAPACITY_POOL_HEADER, pool);
+      const stub = binding.get(binding.idFromName(poolContainerName), { locationHint: "enam" });
+      const response = await stub.fetch(new Request(request, { headers }));
+      const hint = parseCapacityPool(response.headers.get(CAPACITY_HINT_HEADER));
+      if (hint) capacityRouter.remember(slug, hint);
+      return response;
     }
 
     const id = env.CONTAINER.idFromName(containerName);
