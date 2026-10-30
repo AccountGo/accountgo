@@ -89,7 +89,8 @@ const BankStatementImportPage: React.FC = () => {
 
   const loadLines = useCallback(
     async (nextStatus: StatementLineStatus) => {
-      const res = await authFetch(`/api/Banking/Accounts/${id}/StatementLines?status=${nextStatus}`);
+      const q = new URLSearchParams({ status: nextStatus, page: '1', pageSize: '500' });
+      const res = await authFetch(`/api/Banking/Accounts/${id}/StatementLines?${q}`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || 'Could not load statement lines.');

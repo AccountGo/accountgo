@@ -388,6 +388,9 @@ export interface BankStatementLineList {
   lines: BankStatementLine[];
   unmatchedCount: number;
   matchedCount: number;
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export type StatementLineStatus = 'unmatched' | 'matched' | 'all';

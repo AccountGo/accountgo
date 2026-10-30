@@ -109,6 +109,10 @@ namespace Dto.Banking
         public IReadOnlyList<BankStatementLineDto> Lines { get; set; } = Array.Empty<BankStatementLineDto>();
         public int UnmatchedCount { get; set; }
         public int MatchedCount { get; set; }
+        /// <summary>Rows in the filtered status set before paging.</summary>
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
     }
 
     public class MatchBankStatementLineRequest
