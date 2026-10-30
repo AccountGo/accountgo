@@ -188,6 +188,43 @@ VALUES (1, 1, 1, 'Orphan', NULL, 0, 1);
     }
 
     [Fact]
+    public void D1_0047_PriorPeriodAdjustment_RunUnderCompoundSelectLimit_AndUpgraderAddsColumn()
+    {
+        using var connection = OpenLegacyBankDb();
+        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+
+        Execute(connection, @"
+CREATE TABLE IF NOT EXISTS ""JournalEntryHeader"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""CompanyId"" INTEGER NOT NULL,
+    ""Date"" TEXT NOT NULL,
+    ""Memo"" TEXT NULL,
+    ""VoucherType"" INTEGER NULL
+);
+");
+
+        var migrationSql = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0047_prior_period_adjustment.sql"));
+        Assert.DoesNotContain("UNION ALL", migrationSql, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(Record.Exception(() => ExecuteScript(connection, migrationSql)));
+        Assert.True(ColumnExists(connection, "JournalEntryHeader", "AdjustsFiscalYearId"));
+
+        // Upgrader mirror of 0047: AddColumnIfMissing (same SQL as EnsurePriorPeriodAdjustment).
+        Execute(connection, @"DROP TABLE ""JournalEntryHeader"";
+CREATE TABLE ""JournalEntryHeader"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""CompanyId"" INTEGER NOT NULL,
+    ""Date"" TEXT NOT NULL
+);");
+        Assert.False(ColumnExists(connection, "JournalEntryHeader", "AdjustsFiscalYearId"));
+        Execute(connection, @"ALTER TABLE ""JournalEntryHeader"" ADD COLUMN ""AdjustsFiscalYearId"" INTEGER NULL;");
+        Assert.True(ColumnExists(connection, "JournalEntryHeader", "AdjustsFiscalYearId"));
+
+        var upgrader = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/Data/Schema/SqliteSchemaUpgrader.cs"));
+        Assert.Contains("EnsurePriorPeriodAdjustment", upgrader, StringComparison.Ordinal);
+        Assert.Contains("AdjustsFiscalYearId", upgrader, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SqliteSchemaUpgrader_BankCleanup_IsIdempotent()
     {
         using var connection = OpenLegacyBankDb();

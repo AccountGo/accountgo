@@ -6,6 +6,9 @@ namespace Dto.Financial
     {
         public DateTime JournalDate { get; set; }
         public int? VoucherType { get; set; }
+        /// <summary>Closed fiscal year id when <see cref="VoucherType"/> is PriorPeriodAdjustment (7).</summary>
+        public int? AdjustsFiscalYearId { get; set; }
+        public string? AdjustsFiscalYearCode { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Memo { get; set; }
         public bool? Posted { get; set; }

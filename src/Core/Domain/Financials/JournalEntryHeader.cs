@@ -26,12 +26,15 @@ namespace Core.Domain.Financials
         public int? GeneralLedgerHeaderId { get; set; }
         public int? PartyId { get; set; }
         public JournalVoucherTypes? VoucherType { get; set; }
+        /// <summary>Closed fiscal year corrected by a <see cref="JournalVoucherTypes.PriorPeriodAdjustment"/> journal.</summary>
+        public int? AdjustsFiscalYearId { get; set; }
         public DateTime Date { get; set; }
         public string Memo { get; set; }
         public string ReferenceNo { get; set; }
         public bool? Posted { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
         public virtual Party Party { get; set; }
+        public virtual FinancialYear AdjustsFiscalYear { get; set; }
 
         public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; }
     }
