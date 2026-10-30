@@ -170,3 +170,22 @@ export function clampStatementLinePage(page: number, totalCount: number, pageSiz
   const lastPage = Math.max(1, Math.ceil(Math.max(0, totalCount) / size));
   return Math.min(requested, lastPage);
 }
+
+/** Normalize bank payee / vendor name for matching (#436 I2). */
+export function normalizePayeeName(value: string | null | undefined): string {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+/** Prefer an exact vendor name match for the bank description; otherwise null. */
+export function matchVendorIdByPayee(
+  payee: string | null | undefined,
+  vendors: { id: number; name?: string | null }[],
+): number | null {
+  const needle = normalizePayeeName(payee);
+  if (!needle) return null;
+  const exact = vendors.find((v) => normalizePayeeName(v.name) === needle);
+  return exact?.id ?? null;
+}

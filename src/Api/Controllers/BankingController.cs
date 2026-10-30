@@ -26,6 +26,7 @@ namespace Api.Controllers
         private readonly IBankTransactionService _transactions;
         private readonly IBankReconciliationService _reconciliations;
         private readonly IBankStatementImportService _statements;
+        private readonly IStatementLineExpenseService _statementExpenses;
         private readonly ITenantContext _tenant;
         private readonly IEntitlementService _entitlements;
         private readonly ApiDbContext _db;
@@ -35,6 +36,7 @@ namespace Api.Controllers
             IBankTransactionService transactions,
             IBankReconciliationService reconciliations,
             IBankStatementImportService statements,
+            IStatementLineExpenseService statementExpenses,
             ITenantContext tenant,
             IEntitlementService entitlements,
             ApiDbContext db)
@@ -43,6 +45,7 @@ namespace Api.Controllers
             _transactions = transactions;
             _reconciliations = reconciliations;
             _statements = statements;
+            _statementExpenses = statementExpenses;
             _tenant = tenant;
             _entitlements = entitlements;
             _db = db;
@@ -729,6 +732,68 @@ namespace Api.Controllers
                 var matched = _statements.CreateTransaction(id, request);
                 tx.Commit();
                 return Ok(matched);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Curated expense categories (name only) plus More… for Record expense (#436 I2).</summary>
+        [HttpGet("StatementExpenseCategories")]
+        [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesBillsView)]
+        public IActionResult StatementExpenseCategories() =>
+            Ok(_statementExpenses.ListExpenseCategories());
+
+        [HttpPost("StatementLines/{id:int}/RecordExpense")]
+        [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesBillsCreate)]
+        [RequirePermission(SystemPermissions.PurchasesBillsPost)]
+        [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
+        public IActionResult RecordExpenseFromStatementLine(int id, [FromBody] RecordExpenseFromStatementLineRequest request)
+        {
+            if (request?.NewVendor != null && !string.IsNullOrWhiteSpace(request.NewVendor.Name)
+                && !_tenant.Permissions.Contains(SystemPermissions.PurchasesVendorsManage))
+                return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesVendorsManage);
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statementExpenses.RecordExpense(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("StatementLines/{id:int}/PayOpenBill")]
+        [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
+        public IActionResult PayOpenBillFromStatementLine(int id, [FromBody] PayOpenBillFromStatementLineRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statementExpenses.PayOpenBill(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
             }
             catch (TenantEntityNotFoundException)
             {

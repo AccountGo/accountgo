@@ -31,6 +31,7 @@ namespace Api.Controllers
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly IBankAccountService _bankAccounts;
+        private readonly IDocumentLineAccountCatalog _lineAccounts;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly Api.Data.ApiDbContext _db;
@@ -41,6 +42,7 @@ namespace Api.Controllers
             IFinancialService financialService,
             IInventoryService inventoryService,
             IBankAccountService bankAccounts,
+            IDocumentLineAccountCatalog lineAccounts,
             Core.Tenancy.ITenantGuard tenantGuard,
             Core.Tenancy.ITenantContext tenantContext,
             Api.Data.ApiDbContext db,
@@ -51,6 +53,7 @@ namespace Api.Controllers
             _financialService = financialService;
             _inventoryService = inventoryService;
             _bankAccounts = bankAccounts;
+            _lineAccounts = lineAccounts;
             _tenantGuard = tenantGuard;
             _tenantContext = tenantContext;
             _db = db;
@@ -753,7 +756,7 @@ namespace Api.Controllers
                 return BadRequest(new { message = $"Notes can be at most {NotesMaxLength} characters." });
 
             var vendor = _tenantGuard.EnsureOwned<Vendor>(billDto.VendorId, nameof(billDto.VendorId));
-            var lineAccounts = BillAccountsQuery().Select(a => a.Id).ToHashSet();
+            var lineAccounts = _lineAccounts.ListBillLineAccounts().Select(a => a.Id).ToHashSet();
             var requestedItemIds = billDto.Lines.Where(l => l.ItemId > 0).Select(l => l.ItemId!.Value).Distinct().ToArray();
             var stockAccountsByItem = _db.Items
                 .Include(i => i.ItemCategory)
@@ -1026,8 +1029,7 @@ namespace Api.Controllers
         [Route("BillAccounts")] // api/Purchasing/BillAccounts
         [RequirePermission(SystemPermissions.PurchasesBillsView)]
         public IActionResult BillAccounts() =>
-            Ok(BillAccountsQuery().OrderBy(a => a.AccountClassId == (int)AccountClasses.Expense ? 0 : 1).ThenBy(a => a.AccountCode)
-                .Select(a => ToBillAccount(a)).ToList());
+            Ok(_lineAccounts.ListBillLineAccounts().Select(a => ToBillAccount(a)).ToList());
 
         /// <summary>The cash and bank accounts a bill can be paid from.</summary>
         [HttpGet]
@@ -1071,16 +1073,6 @@ namespace Api.Controllers
             .Include(b => b.PurchaseInvoiceLines).ThenInclude(l => l.Item).ThenInclude(i => i!.ItemCategory)
             .Include(b => b.PurchaseInvoiceLines).ThenInclude(l => l.Account)
             .Include(b => b.VendorPayments).ThenInclude(p => p.Account);
-
-        private IQueryable<Core.Domain.Financials.Account> BillAccountsQuery()
-        {
-            var receivables = _db.Customers.Where(c => c.AccountsReceivableAccountId != null).Select(c => c.AccountsReceivableAccountId!.Value);
-            return _db.Accounts.Where(a => a.ArchivedAt == null
-                && (a.AccountClassId == (int)AccountClasses.Expense || a.AccountClassId == (int)AccountClasses.Assets)
-                && !a.ChildAccounts.Any()
-                && !a.IsCash && !(a.ParentAccount != null && a.ParentAccount.IsCash)
-                && a.AccountCode != "10120" && !receivables.Contains(a.Id));
-        }
 
         // Summary accounts such as 10110 can't take postings, so only postable cash accounts qualify.
         private IQueryable<Core.Domain.Financials.Account> PaymentAccountsQuery() =>
