@@ -20,10 +20,10 @@ namespace AccountGo.BackendTests
             WithDb(db =>
             {
                 db.Companies.Single(c => c.Id == _companyId).ActiveModulesJson = "[\"reports\"]";
-                var asset = db.Accounts.First(a => a.AccountClassId == 1 && !a.ChildAccounts.Any());
-                var equity = db.Accounts.First(a => a.AccountClassId == 3 && !a.ChildAccounts.Any());
-                var revenue = db.Accounts.First(a => a.AccountClassId == 4 && !a.ChildAccounts.Any());
-                var expense = db.Accounts.First(a => a.AccountClassId == 5 && !a.ChildAccounts.Any());
+                var asset = db.Accounts.OrderBy(a => a.Id).First(a => a.AccountClassId == 1 && !a.ChildAccounts.Any());
+                var equity = db.Accounts.OrderBy(a => a.Id).First(a => a.AccountClassId == 3 && !a.ChildAccounts.Any());
+                var revenue = db.Accounts.OrderBy(a => a.Id).First(a => a.AccountClassId == 4 && !a.ChildAccounts.Any());
+                var expense = db.Accounts.OrderBy(a => a.Id).First(a => a.AccountClassId == 5 && !a.ChildAccounts.Any());
                 var contra = new Account
                 {
                     CompanyId = _companyId, AccountCode = "TEST-CONTRA", AccountName = "Accumulated depreciation",
@@ -91,9 +91,9 @@ namespace AccountGo.BackendTests
             WithDb(db =>
             {
                 db.Companies.Single(c => c.Id == _companyId).ActiveModulesJson = "[\"reports\"]";
-                var asset = db.Accounts.First(a => a.AccountClassId == 1 && !a.ChildAccounts.Any());
-                var expense = db.Accounts.First(a => a.AccountClassId == 5 && !a.ChildAccounts.Any());
-                var equity = db.Accounts.First(a => a.AccountClassId == 3 && !a.ChildAccounts.Any());
+                var asset = db.Accounts.OrderBy(a => a.Id).First(a => a.AccountClassId == 1 && !a.ChildAccounts.Any());
+                var expense = db.Accounts.OrderBy(a => a.Id).First(a => a.AccountClassId == 5 && !a.ChildAccounts.Any());
+                var equity = db.Accounts.OrderBy(a => a.Id).First(a => a.AccountClassId == 3 && !a.ChildAccounts.Any());
                 var day = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
                 db.GeneralLedgerHeaders.AddRange(
                     ReportEntry(day, asset, equity, 100m),

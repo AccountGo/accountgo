@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Claims;
 using System.Text;
 using Api.Data;
+using Api.Data.Postgres;
 using Api.Observability;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -197,6 +198,40 @@ namespace Api.Extensions
                 {
                     options.UseSqlite(sqliteConnection);
                     options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
+                });
+
+                return;
+            }
+
+            if (provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase)
+                || provider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+            {
+                var postgresConnection = configuration.GetConnectionString("PostgresConnection")
+                    ?? throw new InvalidOperationException(
+                        "DatabaseProvider is Postgres but ConnectionStrings:PostgresConnection is not set.");
+
+                Console.WriteLine("[Database Provider] Using PostgreSQL");
+
+                // Never retries (services open their own transactions); buffers results, see BufferingExecutionStrategy.
+                services.AddDbContext<ApiDbContext, PostgresApiDbContext>((sp, options) =>
+                {
+                    options.UseNpgsql(postgresConnection,
+                        npgsql => npgsql.ExecutionStrategy(d => new BufferingExecutionStrategy(d)));
+                    options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>(),
+                        new WriteLockTransactionInterceptor());
+                    if (environment.IsDevelopment())
+                    {
+                        options.EnableSensitiveDataLogging();
+                        options.EnableDetailedErrors();
+                    }
+                });
+
+                services.AddDbContext<ApplicationIdentityDbContext, PostgresIdentityDbContext>((sp, options) =>
+                {
+                    options.UseNpgsql(postgresConnection,
+                        npgsql => npgsql.ExecutionStrategy(d => new BufferingExecutionStrategy(d)));
+                    options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>(),
+                        new WriteLockTransactionInterceptor());
                 });
 
                 return;

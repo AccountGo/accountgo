@@ -39,6 +39,16 @@ public static class AccountGoApp
     {
         modules ??= Array.Empty<IAccountGoModule>();
         var app = BuildApp(args, modules);
+
+        var copyIndex = Array.IndexOf(args, "--copy-from-sqlite");
+        if (copyIndex >= 0)
+        {
+            if (copyIndex + 1 >= args.Length)
+                throw new ArgumentException("--copy-from-sqlite needs the path of the SQLite file.");
+            Environment.ExitCode = Api.Data.Postgres.SqliteToPostgresCopy.Run(app.Services, args[copyIndex + 1]);
+            return;
+        }
+
         InitializeDatabase(app, args);
 
         if (args.Contains("--prepare-schema"))
@@ -610,68 +620,15 @@ public static class AccountGoApp
                     // tables moments later, so there the default roles and admin users come from D1 and its migrations instead.
                     if (!restoredFromD1)
                     {
-                        // Ensure security permissions and roles are initialized
-                        var securityService = services.GetRequiredService<Services.Security.ISecurityService>();
-                        securityService.EnsureDefaultPermissionsAndRoles();
-                        Console.WriteLine("✓ Security permissions and default roles verified.");
-
-                        // Ensure admin users exist in Identity and Domain
-                        var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
-                        var adminService = services.GetRequiredService<Services.Administration.IAdministrationService>();
-                        var secService = services.GetRequiredService<Services.Security.ISecurityService>();
-                        var adminRole = secService.GetRole("SystemAdministrators") ?? secService.GetRole("Administrator");
-
-                        var adminEmails = new[]
-                        {
-                            (Email: "admin@accountgo.ph", First: "Admin", Last: "User"),
-                            (Email: "marvinperez@gmail.com", First: "Marvin", Last: "Perez"),
-                            (Email: "support@accountgo.dev", First: "Marvin", Last: "Perez")
-                        };
-
-                        foreach (var (email, first, last) in adminEmails)
-                        {
-                            var existingUser = userManager.FindByEmailAsync(email).GetAwaiter().GetResult();
-                            if (existingUser == null)
-                            {
-                                var newUser = new ApplicationUser
-                                {
-                                    UserName = email,
-                                    Email = email,
-                                    EmailConfirmed = true
-                                };
-                                var createResult = userManager.CreateAsync(newUser).GetAwaiter().GetResult();
-                                if (createResult.Succeeded)
-                                {
-                                    Console.WriteLine($"✓ Admin user '{email}' initialized in Identity.");
-                                }
-                            }
-
-                            var domainUser = secService.GetUser(email);
-                            if (domainUser == null)
-                            {
-                                var newDomainUser = new Core.Domain.Security.User
-                                {
-                                    EmailAddress = email,
-                                    UserName = email,
-                                    Firstname = first,
-                                    Lastname = last
-                                };
-                                adminService.SaveUser(newDomainUser);
-                                if (adminRole != null && email.Equals("marvinperez@gmail.com", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    var freshUser = secService.GetUser(email);
-                                    if (freshUser != null)
-                                    {
-                                        secService.AddUserInRole(freshUser.Id, adminRole.Id);
-                                    }
-                                }
-                                Console.WriteLine($"✓ Domain user '{email}' initialized.");
-                            }
-                        }
+                        EnsureSecurityDefaultsAndAdminUsers(services);
                     }
 
                     // Run one-time post-seed membership and role backfill -> Version 2
                     Api.Data.Schema.SqliteSchemaUpgrader.UpgradePostSeed(apiDbContext.Database.GetDbConnection());
+                }
+                else if (apiDbContext.Database.IsNpgsql())
+                {
+                    InitializePostgres(services, apiDbContext, identityDbContext);
                 }
                 else
                 {
@@ -744,6 +701,147 @@ public static class AccountGoApp
                 Console.WriteLine($"✗ FATAL ERROR: Database initialization failed - Application startup aborted.");
                 Console.WriteLine($"Details: {ex}");
                 throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Postgres holds the data itself (no D1 copy), so start-up writes persist: migrate, seed demo books only into an
+    /// empty database, and keep the default roles current on every start.
+    /// </summary>
+    private static void InitializePostgres(IServiceProvider services, ApiDbContext apiDbContext,
+        ApplicationIdentityDbContext identityDbContext)
+    {
+        bool isNewDatabase = !apiDbContext.Database.GetAppliedMigrations().Any();
+
+        Console.WriteLine("Applying ApiDb migrations (Postgres)...");
+        apiDbContext.Database.Migrate();
+        Console.WriteLine("Applying IdentityDb migrations (Postgres)...");
+        identityDbContext.Database.Migrate();
+        Console.WriteLine("✓ Postgres migrations completed.");
+
+        if (isNewDatabase)
+        {
+            var configuration = services.GetRequiredService<IConfiguration>();
+            if (!string.Equals(configuration["SEED_DEMO_DATA"], "false", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Seeding new Postgres database...");
+                services.GetRequiredService<DatabaseSeeder>().Seed();
+                Console.WriteLine("✓ Postgres database seeding completed.");
+            }
+
+            EnsureSecurityDefaultsAndAdminUsers(services);
+            EnsureDemoMemberships(apiDbContext, identityDbContext);
+        }
+        else
+        {
+            services.GetRequiredService<Services.Security.ISecurityService>().EnsureDefaultPermissionsAndRoles();
+            Console.WriteLine("✓ Security permissions and default roles verified.");
+        }
+    }
+
+    /// <summary>
+    /// The demo workspace memberships that SQLite gets from <c>SqliteSchemaUpgrader.UpgradePostSeed</c> (version 2), so
+    /// the built-in users can sign in to a new Postgres database.
+    /// </summary>
+    private static void EnsureDemoMemberships(ApiDbContext apiDbContext, ApplicationIdentityDbContext identityDbContext)
+    {
+        var members = new[]
+        {
+            (Email: "marvinperez@gmail.com", Role: Core.Domain.CompanyMemberRole.Owner),
+            (Email: "support@accountgo.dev", Role: Core.Domain.CompanyMemberRole.Admin),
+            (Email: "admin@accountgo.ph", Role: Core.Domain.CompanyMemberRole.Member),
+        };
+
+        foreach (var (email, role) in members)
+        {
+            var userId = identityDbContext.Users
+                .Where(u => u.NormalizedEmail == email.ToUpperInvariant())
+                .Select(u => u.Id)
+                .FirstOrDefault();
+            if (userId == null || apiDbContext.CompanyMembers.IgnoreQueryFilters().Any(m => m.CompanyId == 1 && m.UserId == userId))
+                continue;
+
+            var member = new Core.Domain.CompanyMember
+            {
+                CompanyId = 1,
+                UserId = userId,
+                Role = role,
+                Status = Core.Domain.CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow,
+            };
+            if (role == Core.Domain.CompanyMemberRole.Member)
+            {
+                var viewer = apiDbContext.SecurityRoles.FirstOrDefault(r => r.Name == "Auditor / Viewer");
+                if (viewer != null)
+                    member.SecurityRoles.Add(new Core.Domain.CompanyMemberSecurityRole { SecurityRoleId = viewer.Id });
+            }
+            apiDbContext.CompanyMembers.Add(member);
+        }
+
+        apiDbContext.SaveChanges();
+        Console.WriteLine("✓ Demo workspace memberships verified.");
+    }
+
+    /// <summary>Default permissions and roles, plus the built-in admin users in Identity and the domain.</summary>
+    private static void EnsureSecurityDefaultsAndAdminUsers(IServiceProvider services)
+    {
+        // Ensure security permissions and roles are initialized
+        var securityService = services.GetRequiredService<Services.Security.ISecurityService>();
+        securityService.EnsureDefaultPermissionsAndRoles();
+        Console.WriteLine("✓ Security permissions and default roles verified.");
+
+        // Ensure admin users exist in Identity and Domain
+        var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+        var adminService = services.GetRequiredService<Services.Administration.IAdministrationService>();
+        var secService = services.GetRequiredService<Services.Security.ISecurityService>();
+        var adminRole = secService.GetRole("SystemAdministrators") ?? secService.GetRole("Administrator");
+
+        var adminEmails = new[]
+        {
+            (Email: "admin@accountgo.ph", First: "Admin", Last: "User"),
+            (Email: "marvinperez@gmail.com", First: "Marvin", Last: "Perez"),
+            (Email: "support@accountgo.dev", First: "Marvin", Last: "Perez")
+        };
+
+        foreach (var (email, first, last) in adminEmails)
+        {
+            var existingUser = userManager.FindByEmailAsync(email).GetAwaiter().GetResult();
+            if (existingUser == null)
+            {
+                var newUser = new ApplicationUser
+                {
+                    UserName = email,
+                    Email = email,
+                    EmailConfirmed = true
+                };
+                var createResult = userManager.CreateAsync(newUser).GetAwaiter().GetResult();
+                if (createResult.Succeeded)
+                {
+                    Console.WriteLine($"✓ Admin user '{email}' initialized in Identity.");
+                }
+            }
+
+            var domainUser = secService.GetUser(email);
+            if (domainUser == null)
+            {
+                var newDomainUser = new Core.Domain.Security.User
+                {
+                    EmailAddress = email,
+                    UserName = email,
+                    Firstname = first,
+                    Lastname = last
+                };
+                adminService.SaveUser(newDomainUser);
+                if (adminRole != null && email.Equals("marvinperez@gmail.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    var freshUser = secService.GetUser(email);
+                    if (freshUser != null)
+                    {
+                        secService.AddUserInRole(freshUser.Id, adminRole.Id);
+                    }
+                }
+                Console.WriteLine($"✓ Domain user '{email}' initialized.");
             }
         }
     }
