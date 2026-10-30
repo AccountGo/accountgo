@@ -477,6 +477,35 @@ public class StatementLineExpenseServiceTests
         Assert.NotEqual(expectedTax, PurchaseInvoiceLine.TaxOf(billLine.Amount, 12m));
     }
 
+    [Theory]
+    [InlineData("Figma INV-123 2026-03-15", "figma")]
+    [InlineData("AWS ref:AB12 fees 99.00", "aws fees")]
+    [InlineData("Store 01/02/2026 #44", "store")]
+    public void NormalizeDescriptionKey_strips_digits_dates_and_refs(string input, string expected)
+    {
+        Assert.Equal(expected, StatementLineExpenseService.NormalizeDescriptionKey(input));
+    }
+
+    [Fact]
+    public void FindDescriptionRule_skips_archived_vendor_or_account()
+    {
+        using var harness = new BankingTestHarness();
+        SeedExpenseTree(harness);
+        harness.Repos.Vendors.Insert(new Vendor { Id = 1, CompanyId = 1, ArchivedAt = DateTime.UtcNow });
+        harness.Repos.StatementDescriptionRules.Insert(new BankStatementDescriptionRule
+        {
+            Id = 1,
+            CompanyId = 1,
+            DescriptionKey = "figma",
+            VendorId = 1,
+            ExpenseAccountId = harness.RequireAccount("50115").Id,
+            CreatedAt = DateTime.UtcNow,
+            LastUsedAt = DateTime.UtcNow
+        });
+        var service = Build(harness, new Mock<IPurchasingService>(MockBehavior.Strict));
+        Assert.Null(service.FindDescriptionRule("Figma"));
+    }
+
     private static StatementLineExpenseService Build(BankingTestHarness harness, Mock<IPurchasingService> purchasing)
     {
         var tenant = new BankingTestHarness.FakeTenant(1);
@@ -487,6 +516,7 @@ public class StatementLineExpenseServiceTests
         return new StatementLineExpenseService(
             harness.Repos.StatementLines,
             harness.Repos.Banks,
+            harness.Repos.Accounts,
             harness.Repos.Vendors,
             harness.Repos.PurchaseInvoices,
             harness.Repos.GlLines,

@@ -33,6 +33,10 @@ public class StatementLineActionPermissionTests
     [InlineData(nameof(BankingController.PayOpenBillFromStatementLine), SystemPermissions.BankingAccountsManage)]
     [InlineData(nameof(BankingController.ApplyOpenInvoiceFromStatementLine), SystemPermissions.SalesReceiptsCreate)]
     [InlineData(nameof(BankingController.ApplyOpenInvoiceFromStatementLine), SystemPermissions.BankingAccountsManage)]
+    [InlineData(nameof(BankingController.BulkRecordExpenseFromStatementLines), SystemPermissions.PurchasesBillsCreate)]
+    [InlineData(nameof(BankingController.BulkRecordExpenseFromStatementLines), SystemPermissions.PurchasesBillsPost)]
+    [InlineData(nameof(BankingController.BulkRecordExpenseFromStatementLines), SystemPermissions.PurchasesPaymentsCreate)]
+    [InlineData(nameof(BankingController.BulkRecordExpenseFromStatementLines), SystemPermissions.BankingAccountsManage)]
     public void Action_declares_required_permission(string methodName, string permission)
     {
         var method = typeof(BankingController).GetMethod(methodName);
@@ -80,6 +84,22 @@ public class StatementLineActionPermissionTests
         Assert.Equal(403, result.StatusCode);
         var problem = Assert.IsType<ProblemDetails>(result.Value);
         Assert.Equal(SystemPermissions.SalesReceiptsCreate, problem.Extensions["requiredPermission"]);
+    }
+
+    [Fact]
+    public async Task BulkRecordExpense_denied_without_bills_create()
+    {
+        var result = await RunPermissionFilter(
+            SystemPermissions.PurchasesBillsCreate,
+            permissions: new HashSet<string>
+            {
+                SystemPermissions.BankingAccountsManage,
+                SystemPermissions.PurchasesBillsPost,
+                SystemPermissions.PurchasesPaymentsCreate
+            });
+        Assert.Equal(403, result.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
+        Assert.Equal(SystemPermissions.PurchasesBillsCreate, problem.Extensions["requiredPermission"]);
     }
 
     private static async Task<ObjectResult> RunPermissionFilter(string required, IReadOnlySet<string> permissions)

@@ -758,7 +758,9 @@ namespace Api.Controllers
         /// <summary>Remembered vendor + category for a bank description (#436 I4).</summary>
         [HttpGet("StatementDescriptionRule")]
         [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesBillsView)]
         public IActionResult StatementDescriptionRule([FromQuery] string? description)
         {
             var rule = _statementExpenses.FindDescriptionRule(description);
@@ -767,9 +769,16 @@ namespace Api.Controllers
 
         [HttpPost("StatementLines/BulkRecordExpense")]
         [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesBillsCreate)]
+        [RequirePermission(SystemPermissions.PurchasesBillsPost)]
+        [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
         public IActionResult BulkRecordExpenseFromStatementLines([FromBody] BulkRecordExpenseFromStatementLinesRequest request)
         {
+            if (request?.NewVendor != null && !string.IsNullOrWhiteSpace(request.NewVendor.Name)
+                && !_tenant.Permissions.Contains(SystemPermissions.PurchasesVendorsManage))
+                return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesVendorsManage);
             try
             {
                 using var tx = BeginWriteTransaction();
