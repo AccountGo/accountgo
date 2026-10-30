@@ -49,9 +49,6 @@ namespace Services.Banking
             "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyyMMdd"
         };
 
-        /// <summary>OFX amounts treat the last <c>.</c> or <c>,</c> as the decimal point only when exactly this many digits follow it.</summary>
-        private const int OfxDecimalFractionDigits = 2;
-
         private static readonly char[] CandidateDelimiters = { ',', ';', '\t' };
 
         public static IReadOnlyList<ParsedStatementRow> Parse(BankStatementSources source, string content, BankStatementColumnMap? map)
@@ -421,34 +418,57 @@ namespace Services.Banking
         }
 
         /// <summary>
-        /// OFX 1.x amounts mix US ("1,234.56") and European ("1.234,56") grouping. The last <c>.</c> or <c>,</c>
-        /// is the decimal point only when exactly <see cref="OfxDecimalFractionDigits"/> digits follow it; every other
-        /// separator is thousands grouping and is stripped. Without a two-digit fractional part, every separator is
-        /// stripped ("1,234" → 1234).
+        /// OFX 1.x amounts mix US and European grouping. Rules:
+        /// <list type="bullet">
+        /// <item>Both <c>.</c> and <c>,</c> present: the last one is the decimal point; the others are grouping.</item>
+        /// <item>Only <c>.</c>: once = decimal; repeated = grouping (strip all).</item>
+        /// <item>Only <c>,</c>: repeated = grouping; once = decimal unless exactly three digits follow (thousands).</item>
+        /// </list>
         /// </summary>
         internal static string? NormalizeOfxNumber(string? raw)
         {
             if (raw == null)
                 return null;
 
+            var firstDot = raw.IndexOf('.');
             var lastDot = raw.LastIndexOf('.');
+            var firstComma = raw.IndexOf(',');
             var lastComma = raw.LastIndexOf(',');
-            var decimalAt = Math.Max(lastDot, lastComma);
-            var hasDecimal = false;
-            if (decimalAt >= 0)
+            var hasDot = firstDot >= 0;
+            var hasComma = firstComma >= 0;
+
+            int? decimalAt = null;
+            if (hasDot && hasComma)
             {
-                var fractionLength = raw.Length - decimalAt - 1;
-                hasDecimal = fractionLength == OfxDecimalFractionDigits;
-                if (hasDecimal)
+                decimalAt = Math.Max(lastDot, lastComma);
+            }
+            else if (hasDot)
+            {
+                if (firstDot == lastDot)
+                    decimalAt = firstDot;
+            }
+            else if (hasComma)
+            {
+                if (firstComma != lastComma)
                 {
-                    for (var i = decimalAt + 1; i < raw.Length; i++)
+                    // Repeated commas are thousands grouping.
+                }
+                else
+                {
+                    var digitsAfter = 0;
+                    var allDigits = true;
+                    for (var i = firstComma + 1; i < raw.Length; i++)
                     {
                         if (!char.IsDigit(raw[i]))
                         {
-                            hasDecimal = false;
+                            allDigits = false;
                             break;
                         }
+                        digitsAfter++;
                     }
+                    // A single comma with exactly three trailing digits is thousands ("1,234"), not a decimal.
+                    if (!(allDigits && digitsAfter == 3))
+                        decimalAt = firstComma;
                 }
             }
 
@@ -458,7 +478,7 @@ namespace Services.Banking
                 var ch = raw[i];
                 if (ch is '.' or ',')
                 {
-                    if (hasDecimal && i == decimalAt)
+                    if (decimalAt == i)
                         cleaned.Append('.');
                     continue;
                 }
