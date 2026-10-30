@@ -8,7 +8,12 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BalanceCheckDialog } from '../components/BalanceCheckDialog';
 import { canShowBalanceCheck } from '../lib/balanceCheck';
 import { useAuth } from '../auth/AuthContext';
-import { useTenantContext } from '../components/Gating';
+import {
+  announceStatementImportUpgrade,
+  shouldShowUpgradeAvailableBadge,
+  useTenantContext,
+} from '../components/Gating';
+import { useCapabilities } from '../lib/entitlements';
 import { localToday } from '../lib/businessDays';
 import type { TenantContextType } from '../types';
 import type { BankAccount, BankRegister as BankRegisterDto } from '../types/banking';
@@ -36,6 +41,7 @@ const BankRegisterPage: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasModule, hasPermission } = useTenantContext();
+  const { canStatementImport, canManageBilling, entitlements } = useCapabilities();
   const hasFinancials = hasModule('financials');
   const canManage = hasPermission('banking.accounts.manage');
   const canCreateTx = hasPermission('banking.transactions.create');
@@ -208,12 +214,26 @@ const BankRegisterPage: React.FC = () => {
                 onClick={() => navigate(`/org/${currentOrg.slug}/banking/${account.id}/reconcile`)}
               />
             )}
-            {hasFinancials && canReconcile && !account.archivedAt && (
+            {canManage && canStatementImport && !account.archivedAt && (
               <HeaderButton
                 label="Import statement"
                 icon={FileUp}
                 variant="secondary"
                 onClick={() => navigate(`/org/${currentOrg.slug}/banking/${account.id}/statement-import`)}
+              />
+            )}
+            {canManage && !canStatementImport && !account.archivedAt && (
+              <HeaderButton
+                label="Import statement"
+                icon={FileUp}
+                variant="secondary"
+                onClick={() =>
+                  announceStatementImportUpgrade({
+                    effectivePlan: entitlements?.effectivePlan ?? entitlements?.plan,
+                    upgradeAvailable: shouldShowUpgradeAvailableBadge(entitlements),
+                    canManageBilling,
+                  })
+                }
               />
             )}
             {canShowBalanceCheck({ hasFinancials, canView: canViewAccounts, archived: !!account.archivedAt }) && (
