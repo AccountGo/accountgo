@@ -194,8 +194,8 @@ public class StatementLineExpenseServiceTests
         var expenseAccountId = harness.RequireAccount("50115").Id;
 
         var purchasing = new Mock<IPurchasingService>(MockBehavior.Strict);
-        purchasing.Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>()))
-            .Callback<PurchaseInvoiceHeader>(b => { b.Id = 1; b.No = "B1"; harness.Repos.PurchaseInvoices.Insert(b); });
+        purchasing.Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()))
+            .Callback<PurchaseInvoiceHeader, bool>((b, _) => { b.Id = 1; b.No = "B1"; harness.Repos.PurchaseInvoices.Insert(b); });
         purchasing.Setup(p => p.ApproveBill(1, It.IsAny<string?>(), It.IsAny<DateTime>()));
         purchasing.Setup(p => p.AddVendor(It.IsAny<Vendor>()))
             .Callback<Vendor>(v => { v.Id = 2; v.CompanyId = 1; harness.Repos.Vendors.Insert(v); });
@@ -244,8 +244,8 @@ public class StatementLineExpenseServiceTests
 
         var saveCount = 0;
         var purchasing = new Mock<IPurchasingService>(MockBehavior.Strict);
-        purchasing.Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>()))
-            .Callback<PurchaseInvoiceHeader>(bill =>
+        purchasing.Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()))
+            .Callback<PurchaseInvoiceHeader, bool>((bill, _) =>
             {
                 saveCount++;
                 bill.Id = saveCount;
