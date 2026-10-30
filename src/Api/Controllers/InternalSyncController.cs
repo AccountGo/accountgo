@@ -101,6 +101,12 @@ namespace Api.Controllers
             if (!EnsureInternalAccess(out var failure))
                 return failure!;
 
+            // The restore clears every table first; only the container's own SQLite copy may ever receive it.
+            if (!_context.Database.IsSqlite())
+            {
+                return Conflict(new { error = "D1 restore applies only to the SQLite provider." });
+            }
+
             if ((request.Statements != null && request.Statements.Count > 0) ||
                 !string.IsNullOrWhiteSpace(request.RawSql))
             {

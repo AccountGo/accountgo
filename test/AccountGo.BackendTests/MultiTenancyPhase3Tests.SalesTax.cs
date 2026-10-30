@@ -316,7 +316,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(0m, (await GetInvoice(saved.Id)).BalanceDue);
         }
 
-        [Theory]
+        [SqliteTheory]
         [InlineData(false)]
         [InlineData(true)]
         public async Task SalesTax_SchemaUpgrade_DefaultsExistingDraftAndIssuedLinesWithoutChangingLedger(bool localUpgrade)

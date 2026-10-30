@@ -30,6 +30,15 @@ namespace Api.Data
             DbContextOptions<ApiDbContext> options,
             ID1SyncContext? d1SyncContext = null,
             ITenantContext? tenantContext = null)
+            : this((DbContextOptions)options, d1SyncContext, tenantContext)
+        {
+        }
+
+        // Provider subclasses (Postgres) that carry their own migrations.
+        protected ApiDbContext(
+            DbContextOptions options,
+            ID1SyncContext? d1SyncContext,
+            ITenantContext? tenantContext)
             : base(options)
         {
             _d1SyncContext = d1SyncContext;
