@@ -69,7 +69,6 @@ namespace Services.Financial
         Account GetAccountByAccountCode(string accountcode);
         Account GetAccount(int id);
         void AddAccount(Account account);
-        JournalEntryHeader CloseAccountingPeriod();
         void SaveAccountClasses(IList<AccountClass> accountClasses);
         void SaveFinancialYear(FinancialYear financialYear);
         void SavePaymentTerm(PaymentTerm paymentTerm);

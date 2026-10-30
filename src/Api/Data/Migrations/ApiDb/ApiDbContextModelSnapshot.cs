@@ -387,6 +387,11 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
+                    b.Property<int>("EntityType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(3);
+
                     b.Property<string>("Currency")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1336,6 +1341,16 @@ namespace Api.Data.Migrations.ApiDb
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ClosedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int?>("ClosingGeneralLedgerHeaderId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("EndDate")

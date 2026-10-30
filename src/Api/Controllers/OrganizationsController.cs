@@ -75,6 +75,7 @@ namespace Api.Controllers
             public DateTime? BooksStartDate { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public TaxRegime? TaxRegime { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public IndustryTemplate? IndustryTemplate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public EntityType? EntityType { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
         }
 
@@ -94,6 +95,7 @@ namespace Api.Controllers
             if (request.FiscalYearPattern is FiscalYearPattern pattern) options.FiscalYearPattern = pattern;
             if (request.TaxRegime is TaxRegime regime) options.TaxRegime = regime;
             if (request.IndustryTemplate is IndustryTemplate industry) options.IndustryTemplate = industry;
+            if (request.EntityType is EntityType entityType) options.EntityType = entityType;
             if (request.InventoryCostingMethod is InventoryCostingMethod costing) options.InventoryCostingMethod = costing;
             return options;
         }
@@ -361,6 +363,7 @@ namespace Api.Controllers
             public DateTime? BooksStartDate { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public TaxRegime? TaxRegime { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public IndustryTemplate? IndustryTemplate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public EntityType? EntityType { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
         }
 
@@ -389,9 +392,13 @@ namespace Api.Controllers
                 BooksStartDate = request.BooksStartDate,
                 TaxRegime = request.TaxRegime,
                 IndustryTemplate = request.IndustryTemplate,
+                EntityType = request.EntityType,
                 InventoryCostingMethod = request.InventoryCostingMethod,
             }, DateTime.UtcNow);
 
+            if (result.ClosedYearsConflict)
+                return Problem(statusCode: 409, title: "Cannot change entity type",
+                    detail: "Reopen closed years before changing the entity type.");
             if (result.Frozen)
                 return Problem(statusCode: 409, title: "Accounting policy is locked",
                     detail: "Reporting framework, basis, fiscal year and books start date cannot change after the first journal entry is posted.");
@@ -508,6 +515,7 @@ namespace Api.Controllers
             booksStartDate = s.BooksStartDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
             taxRegime = s.TaxRegime.ToString(),
             industryTemplate = s.IndustryTemplate.ToString(),
+            entityType = s.EntityType.ToString(),
             inventoryCostingMethod = s.InventoryCostingMethod.ToString(),
             coaTemplateId = s.CoaTemplateId,
             currency = s.Currency,

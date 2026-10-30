@@ -624,6 +624,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureBankStatementColumnMappings(connection);
             EnsureStatementOtherIncomeColumns(connection);
             EnsureBooksLockChange(connection);
+            EnsureEntityTypeAndYearEndClose(connection);
         }
 
         // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
@@ -642,6 +643,28 @@ WHERE ""DisabledModulesJson"" IS NULL
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = BooksLockChangeSql;
+            cmd.ExecuteNonQuery();
+        }
+
+        // D1 0046_entity_type_and_year_end_close.sql (#455 Phase 2b-1)
+        private static void EnsureEntityTypeAndYearEndClose(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "CompanySetting", "EntityType", "INTEGER NOT NULL DEFAULT 3");
+            AddColumnIfMissing(connection, "FinancialYear", "ClosedAt", "TEXT NULL");
+            AddColumnIfMissing(connection, "FinancialYear", "ClosedBy", "TEXT NULL");
+            AddColumnIfMissing(connection, "FinancialYear", "ClosingGeneralLedgerHeaderId", "INTEGER NULL");
+
+            if (!TableExists(connection, "Account") || !TableExists(connection, "Company"))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = EntityTypeYearEndAccount30800Sql;
+            cmd.ExecuteNonQuery();
+            cmd.CommandText = EntityTypeYearEndAccount30810Sql;
+            cmd.ExecuteNonQuery();
+            cmd.CommandText = EntityTypeYearEndAccount30820Sql;
+            cmd.ExecuteNonQuery();
+            cmd.CommandText = EntityTypeYearEndPermanentAccountBackfillSql;
             cmd.ExecuteNonQuery();
         }
 
@@ -1048,6 +1071,48 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""ChangedAt"" TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS ""IX_BooksLockChange_CompanyId"" ON ""BooksLockChange"" (""CompanyId"");";
+
+        private const string EntityTypeYearEndAccount30800Sql = @"
+            INSERT INTO ""Account"" (""CompanyId"", ""AccountCode"", ""AccountName"", ""ParentAccountId"", ""AccountClassId"", ""DrOrCrSide"", ""IsCash"", ""IsContraAccount"")
+            SELECT c.""Id"", '30800', 'Owner''s Drawings', parent.""Id"", cls.""Id"", 1, 0, 0
+            FROM ""Company"" c
+            JOIN ""AccountClass"" cls ON cls.""Name"" = 'Equity'
+            JOIN ""Account"" parent ON parent.""CompanyId"" = c.""Id"" AND parent.""AccountCode"" = '30000'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM ""Account"" a WHERE a.""CompanyId"" = c.""Id"" AND a.""AccountCode"" = '30800'
+            );";
+
+        private const string EntityTypeYearEndAccount30810Sql = @"
+            INSERT INTO ""Account"" (""CompanyId"", ""AccountCode"", ""AccountName"", ""ParentAccountId"", ""AccountClassId"", ""DrOrCrSide"", ""IsCash"", ""IsContraAccount"")
+            SELECT c.""Id"", '30810', 'Dividends Declared', parent.""Id"", cls.""Id"", 1, 0, 0
+            FROM ""Company"" c
+            JOIN ""AccountClass"" cls ON cls.""Name"" = 'Equity'
+            JOIN ""Account"" parent ON parent.""CompanyId"" = c.""Id"" AND parent.""AccountCode"" = '30000'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM ""Account"" a WHERE a.""CompanyId"" = c.""Id"" AND a.""AccountCode"" = '30810'
+            );";
+
+        private const string EntityTypeYearEndAccount30820Sql = @"
+            INSERT INTO ""Account"" (""CompanyId"", ""AccountCode"", ""AccountName"", ""ParentAccountId"", ""AccountClassId"", ""DrOrCrSide"", ""IsCash"", ""IsContraAccount"")
+            SELECT c.""Id"", '30820', 'Prior Period Adjustments', parent.""Id"", cls.""Id"", 2, 0, 0
+            FROM ""Company"" c
+            JOIN ""AccountClass"" cls ON cls.""Name"" = 'Equity'
+            JOIN ""Account"" parent ON parent.""CompanyId"" = c.""Id"" AND parent.""AccountCode"" = '30000'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM ""Account"" a WHERE a.""CompanyId"" = c.""Id"" AND a.""AccountCode"" = '30820'
+            );";
+
+        private const string EntityTypeYearEndPermanentAccountBackfillSql = @"
+            UPDATE ""GeneralLedgerSetting""
+            SET ""PermanentAccountId"" = (
+                SELECT a.""Id"" FROM ""Account"" a
+                WHERE a.""CompanyId"" = ""GeneralLedgerSetting"".""CompanyId"" AND a.""AccountCode"" = '30300'
+            )
+            WHERE ""PermanentAccountId"" IS NULL
+              AND EXISTS (
+                SELECT 1 FROM ""Account"" a
+                WHERE a.""CompanyId"" = ""GeneralLedgerSetting"".""CompanyId"" AND a.""AccountCode"" = '30300'
+            );";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
         {

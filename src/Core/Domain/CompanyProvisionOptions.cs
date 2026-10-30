@@ -15,6 +15,7 @@ namespace Core.Domain
         public DateTime? BooksStartDate { get; set; }
         public TaxRegime TaxRegime { get; set; } = TaxRegime.None;
         public IndustryTemplate IndustryTemplate { get; set; } = IndustryTemplate.Services;
+        public EntityType EntityType { get; set; } = EntityType.SoleProprietor;
         public InventoryCostingMethod InventoryCostingMethod { get; set; } = InventoryCostingMethod.None;
         public string CoaTemplateId { get; set; }
     }

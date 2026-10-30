@@ -209,6 +209,7 @@ namespace Api.Data
                 .HasDefaultValue(new System.DateTime(1970, 1, 1));
             builder.Entity<CompanySetting>().Property(s => s.BooksLockedThrough)
                 .HasColumnType("date");
+            builder.Entity<CompanySetting>().Property(s => s.EntityType).HasDefaultValue(EntityType.Corporation);
             builder.Entity<CompanySetting>().Property(s => s.IndustryTemplate).HasDefaultValue(IndustryTemplate.Services);
             builder.Entity<BooksLockChange>(entity =>
             {

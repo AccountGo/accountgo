@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -42,6 +43,7 @@ namespace Api.Controllers
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly ApiDbContext _db;
         private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
+        private readonly IYearEndCloseService _yearEndCloseService;
 
         public FinancialsController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -50,7 +52,8 @@ namespace Api.Controllers
             Core.Tenancy.ITenantGuard tenantGuard,
             Core.Tenancy.ITenantContext tenantContext,
             ApiDbContext db,
-            Services.Financial.IBooksLockGuard booksLockGuard)
+            Services.Financial.IBooksLockGuard booksLockGuard,
+            IYearEndCloseService yearEndCloseService)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -60,7 +63,14 @@ namespace Api.Controllers
             _tenantContext = tenantContext;
             _db = db;
             _booksLockGuard = booksLockGuard;
+            _yearEndCloseService = yearEndCloseService;
         }
+
+        private string YearEndActor =>
+            GetUserNameFromRequestHeader()
+            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst("sub")?.Value
+            ?? "unknown";
 
         [HttpGet]
         [Route("CashBanks")] // api/Financials/CashBanks
@@ -1368,6 +1378,136 @@ namespace Api.Controllers
             BankName = bank.BankName,
             AccountId = bank.AccountId
         };
+        #endregion
+
+        #region Year-end close (#455 Phase 2b-1)
+
+        [HttpGet]
+        [Route("YearEnd")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsAccountsView)]
+        public IActionResult ListYearEndYears()
+        {
+            var years = _yearEndCloseService.ListYears();
+            return Ok(years.Select(MapYearEndSummary));
+        }
+
+        [HttpGet]
+        [Route("YearEnd/{code}")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsAccountsView)]
+        public IActionResult PreviewYearEnd(string code)
+        {
+            try
+            {
+                var preview = _yearEndCloseService.Preview(code);
+                return Ok(MapYearEndPreview(preview));
+            }
+            catch (YearEndCloseException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        public sealed class YearEndCloseRequest
+        {
+            public bool AcknowledgeWarnings { get; set; }
+        }
+
+        [HttpPost]
+        [Route("YearEnd/{code}/Close")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
+        public IActionResult CloseYearEnd(string code, [FromBody] YearEndCloseRequest request)
+        {
+            try
+            {
+                var preview = _yearEndCloseService.Close(
+                    code,
+                    request?.AcknowledgeWarnings ?? false,
+                    YearEndActor);
+                return Ok(MapYearEndPreview(preview));
+            }
+            catch (YearEndCloseException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        public sealed class YearEndReopenRequest
+        {
+            public string Reason { get; set; }
+        }
+
+        [HttpPost]
+        [Route("YearEnd/{code}/Reopen")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
+        public IActionResult ReopenYearEnd(string code, [FromBody] YearEndReopenRequest request)
+        {
+            try
+            {
+                var preview = _yearEndCloseService.Reopen(
+                    code,
+                    request?.Reason ?? "",
+                    YearEndActor);
+                return Ok(MapYearEndPreview(preview));
+            }
+            catch (YearEndCloseException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private static string FormatYearEndDate(DateTime date) =>
+            date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        private static string? FormatYearEndDateTime(DateTime? value) =>
+            value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        private static object MapYearEndSummary(YearEndYearSummary year) => new
+        {
+            fiscalYearCode = year.FiscalYearCode,
+            startDate = FormatYearEndDate(year.StartDate),
+            endDate = FormatYearEndDate(year.EndDate),
+            status = year.Status,
+            closedAt = FormatYearEndDateTime(year.ClosedAt),
+            closedBy = year.ClosedBy
+        };
+
+        private static object MapYearEndPreview(YearEndPreview preview) => new
+        {
+            fiscalYearCode = preview.FiscalYearCode,
+            startDate = FormatYearEndDate(preview.StartDate),
+            endDate = FormatYearEndDate(preview.EndDate),
+            status = preview.Status,
+            closedAt = FormatYearEndDateTime(preview.ClosedAt),
+            closedBy = preview.ClosedBy,
+            blocking = preview.Blocking.Select(item => new
+            {
+                code = item.Code,
+                message = item.Message,
+                count = item.Count,
+                linkPath = item.LinkPath
+            }),
+            warnings = preview.Warnings.Select(item => new
+            {
+                code = item.Code,
+                message = item.Message,
+                count = item.Count,
+                linkPath = item.LinkPath
+            }),
+            closingLines = preview.ClosingLines.Select(line => new
+            {
+                accountId = line.AccountId,
+                accountCode = line.AccountCode,
+                accountName = line.AccountName,
+                drCr = line.DrCr,
+                amount = line.Amount
+            }),
+            canClose = preview.CanClose
+        };
+
         #endregion
     }
 }

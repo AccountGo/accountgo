@@ -442,17 +442,32 @@ namespace Services.Financial
 
         public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?), AccountingBasis basis = AccountingBasis.Accrual)
         {
+            return TrialBalanceCore(from, to, basis, excludeClosingEntries: false);
+        }
+
+        /// <summary>
+        /// Trial balance used by P&amp;L views: ClosingEntries journals (and their reopen tags) are omitted
+        /// so a closed year's income statement still shows operating activity.
+        /// </summary>
+        private ICollection<TrialBalance> TrialBalanceExcludingClosingEntries(DateTime? from, DateTime? to, AccountingBasis basis) =>
+            TrialBalanceCore(from, to, basis, excludeClosingEntries: true);
+
+        private ICollection<TrialBalance> TrialBalanceCore(DateTime? from, DateTime? to, AccountingBasis basis, bool excludeClosingEntries)
+        {
             if (from.HasValue && to.HasValue && from.Value > to.Value)
                 throw new ArgumentException("The start date must not be after the end date.");
 
             if (basis == AccountingBasis.Cash)
-                return CashBasisTrialBalance(from, to);
+                return CashBasisTrialBalance(from, to, excludeClosingEntries);
 
+            var closingIds = excludeClosingEntries ? ClosingGeneralLedgerHeaderIds() : null;
             var lines = _generalLedgerLineRepository.Table;
             if (from.HasValue)
                 lines = lines.Where(l => l.GeneralLedgerHeader.Date >= from.Value);
             if (to.HasValue)
                 lines = lines.Where(l => l.GeneralLedgerHeader.Date <= to.Value);
+            if (closingIds != null && closingIds.Count > 0)
+                lines = lines.Where(l => !closingIds.Contains(l.GeneralLedgerHeaderId));
 
             return lines
                 .GroupBy(l => new { l.AccountId, l.Account.AccountCode, l.Account.AccountName })
@@ -468,7 +483,17 @@ namespace Services.Financial
                 .ToList();
         }
 
-        private ICollection<TrialBalance> CashBasisTrialBalance(DateTime? from, DateTime? to)
+        private HashSet<int> ClosingGeneralLedgerHeaderIds()
+        {
+            if (_journalEntryRepo?.Table == null)
+                return new HashSet<int>();
+            return _journalEntryRepo.Table
+                .Where(j => j.VoucherType == JournalVoucherTypes.ClosingEntries && j.GeneralLedgerHeaderId != null)
+                .Select(j => j.GeneralLedgerHeaderId!.Value)
+                .ToHashSet();
+        }
+
+        private ICollection<TrialBalance> CashBasisTrialBalance(DateTime? from, DateTime? to, bool excludeClosingEntries = false)
         {
             var accounts = _accountRepo.Table
                 .Select(a => new { a.Id, a.AccountClassId, a.AccountCode, a.AccountName })
@@ -486,7 +511,9 @@ namespace Services.Financial
                 && acc.AccountCode != "10160"
                 && !purchasingTaxAccountIds.Contains(accountId);
 
+            var closingIds = excludeClosingEntries ? ClosingGeneralLedgerHeaderIds() : null;
             var allGlLines = _generalLedgerLineRepository.Table
+                .Where(l => closingIds == null || closingIds.Count == 0 || !closingIds.Contains(l.GeneralLedgerHeaderId))
                 .Select(l => new
                 {
                     l.Id,
@@ -963,7 +990,8 @@ namespace Services.Financial
 
         public ICollection<IncomeStatement> IncomeStatement(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?), AccountingBasis basis = AccountingBasis.Accrual)
         {
-            var balances = TrialBalance(from, to, basis).ToDictionary(a => a.AccountId);
+            // Exclude ClosingEntries so closed-year P&L still shows operating activity.
+            var balances = TrialBalanceExcludingClosingEntries(from, to, basis).ToDictionary(a => a.AccountId);
             return _accountRepo.Table.Where(a => a.AccountClassId == 4 || a.AccountClassId == 5)
                 .Select(a => new { a.Id, a.AccountClassId, a.AccountCode, a.AccountName })
                 .ToList()
@@ -1900,53 +1928,6 @@ namespace Services.Financial
                 statementLine.MatchedGeneralLedgerLineId = null;
             // The repository saves every tracked change, so one Update persists all cleared matches.
             _bankStatementLineRepo.Update(matched[0]);
-        }
-
-        public JournalEntryHeader CloseAccountingPeriod()
-        {
-            /*
-            Example:
-
-            The following example shows the closing entries based on the adjusted trial balance of Company A.
-
-            Note	
-            
-            Date	        Account	                Debit	        Credit
-            1	Jan 31	    Service Revenue	        85,600	
-                            Income Summary		                    85,600
-            2	Jan 31	    Income Summary	        77,364	
-                            Wages Expense		                    38,200
-                            Supplies Expense	                    18,480
-                            Rent Expense		                    12,000
-                            Miscellaneous Expense	                3,470
-                            Electricity Expense		                2,470
-                            Telephone Expense		                1,494
-                            Depreciation Expense	                1,100
-                            Interest Expense		                150
-            3	Jan 31	    Income Summary	        8,236	
-                            Retained Earnings		                8,236
-            4	Jan 31	    Retained Earnings	    5,000	
-                            Dividend		                        5,000
-            
-            Notes
-
-            1. Service revenue account is debited and its balance it credited to income summary account. If a business has other income accounts, for example gain on sale account, then the debit side of the first closing entry will also include the gain on sale account and the income summary account will be credited for the sum of all income accounts.
-            2. Each expense account is credited and the income summary is debited for the sum of the balances of expense accounts. This will reduce the balance in income summary account.
-            3. Income summary account is debited and retained earnings account is credited for the an amount equal to the excess of service revenue over total expenses i.e. the net balance in income summary account after posting the first two closing entries. In this case $85,600 − $77,364 = $8,236. Please note that, if the balance in income summary account is negative at this stage, this closing entry will be opposite i.e. debit to retained earnings and credit to income summary.
-            4. The last closing entry transfers the dividend or withdrawal account balance to the retained earnings account. Since dividend and withdrawal accounts are contra to the retained earnings account, they reduce the balance in the retained earnings.
-            */
-
-            var glSetting = _generalLedgerSettingRepo.Table.FirstOrDefault();
-
-            var journalEntry = new JournalEntryHeader()
-            {
-                Memo = "Closing entries",
-                Date = DateTime.Now,
-                Posted = false,
-                VoucherType = JournalVoucherTypes.ClosingEntries
-            };
-
-            return journalEntry;
         }
 
         public void SaveAccountClasses(IList<AccountClass> accountClasses)
