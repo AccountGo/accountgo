@@ -1,5 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
-import { resolveContainerInstanceType } from "./container-capacity";
+import {
+  CAPACITY_POOL_HEADER,
+  parseCapacityPool,
+  resolvePoolInstanceType,
+  type CapacityPool,
+} from "./container-capacity";
 import { constantTimeEqual } from "./constant-time";
 import {
   BuildMismatchError,
@@ -41,6 +46,12 @@ const CONTAINER_RETRY_BASE_DELAY_MS = 750;
 /** Match V1 sleepAfter = 15m so cold starts do not thrash. */
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const PORT_POLL_INTERVAL_MS = 500;
+/**
+ * One readiness probe. getTcpPort().fetch() has no timeout of its own, and a probe that connects while the app is
+ * still booting can wait forever; the 2026-10-28 rollback (requests hung ~90 s, 0 CPU) matched that. Bound each
+ * attempt so the loop keeps polling and its deadline applies.
+ */
+const PORT_PROBE_TIMEOUT_MS = 3_000;
 
 /**
  * Phase 0 V2 writer: durable_object scheduling policy, instance size at start().
@@ -52,6 +63,8 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
   private readonly host: ContainerHost;
   private initPromise: Promise<void> | null = null;
   private loggedMismatch = false;
+  /** Pool this object serves (from the Worker's pool header); decides the instance size at start(). */
+  private pool: CapacityPool = "free";
 
   /** True only while the running container is the one the last build check passed against. */
   get restored(): boolean {
@@ -117,7 +130,8 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       if (!images?.base) {
         throw new Error("Container image 'base' is not configured for AccountGoApiContainerV2");
       }
-      const instance = resolveContainerInstanceType(this.env.CONTAINER_INSTANCE_TYPE);
+      const instance = resolvePoolInstanceType(this.pool, this.env);
+      console.warn(`[worker-v2] starting ${this.pool} pool container on ${instance}`);
       container.start({
         image: images.base,
         instance,
@@ -143,9 +157,14 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
         }
         const port = container.getTcpPort(CONTAINER_PORT);
         // TCP accept is enough; ASP.NET may not expose Worker /healthz.
-        const probe = await port.fetch(`http://127.0.0.1:${CONTAINER_PORT}/`, {
-          method: "GET",
-        });
+        const probe = await withTimeout(
+          port.fetch(`http://127.0.0.1:${CONTAINER_PORT}/`, {
+            method: "GET",
+            signal: AbortSignal.timeout(PORT_PROBE_TIMEOUT_MS),
+          }),
+          PORT_PROBE_TIMEOUT_MS,
+          `port ${CONTAINER_PORT} probe`
+        );
         // Any HTTP response means the listener is up (including 404).
         void probe.body?.cancel();
         return;
@@ -283,6 +302,8 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
   }
 
   override async fetch(request: Request): Promise<Response> {
+    const pool = parseCapacityPool(request.headers.get(CAPACITY_POOL_HEADER));
+    if (pool) this.pool = pool;
     const url = new URL(request.url);
     const timingEnabled = isServerTimingEnabled(this.env);
     const workerStarted = Date.now();
@@ -378,6 +399,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
 
     const cleanHeaders = new Headers(request.headers);
     cleanHeaders.delete("x-container-name");
+    cleanHeaders.delete(CAPACITY_POOL_HEADER);
     cleanHeaders.delete("x-internal-key");
     cleanHeaders.delete("x-restart-container");
 
@@ -425,4 +447,15 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       );
     }
   }
+}
+
+/** Rejects when <paramref name="promise"/> has not settled within <paramref name="ms"/> (backstop for the abort signal). */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
 }

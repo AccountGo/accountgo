@@ -240,6 +240,16 @@ namespace Core.Entitlements
             return false;
         }
 
+        /// <summary>
+        /// When policy was already resolved for this company in the current request, returns its tier
+        /// (<see cref="CompanyTiers"/>: free, pro or comp) without an extra Company load. Otherwise false.
+        /// </summary>
+        bool TryGetResolvedTier(int companyId, out string tier)
+        {
+            tier = "";
+            return false;
+        }
+
         /// <summary>Checks whether the workspace is entitled to the given feature key (e.g. "mfa").</summary>
         bool HasFeature(int companyId, string feature) => Get(companyId).HasFeature(feature);
 
