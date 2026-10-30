@@ -26,6 +26,8 @@ interface WorkspaceTax {
 
 interface StatementLineExpenseDialogProps {
   line: BankStatementLine;
+  /** Extra money-out lines to record with the same vendor + category (#436 I4). */
+  additionalLineIds?: number[];
   formatCurrency: (n: number) => string;
   initialMode?: Mode;
   onSaved: () => void | Promise<void>;
@@ -35,6 +37,7 @@ interface StatementLineExpenseDialogProps {
 /** Record expense or pay an open bill from an unmatched money-out statement line (#436 I2). */
 export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProps> = ({
   line,
+  additionalLineIds = [],
   formatCurrency,
   initialMode = 'expense',
   onSaved,
@@ -57,6 +60,11 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
   const canCreateVendor = hasPermission('purchases.vendors.manage');
   const titleId = useId();
   const amount = Math.abs(line.amount);
+  const bulkLineIds = useMemo(
+    () => Array.from(new Set([line.id, ...additionalLineIds])),
+    [line.id, additionalLineIds],
+  );
+  const isBulk = bulkLineIds.length > 1;
 
   const [mode, setMode] = useState<Mode>(() => {
     if (initialMode === 'payBill' && canPayOpenBill) return 'payBill';
@@ -86,21 +94,31 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
     void (async () => {
       setLoading(true);
       try {
-        const [catRes, vendorRes, billRes, taxRes] = await Promise.all([
+        const descQ = encodeURIComponent(line.payee || line.memo || '');
+        const [catRes, vendorRes, billRes, taxRes, ruleRes] = await Promise.all([
           authFetch('/api/Banking/StatementExpenseCategories'),
           authFetch('/api/Purchasing/Vendors'),
           authFetch('/api/Purchasing/Bills'),
           authFetch('/api/Tax/Taxes'),
+          authFetch(`/api/Banking/StatementDescriptionRule?description=${descQ}`),
         ]);
         if (cancelled) return;
         if (catRes.ok) setCategories((await catRes.json()) as StatementExpenseCategories);
+        let ruleVendorId: number | null = null;
+        let ruleAccountId: number | null = null;
+        if (ruleRes.status === 200) {
+          const rule = await ruleRes.json();
+          if (rule?.vendorId) ruleVendorId = Number(rule.vendorId);
+          if (rule?.expenseAccountId) ruleAccountId = Number(rule.expenseAccountId);
+        }
         if (vendorRes.ok) {
           const list = (await vendorRes.json()) as Vendor[];
           setVendors(list);
-          const matched = matchVendorIdByPayee(line.payee || line.memo, list);
+          const matched = ruleVendorId ?? matchVendorIdByPayee(line.payee || line.memo, list);
           if (matched != null) setVendorChoice(String(matched));
           else if (createVendorValue) setVendorChoice(createVendorValue);
         }
+        if (ruleAccountId != null) setExpenseAccountId(String(ruleAccountId));
         if (billRes.ok) {
           const list = (await billRes.json()) as Bill[];
           const open = list.filter((b) => !b.voidedAt && b.approved && b.balanceDue > 0.005);
@@ -145,20 +163,41 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
           taxId: taxId ? Number(taxId) : null,
           description: line.payee || line.memo || null,
           memo: memo.trim() || null,
+          rememberRule: true,
         };
         if (vendorChoice.startsWith('__new__:')) {
           body.newVendor = { name: vendorChoice.slice('__new__:'.length) };
         } else {
           body.vendorId = Number(vendorChoice);
         }
-        const res = await authFetch(`/api/Banking/StatementLines/${line.id}/RecordExpense`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => null);
-          throw new Error(errBody?.message || 'Could not record the expense.');
+        if (isBulk) {
+          const res = await authFetch('/api/Banking/StatementLines/BulkRecordExpense', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              lineIds: bulkLineIds,
+              expenseAccountId: body.expenseAccountId,
+              taxId: body.taxId,
+              memo: body.memo,
+              rememberRule: true,
+              vendorId: body.vendorId ?? null,
+              newVendor: body.newVendor ?? null,
+            }),
+          });
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => null);
+            throw new Error(errBody?.message || 'Could not record the expenses.');
+          }
+        } else {
+          const res = await authFetch(`/api/Banking/StatementLines/${line.id}/RecordExpense`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => null);
+            throw new Error(errBody?.message || 'Could not record the expense.');
+          }
         }
       } else {
         if (!billId) throw new Error('Pick an open bill to pay.');
@@ -199,7 +238,11 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
         <div className="flex items-center gap-2">
           <Receipt className="w-5 h-5 text-[var(--brand-primary)]" />
           <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">
-            {mode === 'expense' ? 'Record expense' : 'Pay open bill'}
+            {mode === 'expense'
+              ? isBulk
+                ? `Record expense (${bulkLineIds.length} lines)`
+                : 'Record expense'
+              : 'Pay open bill'}
           </h3>
         </div>
         <button
@@ -219,30 +262,32 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
           <span className="font-mono font-semibold text-[var(--text-main)]">{formatCurrency(line.amount)}</span>
         </p>
 
-        <div className="flex gap-1 p-1 rounded-xl bg-[var(--bg-subtle)]">
-          {(
-            [
-              canRecordExpense ? (['expense', 'Record expense'] as const) : null,
-              canPayOpenBill ? (['payBill', 'Pay open bill'] as const) : null,
-            ] as Array<readonly [Mode, string] | null>
-          )
-            .filter((entry): entry is readonly [Mode, string] => entry != null)
-            .map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              disabled={busy}
-              onClick={() => setMode(value)}
-              className={`flex-1 h-9 rounded-lg text-xs font-semibold ${
-                mode === value
-                  ? 'bg-[var(--brand-primary)] text-white'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {!isBulk && (
+          <div className="flex gap-1 p-1 rounded-xl bg-[var(--bg-subtle)]">
+            {(
+              [
+                canRecordExpense ? (['expense', 'Record expense'] as const) : null,
+                canPayOpenBill ? (['payBill', 'Pay open bill'] as const) : null,
+              ] as Array<readonly [Mode, string] | null>
+            )
+              .filter((entry): entry is readonly [Mode, string] => entry != null)
+              .map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                disabled={busy}
+                onClick={() => setMode(value)}
+                className={`flex-1 h-9 rounded-lg text-xs font-semibold ${
+                  mode === value
+                    ? 'bg-[var(--brand-primary)] text-white'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {error && (
           <div role="alert" className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">

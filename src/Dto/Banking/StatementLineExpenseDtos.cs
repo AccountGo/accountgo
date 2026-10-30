@@ -40,6 +40,8 @@ namespace Dto.Banking
         public string? VendorInvoiceNo { get; set; }
         public string? PaymentMethod { get; set; }
         public string? Memo { get; set; }
+        /// <summary>When true (default), upsert a description → vendor + category rule (#436 I4).</summary>
+        public bool RememberRule { get; set; } = true;
     }
 
     /// <summary>Apply a money-out statement line as payment on an open bill (#436 I2).</summary>
