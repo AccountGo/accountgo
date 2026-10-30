@@ -620,7 +620,19 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureBankReconciliationSchema(connection);
             EnsureBankStatementSchema(connection);
             EnsureBankStatementDescriptionRules(connection);
+            EnsureBankStatementColumnMappings(connection);
             EnsureStatementOtherIncomeColumns(connection);
+        }
+
+        // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
+        private static void EnsureBankStatementColumnMappings(DbConnection connection)
+        {
+            if (!TableExists(connection, "Bank"))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = BankStatementColumnMappingSql;
+            cmd.ExecuteNonQuery();
         }
 
         // D1 0042_statement_other_income.sql (#436 I5)
@@ -999,6 +1011,21 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementDescriptionRule_CompanyId"" ON ""BankStatementDescriptionRule"" (""CompanyId"");
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementDescriptionRule_VendorId"" ON ""BankStatementDescriptionRule"" (""VendorId"");
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementDescriptionRule_ExpenseAccountId"" ON ""BankStatementDescriptionRule"" (""ExpenseAccountId"");";
+
+        private const string BankStatementColumnMappingSql = @"
+            CREATE TABLE IF NOT EXISTS ""BankStatementColumnMapping"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BankStatementColumnMapping"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""BankId"" INTEGER NOT NULL,
+                ""HeaderSignature"" TEXT NOT NULL,
+                ""ColumnMapJson"" TEXT NOT NULL,
+                ""UpdatedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_BankStatementColumnMapping_Bank_BankId"" FOREIGN KEY (""BankId"") REFERENCES ""Bank"" (""Id"")
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankStatementColumnMapping_Company_Bank_Header""
+                ON ""BankStatementColumnMapping"" (""CompanyId"", ""BankId"", ""HeaderSignature"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementColumnMapping_CompanyId"" ON ""BankStatementColumnMapping"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementColumnMapping_BankId"" ON ""BankStatementColumnMapping"" (""BankId"");";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
         {
