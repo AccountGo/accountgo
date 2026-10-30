@@ -38,5 +38,34 @@ namespace AccountGo.BackendTests
             using (scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
                 Assert.Equal(3, scope.ServiceProvider.GetRequiredService<ApiDbContext>().EntitlementUsages.Count());
         }
+
+        [Fact]
+        public async Task CapacityHeader_FollowsTheWorkspaceTier_AndIsAbsentWithoutAWorkspace()
+        {
+            // The hosted Worker routes a workspace to the paid or free container pool by this header.
+            var free = await Send(HttpMethod.Get, "/api/entitlements");
+            Assert.True(free.IsSuccessStatusCode);
+            Assert.Equal("free", Assert.Single(free.Headers.GetValues(Api.Middleware.EntitlementsVersionMiddleware.CapacityHeaderName)));
+
+            WithDb(db =>
+            {
+                db.Companies.Single(c => c.Id == _companyId).Tier = CompanyTiers.Comp;
+                db.SaveChanges();
+            });
+            var comp = await Send(HttpMethod.Get, "/api/entitlements");
+            Assert.Equal("paid", Assert.Single(comp.Headers.GetValues(Api.Middleware.EntitlementsVersionMiddleware.CapacityHeaderName)));
+
+            var noWorkspace = await Send(HttpMethod.Get, "/api/organizations", scoped: false);
+            Assert.True(noWorkspace.IsSuccessStatusCode);
+            Assert.False(noWorkspace.Headers.Contains(Api.Middleware.EntitlementsVersionMiddleware.CapacityHeaderName));
+        }
+
+        [Theory]
+        [InlineData("pro", "paid")]
+        [InlineData("comp", "paid")]
+        [InlineData("free", "free")]
+        [InlineData("", "free")]
+        public void CapacityOf_MapsTierToPool(string tier, string pool) =>
+            Assert.Equal(pool, Api.Middleware.EntitlementsVersionMiddleware.CapacityOf(tier));
     }
 }

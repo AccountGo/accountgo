@@ -112,6 +112,18 @@ namespace Services.Entitlements
             return false;
         }
 
+        public bool TryGetResolvedTier(int companyId, out string tier)
+        {
+            if (_policyMemo.TryGetValue(companyId, out var memo))
+            {
+                tier = memo.Tier;
+                return true;
+            }
+
+            tier = "";
+            return false;
+        }
+
         public EntitlementDecision Evaluate(int companyId, EntitlementAction action) => action switch
         {
             EntitlementAction.Module module => EvaluateModule(companyId, module),
