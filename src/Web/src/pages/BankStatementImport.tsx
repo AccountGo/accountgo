@@ -29,6 +29,7 @@ import type {
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
 const inputClass =
   'w-full h-10 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-sm text-[var(--text-main)]';
+const LIST_PAGE_SIZE = 100;
 
 type ColumnKey =
   | 'dateColumn'
@@ -63,6 +64,7 @@ const BankStatementImportPage: React.FC = () => {
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [list, setList] = useState<BankStatementLineList | null>(null);
   const [status, setStatus] = useState<StatementLineStatus>('unmatched');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,8 +90,12 @@ const BankStatementImportPage: React.FC = () => {
   );
 
   const loadLines = useCallback(
-    async (nextStatus: StatementLineStatus) => {
-      const q = new URLSearchParams({ status: nextStatus, page: '1', pageSize: '500' });
+    async (nextStatus: StatementLineStatus, nextPage: number) => {
+      const q = new URLSearchParams({
+        status: nextStatus,
+        page: String(nextPage),
+        pageSize: String(LIST_PAGE_SIZE),
+      });
       const res = await authFetch(`/api/Banking/Accounts/${id}/StatementLines?${q}`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -108,17 +114,25 @@ const BankStatementImportPage: React.FC = () => {
       const accRes = await authFetch(`/api/Banking/Accounts/${id}`);
       if (!accRes.ok) throw new Error('Bank account not found.');
       setAccount(await accRes.json());
-      await loadLines(status);
+      await loadLines(status, page);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not load.');
     } finally {
       setLoading(false);
     }
-  }, [authFetch, id, loadLines, status]);
+  }, [authFetch, id, loadLines, status, page]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const totalCount = list?.totalCount ?? 0;
+  const pageSize = list?.pageSize ?? LIST_PAGE_SIZE;
+  const currentPage = list?.page ?? page;
+  const showingFrom = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const showingTo = Math.min(currentPage * pageSize, totalCount);
+  const canPrev = currentPage > 1;
+  const canNext = currentPage * pageSize < totalCount;
 
   const headers = useMemo(() => {
     if (source !== 1 || sampleRows.length === 0) return [];
@@ -206,7 +220,8 @@ const BankStatementImportPage: React.FC = () => {
       setFileName('');
       setSource(null);
       setSampleRows([]);
-      await loadLines(status);
+      setPage(1);
+      await loadLines(status, 1);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not import the file.');
     } finally {
@@ -228,7 +243,7 @@ const BankStatementImportPage: React.FC = () => {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || `Could not ${action.toLowerCase()} the line.`);
       }
-      await loadLines(status);
+      await loadLines(status, page);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Action failed.');
     } finally {
@@ -436,7 +451,10 @@ const BankStatementImportPage: React.FC = () => {
               <button
                 key={value}
                 type="button"
-                onClick={() => setStatus(value)}
+                onClick={() => {
+                  setStatus(value);
+                  setPage(1);
+                }}
                 className={`h-8 px-3 rounded-lg text-xs font-semibold capitalize ${
                   status === value
                     ? 'bg-[var(--brand-primary)] text-white'
@@ -448,6 +466,34 @@ const BankStatementImportPage: React.FC = () => {
             ))}
           </div>
         </div>
+
+        {list && (
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--text-secondary)]">
+            <p role="status">
+              {totalCount === 0
+                ? 'Showing 0 of 0'
+                : `Showing ${showingFrom}–${showingTo} of ${totalCount}`}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={!canPrev || busy || loading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)] disabled:opacity-40 hover:bg-[var(--bg-surface-hover)]"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={!canNext || busy || loading}
+                onClick={() => setPage((p) => p + 1)}
+                className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)] disabled:opacity-40 hover:bg-[var(--bg-surface-hover)]"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-x-auto shadow-sm">
           <table className="w-full text-sm min-w-[720px]">
@@ -547,7 +593,7 @@ const BankStatementImportPage: React.FC = () => {
           onClose={() => setCreateFor(null)}
           onSaved={async () => {
             setCreateFor(null);
-            await loadLines(status);
+            await loadLines(status, page);
           }}
         />
       )}
