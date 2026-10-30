@@ -298,100 +298,7 @@ namespace AccountGo.BackendTests
         }
 
         [SqliteFact]
-        public async Task StockMigration_BackfillsExistingWorkspacesAndCanBeReappliedSafely()
-        {
-            var itemId = CreateStockItem("Legacy stock", 7.5m);
-            WithDb(db =>
-            {
-                var item = db.Items.Single(i => i.Id == itemId);
-                var measurementId = item.PurchaseMeasurementId.Value;
-                db.InventoryControlJournals.AddRange(
-                    new InventoryControlJournal { ItemId = item.Id, MeasurementId = measurementId, DocumentType = DocumentTypes.PurchaseInvoice, Date = DateTime.UtcNow.Date, INQty = 10m },
-                    new InventoryControlJournal { ItemId = item.Id, MeasurementId = measurementId, DocumentType = DocumentTypes.SalesInvoice, Date = DateTime.UtcNow.Date, OUTQty = 2m, IsReverse = true },
-                    new InventoryControlJournal { ItemId = item.Id, MeasurementId = measurementId, DocumentType = DocumentTypes.PurchaseInvoice, Date = DateTime.UtcNow.Date, INQty = 3m, IsReverse = true },
-                    new InventoryControlJournal { ItemId = item.Id, MeasurementId = measurementId, DocumentType = DocumentTypes.SalesInvoice, Date = DateTime.UtcNow.Date, OUTQty = 1m });
-                db.SaveChanges();
-            });
-
-            var secondWorkspace = await Send(HttpMethod.Post, "/api/organizations",
-                new { name = "Stock Migration Two", slug = "stock-migration-two" }, scoped: false);
-            Assert.Equal(HttpStatusCode.Created, secondWorkspace.StatusCode);
-
-            var secondCompanyId = 0;
-            WithDb(db => secondCompanyId = db.Companies.Single(c => c.Slug == "stock-migration-two").Id);
-            using (var scope = _factory.Services.CreateScope())
-            {
-                var inventory = scope.ServiceProvider.GetRequiredService<IInventoryService>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>()
-                    .Impersonate(secondCompanyId, "stock-migration-two", CompanyMemberRole.Owner))
-                    Assert.Null(inventory.GetItemById(itemId));
-            }
-
-            using var source = new SqliteConnection("Data Source=" + _path);
-            using var replica = new SqliteConnection("Data Source=:memory:");
-            source.Open();
-            replica.Open();
-            source.BackupDatabase(replica);
-            using var command = replica.CreateCommand();
-            command.CommandText = @"
-                UPDATE ""Item"" SET ""InventoryAdjustmentAccountId"" = NULL
-                WHERE ""InventoryAdjustmentAccountId"" IN (SELECT ""Id"" FROM ""Account"" WHERE ""AccountCode"" IN ('30700', '50310'));
-                UPDATE ""ItemCategory"" SET ""AdjustmentAccountId"" = NULL
-                WHERE ""AdjustmentAccountId"" IN (SELECT ""Id"" FROM ""Account"" WHERE ""AccountCode"" IN ('30700', '50310'));
-                DELETE FROM ""Account"" WHERE ""AccountCode"" IN ('30700', '50310');
-                DELETE FROM ""SequenceNumber"" WHERE ""SequenceNumberType"" = 16;
-                DROP TABLE ""InventoryAdjustment"";
-                ALTER TABLE ""Item"" DROP COLUMN ""QuantityOnHand"";
-                ALTER TABLE ""Item"" DROP COLUMN ""AverageCost"";
-                ALTER TABLE ""Item"" DROP COLUMN ""StockValue"";
-                ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""DocumentId"";
-                ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""UnitCost"";
-                ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""Memo"";";
-            command.ExecuteNonQuery();
-
-            SQLitePCL.raw.sqlite3_limit(replica.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-            var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0014_stock.sql"));
-            ApplyStockMigration(command, migration, skipColumnAdds: false);
-            ApplyStockMigration(command, migration, skipColumnAdds: true);
-            var valueMigration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0016_stock_value.sql"));
-            ApplyStockMigration(command, valueMigration, skipColumnAdds: false);
-            ApplyStockMigration(command, valueMigration, skipColumnAdds: true);
-
-            Assert.True(ColumnExists(command, "Item", "QuantityOnHand"));
-            Assert.True(ColumnExists(command, "Item", "AverageCost"));
-            Assert.True(ColumnExists(command, "Item", "StockValue"));
-            Assert.True(ColumnExists(command, "InventoryControlJournal", "DocumentId"));
-            Assert.True(TableExists(command, "InventoryAdjustment"));
-            command.CommandText = @"SELECT ""QuantityOnHand"", ""AverageCost"", ""StockValue"" FROM ""Item"" WHERE ""Id"" = " + itemId;
-            using (var reader = command.ExecuteReader())
-            {
-                Assert.True(reader.Read());
-                Assert.Equal(10m, reader.GetDecimal(0));
-                Assert.Equal(7.5m, reader.GetDecimal(1));
-                Assert.Equal(75m, reader.GetDecimal(2));
-            }
-
-            command.CommandText = @"SELECT ""Id"" FROM ""Company"" ORDER BY ""Id""";
-            var companyIds = new List<int>();
-            using (var reader = command.ExecuteReader())
-                while (reader.Read()) companyIds.Add(reader.GetInt32(0));
-
-            foreach (var companyId in companyIds)
-            {
-                foreach (var code in new[] { "30700", "50310" })
-                {
-                    command.CommandText = $@"SELECT COUNT(*) FROM ""Account"" WHERE ""CompanyId"" = {companyId} AND ""AccountCode"" = '{code}'";
-                    Assert.Equal(1L, command.ExecuteScalar());
-                }
-                command.CommandText = $@"SELECT COUNT(*) FROM ""SequenceNumber"" WHERE ""CompanyId"" = {companyId} AND ""SequenceNumberType"" = 16";
-                Assert.Equal(1L, command.ExecuteScalar());
-            }
-        }
-
-        [SqliteTheory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void StockValueMigration_BackfillsMovementCentsInsteadOfRoundedAverage(bool localUpgrade)
+        public void StockValueMigration_BackfillsMovementCentsInsteadOfRoundedAverage()
         {
             var itemId = CreateStockItem("Valued migration stock");
             AdjustStock(itemId, 10000m, 1m, "Count", "First receipt");
@@ -405,17 +312,8 @@ namespace AccountGo.BackendTests
             using var command = replica.CreateCommand();
             command.CommandText = @"ALTER TABLE ""Item"" DROP COLUMN ""StockValue"";";
             command.ExecuteNonQuery();
-            if (localUpgrade)
-            {
-                Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(replica);
-                Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(replica);
-            }
-            else
-            {
-                var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0016_stock_value.sql"));
-                ApplyStockMigration(command, migration, skipColumnAdds: false);
-                ApplyStockMigration(command, migration, skipColumnAdds: true);
-            }
+            Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(replica);
+            Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(replica);
             command.CommandText = @"SELECT ""StockValue"" FROM ""Item"" WHERE ""Id"" = " + itemId;
             Assert.Equal(30200m, Convert.ToDecimal(command.ExecuteScalar()));
         }
@@ -564,20 +462,5 @@ namespace AccountGo.BackendTests
             return Convert.ToInt32(command.ExecuteScalar()) == 1;
         }
 
-        private static void ApplyStockMigration(SqliteCommand command, string migration, bool skipColumnAdds)
-        {
-            var sqlStatements = string.Join("\n", migration.Split('\n')
-                .Where(line => !line.TrimStart().StartsWith("--", StringComparison.Ordinal)))
-                .Split(';');
-            foreach (var statement in sqlStatements)
-            {
-                var sql = statement.Trim();
-                if (sql.Length == 0 || (skipColumnAdds && sql.StartsWith("ALTER TABLE", StringComparison.OrdinalIgnoreCase)))
-                    continue;
-                command.Parameters.Clear();
-                command.CommandText = sql;
-                command.ExecuteNonQuery();
-            }
-        }
     }
 }

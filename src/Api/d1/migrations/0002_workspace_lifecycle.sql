@@ -1,4 +1,0 @@
-ALTER TABLE "Company" ADD COLUMN "DeletedAt" TEXT NULL;
-ALTER TABLE "CompanySetting" ADD COLUMN "Currency" TEXT NOT NULL DEFAULT 'PHP';
-ALTER TABLE "CompanyInvitation" ADD COLUMN "ResendWindowStart" TEXT NULL;
-ALTER TABLE "CompanyInvitation" ADD COLUMN "ResendCount" INTEGER NOT NULL DEFAULT 0;

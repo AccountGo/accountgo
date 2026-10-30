@@ -581,7 +581,7 @@ namespace Api.Controllers
                 .Distinct()
                 .ToList();
 
-            // Saved in foreign-key order: D1 replays the statements in order and enforces the keys.
+            // Saved in foreign-key order.
             using var tx = _db.Database.BeginTransaction();
             _db.RemoveRange(_db.Set<VendorContact>().Where(vc => vc.VendorId == id));
             vendor.BillToContactId = null;
@@ -993,7 +993,7 @@ namespace Api.Controllers
             if (!bill.IsDraft)
                 return BadRequest(new { message = "Only a draft bill can be deleted. Void an approved bill instead." });
 
-            // Lines first, then the bill: D1 replays the statements in order and enforces foreign keys.
+            // Lines first, then the bill (foreign-key order).
             using var tx = _db.Database.BeginTransaction();
             _db.PurchaseInvoiceLines.RemoveRange(bill.PurchaseInvoiceLines);
             _db.SaveChanges();

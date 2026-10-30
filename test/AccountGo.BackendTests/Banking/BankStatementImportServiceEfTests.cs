@@ -131,34 +131,6 @@ public class BankStatementImportServiceEfTests : IDisposable
         }
     }
 
-    [Fact]
-    public void D1_0039_RunsUnderCompoundSelectLimit_AndEnforcesFilteredUniqueIndex()
-    {
-        using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
-        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-        Execute(connection, @"CREATE TABLE ""Bank"" (""Id"" INTEGER PRIMARY KEY, ""CompanyId"" INTEGER NOT NULL);");
-        Execute(connection, @"CREATE TABLE ""GeneralLedgerLine"" (""Id"" INTEGER PRIMARY KEY, ""CompanyId"" INTEGER NOT NULL);");
-
-        var script = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0039_bank_statement_lines.sql"));
-        foreach (var line in script.Split('\n'))
-        {
-            var trimmed = line.Trim();
-            if (trimmed.Length == 0 || trimmed.StartsWith("--", StringComparison.Ordinal))
-                continue;
-            Assert.EndsWith(";", trimmed);
-            Execute(connection, trimmed);
-        }
-
-        Execute(connection, @"INSERT INTO ""Bank"" (""Id"", ""CompanyId"") VALUES (1, 1);");
-        Execute(connection, @"INSERT INTO ""BankStatementImport"" (""CompanyId"", ""BankId"", ""Source"", ""ImportedAt"") VALUES (1, 1, 1, '2026-10-30');");
-        const string insert = @"INSERT INTO ""BankStatementLine"" (""CompanyId"", ""BankId"", ""BankStatementImportId"", ""Source"", ""ExternalId"", ""PostedDate"", ""Amount"", ""CreatedAt"") VALUES (1, 1, 1, 1, {0}, '2026-10-01', 5, '2026-10-30');";
-        Execute(connection, string.Format(insert, "NULL"));
-        Execute(connection, string.Format(insert, "NULL"));
-        Execute(connection, string.Format(insert, "'A'"));
-        Assert.Throws<SqliteException>(() => Execute(connection, string.Format(insert, "'A'")));
-    }
-
     private static BankStatementImportRequest Csv(string body) => new()
     {
         Source = (int)BankStatementSources.Csv,
