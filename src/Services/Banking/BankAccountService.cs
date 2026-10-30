@@ -41,6 +41,7 @@ namespace Services.Banking
         private readonly IFinancialService _financial;
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
+        private readonly IBooksLockGuard _booksLockGuard;
 
         public BankAccountService(
             IRepository<Bank> banks,
@@ -62,7 +63,8 @@ namespace Services.Banking
             IRepository<Party> parties,
             IFinancialService financial,
             IEntitlementService entitlements,
-            ITenantContext tenant)
+            ITenantContext tenant,
+            IBooksLockGuard booksLockGuard = null!)
         {
             _banks = banks;
             _bankTransactions = bankTransactions;
@@ -78,6 +80,7 @@ namespace Services.Banking
             _vendorPayments = vendorPayments;
             _purchaseInvoices = purchaseInvoices;
             _journals = journals;
+            _booksLockGuard = booksLockGuard;
             _customers = customers;
             _vendors = vendors;
             _parties = parties;

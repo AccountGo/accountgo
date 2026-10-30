@@ -14,6 +14,7 @@ using Dto.Banking;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Services.Banking;
+using Services.Financial;
 
 namespace Api.Controllers
 {
@@ -31,6 +32,7 @@ namespace Api.Controllers
         private readonly IStatementIncomeRecorder _statementIncome;
         private readonly ITenantContext _tenant;
         private readonly IEntitlementService _entitlements;
+        private readonly IBooksLockGuard _booksLockGuard;
         private readonly ApiDbContext _db;
 
         public BankingController(
@@ -43,6 +45,7 @@ namespace Api.Controllers
             IStatementIncomeRecorder statementIncome,
             ITenantContext tenant,
             IEntitlementService entitlements,
+            IBooksLockGuard booksLockGuard,
             ApiDbContext db)
         {
             _banks = banks;
@@ -54,6 +57,7 @@ namespace Api.Controllers
             _statementIncome = statementIncome;
             _tenant = tenant;
             _entitlements = entitlements;
+            _booksLockGuard = booksLockGuard;
             _db = db;
         }
 
@@ -707,6 +711,8 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult MatchStatementLine(int id, [FromBody] MatchBankStatementLineRequest? request)
         {
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -729,6 +735,8 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult UnmatchStatementLine(int id)
         {
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -754,6 +762,8 @@ namespace Api.Controllers
         {
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -806,6 +816,8 @@ namespace Api.Controllers
                 return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesVendorsManage);
             if (RefuseBeforeBooksStart(request?.LineIds?.ToArray() ?? Array.Empty<int>()) is { } refused)
                 return refused;
+            if (RefuseIfBooksLocked(request?.LineIds?.ToArray() ?? Array.Empty<int>()) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -837,6 +849,8 @@ namespace Api.Controllers
                 return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesVendorsManage);
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -863,6 +877,8 @@ namespace Api.Controllers
         {
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -899,6 +915,8 @@ namespace Api.Controllers
         {
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -925,6 +943,8 @@ namespace Api.Controllers
         {
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -947,6 +967,8 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult ExcludeStatementLine(int id, [FromBody] ExcludeBankStatementLineRequest request)
         {
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -991,6 +1013,8 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult IncludeStatementLine(int id)
         {
+            if (RefuseIfBooksLocked(id) is { } locked)
+                return locked;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -1079,6 +1103,32 @@ namespace Api.Controllers
             return earliest.HasValue
                 ? BadRequest(new { message = new Core.Domain.BooksStartViolationException(earliest.Value, booksStart.Value).Message })
                 : null;
+        }
+
+        /// <summary>
+        /// A 400 when a statement line is dated on or before the books lock. Match/unmatch/exclude and record
+        /// actions are all refused for locked lines.
+        /// </summary>
+        private IActionResult? RefuseIfBooksLocked(params int[] lineIds)
+        {
+            if (lineIds == null || lineIds.Length == 0)
+                return null;
+            try
+            {
+                foreach (var posted in _db.BankStatementLines
+                    .Where(l => lineIds.Contains(l.Id))
+                    .Select(l => l.PostedDate)
+                    .ToList())
+                {
+                    _booksLockGuard.EnsureDateAllowed(posted);
+                }
+            }
+            catch (Core.Domain.BooksLockedException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
+            return null;
         }
     }
 }

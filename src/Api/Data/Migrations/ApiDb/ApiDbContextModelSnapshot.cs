@@ -368,6 +368,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("date")
                         .HasDefaultValue(new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
 
+                    b.Property<DateTime?>("BooksLockedThrough")
+                        .HasColumnType("date");
+
                     b.Property<string>("BusinessEmail")
                         .HasColumnType("nvarchar(max)");
 
@@ -1211,6 +1214,42 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique();
 
                     b.ToTable("BankStatementColumnMapping");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BooksLockChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("NewLockedThrough")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("PreviousLockedThrough")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("BooksLockChange");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>

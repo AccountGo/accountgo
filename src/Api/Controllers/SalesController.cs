@@ -33,6 +33,7 @@ namespace Api.Controllers
         private readonly Api.Data.ApiDbContext _db;
         private readonly Api.Service.SalesInvoicePresentation _invoicePresentation;
         private readonly IConfiguration _configuration;
+        private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
@@ -47,7 +48,8 @@ namespace Api.Controllers
             Core.Tenancy.ITenantGuard tenantGuard,
             Api.Data.ApiDbContext db,
             Api.Service.SalesInvoicePresentation invoicePresentation,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            Services.Financial.IBooksLockGuard booksLockGuard)
         {
             _adminService = adminService;
             _salesService = salesService;
@@ -63,6 +65,20 @@ namespace Api.Controllers
             _db = db;
             _invoicePresentation = invoicePresentation;
             _configuration = configuration;
+            _booksLockGuard = booksLockGuard;
+        }
+
+        private IActionResult? RefuseIfBooksLocked(DateTime date)
+        {
+            try
+            {
+                _booksLockGuard.EnsureDateAllowed(date);
+                return null;
+            }
+            catch (Core.Domain.BooksLockedException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost]
@@ -1657,6 +1673,18 @@ namespace Api.Controllers
 
             try
             {
+                if (RefuseIfBooksLocked(salesInvoiceDto.InvoiceDate) is { } locked)
+                    return locked;
+                if (salesInvoiceDto.Id > 0)
+                {
+                    var existingDate = _db.SalesInvoiceHeaders
+                        .Where(i => i.Id == salesInvoiceDto.Id)
+                        .Select(i => (DateTime?)i.Date)
+                        .FirstOrDefault();
+                    if (existingDate.HasValue && RefuseIfBooksLocked(existingDate.Value) is { } existingLocked)
+                        return existingLocked;
+                }
+
                 if (!ModelState.IsValid)
                 {
                     // Collect per-error messages; do not index Errors by ModelState.ErrorCount (ArgumentOutOfRange).
@@ -2017,6 +2045,8 @@ namespace Api.Controllers
         public IActionResult CreateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             EnsureSalesInvoiceReferencesOwned(salesInvoiceDto);
+            if (RefuseIfBooksLocked(salesInvoiceDto.InvoiceDate) is { } locked)
+                return locked;
             if (!string.IsNullOrEmpty(salesInvoiceDto.Status) && !string.Equals(salesInvoiceDto.Status, "Draft", StringComparison.OrdinalIgnoreCase))
             {
                 return BadRequest(new { message = "New invoices must be created as Draft. Issue the invoice after creation." });
@@ -2045,6 +2075,14 @@ namespace Api.Controllers
         public IActionResult UpdateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             EnsureSalesInvoiceReferencesOwned(salesInvoiceDto);
+            if (RefuseIfBooksLocked(salesInvoiceDto.InvoiceDate) is { } locked)
+                return locked;
+            var existingDate = _db.SalesInvoiceHeaders
+                .Where(i => i.Id == salesInvoiceDto.Id)
+                .Select(i => (DateTime?)i.Date)
+                .FirstOrDefault();
+            if (existingDate.HasValue && RefuseIfBooksLocked(existingDate.Value) is { } existingLocked)
+                return existingLocked;
             Core.Domain.Error.Result<Dto.Sales.SalesInvoice> result;
             try
             {
@@ -2093,6 +2131,13 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public async Task<IActionResult> DeleteSalesInvoice(int id)
         {
+            var invoiceDate = _db.SalesInvoiceHeaders
+                .Where(i => i.Id == id)
+                .Select(i => (DateTime?)i.Date)
+                .FirstOrDefault();
+            if (invoiceDate.HasValue && RefuseIfBooksLocked(invoiceDate.Value) is { } locked)
+                return locked;
+
             // Saving an invoice records a sales order behind it; a deleted draft takes the order with it, so the
             // client isn't left with a record that keeps it from being deleted.
             using var tx = _db.Database.BeginTransaction();
@@ -2229,6 +2274,9 @@ namespace Api.Controllers
                     return NotFound(new { message = $"Invoice #{id} not found." });
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
                     return Ok(new { success = true, invoiceId = invoice.Id, status = "Void" });
+
+                if (RefuseIfBooksLocked(invoice.Date) is { } locked)
+                    return locked;
 
                 try
                 {
