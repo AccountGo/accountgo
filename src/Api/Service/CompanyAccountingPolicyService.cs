@@ -18,14 +18,16 @@ namespace Api.Service
         public DateTime? BooksStartDate { get; set; }
         public TaxRegime? TaxRegime { get; set; }
         public IndustryTemplate? IndustryTemplate { get; set; }
+        public EntityType? EntityType { get; set; }
         public InventoryCostingMethod? InventoryCostingMethod { get; set; }
     }
 
     public class AccountingPolicyChangeResult
     {
         public bool Frozen { get; set; }
+        public bool ClosedYearsConflict { get; set; }
         public IReadOnlyList<string> Errors { get; set; } = Array.Empty<string>();
-        public bool Ok => !Frozen && Errors.Count == 0;
+        public bool Ok => !Frozen && !ClosedYearsConflict && Errors.Count == 0;
     }
 
     /// <summary>Change-control helpers for company accounting policy.</summary>
@@ -57,6 +59,13 @@ namespace Api.Service
             if (frozen && touchesFrozenField)
                 return new AccountingPolicyChangeResult { Frozen = true };
 
+            if (change.EntityType.HasValue && change.EntityType.Value != setting.EntityType)
+            {
+                var hasClosedYears = _db.FinancialYears.Any(fy => fy.CompanyId == setting.CompanyId && fy.ClosedAt != null);
+                if (hasClosedYears)
+                    return new AccountingPolicyChangeResult { ClosedYearsConflict = true };
+            }
+
             var options = new CompanyProvisionOptions
             {
                 ReportingFramework = change.ReportingFramework ?? setting.ReportingFramework,
@@ -65,6 +74,7 @@ namespace Api.Service
                 BooksStartDate = (change.BooksStartDate ?? setting.BooksStartDate).Date,
                 TaxRegime = change.TaxRegime ?? setting.TaxRegime,
                 IndustryTemplate = change.IndustryTemplate ?? setting.IndustryTemplate,
+                EntityType = change.EntityType ?? setting.EntityType,
                 InventoryCostingMethod = change.InventoryCostingMethod ?? setting.InventoryCostingMethod,
             };
             // Switching to or from Cash Basis implies the matching basis unless the caller says otherwise.
@@ -78,6 +88,7 @@ namespace Api.Service
                 return new AccountingPolicyChangeResult { Errors = errors };
 
             var taxRegimeChanged = options.TaxRegime != setting.TaxRegime;
+            var entityTypeChanged = options.EntityType != setting.EntityType;
             var fiscalYearChanged = options.FiscalYearPattern != setting.FiscalYearPattern
                 || options.FiscalYearStartMonth != setting.FiscalYearStartMonth
                 || options.BooksStartDate != setting.BooksStartDate.Date;
@@ -89,14 +100,43 @@ namespace Api.Service
             setting.BooksStartDate = options.BooksStartDate.Value;
             setting.TaxRegime = options.TaxRegime;
             setting.IndustryTemplate = options.IndustryTemplate;
+            setting.EntityType = options.EntityType;
             setting.InventoryCostingMethod = options.InventoryCostingMethod;
 
+            if (entityTypeChanged)
+                ApplyEntityType(setting);
             if (fiscalYearChanged)
                 ReplaceActiveFiscalYear(setting);
             if (taxRegimeChanged)
                 SyncSeededTax(setting.TaxRegime);
 
             return new AccountingPolicyChangeResult();
+        }
+
+        private void ApplyEntityType(CompanySetting setting)
+        {
+            var profile = EntityEquityMapping.GetProfile(setting.EntityType);
+            var accounts = _db.Accounts.Where(a => a.CompanyId == setting.CompanyId).ToList();
+            var accountByCode = accounts.ToDictionary(a => a.AccountCode, StringComparer.Ordinal);
+
+            if (accountByCode.TryGetValue(profile.CloseTargetAccountCode, out var targetAccount))
+            {
+                var glSetting = _db.GeneralLedgerSettings.FirstOrDefault(s => s.CompanyId == setting.CompanyId);
+                if (glSetting == null)
+                {
+                    glSetting = new GeneralLedgerSetting { CompanyId = setting.CompanyId };
+                    _db.GeneralLedgerSettings.Add(glSetting);
+                }
+                glSetting.PermanentAccountId = targetAccount.Id;
+            }
+
+            foreach (var (code, displayName) in profile.DisplayNames)
+            {
+                if (accountByCode.TryGetValue(code, out var acc) && EntityEquityMapping.IsRenameable(code, acc.AccountName))
+                {
+                    acc.AccountName = displayName;
+                }
+            }
         }
 
         // Only rewrites the untouched seed (a single zero-rate placeholder); real tax setups are left alone.

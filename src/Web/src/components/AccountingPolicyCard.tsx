@@ -9,12 +9,20 @@ interface Policy {
   fiscalYearStartMonth: number | null;
   booksStartDate: string;
   taxRegime: string;
+  entityType?: string;
   inventoryCostingMethod: string;
   isLedgerFrozen: boolean;
 }
 
 const FRAMEWORKS: [string, string][] = [
   ['IfrsForSmes', 'IFRS for SMEs'], ['UsGaapPrivate', 'US GAAP (private company)'], ['Ifrs', 'Full IFRS'], ['CashBasis', 'Cash basis'],
+];
+const ENTITY_TYPES: [string, string][] = [
+  ['SoleProprietor', 'Sole Proprietor'],
+  ['Partnership', 'Partnership'],
+  ['Corporation', 'Corporation'],
+  ['Cooperative', 'Cooperative'],
+  ['NonProfit', 'Non-Profit'],
 ];
 const PATTERNS: [string, string][] = [['Calendar', 'Calendar year (Jan–Dec)'], ['AprMar', 'April – March'], ['JulJun', 'July – June'], ['Custom', 'Custom start month']];
 const TAX: [string, string][] = [['None', 'No tax'], ['SalesTax', 'Sales tax'], ['VatGst', 'VAT / GST']];
@@ -66,7 +74,11 @@ export const AccountingPolicyCard: React.FC<{ canEdit: boolean }> = ({ canEdit }
     setBusy(true);
     setMessage(null);
     try {
-      const body: Record<string, unknown> = { taxRegime: policy.taxRegime, inventoryCostingMethod: policy.inventoryCostingMethod };
+      const body: Record<string, unknown> = {
+        taxRegime: policy.taxRegime,
+        entityType: policy.entityType,
+        inventoryCostingMethod: policy.inventoryCostingMethod
+      };
       if (!frozen) {
         Object.assign(body, {
           reportingFramework: policy.reportingFramework,
@@ -143,6 +155,12 @@ export const AccountingPolicyCard: React.FC<{ canEdit: boolean }> = ({ canEdit }
           <label htmlFor="policy-tax" className={labelClass}>Tax regime</label>
           <select id="policy-tax" className={selectClass} disabled={!canEdit} value={policy.taxRegime} onChange={(e) => set({ taxRegime: e.target.value })}>
             {TAX.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="policy-entity-type" className={labelClass}>Entity type</label>
+          <select id="policy-entity-type" className={selectClass} disabled={!canEdit} value={policy.entityType ?? 'SoleProprietor'} onChange={(e) => set({ entityType: e.target.value })}>
+            {ENTITY_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </div>
         <div>

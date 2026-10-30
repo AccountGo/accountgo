@@ -76,8 +76,10 @@ namespace Services.Dashboard
 
             var moneyInBank = BuildMoneyInBank(accounts);
 
-            var totalSalesYtd = ComputeNetAmount(ledger, revenueAccountIds, normalBalanceIsDebit: false);
-            var totalExpensesYtd = ComputeNetAmount(ledger, expenseAccountIds, normalBalanceIsDebit: true);
+            // IncomeStatement excludes ClosingEntries so YTD is unchanged after year-end close.
+            var incomeItems = (_financialService.IncomeStatement(rangeStart, rangeEnd) ?? Enumerable.Empty<IncomeStatement>()).ToList();
+            var totalSalesYtd = RoundMoney(incomeItems.Where(i => !i.IsExpense).Sum(i => i.Amount));
+            var totalExpensesYtd = RoundMoney(incomeItems.Where(i => i.IsExpense).Sum(i => i.Amount));
             var cashFlowYtd = ComputeNetAmount(ledger, bankAccountIds, normalBalanceIsDebit: true);
 
             var summary = new DashboardSummaryDto

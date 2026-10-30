@@ -15,8 +15,11 @@ namespace Core.Domain
         public const string TradingFifo = "trading-fifo";
         public const string MixedSme = "mixed-sme";
 
-        /// <summary>Accounts every template must keep because <c>GeneralLedgerSetting</c> points at them.</summary>
-        public static readonly IReadOnlyList<string> RequiredControlAccountCodes = new[] { "20110", "10810", "40400", "40500" };
+        /// <summary>Accounts every template must keep because control settings or closing entries point at them.</summary>
+        public static readonly IReadOnlyList<string> RequiredControlAccountCodes = new[]
+        {
+            "20110", "10810", "40400", "40500", "30800", "30810", "30820"
+        };
 
         // Manufacturing-style depth that a services business does not use: work in progress and purchase price variance.
         private static readonly HashSet<string> ServicesOmitted = new HashSet<string>(StringComparer.Ordinal) { "10900", "50500" };

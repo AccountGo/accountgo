@@ -64,12 +64,19 @@ interface DashboardSummary {
   bankCloseStatus?: BankCloseStatus | null;
 }
 
+interface YearEndYearRow {
+  fiscalYearCode: string;
+  endDate: string;
+  status: number;
+}
+
 export const Dashboard: React.FC = () => {
-  const { currentOrg, user, hasModule } = useOutletContext<TenantContextType>();
+  const { currentOrg, user, hasModule, hasPermission } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [yearEndReminder, setYearEndReminder] = useState<YearEndYearRow | null>(null);
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
 
@@ -100,6 +107,30 @@ export const Dashboard: React.FC = () => {
       mounted = false;
     };
   }, [authFetch, currentOrg.slug]);
+
+  useEffect(() => {
+    if (!hasModule('financials') || !hasPermission('financials.periods.close')) {
+      setYearEndReminder(null);
+      return;
+    }
+    let mounted = true;
+    void (async () => {
+      try {
+        const res = await authFetch('/api/Financials/YearEnd');
+        if (!res.ok || !mounted) return;
+        const years = (await res.json()) as YearEndYearRow[];
+        const ended = years
+          .filter((y) => y.status === 2)
+          .sort((a, b) => b.endDate.localeCompare(a.endDate));
+        setYearEndReminder(ended[0] ?? null);
+      } catch {
+        if (mounted) setYearEndReminder(null);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [authFetch, currentOrg.slug, hasModule, hasPermission]);
 
   const kpis = summary?.kpis;
   const recentActivity = summary?.recentActivity || [];
@@ -169,6 +200,18 @@ export const Dashboard: React.FC = () => {
       />
 
       <BankCloseStatusCard status={summary?.bankCloseStatus} orgSlug={currentOrg.slug} />
+
+      {yearEndReminder && (
+        <p className="text-sm text-amber-700 bg-amber-500/10 px-4 py-3 rounded-2xl">
+          Fiscal year {yearEndReminder.fiscalYearCode} has ended and is ready to close.{' '}
+          <Link
+            to={`/org/${currentOrg.slug}/settings?tab=financials`}
+            className="font-semibold text-[var(--brand-primary)] hover:underline"
+          >
+            Open year-end close in Settings
+          </Link>
+        </p>
+      )}
 
       {/* Financial Metric Cards Grid (Border-Less with Ambient Elevation) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

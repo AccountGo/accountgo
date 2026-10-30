@@ -17,6 +17,7 @@ namespace Services.Financial
         private readonly IRepository<CompanySetting> _settings;
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
+        private int _bypassDepth;
 
         public BooksLockGuard(
             IRepository<CompanySetting> settings,
@@ -28,8 +29,17 @@ namespace Services.Financial
             _tenant = tenant;
         }
 
+        public IDisposable Bypass()
+        {
+            _bypassDepth++;
+            return new Releaser(() => _bypassDepth--);
+        }
+
         public void EnsureDateAllowed(DateTime date)
         {
+            if (_bypassDepth > 0)
+                return;
+
             if (!_tenant.IsResolved || !_tenant.CompanyId.HasValue)
                 return;
 
@@ -52,6 +62,19 @@ namespace Services.Financial
                 _tenant.RequireCompanyId(),
                 new EntitlementAction.Module(ModuleAccess.Read, SystemModules.Financials));
             return decision.Allowed;
+        }
+
+        private sealed class Releaser : IDisposable
+        {
+            private Action? _release;
+
+            public Releaser(Action release) => _release = release;
+
+            public void Dispose()
+            {
+                var action = System.Threading.Interlocked.Exchange(ref _release, null);
+                action?.Invoke();
+            }
         }
     }
 }
