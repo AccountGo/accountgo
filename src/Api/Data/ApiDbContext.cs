@@ -711,6 +711,20 @@ namespace Api.Data
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
+            builder.Entity<BankStatementDescriptionRule>(entity =>
+            {
+                entity.Property(e => e.DescriptionKey).HasMaxLength(200).IsRequired();
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => new { e.CompanyId, e.DescriptionKey }, "UX_BankStatementDescriptionRule_Company_DescriptionKey")
+                    .IsUnique();
+                entity.HasOne(e => e.Vendor).WithMany()
+                    .HasForeignKey(e => e.VendorId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ExpenseAccount).WithMany()
+                    .HasForeignKey(e => e.ExpenseAccountId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
             builder.Entity<GeneralLedgerLine>(entity =>
             {
                 entity.HasIndex(e => new { e.CompanyId, e.BankReconciliationId }, "IX_GeneralLedgerLine_Company_BankReconciliationId");
@@ -739,6 +753,7 @@ namespace Api.Data
         public virtual DbSet<BankReconciliationItem> BankReconciliationItems { get; set; }
         public virtual DbSet<BankStatementImport> BankStatementImports { get; set; }
         public virtual DbSet<BankStatementLine> BankStatementLines { get; set; }
+        public virtual DbSet<BankStatementDescriptionRule> BankStatementDescriptionRules { get; set; }
         public virtual DbSet<Company> Companies { get; set; }
         public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }

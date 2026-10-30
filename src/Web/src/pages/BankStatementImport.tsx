@@ -101,6 +101,7 @@ const BankStatementImportPage: React.FC = () => {
   const [applyFor, setApplyFor] = useState<BankStatementLine | null>(null);
   const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
   const [pickedCandidate, setPickedCandidate] = useState<Record<number, string>>({});
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   const formatCurrency = useCallback(
     (n: number) =>
@@ -284,6 +285,20 @@ const BankStatementImportPage: React.FC = () => {
     } finally {
       setBusy(false);
     }
+  };
+
+  const toggleSelected = (id: number) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const bulkRecordExpense = async () => {
+    if (selectedIds.length === 0) return;
+    const first = (list?.lines ?? []).find((l) => l.id === selectedIds[0]);
+    if (!first || first.amount >= 0) {
+      setError('Bulk record expense only works on money-out lines.');
+      return;
+    }
+    setExpenseFor(first);
   };
 
   const lineAction = async (
@@ -537,6 +552,16 @@ const BankStatementImportPage: React.FC = () => {
                 : `Showing ${showingFrom}–${showingTo} of ${totalCount}`}
             </p>
             <div className="flex gap-2">
+              {canManage && selectedIds.length > 0 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void bulkRecordExpense()}
+                  className="h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
+                >
+                  Record expense ({selectedIds.length})
+                </button>
+              )}
               <button
                 type="button"
                 disabled={!canPrev || busy || loading}
@@ -561,6 +586,11 @@ const BankStatementImportPage: React.FC = () => {
           <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
+                {canManage && status === 'unmatched' && (
+                  <th className="px-3 py-3 font-semibold w-10">
+                    <span className="sr-only">Select</span>
+                  </th>
+                )}
                 <th className="px-4 py-3 font-semibold">Date</th>
                 <th className="px-4 py-3 font-semibold">Payee / memo</th>
                 <th className="px-4 py-3 font-semibold">Reference</th>
@@ -571,6 +601,19 @@ const BankStatementImportPage: React.FC = () => {
             <tbody className="divide-y divide-[var(--border-subtle)]">
               {(list?.lines ?? []).map((line) => (
                 <tr key={line.id} className="text-[var(--text-main)] align-top">
+                  {canManage && status === 'unmatched' && (
+                    <td className="px-3 py-2.5">
+                      {!line.isMatched && !line.isExcluded && line.amount < 0 && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select line ${line.id}`}
+                          checked={selectedIds.includes(line.id)}
+                          onChange={() => toggleSelected(line.id)}
+                          className="rounded border-[var(--border-subtle)]"
+                        />
+                      )}
+                    </td>
+                  )}
                   <td className="px-4 py-2.5 whitespace-nowrap">{String(line.postedDate).slice(0, 10)}</td>
                   <td className="px-4 py-2.5">
                     <div>{line.payee || '—'}</div>
@@ -700,10 +743,12 @@ const BankStatementImportPage: React.FC = () => {
       {expenseFor && (
         <StatementLineExpenseDialog
           line={expenseFor}
+          additionalLineIds={selectedIds.filter((id) => id !== expenseFor.id)}
           formatCurrency={formatCurrency}
           onClose={() => setExpenseFor(null)}
           onSaved={async () => {
             setExpenseFor(null);
+            setSelectedIds([]);
             await loadLines(status, page);
           }}
         />

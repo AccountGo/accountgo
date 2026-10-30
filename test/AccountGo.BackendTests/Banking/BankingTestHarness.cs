@@ -327,6 +327,7 @@ internal sealed class BankingInMemoryRepos
     public BankingMemoryRepo<BankReconciliationItem> ReconciliationItems { get; } = new();
     public BankingMemoryRepo<BankStatementImport> StatementImports { get; } = new();
     public BankingMemoryRepo<BankStatementLine> StatementLines { get; } = new();
+    public BankingMemoryRepo<BankStatementDescriptionRule> StatementDescriptionRules { get; } = new();
     public BankingMemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
     public BankingMemoryRepo<GeneralLedgerHeader> GlHeaders { get; } = new();
     public BankingMemoryRepo<Company> Companies { get; } = new();
