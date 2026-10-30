@@ -307,20 +307,33 @@ export const BANK_STATEMENT_SOURCE = {
   Csv: 1,
   Ofx: 2,
   Manual: 3,
+  Camt: 4,
+  Mt940: 5,
+  Qif: 6,
+  Xlsx: 7,
 } as const;
 
 export interface BankStatementColumnMap {
   hasHeaderRow: boolean;
+  /** 0-based record index of the header; null → server detects preamble + header. */
+  headerRowIndex?: number | null;
   delimiter?: string | null;
   dateFormat?: string | null;
+  /** '.' or ',' — required when the amount column is ambiguous. */
+  decimalSeparator?: string | null;
   dateColumn: number;
   amountColumn?: number | null;
   depositColumn?: number | null;
   withdrawalColumn?: number | null;
+  feeColumn?: number | null;
+  directionColumn?: number | null;
   payeeColumn?: number | null;
   memoColumn?: number | null;
   referenceColumn?: number | null;
   externalIdColumn?: number | null;
+  currencyColumn?: number | null;
+  statusColumn?: number | null;
+  allowedStatuses?: string[] | null;
   invertSign: boolean;
 }
 
@@ -328,6 +341,8 @@ export interface BankStatementImportPayload {
   source: number;
   fileName?: string | null;
   content: string;
+  /** Raw file bytes; preferred so the API can detect UTF-8 / UTF-16 / Windows-1252. */
+  contentBase64?: string | null;
   columnMap?: BankStatementColumnMap | null;
 }
 
@@ -343,13 +358,34 @@ export interface BankStatementPreviewRow {
   error?: string | null;
 }
 
+export interface BankStatementDetectionSummary {
+  date?: string | null;
+  amount?: string | null;
+  currency?: string | null;
+  status?: string | null;
+  header?: string | null;
+  needsDateFormatChoice: boolean;
+  needsAmountFormatChoice?: boolean;
+}
+
 export interface BankStatementPreview {
   source: number;
   totalRows: number;
   readyRows: number;
   duplicateRows: number;
   errorRows: number;
+  detection?: BankStatementDetectionSummary | null;
+  mappingSource?: string | null;
+  headerSignature?: string | null;
+  presetName?: string | null;
   rows: BankStatementPreviewRow[];
+}
+
+export interface BankStatementResolveMapping {
+  columnMap?: BankStatementColumnMap | null;
+  mappingSource: 'saved' | 'preset' | 'none' | string;
+  headerSignature?: string | null;
+  presetName?: string | null;
 }
 
 export interface BankStatementCommitResult {

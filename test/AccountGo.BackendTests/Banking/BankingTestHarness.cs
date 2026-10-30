@@ -131,6 +131,7 @@ internal sealed class BankingTestHarness : IDisposable
         var statements = new BankStatementImportService(
             Repos.StatementImports,
             Repos.StatementLines,
+            Repos.ColumnMappings,
             Repos.Banks,
             Repos.GlLines,
             Repos.GlHeaders,
@@ -327,6 +328,7 @@ internal sealed class BankingInMemoryRepos
     public BankingMemoryRepo<BankReconciliationItem> ReconciliationItems { get; } = new();
     public BankingMemoryRepo<BankStatementImport> StatementImports { get; } = new();
     public BankingMemoryRepo<BankStatementLine> StatementLines { get; } = new();
+    public BankingMemoryRepo<BankStatementColumnMapping> ColumnMappings { get; } = new();
     public BankingMemoryRepo<BankStatementDescriptionRule> StatementDescriptionRules { get; } = new();
     public BankingMemoryRepo<GeneralLedgerLine> GlLines { get; } = new();
     public BankingMemoryRepo<GeneralLedgerHeader> GlHeaders { get; } = new();

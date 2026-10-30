@@ -67,9 +67,8 @@ public class BankStatementParserTests
 
     [Theory]
     [InlineData("03/04/2026")]
-    [InlineData("13/04/2026")]
     [InlineData("3/4/26")]
-    public void Csv_NumericSlashDatesAreRefusedWithoutADateFormat(string rawDate)
+    public void Csv_AmbiguousNumericSlashDatesAreRefusedWithoutADateFormat(string rawDate)
     {
         var csv = $"d,a\n{rawDate},5.00\n";
         var map = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1 };
@@ -78,6 +77,43 @@ public class BankStatementParserTests
 
         Assert.False(row.IsValid);
         Assert.Contains("needs a date format", row.Error);
+    }
+
+    [Fact]
+    public void Csv_DayFirstColumnIsDetectedWithoutUserFormat()
+    {
+        const string csv = "d,a\n13/04/2026,5.00\n02/03/2026,6.00\n";
+        var map = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1 };
+
+        var rows = BankStatementParser.ParseCsv(csv, map);
+
+        Assert.All(rows, r => Assert.True(r.IsValid, r.Error));
+        Assert.Equal(new DateTime(2026, 4, 13), rows[0].PostedDate);
+        Assert.Equal(new DateTime(2026, 3, 2), rows[1].PostedDate);
+    }
+
+    [Fact]
+    public void Csv_Iso8601WithFractionAndZ_NeedsNoFormat()
+    {
+        const string csv = "d,a\n2024-03-07T04:59:09.447Z,5.00\n";
+        var map = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1 };
+
+        var row = Assert.Single(BankStatementParser.ParseCsv(csv, map));
+
+        Assert.True(row.IsValid, row.Error);
+        Assert.Equal(new DateTime(2024, 3, 7), row.PostedDate);
+    }
+
+    [Fact]
+    public void Csv_DirectionColumnSignsUnsignedAmount()
+    {
+        const string csv = "d,a,dir\n2024-01-01,40.00,out\n2024-01-02,10.00,in\n";
+        var map = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1, DirectionColumn = 2 };
+
+        var rows = BankStatementParser.ParseCsv(csv, map);
+
+        Assert.Equal(-40.00m, rows[0].Amount);
+        Assert.Equal(10.00m, rows[1].Amount);
     }
 
     [Fact]

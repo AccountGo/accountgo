@@ -1,0 +1,8 @@
+Account,Wise USD
+Currency,USD
+profile_id,profile_type,profile_name,activity_id,created_on,updated_on,type,status,resource_type,resource_id,title,description,direction,amount,currency,signed_amount,secondary_amount,primary_amount_raw
+111,PERSONAL,Demo,ACT-USD-001,2024-03-07T04:59:09.447Z,2024-03-07T04:59:10.100Z,TRANSFER,completed,transfer,RES-1,Received money from Client Co,Invoice payment,in,1250.50,USD,1250.50,,1250.50 USD
+111,PERSONAL,Demo,ACT-USD-002,2024-03-08T12:00:00.000Z,2024-03-08T12:00:01.000Z,TRANSFER,completed,transfer,RES-2,Sent money to Vendor LLC,Supplies,out,40.00,USD,-40.00,,-40.00 USD
+111,PERSONAL,Demo,ACT-PHP-001,2024-03-09T08:15:30.123Z,2024-03-09T08:15:31.000Z,TRANSFER,completed,transfer,RES-3,Received money from Sender PH,PHP transfer,in,1466.01,PHP,1466.01,,1466.01 PHP
+111,PERSONAL,Demo,ACT-INT-001,2024-03-10T01:00:00.000Z,2024-03-10T01:00:05.000Z,TRANSFER,completed,transfer,RES-4,Converted USD to EUR,Balance conversion,neutral,100.00,USD,100.00,,100.00 USD
+111,PERSONAL,Demo,ACT-PEND-001,2024-03-11T09:00:00.000Z,,TRANSFER,pending,transfer,RES-5,Sent money to Pending Payee,Pending,out,12.00,USD,-12.00,,-12.00 USD

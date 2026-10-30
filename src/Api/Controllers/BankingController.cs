@@ -637,6 +637,26 @@ namespace Api.Controllers
             }
         }
 
+        /// <summary>Saved mapping or built-in preset for this CSV header — never skips preview (#447 Phase B).</summary>
+        [HttpPost("Accounts/{bankId:int}/StatementImports/ResolveMapping")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        public IActionResult ResolveStatementMapping(int bankId, [FromBody] BankStatementImportRequest request)
+        {
+            try
+            {
+                return Ok(_statements.ResolveMapping(bankId, request));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost("Accounts/{bankId:int}/StatementImports")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]

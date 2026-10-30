@@ -21,4 +21,9 @@
     <ProjectReference Include="..\..\src\Services\Services.csproj" />
     <ProjectReference Include="..\..\src\Api\Api.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Banking\StatementCorpus\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
