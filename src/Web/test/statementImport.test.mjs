@@ -17,6 +17,11 @@ test('detectDelimiter picks the most common separator outside quotes', () => {
   assert.equal(detectDelimiter('"A,B";C;D'), ';');
 });
 
+test('detectDelimiter skips leading blank lines before probing', () => {
+  assert.equal(detectDelimiter('\n\nDate\tAmount\tPayee\n1\t2\t3'), '\t');
+  assert.equal(detectDelimiter('\r\n\r\nDate;Amount;Payee'), ';');
+});
+
 test('parseCsvRows handles quotes, doubled quotes, blank lines, and limits rows', () => {
   const rows = parseCsvRows('a,b\r\n"x, y","say ""hi"""\n\n3,4\n5,6', ',', 3);
   assert.deepEqual(rows, [
