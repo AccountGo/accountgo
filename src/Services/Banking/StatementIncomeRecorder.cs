@@ -23,7 +23,7 @@ namespace Services.Banking
     public sealed class StatementIncomeRecorder : IStatementIncomeRecorder
     {
         public const string OtherIncomeCustomerName = "Other income";
-        public const string GeneralItemName = "Service / Product";
+        public const string GeneralItemName = StatementGeneralItem.Name;
 
         private static readonly (string Name, string Code)[] CuratedIncomeCodes =
         {
@@ -124,7 +124,7 @@ namespace Services.Banking
             _lineAccounts.EnsureIncomeLineAccount(request.IncomeAccountId);
 
             var customer = ResolveCustomer(request.CustomerId);
-            var item = ResolveGeneralItem();
+            var item = StatementGeneralItem.Resolve(_inventory, _financial);
             var description = FirstNonBlank(request.Description, line.Payee, line.Memo) ?? "Other income";
 
             var measurementId = item.SellMeasurementId ?? item.SmallestMeasurementId
@@ -269,44 +269,6 @@ namespace Services.Banking
             };
             _sales.AddCustomer(customer);
             return customer;
-        }
-
-        private Item ResolveGeneralItem()
-        {
-            var items = _inventory.GetAllItems().ToList();
-            var item = items.FirstOrDefault(i =>
-                i.ArchivedAt == null
-                && string.Equals(i.Description, GeneralItemName, StringComparison.OrdinalIgnoreCase));
-            if (item != null)
-                return item;
-
-            var measurements = _inventory.GetMeasurements().ToList();
-            var measurement = measurements.FirstOrDefault(m => m.Code == "EA") ?? measurements.FirstOrDefault()
-                ?? throw new InvalidOperationException("No unit of measure is set up for this workspace.");
-            var category = _inventory.GetItemCategories().FirstOrDefault(c => c.ItemType == ItemTypes.Service);
-            if (category == null)
-            {
-                category = new ItemCategory
-                {
-                    Name = "Services",
-                    ItemType = ItemTypes.Service,
-                    MeasurementId = measurement.Id,
-                    SalesAccountId = _financial.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id
-                };
-                _inventory.SaveItemCategory(category);
-            }
-
-            item = new Item
-            {
-                ItemCategoryId = category.Id,
-                Description = GeneralItemName,
-                SellDescription = GeneralItemName,
-                SmallestMeasurementId = measurement.Id,
-                SellMeasurementId = measurement.Id,
-                SalesAccountId = category.SalesAccountId
-            };
-            _inventory.AddItem(item);
-            return item;
         }
 
         private void LinkLineToBankDebit(BankStatementLine line, Bank bank, SalesReceiptHeader receipt)

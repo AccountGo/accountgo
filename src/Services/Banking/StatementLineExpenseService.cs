@@ -15,6 +15,7 @@ using Core.Entitlements;
 using Core.Tenancy;
 using Dto.Banking;
 using Services.Financial;
+using Services.Inventory;
 using Services.Purchasing;
 
 namespace Services.Banking
@@ -46,6 +47,8 @@ namespace Services.Banking
         private readonly IRepository<Tax> _taxes;
         private readonly IRepository<BankStatementDescriptionRule> _rules;
         private readonly IPurchasingService _purchasing;
+        private readonly IInventoryService _inventory;
+        private readonly IFinancialService _financial;
         private readonly IBankAccountService _bankAccounts;
         private readonly IDocumentLineAccountCatalog _lineAccounts;
         private readonly IEntitlementService _entitlements;
@@ -61,6 +64,8 @@ namespace Services.Banking
             IRepository<Tax> taxes,
             IRepository<BankStatementDescriptionRule> rules,
             IPurchasingService purchasing,
+            IInventoryService inventory,
+            IFinancialService financial,
             IBankAccountService bankAccounts,
             IDocumentLineAccountCatalog lineAccounts,
             IEntitlementService entitlements,
@@ -75,6 +80,8 @@ namespace Services.Banking
             _taxes = taxes;
             _rules = rules;
             _purchasing = purchasing;
+            _inventory = inventory;
+            _financial = financial;
             _bankAccounts = bankAccounts;
             _lineAccounts = lineAccounts;
             _entitlements = entitlements;
@@ -159,6 +166,7 @@ namespace Services.Banking
             }
 
             var description = FirstNonBlank(request.Description, line.Payee, line.Memo) ?? "Expense";
+            var item = StatementGeneralItem.Resolve(_inventory, _financial);
             var bill = new PurchaseInvoiceHeader
             {
                 VendorId = vendorId,
@@ -172,6 +180,7 @@ namespace Services.Banking
                 {
                     new PurchaseInvoiceLine
                     {
+                        ItemId = item.Id,
                         Quantity = 1m,
                         Amount = lineAmount,
                         AccountId = request.ExpenseAccountId,
@@ -365,10 +374,35 @@ namespace Services.Banking
             if (name.Length > 256)
                 throw new InvalidOperationException("A vendor name can be at most 256 characters.");
 
+            // Reuse an active vendor with the same name rather than adding a duplicate (a retry, or one added since the
+            // dialog loaded its vendor list).
+            var tenantId = _tenant.RequireCompanyId();
+            var lowered = name.ToLower();
+            var existingId = _vendors.Table
+                .Where(v => v.CompanyId == tenantId && v.ArchivedAt == null
+                    && v.Party != null && v.Party.Name != null && v.Party.Name.ToLower() == lowered)
+                .OrderBy(v => v.Id)
+                .Select(v => (int?)v.Id)
+                .FirstOrDefault();
+            if (existingId.HasValue)
+                return existingId.Value;
+
             var email = string.IsNullOrWhiteSpace(request.NewVendor?.Email)
                 ? null
                 : request.NewVendor!.Email!.Trim();
             var parts = name.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            var contact = new Contact
+            {
+                ContactType = ContactTypes.Vendor,
+                FirstName = parts[0],
+                LastName = parts.Length > 1 ? parts[1] : "Contact",
+                Party = new Party
+                {
+                    PartyType = PartyTypes.Contact,
+                    Name = name,
+                    Email = email
+                }
+            };
             var vendor = new Vendor
             {
                 Party = new Party
@@ -378,18 +412,9 @@ namespace Services.Banking
                     Name = name,
                     Email = email
                 },
-                PrimaryContact = new Contact
-                {
-                    ContactType = ContactTypes.Vendor,
-                    FirstName = parts[0],
-                    LastName = parts.Length > 1 ? parts[1] : "Contact",
-                    Party = new Party
-                    {
-                        PartyType = PartyTypes.Contact,
-                        Name = name,
-                        Email = email
-                    }
-                }
+                PrimaryContact = contact,
+                // Listed as one of the vendor's contacts too, as a vendor added on the Vendors tab is.
+                VendorContact = new List<VendorContact> { new VendorContact { Contact = contact } }
             };
             _purchasing.AddVendor(vendor);
             return vendor.Id;

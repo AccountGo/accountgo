@@ -3,9 +3,11 @@
 
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Items;
 using Core.Domain.Purchases;
 using Core.Domain.TaxSystem;
 using Core.Entitlements;
@@ -14,6 +16,7 @@ using Dto.Banking;
 using Moq;
 using Services.Banking;
 using Services.Financial;
+using Services.Inventory;
 using Services.Purchasing;
 using Xunit;
 
@@ -62,10 +65,12 @@ public class StatementLineExpenseServiceTests
                 harness.Repos.PurchaseInvoices.Insert(b);
             });
         purchasing.Setup(p => p.ApproveBill(88, "tester", It.IsAny<DateTime>()));
+        Vendor? addedVendor = null;
         purchasing
             .Setup(p => p.AddVendor(It.IsAny<Vendor>()))
             .Callback<Vendor>(v =>
             {
+                addedVendor = v;
                 v.Id = 7;
                 v.CompanyId = 1;
                 harness.Repos.Vendors.Insert(v);
@@ -119,6 +124,10 @@ public class StatementLineExpenseServiceTests
         Assert.True(bypassed);
         Assert.NotNull(savedBill);
         Assert.Equal(expenseAccountId, savedBill!.PurchaseInvoiceLines.Single().AccountId);
+        Assert.Equal(GeneralItemId, savedBill.PurchaseInvoiceLines.Single().ItemId);
+        Assert.Equal(7, savedBill.VendorId);
+        Assert.NotNull(addedVendor);
+        Assert.Same(addedVendor!.PrimaryContact, Assert.Single(addedVendor.VendorContact).Contact);
         Assert.Equal(49.99m, savedBill.PurchaseInvoiceLines.Single().Amount);
         Assert.Equal("bill", result.Bill.Kind);
         Assert.Equal(88, result.Bill.Id);
@@ -130,6 +139,40 @@ public class StatementLineExpenseServiceTests
         purchasing.Verify(p => p.ApproveBill(88, "tester", It.IsAny<DateTime>()), Times.Once);
         purchasing.Verify(p => p.PayBill(88, bank.AccountId!.Value, 49.99m, BankingTestHarness.Utc(2026, 3, 15).Date,
             It.IsAny<string?>(), "REF-1", It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public void RecordExpense_new_vendor_reuses_active_vendor_with_the_same_name()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        SeedExpenseTree(harness);
+        harness.Repos.Vendors.Insert(new Vendor
+        {
+            Id = 3, CompanyId = 1, ArchivedAt = DateTime.UtcNow, Party = new Party { Name = "Figma" }
+        });
+        harness.Repos.Vendors.Insert(new Vendor { Id = 4, CompanyId = 1, Party = new Party { Name = "figma" } });
+        var bank = harness.CreateBank("Checking");
+        var line = ImportPayment(harness, bank.Id, -49.99m, "Figma", BankingTestHarness.Utc(2026, 3, 15));
+
+        // Strict: AddVendor is not set up, so creating a vendor would throw.
+        var purchasing = new Mock<IPurchasingService>(MockBehavior.Strict);
+        PurchaseInvoiceHeader? savedBill = null;
+        purchasing
+            .Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()))
+            .Callback<PurchaseInvoiceHeader, bool>((b, _) => savedBill = b)
+            .Throws(new InvalidOperationException("stop after save"));
+        harness.Entitlements.Setup(e => e.Bypass()).Returns(Mock.Of<IDisposable>());
+
+        var service = Build(harness, purchasing);
+        Assert.Throws<InvalidOperationException>(() => service.RecordExpense(line.Id, new RecordExpenseFromStatementLineRequest
+        {
+            NewVendor = new QuickVendorFromStatementRequest { Name = " FIGMA " },
+            ExpenseAccountId = harness.RequireAccount("50115").Id
+        }, "tester"));
+
+        Assert.Equal(4, savedBill!.VendorId);
+        purchasing.Verify(p => p.AddVendor(It.IsAny<Vendor>()), Times.Never);
     }
 
     [Fact]
@@ -506,8 +549,15 @@ public class StatementLineExpenseServiceTests
         Assert.Null(service.FindDescriptionRule("Figma"));
     }
 
+    private const int GeneralItemId = 5;
+
     private static StatementLineExpenseService Build(BankingTestHarness harness, Mock<IPurchasingService> purchasing)
     {
+        var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
+        inventory.Setup(i => i.GetAllItems()).Returns(new List<Item>
+        {
+            new() { Id = GeneralItemId, CompanyId = 1, Description = StatementIncomeRecorder.GeneralItemName }
+        });
         var tenant = new BankingTestHarness.FakeTenant(1);
         var catalog = new DocumentLineAccountCatalog(
             harness.Repos.Accounts,
@@ -523,6 +573,8 @@ public class StatementLineExpenseServiceTests
             harness.Repos.Taxes,
             harness.Repos.StatementDescriptionRules,
             purchasing.Object,
+            inventory.Object,
+            new Mock<IFinancialService>(MockBehavior.Loose).Object,
             harness.Banks,
             catalog,
             harness.Entitlements.Object,
