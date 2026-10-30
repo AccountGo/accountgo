@@ -128,10 +128,13 @@ namespace Services.Banking
 
             var taxId = request.TaxId is > 0 ? request.TaxId : null;
             var lineAmount = amount;
+            var lineTaxAmount = 0m;
+            var preserveTaxAmounts = false;
             if (taxId.HasValue)
             {
                 var tax = RequireActiveTax(taxId.Value);
-                lineAmount = PurchaseInvoiceLine.NetOfInclusive(amount, tax.Rate);
+                (lineAmount, lineTaxAmount) = PurchaseInvoiceLine.SplitInclusive(amount, tax.Rate);
+                preserveTaxAmounts = true;
             }
 
             var description = FirstNonBlank(request.Description, line.Payee, line.Memo) ?? "Expense";
@@ -152,6 +155,7 @@ namespace Services.Banking
                         Amount = lineAmount,
                         AccountId = request.ExpenseAccountId,
                         TaxId = taxId,
+                        TaxAmount = lineTaxAmount,
                         Description = description
                     }
                 }
@@ -160,7 +164,7 @@ namespace Services.Banking
             // Statement-recorded expenses do not consume the monthly Bills quota (#436 decision 4).
             using (_entitlements.Bypass())
             {
-                _purchasing.SaveBill(bill);
+                _purchasing.SaveBill(bill, preserveTaxAmounts);
                 _purchasing.ApproveBill(bill.Id, string.IsNullOrWhiteSpace(actor) ? null : actor.Trim(), DateTime.UtcNow);
             }
 

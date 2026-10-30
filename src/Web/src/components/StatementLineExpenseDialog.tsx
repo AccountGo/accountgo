@@ -224,7 +224,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
             [
               canRecordExpense ? (['expense', 'Record expense'] as const) : null,
               canPayOpenBill ? (['payBill', 'Pay open bill'] as const) : null,
-            ] as const
+            ] as Array<readonly [Mode, string] | null>
           )
             .filter((entry): entry is readonly [Mode, string] => entry != null)
             .map(([value, label]) => (

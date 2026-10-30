@@ -29,7 +29,11 @@ namespace Services.Purchasing
         void UpdateVendor(Vendor vendor);
         IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices();
         PurchaseInvoiceHeader GetPurchaseInvoiceById(int id);
-        void SaveBill(PurchaseInvoiceHeader bill);
+        /// <param name="preserveTaxAmounts">
+        /// When true, keeps each line's supplied <see cref="PurchaseInvoiceLine.TaxAmount"/> instead of
+        /// recalculating tax-on-top from the rate (needed for tax-inclusive bank amounts).
+        /// </param>
+        void SaveBill(PurchaseInvoiceHeader bill, bool preserveTaxAmounts = false);
         int DefaultLineAccountId(int itemId, Vendor vendor);
         void ApproveBill(int billId, string? approvedBy = null, DateTime? approvedAt = null);
         void VoidBill(int billId, DateTime voidDate, string? voidReason = null, string? voidedBy = null);
