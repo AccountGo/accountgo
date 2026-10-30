@@ -207,10 +207,13 @@ namespace Services.Banking
             return query.Min().Date;
         }
 
-        private bool IsInActiveFiscalYear(DateTime date) =>
-            _fiscalYears.Table.Any(fy =>
+        private bool IsInActiveFiscalYear(DateTime date)
+        {
+            _financial.EnsureFiscalYearsThrough(date);
+            return _fiscalYears.Table.Any(fy =>
                 fy.IsActive
                 && date.Date >= fy.StartDate.Date
                 && date.Date <= fy.EndDate.Date);
+        }
     }
 }

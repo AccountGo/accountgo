@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Globalization;
 using Api.Data;
 using Api.Filters;
 using Api.Service;
@@ -26,6 +27,7 @@ namespace Api.Controllers
         private readonly WorkspaceService _workspaces;
         private readonly CompanyAccountingPolicyService _accountingPolicy;
         private readonly IPlanCatalog _plans;
+        private readonly Services.Financial.IFinancialService _financial;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -33,13 +35,15 @@ namespace Api.Controllers
             ApiDbContext db,
             WorkspaceService workspaces,
             CompanyAccountingPolicyService accountingPolicy,
-            IPlanCatalog plans)
+            IPlanCatalog plans,
+            Services.Financial.IFinancialService financial)
         {
             _tenant = tenant;
             _db = db;
             _workspaces = workspaces;
             _accountingPolicy = accountingPolicy;
             _plans = plans;
+            _financial = financial;
         }
 
         [TenantFree]
@@ -137,12 +141,14 @@ namespace Api.Controllers
         {
             var id = _tenant.RequireCompanyId();
             var company = _db.Companies.Single(c => c.Id == id);
+            var fiscalYear = _financial.CurrentFiscalYear();
             return Ok(new
             {
                 id = company.Id, name = company.Name, slug = company.Slug, shortName = company.ShortName,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), subscriptionStatus = company.SubscriptionStatus,
                 role = _tenant.Role.ToString(), permissions = _tenant.Permissions,
-                currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault() ?? "USD"
+                currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault() ?? "USD",
+                fiscalYearEnd = fiscalYear?.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
             });
         }
 

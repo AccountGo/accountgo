@@ -294,7 +294,7 @@ export default function GeneralLedger() {
         }
         if (value === 'year') {
           try {
-            update({ ...getDateRange('year', new Date(), activeYear), period: 'year' });
+            update({ ...getDateRange('year', new Date(), data?.years), period: 'year' });
           } catch (error) {
             setFailure({ key, message: error instanceof Error ? error.message : 'No active financial year covers today.' });
           }

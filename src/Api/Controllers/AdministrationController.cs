@@ -133,16 +133,32 @@ namespace Api.Controllers
         [HttpGet("financialyears")]
         public IActionResult FinancialYears()
         {
-            var years = _adminService.GetFinancialYears();
-            return Ok(years.Select(f => new
+            var years = _adminService.GetFinancialYears()
+                .Select(f => new
+                {
+                    id = f.Id,
+                    fiscalYearCode = f.FiscalYearCode,
+                    fiscalYearName = f.FiscalYearName,
+                    startDate = f.StartDate,
+                    endDate = f.EndDate,
+                    isActive = f.IsActive
+                })
+                .ToList();
+            // Read path: surface the year containing today without inserting rows.
+            var current = _financialService.CurrentFiscalYear();
+            if (current != null && years.All(y => y.fiscalYearCode != current.FiscalYearCode))
             {
-                id = f.Id,
-                fiscalYearCode = f.FiscalYearCode,
-                fiscalYearName = f.FiscalYearName,
-                startDate = f.StartDate,
-                endDate = f.EndDate,
-                isActive = f.IsActive
-            }));
+                years.Add(new
+                {
+                    id = current.Id,
+                    fiscalYearCode = current.FiscalYearCode,
+                    fiscalYearName = current.FiscalYearName,
+                    startDate = current.StartDate,
+                    endDate = current.EndDate,
+                    isActive = true
+                });
+            }
+            return Ok(years);
         }
 
         [HttpGet("paymentterms")]

@@ -50,7 +50,8 @@ public class SignUpAndOrganizationTests : IDisposable
         var controller = new OrganizationsController(_tenantContext, _db,
             new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext)),
             new CompanyAccountingPolicyService(_db),
-            new Services.Billing.CommunityPlanCatalog());
+            new Services.Billing.CommunityPlanCatalog(),
+            Mock.Of<Services.Financial.IFinancialService>());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
