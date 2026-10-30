@@ -344,6 +344,36 @@ public class BankStatementImportServiceTests
     }
 
     [Fact]
+    public void ListLines_PagesServerSide()
+    {
+        using var harness = NewHarness(out var bank);
+        harness.Statements.Commit(bank.Id, Csv(
+            "2026-10-01,10.00,A,,\n" +
+            "2026-10-02,20.00,B,,\n" +
+            "2026-10-03,30.00,C,,\n"), "t");
+
+        var page1 = harness.Statements.ListLines(bank.Id, "all", page: 1, pageSize: 2);
+        var page2 = harness.Statements.ListLines(bank.Id, "all", page: 2, pageSize: 2);
+
+        Assert.Equal(3, page1.TotalCount);
+        Assert.Equal(1, page1.Page);
+        Assert.Equal(2, page1.PageSize);
+        Assert.Equal(2, page1.Lines.Count);
+        Assert.Equal(10m, page1.Lines[0].Amount);
+        Assert.Equal(20m, page1.Lines[1].Amount);
+
+        Assert.Equal(3, page2.TotalCount);
+        Assert.Equal(2, page2.Page);
+        Assert.Single(page2.Lines);
+        Assert.Equal(30m, page2.Lines[0].Amount);
+
+        var clamped = harness.Statements.ListLines(bank.Id, "all", page: 0, pageSize: 10_000);
+        Assert.Equal(1, clamped.Page);
+        Assert.Equal(BankStatementImportService.MaxListPageSize, clamped.PageSize);
+        Assert.Equal(3, clamped.Lines.Count);
+    }
+
+    [Fact]
     public void TenantIsolation_OtherCompanyCannotSeeOrChangeLines()
     {
         using var harness = NewHarness(out var bank);

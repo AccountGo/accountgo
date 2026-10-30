@@ -19,7 +19,8 @@ namespace Services.Banking
         /// <summary>Statement date and ledger date may differ by this many days and still match.</summary>
         public const int MatchWindowDays = 3;
         public const int PreviewRowLimit = 50;
-        public const int MaxListedLines = 2000;
+        public const int DefaultListPageSize = 100;
+        public const int MaxListPageSize = 500;
         public const string StatusUnmatched = "unmatched";
         public const string StatusMatched = "matched";
         public const string StatusAll = "all";
@@ -138,35 +139,53 @@ namespace Services.Banking
             return result;
         }
 
-        public BankStatementLineListDto ListLines(int bankId, string? status)
+        public BankStatementLineListDto ListLines(int bankId, string? status, int page = 1, int pageSize = DefaultListPageSize)
         {
             EnsureCompany();
             var bank = RequireBank(bankId);
             var normalized = NormalizeStatus(status);
             var companyId = _tenant.RequireCompanyId();
 
-            var all = _lines.Table
-                .Where(l => l.CompanyId == companyId && l.BankId == bank.Id)
+            if (page < 1)
+                page = 1;
+            if (pageSize < 1)
+                pageSize = DefaultListPageSize;
+            if (pageSize > MaxListPageSize)
+                pageSize = MaxListPageSize;
+
+            // Counts and the page slice stay on the query; only the current page (and the unmatched
+            // set needed for candidate uniqueness) are materialised.
+            var bankLines = _lines.Table.Where(l => l.CompanyId == companyId && l.BankId == bank.Id);
+            var unmatchedCount = bankLines.Count(l => l.MatchedGeneralLedgerLineId == null);
+            var matchedCount = bankLines.Count() - unmatchedCount;
+
+            IQueryable<BankStatementLine> filtered = normalized switch
+            {
+                StatusMatched => bankLines.Where(l => l.MatchedGeneralLedgerLineId != null),
+                StatusAll => bankLines,
+                _ => bankLines.Where(l => l.MatchedGeneralLedgerLineId == null)
+            };
+            var totalCount = filtered.Count();
+            var pageRows = filtered
                 .OrderBy(l => l.PostedDate).ThenBy(l => l.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToList();
 
-            var unmatched = all.Where(l => !l.MatchedGeneralLedgerLineId.HasValue).ToList();
-            var matchedCount = all.Count - unmatched.Count;
-
-            IEnumerable<BankStatementLine> selected = normalized switch
-            {
-                StatusMatched => all.Where(l => l.MatchedGeneralLedgerLineId.HasValue),
-                StatusAll => all,
-                _ => unmatched
-            };
-            var page = selected.Take(MaxListedLines).ToList();
-
-            var candidatePool = LoadCandidatePool(bank, unmatched);
+            var unmatched = unmatchedCount == 0
+                ? new List<BankStatementLine>()
+                : bankLines.Where(l => l.MatchedGeneralLedgerLineId == null).ToList();
+            var candidatePool = unmatched.Count == 0
+                ? Array.Empty<PoolEntry>()
+                : LoadCandidatePool(bank, unmatched);
             return new BankStatementLineListDto
             {
-                UnmatchedCount = unmatched.Count,
+                UnmatchedCount = unmatchedCount,
                 MatchedCount = matchedCount,
-                Lines = page.Select(l => ToDto(l, l.MatchedGeneralLedgerLineId.HasValue
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                Lines = pageRows.Select(l => ToDto(l, l.MatchedGeneralLedgerLineId.HasValue
                     ? Array.Empty<PoolEntry>()
                     : CandidatesFor(l, candidatePool))).ToList()
             };
