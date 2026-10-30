@@ -105,6 +105,39 @@ public class BankStatementParserTests
         Assert.Contains("dd/MM/yyyy", row.Error);
     }
 
+    [Fact]
+    public void Csv_SkipsLeadingBlankLinesBeforeTheHeader()
+    {
+        const string csv = "\n\nDate,Amount\n2026-10-01,5.00\n";
+        var map = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1, HasHeaderRow = true };
+
+        var row = Assert.Single(BankStatementParser.ParseCsv(csv, map));
+
+        Assert.True(row.IsValid, row.Error);
+        Assert.Equal(new DateTime(2026, 10, 1), row.PostedDate);
+        Assert.Equal(5.00m, row.Amount);
+    }
+
+    [Theory]
+    [InlineData("\t")]
+    [InlineData("\\t")]
+    public void Csv_AcceptsTabDelimiter(string delimiter)
+    {
+        const string csv = "Date\tAmount\n2026-10-01\t5.00\n";
+        var map = new BankStatementColumnMap
+        {
+            DateColumn = 0,
+            AmountColumn = 1,
+            Delimiter = delimiter,
+            HasHeaderRow = true
+        };
+
+        var row = Assert.Single(BankStatementParser.ParseCsv(csv, map));
+
+        Assert.True(row.IsValid, row.Error);
+        Assert.Equal(5.00m, row.Amount);
+    }
+
     [Theory]
     [InlineData("2026-10-01")]
     [InlineData("2026/10/01")]

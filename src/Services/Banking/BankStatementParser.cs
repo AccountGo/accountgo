@@ -81,13 +81,18 @@ namespace Services.Banking
             var rows = new List<ParsedStatementRow>();
             var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
             var recordNumber = 0;
+            var headerSkipped = !map.HasHeaderRow;
             foreach (var fields in records)
             {
                 recordNumber++;
-                if (recordNumber == 1 && map.HasHeaderRow)
-                    continue;
+                // Leading blank lines (and blanks between rows) are never the header or data.
                 if (IsBlankRecord(fields))
                     continue;
+                if (!headerSkipped)
+                {
+                    headerSkipped = true;
+                    continue;
+                }
 
                 if (rows.Count >= MaxRows)
                     throw new InvalidOperationException($"A statement can have at most {MaxRows} rows.");
@@ -132,8 +137,10 @@ namespace Services.Banking
                 if (column is < 0)
                     throw new InvalidOperationException("Column positions cannot be negative.");
             }
-            if (!string.IsNullOrEmpty(map.Delimiter) && map.Delimiter.Length != 1)
-                throw new InvalidOperationException("The delimiter must be a single character.");
+            if (!string.IsNullOrEmpty(map.Delimiter)
+                && map.Delimiter != "\\t"
+                && map.Delimiter.Length != 1)
+                throw new InvalidOperationException("The delimiter must be a single character (or \\t for tab).");
         }
 
         private static char ResolveDelimiter(string content, string? requested)
