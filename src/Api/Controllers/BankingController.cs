@@ -653,11 +653,15 @@ namespace Api.Controllers
         [HttpGet("Accounts/{bankId:int}/StatementLines")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
-        public IActionResult ListStatementLines(int bankId, [FromQuery] string? status = null)
+        public IActionResult ListStatementLines(
+            int bankId,
+            [FromQuery] string? status = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = BankStatementImportService.DefaultListPageSize)
         {
             try
             {
-                return Ok(_statements.ListLines(bankId, status));
+                return Ok(_statements.ListLines(bankId, status, page, pageSize));
             }
             catch (TenantEntityNotFoundException)
             {

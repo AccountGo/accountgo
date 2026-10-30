@@ -15,7 +15,7 @@ namespace Services.Banking
         BankStatementCommitResultDto Commit(int bankId, BankStatementImportRequest request, string actor);
 
         /// <param name="status">unmatched (default), matched, or all.</param>
-        BankStatementLineListDto ListLines(int bankId, string? status);
+        BankStatementLineListDto ListLines(int bankId, string? status, int page = 1, int pageSize = BankStatementImportService.DefaultListPageSize);
 
         BankStatementLineDto Match(int lineId, MatchBankStatementLineRequest request);
         BankStatementLineDto Unmatch(int lineId);
