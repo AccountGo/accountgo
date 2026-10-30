@@ -208,11 +208,70 @@ namespace Services.Financial
 
         public FinancialYear CurrentFiscalYear()
         {
-            var query = (from fy in _fiscalYearRepo.Table
-                         where fy.IsActive == true
-                         select fy).FirstOrDefault();
+            var today = DateTime.UtcNow.Date;
+            var setting = _companySettingRepo.Table.FirstOrDefault();
+            if (setting == null)
+                return null;
+            if (today < setting.BooksStartDate.Date)
+                return null;
 
-            return query;
+            var stored = _fiscalYearRepo.Table
+                .FirstOrDefault(fy => fy.IsActive
+                    && today >= fy.StartDate.Date
+                    && today <= fy.EndDate.Date);
+            if (stored != null)
+                return stored;
+
+            var computed = FiscalYearCalculator.Containing(
+                today, setting.FiscalYearPattern, setting.FiscalYearStartMonth);
+            return new FinancialYear
+            {
+                CompanyId = setting.CompanyId,
+                FiscalYearCode = computed.Code,
+                FiscalYearName = computed.Code,
+                StartDate = computed.Start,
+                EndDate = computed.End,
+                IsActive = true
+            };
+        }
+
+        /// <inheritdoc />
+        public void EnsureFiscalYearsThrough(DateTime date)
+        {
+            var setting = _companySettingRepo.Table.FirstOrDefault();
+            if (setting == null)
+                return;
+
+            var booksStart = setting.BooksStartDate.Date;
+            if (date.Date < booksStart)
+                return;
+
+            var pattern = setting.FiscalYearPattern;
+            var startMonth = setting.FiscalYearStartMonth;
+            var requested = FiscalYearCalculator.Containing(date, pattern, startMonth);
+            var max = FiscalYearCalculator.Containing(DateTime.UtcNow.Date.AddYears(1), pattern, startMonth);
+            // Horizon is next fiscal year from today; later dates create nothing.
+            if (requested.Start > max.Start)
+                return;
+
+            var cursor = FiscalYearCalculator.Containing(booksStart, pattern, startMonth);
+            while (cursor.Start <= requested.Start)
+            {
+                if (!_fiscalYearRepo.Table.Any(fy => fy.FiscalYearCode == cursor.Code))
+                {
+                    _fiscalYearRepo.Insert(new FinancialYear
+                    {
+                        CompanyId = setting.CompanyId,
+                        FiscalYearCode = cursor.Code,
+                        FiscalYearName = cursor.Code,
+                        StartDate = cursor.Start,
+                        EndDate = cursor.End,
+                        IsActive = true
+                    });
+                }
+
+                cursor = FiscalYearCalculator.Containing(cursor.Start.AddYears(1), pattern, startMonth);
+            }
         }
 
         /// <summary>Rejects postings dated before the company's books start date (resolved in the current tenant scope).</summary>
@@ -330,6 +389,8 @@ namespace Services.Financial
                 throw new InvalidOperationException("One or more line(s) amount is zero.");
 
             _reconciledPeriodGuard?.EnsurePostingAllowed(glEntry);
+
+            EnsureFiscalYearsThrough(glEntry.Date);
 
             var activeFiscalYear = _fiscalYearRepo.Table
                 .FirstOrDefault(fy => fy.IsActive && glEntry.Date >= fy.StartDate && glEntry.Date <= fy.EndDate);

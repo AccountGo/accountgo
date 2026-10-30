@@ -210,10 +210,12 @@ namespace Services.Dashboard
             return _bankAccountService.GetCloseStatus(asOf);
         }
 
-        private static (DateTime Start, DateTime End) ResolveDateRange(DateTime? from, DateTime? to)
+        private (DateTime Start, DateTime End) ResolveDateRange(DateTime? from, DateTime? to)
         {
             var today = DateTime.Today;
-            var start = from?.Date ?? new DateTime(today.Year, 1, 1);
+            var start = from?.Date
+                ?? _financialService.CurrentFiscalYear()?.StartDate.Date
+                ?? new DateTime(today.Year, 1, 1);
             var end = to?.Date ?? today;
 
             if (end < start)

@@ -336,10 +336,20 @@ public class BankAccountServiceTests
         harness.SeedCashTree();
         harness.SeedOpeningBalanceEquity();
         harness.SetupOpeningBalanceFinancialMocks();
-        // On or after books start (2020-01-01) but outside the only active fiscal year.
+        // Year covering the date exists but is not open (Ensure must not reactivate it).
         var fy = harness.FiscalYears.Table.Single();
         fy.StartDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         fy.EndDate = new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+        fy.FiscalYearCode = "FY2026";
+        harness.FiscalYears.Insert(new FinancialYear
+        {
+            CompanyId = 1,
+            FiscalYearCode = "FY2025",
+            FiscalYearName = "FY2025",
+            StartDate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(2025, 12, 31, 0, 0, 0, DateTimeKind.Utc),
+            IsActive = false
+        });
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             harness.Service.Create(new CreateBankAccountRequest
@@ -350,6 +360,39 @@ public class BankAccountServiceTests
                 OpeningBalanceDate = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc)
             }, includeFullNumbers: false));
         Assert.Equal("Post an adjustment instead.", ex.Message);
+    }
+
+    [Fact]
+    public void Create_OpeningBalance_InLaterOpenYear_IsAccepted()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.SeedOpeningBalanceEquity();
+        harness.SetupOpeningBalanceFinancialMocks();
+        var fy = harness.FiscalYears.Table.Single();
+        fy.StartDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        fy.EndDate = new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+        fy.FiscalYearCode = "FY2026";
+        harness.FiscalYears.Insert(new FinancialYear
+        {
+            CompanyId = 1,
+            FiscalYearCode = "FY2027",
+            FiscalYearName = "FY2027",
+            StartDate = new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(2027, 12, 31, 0, 0, 0, DateTimeKind.Utc),
+            IsActive = true
+        });
+
+        var created = harness.Service.Create(new CreateBankAccountRequest
+        {
+            Name = "Later Year",
+            Type = 1,
+            OpeningBalance = 75m,
+            OpeningBalanceDate = new DateTime(2027, 3, 15, 0, 0, 0, DateTimeKind.Utc)
+        }, includeFullNumbers: false);
+
+        Assert.Equal(75m, created.OpeningBalance);
+        Assert.Equal(new DateTime(2027, 3, 15), created.OpeningBalanceDate!.Value.Date);
     }
 
     [Fact]

@@ -101,11 +101,20 @@ const statements: { key: Statement; label: string }[] = [
 const localDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-export function getDateRange(preset: Exclude<Preset, 'custom'>, today: Date, year?: FinancialYear): DateRange {
+export function getDateRange(
+  preset: Exclude<Preset, 'custom'>,
+  today: Date,
+  yearOrYears?: FinancialYear | FinancialYear[],
+): DateRange {
   const to = localDate(today);
   if (preset === 'all') return { from: '', to };
   if (preset === 'year') {
-    if (!year || year.startDate.slice(0, 10) > to || year.endDate.slice(0, 10) < to)
+    const years = yearOrYears == null ? [] : Array.isArray(yearOrYears) ? yearOrYears : [yearOrYears];
+    const year = years.find(y =>
+      y.isActive !== false
+      && y.startDate.slice(0, 10) <= to
+      && y.endDate.slice(0, 10) >= to);
+    if (!year)
       throw new Error('No active financial year covers today. Select a custom date range.');
     return { from: year.startDate.slice(0, 10), to };
   }
@@ -306,8 +315,7 @@ export default function Reports() {
   const loading = allowed && validRange && !data && !error;
   const tenantData = result?.slug === currentOrg.slug ? result.data : null;
   const today = localDate(new Date());
-  const activeYear = tenantData?.years.find(y => y.isActive && y.startDate.slice(0, 10) <= today && y.endDate.slice(0, 10) >= today)
-    ?? tenantData?.years.find(y => y.isActive);
+  const activeYear = tenantData?.years.find(y => y.isActive && y.startDate.slice(0, 10) <= today && y.endDate.slice(0, 10) >= today);
 
   useEffect(() => {
     if (!allowed || !validRange) return;
@@ -372,7 +380,7 @@ export default function Reports() {
             const next = event.target.value as Preset;
             setPreset(next);
             if (next !== 'custom') {
-              try { setRange(getDateRange(next, new Date(), activeYear)); }
+              try { setRange(getDateRange(next, new Date(), next === 'year' ? tenantData?.years : activeYear)); }
               catch (error) { setFailure({ key, message: error instanceof Error ? error.message : 'Invalid financial year.' }); }
             }
           }}>

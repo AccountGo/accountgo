@@ -171,6 +171,16 @@ test('presets use local calendar dates and the active fiscal year, including non
   assert.deepEqual(getDateRange('year', today, { startDate: '2026-07-01', endDate: '2027-06-30' }), { from: '2026-07-01', to: '2026-10-24' });
   assert.throws(() => getDateRange('year', today), /No active financial year/);
   assert.throws(() => getDateRange('year', today, { startDate: '2025-01-01', endDate: '2025-12-31' }), /No active financial year/);
+  assert.deepEqual(getDateRange('year', today, [
+    { startDate: '2025-01-01', endDate: '2025-12-31', isActive: true },
+    { startDate: '2026-01-01', endDate: '2026-12-31', isActive: true },
+    { startDate: '2027-01-01', endDate: '2027-12-31', isActive: true },
+  ]), { from: '2026-01-01', to: '2026-10-24' });
+  assert.deepEqual(getDateRange('year', today, [
+    { startDate: '2025-01-01', endDate: '2025-12-31', isActive: true },
+    { startDate: '2026-01-01', endDate: '2026-12-31', isActive: false },
+    { startDate: '2026-07-01', endDate: '2027-06-30', isActive: true },
+  ]), { from: '2026-07-01', to: '2026-10-24' });
   const params = new URLSearchParams(reportQuery({ from: '2026-04-01', to: '2026-04-30' }));
   assert.equal(params.get('from'), '2026-04-01T00:00:00');
   assert.equal(params.get('to'), '2026-04-30T23:59:59.9999999');
