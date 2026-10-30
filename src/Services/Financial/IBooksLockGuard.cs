@@ -18,5 +18,10 @@ namespace Services.Financial
         /// and the workspace has the Financials module.
         /// </summary>
         void EnsureDateAllowed(DateTime date);
+
+        /// <summary>
+        /// Temporarily bypasses lock checks within a using scope (used ONLY by close/reopen).
+        /// </summary>
+        IDisposable Bypass();
     }
 }

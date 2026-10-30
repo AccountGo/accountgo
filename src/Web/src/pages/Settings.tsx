@@ -35,6 +35,7 @@ import { InvoiceSettingsTab } from '../components/InvoiceSettingsTab';
 import { TaxSettingsTab } from '../components/TaxSettingsTab';
 import { AccountingPolicyCard } from '../components/AccountingPolicyCard';
 import { BooksLockCard } from '../components/BooksLockCard';
+import { YearEndCloseCard } from '../components/YearEndCloseCard';
 import { SettingsNav, SettingsNavGroup } from '../components/SettingsNav';
 import { ModalShell } from '../components/ModalShell';
 
@@ -813,6 +814,7 @@ export const Settings: React.FC = () => {
             >
               <AccountingPolicyCard canEdit={isWorkspaceAdmin} />
               <BooksLockCard canClose={hasPermission('financials.periods.close')} />
+              <YearEndCloseCard canClose={hasPermission('financials.periods.close')} />
 
               {/* Fiscal Year Section */}
               <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">

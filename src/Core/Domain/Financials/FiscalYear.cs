@@ -31,5 +31,12 @@ namespace Core.Domain.Financials
         public DateTime EndDate { get; set; }
 
         public bool IsActive { get; set; }
+
+        public DateTime? ClosedAt { get; set; }
+
+        [StringLength(256)]
+        public string? ClosedBy { get; set; }
+
+        public int? ClosingGeneralLedgerHeaderId { get; set; }
     }
 }

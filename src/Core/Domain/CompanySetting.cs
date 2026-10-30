@@ -34,6 +34,7 @@ namespace Core.Domain
         public DateTime? BooksLockedThrough { get; set; }
 
         public IndustryTemplate IndustryTemplate { get; set; } = IndustryTemplate.Services;
+        public EntityType EntityType { get; set; } = EntityType.SoleProprietor;
         public InventoryCostingMethod InventoryCostingMethod { get; set; } = InventoryCostingMethod.None;
         public string CoaTemplateId { get; set; } = "legacy-default";
         public DateTime? OnboardingChecklistDismissedAt { get; set; }

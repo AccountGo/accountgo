@@ -81,6 +81,19 @@ namespace Api.Service
                     throw new InvalidOperationException($"Chart of accounts template '{coaTemplateId}' is missing required control accounts: {string.Join(", ", missing)}.");
                 _db.SaveChanges();
 
+                var entityProfile = EntityEquityMapping.GetProfile(options.EntityType);
+                if (accounts.TryGetValue(entityProfile.CloseTargetAccountCode, out var targetAccount))
+                {
+                    // Apply display names to seeded accounts if renameable
+                    foreach (var (code, displayName) in entityProfile.DisplayNames)
+                    {
+                        if (accounts.TryGetValue(code, out var acc) && EntityEquityMapping.IsRenameable(code, acc.AccountName))
+                        {
+                            acc.AccountName = displayName;
+                        }
+                    }
+                }
+
                 if (!_db.GeneralLedgerSettings.Any())
                     _db.GeneralLedgerSettings.Add(new GeneralLedgerSetting
                     {
@@ -88,7 +101,8 @@ namespace Api.Service
                         PayableAccountId = accounts["20110"].Id,
                         GoodsReceiptNoteClearingAccountId = accounts["10810"].Id,
                         SalesDiscountAccountId = accounts["40400"].Id,
-                        ShippingChargeAccountId = accounts["40500"].Id
+                        ShippingChargeAccountId = accounts["40500"].Id,
+                        PermanentAccountId = targetAccount?.Id
                     });
 
                 var fy = FiscalYearCalculator.Containing(booksStart, options.FiscalYearPattern, options.FiscalYearStartMonth);
@@ -133,6 +147,7 @@ namespace Api.Service
                         FiscalYearStartMonth = options.FiscalYearPattern == FiscalYearPattern.Custom ? options.FiscalYearStartMonth : null,
                         BooksStartDate = booksStart,
                         IndustryTemplate = options.IndustryTemplate,
+                        EntityType = options.EntityType,
                         InventoryCostingMethod = options.InventoryCostingMethod,
                         CoaTemplateId = coaTemplateId
                     });

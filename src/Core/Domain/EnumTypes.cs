@@ -293,4 +293,13 @@ namespace Core.Domain
         Fifo = 1,
         WeightedAverage = 2
     }
+
+    public enum EntityType
+    {
+        SoleProprietor = 1,
+        Partnership = 2,
+        Corporation = 3,
+        Cooperative = 4,
+        NonProfit = 5
+    }
 }

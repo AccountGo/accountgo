@@ -53,6 +53,9 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 30500,Accumulated Losses,30000,3,FALSE,FALSE,100,CR
 30600,Other Reserves,30000,3,FALSE,FALSE,100,CR
 30700,Opening Balance Equity,30000,3,FALSE,FALSE,100,CR
+30800,Owner's Drawings,30000,3,TRUE,FALSE,100,DR
+30810,Dividends Declared,30000,3,TRUE,FALSE,100,DR
+30820,Prior Period Adjustments,30000,3,FALSE,FALSE,100,CR
 40000,Revenues,,4,FALSE,FALSE,100,CR
 40100,Sales A/C,40000,4,FALSE,FALSE,100,CR
 40200,Home Owners,40000,4,FALSE,FALSE,100,CR

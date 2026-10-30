@@ -106,6 +106,70 @@ WHERE p.""Name"" = 'financials.periods.close'"));
     }
 
     [Fact]
+    public void D1_0046_EntityTypeAndYearEndClose_RunUnderCompoundSelectLimit()
+    {
+        using var connection = OpenLegacyBankDb();
+        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+
+        Execute(connection, @"
+CREATE TABLE IF NOT EXISTS ""Company"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""Name"" TEXT NOT NULL,
+    ""Slug"" TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ""CompanySetting"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""CompanyId"" INTEGER NOT NULL,
+    ""Currency"" TEXT NOT NULL DEFAULT 'USD',
+    ""BooksStartDate"" TEXT NOT NULL DEFAULT '2026-01-01'
+);
+CREATE TABLE IF NOT EXISTS ""FinancialYear"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""CompanyId"" INTEGER NOT NULL,
+    ""FiscalYearCode"" TEXT NOT NULL,
+    ""FiscalYearName"" TEXT NOT NULL,
+    ""StartDate"" TEXT NOT NULL,
+    ""EndDate"" TEXT NOT NULL,
+    ""IsActive"" INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS ""AccountClass"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""Name"" TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ""GeneralLedgerSetting"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""CompanyId"" INTEGER NOT NULL,
+    ""PermanentAccountId"" INTEGER NULL
+);
+INSERT INTO ""Company"" (""Id"", ""Name"", ""Slug"") VALUES (1, 'Schema Co', 'schema-co');
+INSERT INTO ""CompanySetting"" (""CompanyId"") VALUES (1);
+INSERT INTO ""AccountClass"" (""Id"", ""Name"") VALUES (3, 'Equity');
+INSERT INTO ""Account"" (""Id"", ""AccountClassId"", ""ParentAccountId"", ""DrOrCrSide"", ""CompanyId"", ""AccountCode"", ""AccountName"", ""IsCash"", ""IsContraAccount"")
+VALUES
+ (300, 3, NULL, 2, 1, '30000', 'Equity', 0, 0),
+ (303, 3, 300, 2, 1, '30300', 'Retained Earnings', 0, 0);
+INSERT INTO ""GeneralLedgerSetting"" (""CompanyId"", ""PermanentAccountId"") VALUES (1, NULL);
+");
+
+        var migrationSql = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0046_entity_type_and_year_end_close.sql"));
+        Assert.Null(Record.Exception(() => ExecuteScript(connection, migrationSql)));
+
+        Assert.True(ColumnExists(connection, "CompanySetting", "EntityType"));
+        Assert.True(ColumnExists(connection, "FinancialYear", "ClosedAt"));
+        Assert.True(ColumnExists(connection, "FinancialYear", "ClosedBy"));
+        Assert.True(ColumnExists(connection, "FinancialYear", "ClosingGeneralLedgerHeaderId"));
+        Assert.Equal(1L, ScalarLong(connection, @"SELECT COUNT(*) FROM ""Account"" WHERE ""AccountCode"" = '30800'"));
+        Assert.Equal(1L, ScalarLong(connection, @"SELECT COUNT(*) FROM ""Account"" WHERE ""AccountCode"" = '30810'"));
+        Assert.Equal(1L, ScalarLong(connection, @"SELECT COUNT(*) FROM ""Account"" WHERE ""AccountCode"" = '30820'"));
+        Assert.Equal(303L, ScalarLong(connection, @"
+SELECT ""PermanentAccountId"" FROM ""GeneralLedgerSetting"" WHERE ""CompanyId"" = 1"));
+
+        Assert.DoesNotContain("UNION ALL", migrationSql, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(3, SplitSqlStatements(migrationSql).Count(s =>
+            s.Contains("INSERT INTO \"Account\"", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public void D1_0032_AbortsWhenAccountIdStillNull()
     {
         using var connection = OpenLegacyBankDb();
