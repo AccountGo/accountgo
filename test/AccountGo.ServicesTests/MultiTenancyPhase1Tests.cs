@@ -64,14 +64,10 @@ public class MultiTenancyPhase1Tests
         }
     }
 
-    [Fact]
+    [LocalDatabaseFact]
     public void SqliteSchemaUpgrader_Upgrades_AccountGoDb_And_Ensures_CompanyId_On_All_Tenant_Tables()
     {
-        var dbPath = Path.Combine(AppContext.BaseDirectory, "../../../../../src/Api/accountgo.db");
-        if (!File.Exists(dbPath))
-        {
-            dbPath = Path.GetFullPath("src/Api/accountgo.db");
-        }
+        var dbPath = LocalDevDatabase.Path!;
 
         Assert.True(File.Exists(dbPath), $"Target database not found at {dbPath}");
 
@@ -135,14 +131,10 @@ public class MultiTenancyPhase1Tests
         }
     }
 
-    [Fact]
+    [LocalDatabaseFact]
     public void Backfill_Assigns_Correct_Roles_Per_Decisions_D1_And_D2()
     {
-        var dbPath = Path.Combine(AppContext.BaseDirectory, "../../../../../src/Api/accountgo.db");
-        if (!File.Exists(dbPath))
-        {
-            dbPath = Path.GetFullPath("src/Api/accountgo.db");
-        }
+        var dbPath = LocalDevDatabase.Path!;
 
         using var connection = new SqliteConnection($"Data Source={dbPath}");
         // Test calling on a closed connection
@@ -216,7 +208,7 @@ public class MultiTenancyPhase1Tests
         }
     }
 
-    [Fact]
+    [LocalDatabaseFact]
     public void Fresh_Database_Schema_Matches_Upgraded_Database_Schema()
     {
         var tempUpgradedDb = Path.GetTempFileName();
@@ -224,11 +216,7 @@ public class MultiTenancyPhase1Tests
 
         try
         {
-            var sourceDbPath = Path.Combine(AppContext.BaseDirectory, "../../../../../src/Api/accountgo.db");
-            if (!File.Exists(sourceDbPath))
-            {
-                sourceDbPath = Path.GetFullPath("src/Api/accountgo.db");
-            }
+            var sourceDbPath = LocalDevDatabase.Path!;
             File.Copy(sourceDbPath, tempUpgradedDb, overwrite: true);
 
             using (var connUpgraded = new SqliteConnection($"Data Source={tempUpgradedDb}"))
@@ -322,17 +310,13 @@ public class MultiTenancyPhase1Tests
         }
     }
 
-    [Fact]
+    [LocalDatabaseFact]
     public async Task Real_App_Boots_Successfully_On_Existing_Upgraded_Database()
     {
         var tempDb = Path.Combine(Path.GetTempPath(), $"accountgo_prod_{Guid.NewGuid():N}.db");
         try
         {
-            var sourceDbPath = Path.Combine(AppContext.BaseDirectory, "../../../../../src/Api/accountgo.db");
-            if (!File.Exists(sourceDbPath))
-            {
-                sourceDbPath = Path.GetFullPath("src/Api/accountgo.db");
-            }
+            var sourceDbPath = LocalDevDatabase.Path!;
             File.Copy(sourceDbPath, tempDb, overwrite: true);
 
             var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
