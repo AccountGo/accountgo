@@ -31,7 +31,12 @@ import ReconciliationHistoryPage from './pages/ReconciliationHistory';
 import ReconcilePage from './pages/Reconcile';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
-import { PermissionDeniedCard, RequiresModule, useTenantContext } from './components/Gating';
+import {
+  PermissionDeniedCard,
+  RequiresModule,
+  RequiresStatementImport,
+  useTenantContext,
+} from './components/Gating';
 import { useAuth } from './auth/AuthContext';
 import { getPersistedOrgSlug } from './lib/storage';
 import { Loader2 } from 'lucide-react';
@@ -194,9 +199,9 @@ const router = createBrowserRouter([
           {
             path: 'banking/:bankId/statement-import',
             element: (
-              <RequiresModule module="financials">
+              <RequiresStatementImport>
                 <BankStatementImportPage />
-              </RequiresModule>
+              </RequiresStatementImport>
             ),
           },
           {

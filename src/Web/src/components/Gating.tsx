@@ -2,7 +2,14 @@ import React from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import { Lock, Sparkles, ArrowRight, ShieldAlert } from 'lucide-react';
 import { ModuleKey, TenantContextType } from '../types';
-import { useCapabilities } from '../lib/entitlements';
+import {
+  FEATURE_BANKING_STATEMENT_IMPORT,
+  useCapabilities,
+} from '../lib/entitlements';
+import {
+  ENTITLEMENT_DENIED_EVENT,
+  type EntitlementProblem,
+} from '../lib/entitlementEvents';
 
 export function useTenantContext(): TenantContextType {
   return useOutletContext<TenantContextType>();
@@ -75,6 +82,40 @@ export const RequiresModule: React.FC<RequiresModuleProps> = ({
 
   return <ModuleLockedCard module={modules[0]} orgSlug={currentOrg.slug} />;
 };
+
+/** Statement import page (#436): financials, hosted feature, or community — not financials alone. */
+export const RequiresStatementImport: React.FC<{ children: React.ReactNode; fallback?: React.ReactNode }> = ({
+  children,
+  fallback,
+}) => {
+  const { currentOrg } = useTenantContext();
+  const { canStatementImport } = useCapabilities();
+
+  if (canStatementImport) {
+    return <>{children}</>;
+  }
+
+  if (fallback !== undefined) {
+    return <>{fallback}</>;
+  }
+
+  return <ModuleLockedCard module="financials" orgSlug={currentOrg.slug} />;
+};
+
+/** Opens the plan-limit dialog for hosted Free workspaces that lack statement import. */
+export function announceStatementImportUpgrade(effectivePlan?: string | null): void {
+  if (typeof window === 'undefined') return;
+  const detail: EntitlementProblem = {
+    code: 'FEATURE_NOT_ENTITLED',
+    title: 'Feature not included in your plan',
+    detail: 'Statement import is available on Invoicing Pro and Accounting plans.',
+    requiredFeature: FEATURE_BANKING_STATEMENT_IMPORT,
+    effectivePlan: effectivePlan ?? undefined,
+    upgradeAvailable: true,
+    canManageBilling: true,
+  };
+  window.dispatchEvent(new CustomEvent<EntitlementProblem>(ENTITLEMENT_DENIED_EVENT, { detail }));
+}
 
 interface HasPermissionProps {
   permission: string | string[];

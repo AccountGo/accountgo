@@ -610,8 +610,8 @@ namespace Api.Controllers
         }
 
         [HttpPost("Accounts/{bankId:int}/StatementImports/Preview")]
-        [RequireModule(SystemModules.Financials)]
-        [RequirePermission(SystemPermissions.BankingReconcile)]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult PreviewStatementImport(int bankId, [FromBody] BankStatementImportRequest request)
         {
             try
@@ -629,8 +629,8 @@ namespace Api.Controllers
         }
 
         [HttpPost("Accounts/{bankId:int}/StatementImports")]
-        [RequireModule(SystemModules.Financials)]
-        [RequirePermission(SystemPermissions.BankingReconcile)]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult CommitStatementImport(int bankId, [FromBody] BankStatementImportRequest request)
         {
             try
@@ -651,7 +651,7 @@ namespace Api.Controllers
         }
 
         [HttpGet("Accounts/{bankId:int}/StatementLines")]
-        [RequireModule(SystemModules.Financials)]
+        [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
         public IActionResult ListStatementLines(
             int bankId,
@@ -674,8 +674,8 @@ namespace Api.Controllers
         }
 
         [HttpPost("StatementLines/{id:int}/Match")]
-        [RequireModule(SystemModules.Financials)]
-        [RequirePermission(SystemPermissions.BankingReconcile)]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult MatchStatementLine(int id, [FromBody] MatchBankStatementLineRequest? request)
         {
             try
@@ -696,8 +696,8 @@ namespace Api.Controllers
         }
 
         [HttpPost("StatementLines/{id:int}/Unmatch")]
-        [RequireModule(SystemModules.Financials)]
-        [RequirePermission(SystemPermissions.BankingReconcile)]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult UnmatchStatementLine(int id)
         {
             try

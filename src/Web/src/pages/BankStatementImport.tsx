@@ -5,6 +5,7 @@ import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
+import { useCapabilities } from '../lib/entitlements';
 import {
   CSV_SAMPLE_ROWS,
   clampStatementLinePage,
@@ -59,8 +60,10 @@ const BankStatementImportPage: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasPermission } = useTenantContext();
-  const canReconcile = hasPermission('banking.reconcile');
+  const canManage = hasPermission('banking.accounts.manage');
   const canCreateTx = hasPermission('banking.transactions.create');
+  const { canModule } = useCapabilities();
+  const hasFinancials = canModule('financials');
 
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [list, setList] = useState<BankStatementLineList | null>(null);
@@ -327,7 +330,7 @@ const BankStatementImportPage: React.FC = () => {
         </div>
       )}
 
-      {canReconcile && !account.archivedAt && (
+      {canManage && !account.archivedAt && (
         <section className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 space-y-4 shadow-sm">
           <h2 className="text-sm font-bold text-[var(--text-main)]">1. Choose a file</h2>
           <input
@@ -553,7 +556,7 @@ const BankStatementImportPage: React.FC = () => {
                   <td className="px-4 py-2.5">{line.reference || '—'}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(line.amount)}</td>
                   <td className="px-4 py-2.5 text-right">
-                    {canReconcile && line.isMatched && (
+                    {canManage && line.isMatched && (
                       <button
                         type="button"
                         disabled={busy}
@@ -563,7 +566,7 @@ const BankStatementImportPage: React.FC = () => {
                         <Link2Off className="w-3.5 h-3.5" /> Unmatch
                       </button>
                     )}
-                    {canReconcile && !line.isMatched && (
+                    {canManage && !line.isMatched && (
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         {line.candidates.length > 0 && (
                           <>
@@ -595,7 +598,7 @@ const BankStatementImportPage: React.FC = () => {
                             </button>
                           </>
                         )}
-                        {canCreateTx && (
+                        {hasFinancials && canCreateTx && (
                           <button
                             type="button"
                             disabled={busy}
