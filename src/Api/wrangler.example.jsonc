@@ -44,14 +44,6 @@
       }
     ]
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "accountgo-db",
-      "database_id": "YOUR_D1_DATABASE_ID",
-      "migrations_dir": "d1/migrations"
-    }
-  ],
   "migrations": [
     {
       "tag": "v1",
@@ -72,7 +64,7 @@
     // Phase 0: keep false until V2 is validated. Isolation remains one shared writer.
     "TIERED_CAPACITY_ENABLED": "false",
     "CONTAINER_INSTANCE_TYPE": "standard-1",
-    "DatabaseProvider": "Sqlite",
+    "DatabaseProvider": "Postgres",
     "EMAIL_PROVIDER": "Console",
     "PUBLIC_WEB_URL": "http://localhost:3000",
     "PUBLIC_API_URL": "http://localhost:8001",

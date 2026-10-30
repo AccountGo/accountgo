@@ -5,16 +5,16 @@
  * Container request dispatch shared by the V1 and V2 writers.
  *
  * Invariant: a request is only dispatched while `restored` is true, and `restored` is only true for the
- * container instance the D1 restore ran against:
- * - RestoreState hands out a token when a restore starts and accepts the commit only if nothing
+ * container instance the start-up (build) check ran against:
+ * - RestoreState hands out a token when the check starts and accepts the commit only if nothing
  *   invalidated it in between.
  * - Starting a container, a container exit (watchContainerExit), onStop/onError and a transient
  *   failure that leaves the container not running invalidate. A failure on a container that is still
- *   running keeps its restore.
+ *   running keeps its check.
  * - dispatch() is a raw port fetch that never starts a container, so the only way to get a new
  *   instance is the host's ensureReady(), which invalidates before starting one.
  * - fetchFromContainer() checks `restored && running` synchronously right before each dispatch and runs
- *   readiness + restore first when either is false.
+ *   readiness + the check first when either is false.
  */
 import {
   errorText,
@@ -97,7 +97,7 @@ export interface ContainerHost {
   isRunning(): boolean;
   /** Start the container if needed and wait for the port; invalidates before starting a new instance. */
   ensureReady(): Promise<void>;
-  /** Build check + D1 restore (single-flight). Throws the writer's restore errors. */
+  /** Build check (single-flight). Throws the writer's start-up errors. */
   ensureRestored(readyTiming?: ReadyTiming): Promise<void>;
   invalidate(reason: string): void;
   /** Port fetch that never starts a container. */
@@ -215,8 +215,7 @@ export async function fetchFromContainer(
       }
     }
 
-    // Only a container that is gone loses its restore. Re-restoring a running one would clear tables under
-    // in-flight requests and drop writes not yet synced to D1; real exits and new starts invalidate on their own.
+    // Only a container that is gone loses its check; real exits and new starts invalidate on their own.
     if (!host.isRunning()) host.invalidate(`${opts.label} failed: container is not running`);
     const reach: FailureReach = dispatched ? failureReach(failure) : "not-reached";
     const retry = attempt < opts.attempts && (replayable || reach === "not-reached");

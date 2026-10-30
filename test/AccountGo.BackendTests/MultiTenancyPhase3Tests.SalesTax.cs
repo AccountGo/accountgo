@@ -316,10 +316,8 @@ namespace AccountGo.BackendTests
             Assert.Equal(0m, (await GetInvoice(saved.Id)).BalanceDue);
         }
 
-        [SqliteTheory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public async Task SalesTax_SchemaUpgrade_DefaultsExistingDraftAndIssuedLinesWithoutChangingLedger(bool localUpgrade)
+        [SqliteFact]
+        public async Task SalesTax_SchemaUpgrade_DefaultsExistingDraftAndIssuedLinesWithoutChangingLedger()
         {
             foreach (var status in new[] { "Draft", "Open" })
             {
@@ -352,18 +350,8 @@ namespace AccountGo.BackendTests
                 PRAGMA foreign_keys=ON;";
             command.ExecuteNonQuery();
 
-            if (localUpgrade)
-            {
-                SqliteSchemaUpgrader.Upgrade(replica);
-                SqliteSchemaUpgrader.Upgrade(replica);
-            }
-            else
-            {
-                var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0018_sales_line_tax.sql"));
-                ApplyStockMigration(command, migration, skipColumnAdds: false);
-                // D1 records applied DDL once; replica replays must skip the already-added columns, like stock migrations.
-                ApplyStockMigration(command, migration, skipColumnAdds: true);
-            }
+            SqliteSchemaUpgrader.Upgrade(replica);
+            SqliteSchemaUpgrader.Upgrade(replica);
             command.CommandText = @"SELECT COUNT(*) FROM ""SalesInvoiceLine"" WHERE ""TaxId"" IS NOT NULL OR ""TaxAmount"" != 0";
             Assert.Equal(0L, command.ExecuteScalar());
             command.CommandText = @"SELECT COUNT(*) FROM ""SalesInvoiceLine""";

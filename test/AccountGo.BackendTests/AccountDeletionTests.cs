@@ -138,7 +138,7 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task CoOwner_Delete_RemovesMembership_KeepsBooksHistoryAndSyncs()
+        public async Task CoOwner_Delete_RemovesMembership_KeepsBooksHistory()
         {
             var owner = await CreateUser(OwnerEmail);
             var other = await CreateUser(OtherEmail);
@@ -186,9 +186,6 @@ namespace AccountGo.BackendTests
 
             var response = await Delete(owner.Token, OwnerEmail);
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-            var sync = AllSyncStatements(response);
-            Assert.Contains(sync, sql => sql.Contains("INSERT INTO \"AspNetUsers\"") && sql.Contains("\"DeletedAt\""));
-            Assert.Contains(sync, sql => sql.StartsWith("DELETE FROM \"CompanyMember\""));
 
             using var check = _factory.Services.CreateScope();
             var dbCheck = check.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -418,22 +415,6 @@ namespace AccountGo.BackendTests
         private static async Task<JsonElement> Json(HttpResponseMessage response)
         {
             return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
-        }
-
-        private static List<string> AllSyncStatements(HttpResponseMessage response)
-        {
-            var chunks = new List<string>();
-            var count = response.Headers.Contains("x-d1-sync-sql-count")
-                ? int.Parse(response.Headers.GetValues("x-d1-sync-sql-count").Single()) : 1;
-            for (var i = 0; i < count; i++)
-            {
-                var key = response.Headers.Contains("x-d1-sync-sql") ? "x-d1-sync-sql" : "x-d1-sync-sql-" + i;
-                chunks.Add(response.Headers.GetValues(key).Single());
-            }
-            using var input = new MemoryStream(Convert.FromBase64String(string.Concat(chunks)));
-            using var gzip = new GZipStream(input, CompressionMode.Decompress);
-            using var reader = new StreamReader(gzip, Encoding.UTF8);
-            return JsonSerializer.Deserialize<List<string>>(reader.ReadToEnd());
         }
 
         private sealed record UserSession(string Token, string Id);

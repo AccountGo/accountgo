@@ -1,18 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
 import { resolveContainerInstanceType } from "./container-capacity";
-import { constantTimeEqual, parseSyncSqlHeaders } from "./sync-utils";
+import { constantTimeEqual } from "./constant-time";
 import {
   BuildMismatchError,
-  RestoreError,
-  RestoreInterruptedError,
-  applyD1SyncFromResponse,
+  ContainerConfigError,
+  StartupInterruptedError,
   buildContainerEnvVars,
   errorText,
-  isRestoreTransient,
+  isStartupTransient,
   isTransientContainerError,
+  requirePersistentDatabase,
   resolveInternalSyncKey,
-  restoreD1ToContainer,
-  usesD1Copy,
   serviceUnavailable,
   sleep,
 } from "./container-shared";
@@ -31,7 +29,6 @@ import {
   isServerTimingEnabled,
   logSlowWorkerRequest,
   scrubPathForLog,
-  stripD1SyncHeaders,
   withServerTiming,
   type TimingSegment,
 } from "./server-timing";
@@ -41,7 +38,7 @@ const CONTAINER_PORT = 8001;
 const PORT_READY_TIMEOUT_MS = 90_000;
 const CONTAINER_RETRY_ATTEMPTS = 4;
 const CONTAINER_RETRY_BASE_DELAY_MS = 750;
-/** Match V1 sleepAfter = 15m so cold start + D1 restore does not thrash. */
+/** Match V1 sleepAfter = 15m so cold starts do not thrash. */
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const PORT_POLL_INTERVAL_MS = 500;
 
@@ -56,7 +53,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
   private initPromise: Promise<void> | null = null;
   private loggedMismatch = false;
 
-  /** True only while the running container is the one the last D1 restore went into. */
+  /** True only while the running container is the one the last build check passed against. */
   get restored(): boolean {
     return this.restoreState.restored;
   }
@@ -114,7 +111,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     }
 
     if (!container.running) {
-      // A container that is not running comes back empty; it must be restored before it serves anything.
+      // A container that is not running must pass the build check again before it serves anything.
       this.invalidate("container is starting");
       const images = container.images;
       if (!images?.base) {
@@ -180,7 +177,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     return await container.getTcpPort(CONTAINER_PORT).fetch(request);
   }
 
-  /** Internal build-check / restore calls; replayable because a failed restore is redone in full. */
+  /** Internal build-check calls; replayable because a failed check is simply redone. */
   private containerFetchWithRetry(
     input: string,
     init: RequestInit | undefined,
@@ -204,6 +201,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     watchContainerExit(this.ctx.container, this.restoreState, token, (m) =>
       console.warn(`[worker-v2] ${m}`)
     );
+    requirePersistentDatabase(this.env);
     const syncKey = resolveInternalSyncKey(this.env);
 
     if (this.env.BUILD_SHA) {
@@ -248,19 +246,9 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       }
     }
 
-    // On Postgres the container already has the data.
-    if (usesD1Copy(this.env)) {
-      await restoreD1ToContainer({
-        db: this.env.DB,
-        env: this.env,
-        containerFetchWithRetry: (input, init, label) =>
-          this.containerFetchWithRetry(String(input), init, label, readyTiming),
-      });
-    }
-
-    // Commit only if every restore batch went into the container that is running now.
+    // Commit only if the build check ran against the container that is running now.
     if (!this.isContainerRunning() || !this.restoreState.commit(token)) {
-      throw new RestoreInterruptedError();
+      throw new StartupInterruptedError();
     }
   }
 
@@ -272,7 +260,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       try {
         await p;
       } finally {
-        // Settled either way; a later invalidation must start a fresh restore.
+        // Settled either way; a later invalidation must start a fresh check.
         if (this.initPromise === p) {
           this.initPromise = null;
         }
@@ -282,7 +270,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
     try {
       await runOnce();
     } catch (err) {
-      if (!isRestoreTransient(err)) {
+      if (!isStartupTransient(err)) {
         throw err;
       }
       console.warn(`[worker-v2] initialize retry after transient failure: ${errorText(err)}`);
@@ -378,9 +366,9 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
           return finish(serviceUnavailable(prepErr.message, 5));
         }
 
-        if (prepErr instanceof RestoreError) {
-          const retryAfter = isRestoreTransient(prepErr) ? 5 : 8;
-          return finish(serviceUnavailable(prepErr.message, retryAfter));
+        if (prepErr instanceof ContainerConfigError) {
+          console.error(`[worker-v2] ${prepErr.message}`);
+          return finish(serviceUnavailable("Service is not configured, please try again later", 60));
         }
 
         console.error("[worker-v2] Container initialization failed:", prepErr);
@@ -415,55 +403,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
         return containerRes;
       }
 
-      let syncStatements: string[] = [];
-      try {
-        syncStatements = await parseSyncSqlHeaders(containerRes.headers);
-      } catch (headerErr: unknown) {
-        const message = headerErr instanceof Error ? headerErr.message : String(headerErr);
-        console.error(
-          `[worker-v2] Failed to parse D1 sync headers: method=${request.method} path=${scrubbedRoute} error=${message}`
-        );
-        await this.destroyContainer("d1-header-error");
-        return finish(serviceUnavailable("Your change could not be saved. Please retry.", 5), [
-          { name: "container", dur: containerMs },
-        ]);
-      }
-
-      let d1Ms: number | undefined;
-      try {
-        const d1Started = Date.now();
-        await applyD1SyncFromResponse({
-          db: this.env.DB,
-          syncStatements,
-          method: request.method,
-          pathname: url.pathname,
-        });
-        if (syncStatements.length > 0) {
-          d1Ms = Date.now() - d1Started;
-        }
-      } catch {
-        await this.destroyContainer("d1-sync-failure");
-        return finish(serviceUnavailable("Your change could not be saved. Please retry.", 5), [
-          { name: "container", dur: containerMs },
-        ]);
-      }
-
-      const responseHeaders = stripD1SyncHeaders(containerRes.headers);
-      const base = new Response(containerRes.body, {
-        status: containerRes.status,
-        statusText: containerRes.statusText,
-        headers: responseHeaders,
-      });
-
-      const extra: TimingSegment[] = [{ name: "container", dur: containerMs }];
-      if (d1Ms !== undefined) {
-        extra.push({
-          name: "d1",
-          dur: d1Ms,
-          desc: syncStatements.length === 1 ? "1 stmt" : `${syncStatements.length} stmts`,
-        });
-      }
-      return finish(base, extra);
+      return finish(containerRes, [{ name: "container", dur: containerMs }]);
     } catch (err) {
       console.error(
         `[worker-v2] Proxy failed method=${request.method} path=${scrubbedRoute}: ${errorText(err)}`
@@ -471,7 +411,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       if (err instanceof ContainerUnavailableError) {
         return finish(unavailableResponse(err));
       }
-      if (err instanceof BuildMismatchError || err instanceof RestoreError) {
+      if (err instanceof BuildMismatchError) {
         return finish(serviceUnavailable(err.message, 5));
       }
       this.invalidate("proxy failed");

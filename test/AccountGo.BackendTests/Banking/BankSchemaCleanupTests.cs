@@ -22,206 +22,13 @@ namespace AccountGo.BackendTests.Banking;
 public class BankSchemaCleanupTests
 {
     [Fact]
-    public void D1_0032_RunsUnderCompoundSelectLimit()
+    public void SqliteSchemaUpgrader_Defines_PriorPeriodAdjustment_Column()
     {
-        using var connection = OpenLegacyBankDb();
-        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-
-        // Preflight-clean: every bank already has a dedicated postable cash account.
-        SeedEligibleBanks(connection);
-
-        var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0032_bank_accounts.sql"));
-        var ex = Record.Exception(() => ExecuteScript(connection, migration));
-        Assert.Null(ex);
-
-        Assert.True(ColumnExists(connection, "Bank", "IsDefaultForReceipts"));
-        Assert.True(ColumnExists(connection, "Bank", "ArchivedAt"));
-        Assert.True(IndexExists(connection, "UX_Bank_Company_Account"));
-        Assert.True(TriggerExists(connection, "trg_Bank_AccountId_required_insert"));
-    }
-
-    [Fact]
-    public void D1_0044_And_0045_BooksLock_RunUnderCompoundSelectLimit()
-    {
-        using var connection = OpenLegacyBankDb();
-        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-
-        Execute(connection, @"
-CREATE TABLE IF NOT EXISTS ""CompanySetting"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""CompanyId"" INTEGER NOT NULL,
-    ""Currency"" TEXT NOT NULL DEFAULT 'USD',
-    ""BooksStartDate"" TEXT NOT NULL DEFAULT '1970-01-01'
-);
-CREATE TABLE IF NOT EXISTS ""SecurityGroup"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""Name"" TEXT NOT NULL,
-    ""DisplayName"" TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS ""SecurityPermission"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""Name"" TEXT NOT NULL,
-    ""DisplayName"" TEXT NOT NULL,
-    ""SecurityGroupId"" INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS ""SecurityRole"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""Name"" TEXT NOT NULL,
-    ""DisplayName"" TEXT NOT NULL,
-    ""SysAdmin"" INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS ""SecurityRolePermission"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""SecurityRoleId"" INTEGER NOT NULL,
-    ""SecurityPermissionId"" INTEGER NOT NULL
-);
-INSERT INTO ""SecurityGroup"" (""Name"", ""DisplayName"") VALUES ('Financials', 'General Ledger');
-INSERT INTO ""SecurityGroup"" (""Name"", ""DisplayName"") VALUES ('Admin', 'Administration');
-INSERT INTO ""SecurityPermission"" (""Name"", ""DisplayName"", ""SecurityGroupId"")
-SELECT 'admin.members.manage', 'Manage Members', g.""Id"" FROM ""SecurityGroup"" g WHERE g.""Name"" = 'Admin';
-INSERT INTO ""SecurityRole"" (""Name"", ""DisplayName"") VALUES ('Workspace Admin Mirror', 'Workspace Admin Mirror');
-INSERT INTO ""SecurityRolePermission"" (""SecurityRoleId"", ""SecurityPermissionId"")
-SELECT r.""Id"", p.""Id"" FROM ""SecurityRole"" r, ""SecurityPermission"" p
-WHERE r.""Name"" = 'Workspace Admin Mirror' AND p.""Name"" = 'admin.members.manage';
-");
-
-        var lockSql = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0044_books_lock.sql"));
-        var permSql = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0045_books_lock_permission.sql"));
-        Assert.Null(Record.Exception(() => ExecuteScript(connection, lockSql)));
-        Assert.Null(Record.Exception(() => ExecuteScript(connection, permSql)));
-
-        Assert.True(ColumnExists(connection, "CompanySetting", "BooksLockedThrough"));
-        Assert.True(IndexExists(connection, "IX_BooksLockChange_CompanyId"));
-        Assert.Equal(1, ScalarLong(connection, @"SELECT COUNT(*) FROM ""SecurityPermission"" WHERE ""Name"" = 'financials.periods.close'"));
-        Assert.Equal(1, ScalarLong(connection, @"
-SELECT COUNT(*) FROM ""SecurityRolePermission"" rp
-JOIN ""SecurityPermission"" p ON p.""Id"" = rp.""SecurityPermissionId""
-WHERE p.""Name"" = 'financials.periods.close'"));
-        // One INSERT per statement: no multi-row VALUES or UNION ALL in either migration.
-        Assert.DoesNotContain("UNION ALL", lockSql + permSql, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(1, SplitSqlStatements(permSql).Count(s =>
-            s.Contains("INSERT INTO \"SecurityPermission\"", StringComparison.Ordinal)));
-        Assert.Equal(1, SplitSqlStatements(permSql).Count(s =>
-            s.Contains("INSERT INTO \"SecurityRolePermission\"", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public void D1_0046_EntityTypeAndYearEndClose_RunUnderCompoundSelectLimit()
-    {
-        using var connection = OpenLegacyBankDb();
-        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-
-        Execute(connection, @"
-CREATE TABLE IF NOT EXISTS ""Company"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""Name"" TEXT NOT NULL,
-    ""Slug"" TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS ""CompanySetting"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""CompanyId"" INTEGER NOT NULL,
-    ""Currency"" TEXT NOT NULL DEFAULT 'USD',
-    ""BooksStartDate"" TEXT NOT NULL DEFAULT '2026-01-01'
-);
-CREATE TABLE IF NOT EXISTS ""FinancialYear"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""CompanyId"" INTEGER NOT NULL,
-    ""FiscalYearCode"" TEXT NOT NULL,
-    ""FiscalYearName"" TEXT NOT NULL,
-    ""StartDate"" TEXT NOT NULL,
-    ""EndDate"" TEXT NOT NULL,
-    ""IsActive"" INTEGER NOT NULL DEFAULT 1
-);
-CREATE TABLE IF NOT EXISTS ""AccountClass"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""Name"" TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS ""GeneralLedgerSetting"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""CompanyId"" INTEGER NOT NULL,
-    ""PermanentAccountId"" INTEGER NULL
-);
-INSERT INTO ""Company"" (""Id"", ""Name"", ""Slug"") VALUES (1, 'Schema Co', 'schema-co');
-INSERT INTO ""CompanySetting"" (""CompanyId"") VALUES (1);
-INSERT INTO ""AccountClass"" (""Id"", ""Name"") VALUES (3, 'Equity');
-INSERT INTO ""Account"" (""Id"", ""AccountClassId"", ""ParentAccountId"", ""DrOrCrSide"", ""CompanyId"", ""AccountCode"", ""AccountName"", ""IsCash"", ""IsContraAccount"")
-VALUES
- (300, 3, NULL, 2, 1, '30000', 'Equity', 0, 0),
- (303, 3, 300, 2, 1, '30300', 'Retained Earnings', 0, 0);
-INSERT INTO ""GeneralLedgerSetting"" (""CompanyId"", ""PermanentAccountId"") VALUES (1, NULL);
-");
-
-        var migrationSql = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0046_entity_type_and_year_end_close.sql"));
-        Assert.Null(Record.Exception(() => ExecuteScript(connection, migrationSql)));
-
-        Assert.True(ColumnExists(connection, "CompanySetting", "EntityType"));
-        Assert.True(ColumnExists(connection, "FinancialYear", "ClosedAt"));
-        Assert.True(ColumnExists(connection, "FinancialYear", "ClosedBy"));
-        Assert.True(ColumnExists(connection, "FinancialYear", "ClosingGeneralLedgerHeaderId"));
-        Assert.Equal(1L, ScalarLong(connection, @"SELECT COUNT(*) FROM ""Account"" WHERE ""AccountCode"" = '30800'"));
-        Assert.Equal(1L, ScalarLong(connection, @"SELECT COUNT(*) FROM ""Account"" WHERE ""AccountCode"" = '30810'"));
-        Assert.Equal(1L, ScalarLong(connection, @"SELECT COUNT(*) FROM ""Account"" WHERE ""AccountCode"" = '30820'"));
-        Assert.Equal(303L, ScalarLong(connection, @"
-SELECT ""PermanentAccountId"" FROM ""GeneralLedgerSetting"" WHERE ""CompanyId"" = 1"));
-
-        Assert.DoesNotContain("UNION ALL", migrationSql, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(3, SplitSqlStatements(migrationSql).Count(s =>
-            s.Contains("INSERT INTO \"Account\"", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public void D1_0032_AbortsWhenAccountIdStillNull()
-    {
-        using var connection = OpenLegacyBankDb();
-        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-
-        Execute(connection, @"
-INSERT INTO ""Account"" (""Id"", ""AccountClassId"", ""ParentAccountId"", ""DrOrCrSide"", ""CompanyId"", ""AccountCode"", ""AccountName"", ""IsCash"", ""IsContraAccount"")
-VALUES (5, 1, 2, 1, 1, '10110', 'Cash in Hand and in Bank', 1, 0);
-INSERT INTO ""Bank"" (""Id"", ""CompanyId"", ""Type"", ""Name"", ""AccountId"", ""IsDefault"", ""IsActive"")
-VALUES (1, 1, 1, 'Orphan', NULL, 0, 1);
-");
-
-        var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0032_bank_accounts.sql"));
-        var ex = Assert.Throws<SqliteException>(() => ExecuteScript(connection, migration));
-        Assert.Contains("CONSTRAINT", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void D1_0047_PriorPeriodAdjustment_RunUnderCompoundSelectLimit_AndUpgraderAddsColumn()
-    {
-        using var connection = OpenLegacyBankDb();
-        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-
-        Execute(connection, @"
-CREATE TABLE IF NOT EXISTS ""JournalEntryHeader"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""CompanyId"" INTEGER NOT NULL,
-    ""Date"" TEXT NOT NULL,
-    ""Memo"" TEXT NULL,
-    ""VoucherType"" INTEGER NULL
-);
-");
-
-        var migrationSql = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0047_prior_period_adjustment.sql"));
-        Assert.DoesNotContain("UNION ALL", migrationSql, StringComparison.OrdinalIgnoreCase);
-        Assert.Null(Record.Exception(() => ExecuteScript(connection, migrationSql)));
-        Assert.True(ColumnExists(connection, "JournalEntryHeader", "AdjustsFiscalYearId"));
-
-        // Upgrader mirror of 0047: AddColumnIfMissing (same SQL as EnsurePriorPeriodAdjustment).
-        Execute(connection, @"DROP TABLE ""JournalEntryHeader"";
-CREATE TABLE ""JournalEntryHeader"" (
-    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    ""CompanyId"" INTEGER NOT NULL,
-    ""Date"" TEXT NOT NULL
-);");
-        Assert.False(ColumnExists(connection, "JournalEntryHeader", "AdjustsFiscalYearId"));
-        Execute(connection, @"ALTER TABLE ""JournalEntryHeader"" ADD COLUMN ""AdjustsFiscalYearId"" INTEGER NULL;");
-        Assert.True(ColumnExists(connection, "JournalEntryHeader", "AdjustsFiscalYearId"));
-
+        // D1 migrations were removed (#462); SQLite upgrades go through SqliteSchemaUpgrader.
         var upgrader = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/Data/Schema/SqliteSchemaUpgrader.cs"));
         Assert.Contains("EnsurePriorPeriodAdjustment", upgrader, StringComparison.Ordinal);
         Assert.Contains("AdjustsFiscalYearId", upgrader, StringComparison.Ordinal);
+        Assert.Contains("EnsurePriorPeriodAdjustment(connection)", upgrader, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -289,7 +96,9 @@ CREATE TABLE ""JournalEntryHeader"" (
     {
         using var connection = OpenLegacyBankDb();
         SeedEligibleBanks(connection);
-        ExecuteScript(connection, File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0032_bank_accounts.sql")));
+        AddBankColumns(connection);
+        BankAccountCleanup.Apply(connection);
+        BankAccountCleanup.EnsureIndexesAndTriggers(connection);
 
         var ex = Assert.Throws<SqliteException>(() => Execute(connection, @"
 INSERT INTO ""Bank"" (""CompanyId"", ""Type"", ""Name"", ""AccountId"", ""IsDefault"", ""IsActive"", ""IsDefaultForReceipts"", ""IsDefaultForPayments"")
@@ -343,32 +152,6 @@ VALUES
             BankAccountCleanup.Apply(connection);
             BankAccountCleanup.EnsureIndexesAndTriggers(connection);
         });
-        Assert.Null(ex);
-
-        Assert.Equal("BDO", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 1;"));
-        Assert.Equal("BDO (2)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 2;"));
-        Assert.Equal("bdo (3)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 3;"));
-        Assert.Equal("BDO (4)", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 4;"));
-        AssertCleanupNameUniqueness(connection);
-    }
-
-    [Fact]
-    public void D1_0032_DeduplicateNames_ThreeVariantsAndExistingSuffix()
-    {
-        using var connection = OpenLegacyBankDb();
-        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
-        SeedCashChart(connection);
-        Execute(connection, @"
-INSERT INTO ""Bank"" (""Id"", ""CompanyId"", ""Type"", ""Name"", ""AccountId"", ""IsDefault"", ""IsActive"")
-VALUES
- (1, 1, 1, 'BDO', 16, 0, 1),
- (2, 1, 1, 'BDO (2)', 17, 0, 1),
- (3, 1, 1, 'bdo', 18, 0, 1),
- (4, 1, 1, 'BDO', 20, 0, 1);
-");
-
-        var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0032_bank_accounts.sql"));
-        var ex = Record.Exception(() => ExecuteScript(connection, migration));
         Assert.Null(ex);
 
         Assert.Equal("BDO", ScalarString(connection, @"SELECT ""Name"" FROM ""Bank"" WHERE ""Id"" = 1;"));

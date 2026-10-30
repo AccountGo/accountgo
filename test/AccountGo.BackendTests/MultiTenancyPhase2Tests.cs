@@ -510,9 +510,9 @@ namespace AccountGo.BackendTests
             }
         }
 
-        // Test 6: Created rows have CompanyId = A; emitted x-d1-sync-sql contains "CompanyId" with A's id
+        // Test 6: Created rows have CompanyId = A
         [Fact]
-        public async Task Test6_Created_Rows_Stamped_With_CompanyId_And_Included_In_D1_Sync_Sql()
+        public async Task Test6_Created_Rows_Stamped_With_CompanyId()
         {
             var customerDto = new Dto.Sales.Customer
             {
@@ -524,23 +524,6 @@ namespace AccountGo.BackendTests
             req.Content = JsonContent.Create(customerDto);
             var res = await _client.SendAsync(req);
             Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-
-            // Assert D1 sync SQL header is present and contains CompanyId with CompanyAId
-            Assert.True(res.Headers.Contains("x-d1-sync-sql") || res.Headers.Contains("x-d1-sync-sql-0"));
-            var syncHeader = res.Headers.Contains("x-d1-sync-sql")
-                ? res.Headers.GetValues("x-d1-sync-sql").First()
-                : res.Headers.GetValues("x-d1-sync-sql-0").First();
-
-            Assert.Equal("gzip", res.Headers.GetValues("x-d1-sync-encoding").Single());
-            string decodedJson;
-            using (var input = new MemoryStream(Convert.FromBase64String(syncHeader)))
-            using (var gzip = new GZipStream(input, CompressionMode.Decompress))
-            using (var reader = new StreamReader(gzip, Encoding.UTF8))
-                decodedJson = reader.ReadToEnd();
-            var stmts = System.Text.Json.JsonSerializer.Deserialize<List<string>>(decodedJson);
-            Assert.NotNull(stmts);
-            var customerInsert = Assert.Single(stmts, s => s.StartsWith("INSERT INTO \"Customer\""));
-            Assert.Equal(CompanyAId.ToString(), InsertedValue(customerInsert, "CompanyId"));
 
             // Verify in DB that CompanyId was stamped to CompanyAId
             using var scope = _factory.Services.CreateScope();
@@ -696,33 +679,6 @@ namespace AccountGo.BackendTests
             Assert.Contains("\"role\":\"Owner\"", json);
             Assert.Contains("\"plan\":\"community\"", json);
         }
-        /// <summary>Returns the literal inserted for a column in an `INSERT INTO "t" (cols) VALUES (vals) ...` statement.</summary>
-        private static string InsertedValue(string insertSql, string column)
-        {
-            var colsStart = insertSql.IndexOf('(') + 1;
-            var colsEnd = insertSql.IndexOf(") VALUES (", StringComparison.Ordinal);
-            var columns = insertSql.Substring(colsStart, colsEnd - colsStart).Split(", ").Select(c => c.Trim('"')).ToList();
-
-            var values = new List<string>();
-            var current = new StringBuilder();
-            var inString = false;
-            for (var i = colsEnd + ") VALUES (".Length; i < insertSql.Length; i++)
-            {
-                var ch = insertSql[i];
-                if (ch == '\'') inString = !inString; // '' escapes toggle twice, which keeps the state right
-                if (!inString && (ch == ',' || ch == ')'))
-                {
-                    values.Add(current.ToString().Trim());
-                    current.Clear();
-                    if (ch == ')') break;
-                    continue;
-                }
-                current.Append(ch);
-            }
-
-            return values[columns.IndexOf(column)];
-        }
-
         // Old endpoints that listed or described every workspace are gone or scoped to the caller's workspace.
         [Fact]
         public async Task Test12_Workspace_Listing_And_Subscription_Do_Not_Leak_Other_Workspaces()

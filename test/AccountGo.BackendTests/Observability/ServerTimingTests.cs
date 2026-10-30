@@ -35,7 +35,6 @@ public class ServerTimingTests
         Assert.Contains("app;dur=", header);
         Assert.Contains("db;dur=", header);
         Assert.Contains("desc=\"2 queries\"", header);
-        Assert.DoesNotContain("d1prep", header);
     }
 
     [Fact]
@@ -46,17 +45,6 @@ public class ServerTimingTests
         var res = await client.GetAsync("/timing-probe");
         res.EnsureSuccessStatusCode();
         Assert.False(res.Headers.Contains(ServerTimingMiddleware.HeaderName));
-    }
-
-    [Fact]
-    public async Task Middleware_IncludesD1Prep_WhenAccumulatorSet()
-    {
-        using var host = await CreateHostAsync(enabled: true, runQueries: 0, setD1PrepMs: 7);
-        var client = host.GetTestClient();
-        var res = await client.GetAsync("/timing-probe");
-        res.EnsureSuccessStatusCode();
-        var header = string.Join(", ", res.Headers.GetValues(ServerTimingMiddleware.HeaderName));
-        Assert.Contains("d1prep;dur=7", header);
     }
 
     [Fact]
@@ -94,14 +82,13 @@ public class ServerTimingTests
         var acc = new ServerTimingAccumulator();
         acc.AddDbCommand(4);
         acc.AddDbCommand(6);
-        acc.SetD1Prep(2);
         var header = ServerTimingMiddleware.BuildHeader(15, acc);
-        Assert.Equal("app;dur=15, db;dur=10;desc=\"2 queries\", d1prep;dur=2", header);
+        Assert.Equal("app;dur=15, db;dur=10;desc=\"2 queries\"", header);
         Assert.DoesNotContain("SELECT", header, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Company", header, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task<IHost> CreateHostAsync(bool enabled, int runQueries, long? setD1PrepMs = null)
+    private static async Task<IHost> CreateHostAsync(bool enabled, int runQueries)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -130,12 +117,6 @@ public class ServerTimingTests
                     {
                         endpoints.MapGet("/timing-probe", async (HttpContext ctx) =>
                         {
-                            if (setD1PrepMs is long prep
-                                && ctx.Items[ServerTimingAccumulator.HttpContextItemsKey] is ServerTimingAccumulator acc)
-                            {
-                                acc.SetD1Prep(prep);
-                            }
-
                             if (runQueries > 0
                                 && ctx.Items[ServerTimingAccumulator.HttpContextItemsKey] is ServerTimingAccumulator timing)
                             {
