@@ -47,6 +47,7 @@ namespace Services.Financial
 
     public sealed class YearEndYearSummary
     {
+        public int Id { get; set; }
         public string FiscalYearCode { get; set; } = "";
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }

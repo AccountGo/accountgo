@@ -6,6 +6,25 @@ import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { BankCloseStatusLoader } from '../components/BankCloseStatusCard';
 import { currencySymbol, DEFAULT_CURRENCY } from '../lib/currency';
+import { comparativeRange } from '../lib/comparativeRange';
+
+const COMPARE_STORAGE_KEY = 'accountgo.reports.comparePreviousPeriod';
+
+function readCompareToggle(): boolean {
+  try {
+    return localStorage.getItem(COMPARE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeCompareToggle(value: boolean): void {
+  try {
+    localStorage.setItem(COMPARE_STORAGE_KEY, value ? '1' : '0');
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
 
 export interface FinancialYear {
   fiscalYearCode: string;
@@ -90,6 +109,12 @@ export interface StatementRow {
   debit?: number;
   credit?: number;
   amount?: number;
+  /** Minor units for the comparative period (P&L / Balance Sheet compare mode). */
+  comparativeAmount?: number;
+  change?: number;
+  /** Percent change; null when the comparative amount is 0. */
+  changePercent?: number | null;
+  accountId?: number;
 }
 
 const statements: { key: Statement; label: string }[] = [
@@ -206,7 +231,11 @@ export function buildStatement(statement: Statement, data: ReportData, hideZero 
     rows.push({ code: '', label, kind: 'section' });
     const visible = byCode(accounts).filter(a => !hideZero || minorUnits(a.amount) !== 0);
     rows.push(...visible.map(a => ({
-      code: a.accountCode, label: a.accountName, kind: 'account' as const, amount: minorUnits(a.amount),
+      code: a.accountCode,
+      label: a.accountName,
+      kind: 'account' as const,
+      amount: minorUnits(a.amount),
+      accountId: a.accountId,
     })));
     const amount = accounts.reduce((sum, a) => sum + minorUnits(a.amount), 0);
     rows.push({ code: '', label: `Total ${label}`, kind: 'total', amount });
@@ -278,21 +307,78 @@ export function buildStatement(statement: Statement, data: ReportData, hideZero 
   return rows;
 }
 
-export function statementCsv(statement: Statement, rows: StatementRow[], metadata: string[][]): string {
+export function statementCsv(
+  statement: Statement,
+  rows: StatementRow[],
+  metadata: string[][],
+  options?: { compare?: boolean; currentHeader?: string; comparativeHeader?: string },
+): string {
   const amount = (value?: number) => value === undefined ? '' : (value / 100).toFixed(2);
+  const pct = (value: number | null | undefined) =>
+    value === undefined || value === null ? '' : `${value.toFixed(1)}%`;
+  const compare = !!options?.compare && (statement === 'income' || statement === 'balanceSheet');
+  const header = statement === 'trialBalance'
+    ? ['Code', 'Account', 'Debit', 'Credit']
+    : compare
+      ? ['Code', 'Account', options?.currentHeader || 'Current', options?.comparativeHeader || 'Comparative', 'Change', 'Change %']
+      : ['Code', 'Account', 'Amount'];
   const cells = [
     ...metadata,
     [],
-    statement === 'trialBalance' ? ['Code', 'Account', 'Debit', 'Credit'] : ['Code', 'Account', 'Amount'],
+    header,
     ...rows.map(row => statement === 'trialBalance'
       ? [row.code, row.label, amount(row.debit), amount(row.credit)]
-      : [row.code, row.label, amount(row.amount)]),
+      : compare
+        ? [row.code, row.label, amount(row.amount), amount(row.comparativeAmount), amount(row.change), pct(row.changePercent)]
+        : [row.code, row.label, amount(row.amount)]),
   ];
   return cells.map(row => row.map(cell => {
     // Prevent spreadsheet formulas in user-controlled account codes and names.
     const safe = /^\s*[=+@\t\r-]/.test(cell) && !/^-?\d+(\.\d+)?$/.test(cell) ? `'${cell}` : cell;
     return `"${safe.replaceAll('"', '""')}"`;
   }).join(',')).join('\r\n');
+}
+
+/** Merge current and comparative P&L / Balance Sheet statement rows by account id (or label for totals). */
+export function applyComparativeAmounts(
+  currentRows: StatementRow[],
+  comparativeRows: StatementRow[],
+): StatementRow[] {
+  const byKey = new Map<string, StatementRow>();
+  for (const row of comparativeRows) {
+    const key = row.kind === 'account' && row.accountId
+      ? `a:${row.accountId}`
+      : `${row.kind}:${row.code}:${row.label}`;
+    byKey.set(key, row);
+  }
+  const seen = new Set<string>();
+  const merged: StatementRow[] = currentRows.map(row => {
+    const key = row.kind === 'account' && row.accountId
+      ? `a:${row.accountId}`
+      : `${row.kind}:${row.code}:${row.label}`;
+    seen.add(key);
+    const other = byKey.get(key);
+    const amount = row.amount ?? 0;
+    const comparativeAmount = other?.amount ?? 0;
+    const change = amount - comparativeAmount;
+    const changePercent = comparativeAmount === 0 ? null : (change / Math.abs(comparativeAmount)) * 100;
+    return { ...row, comparativeAmount, change, changePercent };
+  });
+  for (const row of comparativeRows) {
+    const key = row.kind === 'account' && row.accountId
+      ? `a:${row.accountId}`
+      : `${row.kind}:${row.code}:${row.label}`;
+    if (seen.has(key)) continue;
+    const comparativeAmount = row.amount ?? 0;
+    merged.push({
+      ...row,
+      amount: 0,
+      comparativeAmount,
+      change: -comparativeAmount,
+      changePercent: comparativeAmount === 0 ? null : -100,
+    });
+  }
+  return merged;
 }
 
 export default function Reports() {
@@ -305,12 +391,16 @@ export default function Reports() {
   const [preset, setPreset] = useState<Preset>('month');
   const [range, setRange] = useState<DateRange>(() => getDateRange('month', new Date()));
   const [hideZero, setHideZero] = useState(true);
+  const [compare, setCompare] = useState(readCompareToggle);
   const [revision, setRevision] = useState(0);
-  const [result, setResult] = useState<{ key: string; slug: string; data: ReportData } | null>(null);
+  const [result, setResult] = useState<{ key: string; slug: string; data: ReportData; comparative?: ReportData; comparativeRange?: DateRange | null } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const validRange = !!range.to && (!range.from || range.from <= range.to);
-  const key = JSON.stringify([currentOrg.slug, range.from, range.to, basis, revision]);
+  const canCompare = statement === 'income' || statement === 'balanceSheet';
+  const key = JSON.stringify([currentOrg.slug, range.from, range.to, basis, revision, compare && canCompare]);
   const data = result?.key === key ? result.data : null;
+  const comparativeData = result?.key === key ? result.comparative : undefined;
+  const activeCompareRange = result?.key === key ? result.comparativeRange : undefined;
   const error = failure?.key === key ? failure.message : null;
   const loading = allowed && validRange && !data && !error;
   const tenantData = result?.slug === currentOrg.slug ? result.data : null;
@@ -320,21 +410,57 @@ export default function Reports() {
   useEffect(() => {
     if (!allowed || !validRange) return;
     let cancelled = false;
-    loadReportData(authFetch, range, basis).then(
-      data => { if (!cancelled) { setResult({ key, slug: currentOrg.slug, data }); setFailure(null); } },
-      error => { if (!cancelled) setFailure({ key, message: error instanceof Error ? error.message : 'Unable to load financial reports.' }); },
-    );
+    (async () => {
+      try {
+        const [data, policyRes] = await Promise.all([
+          loadReportData(authFetch, range, basis),
+          authFetch('/api/organizations/current/accounting-policy'),
+        ]);
+        let booksStart: string | null = null;
+        if (policyRes.ok) {
+          const policy: { booksStartDate?: string } = await policyRes.json();
+          if (typeof policy.booksStartDate === 'string' && policy.booksStartDate)
+            booksStart = policy.booksStartDate.slice(0, 10);
+        }
+        let comparative: ReportData | undefined;
+        let prior: DateRange | null = null;
+        if (compare && canCompare) {
+          prior = comparativeRange(
+            range,
+            preset,
+            data.years,
+            statement === 'balanceSheet' ? 'balanceSheet' : 'income',
+            booksStart,
+          );
+          if (prior) comparative = await loadReportData(authFetch, prior, basis);
+        }
+        if (!cancelled) {
+          setResult({ key, slug: currentOrg.slug, data, comparative, comparativeRange: prior });
+          setFailure(null);
+        }
+      } catch (error) {
+        if (!cancelled) setFailure({ key, message: error instanceof Error ? error.message : 'Unable to load financial reports.' });
+      }
+    })();
     return () => { cancelled = true; };
-  }, [authFetch, allowed, validRange, key, range, basis, currentOrg.slug]);
+  }, [authFetch, allowed, validRange, key, range, basis, currentOrg.slug, compare, canCompare, preset, statement]);
 
   if (!allowed) return <PermissionDeniedCard permission="reports.view" />;
 
-  const rows = data ? buildStatement(statement, data, hideZero) : [];
+  const showingCompare = !!(compare && canCompare && comparativeData && activeCompareRange);
+  const baseRows = data ? buildStatement(statement, data, hideZero) : [];
+  const rows = showingCompare && (statement === 'income' || statement === 'balanceSheet')
+    ? applyComparativeAmounts(baseRows, buildStatement(statement, comparativeData!, hideZero))
+    : baseRows;
   const title = statements.find(s => s.key === statement)!.label;
   const basisLabel = basis === 'cash' ? 'Cash Basis' : 'Accrual Basis';
   const period = statement === 'balanceSheet' ? `As of ${range.to}` : `${range.from || 'All time'} to ${range.to}`;
+  const comparativePeriod = !activeCompareRange ? ''
+    : statement === 'balanceSheet' ? `As of ${activeCompareRange.to}` : `${activeCompareRange.from} to ${activeCompareRange.to}`;
   const formatAmount = (value?: number) => value === undefined ? '' :
     `${currencySymbol(currentOrg.currency)}${(value / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatPercent = (value: number | null | undefined) =>
+    value === undefined || value === null ? '' : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
   const difference = statement === 'trialBalance'
     ? (rows.at(-1)?.debit ?? 0) - (rows.at(-1)?.credit ?? 0)
     : rows.at(-1)?.amount ?? 0;
@@ -342,8 +468,14 @@ export default function Reports() {
     if (!data || !validRange || error) return;
     const csv = statementCsv(statement, rows, [
       ['Statement', title], ['Accounting Basis', basisLabel], ['Organization', currentOrg.name], ['Currency', currentOrg.currency || DEFAULT_CURRENCY],
-      ['Period', period], ['Financial Year', activeYear?.fiscalYearName || 'No active financial year'],
-    ]);
+      ['Period', period],
+      ...(showingCompare ? [['Comparative period', comparativePeriod]] : []),
+      ['Financial Year', activeYear?.fiscalYearName || 'No active financial year'],
+    ], {
+      compare: showingCompare,
+      currentHeader: period,
+      comparativeHeader: comparativePeriod,
+    });
     const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement('a');
     link.href = url;
@@ -354,6 +486,10 @@ export default function Reports() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const inputClass = 'rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]';
+  const setCompareAndPersist = (value: boolean) => {
+    setCompare(value);
+    writeCompareToggle(value);
+  };
 
   return (
     <div className="space-y-6 text-[var(--text-main)]">
@@ -403,6 +539,10 @@ export default function Reports() {
           <input type="checkbox" checked={hideZero} onChange={event => setHideZero(event.target.checked)} className="accent-[var(--brand-primary)]" />
           Hide zero balances
         </label>
+        {canCompare && <label className="flex items-center gap-2 py-2 text-sm">
+          <input type="checkbox" checked={compare} onChange={event => setCompareAndPersist(event.target.checked)} className="accent-[var(--brand-primary)]" />
+          Compare with previous period
+        </label>}
       </div>
       <nav aria-label="Financial statements" className="flex flex-wrap gap-2">
         {statements.map(tab => <button key={tab.key} type="button" aria-pressed={statement === tab.key} onClick={() => setStatement(tab.key)}
@@ -421,6 +561,7 @@ export default function Reports() {
             </p>}
           </div>
           {statement === 'balanceSheet' && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">Cumulative balances through the as-of date, including opening balances and unclosed earnings.</p>}
+          {compare && canCompare && !showingCompare && data && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No prior period is available (comparative range would start before the books start).</p>}
           {statement === 'cashFlow' && basis === 'cash' && data.cashFlow?.message && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">{data.cashFlow.message}</p>}
           {!rows.some(row => row.kind === 'account') && (!data.cashFlow?.message || statement !== 'cashFlow') && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No ledger activity for the selected dates and filters.</p>}
           <div className="overflow-x-auto">
@@ -429,6 +570,12 @@ export default function Reports() {
               <thead className="bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
                 <tr><th scope="col" className="p-4 text-left">Code</th><th scope="col" className="p-4 text-left">Account</th>
                   {statement === 'trialBalance' ? <><th scope="col" className="p-4 text-right">Debit</th><th scope="col" className="p-4 text-right">Credit</th></>
+                    : showingCompare ? <>
+                      <th scope="col" className="p-4 text-right">{period}</th>
+                      <th scope="col" className="p-4 text-right">{comparativePeriod}</th>
+                      <th scope="col" className="p-4 text-right">Change</th>
+                      <th scope="col" className="p-4 text-right">Change %</th>
+                    </>
                     : <th scope="col" className="p-4 text-right">Amount</th>}</tr>
               </thead>
               <tbody>
@@ -440,6 +587,12 @@ export default function Reports() {
                         : row.label}
                     </th>
                     {statement === 'trialBalance' ? <><td className="p-4 text-right tabular-nums">{formatAmount(row.debit)}</td><td className="p-4 text-right tabular-nums">{formatAmount(row.credit)}</td></>
+                      : showingCompare ? <>
+                        <td className="p-4 text-right tabular-nums">{formatAmount(row.amount)}</td>
+                        <td className="p-4 text-right tabular-nums">{formatAmount(row.comparativeAmount)}</td>
+                        <td className="p-4 text-right tabular-nums">{formatAmount(row.change)}</td>
+                        <td className="p-4 text-right tabular-nums">{formatPercent(row.changePercent)}</td>
+                      </>
                       : <td className="p-4 text-right tabular-nums">{formatAmount(row.amount)}</td>}
                   </tr>)}
               </tbody>

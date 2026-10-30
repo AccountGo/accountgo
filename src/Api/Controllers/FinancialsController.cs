@@ -153,30 +153,7 @@ namespace Api.Controllers
 
             foreach (var je in journalEntries)
             {
-                var journalEntryDto = new JournalEntry()
-                {
-                    Id = je.Id,
-                    JournalDate = je.Date,
-                    Memo = je.Memo,
-                    ReferenceNo = je.ReferenceNo,
-                    VoucherType = (int)je.VoucherType.GetValueOrDefault(),
-                    Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue
-                };
-
-                foreach (var line in je.JournalEntryLines)
-                {
-                    var lineDto = new JournalEntryLine()
-                    {
-                        Id = line.Id,
-                        AccountId = line.AccountId,
-                        Amount = line.Amount,
-                        DrCr = (int)line.DrCr,
-                        Memo = line.Memo
-                    };
-
-                    journalEntryDto.JournalEntryLines.Add(lineDto);
-                }
-
+                var journalEntryDto = ToJournalEntryDto(je);
                 journalEntriesDto.Add(journalEntryDto);
             }
 
@@ -192,29 +169,7 @@ namespace Api.Controllers
             if (je == null)
                 return NotFound(new { message = $"Journal entry #{id} not found." });
 
-            var journalEntryDto = new JournalEntry()
-            {
-                Id = je.Id,
-                JournalDate = je.Date,
-                Memo = je.Memo,
-                ReferenceNo = je.ReferenceNo,
-                VoucherType = (int)je.VoucherType.GetValueOrDefault(),
-                Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue
-            };
-
-            foreach (var line in je.JournalEntryLines)
-            {
-                var lineDto = new JournalEntryLine()
-                {
-                    Id = line.Id,
-                    AccountId = line.AccountId,
-                    Amount = line.Amount,
-                    DrCr = (int)line.DrCr,
-                    Memo = line.Memo
-                };
-
-                journalEntryDto.JournalEntryLines.Add(lineDto);
-            }
+            var journalEntryDto = ToJournalEntryDto(je);
 
             // is this journal entry ready for posting?
             if (!journalEntryDto.Posted.GetValueOrDefault()
@@ -225,6 +180,35 @@ namespace Api.Controllers
             }
 
             return new ObjectResult(journalEntryDto);
+        }
+
+        private static JournalEntry ToJournalEntryDto(Core.Domain.Financials.JournalEntryHeader je)
+        {
+            var dto = new JournalEntry()
+            {
+                Id = je.Id,
+                JournalDate = je.Date,
+                Memo = je.Memo,
+                ReferenceNo = je.ReferenceNo,
+                VoucherType = (int)je.VoucherType.GetValueOrDefault(),
+                AdjustsFiscalYearId = je.AdjustsFiscalYearId,
+                AdjustsFiscalYearCode = je.AdjustsFiscalYear?.FiscalYearCode,
+                Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue
+            };
+
+            foreach (var line in je.JournalEntryLines)
+            {
+                dto.JournalEntryLines.Add(new JournalEntryLine()
+                {
+                    Id = line.Id,
+                    AccountId = line.AccountId,
+                    Amount = line.Amount,
+                    DrCr = (int)line.DrCr,
+                    Memo = line.Memo
+                });
+            }
+
+            return dto;
         }
 
         [HttpPost]
@@ -350,6 +334,7 @@ namespace Api.Controllers
 
                 journalEntry.Date = journalEntryDto.JournalDate;
                 journalEntry.VoucherType = (Core.Domain.JournalVoucherTypes)journalEntryDto.VoucherType.GetValueOrDefault();
+                journalEntry.AdjustsFiscalYearId = journalEntryDto.AdjustsFiscalYearId;
                 journalEntry.ReferenceNo = journalEntryDto.ReferenceNo;
                 journalEntry.Memo = journalEntryDto.Memo;
 
@@ -1482,6 +1467,7 @@ namespace Api.Controllers
 
         private static object MapYearEndSummary(YearEndYearSummary year) => new
         {
+            id = year.Id,
             fiscalYearCode = year.FiscalYearCode,
             startDate = FormatYearEndDate(year.StartDate),
             endDate = FormatYearEndDate(year.EndDate),

@@ -1507,6 +1507,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AdjustsFiscalYearId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
 
@@ -1532,6 +1535,8 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdjustsFiscalYearId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
@@ -3935,6 +3940,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
             modelBuilder.Entity("Core.Domain.Financials.JournalEntryHeader", b =>
                 {
+                    b.HasOne("Core.Domain.Financials.FinancialYear", "AdjustsFiscalYear")
+                        .WithMany()
+                        .HasForeignKey("AdjustsFiscalYearId");
+
                     b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
                         .WithMany()
                         .HasForeignKey("GeneralLedgerHeaderId");
@@ -3942,6 +3951,8 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasOne("Core.Domain.Party", "Party")
                         .WithMany()
                         .HasForeignKey("PartyId");
+
+                    b.Navigation("AdjustsFiscalYear");
 
                     b.Navigation("GeneralLedgerHeader");
 

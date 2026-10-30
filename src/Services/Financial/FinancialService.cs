@@ -58,6 +58,8 @@ namespace Services.Financial
         private readonly Services.Banking.IReconciledPeriodGuard _reconciledPeriodGuard;
         private readonly IBooksLockGuard _booksLockGuard;
 
+        private static readonly System.Threading.AsyncLocal<int> AllowClosingEntriesDepth = new();
+
         public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
             IRepository<GeneralLedgerHeader> generalLedgerRepository,
@@ -428,16 +430,106 @@ namespace Services.Financial
         {
             var journalEntries = _journalEntryRepo.GetAllIncluding(je => je.JournalEntryLines,
                 je => je.Party,
-                je => je.GeneralLedgerHeader);
+                je => je.GeneralLedgerHeader,
+                je => je.AdjustsFiscalYear);
 
             return journalEntries;
         }
 
+        public IDisposable AllowClosingEntries()
+        {
+            AllowClosingEntriesDepth.Value = AllowClosingEntriesDepth.Value + 1;
+            return new ClosingEntriesScope(() =>
+                AllowClosingEntriesDepth.Value = Math.Max(0, AllowClosingEntriesDepth.Value - 1));
+        }
+
+        private sealed class ClosingEntriesScope : IDisposable
+        {
+            private readonly Action _release;
+            private bool _disposed;
+            public ClosingEntriesScope(Action release) => _release = release;
+            public void Dispose()
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _release();
+            }
+        }
+
         public void AddJournalEntry(JournalEntryHeader journalEntry)
         {
+            ValidateJournalVoucherRules(journalEntry);
             journalEntry.Posted = false;
 
             _journalEntryRepo.Insert(journalEntry);
+        }
+
+        /// <summary>
+        /// ClosingEntries are system-only; PriorPeriodAdjustment has IAS 8 / IFRS for SMEs s.10 rules.
+        /// </summary>
+        private void ValidateJournalVoucherRules(JournalEntryHeader journalEntry)
+        {
+            if (journalEntry == null)
+                throw new ArgumentNullException(nameof(journalEntry));
+
+            if (journalEntry.VoucherType == JournalVoucherTypes.ClosingEntries
+                && AllowClosingEntriesDepth.Value <= 0)
+            {
+                throw new InvalidOperationException("Closing entries are created by the year-end close.");
+            }
+
+            if (journalEntry.VoucherType != JournalVoucherTypes.PriorPeriodAdjustment)
+            {
+                journalEntry.AdjustsFiscalYearId = null;
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(journalEntry.Memo))
+                throw new InvalidOperationException(
+                    "A prior-period adjustment requires a memo explaining the reason for the correction.");
+
+            if (!journalEntry.AdjustsFiscalYearId.HasValue || journalEntry.AdjustsFiscalYearId.Value <= 0)
+                throw new InvalidOperationException(
+                    "A prior-period adjustment must correct a closed fiscal year.");
+
+            var adjustedYear = _fiscalYearRepo.GetById(journalEntry.AdjustsFiscalYearId.Value)
+                ?? _fiscalYearRepo.Table.FirstOrDefault(fy => fy.Id == journalEntry.AdjustsFiscalYearId.Value);
+            if (adjustedYear == null)
+                throw new InvalidOperationException(
+                    "A prior-period adjustment must correct a closed fiscal year.");
+
+            if (adjustedYear.ClosedAt == null)
+                throw new InvalidOperationException(
+                    "A prior-period adjustment must correct a closed fiscal year. The selected year is still open.");
+
+            if (adjustedYear.EndDate.Date >= journalEntry.Date.Date)
+                throw new InvalidOperationException(
+                    "A prior-period adjustment must correct a fiscal year that ended before the journal date.");
+
+            var lines = journalEntry.JournalEntryLines?.ToList() ?? new List<JournalEntryLine>();
+            if (lines.Count == 0)
+                throw new InvalidOperationException(
+                    "A prior-period adjustment must include at least one line on account 30820 (Prior Period Adjustments).");
+
+            var accountIds = lines.Select(l => l.AccountId).Distinct().ToList();
+            var accounts = _accountRepo.Table.Where(a => accountIds.Contains(a.Id)).ToList();
+            var byId = accounts.ToDictionary(a => a.Id);
+
+            if (lines.Any(l =>
+                    byId.TryGetValue(l.AccountId, out var account)
+                    && (account.AccountClassId == 4 || account.AccountClassId == 5)))
+            {
+                throw new InvalidOperationException(
+                    "A prior-period adjustment can't post to income or expense accounts. Use account 30820 against the balance-sheet accounts being corrected.");
+            }
+
+            if (!lines.Any(l =>
+                    byId.TryGetValue(l.AccountId, out var account)
+                    && account.AccountCode == "30820"))
+            {
+                throw new InvalidOperationException(
+                    "A prior-period adjustment must include at least one line on account 30820 (Prior Period Adjustments).");
+            }
         }
 
         public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?), AccountingBasis basis = AccountingBasis.Accrual)
@@ -924,12 +1016,15 @@ namespace Services.Financial
                 {
                     TrialBalance balance;
                     var net = balances.TryGetValue(a.Id, out balance) ? balance.Debit - balance.Credit : 0m;
+                    // 30820 is equity (class 3) from the books; keep it out of the computed RE split below
+                    // (that split only sums class 4/5) and surface a stable statement label.
+                    var name = a.AccountCode == "30820" ? "Prior period adjustments" : a.AccountName;
                     return new BalanceSheet
                     {
                         AccountId = a.Id,
                         AccountClassId = a.AccountClassId,
                         AccountCode = a.AccountCode,
-                        AccountName = a.AccountName,
+                        AccountName = name,
                         Amount = a.AccountClassId == 1 ? net : -net
                     };
                 }).ToList();
@@ -1266,12 +1361,14 @@ namespace Services.Financial
                 || code == "30300"
                 || code == "30400"
                 || code == "30500"
+                || code == "30820"
                 || code == "99999"
                 || name.Contains("retained surplus")
                 || name.Contains("retained earnings")
                 || name.Contains("accumulated profit")
                 || name.Contains("accumulated loss")
-                || name.Contains("income summary");
+                || name.Contains("income summary")
+                || name.Contains("prior period adjustment");
         }
 
         private static bool IsAccumulatedDepreciationOrAmortizationAccount(
@@ -1790,7 +1887,8 @@ namespace Services.Financial
             {
                 var je = _journalEntryRepo.GetAllIncluding(j => j.GeneralLedgerHeader,
                     j => j.JournalEntryLines,
-                    j => j.Party)
+                    j => j.Party,
+                    j => j.AdjustsFiscalYear)
                     .Where(j => j.GeneralLedgerHeaderId == id)
                     .FirstOrDefault();
                 return je;
@@ -1799,7 +1897,8 @@ namespace Services.Financial
             {
                 var je = _journalEntryRepo.GetAllIncluding(j => j.GeneralLedgerHeader,
                     j => j.JournalEntryLines,
-                    j => j.Party)
+                    j => j.Party,
+                    j => j.AdjustsFiscalYear)
                     .Where(j => j.Id == id)
                     .FirstOrDefault();
                 return je;
@@ -1812,6 +1911,8 @@ namespace Services.Financial
                 throw new ArgumentNullException(nameof(journalEntry));
             if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("Posted journal entries cannot be edited or posted again.");
+
+            ValidateJournalVoucherRules(journalEntry);
 
             if (posted)
             {

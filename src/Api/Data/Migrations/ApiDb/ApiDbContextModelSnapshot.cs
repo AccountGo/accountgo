@@ -1508,6 +1508,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AdjustsFiscalYearId")
+                        .HasColumnType("int");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -1533,6 +1536,8 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdjustsFiscalYearId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
@@ -3940,6 +3945,10 @@ namespace Api.Data.Migrations.ApiDb
 
             modelBuilder.Entity("Core.Domain.Financials.JournalEntryHeader", b =>
                 {
+                    b.HasOne("Core.Domain.Financials.FinancialYear", "AdjustsFiscalYear")
+                        .WithMany()
+                        .HasForeignKey("AdjustsFiscalYearId");
+
                     b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
                         .WithMany()
                         .HasForeignKey("GeneralLedgerHeaderId");
@@ -3947,6 +3956,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Party", "Party")
                         .WithMany()
                         .HasForeignKey("PartyId");
+
+                    b.Navigation("AdjustsFiscalYear");
 
                     b.Navigation("GeneralLedgerHeader");
 

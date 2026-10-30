@@ -26,6 +26,11 @@ namespace Services.Financial
         IEnumerable<JournalEntryHeader> GetJournalEntries();
         IEnumerable<JournalEntryLine> GetJournalEntryLines();
         void AddJournalEntry(JournalEntryHeader journalEntry);
+        /// <summary>
+        /// Allows create/update/post of <see cref="JournalVoucherTypes.ClosingEntries"/> journals
+        /// (used by year-end close/reopen). Outside this scope the voucher type is rejected.
+        /// </summary>
+        IDisposable AllowClosingEntries();
         ICollection<TrialBalance> TrialBalance(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<BalanceSheet> BalanceSheet(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<IncomeStatement> IncomeStatement(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);

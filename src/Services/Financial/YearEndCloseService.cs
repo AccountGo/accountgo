@@ -98,6 +98,7 @@ namespace Services.Financial
             int? closingGlId = null;
 
             using (_booksLockGuard.Bypass())
+            using (_financial.AllowClosingEntries())
             {
                 if (preview.ClosingLines.Count > 0)
                 {
@@ -489,19 +490,22 @@ namespace Services.Financial
                 ZeroAccount(account.Id, account.AccountCode, account.AccountName, bal.Debit, bal.Credit);
             }
 
+            // Cumulative balances through FY end must INCLUDE earlier ClosingEntries (they already
+            // zeroed prior drawings / PPAs). Excluding them would re-close those on every later close.
+            var throughEnd = TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
+
             if (!string.IsNullOrEmpty(profile.DistributionAccountCode))
             {
                 var dist = _accounts.Table.FirstOrDefault(a => a.AccountCode == profile.DistributionAccountCode);
-                if (dist != null)
-                {
-                    // Cumulative balance through FY end must INCLUDE earlier years' ClosingEntries
-                    // (they already zeroed prior drawings). Excluding them would re-close prior
-                    // drawings on every later close. This year's closing journal does not exist yet.
-                    var throughEnd = TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
-                    if (throughEnd.TryGetValue(dist.Id, out var bal))
-                        ZeroAccount(dist.Id, dist.AccountCode, dist.AccountName, bal.Debit, bal.Credit);
-                }
+                if (dist != null && throughEnd.TryGetValue(dist.Id, out var distBal))
+                    ZeroAccount(dist.Id, dist.AccountCode, dist.AccountName, distBal.Debit, distBal.Credit);
             }
+
+            // Prior-period adjustments (30820) are equity corrections posted in open years against a
+            // closed year; close them into the permanent account like distributions (own preview line).
+            var ppa = _accounts.Table.FirstOrDefault(a => a.AccountCode == "30820");
+            if (ppa != null && throughEnd.TryGetValue(ppa.Id, out var ppaBal))
+                ZeroAccount(ppa.Id, ppa.AccountCode, ppa.AccountName, ppaBal.Debit, ppaBal.Credit);
 
             var permanentNet = permanentCr - permanentDr;
             if (permanentNet > 0m)
@@ -574,6 +578,7 @@ namespace Services.Financial
         private static YearEndYearSummary ToSummary(FinancialYear year, DateTime today) =>
             new()
             {
+                Id = year.Id,
                 FiscalYearCode = year.FiscalYearCode,
                 StartDate = year.StartDate.Date,
                 EndDate = year.EndDate.Date,
