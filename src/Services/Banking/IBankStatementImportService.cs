@@ -30,6 +30,9 @@ namespace Services.Banking
         BankStatementLineDto Exclude(int lineId, ExcludeBankStatementLineRequest request, string actor);
 
         /// <summary>Clear exclusion and return the line to Unmatched.</summary>
+        /// <summary>Excludes every unmatched line dated before the books start date; returns how many.</summary>
+        ExcludeBankStatementLineResultDto ExcludeBeforeBooksStart(int bankId, string actor);
+
         BankStatementLineDto Include(int lineId);
 
         /// <summary>Post a bank transaction for an unmatched line and link the new ledger line to it.</summary>
