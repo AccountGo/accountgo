@@ -88,6 +88,7 @@ public class StatementLineInvoiceServiceTests
             harness.Repos.GlLines,
             sales.Object,
             harness.Banks,
+            new Services.Sales.InvoicePaymentRecorder(sales.Object),
             new BankingTestHarness.FakeTenant(1));
 
         var result = service.ApplyOpenInvoice(line.Id, new ApplyOpenInvoiceFromStatementLineRequest
@@ -125,6 +126,7 @@ public class StatementLineInvoiceServiceTests
             harness.Repos.GlLines,
             sales.Object,
             harness.Banks,
+            new Services.Sales.InvoicePaymentRecorder(sales.Object),
             new BankingTestHarness.FakeTenant(1));
 
         Assert.Throws<InvalidOperationException>(() =>

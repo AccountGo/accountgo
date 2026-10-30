@@ -66,6 +66,30 @@ public class DocumentLineAccountCatalogTests
     }
 
     [Fact]
+    public void ListIncomeLineAccounts_excludes_summary_accounts()
+    {
+        using var harness = new BankingTestHarness();
+        harness.Repos.Accounts.Insert(new Account
+        {
+            Id = 400, CompanyId = 1, AccountCode = "40000", AccountName = "Income",
+            AccountClassId = (int)AccountClasses.Revenue, DrOrCrSide = DrOrCrSide.Cr
+        });
+        harness.Repos.Accounts.Insert(new Account
+        {
+            Id = 401, CompanyId = 1, AccountCode = "40600", AccountName = "Other Income",
+            AccountClassId = (int)AccountClasses.Revenue, DrOrCrSide = DrOrCrSide.Cr,
+            ParentAccountId = 400
+        });
+        var catalog = new DocumentLineAccountCatalog(
+            harness.Repos.Accounts, harness.Repos.Customers, new BankingTestHarness.FakeTenant(1));
+        var list = catalog.ListIncomeLineAccounts();
+        Assert.DoesNotContain(list, a => a.Id == 400);
+        Assert.Contains(list, a => a.Id == 401);
+        Assert.Throws<InvalidOperationException>(() => catalog.EnsureIncomeLineAccount(400));
+        catalog.EnsureIncomeLineAccount(401);
+    }
+
+    [Fact]
     public void ListBillLineAccounts_excludes_customer_ar_control_accounts()
     {
         using var harness = new BankingTestHarness();

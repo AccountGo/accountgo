@@ -50,6 +50,12 @@ namespace Core.Domain.Sales
         /// <summary>The customer as printed when the invoice was issued (<see cref="InvoiceBillTo"/> JSON); null while a draft.</summary>
         public string? BillToJson { get; set; }
         public SalesInvoiceStatus? Status { get; set; }
+        /// <summary>
+        /// How this invoice was created when not through the normal sales UI (#436 I5).
+        /// Null for ordinary invoices. Set to <see cref="SalesInvoiceOrigins.StatementOtherIncome"/>
+        /// for statement-recorded other income so a later sales-receipt document can find them.
+        /// </summary>
+        public SalesInvoiceOrigins? Origin { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }

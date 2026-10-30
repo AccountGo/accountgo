@@ -5,6 +5,7 @@ import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { StatementLineApplyInvoiceDialog } from '../components/StatementLineApplyInvoiceDialog';
 import { StatementLineExcludeDialog } from '../components/StatementLineExcludeDialog';
 import { StatementLineExpenseDialog } from '../components/StatementLineExpenseDialog';
+import { StatementLineOtherIncomeDialog } from '../components/StatementLineOtherIncomeDialog';
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
 import { STATEMENT_EXCLUSION_REASONS } from '../types/banking';
 import { useAuth } from '../auth/AuthContext';
@@ -79,6 +80,12 @@ const BankStatementImportPage: React.FC = () => {
   const salesWritable = canModule('sales') && canWrite('sales');
   const canApplyOpenInvoice =
     canManage && salesWritable && hasPermission('sales.receipts.create');
+  const canRecordOtherIncome =
+    canManage &&
+    salesWritable &&
+    hasPermission('sales.invoices.create') &&
+    hasPermission('sales.invoices.post') &&
+    hasPermission('sales.receipts.create');
 
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [list, setList] = useState<BankStatementLineList | null>(null);
@@ -99,6 +106,7 @@ const BankStatementImportPage: React.FC = () => {
   const [createFor, setCreateFor] = useState<BankStatementLine | null>(null);
   const [expenseFor, setExpenseFor] = useState<BankStatementLine | null>(null);
   const [applyFor, setApplyFor] = useState<BankStatementLine | null>(null);
+  const [incomeFor, setIncomeFor] = useState<BankStatementLine | null>(null);
   const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
   const [pickedCandidate, setPickedCandidate] = useState<Record<number, string>>({});
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -684,15 +692,29 @@ const BankStatementImportPage: React.FC = () => {
                             {canRecordExpense ? 'Record expense' : 'Pay open bill'}
                           </button>
                         )}
-                        {line.amount > 0 && canApplyOpenInvoice && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => setApplyFor(line)}
-                            className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
-                          >
-                            Apply invoice
-                          </button>
+                        {line.amount > 0 && (canApplyOpenInvoice || canRecordOtherIncome) && (
+                          <>
+                            {canApplyOpenInvoice && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => setApplyFor(line)}
+                                className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
+                              >
+                                Apply invoice
+                              </button>
+                            )}
+                            {canRecordOtherIncome && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => setIncomeFor(line)}
+                                className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-[var(--text-main)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-hover)]"
+                              >
+                                Other income
+                              </button>
+                            )}
+                          </>
                         )}
                         <button
                           type="button"
@@ -761,6 +783,18 @@ const BankStatementImportPage: React.FC = () => {
           onClose={() => setApplyFor(null)}
           onSaved={async () => {
             setApplyFor(null);
+            await loadLines(status, page);
+          }}
+        />
+      )}
+
+      {incomeFor && (
+        <StatementLineOtherIncomeDialog
+          line={incomeFor}
+          formatCurrency={formatCurrency}
+          onClose={() => setIncomeFor(null)}
+          onSaved={async () => {
+            setIncomeFor(null);
             await loadLines(status, page);
           }}
         />

@@ -20,5 +20,10 @@ namespace Services.Financial
         IReadOnlyList<Account> ListBillLineAccounts();
 
         void EnsureBillLineAccount(int accountId);
+
+        /// <summary>Leaf revenue accounts that are not archived (and not contra).</summary>
+        IReadOnlyList<Account> ListIncomeLineAccounts();
+
+        void EnsureIncomeLineAccount(int accountId);
     }
 }

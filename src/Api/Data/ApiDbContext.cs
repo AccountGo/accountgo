@@ -436,6 +436,9 @@ namespace Api.Data
                 .IsUnique()
                 .HasDatabaseName("IX_SalesInvoiceHeader_CompanyId_No");
 
+            builder.Entity<SalesInvoiceHeader>()
+                .HasIndex(e => new { e.CompanyId, e.Origin }, "IX_SalesInvoiceHeader_Company_Origin");
+
             builder.Entity<SalesInvoiceLine>()
                 .Property(p => p.Amount)
                 .HasColumnType("decimal(18, 2)");

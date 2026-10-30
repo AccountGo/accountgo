@@ -25,6 +25,8 @@ namespace Api.Controllers
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
         private readonly IBankAccountService _bankAccounts;
+        private readonly IIssuedInvoiceSnapshotCapture _issueSnapshots;
+        private readonly IInvoicePaymentRecorder _invoicePayments;
         private readonly ILogger<SalesController> _logger;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
@@ -38,6 +40,8 @@ namespace Api.Controllers
             IInventoryService inventoryService,
             ITaxService taxService,
             IBankAccountService bankAccounts,
+            IIssuedInvoiceSnapshotCapture issueSnapshots,
+            IInvoicePaymentRecorder invoicePayments,
             ILogger<SalesController> logger,
             Core.Tenancy.ITenantContext tenantContext,
             Core.Tenancy.ITenantGuard tenantGuard,
@@ -51,6 +55,8 @@ namespace Api.Controllers
             _inventoryService = inventoryService;
             _taxService = taxService;
             _bankAccounts = bankAccounts;
+            _issueSnapshots = issueSnapshots;
+            _invoicePayments = invoicePayments;
             _logger = logger;
             _tenantContext = tenantContext;
             _tenantGuard = tenantGuard;
@@ -685,7 +691,7 @@ namespace Api.Controllers
             IList<Dto.Sales.Customer> customersDto = new List<Dto.Sales.Customer>();
             try
             {
-                var customers = _salesService.GetCustomers().Where(p => p.Party != null);
+                var customers = _salesService.GetCustomers().Where(p => p.Party != null && !p.IsSystem);
                 foreach (var customer in customers)
                 {
                     var customerDto = new Dto.Sales.Customer()
@@ -1109,42 +1115,12 @@ namespace Api.Controllers
             (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
             ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);
 
-        /// <summary>
-        /// Stores the payment instructions as they resolve when the invoice is issued, after the seller is recorded and the
-        /// number is assigned (the bank text carries the invoice number). Issued invoices print only what is stored.
-        /// </summary>
-        private bool CapturePaymentInstructionsIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice)
-        {
-            if (invoice.Status is null or Core.Domain.SalesInvoiceStatus.Draft or Core.Domain.SalesInvoiceStatus.Void)
-                return false;
-
-            var invoiceSettings = _db.CompanySettings.FirstOrDefault()?.GetSalesInvoiceSettings()
-                ?? new Core.Domain.SalesInvoiceSettings();
-            var paymentBank = invoiceSettings.PaymentBankId.HasValue
-                ? _db.Banks.FirstOrDefault(b => b.Id == invoiceSettings.PaymentBankId.Value)
-                : null;
-            var sellerName = Core.Domain.Sales.InvoiceSeller.FromJson(invoice.SellerJson)?.Name;
-
-            var resolved = BankPaymentInstructions.Resolve(
-                invoice.PaymentInstructions, invoiceSettings, paymentBank, sellerName, invoice.No);
-            var before = invoice.PaymentInstructions;
-            invoice.CapturePaymentInstructionsIfIssued(resolved);
-            return !string.Equals(before, invoice.PaymentInstructions, StringComparison.Ordinal);
-        }
+        private bool CapturePaymentInstructionsIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice) =>
+            _issueSnapshots.CapturePaymentInstructionsIfIssued(invoice);
 
         /// <summary>Records the seller and the customer as they print, once the invoice is issued.</summary>
-        private void CaptureIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice)
-        {
-            invoice.CaptureSellerIfIssued(CurrentCompany(), _db.CompanySettings.FirstOrDefault());
-            if (invoice.BillToJson != null)
-                return;
-
-            var customer = _db.Customers
-                .Include(c => c.Party)
-                .Include(c => c.BillToContact!).ThenInclude(c => c.Party)
-                .FirstOrDefault(c => c.Id == invoice.CustomerId);
-            invoice.CaptureBillToIfIssued(customer?.Party, customer?.BillToContact);
-        }
+        private void CaptureIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice) =>
+            _issueSnapshots.CaptureSellerAndBillToIfIssued(invoice);
 
         /// <summary>An invoice's totals, balance and status, the same in every view of it.</summary>
         private sealed record InvoiceSummary(decimal TotalTax, decimal GrandTotal, decimal Allocated, decimal BalanceDue,
@@ -2202,41 +2178,17 @@ namespace Api.Controllers
 
                 var paymentDate = paymentDto.PaymentDate == default ? DateTime.UtcNow : paymentDto.PaymentDate;
 
-                // 1. Create and post SalesReceiptHeader (DR Cash, CR Accounts Receivable)
-                var receipt = new Core.Domain.Sales.SalesReceiptHeader
-                {
-                    CustomerId = invoice.CustomerId,
-                    Date = paymentDate,
-                    Amount = paymentDto.Amount,
-                    AccountToDebitId = accountToDebitId,
-                    PaymentMethod = string.IsNullOrWhiteSpace(paymentDto.PaymentMethod) ? "Bank Transfer" : paymentDto.PaymentMethod,
-                    ReferenceNo = string.IsNullOrWhiteSpace(paymentDto.ReferenceNo) ? invoice.No : paymentDto.ReferenceNo,
-                    Memo = paymentDto.Notes
-                };
+                // 1–2. Receipt + allocation (shared with ApplyOpenInvoice).
+                var receipt = _invoicePayments.RecordAllocatedReceipt(
+                    invoice,
+                    paymentDto.Amount,
+                    paymentDate,
+                    accountToDebitId,
+                    accountToCreditId,
+                    paymentDto.PaymentMethod,
+                    paymentDto.ReferenceNo,
+                    paymentDto.Notes);
 
-                receipt.SalesReceiptLines.Add(new Core.Domain.Sales.SalesReceiptLine
-                {
-                    Quantity = 1,
-                    Amount = paymentDto.Amount,
-                    AmountPaid = paymentDto.Amount,
-                    AccountToCreditId = accountToCreditId
-                });
-
-                _salesService.AddSalesReceipt(receipt);
-
-                // 2. Add CustomerAllocation linking receipt to invoice
-                var allocation = new Core.Domain.Sales.CustomerAllocation
-                {
-                    CustomerId = invoice.CustomerId,
-                    Date = paymentDate,
-                    SalesInvoiceHeaderId = invoice.Id,
-                    SalesReceiptHeaderId = receipt.Id,
-                    Amount = paymentDto.Amount
-                };
-                invoice.CustomerAllocations.Add(allocation);
-
-                // Update invoice status based on total allocations including taxes and shipping
-                invoice.RefreshPaymentStatus();
                 CaptureIfIssued(invoice);
                 _salesService.UpdateSalesInvoice(invoice);
                 tx.Commit();

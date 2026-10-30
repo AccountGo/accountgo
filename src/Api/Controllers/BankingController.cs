@@ -28,6 +28,7 @@ namespace Api.Controllers
         private readonly IBankStatementImportService _statements;
         private readonly IStatementLineExpenseService _statementExpenses;
         private readonly IStatementLineInvoiceService _statementInvoices;
+        private readonly IStatementIncomeRecorder _statementIncome;
         private readonly ITenantContext _tenant;
         private readonly IEntitlementService _entitlements;
         private readonly ApiDbContext _db;
@@ -39,6 +40,7 @@ namespace Api.Controllers
             IBankStatementImportService statements,
             IStatementLineExpenseService statementExpenses,
             IStatementLineInvoiceService statementInvoices,
+            IStatementIncomeRecorder statementIncome,
             ITenantContext tenant,
             IEntitlementService entitlements,
             ApiDbContext db)
@@ -49,6 +51,7 @@ namespace Api.Controllers
             _statements = statements;
             _statementExpenses = statementExpenses;
             _statementInvoices = statementInvoices;
+            _statementIncome = statementIncome;
             _tenant = tenant;
             _entitlements = entitlements;
             _db = db;
@@ -836,6 +839,40 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statementExpenses.PayOpenBill(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("StatementIncomeCategories")]
+        [RequireStatementImport]
+        [RequireModule(SystemModules.Sales)]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.SalesInvoicesView)]
+        public IActionResult StatementIncomeCategories() =>
+            Ok(_statementIncome.ListIncomeCategories());
+
+        [HttpPost("StatementLines/{id:int}/RecordOtherIncome")]
+        [RequireStatementImport]
+        [RequireModule(SystemModules.Sales)]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.SalesInvoicesCreate)]
+        [RequirePermission(SystemPermissions.SalesInvoicesPost)]
+        [RequirePermission(SystemPermissions.SalesReceiptsCreate)]
+        public IActionResult RecordOtherIncomeFromStatementLine(int id, [FromBody] RecordOtherIncomeFromStatementLineRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statementIncome.Record(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
                 tx.Commit();
                 return Ok(result);
             }
