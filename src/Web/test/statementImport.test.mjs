@@ -6,6 +6,8 @@ import {
   hasAmountMapping,
   importSummary,
   kindsForAmount,
+  matchVendorIdByPayee,
+  normalizePayeeName,
   parseCsvRows,
   sourceForFileName,
   suggestColumnMap,
@@ -80,4 +82,15 @@ test('clampStatementLinePage steps back when the last page is emptied', () => {
   assert.equal(clampStatementLinePage(3, 200, 100), 2);
   assert.equal(clampStatementLinePage(5, 0, 100), 1);
   assert.equal(clampStatementLinePage(0, 50, 100), 1);
+});
+
+test('matchVendorIdByPayee matches normalized names and ignores blanks', () => {
+  assert.equal(normalizePayeeName('  Figma  Inc '), 'figma inc');
+  const vendors = [
+    { id: 1, name: 'Acme' },
+    { id: 2, name: 'Figma Inc' },
+  ];
+  assert.equal(matchVendorIdByPayee('figma  inc', vendors), 2);
+  assert.equal(matchVendorIdByPayee('Unknown', vendors), null);
+  assert.equal(matchVendorIdByPayee('  ', vendors), null);
 });

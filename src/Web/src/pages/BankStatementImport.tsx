@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Link2Off, Loader2, Plus, Upload } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { StatementLineExpenseDialog } from '../components/StatementLineExpenseDialog';
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
@@ -82,6 +83,7 @@ const BankStatementImportPage: React.FC = () => {
   const [preview, setPreview] = useState<BankStatementPreview | null>(null);
 
   const [createFor, setCreateFor] = useState<BankStatementLine | null>(null);
+  const [expenseFor, setExpenseFor] = useState<BankStatementLine | null>(null);
   const [pickedCandidate, setPickedCandidate] = useState<Record<number, string>>({});
 
   const formatCurrency = useCallback(
@@ -598,6 +600,16 @@ const BankStatementImportPage: React.FC = () => {
                             </button>
                           </>
                         )}
+                        {line.amount < 0 && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setExpenseFor(line)}
+                            className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
+                          >
+                            Record expense
+                          </button>
+                        )}
                         {hasFinancials && canCreateTx && (
                           <button
                             type="button"
@@ -624,6 +636,18 @@ const BankStatementImportPage: React.FC = () => {
           </table>
         </div>
       </section>
+
+      {expenseFor && (
+        <StatementLineExpenseDialog
+          line={expenseFor}
+          formatCurrency={formatCurrency}
+          onClose={() => setExpenseFor(null)}
+          onSaved={async () => {
+            setExpenseFor(null);
+            await loadLines(status, page);
+          }}
+        />
+      )}
 
       {createFor && (
         <StatementLineTransactionDialog

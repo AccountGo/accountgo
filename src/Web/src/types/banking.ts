@@ -394,3 +394,20 @@ export interface BankStatementLineList {
 }
 
 export type StatementLineStatus = 'unmatched' | 'matched' | 'all';
+
+export interface StatementExpenseCategory {
+  accountId: number;
+  name: string;
+  curated: boolean;
+}
+
+export interface StatementExpenseCategories {
+  curated: StatementExpenseCategory[];
+  more: StatementExpenseCategory[];
+}
+
+export interface StatementLineDocumentLink {
+  kind: string;
+  id: number;
+  no?: string | null;
+}
