@@ -625,6 +625,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureStatementOtherIncomeColumns(connection);
             EnsureBooksLockChange(connection);
             EnsureEntityTypeAndYearEndClose(connection);
+            EnsurePriorPeriodAdjustment(connection);
         }
 
         // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
@@ -666,6 +667,12 @@ WHERE ""DisabledModulesJson"" IS NULL
             cmd.ExecuteNonQuery();
             cmd.CommandText = EntityTypeYearEndPermanentAccountBackfillSql;
             cmd.ExecuteNonQuery();
+        }
+
+        // D1 0047_prior_period_adjustment.sql (#455 Phase 2b-2)
+        private static void EnsurePriorPeriodAdjustment(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "JournalEntryHeader", "AdjustsFiscalYearId", "INTEGER NULL");
         }
 
         // D1 0042_statement_other_income.sql (#436 I5)

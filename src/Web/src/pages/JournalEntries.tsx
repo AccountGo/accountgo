@@ -5,6 +5,11 @@ import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, ReadOnlyModuleBanner, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { currencySymbol } from '../lib/currency';
+import {
+  journalVoucherTypeLabel,
+  PRIOR_PERIOD_ADJUSTMENT,
+  SELECTABLE_JOURNAL_VOUCHER_TYPES,
+} from '../lib/journalVoucherTypes';
 import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
 import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 import { getDateRange } from './Reports';
@@ -14,12 +19,15 @@ export interface JournalEntry {
   id: number;
   journalDate: string;
   voucherType: number;
+  adjustsFiscalYearId?: number | null;
+  adjustsFiscalYearCode?: string | null;
   referenceNo: string | null;
   memo: string | null;
   posted: boolean | null;
   journalEntryLines: JournalLine[];
 }
 interface JournalAccount { id: number; accountCode: string; accountName: string; canPost: boolean; archived?: boolean; childAccounts: JournalAccount[] }
+interface ClosedFiscalYear { id: number; fiscalYearCode: string; status: number | string }
 type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 export function journalTotals(entry: JournalEntry) {
@@ -38,10 +46,13 @@ async function read<T>(fetcher: Fetcher, path: string, init?: RequestInit): Prom
   return response.json();
 }
 const inputClass = 'w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-main)] focus:ring-2 focus:ring-[var(--brand-ring)]';
-const voucherTypes = ['Opening balances', 'Closing entries', 'Adjustment entries', 'Correction entries', 'Transfer entries', 'Other'];
 
-export function JournalEditor({ initial, accounts, canCreate, canPost, fetcher, onSaved, currency }: {
-  initial: JournalEntry; accounts: JournalAccount[]; canCreate: boolean; canPost: boolean;
+const PPA_HELP =
+  'For a material error in a closed year whose statements were already filed. Post the correction against account 30820 and the balance-sheet accounts. Immaterial corrections go through this year\'s accounts as a normal entry. Unfiled closed years can be reopened under Year-end instead.';
+
+export function JournalEditor({ initial, accounts, closedYears, canCreate, canPost, fetcher, onSaved, currency }: {
+  initial: JournalEntry; accounts: JournalAccount[]; closedYears: ClosedFiscalYear[];
+  canCreate: boolean; canPost: boolean;
   fetcher: Fetcher; onSaved: (id: number) => void; currency: string | undefined;
 }) {
   const [entry, setEntry] = useState(initial);
@@ -50,18 +61,28 @@ export function JournalEditor({ initial, accounts, canCreate, canPost, fetcher, 
   const [dirty, setDirty] = useState(false);
   const editable = canCreate && !entry.posted && !busy;
   const totals = journalTotals(entry);
+  const isPpa = entry.voucherType === PRIOR_PERIOD_ADJUSTMENT;
   const update = (next: JournalEntry) => { setEntry(next); setDirty(true); setError(''); };
   const updateLine = (index: number, values: Partial<JournalLine>) =>
     update({ ...entry, journalEntryLines: entry.journalEntryLines.map((line, i) => i === index ? { ...line, ...values } : line) });
   const periodConfirm = useReconciledPeriodConfirm();
+  const voucherOptions = SELECTABLE_JOURNAL_VOUCHER_TYPES.slice();
+  // Keep displaying Closing entries (2) for existing system journals even though it is not selectable.
+  if (entry.voucherType === 2 && !voucherOptions.some(o => o.value === 2)) {
+    voucherOptions.unshift({ value: 2, label: journalVoucherTypeLabel(2) });
+  }
   const submit = async (post: boolean, confirmReconciledPeriod = false) => {
     setBusy(true); setError('');
     try {
       const path = post
         ? withConfirmReconciledPeriod('/api/Financials/PostJournalEntry', confirmReconciledPeriod)
         : '/api/Financials/SaveJournalEntry';
+      const payload = {
+        ...entry,
+        adjustsFiscalYearId: isPpa ? entry.adjustsFiscalYearId : null,
+      };
       const response = await fetcher(path, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       });
       if (post && await periodConfirm.handleConflict(response, () => void submit(true, true))) {
         setBusy(false);
@@ -84,11 +105,34 @@ export function JournalEditor({ initial, accounts, canCreate, canPost, fetcher, 
         <label className="grid gap-1 text-sm">Journal date<input type="date" required className={inputClass} value={entry.journalDate.slice(0, 10)}
           onChange={event => update({ ...entry, journalDate: event.target.value })} /></label>
         <label className="grid gap-1 text-sm">Voucher type<select className={inputClass} value={entry.voucherType}
-          onChange={event => update({ ...entry, voucherType: Number(event.target.value) })}>
-          {voucherTypes.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}
+          onChange={event => {
+            const voucherType = Number(event.target.value);
+            update({
+              ...entry,
+              voucherType,
+              adjustsFiscalYearId: voucherType === PRIOR_PERIOD_ADJUSTMENT ? entry.adjustsFiscalYearId : null,
+            });
+          }}>
+          {voucherOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select></label>
         <label className="grid gap-1 text-sm">Reference<input className={inputClass} value={entry.referenceNo || ''} onChange={event => update({ ...entry, referenceNo: event.target.value })} /></label>
-        <label className="grid gap-1 text-sm">Memo<input className={inputClass} value={entry.memo || ''} onChange={event => update({ ...entry, memo: event.target.value })} /></label>
+        <label className="grid gap-1 text-sm">Memo<input className={inputClass} value={entry.memo || ''} onChange={event => update({ ...entry, memo: event.target.value })} required={isPpa} /></label>
+        {isPpa && <>
+          <label className="grid gap-1 text-sm sm:col-span-2">Corrects fiscal year
+            <select
+              className={inputClass}
+              required
+              disabled={!editable || closedYears.length === 0}
+              value={entry.adjustsFiscalYearId ?? ''}
+              onChange={event => update({ ...entry, adjustsFiscalYearId: Number(event.target.value) || null })}>
+              <option value="">{closedYears.length === 0 ? 'No closed years yet' : 'Select closed year'}</option>
+              {closedYears.map(year => <option key={year.id} value={year.id}>{year.fiscalYearCode}</option>)}
+            </select>
+          </label>
+          {closedYears.length === 0
+            ? <p className="text-sm text-[var(--text-secondary)] sm:col-span-2">Close a fiscal year under Year-end before posting a prior-period adjustment.</p>
+            : <p className="text-sm text-[var(--text-secondary)] sm:col-span-2">{PPA_HELP}</p>}
+        </>}
       </fieldset>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -132,7 +176,7 @@ export default function JournalEntries() {
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState('draft');
   const [revision, setRevision] = useState(0);
-  const [result, setResult] = useState<{ key: string; entries: JournalEntry[]; accounts: JournalAccount[] } | null>(null);
+  const [result, setResult] = useState<{ key: string; entries: JournalEntry[]; accounts: JournalAccount[]; closedYears: ClosedFiscalYear[] } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const allowed = hasPermission('financials.journal.view');
   const financialsWritable = canWrite('financials');
@@ -148,9 +192,11 @@ export default function JournalEntries() {
     Promise.all([
       read<JournalEntry[]>(authFetch, '/api/Financials/JournalEntries'),
       read<JournalAccount[]>(authFetch, '/api/Financials/Accounts'),
-    ]).then(([entries, accounts]) => {
+      read<ClosedFiscalYear[]>(authFetch, '/api/Financials/YearEnd').catch(() => [] as ClosedFiscalYear[]),
+    ]).then(([entries, accounts, years]) => {
       if (!Array.isArray(entries) || !Array.isArray(accounts)) throw new Error('The journals API returned an invalid response.');
-      if (!cancelled) setResult({ key, entries, accounts });
+      const closedYears = (Array.isArray(years) ? years : []).filter(y => y.status === 3 || y.status === 'Closed');
+      if (!cancelled) setResult({ key, entries, accounts, closedYears });
     }).catch(error => {
       if (!cancelled) setFailure({ key, message: error instanceof Error ? error.message : 'Unable to load manual journals.' });
     });
@@ -160,7 +206,8 @@ export default function JournalEntries() {
   const isNew = params.has('new');
   const selected = data?.entries.find(entry => String(entry.id) === params.get('id'));
   const initial: JournalEntry | undefined = isNew ? {
-    id: 0, journalDate: getDateRange('all', new Date()).to, memo: '', referenceNo: '', voucherType: 6, posted: false,
+    id: 0, journalDate: getDateRange('all', new Date()).to, memo: '', referenceNo: '', voucherType: 6,
+    adjustsFiscalYearId: null, posted: false,
     journalEntryLines: [1, 2].map(drCr => ({ id: 0, accountId: 0, drCr, amount: 0, memo: '' })),
   } : selected;
   const flatten = (accounts: JournalAccount[]): JournalAccount[] => accounts.flatMap(account => [account, ...flatten(account.childAccounts || [])]);
@@ -175,16 +222,20 @@ export default function JournalEntries() {
       : !data ? <p role="status">Loading manual journals...</p>
       : <>
         {isNew && !canCreate ? <PermissionDeniedCard permission="financials.journal.create" />
-          : initial ? <JournalEditor key={`${key}-${isNew ? 'new' : initial.id}`} initial={initial} accounts={flatten(data.accounts)} canCreate={canCreate} canPost={canPost}
+          : initial ? <JournalEditor key={`${key}-${isNew ? 'new' : initial.id}`} initial={initial} accounts={flatten(data.accounts)}
+            closedYears={data.closedYears} canCreate={canCreate} canPost={canPost}
             fetcher={authFetch} currency={currentOrg.currency} onSaved={id => { setParams({ id: String(id) }); setRevision(r => r + 1); }} />
             : params.has('id') && <p role="alert">Journal entry not found in this workspace.</p>}
         <nav aria-label="Manual journal status" className="flex gap-3">{['draft', 'posted'].map(value =>
           <button type="button" key={value} aria-pressed={status === value} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2" onClick={() => setStatus(value)}>{value === 'draft' ? 'Drafts' : 'Posted manual journals'}</button>)}</nav>
         <div className="overflow-x-auto rounded-2xl bg-[var(--bg-surface)]">
           <table className="w-full text-sm"><caption className="sr-only">{status === 'draft' ? 'Draft journals (not in posted books)' : 'Posted manual journals'}</caption>
-            <thead><tr>{['Journal', 'Date', 'Reference', 'Memo', 'Status'].map(label => <th scope="col" key={label} className="p-4 text-left">{label}</th>)}</tr></thead>
+            <thead><tr>{['Journal', 'Date', 'Type', 'Corrected year', 'Reference', 'Memo', 'Status'].map(label => <th scope="col" key={label} className="p-4 text-left">{label}</th>)}</tr></thead>
             <tbody>{data.entries.filter(entry => !!entry.posted === (status === 'posted')).map(entry => <tr key={entry.id} className="border-t border-[var(--border-subtle)]">
-              <th scope="row" className="p-4 text-left"><Link className="underline" to={`?id=${entry.id}`}>Open #{entry.id}</Link></th><td className="p-4">{entry.journalDate.slice(0, 10)}</td>
+              <th scope="row" className="p-4 text-left"><Link className="underline" to={`?id=${entry.id}`}>Open #{entry.id}</Link></th>
+              <td className="p-4">{entry.journalDate.slice(0, 10)}</td>
+              <td className="p-4">{journalVoucherTypeLabel(entry.voucherType)}</td>
+              <td className="p-4">{entry.adjustsFiscalYearCode || '—'}</td>
               <td className="p-4">{entry.referenceNo}</td><td className="p-4">{entry.memo}</td><td className="p-4">{entry.posted ? 'Posted' : 'Draft'}</td>
             </tr>)}</tbody>
           </table>
