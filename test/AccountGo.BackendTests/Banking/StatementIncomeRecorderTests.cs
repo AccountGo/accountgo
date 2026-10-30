@@ -100,7 +100,7 @@ public class StatementIncomeRecorderTests
         sales.Setup(s => s.AddCustomer(It.IsAny<Customer>()));
 
         var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
-        inventory.Setup(i => i.GetAllItems()).Returns(new List<Item> { item });
+        inventory.Setup(i => i.GetActiveItemByDescription(StatementIncomeRecorder.GeneralItemName)).Returns(item);
 
         var financial = new Mock<IFinancialService>(MockBehavior.Loose);
         financial.Setup(f => f.GetAccounts()).Returns(harness.Repos.Accounts.Table.ToList());
@@ -211,7 +211,7 @@ public class StatementIncomeRecorderTests
             });
         sales.Setup(s => s.UpdateSalesInvoice(It.IsAny<SalesInvoiceHeader>()));
         var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
-        inventory.Setup(i => i.GetAllItems()).Returns(new List<Item> { item });
+        inventory.Setup(i => i.GetActiveItemByDescription(StatementIncomeRecorder.GeneralItemName)).Returns(item);
         var financial = new Mock<IFinancialService>(MockBehavior.Loose);
         harness.Entitlements.Setup(e => e.Bypass()).Returns(Mock.Of<IDisposable>());
 

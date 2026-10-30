@@ -375,8 +375,9 @@ namespace Services.Banking
                 line.ExcludedBy = excludedBy;
                 line.ExclusionReason = BankStatementExclusionReasons.Other;
                 line.ExclusionNote = note;
-                _lines.Update(line);
             }
+            // One save for all lines: the repository saves every tracked change, so a save per line only repeats change detection.
+            _lines.Update(lines[0]);
             return new ExcludeBankStatementLineResultDto { Excluded = lines.Count };
         }
 

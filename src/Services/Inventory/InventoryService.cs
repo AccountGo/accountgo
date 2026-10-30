@@ -120,6 +120,15 @@ namespace Services.Inventory
             return items;
         }
 
+        public Item GetActiveItemByDescription(string description)
+        {
+            var lowered = description.Trim().ToLower();
+            return _itemRepo.Table
+                .Where(i => i.ArchivedAt == null && i.Description != null && i.Description.ToLower() == lowered)
+                .OrderBy(i => i.Id)
+                .FirstOrDefault();
+        }
+
         public Item GetItemById(int id)
         {
             var item = _itemRepo.GetAllIncluding(

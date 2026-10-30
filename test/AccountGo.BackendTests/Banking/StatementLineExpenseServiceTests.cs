@@ -554,10 +554,8 @@ public class StatementLineExpenseServiceTests
     private static StatementLineExpenseService Build(BankingTestHarness harness, Mock<IPurchasingService> purchasing)
     {
         var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
-        inventory.Setup(i => i.GetAllItems()).Returns(new List<Item>
-        {
-            new() { Id = GeneralItemId, CompanyId = 1, Description = StatementIncomeRecorder.GeneralItemName }
-        });
+        inventory.Setup(i => i.GetActiveItemByDescription(StatementIncomeRecorder.GeneralItemName))
+            .Returns(new Item { Id = GeneralItemId, CompanyId = 1, Description = StatementIncomeRecorder.GeneralItemName });
         var tenant = new BankingTestHarness.FakeTenant(1);
         var catalog = new DocumentLineAccountCatalog(
             harness.Repos.Accounts,
