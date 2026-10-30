@@ -810,7 +810,9 @@ namespace Api.Controllers
 
         [HttpPost("StatementLines/{id:int}/ApplyOpenInvoice")]
         [RequireStatementImport]
+        [RequireModule(SystemModules.Sales)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.SalesReceiptsCreate)]
         public IActionResult ApplyOpenInvoiceFromStatementLine(int id, [FromBody] ApplyOpenInvoiceFromStatementLineRequest request)
         {
             try

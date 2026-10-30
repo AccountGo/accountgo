@@ -76,6 +76,9 @@ const BankStatementImportPage: React.FC = () => {
     hasPermission('purchases.bills.post') &&
     hasPermission('purchases.payments.create');
   const canPayOpenBill = canManage && purchasesWritable && hasPermission('purchases.payments.create');
+  const salesWritable = canModule('sales') && canWrite('sales');
+  const canApplyOpenInvoice =
+    canManage && salesWritable && hasPermission('sales.receipts.create');
 
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [list, setList] = useState<BankStatementLineList | null>(null);
@@ -638,7 +641,7 @@ const BankStatementImportPage: React.FC = () => {
                             {canRecordExpense ? 'Record expense' : 'Pay open bill'}
                           </button>
                         )}
-                        {line.amount > 0 && (
+                        {line.amount > 0 && canApplyOpenInvoice && (
                           <button
                             type="button"
                             disabled={busy}

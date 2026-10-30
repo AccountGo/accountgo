@@ -31,6 +31,8 @@ public class StatementLineActionPermissionTests
     [InlineData(nameof(BankingController.RecordExpenseFromStatementLine), SystemPermissions.BankingAccountsManage)]
     [InlineData(nameof(BankingController.PayOpenBillFromStatementLine), SystemPermissions.PurchasesPaymentsCreate)]
     [InlineData(nameof(BankingController.PayOpenBillFromStatementLine), SystemPermissions.BankingAccountsManage)]
+    [InlineData(nameof(BankingController.ApplyOpenInvoiceFromStatementLine), SystemPermissions.SalesReceiptsCreate)]
+    [InlineData(nameof(BankingController.ApplyOpenInvoiceFromStatementLine), SystemPermissions.BankingAccountsManage)]
     public void Action_declares_required_permission(string methodName, string permission)
     {
         var method = typeof(BankingController).GetMethod(methodName);
@@ -67,6 +69,17 @@ public class StatementLineActionPermissionTests
         Assert.Equal(403, result.StatusCode);
         var problem = Assert.IsType<ProblemDetails>(result.Value);
         Assert.Equal(SystemPermissions.PurchasesPaymentsCreate, problem.Extensions["requiredPermission"]);
+    }
+
+    [Fact]
+    public async Task ApplyOpenInvoice_denied_without_receipts_create()
+    {
+        var result = await RunPermissionFilter(
+            SystemPermissions.SalesReceiptsCreate,
+            permissions: new HashSet<string> { SystemPermissions.BankingAccountsManage });
+        Assert.Equal(403, result.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
+        Assert.Equal(SystemPermissions.SalesReceiptsCreate, problem.Extensions["requiredPermission"]);
     }
 
     private static async Task<ObjectResult> RunPermissionFilter(string required, IReadOnlySet<string> permissions)
