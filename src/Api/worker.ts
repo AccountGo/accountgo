@@ -14,6 +14,7 @@ import {
   isTransientContainerError,
   resolveInternalSyncKey,
   restoreD1ToContainer,
+  usesD1Copy,
   serviceUnavailable,
   sleep,
 } from "./container-shared";
@@ -207,8 +208,10 @@ export class AccountGoApiContainer extends Container<Env> {
       }
     }
 
-    // D1 restore (throws RestoreError with detail on failure)
-    await this.restoreD1ToContainer(readyTiming);
+    // D1 restore (throws RestoreError with detail on failure). On Postgres the container already has the data.
+    if (usesD1Copy(this.env)) {
+      await this.restoreD1ToContainer(readyTiming);
+    }
 
     // Commit only if every restore batch went into the container that is running now.
     if (!this.container.running || !this.restoreState.commit(token)) {

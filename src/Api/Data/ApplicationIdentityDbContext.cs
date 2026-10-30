@@ -12,6 +12,12 @@ namespace Api.Data
         private readonly ID1SyncContext? _d1SyncContext;
 
         public ApplicationIdentityDbContext(DbContextOptions<ApplicationIdentityDbContext> options, ID1SyncContext? d1SyncContext = null)
+            : this((DbContextOptions)options, d1SyncContext)
+        {
+        }
+
+        // Provider subclasses (Postgres) that carry their own migrations.
+        protected ApplicationIdentityDbContext(DbContextOptions options, ID1SyncContext? d1SyncContext)
             : base(options)
         {
             _d1SyncContext = d1SyncContext;

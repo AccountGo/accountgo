@@ -297,7 +297,7 @@ namespace AccountGo.BackendTests
             });
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task StockMigration_BackfillsExistingWorkspacesAndCanBeReappliedSafely()
         {
             var itemId = CreateStockItem("Legacy stock", 7.5m);
@@ -388,7 +388,7 @@ namespace AccountGo.BackendTests
             }
         }
 
-        [Theory]
+        [SqliteTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void StockValueMigration_BackfillsMovementCentsInsteadOfRoundedAverage(bool localUpgrade)

@@ -9,7 +9,7 @@ namespace AccountGo.BackendTests
     // Role defaults reach production only through D1 migrations: start-up writes never leave the container.
     public partial class MultiTenancyPhase3Tests
     {
-        [Fact]
+        [SqliteFact]
         public void RoleDefaultsMigration_GivesBuiltInRolesTheDefaultsStartUpApplies()
         {
             using var source = new SqliteConnection("Data Source=" + _path);
@@ -45,7 +45,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(expected, RolePermissions(command));
         }
 
-        [Fact]
+        [SqliteFact]
         public void StockPermissionMigration_GrantsAdjustToRolesThatManageItems_AndIsIdempotent()
         {
             using (var source = new SqliteConnection("Data Source=" + _path))
@@ -77,7 +77,7 @@ namespace AccountGo.BackendTests
             }
         }
 
-        [Fact]
+        [SqliteFact]
         public void StockPermissionCleanup_PreservesLegacyCustomRoleGrants_AndRemovesDuplicate()
         {
             using var source = new SqliteConnection("Data Source=" + _path);
