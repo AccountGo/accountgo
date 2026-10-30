@@ -755,6 +755,38 @@ namespace Api.Controllers
         public IActionResult StatementExpenseCategories() =>
             Ok(_statementExpenses.ListExpenseCategories());
 
+        /// <summary>Remembered vendor + category for a bank description (#436 I4).</summary>
+        [HttpGet("StatementDescriptionRule")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        public IActionResult StatementDescriptionRule([FromQuery] string? description)
+        {
+            var rule = _statementExpenses.FindDescriptionRule(description);
+            return rule == null ? NoContent() : Ok(rule);
+        }
+
+        [HttpPost("StatementLines/BulkRecordExpense")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        public IActionResult BulkRecordExpenseFromStatementLines([FromBody] BulkRecordExpenseFromStatementLinesRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statementExpenses.BulkRecordExpense(request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost("StatementLines/{id:int}/RecordExpense")]
         [RequireStatementImport]
         [RequireModule(SystemModules.Purchases)]
