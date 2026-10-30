@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -38,6 +39,7 @@ namespace Services.Banking
 
         private readonly IRepository<BankStatementLine> _lines;
         private readonly IRepository<Bank> _banks;
+        private readonly IRepository<Account> _accounts;
         private readonly IRepository<Vendor> _vendors;
         private readonly IRepository<PurchaseInvoiceHeader> _bills;
         private readonly IRepository<GeneralLedgerLine> _glLines;
@@ -52,6 +54,7 @@ namespace Services.Banking
         public StatementLineExpenseService(
             IRepository<BankStatementLine> lines,
             IRepository<Bank> banks,
+            IRepository<Account> accounts,
             IRepository<Vendor> vendors,
             IRepository<PurchaseInvoiceHeader> bills,
             IRepository<GeneralLedgerLine> glLines,
@@ -65,6 +68,7 @@ namespace Services.Banking
         {
             _lines = lines;
             _banks = banks;
+            _accounts = accounts;
             _vendors = vendors;
             _bills = bills;
             _glLines = glLines;
@@ -123,7 +127,9 @@ namespace Services.Banking
 
             var companyId = _tenant.RequireCompanyId();
             var rule = _rules.Table.FirstOrDefault(r => r.CompanyId == companyId && r.DescriptionKey == key);
-            return rule == null ? null : ToRuleDto(rule);
+            if (rule == null || IsRuleTargetArchived(rule))
+                return null;
+            return ToRuleDto(rule);
         }
 
         public RecordExpenseFromStatementLineResultDto RecordExpense(
@@ -510,11 +516,37 @@ namespace Services.Banking
             };
         }
 
-        internal static string? NormalizeDescriptionKey(string? value)
+        private bool IsRuleTargetArchived(BankStatementDescriptionRule rule)
+        {
+            if (rule.VendorId is > 0)
+            {
+                var vendor = _vendors.Table.FirstOrDefault(v => v.Id == rule.VendorId.Value);
+                if (vendor == null || vendor.ArchivedAt != null)
+                    return true;
+            }
+            if (rule.ExpenseAccountId is > 0)
+            {
+                var account = _accounts.Table.FirstOrDefault(a => a.Id == rule.ExpenseAccountId.Value);
+                if (account == null || account.ArchivedAt != null)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Stable key for remembered rules: lowercased words with digits, dates, and ref tokens removed.
+        /// </summary>
+        public static string? NormalizeDescriptionKey(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
-            var normalized = string.Join(' ', value.Trim().ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            var lower = value.Trim().ToLowerInvariant();
+            lower = Regex.Replace(lower, @"\b\d{4}-\d{2}-\d{2}\b", " ");
+            lower = Regex.Replace(lower, @"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", " ");
+            lower = Regex.Replace(lower, @"\b(?:ref|reference|inv|invoice|txn|trx|id)[:#-]?\s*\S+\b", " ");
+            lower = Regex.Replace(lower, @"\d+", " ");
+            lower = Regex.Replace(lower, @"[^a-z\s]+", " ");
+            var normalized = string.Join(' ', lower.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
             if (normalized.Length == 0)
                 return null;
             return normalized.Length <= 200 ? normalized : normalized[..200];

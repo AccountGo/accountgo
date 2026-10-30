@@ -552,7 +552,7 @@ const BankStatementImportPage: React.FC = () => {
                 : `Showing ${showingFrom}–${showingTo} of ${totalCount}`}
             </p>
             <div className="flex gap-2">
-              {canManage && selectedIds.length > 0 && (
+              {canRecordExpense && selectedIds.length > 0 && (
                 <button
                   type="button"
                   disabled={busy}
