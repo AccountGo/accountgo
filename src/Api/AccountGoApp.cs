@@ -759,7 +759,7 @@ public static class AccountGoApp
                 .Where(u => u.NormalizedEmail == email.ToUpperInvariant())
                 .Select(u => u.Id)
                 .FirstOrDefault();
-            if (userId == null || apiDbContext.CompanyMembers.IgnoreQueryFilters().Any(m => m.CompanyId == 1 && m.UserId == userId))
+            if (userId == null || apiDbContext.CompanyMembers.Any(m => m.CompanyId == 1 && m.UserId == userId))
                 continue;
 
             var member = new Core.Domain.CompanyMember
