@@ -36,6 +36,7 @@ namespace Api.Controllers
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly Api.Data.ApiDbContext _db;
         private readonly ILogger<PurchasingController> _logger;
+        private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
 
         public PurchasingController(IAdministrationService adminService,
             IPurchasingService purchasingService,
@@ -46,7 +47,8 @@ namespace Api.Controllers
             Core.Tenancy.ITenantGuard tenantGuard,
             Core.Tenancy.ITenantContext tenantContext,
             Api.Data.ApiDbContext db,
-            ILogger<PurchasingController> logger)
+            ILogger<PurchasingController> logger,
+            Services.Financial.IBooksLockGuard booksLockGuard)
         {
             _adminService = adminService;
             _purchasingService = purchasingService;
@@ -58,6 +60,20 @@ namespace Api.Controllers
             _tenantContext = tenantContext;
             _db = db;
             _logger = logger;
+            _booksLockGuard = booksLockGuard;
+        }
+
+        private IActionResult? RefuseIfBooksLocked(DateTime date)
+        {
+            try
+            {
+                _booksLockGuard.EnsureDateAllowed(date);
+                return null;
+            }
+            catch (Core.Domain.BooksLockedException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -736,6 +752,18 @@ namespace Api.Controllers
             if (approving && !_tenantContext.Permissions.Contains(SystemPermissions.PurchasesBillsPost))
                 return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesBillsPost);
 
+            if (RefuseIfBooksLocked(billDto.Date) is { } locked)
+                return locked;
+            if (billDto.Id > 0)
+            {
+                var existingDate = _db.PurchaseInvoiceHeaders
+                    .Where(b => b.Id == billDto.Id)
+                    .Select(b => (DateTime?)b.Date)
+                    .FirstOrDefault();
+                if (existingDate.HasValue && RefuseIfBooksLocked(existingDate.Value) is { } existingLocked)
+                    return existingLocked;
+            }
+
             if (billDto.VendorId <= 0)
                 return BadRequest(new { message = "Pick the vendor the bill is from." });
             if (billDto.Lines.Count == 0)
@@ -942,6 +970,12 @@ namespace Api.Controllers
                 return BadRequest(new { message = "A reason is required to void a bill." });
 
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(billId, nameof(billId));
+            var billDate = _db.PurchaseInvoiceHeaders
+                .Where(b => b.Id == billId)
+                .Select(b => (DateTime?)b.Date)
+                .FirstOrDefault();
+            if (billDate.HasValue && RefuseIfBooksLocked(billDate.Value) is { } locked)
+                return locked;
             var user = GetUserNameFromRequestHeader();
             return BillAction(billId, () => _purchasingService.VoidBill(billId, voidDate.Value.Date, voidReason, user), "void");
         }
@@ -954,6 +988,8 @@ namespace Api.Controllers
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
             var bill = _db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Id == id);
+            if (RefuseIfBooksLocked(bill.Date) is { } locked)
+                return locked;
             if (!bill.IsDraft)
                 return BadRequest(new { message = "Only a draft bill can be deleted. Void an approved bill instead." });
 
@@ -1015,6 +1051,9 @@ namespace Api.Controllers
             var payment = _db.VendorPayments.FirstOrDefault(p => p.Id == paymentId);
             if (payment == null)
                 return NotFound(new { message = $"Payment #{paymentId} was not found." });
+
+            if (RefuseIfBooksLocked(payment.Date) is { } locked)
+                return locked;
 
             var billId = payment.PurchaseInvoiceHeaderId;
             if (!billId.HasValue)

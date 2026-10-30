@@ -66,6 +66,12 @@ namespace Services.Banking
             if (rounded != 0m && !IsInActiveFiscalYear(date))
                 throw new InvalidOperationException("Post an adjustment instead.");
 
+            // Books lock: refuse a non-zero OB, or a change/clear of an existing one, dated on or before the lock.
+            if (previousDate.HasValue)
+                _booksLockGuard?.EnsureDateAllowed(previousDate.Value);
+            if (rounded != 0m)
+                _booksLockGuard?.EnsureDateAllowed(date);
+
             if (previousHeaderId.HasValue)
             {
                 var reversalDate = previousDate ?? date;

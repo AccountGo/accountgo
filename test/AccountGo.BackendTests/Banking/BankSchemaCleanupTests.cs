@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Api.Data;
 using Api.Data.Schema;
@@ -37,6 +38,71 @@ public class BankSchemaCleanupTests
         Assert.True(ColumnExists(connection, "Bank", "ArchivedAt"));
         Assert.True(IndexExists(connection, "UX_Bank_Company_Account"));
         Assert.True(TriggerExists(connection, "trg_Bank_AccountId_required_insert"));
+    }
+
+    [Fact]
+    public void D1_0044_And_0045_BooksLock_RunUnderCompoundSelectLimit()
+    {
+        using var connection = OpenLegacyBankDb();
+        SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+
+        Execute(connection, @"
+CREATE TABLE IF NOT EXISTS ""CompanySetting"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""CompanyId"" INTEGER NOT NULL,
+    ""Currency"" TEXT NOT NULL DEFAULT 'USD',
+    ""BooksStartDate"" TEXT NOT NULL DEFAULT '1970-01-01'
+);
+CREATE TABLE IF NOT EXISTS ""SecurityGroup"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""Name"" TEXT NOT NULL,
+    ""DisplayName"" TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ""SecurityPermission"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""Name"" TEXT NOT NULL,
+    ""DisplayName"" TEXT NOT NULL,
+    ""SecurityGroupId"" INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ""SecurityRole"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""Name"" TEXT NOT NULL,
+    ""DisplayName"" TEXT NOT NULL,
+    ""SysAdmin"" INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS ""SecurityRolePermission"" (
+    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ""SecurityRoleId"" INTEGER NOT NULL,
+    ""SecurityPermissionId"" INTEGER NOT NULL
+);
+INSERT INTO ""SecurityGroup"" (""Name"", ""DisplayName"") VALUES ('Financials', 'General Ledger');
+INSERT INTO ""SecurityGroup"" (""Name"", ""DisplayName"") VALUES ('Admin', 'Administration');
+INSERT INTO ""SecurityPermission"" (""Name"", ""DisplayName"", ""SecurityGroupId"")
+SELECT 'admin.members.manage', 'Manage Members', g.""Id"" FROM ""SecurityGroup"" g WHERE g.""Name"" = 'Admin';
+INSERT INTO ""SecurityRole"" (""Name"", ""DisplayName"") VALUES ('Workspace Admin Mirror', 'Workspace Admin Mirror');
+INSERT INTO ""SecurityRolePermission"" (""SecurityRoleId"", ""SecurityPermissionId"")
+SELECT r.""Id"", p.""Id"" FROM ""SecurityRole"" r, ""SecurityPermission"" p
+WHERE r.""Name"" = 'Workspace Admin Mirror' AND p.""Name"" = 'admin.members.manage';
+");
+
+        var lockSql = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0044_books_lock.sql"));
+        var permSql = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0045_books_lock_permission.sql"));
+        Assert.Null(Record.Exception(() => ExecuteScript(connection, lockSql)));
+        Assert.Null(Record.Exception(() => ExecuteScript(connection, permSql)));
+
+        Assert.True(ColumnExists(connection, "CompanySetting", "BooksLockedThrough"));
+        Assert.True(IndexExists(connection, "IX_BooksLockChange_CompanyId"));
+        Assert.Equal(1, ScalarLong(connection, @"SELECT COUNT(*) FROM ""SecurityPermission"" WHERE ""Name"" = 'financials.periods.close'"));
+        Assert.Equal(1, ScalarLong(connection, @"
+SELECT COUNT(*) FROM ""SecurityRolePermission"" rp
+JOIN ""SecurityPermission"" p ON p.""Id"" = rp.""SecurityPermissionId""
+WHERE p.""Name"" = 'financials.periods.close'"));
+        // One INSERT per statement: no multi-row VALUES or UNION ALL in either migration.
+        Assert.DoesNotContain("UNION ALL", lockSql + permSql, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, SplitSqlStatements(permSql).Count(s =>
+            s.Contains("INSERT INTO \"SecurityPermission\"", StringComparison.Ordinal)));
+        Assert.Equal(1, SplitSqlStatements(permSql).Count(s =>
+            s.Contains("INSERT INTO \"SecurityRolePermission\"", StringComparison.Ordinal)));
     }
 
     [Fact]
