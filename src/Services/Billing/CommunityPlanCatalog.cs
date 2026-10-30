@@ -14,7 +14,7 @@ namespace Services.Billing;
 /// </summary>
 public sealed class CommunityPlanCatalog : IPlanCatalog
 {
-    public const string PlanKey = "community";
+    public const string PlanKey = Core.Entitlements.PlanKeys.Community;
 
     /// <inheritdoc />
     public string DefaultPlanKey => PlanKey;

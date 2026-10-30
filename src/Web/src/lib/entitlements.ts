@@ -148,6 +148,24 @@ export function evaluateCanFeature(snapshot: Entitlements | null, feature: strin
   return snapshot.features.includes(feature);
 }
 
+/** Hosted feature key for CSV/OFX statement import (#436). */
+export const FEATURE_BANKING_STATEMENT_IMPORT = 'banking.statement_import';
+
+/**
+ * Statement import: financials module, or the hosted feature key, or community edition.
+ * Mirrors `IEntitlementService.EvaluateStatementImport`.
+ */
+export function evaluateCanStatementImport(
+  snapshot: Entitlements | null,
+  bootstrapModules?: ModuleKey[],
+): boolean {
+  if (evaluateCanModule(snapshot, 'financials', bootstrapModules)) return true;
+  if (!snapshot) return false;
+  const plan = (snapshot.effectivePlan || snapshot.plan || '').toLowerCase();
+  if (plan === 'community') return true;
+  return evaluateCanFeature(snapshot, FEATURE_BANKING_STATEMENT_IMPORT);
+}
+
 /**
  * Create rule: !limited || (limit == null) || (!overLimit && limit − used > 0).
  * No snapshot → fail open (true). Server remains the authority; this is best-effort UI.
@@ -187,6 +205,8 @@ export interface Capabilities {
   canModule: (moduleKey: ModuleKey) => boolean;
   canWrite: (moduleKey: ModuleKey) => boolean;
   canFeature: (feature: string) => boolean;
+  /** Statement import (#436): financials, hosted feature, or community. */
+  canStatementImport: boolean;
   canCreate: (resource: MeteredResource) => boolean;
   canManageBilling: boolean;
   reload: () => Promise<Entitlements | null>;
@@ -308,6 +328,7 @@ export const CapabilitiesProvider: React.FC<CapabilitiesProviderProps> = ({
     const canModule = (moduleKey: ModuleKey) => evaluateCanModule(entitlements, moduleKey, bootstrap);
     const canWrite = (moduleKey: ModuleKey) => evaluateCanWrite(entitlements, moduleKey, bootstrap);
     const canFeature = (feature: string) => evaluateCanFeature(entitlements, feature);
+    const canStatementImport = evaluateCanStatementImport(entitlements, bootstrap);
     const canCreate = (resource: MeteredResource) => evaluateCanCreate(entitlements, resource);
     return {
       entitlements,
@@ -320,6 +341,7 @@ export const CapabilitiesProvider: React.FC<CapabilitiesProviderProps> = ({
       canModule,
       canWrite,
       canFeature,
+      canStatementImport,
       canCreate,
       canManageBilling: hasPermission('admin.subscription.manage'),
       reload,
