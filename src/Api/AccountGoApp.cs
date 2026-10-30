@@ -719,6 +719,7 @@ public static class AccountGoApp
         Console.WriteLine("Applying IdentityDb migrations (Postgres)...");
         identityDbContext.Database.Migrate();
         Console.WriteLine("✓ Postgres migrations completed.");
+        Api.Data.Postgres.HostedApiLockdown.Apply(apiDbContext);
 
         if (isNewDatabase)
         {
