@@ -22,9 +22,8 @@ namespace Services.Banking
 
         public static Item Resolve(IInventoryService inventory, IFinancialService financial)
         {
-            var item = inventory.GetAllItems().FirstOrDefault(i =>
-                i.ArchivedAt == null
-                && string.Equals(i.Description, Name, StringComparison.OrdinalIgnoreCase));
+            // A direct lookup: GetAllItems loads every item with its accounts, category and stock journals.
+            var item = inventory.GetActiveItemByDescription(Name);
             if (item != null)
                 return item;
 
