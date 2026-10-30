@@ -32,6 +32,9 @@
       }
     }
   ],
+  // Optional runtime switches read by the Worker (no deploy needed to change them), e.g.
+  //   npx wrangler kv key put --namespace-id <id> tiered_capacity false --remote
+  // "kv_namespaces": [{ "binding": "FLAGS", "id": "YOUR_KV_NAMESPACE_ID" }],
   "durable_objects": {
     "bindings": [
       {
