@@ -85,7 +85,7 @@ namespace Services.Banking
                 BankStatementSources.Ofx => ParseOfx(content),
                 BankStatementSources.Camt => CamtStatementParser.Parse(content, accountCurrencyCode),
                 BankStatementSources.Mt940 => Mt940StatementParser.Parse(content),
-                BankStatementSources.Qif => QifStatementParser.Parse(content),
+                BankStatementSources.Qif => QifStatementParser.Parse(content, map?.DateFormat),
                 _ => throw new InvalidOperationException("Pick a supported statement file.")
             };
         }
@@ -142,6 +142,13 @@ namespace Services.Banking
                         throw new FormatException(
                             $"Amount '{Field(fields, map.AmountColumn) ?? Field(fields, map.DepositColumn) ?? Field(fields, map.WithdrawalColumn)}' needs a decimal separator ('.' or ','). Set it in the column map.");
 
+                    if (map.TypeColumn.HasValue && map.SkippedTypes.Count > 0)
+                    {
+                        var type = Field(fields, map.TypeColumn);
+                        if (type != null && map.SkippedTypes.Contains(type))
+                            throw new FormatException($"{type.Trim().ToLowerInvariant()} row skipped");
+                    }
+
                     if (map.StatusColumn.HasValue)
                     {
                         var status = Field(fields, map.StatusColumn);
@@ -193,7 +200,7 @@ namespace Services.Banking
                      {
                          map.AmountColumn, map.DepositColumn, map.WithdrawalColumn, map.FeeColumn,
                          map.DirectionColumn, map.PayeeColumn, map.MemoColumn, map.ReferenceColumn,
-                         map.ExternalIdColumn, map.CurrencyColumn, map.StatusColumn
+                         map.ExternalIdColumn, map.CurrencyColumn, map.StatusColumn, map.TypeColumn
                      })
             {
                 if (column is < 0)
@@ -462,9 +469,9 @@ namespace Services.Banking
                 var feeRaw = Field(fields, map.FeeColumn);
                 if (feeRaw != null)
                 {
+                    // Revolut-style: fee always reduces the balance further (outflow −100 fee 1 → −101).
                     var fee = Math.Abs(ParseAmount(feeRaw, "Fee", map.AmountDecimalSeparator, map.AccountCurrencyCode));
-                    var sign = amount >= 0 ? 1m : -1m;
-                    amount = sign * (Math.Abs(amount) - fee);
+                    amount -= fee;
                 }
             }
 

@@ -106,6 +106,7 @@ namespace Services.Banking
 
             var directionSigns = BuildDirectionSigns(map);
             var allowedStatuses = BuildAllowedStatuses(map);
+            var skippedTypes = BuildSkippedTypes(map);
             var accountCurrency = string.IsNullOrWhiteSpace(accountCurrencyCode)
                 ? null
                 : accountCurrencyCode.Trim().ToUpperInvariant();
@@ -132,6 +133,8 @@ namespace Services.Banking
                 AccountCurrencyCode = accountCurrency,
                 StatusColumn = map.StatusColumn,
                 AllowedStatuses = allowedStatuses,
+                TypeColumn = map.TypeColumn,
+                SkippedTypes = skippedTypes,
                 InvertSign = map.InvertSign,
                 DateDetection = detection,
                 AmountDetection = amountDetection,
@@ -243,6 +246,15 @@ namespace Services.Banking
                 return DefaultAllowedStatuses;
             return new HashSet<string>(
                 map.AllowedStatuses.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static IReadOnlySet<string> BuildSkippedTypes(BankStatementColumnMap map)
+        {
+            if (map.SkippedTypes == null || map.SkippedTypes.Count == 0)
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return new HashSet<string>(
+                map.SkippedTypes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()),
                 StringComparer.OrdinalIgnoreCase);
         }
 

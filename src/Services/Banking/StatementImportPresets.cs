@@ -22,6 +22,10 @@ namespace Services.Banking
             public required IReadOnlyList<string> RequiredHeaders { get; init; }
             /// <summary>Role → preferred header names (first match wins).</summary>
             public required IReadOnlyDictionary<string, string[]> RoleHeaders { get; init; }
+            /// <summary>Optional type values to skip (e.g. PayPal Memo).</summary>
+            public IReadOnlyList<string>? SkippedTypes { get; init; }
+            /// <summary>Optional direction token overrides (e.g. PayPal Balance Impact).</summary>
+            public IReadOnlyDictionary<string, int>? DirectionValueMap { get; init; }
 
             public BankStatementColumnMap Bind(IReadOnlyList<string> fileHeaders)
             {
@@ -69,7 +73,12 @@ namespace Services.Banking
                     PayeeColumn = Find(RoleHeaders.GetValueOrDefault("payee") ?? Array.Empty<string>()),
                     MemoColumn = Find(RoleHeaders.GetValueOrDefault("memo") ?? Array.Empty<string>()),
                     FeeColumn = Find(RoleHeaders.GetValueOrDefault("fee") ?? Array.Empty<string>()),
-                    ReferenceColumn = Find(RoleHeaders.GetValueOrDefault("reference") ?? Array.Empty<string>())
+                    ReferenceColumn = Find(RoleHeaders.GetValueOrDefault("reference") ?? Array.Empty<string>()),
+                    TypeColumn = Find(RoleHeaders.GetValueOrDefault("type") ?? Array.Empty<string>()),
+                    SkippedTypes = SkippedTypes?.ToList(),
+                    DirectionValueMap = DirectionValueMap == null
+                        ? null
+                        : new Dictionary<string, int>(DirectionValueMap, StringComparer.OrdinalIgnoreCase)
                 };
 
                 if (map.AmountColumn == null)
@@ -95,7 +104,7 @@ namespace Services.Banking
             {
                 Name = "Wise activity",
                 RequiredHeaders = NormalizeMany(
-                    "profile_id", "activity_id", "created_on", "status", "direction", "amount", "currency"),
+                    "profile_id", "activity_id", "created_on", "status", "direction", "amount", "currency", "title"),
                 RoleHeaders = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["date"] = new[] { "created_on" },
@@ -105,23 +114,31 @@ namespace Services.Banking
                     ["currency"] = new[] { "currency" },
                     ["status"] = new[] { "status" },
                     ["externalId"] = new[] { "activity_id" },
-                    ["payee"] = new[] { "source_name", "target_name", "merchant" },
-                    ["memo"] = new[] { "target_name", "reference_number" }
+                    ["payee"] = new[] { "title" },
+                    ["memo"] = new[] { "description", "type" }
                 }
             },
             new()
             {
                 Name = "PayPal activity",
-                RequiredHeaders = NormalizeMany("date", "name", "status", "currency", "net"),
+                RequiredHeaders = NormalizeMany("date", "name", "status", "currency", "net", "balance_impact"),
                 RoleHeaders = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["date"] = new[] { "date" },
                     ["amount"] = new[] { "net" },
+                    ["direction"] = new[] { "balance impact", "balance_impact" },
                     ["currency"] = new[] { "currency" },
                     ["status"] = new[] { "status" },
+                    ["type"] = new[] { "type" },
                     ["payee"] = new[] { "name" },
-                    ["memo"] = new[] { "type", "item title", "item_title" },
+                    ["memo"] = new[] { "item title", "item_title", "subject" },
                     ["externalId"] = new[] { "transaction id", "transaction_id" }
+                },
+                SkippedTypes = new[] { "Memo" },
+                DirectionValueMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["credit"] = 1,
+                    ["debit"] = -1
                 }
             },
             new()

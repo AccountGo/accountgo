@@ -36,10 +36,59 @@ public class StatementExtraFormatsTests
     public void Qif_AmbiguousDatesRequireChoice()
     {
         const string qif = "!Type:Bank\nD03/04/26\nT5.00\nPAlpha\n^\nD05/06/26\nT-2.00\nPBeta\n^\n";
+        Assert.True(QifStatementParser.DetectDates(qif).Ambiguous);
         var rows = QifStatementParser.Parse(qif);
         Assert.Equal(2, rows.Count);
         Assert.All(rows, r => Assert.False(r.IsValid));
         Assert.All(rows, r => Assert.Contains("needs a date format", r.Error, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("dd/MM/yyyy", 2026, 4, 3)]
+    [InlineData("MM/dd/yyyy", 2026, 3, 4)]
+    public void Qif_AmbiguousDates_ResolveWithUserFormat(string format, int year, int month, int day)
+    {
+        const string qif = "!Type:Bank\nD03/04/26\nT5.00\nPAlpha\n^\n";
+        var row = Assert.Single(QifStatementParser.Parse(qif, format));
+        Assert.True(row.IsValid, row.Error);
+        Assert.Equal(new DateTime(year, month, day), row.PostedDate);
+    }
+
+    [Fact]
+    public void RevolutStyle_FeeSubtractsFromSignedAmount()
+    {
+        const string csv =
+            "Completed Date,Description,Amount,Fee,Currency,State\n" +
+            "2024-03-07,Card payment,-100.00,1.00,USD,COMPLETED\n" +
+            "2024-03-08,Refund,50.00,0.50,USD,COMPLETED\n";
+        var headers = csv.Split('\n')[0].Split(',');
+        var map = StatementImportPresets.FindMatching(headers)!.Bind(headers);
+        var rows = BankStatementParser.ParseCsv(csv, map);
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, r => Assert.True(r.IsValid, r.Error));
+        // Outflow −100 with fee 1 → −101 (balance 1000 → 899), not −99.
+        Assert.Equal(-101.00m, rows[0].Amount);
+        Assert.Equal(49.50m, rows[1].Amount);
+    }
+
+    [Fact]
+    public void PayPal_SkipsMemoRows_UsesBalanceImpact()
+    {
+        const string csv =
+            "Date,Name,Type,Status,Currency,Net,Balance Impact,Transaction ID\n" +
+            "2024-03-07,Client Co,Express Checkout Payment,Completed,USD,-40.00,Debit,PP-1\n" +
+            "2024-03-07,Note to self,Memo,Completed,USD,0.00,,PP-MEMO\n" +
+            "2024-03-08,Refund,Payment Refund,Completed,USD,10.00,Credit,PP-2\n";
+        var headers = csv.Split('\n')[0].Split(',');
+        var map = StatementImportPresets.FindMatching(headers)!.Bind(headers);
+        var rows = BankStatementParser.ParseCsv(csv, map);
+        Assert.Equal(3, rows.Count);
+        Assert.True(rows[0].IsValid, rows[0].Error);
+        Assert.Equal(-40.00m, rows[0].Amount);
+        Assert.False(rows[1].IsValid);
+        Assert.Contains("memo row skipped", rows[1].Error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(rows[2].IsValid, rows[2].Error);
+        Assert.Equal(10.00m, rows[2].Amount);
     }
 
     [Fact]

@@ -18,8 +18,8 @@ namespace Services.Banking
     /// </summary>
     public static class XlsxStatementReader
     {
-        /// <summary>OpenXml part character budget — keeps a shared container from expanding a malicious sheet.</summary>
-        public const long MaxCharactersInPart = 10_000_000;
+        /// <summary>OpenXml part character budget (~2M) — keeps a shared container from expanding a malicious sheet.</summary>
+        public const long MaxCharactersInPart = 2_000_000;
 
         public static string ToCsv(byte[] bytes)
         {

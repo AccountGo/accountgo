@@ -79,6 +79,20 @@ namespace Services.Banking
                 detection = ToDetectionDto(resolved.Summary);
                 rows = BankStatementParser.ParseCsv(content, resolved.Map, resolved.Records);
             }
+            else if (source == BankStatementSources.Qif)
+            {
+                var userFormat = request.ColumnMap?.DateFormat;
+                var dateDetection = QifStatementParser.DetectDates(content);
+                var needsDateChoice = dateDetection.Ambiguous && string.IsNullOrWhiteSpace(userFormat);
+                detection = new BankStatementDetectionSummaryDto
+                {
+                    Date = needsDateChoice
+                        ? "ambiguous (dd/MM vs MM/dd) — choose a format"
+                        : dateDetection.Summary,
+                    NeedsDateFormatChoice = needsDateChoice
+                };
+                rows = QifStatementParser.Parse(content, userFormat);
+            }
             else
             {
                 rows = BankStatementParser.Parse(source, content, request.ColumnMap, bank.CurrencyCode);

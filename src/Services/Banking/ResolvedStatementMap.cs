@@ -59,6 +59,9 @@ namespace Services.Banking
         /// <summary>True when the amount column is ambiguous and the user has not chosen a separator.</summary>
         public bool NeedsAmountFormatChoice { get; init; }
         public int? FeeColumn { get; init; }
+        public int? TypeColumn { get; init; }
+        public IReadOnlySet<string> SkippedTypes { get; init; } =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>Human-readable detection notes for the import preview.</summary>

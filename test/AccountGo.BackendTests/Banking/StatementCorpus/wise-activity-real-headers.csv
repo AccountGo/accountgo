@@ -1,3 +1,3 @@
-profile_id,profile_type,profile_name,activity_id,created_on,updated_on,type,status,direction,amount,currency,signed_amount,source_name,target_name
-111,PERSONAL,Demo,ACT-USD-001,2024-03-07T04:59:09.447Z,2024-03-07T04:59:10.100Z,TRANSFER,completed,in,1250.50,USD,1250.50,Client Co,Wallet
-111,PERSONAL,Demo,ACT-USD-002,2024-03-08T12:00:00.000Z,2024-03-08T12:00:01.000Z,TRANSFER,completed,out,40.00,USD,-40.00,Wallet,Vendor LLC
+profile_id,profile_type,profile_name,activity_id,created_on,updated_on,type,status,resource_type,resource_id,title,description,direction,amount,currency,signed_amount,secondary_amount,primary_amount_raw
+111,PERSONAL,Demo,ACT-USD-001,2024-03-07T04:59:09.447Z,2024-03-07T04:59:10.100Z,TRANSFER,completed,transfer,RES-1,Received money from Client Co,Invoice payment,in,1250.50,USD,1250.50,,1250.50 USD
+111,PERSONAL,Demo,ACT-USD-002,2024-03-08T12:00:00.000Z,2024-03-08T12:00:01.000Z,TRANSFER,completed,transfer,RES-2,Sent money to Vendor LLC,Supplies,out,40.00,USD,-40.00,,-40.00 USD

@@ -14,13 +14,10 @@ namespace Services.Banking
     /// <summary>Quicken Interchange Format (!Type:Bank) reader (#447 Phase C).</summary>
     public static class QifStatementParser
     {
-        public static IReadOnlyList<ParsedStatementRow> Parse(string content)
+        /// <summary>Whole-file date detection from every D field (never guess from a single row).</summary>
+        public static StatementColumnDetector.DateDetection DetectDates(string content)
         {
             content = content.TrimStart('\uFEFF');
-            if (string.IsNullOrWhiteSpace(content))
-                throw new InvalidOperationException("The statement file is empty.");
-
-            // Decide day/month order from every D field together — never guess from a single row.
             var dateRaw = new List<string>();
             foreach (var rawLine in content.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None))
             {
@@ -28,12 +25,26 @@ namespace Services.Banking
                 if (line.Length > 1 && line[0] == 'D')
                     dateRaw.Add(NormalizeQifDateToken(line[1..].Trim()));
             }
+            return StatementColumnDetector.DetectDateFormat(dateRaw);
+        }
 
-            var dateDetection = StatementColumnDetector.DetectDateFormat(dateRaw);
-            var dateFormat = dateDetection.Ambiguous ? null : dateDetection.Format;
-            var needsDateChoice = dateDetection.Ambiguous
-                || (dateDetection.Kind == StatementColumnDetector.DateKind.Unknown
-                    && dateRaw.Any(LooksNumericSlash));
+        /// <param name="dateFormat">
+        /// User-chosen format such as <c>dd/MM/yyyy</c> or <c>MM/dd/yyyy</c>. Required when
+        /// <see cref="DetectDates"/> is ambiguous — without it every slash date becomes an error row.
+        /// </param>
+        public static IReadOnlyList<ParsedStatementRow> Parse(string content, string? dateFormat = null)
+        {
+            content = content.TrimStart('\uFEFF');
+            if (string.IsNullOrWhiteSpace(content))
+                throw new InvalidOperationException("The statement file is empty.");
+
+            var dateDetection = DetectDates(content);
+            var userFormat = string.IsNullOrWhiteSpace(dateFormat) ? null : dateFormat.Trim();
+            var resolvedFormat = userFormat ?? (dateDetection.Ambiguous ? null : dateDetection.Format);
+            var needsDateChoice = userFormat == null
+                && (dateDetection.Ambiguous
+                    || (dateDetection.Kind == StatementColumnDetector.DateKind.Unknown
+                        && CollectDateTokens(content).Any(LooksNumericSlash)));
 
             var rows = new List<ParsedStatementRow>();
             var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -102,7 +113,7 @@ namespace Services.Banking
                             if (needsDateChoice && LooksNumericSlash(token))
                                 throw new FormatException(
                                     $"Date '{value}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.");
-                            date = ParseQifDate(token, dateFormat, dateDetection);
+                            date = ParseQifDate(token, resolvedFormat, dateDetection);
                             dateError = null;
                         }
                         catch (FormatException ex)
@@ -133,9 +144,21 @@ namespace Services.Banking
             return rows;
         }
 
+        private static IReadOnlyList<string> CollectDateTokens(string content)
+        {
+            var list = new List<string>();
+            foreach (var rawLine in content.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None))
+            {
+                var line = rawLine.TrimEnd();
+                if (line.Length > 1 && line[0] == 'D')
+                    list.Add(NormalizeQifDateToken(line[1..].Trim()));
+            }
+            return list;
+        }
+
         private static DateTime ParseQifDate(
             string normalized,
-            string? detectedFormat,
+            string? resolvedFormat,
             StatementColumnDetector.DateDetection detection)
         {
             if (detection.Kind == StatementColumnDetector.DateKind.Iso8601
@@ -145,12 +168,12 @@ namespace Services.Banking
                     return iso;
             }
 
-            if (!string.IsNullOrWhiteSpace(detectedFormat))
+            if (!string.IsNullOrWhiteSpace(resolvedFormat))
             {
-                var formats = Expand(detectedFormat);
+                var formats = Expand(resolvedFormat);
                 if (DateTime.TryParseExact(normalized, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var exact))
                     return exact;
-                throw new FormatException($"Date '{normalized}' does not match the format '{detectedFormat}'.");
+                throw new FormatException($"Date '{normalized}' does not match the format '{resolvedFormat}'.");
             }
 
             if (detection.Kind == StatementColumnDetector.DateKind.MonthName)

@@ -301,7 +301,8 @@ const BankStatementImportPage: React.FC = () => {
     fileName,
     content,
     contentBase64,
-    columnMap: source === 1 || source === 7 ? columnMap : null,
+    // CSV/xlsx need the full map; QIF only needs dateFormat when dates are ambiguous.
+    columnMap: source === 1 || source === 7 || source === 6 ? columnMap : null,
   });
 
   const mappingReady =
@@ -458,6 +459,38 @@ const BankStatementImportPage: React.FC = () => {
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
             className="block text-sm text-[var(--text-secondary)]"
           />
+
+          {source === 6 && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-bold text-[var(--text-main)]">2. Date format</h2>
+              <div className="max-w-sm">
+                <label className={labelClass} htmlFor="qif-dateFormat">
+                  Date format
+                  {preview?.detection?.needsDateFormatChoice ? ' (required — dates are ambiguous)' : ' (optional)'}
+                </label>
+                <select
+                  id="qif-dateFormat"
+                  value={columnMap.dateFormat ?? ''}
+                  onChange={(e) => {
+                    setPreview(null);
+                    setColumnMap((prev) => ({ ...prev, dateFormat: e.target.value.trim() || null }));
+                  }}
+                  className={inputClass}
+                >
+                  <option value="">Detected / ISO / year-first</option>
+                  <option value="dd/MM/yyyy">dd/MM/yyyy (day first)</option>
+                  <option value="MM/dd/yyyy">MM/dd/yyyy (month first)</option>
+                  <option value="d/M/yyyy">d/M/yyyy</option>
+                  <option value="M/d/yyyy">M/d/yyyy</option>
+                </select>
+              </div>
+              {preview?.detection?.needsDateFormatChoice && !columnMap.dateFormat && (
+                <p className="text-xs text-amber-600">
+                  Every date has day and month ≤ 12. Choose day-first or month-first — we will not guess.
+                </p>
+              )}
+            </div>
+          )}
 
           {(source === 1 || source === 7) && (source === 7 || sampleRows.length > 0) && (
             <div className="space-y-4">

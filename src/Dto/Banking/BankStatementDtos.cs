@@ -35,8 +35,12 @@ namespace Dto.Banking
         public int? AmountColumn { get; set; }
         public int? DepositColumn { get; set; }
         public int? WithdrawalColumn { get; set; }
-        /// <summary>Optional fee column (e.g. Revolut); subtracted from the amount magnitude.</summary>
+        /// <summary>Optional fee column (e.g. Revolut); always subtracted: amount − |fee|.</summary>
         public int? FeeColumn { get; set; }
+        /// <summary>Optional type column (e.g. PayPal); rows whose type is in <see cref="SkippedTypes"/> are skipped.</summary>
+        public int? TypeColumn { get; set; }
+        /// <summary>Type values to skip (default none). PayPal preset skips <c>Memo</c>.</summary>
+        public List<string>? SkippedTypes { get; set; }
         /// <summary>Optional direction column when the amount is unsigned (<c>in</c>/<c>out</c>, <c>CR</c>/<c>DR</c>, …).</summary>
         public int? DirectionColumn { get; set; }
         /// <summary>Optional overrides for direction tokens → +1 (in) or −1 (out).</summary>

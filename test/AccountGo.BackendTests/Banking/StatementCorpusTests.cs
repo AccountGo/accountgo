@@ -192,7 +192,10 @@ public class StatementCorpusTests
         Assert.Equal(2, rows.Count);
         Assert.All(rows, r => Assert.True(r.IsValid, r.Error));
         Assert.Equal(1250.50m, rows[0].Amount);
+        Assert.Equal("Received money from Client Co", rows[0].Payee);
+        Assert.Equal("Invoice payment", rows[0].Memo);
         Assert.Equal(-40.00m, rows[1].Amount);
+        Assert.Equal("Sent money to Vendor LLC", rows[1].Payee);
     }
 
     [Fact]
