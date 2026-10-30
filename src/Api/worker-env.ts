@@ -3,7 +3,6 @@
  * (avoids circular imports).
  */
 export interface Env {
-  DB: D1Database;
   CONTAINER: DurableObjectNamespace;
   CONTAINER_V2?: DurableObjectNamespace;
   ENVIRONMENT?: string;

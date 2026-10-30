@@ -1,7 +1,6 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Api.Service.D1Sync;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,18 +8,15 @@ namespace Api.Data
 {
     public class ApplicationIdentityDbContext : IdentityDbContext<ApplicationUser>
     {
-        private readonly ID1SyncContext? _d1SyncContext;
-
-        public ApplicationIdentityDbContext(DbContextOptions<ApplicationIdentityDbContext> options, ID1SyncContext? d1SyncContext = null)
-            : this((DbContextOptions)options, d1SyncContext)
+        public ApplicationIdentityDbContext(DbContextOptions<ApplicationIdentityDbContext> options)
+            : this((DbContextOptions)options)
         {
         }
 
         // Provider subclasses (Postgres) that carry their own migrations.
-        protected ApplicationIdentityDbContext(DbContextOptions options, ID1SyncContext? d1SyncContext)
+        protected ApplicationIdentityDbContext(DbContextOptions options)
             : base(options)
         {
-            _d1SyncContext = d1SyncContext;
         }
 
         public DbSet<RefreshTokenSession> RefreshTokens { get; set; } = null!;
@@ -30,31 +26,6 @@ namespace Api.Data
         public DbSet<TrustedDevice> TrustedDevices { get; set; } = null!;
         public DbSet<UserWebAuthnCredential> WebAuthnCredentials { get; set; } = null!;
         public DbSet<WebAuthnChallengeEntity> WebAuthnChallenges { get; set; } = null!;
-
-        // Every SaveChanges/SaveChangesAsync overload funnels into these two.
-        public override int SaveChanges(bool acceptAllChangesOnSuccess)
-        {
-            if (_d1SyncContext == null)
-                return base.SaveChanges(acceptAllChangesOnSuccess);
-
-            // Capture states before saving: EF resets them to Unchanged/Detached afterwards.
-            var pending = D1SqlGenerator.Capture(ChangeTracker);
-            var result = base.SaveChanges(acceptAllChangesOnSuccess);
-            pending.FlushTo(_d1SyncContext);
-            return result;
-        }
-
-        public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
-        {
-            if (_d1SyncContext == null)
-                return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-
-            // Capture states before saving: EF resets them to Unchanged/Detached afterwards.
-            var pending = D1SqlGenerator.Capture(ChangeTracker);
-            var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-            pending.FlushTo(_d1SyncContext);
-            return result;
-        }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

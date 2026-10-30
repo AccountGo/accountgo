@@ -178,7 +178,6 @@ public static class AccountGoApp
         builder.Services.AddSingleton<Api.Service.Import.ICoaFormatAdapterRegistry, Api.Service.Import.CoaFormatAdapterRegistry>();
         builder.Services.AddScoped<IAccountService, AccountService>();
         builder.Services.AddScoped<Api.Service.SalesInvoicePresentation>();
-        builder.Services.AddScoped<Api.Service.D1Sync.ID1SyncContext, Api.Service.D1Sync.D1SyncContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
         builder.Services.AddSingleton(Api.Options.EntitlementsConfiguration.FromConfiguration(builder.Configuration));
@@ -437,7 +436,6 @@ public static class AccountGoApp
 
         app.UseRouting();
         app.UseCors("Frontend");
-        app.UseMiddleware<Api.Service.D1Sync.D1SyncMiddleware>();
 
         // Pre-rate-limiting middleware: protect against large-body DoS and extract normalized email asynchronously
         app.Use(async (context, next) =>
@@ -602,14 +600,7 @@ public static class AccountGoApp
                     // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes, security tables)
                     Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
 
-                    // On Cloudflare the Worker restores every table from D1 once the container is up, replacing whatever is
-                    // here; seeding demo data first only delays start-up (minutes on the smallest container).
-                    bool restoredFromD1 = string.Equals(app.Configuration["RESTORE_FROM_D1"], "true", StringComparison.OrdinalIgnoreCase);
-                    if (isNewDatabase && restoredFromD1)
-                    {
-                        Console.WriteLine("Skipping demo seed: data is restored from D1.");
-                    }
-                    else if (isNewDatabase)
+                    if (isNewDatabase)
                     {
                         var seeder = services.GetRequiredService<DatabaseSeeder>();
                         Console.WriteLine("Seeding SQLite database...");
@@ -617,12 +608,7 @@ public static class AccountGoApp
                         Console.WriteLine("✓ SQLite database seeding completed successfully.");
                     }
 
-                    // Start-up writes on Cloudflare never reach D1 (only request writes are synced) and the restore replaces these
-                    // tables moments later, so there the default roles and admin users come from D1 and its migrations instead.
-                    if (!restoredFromD1)
-                    {
-                        EnsureSecurityDefaultsAndAdminUsers(services);
-                    }
+                    EnsureSecurityDefaultsAndAdminUsers(services);
 
                     // Run one-time post-seed membership and role backfill -> Version 2
                     Api.Data.Schema.SqliteSchemaUpgrader.UpgradePostSeed(apiDbContext.Database.GetDbConnection());
@@ -707,7 +693,7 @@ public static class AccountGoApp
     }
 
     /// <summary>
-    /// Postgres holds the data itself (no D1 copy), so start-up writes persist: migrate, seed demo books only into an
+    /// Start-up writes persist on Postgres: migrate, seed demo books only into an
     /// empty database, and keep the default roles current on every start.
     /// </summary>
     private static void InitializePostgres(IServiceProvider services, ApiDbContext apiDbContext,

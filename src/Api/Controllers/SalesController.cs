@@ -588,7 +588,7 @@ namespace Api.Controllers
                 .Distinct()
                 .ToList();
 
-            // Saved in foreign-key order: D1 replays the statements in order and enforces the keys.
+            // Saved in foreign-key order.
             using var tx = _db.Database.BeginTransaction();
             _db.RemoveRange(_db.Set<Core.Domain.CustomerContact>().Where(cc => cc.CustomerId == id));
             customer.BillToContactId = null;
@@ -1991,8 +1991,6 @@ namespace Api.Controllers
         // changes before a later receipt or allocation can accidentally persist part of that failed attempt.
         private string? TryPostSalesInvoice(int invoiceId)
         {
-            var sync = HttpContext.RequestServices.GetRequiredService<Api.Service.D1Sync.ID1SyncContext>();
-            var savedStatements = sync.GetStatements().ToList();
             try
             {
                 using (var tx = BeginInvoiceNumberingTransaction())
@@ -2005,9 +2003,6 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 _db.ChangeTracker.Clear();
-                sync.Clear();
-                foreach (var statement in savedStatements)
-                    sync.AddStatement(statement);
                 _logger.LogWarning(ex, "Invoice {InvoiceId} remains unposted: {Error}", invoiceId, ex.Message);
                 return ex.Message;
             }
@@ -2158,8 +2153,8 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Deletes the orders none of whose lines are on an invoice any more. Lines are saved before their order, the
-        /// order D1 replays them in, since it enforces foreign keys.
+        /// Deletes the orders none of whose lines are on an invoice any more. Lines are deleted before their order
+        /// (foreign-key order).
         /// </summary>
         private void DeleteUninvoicedOrders(List<int> orderIds)
         {

@@ -9,12 +9,12 @@ namespace Api.Data.Postgres
 {
     /// <summary>
     /// <see cref="ApiDbContext"/> on PostgreSQL. Same model; the subclass only exists so the Postgres migrations
-    /// (Data/Migrations/Postgres) are found apart from the SQL Server ones. Never syncs to D1.
+    /// (Data/Migrations/Postgres) are found apart from the SQL Server ones.
     /// </summary>
     public sealed class PostgresApiDbContext : ApiDbContext
     {
         public PostgresApiDbContext(DbContextOptions<PostgresApiDbContext> options, ITenantContext? tenantContext = null)
-            : base(options, d1SyncContext: null, tenantContext)
+            : base(options, tenantContext)
         {
         }
 

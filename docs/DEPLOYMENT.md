@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide covers **self-hosting** AccountGo (Cloudflare Workers / Containers / D1, or Docker).  
+This guide covers **self-hosting** AccountGo (Cloudflare Workers / Containers with PostgreSQL, or Docker).  
 **AccountGo Cloud** (the hosted product at `*.accountgo.dev`) is deployed from a private ops control plane and is not documented with production resource IDs here.
 
 ---
@@ -17,13 +17,13 @@ flowchart LR
         DNS["Cloudflare DNS & SSL"]
         WebWorker["Cloudflare Worker (Static Assets SPA)"]
         APIContainer["Cloudflare Container / Worker (Backend API)"]
-        D1["Cloudflare D1 SQL"]
+        PG["PostgreSQL (any host)"]
     end
 
     User --> DNS
     DNS --> WebWorker
     DNS --> APIContainer
-    APIContainer --> D1
+    APIContainer --> PG
 ```
 
 ---
@@ -51,16 +51,19 @@ Use your own Cloudflare account. Do not reuse AccountGo Cloud resource IDs.
 ```bash
 cd src/Api
 cp wrangler.example.jsonc wrangler.jsonc
-# Set d1_databases[0].database_id to YOUR D1 database id
-# Set vars (PUBLIC_* URLs, CORS, email from-addresses) for your domain
+# Set vars (PUBLIC_* URLs, CORS, email from-addresses) for your domain; keep DatabaseProvider = "Postgres"
 # Put secrets via: npx wrangler secret put SECRET_KEY
 #                  npx wrangler secret put INTERNAL_SYNC_KEY
+#                  npx wrangler secret put ConnectionStrings__PostgresConnection
 #                  npx wrangler secret put RESEND_API_KEY  (if using Resend)
 
 pnpm install
-npx wrangler d1 migrations apply <your-db-name> --remote
 npx wrangler deploy
 ```
+
+The container's disk is not persistent, so the Worker only starts it with `DatabaseProvider = "Postgres"`. The
+connection string is a `postgresql://user:password@host:5432/database` URI or an Npgsql `Host=...;Database=...` string;
+it must be reachable over IPv4 (on Supabase, use the session pooler). The API applies its migrations on start.
 
 ### 3.2 Docker (any host)
 
@@ -83,6 +86,8 @@ docker run -d \
 | -------- | ----------- |
 | `SECRET_KEY` | ≥32-byte secret for JWT / OTP (Cloudflare Worker secret) |
 | `INTERNAL_SYNC_KEY` | Dedicated key for `/api/internal/*` (must differ from `SECRET_KEY`) |
+| `DatabaseProvider` | `Sqlite` (default), `Postgres` or `SqlServer`. Cloudflare Containers require `Postgres` |
+| `ConnectionStrings__PostgresConnection` | Postgres connection string (secret) when `DatabaseProvider=Postgres` |
 | `RESEND_API_KEY` | Resend API key when `EMAIL_PROVIDER=Resend` |
 | `ANTER_API_KEY` / `ANTER_PROJECT_ID` | Optional AccountGo Assistant; set via secrets / env — do not commit |
 | `JwtSettings__validIssuer` / `validAudience` | Match your public API origin |
@@ -90,7 +95,7 @@ docker run -d \
 | `SERVER_TIMING_ENABLED` | Optional. Default `"true"`. When `"false"`, no `Server-Timing` header from the .NET API, API worker, or web worker |
 
 > [!CAUTION]
-> Never commit real secret keys, D1 database IDs for production SaaS, or Cloudflare API tokens to a public repository.
+> Never commit real secret keys, database connection strings, or Cloudflare API tokens to a public repository.
 
 See `src/Api/.env.example` for local development placeholders.
 
@@ -102,9 +107,7 @@ When `SERVER_TIMING_ENABLED` is on (default), each API response carries a `Serve
 |---|---|
 | `app` | .NET pipeline time to response **headers** |
 | `db` | Summed EF command time; `desc` is the query count |
-| `d1prep` | Time to gzip/chunk D1 sync headers (only when sync statements exist) |
 | `container` | API worker → container fetch (includes DO routing) |
-| `d1` | Worker D1 sync batch; `desc` is statement count |
 | `cold` | Present with `desc="1"` when this request started/woke the container |
 | `worker` | API worker total to header time |
 | `proxy` | Web worker `env.API` / `API_HOST` fetch |

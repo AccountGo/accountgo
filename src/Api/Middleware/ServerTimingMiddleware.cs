@@ -91,8 +91,6 @@ public sealed class ServerTimingMiddleware
             accumulator.DbQueryCount == 1
                 ? "1 query"
                 : string.Create(CultureInfo.InvariantCulture, $"{accumulator.DbQueryCount} queries"));
-        if (accumulator.HasD1Prep)
-            AppendMetric(sb, "d1prep", accumulator.D1PrepMilliseconds, null);
         return sb.ToString();
     }
 
@@ -114,13 +112,12 @@ public sealed class ServerTimingMiddleware
     {
         var route = ResolveRouteTemplate(context);
         _logger.LogWarning(
-            "SlowRequest route={Route} status={Status} app_ms={AppMs} db_ms={DbMs} db_queries={DbQueries} d1prep_ms={D1PrepMs}",
+            "SlowRequest route={Route} status={Status} app_ms={AppMs} db_ms={DbMs} db_queries={DbQueries}",
             route,
             context.Response.StatusCode,
             appMs,
             accumulator.DbMilliseconds,
-            accumulator.DbQueryCount,
-            accumulator.HasD1Prep ? accumulator.D1PrepMilliseconds : (long?)null);
+            accumulator.DbQueryCount);
     }
 
     internal static string ResolveRouteTemplate(HttpContext context)

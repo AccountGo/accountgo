@@ -66,18 +66,6 @@ export function withServerTiming(
   });
 }
 
-/** Strip D1 sync headers only; keep Server-Timing and everything else. */
-export function stripD1SyncHeaders(headers: Headers): Headers {
-  const next = new Headers(headers);
-  for (const key of Array.from(next.keys())) {
-    const lower = key.toLowerCase();
-    if (lower.startsWith("x-d1-sync-sql") || lower === "x-d1-sync-encoding") {
-      next.delete(key);
-    }
-  }
-  return next;
-}
-
 /**
  * Scrub a request path for logs.
  * - /invitations/{token}[/…] → {token}

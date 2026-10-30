@@ -437,16 +437,12 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.BadRequest, (await SaveBill(NewBill(vendor.Id, ("Line", 1, 1m, null)))).StatusCode);
             Assert.Equal(4, (await Bills(vendor.Id)).Count);
 
-            // A draft deleted removes its lines before the bill, the order D1 replays and enforces foreign keys in.
+            // A deleted draft takes its lines with it, so the vendor can be deleted.
             var unused = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Mistake" });
             var mistake = await SaveBillOk(NewBill(unused.Id, ("Oops", 1, 1m, null)));
             Assert.False((await GetVendor(unused.Id)).CanDelete);
             var deleted = await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteBill?id={mistake.Id}");
             Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
-            var statements = AllSyncStatements(deleted);
-            var line = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"PurchaseInvoiceLine\""));
-            var header = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"PurchaseInvoiceHeader\""));
-            Assert.True(line >= 0 && header > line, string.Join("\n", statements));
             Assert.True((await GetVendor(unused.Id)).CanDelete);
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteVendor?id={unused.Id}")).StatusCode);
             Assert.DoesNotContain(await Vendors(), v => v.Id == unused.Id);
@@ -487,67 +483,6 @@ namespace AccountGo.BackendTests
             // Voiding again doesn't reverse twice.
             Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             WithDb(db => Assert.Equal(reversal, db.SalesInvoiceHeaders.Single(i => i.Id == id).VoidGeneralLedgerHeaderId));
-        }
-
-        [SqliteFact]
-        public async Task BillsMigration_BackfillsLegacyBills_AndReversesVoidedInvoices()
-        {
-            // An invoice voided before voids reversed their posting.
-            var invoice = await NewInvoice();
-            invoice.SalesInvoiceLines[0].ItemId = null;
-            invoice.SalesInvoiceLines[0].ItemDescription = "Advisory hours";
-            invoice.Status = "Open";
-            var issued = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
-            var invoiceId = (await Json(issued)).GetProperty("id").GetInt32();
-            WithDb(db =>
-            {
-                db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).Status = SalesInvoiceStatus.Void;
-                db.SaveChanges();
-            });
-            // A bill saved before bills had statuses or line text.
-            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Legacy vendor" });
-            var legacy = await SaveBillOk(NewBill(vendor.Id, ("Legacy line", 1, 10m, null)));
-
-            using var source = new SqliteConnection("Data Source=" + _path);
-            using var replica = new SqliteConnection("Data Source=:memory:");
-            source.Open();
-            replica.Open();
-            source.BackupDatabase(replica);
-            using var command = replica.CreateCommand();
-            // D1's data as it is before the migration. The test schema is built with foreign keys, so the new columns
-            // stay and the migration runs without its ALTER TABLE statements.
-            command.CommandText = $@"
-                UPDATE ""PurchaseInvoiceHeader"" SET ""Status"" = NULL WHERE ""Id"" = {legacy.Id};
-                UPDATE ""PurchaseInvoiceLine"" SET ""Description"" = NULL, ""AccountId"" = NULL WHERE ""PurchaseInvoiceHeaderId"" = {legacy.Id};
-                DELETE FROM ""SecurityRolePermission"" WHERE ""SecurityPermissionId"" IN (SELECT ""Id"" FROM ""SecurityPermission"" WHERE ""Name"" = 'purchases.payments.create');
-                DELETE FROM ""SecurityPermission"" WHERE ""Name"" = 'purchases.payments.create';";
-            command.ExecuteNonQuery();
-            command.CommandText = string.Join("\n", File.ReadAllLines(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0012_bills.sql"))
-                .Where(line => !line.StartsWith("ALTER TABLE", StringComparison.Ordinal)));
-            command.ExecuteNonQuery();
-
-            command.CommandText = $@"SELECT ""Status"" FROM ""PurchaseInvoiceHeader"" WHERE ""Id"" = {legacy.Id}";
-            Assert.Equal(0L, command.ExecuteScalar());
-            command.CommandText = $@"SELECT ""Description"" FROM ""PurchaseInvoiceLine"" WHERE ""PurchaseInvoiceHeaderId"" = {legacy.Id}";
-            Assert.Equal("Service / Product", command.ExecuteScalar());
-
-            command.CommandText = $@"
-                SELECT SUM(CASE l.""DrCr"" WHEN 1 THEN l.""Amount"" ELSE -l.""Amount"" END), COUNT(*)
-                FROM ""SalesInvoiceHeader"" i JOIN ""GeneralLedgerLine"" l
-                  ON l.""GeneralLedgerHeaderId"" IN (i.""GeneralLedgerHeaderId"", i.""VoidGeneralLedgerHeaderId"")
-                WHERE i.""Id"" = {invoiceId} AND l.""AccountId"" = {AccountId("10120")}";
-            using (var reader = command.ExecuteReader())
-            {
-                Assert.True(reader.Read());
-                Assert.Equal(0m, reader.GetDecimal(0));
-                Assert.Equal(2L, reader.GetInt64(1));
-            }
-
-            command.CommandText = @"SELECT COUNT(*) FROM ""SecurityRolePermission"" rp
-                JOIN ""SecurityPermission"" p ON p.""Id"" = rp.""SecurityPermissionId""
-                JOIN ""SecurityRole"" r ON r.""Id"" = rp.""SecurityRoleId""
-                WHERE p.""Name"" = 'purchases.payments.create' AND r.""Name"" = 'Accountant'";
-            Assert.Equal(1L, command.ExecuteScalar());
         }
 
         private static Dto.Purchasing.Bill NewBill(int vendorId, params (string Description, decimal Quantity, decimal Amount, int? AccountId)[] lines) => new()
