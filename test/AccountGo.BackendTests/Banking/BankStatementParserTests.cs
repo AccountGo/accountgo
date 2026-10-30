@@ -139,6 +139,27 @@ public class BankStatementParserTests
     }
 
     [Theory]
+    [InlineData("\n\nDate\tAmount\n2026-10-01\t5.00\n")]
+    [InlineData("\r\n\r\nDate;Amount\r\n2026-10-01;5.00\r\n")]
+    public void Csv_AutoDetectsDelimiterFromFirstNonBlankLine(string csv)
+    {
+        // Delimiter null → auto-detect. A leading blank must not make tab/semicolon files fall back to comma
+        // (which would leave Amount in column 0 and fail this parse).
+        var map = new BankStatementColumnMap
+        {
+            DateColumn = 0,
+            AmountColumn = 1,
+            Delimiter = null,
+            HasHeaderRow = true
+        };
+
+        var row = Assert.Single(BankStatementParser.ParseCsv(csv, map));
+
+        Assert.True(row.IsValid, row.Error);
+        Assert.Equal(5.00m, row.Amount);
+    }
+
+    [Theory]
     [InlineData("2026-10-01")]
     [InlineData("2026/10/01")]
     [InlineData("20261001")]
