@@ -147,6 +147,15 @@ namespace Core.Domain
         Manual = 3
     }
 
+    /// <summary>Why a statement line was excluded from matching (#436 I3).</summary>
+    public enum BankStatementExclusionReasons
+    {
+        Personal = 1,
+        TransferBetweenAccounts = 2,
+        Duplicate = 3,
+        Other = 4
+    }
+
     public enum AddressTypes
     {
         Office,
