@@ -14,6 +14,10 @@ const { primePlanCatalog } = await server.ssrLoadModule('/src/lib/usePlanCatalog
 const { AuthProvider } = await server.ssrLoadModule('/src/auth/AuthContext.tsx');
 const { announceEntitlementDenial, isEntitlementProblem, ENTITLEMENT_DENIED_EVENT } =
   await server.ssrLoadModule('/src/lib/entitlementEvents.ts');
+const {
+  evaluateCanStatementImport,
+  FEATURE_BANKING_STATEMENT_IMPORT,
+} = await server.ssrLoadModule('/src/lib/entitlements.ts');
 
 const limited = (salesDocuments) => ({
   enabled: true, plan: 'invoicing', tier: 'free', limited: true, modules: ['sales', 'purchases'],
@@ -107,4 +111,34 @@ test('create-workspace wizard hides plans the operator assigns', () => {
   primePlanCatalog([plan('invoicing', true), plan('accounting', true), plan('enterprise', true)]);
   assert.ok(render().includes('value="enterprise"'));
   primePlanCatalog(null);
+});
+
+test('evaluateCanStatementImport allows financials, feature key, or community', () => {
+  const base = {
+    ...limited({ limit: 5, used: 0, period: 'month' }),
+    modules: ['sales', 'purchases'],
+    features: [],
+    // Avoid hosted plan-key tokens in the public tree (PlanPackagingLeakGuardTests).
+    effectivePlan: 'starter',
+    plan: 'starter',
+    readOnlyModules: [],
+    allowedTransitions: [],
+    lifecycle: null,
+    version: null,
+  };
+  assert.equal(evaluateCanStatementImport(base), false);
+  assert.equal(
+    evaluateCanStatementImport({ ...base, features: [FEATURE_BANKING_STATEMENT_IMPORT] }),
+    true,
+  );
+  assert.equal(
+    evaluateCanStatementImport({
+      ...base,
+      limited: false,
+      effectivePlan: 'community',
+      plan: 'community',
+    }),
+    true,
+  );
+  assert.equal(evaluateCanStatementImport(null, ['financials']), true);
 });

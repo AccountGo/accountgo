@@ -243,6 +243,14 @@ namespace Core.Entitlements
         /// <summary>Checks whether the workspace is entitled to the given feature key (e.g. "mfa").</summary>
         bool HasFeature(int companyId, string feature) => Get(companyId).HasFeature(feature);
 
+        /// <summary>
+        /// Statement import (#436): allow when the workspace has the financials module, or the hosted
+        /// <see cref="FeatureKeys.BankingStatementImport"/> feature, or is on the community edition.
+        /// A plain feature check would deny every community workspace because community never emits feature keys.
+        /// </summary>
+        EntitlementDecision EvaluateStatementImport(int companyId) =>
+            StatementImportAccess.Evaluate(this, companyId);
+
         /// <summary>Throws <see cref="QuotaExceededException"/> when creating <paramref name="count"/> more would pass the limit.
         /// <paramref name="count"/> 0 checks that the workspace is not already over it.</summary>
         void EnsureCanCreate(int companyId, MeteredResource resource, int count = 1);
