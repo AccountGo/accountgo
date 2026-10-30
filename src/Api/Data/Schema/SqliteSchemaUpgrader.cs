@@ -266,7 +266,10 @@ namespace Api.Data.Schema
                     new[] { "BankStatementLine", "ExcludedAt", "TEXT NULL" },
                     new[] { "BankStatementLine", "ExcludedBy", "TEXT NULL" },
                     new[] { "BankStatementLine", "ExclusionReason", "INTEGER NULL" },
-                    new[] { "BankStatementLine", "ExclusionNote", "TEXT NULL" }
+                    new[] { "BankStatementLine", "ExclusionNote", "TEXT NULL" },
+                    // D1 0042_statement_other_income.sql (#436 I5)
+                    new[] { "SalesInvoiceHeader", "Origin", "INTEGER NULL" },
+                    new[] { "Customer", "IsSystem", "INTEGER NOT NULL DEFAULT 0" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -617,6 +620,21 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureBankReconciliationSchema(connection);
             EnsureBankStatementSchema(connection);
             EnsureBankStatementDescriptionRules(connection);
+            EnsureStatementOtherIncomeColumns(connection);
+        }
+
+        // D1 0042_statement_other_income.sql (#436 I5)
+        private static void EnsureStatementOtherIncomeColumns(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "SalesInvoiceHeader", "Origin", "INTEGER NULL");
+            AddColumnIfMissing(connection, "Customer", "IsSystem", "INTEGER NOT NULL DEFAULT 0");
+            if (TableExists(connection, "SalesInvoiceHeader"))
+            {
+                using var idx = connection.CreateCommand();
+                idx.CommandText = @"CREATE INDEX IF NOT EXISTS ""IX_SalesInvoiceHeader_Company_Origin""
+                    ON ""SalesInvoiceHeader"" (""CompanyId"", ""Origin"");";
+                idx.ExecuteNonQuery();
+            }
         }
 
         // D1 0039_bank_statement_lines.sql (#413 Phase 3A) + 0040 exclusion columns (#436 I3)

@@ -156,6 +156,13 @@ namespace Core.Domain
         Other = 4
     }
 
+    /// <summary>How a sales invoice was created outside the normal UI (#436 I5).</summary>
+    public enum SalesInvoiceOrigins
+    {
+        /// <summary>One-line invoice issued and paid from a statement "Record other income" action.</summary>
+        StatementOtherIncome = 1
+    }
+
     public enum AddressTypes
     {
         Office,

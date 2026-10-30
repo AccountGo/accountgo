@@ -685,7 +685,7 @@ namespace Api.Controllers
             IList<Dto.Sales.Customer> customersDto = new List<Dto.Sales.Customer>();
             try
             {
-                var customers = _salesService.GetCustomers().Where(p => p.Party != null);
+                var customers = _salesService.GetCustomers().Where(p => p.Party != null && !p.IsSystem);
                 foreach (var customer in customers)
                 {
                     var customerDto = new Dto.Sales.Customer()
