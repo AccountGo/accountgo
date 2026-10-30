@@ -53,3 +53,77 @@ jobs:
       - name: Build
         working-directory: src/Web
         run: pnpm run build
+
+      - name: Test
+        working-directory: src/Web
+        run: pnpm test
+
+  api-tests:
+    name: API tests (SQLite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Backend tests
+        run: dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj -c Release
+
+      - name: Services tests
+        run: dotnet test test/AccountGo.ServicesTests/AccountGo.ServicesTests.csproj -c Release
+
+  api-tests-postgres:
+    name: API tests (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # One throwaway database per test; see test/AccountGo.BackendTests/PostgresTestDatabase.cs.
+      ACCOUNTGO_TEST_POSTGRES: Host=localhost;Port=5432;Username=postgres;Password=postgres;Maximum Pool Size=5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The roles a hosted Postgres (Supabase) has, so the Data API lockdown runs as it does there.
+      - name: Create hosted API roles
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -c "CREATE ROLE anon NOLOGIN" -c "CREATE ROLE authenticated NOLOGIN"
+
+      - name: Multi-tenancy and architecture tests
+        run: >-
+          dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj -c Release
+          --filter "FullyQualifiedName~MultiTenancyPhase3Tests|FullyQualifiedName~PostgresConnectionString|FullyQualifiedName~Architecture"
+          -- xUnit.MaxParallelThreads=4
+
+  worker-tests:
+    name: Worker tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Loads the .ts modules directly: needs Node with type stripping on by default.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Test
+        working-directory: src/Api
+        run: npm test
