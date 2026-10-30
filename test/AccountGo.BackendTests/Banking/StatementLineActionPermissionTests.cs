@@ -37,6 +37,10 @@ public class StatementLineActionPermissionTests
     [InlineData(nameof(BankingController.BulkRecordExpenseFromStatementLines), SystemPermissions.PurchasesBillsPost)]
     [InlineData(nameof(BankingController.BulkRecordExpenseFromStatementLines), SystemPermissions.PurchasesPaymentsCreate)]
     [InlineData(nameof(BankingController.BulkRecordExpenseFromStatementLines), SystemPermissions.BankingAccountsManage)]
+    [InlineData(nameof(BankingController.RecordOtherIncomeFromStatementLine), SystemPermissions.SalesInvoicesCreate)]
+    [InlineData(nameof(BankingController.RecordOtherIncomeFromStatementLine), SystemPermissions.SalesInvoicesPost)]
+    [InlineData(nameof(BankingController.RecordOtherIncomeFromStatementLine), SystemPermissions.SalesReceiptsCreate)]
+    [InlineData(nameof(BankingController.RecordOtherIncomeFromStatementLine), SystemPermissions.BankingAccountsManage)]
     public void Action_declares_required_permission(string methodName, string permission)
     {
         var method = typeof(BankingController).GetMethod(methodName);
@@ -84,6 +88,22 @@ public class StatementLineActionPermissionTests
         Assert.Equal(403, result.StatusCode);
         var problem = Assert.IsType<ProblemDetails>(result.Value);
         Assert.Equal(SystemPermissions.SalesReceiptsCreate, problem.Extensions["requiredPermission"]);
+    }
+
+    [Fact]
+    public async Task RecordOtherIncome_denied_without_invoices_create()
+    {
+        var result = await RunPermissionFilter(
+            SystemPermissions.SalesInvoicesCreate,
+            permissions: new HashSet<string>
+            {
+                SystemPermissions.BankingAccountsManage,
+                SystemPermissions.SalesInvoicesPost,
+                SystemPermissions.SalesReceiptsCreate
+            });
+        Assert.Equal(403, result.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
+        Assert.Equal(SystemPermissions.SalesInvoicesCreate, problem.Extensions["requiredPermission"]);
     }
 
     [Fact]

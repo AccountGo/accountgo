@@ -854,13 +854,19 @@ namespace Api.Controllers
 
         [HttpGet("StatementIncomeCategories")]
         [RequireStatementImport]
+        [RequireModule(SystemModules.Sales)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.SalesInvoicesView)]
         public IActionResult StatementIncomeCategories() =>
             Ok(_statementIncome.ListIncomeCategories());
 
         [HttpPost("StatementLines/{id:int}/RecordOtherIncome")]
         [RequireStatementImport]
+        [RequireModule(SystemModules.Sales)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.SalesInvoicesCreate)]
+        [RequirePermission(SystemPermissions.SalesInvoicesPost)]
+        [RequirePermission(SystemPermissions.SalesReceiptsCreate)]
         public IActionResult RecordOtherIncomeFromStatementLine(int id, [FromBody] RecordOtherIncomeFromStatementLineRequest request)
         {
             try
