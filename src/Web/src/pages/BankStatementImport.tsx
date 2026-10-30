@@ -63,8 +63,16 @@ const BankStatementImportPage: React.FC = () => {
   const { hasPermission } = useTenantContext();
   const canManage = hasPermission('banking.accounts.manage');
   const canCreateTx = hasPermission('banking.transactions.create');
-  const { canModule } = useCapabilities();
+  const { canModule, canWrite } = useCapabilities();
   const hasFinancials = canModule('financials');
+  const purchasesWritable = canModule('purchases') && canWrite('purchases');
+  const canRecordExpense =
+    canManage &&
+    purchasesWritable &&
+    hasPermission('purchases.bills.create') &&
+    hasPermission('purchases.bills.post') &&
+    hasPermission('purchases.payments.create');
+  const canPayOpenBill = canManage && purchasesWritable && hasPermission('purchases.payments.create');
 
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [list, setList] = useState<BankStatementLineList | null>(null);
@@ -600,14 +608,14 @@ const BankStatementImportPage: React.FC = () => {
                             </button>
                           </>
                         )}
-                        {line.amount < 0 && (
+                        {line.amount < 0 && (canRecordExpense || canPayOpenBill) && (
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => setExpenseFor(line)}
                             className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
                           >
-                            Record expense
+                            {canRecordExpense ? 'Record expense' : 'Pay open bill'}
                           </button>
                         )}
                         {hasFinancials && canCreateTx && (

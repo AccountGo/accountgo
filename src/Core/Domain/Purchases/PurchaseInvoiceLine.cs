@@ -65,5 +65,23 @@ namespace Core.Domain.Purchases
         /// <summary>Tax on top of the subtotal at the tax's rate, to the cent.</summary>
         public static decimal TaxOf(decimal subtotal, decimal? rate) =>
             rate is > 0 ? Math.Round(subtotal * rate.Value / 100m, 2, MidpointRounding.AwayFromZero) : 0;
+
+        /// <summary>
+        /// Net amount for a tax-inclusive (gross) total so that net + <see cref="TaxOf"/>(net, rate)
+        /// equals the gross to the cent. Used when a bank statement amount already includes tax.
+        /// </summary>
+        public static decimal NetOfInclusive(decimal inclusive, decimal? rate)
+        {
+            if (rate is not > 0)
+                return inclusive;
+            var net = Math.Round(inclusive / (1m + rate.Value / 100m), 2, MidpointRounding.AwayFromZero);
+            var total = net + TaxOf(net, rate);
+            if (total == inclusive)
+                return net;
+            var nudged = total < inclusive ? net + 0.01m : net - 0.01m;
+            if (nudged + TaxOf(nudged, rate) == inclusive)
+                return nudged;
+            return net;
+        }
     }
 }

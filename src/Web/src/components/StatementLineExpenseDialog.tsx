@@ -2,6 +2,8 @@ import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Receipt, X } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { useAuth } from '../auth/AuthContext';
+import { useCapabilities } from '../lib/entitlements';
+import { useTenantContext } from './Gating';
 import { matchVendorIdByPayee } from '../lib/statementImport';
 import type { Bill, Vendor } from '../types/purchasing';
 import type {
@@ -39,10 +41,28 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
   onClose,
 }) => {
   const { authFetch } = useAuth();
+  const { hasPermission } = useTenantContext();
+  const { canModule, canWrite } = useCapabilities();
+  const purchasesWritable = canModule('purchases') && canWrite('purchases');
+  const canRecordExpense =
+    purchasesWritable &&
+    hasPermission('banking.accounts.manage') &&
+    hasPermission('purchases.bills.create') &&
+    hasPermission('purchases.bills.post') &&
+    hasPermission('purchases.payments.create');
+  const canPayOpenBill =
+    purchasesWritable &&
+    hasPermission('banking.accounts.manage') &&
+    hasPermission('purchases.payments.create');
+  const canCreateVendor = hasPermission('purchases.vendors.manage');
   const titleId = useId();
   const amount = Math.abs(line.amount);
 
-  const [mode, setMode] = useState<Mode>(initialMode);
+  const [mode, setMode] = useState<Mode>(() => {
+    if (initialMode === 'payBill' && canPayOpenBill) return 'payBill';
+    if (canRecordExpense) return 'expense';
+    return canPayOpenBill ? 'payBill' : 'expense';
+  });
   const [categories, setCategories] = useState<StatementExpenseCategories | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
@@ -200,10 +220,14 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
         </p>
 
         <div className="flex gap-1 p-1 rounded-xl bg-[var(--bg-subtle)]">
-          {([
-            ['expense', 'Record expense'],
-            ['payBill', 'Pay open bill'],
-          ] as const).map(([value, label]) => (
+          {(
+            [
+              canRecordExpense ? (['expense', 'Record expense'] as const) : null,
+              canPayOpenBill ? (['payBill', 'Pay open bill'] as const) : null,
+            ] as const
+          )
+            .filter((entry): entry is readonly [Mode, string] => entry != null)
+            .map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -242,7 +266,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
                 className={inputClass}
               >
                 <option value="">Select vendor…</option>
-                {createVendorValue && (
+                {canCreateVendor && createVendorValue && (
                   <option value={createVendorValue}>
                     Create vendor '{createVendorValue.slice('__new__:'.length)}'
                   </option>
