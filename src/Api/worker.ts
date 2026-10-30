@@ -34,6 +34,7 @@ import {
   type ContainerHost,
 } from "./container-proxy";
 import { constantTimeEqual } from "./constant-time";
+import { RuntimeFlags, TIERED_CAPACITY_FLAG_KEY } from "./runtime-flags";
 import {
   isServerTimingEnabled,
   logSlowWorkerRequest,
@@ -391,6 +392,8 @@ export class AccountGoApiContainer extends Container<Env> {
   }
 }
 
+/** Runtime switches read from the FLAGS KV namespace (per isolate, 30 s). */
+const runtimeFlags = new RuntimeFlags();
 /** Workspace slug → capacity pool, learnt from API responses (per isolate). */
 const capacityRouter = new CapacityRouter();
 let loggedContainerName = false;
@@ -562,7 +565,12 @@ export default {
       }
     }
 
-    const useV2 = isTieredCapacityEnabled(env.TIERED_CAPACITY_ENABLED);
+    // The FLAGS KV value (runtime switch, no deploy) wins over the deployed TIERED_CAPACITY_ENABLED var.
+    const useV2 = await runtimeFlags.isEnabled(
+      env.FLAGS,
+      TIERED_CAPACITY_FLAG_KEY,
+      isTieredCapacityEnabled(env.TIERED_CAPACITY_ENABLED)
+    );
     if (useV2) {
       const binding = env.CONTAINER_V2;
       if (!binding) {
