@@ -9,8 +9,10 @@ export interface Env {
   /** Must be "Postgres" on Cloudflare (requirePersistentDatabase). */
   DatabaseProvider?: string;
   CONTAINER_NAME?: string;
-  /** Phase 0: when "true", route to CONTAINER_V2 (still one shared writer). */
+  /** Deployed default for tiered capacity: "true" routes to the CONTAINER_V2 pools. */
   TIERED_CAPACITY_ENABLED?: string;
+  /** Optional KV namespace with runtime switches (key "tiered_capacity" overrides TIERED_CAPACITY_ENABLED). */
+  FLAGS?: KVNamespace;
   /** V2 start() instance for the paid pool (default standard-1) and the free pool (default lite). */
   CONTAINER_INSTANCE_TYPE_PAID?: string;
   CONTAINER_INSTANCE_TYPE_FREE?: string;
