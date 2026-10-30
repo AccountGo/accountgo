@@ -79,13 +79,18 @@ namespace Services.Banking
             var rows = new List<ParsedStatementRow>();
             var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
             var recordNumber = 0;
+            var headerSkipped = !map.HasHeaderRow;
             foreach (var fields in records)
             {
                 recordNumber++;
-                if (recordNumber == 1 && map.HasHeaderRow)
-                    continue;
+                // Leading blank lines (and blanks between rows) are never the header or data.
                 if (IsBlankRecord(fields))
                     continue;
+                if (!headerSkipped)
+                {
+                    headerSkipped = true;
+                    continue;
+                }
 
                 if (rows.Count >= MaxRows)
                     throw new InvalidOperationException($"A statement can have at most {MaxRows} rows.");
@@ -130,8 +135,10 @@ namespace Services.Banking
                 if (column is < 0)
                     throw new InvalidOperationException("Column positions cannot be negative.");
             }
-            if (!string.IsNullOrEmpty(map.Delimiter) && map.Delimiter.Length != 1)
-                throw new InvalidOperationException("The delimiter must be a single character.");
+            if (!string.IsNullOrEmpty(map.Delimiter)
+                && map.Delimiter != "\\t"
+                && map.Delimiter.Length != 1)
+                throw new InvalidOperationException("The delimiter must be a single character (or \\t for tab).");
         }
 
         private static char ResolveDelimiter(string content, string? requested)
@@ -139,15 +146,15 @@ namespace Services.Banking
             if (!string.IsNullOrEmpty(requested))
                 return requested == "\\t" ? '\t' : requested[0];
 
-            var firstLineEnd = content.IndexOfAny(new[] { '\r', '\n' });
-            var firstLine = firstLineEnd < 0 ? content : content[..firstLineEnd];
+            // Auto-detect from the first non-blank line so a leading blank does not fall back to comma.
+            var probeLine = FirstNonBlankLine(content);
             var best = ',';
             var bestCount = 0;
             foreach (var candidate in CandidateDelimiters)
             {
                 var count = 0;
                 var inQuotes = false;
-                foreach (var ch in firstLine)
+                foreach (var ch in probeLine)
                 {
                     if (ch == '"') inQuotes = !inQuotes;
                     else if (ch == candidate && !inQuotes) count++;
@@ -159,6 +166,27 @@ namespace Services.Banking
                 }
             }
             return best;
+        }
+
+        private static string FirstNonBlankLine(string content)
+        {
+            var start = 0;
+            var length = content.Length;
+            while (start < length)
+            {
+                var end = content.IndexOfAny(new[] { '\r', '\n' }, start);
+                if (end < 0)
+                    end = length;
+                var line = content[start..end];
+                if (!string.IsNullOrWhiteSpace(line))
+                    return line;
+                start = end;
+                if (start < length && content[start] == '\r')
+                    start++;
+                if (start < length && content[start] == '\n')
+                    start++;
+            }
+            return string.Empty;
         }
 
         /// <summary>RFC 4180 reader: quoted fields may contain delimiters, doubled quotes, and line breaks.</summary>

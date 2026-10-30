@@ -49,9 +49,13 @@ export function parseCsvRows(content: string, delimiter: string, maxRows = CSV_S
   return rows;
 }
 
-/** Same rule as the API: comma, semicolon, or tab — whichever appears most in the first line. */
+/** Same rule as the API: comma, semicolon, or tab — whichever appears most in the first non-blank line. */
 export function detectDelimiter(content: string): string {
-  const firstLine = content.replace(/^\uFEFF/, '').split(/\r\n|\r|\n/, 1)[0] ?? '';
+  const firstLine =
+    content
+      .replace(/^\uFEFF/, '')
+      .split(/\r\n|\r|\n/)
+      .find((line) => line.trim().length > 0) ?? '';
   let best = ',';
   let bestCount = 0;
   for (const candidate of [',', ';', '\t']) {
