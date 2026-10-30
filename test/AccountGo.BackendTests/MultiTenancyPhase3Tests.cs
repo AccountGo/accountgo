@@ -36,6 +36,7 @@ namespace AccountGo.BackendTests
     {
         private readonly string _path = Path.Combine(Path.GetTempPath(), "accountgo_p3_" + Guid.NewGuid().ToString("N") + ".db");
         private readonly FakeEmailSender _emails = new FakeEmailSender();
+        private PostgresTestDatabase? _postgres;
         private WebApplicationFactory<Program> _factory;
         private HttpClient _client;
         private string _ownerToken;
@@ -58,8 +59,18 @@ namespace AccountGo.BackendTests
             _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Development");
-                builder.UseSetting("DatabaseProvider", "Sqlite");
-                builder.UseSetting("ConnectionStrings:SqliteConnection", "Data Source=" + _path);
+                _postgres = PostgresTestDatabase.CreateIfConfigured();
+                if (_postgres != null)
+                {
+                    builder.UseSetting("DatabaseProvider", "Postgres");
+                    builder.UseSetting("ConnectionStrings:PostgresConnection", _postgres.ConnectionString);
+                    builder.UseSetting("SEED_DEMO_DATA", "false");
+                }
+                else
+                {
+                    builder.UseSetting("DatabaseProvider", "Sqlite");
+                    builder.UseSetting("ConnectionStrings:SqliteConnection", "Data Source=" + _path);
+                }
                 builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
@@ -87,13 +98,14 @@ namespace AccountGo.BackendTests
         {
             _client.Dispose();
             _factory.Dispose();
+            _postgres?.Dispose();
             foreach (var file in new[] { _path, _path + "-wal", _path + "-shm" })
                 if (File.Exists(file))
                     File.Delete(file);
             return Task.CompletedTask;
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task Create_ProvisionsScopedCleanBooks_Idempotently_AndInvoiceWorks()
         {
             using (var scope = _factory.Services.CreateScope())
@@ -563,7 +575,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={draft}")).StatusCode);
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task InvoiceNumber_UniqueIndex_RejectsADuplicate_LocallyAndOnD1Replay()
         {
             var draft = await SaveDraft();
@@ -946,7 +958,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("Juan Dela Cruz", (await Json(await Send(HttpMethod.Get, Current + "/business-profile"))).GetProperty("legalName").GetString());
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task BusinessProfileAndInvoiceSettings_SyncToD1_ReplaysToTheSameRow()
         {
             // A copy of the database stands in for D1; every response's sync SQL is replayed on it like the worker does.
@@ -1124,7 +1136,7 @@ namespace AccountGo.BackendTests
             Assert.Empty(noLegalName.Seller.AddressLines);
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task IssuedInvoice_KeepsTheSellerItWasIssuedWith()
         {
             var profile = (string address) => new { legalName = "Juan Dela Cruz", businessEmail = "juan@example.com", address = new { line1 = address, city = "Makati" } };
@@ -1458,7 +1470,7 @@ namespace AccountGo.BackendTests
                 r => Assert.Equal(0, r.GetProperty("memberCount").GetInt32()));
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task Create_SyncPayload_HeadersUnder32KB_AndReplaysAllDefaults()
         {
             using (var source = new SqliteConnection("Data Source=" + _path))
@@ -1509,7 +1521,7 @@ namespace AccountGo.BackendTests
             }
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task Create_ProvisioningFailure_RollsBackCompanyAndMembership()
         {
             using (var scope = _factory.Services.CreateScope())
@@ -1631,7 +1643,7 @@ namespace AccountGo.BackendTests
                 return scope.ServiceProvider.GetRequiredService<ApiDbContext>().CompanyMembers.Single(m => m.UserId == userId && m.CompanyId == _companyId).Id;
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task IssuedInvoice_KeepsTheCustomerAndLineTextItWasIssuedWith()
         {
             var issuedDto = await NewInvoice("old@example.com");
@@ -1690,7 +1702,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("Old Name Ltd", (await GetInvoice(issuedId)).CustomerName);
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task InvoiceHistoryMigration_BackfillsIssuedInvoices_AndLineText()
         {
             var issuedDto = await NewInvoice("billing@example.com");
@@ -1978,7 +1990,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("Members can't edit", (await GetClient(client.Id)).Name);
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task DeleteClient_RemovesAnUnusedClient_InForeignKeyOrder()
         {
             var client = await SaveClient(new Dto.Sales.Client { Name = "Added by mistake", Email = "oops@example.com" });
@@ -2038,7 +2050,7 @@ namespace AccountGo.BackendTests
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = draftId, Amount = 10, PaymentDate = DateTime.UtcNow }, _otherToken)).StatusCode);
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task DeletingADraft_RemovesItsSalesOrder_SoTheClientCanBeDeleted()
         {
             var client = await SaveClient(new Dto.Sales.Client { Name = "Drafted once" });

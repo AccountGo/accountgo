@@ -113,6 +113,41 @@ You can use `sqlite3` or any GUI like **DB Browser for SQLite**:
 sqlite3 src/Api/accountgo.db "SELECT Id, Name, Code FROM Company;"
 ```
 
+### PostgreSQL
+
+Set the provider and a connection string (environment or `.env`):
+
+```bash
+DatabaseProvider=Postgres
+ConnectionStrings__PostgresConnection="Host=localhost;Port=5432;Database=accountgo;Username=postgres;Password=..."
+```
+
+On start the API applies the Postgres migrations (`src/Api/Data/Migrations/Postgres`). A database with no migrations
+applied also gets the demo books and the built-in users; set `SEED_DEMO_DATA=false` to skip the demo books.
+
+Schema changes need an EF migration for each server provider. For Postgres:
+
+```bash
+cd src/Api
+dotnet ef migrations add <Name> --context PostgresApiDbContext \
+  --output-dir Data/Migrations/Postgres/ApiDb --namespace Api.Data.Migrations.Postgres.ApiDb
+```
+
+(`PostgresIdentityDbContext` with `Data/Migrations/Postgres/IdentityDb` for Identity tables.)
+
+#### Copying a SQLite database into Postgres
+
+`--copy-from-sqlite` copies every table of a SQLite file (for example a D1 export loaded with `sqlite3`) into an empty
+Postgres database, in one transaction, and checks the row counts afterwards:
+
+```bash
+sqlite3 export.db < d1-export.sql
+DatabaseProvider=Postgres ConnectionStrings__PostgresConnection="..." \
+  dotnet Api.dll --copy-from-sqlite export.db
+```
+
+It applies the migrations first and refuses a target that already holds data.
+
 ---
 
 ## 6. Running Automated Tests
@@ -125,6 +160,10 @@ dotnet test
 
 # Run tests with detailed verbosity
 dotnet test --logger "console;verbosity=normal"
+
+# Run the multi-tenancy integration tests on Postgres (one throwaway database per test)
+ACCOUNTGO_TEST_POSTGRES="Host=127.0.0.1;Port=5432;Username=postgres;Password=...;Maximum Pool Size=5" \
+  dotnet test test/AccountGo.BackendTests --filter "FullyQualifiedName~MultiTenancyPhase3Tests" -- xUnit.MaxParallelThreads=4
 
 # Typecheck and build frontend
 cd src/Web

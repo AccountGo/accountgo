@@ -12,6 +12,7 @@ import {
   isTransientContainerError,
   resolveInternalSyncKey,
   restoreD1ToContainer,
+  usesD1Copy,
   serviceUnavailable,
   sleep,
 } from "./container-shared";
@@ -247,12 +248,15 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
       }
     }
 
-    await restoreD1ToContainer({
-      db: this.env.DB,
-      env: this.env,
-      containerFetchWithRetry: (input, init, label) =>
-        this.containerFetchWithRetry(String(input), init, label, readyTiming),
-    });
+    // On Postgres the container already has the data.
+    if (usesD1Copy(this.env)) {
+      await restoreD1ToContainer({
+        db: this.env.DB,
+        env: this.env,
+        containerFetchWithRetry: (input, init, label) =>
+          this.containerFetchWithRetry(String(input), init, label, readyTiming),
+      });
+    }
 
     // Commit only if every restore batch went into the container that is running now.
     if (!this.isContainerRunning() || !this.restoreState.commit(token)) {

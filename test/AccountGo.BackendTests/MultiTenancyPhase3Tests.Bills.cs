@@ -391,7 +391,7 @@ namespace AccountGo.BackendTests
                 new Dto.Purchasing.Supplier { Name = "Nope" }, _otherToken)).StatusCode);
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task Vendors_Balances_MatchTheBills_AndOnlyUnusedVendorsAreDeleted()
         {
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Balances Ltd", Email = "ap@balances.example", Street = "1 Main St", City = "Makati" });
@@ -489,7 +489,7 @@ namespace AccountGo.BackendTests
             WithDb(db => Assert.Equal(reversal, db.SalesInvoiceHeaders.Single(i => i.Id == id).VoidGeneralLedgerHeaderId));
         }
 
-        [Fact]
+        [SqliteFact]
         public async Task BillsMigration_BackfillsLegacyBills_AndReversesVoidedInvoices()
         {
             // An invoice voided before voids reversed their posting.
