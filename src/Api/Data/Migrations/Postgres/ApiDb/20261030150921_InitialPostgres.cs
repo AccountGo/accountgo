@@ -179,7 +179,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     FiscalYearName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     StartDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
                     EndDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false)
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    ClosedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    ClosedBy = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    ClosingGeneralLedgerHeaderId = table.Column<int>(type: "integer", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -513,6 +516,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     BooksStartDate = table.Column<DateTime>(type: "date", nullable: false, defaultValue: new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)),
                     BooksLockedThrough = table.Column<DateTime>(type: "date", nullable: true),
                     IndustryTemplate = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
+                    EntityType = table.Column<int>(type: "integer", nullable: false, defaultValue: 3),
                     InventoryCostingMethod = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     CoaTemplateId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, defaultValue: "legacy-default"),
                     OnboardingChecklistDismissedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
