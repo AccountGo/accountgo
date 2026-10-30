@@ -261,7 +261,12 @@ namespace Api.Data.Schema
                     new[] { "VendorPayment", "VoidGeneralLedgerHeaderId", "INTEGER NULL" },
                     new[] { "VendorPayment", "VoidedBy", "TEXT NULL" },
                     new[] { "VendorPayment", "VoidedAt", "TEXT NULL" },
-                    new[] { "VendorPayment", "VoidReason", "TEXT NULL" }
+                    new[] { "VendorPayment", "VoidReason", "TEXT NULL" },
+                    // D1 0040_statement_line_exclusion.sql (#436 I3)
+                    new[] { "BankStatementLine", "ExcludedAt", "TEXT NULL" },
+                    new[] { "BankStatementLine", "ExcludedBy", "TEXT NULL" },
+                    new[] { "BankStatementLine", "ExclusionReason", "INTEGER NULL" },
+                    new[] { "BankStatementLine", "ExclusionNote", "TEXT NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -613,7 +618,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureBankStatementSchema(connection);
         }
 
-        // D1 0039_bank_statement_lines.sql (#413 Phase 3A)
+        // D1 0039_bank_statement_lines.sql (#413 Phase 3A) + 0040 exclusion columns (#436 I3)
         private static void EnsureBankStatementSchema(DbConnection connection)
         {
             if (!TableExists(connection, "Bank") || !TableExists(connection, "GeneralLedgerLine"))
@@ -621,6 +626,30 @@ WHERE ""DisabledModulesJson"" IS NULL
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = BankStatementTablesSql;
+            cmd.ExecuteNonQuery();
+
+            EnsureBankStatementExclusionColumns(connection);
+        }
+
+        private static void EnsureBankStatementExclusionColumns(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "BankStatementLine", "ExcludedAt", "TEXT NULL");
+            AddColumnIfMissing(connection, "BankStatementLine", "ExcludedBy", "TEXT NULL");
+            AddColumnIfMissing(connection, "BankStatementLine", "ExclusionReason", "INTEGER NULL");
+            AddColumnIfMissing(connection, "BankStatementLine", "ExclusionNote", "TEXT NULL");
+
+            using var idx = connection.CreateCommand();
+            idx.CommandText = @"CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_ExcludedAt""
+                ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""ExcludedAt"");";
+            idx.ExecuteNonQuery();
+        }
+
+        private static void AddColumnIfMissing(DbConnection connection, string table, string column, string sqlType)
+        {
+            if (!TableExists(connection, table) || ColumnExists(connection, table, column))
+                return;
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {sqlType};";
             cmd.ExecuteNonQuery();
         }
 
@@ -907,6 +936,10 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""Reference"" TEXT NULL,
                 ""MatchedGeneralLedgerLineId"" INTEGER NULL,
                 ""CreatedAt"" TEXT NOT NULL,
+                ""ExcludedAt"" TEXT NULL,
+                ""ExcludedBy"" TEXT NULL,
+                ""ExclusionReason"" INTEGER NULL,
+                ""ExclusionNote"" TEXT NULL,
                 CONSTRAINT ""FK_BankStatementLine_Bank_BankId"" FOREIGN KEY (""BankId"") REFERENCES ""Bank"" (""Id""),
                 CONSTRAINT ""FK_BankStatementLine_BankStatementImport_BankStatementImportId"" FOREIGN KEY (""BankStatementImportId"") REFERENCES ""BankStatementImport"" (""Id""),
                 CONSTRAINT ""FK_BankStatementLine_GeneralLedgerLine_MatchedGeneralLedgerLineId"" FOREIGN KEY (""MatchedGeneralLedgerLineId"") REFERENCES ""GeneralLedgerLine"" (""Id"")
@@ -916,6 +949,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_MatchedGeneralLedgerLineId"" ON ""BankStatementLine"" (""MatchedGeneralLedgerLineId"");
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_BankId"" ON ""BankStatementLine"" (""BankId"");
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_PostedDate"" ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""PostedDate"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_ExcludedAt"" ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""ExcludedAt"");
             CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankStatementLine_Company_Bank_Source_External"" ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""Source"", ""ExternalId"") WHERE ""ExternalId"" IS NOT NULL;";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)

@@ -14,11 +14,17 @@ namespace Services.Banking
         /// <summary>Store new statement lines (deduped by ExternalId) and auto-match unique candidates.</summary>
         BankStatementCommitResultDto Commit(int bankId, BankStatementImportRequest request, string actor);
 
-        /// <param name="status">unmatched (default), matched, or all.</param>
+        /// <param name="status">unmatched (default), matched, excluded, or all.</param>
         BankStatementLineListDto ListLines(int bankId, string? status, int page = 1, int pageSize = BankStatementImportService.DefaultListPageSize);
 
         BankStatementLineDto Match(int lineId, MatchBankStatementLineRequest request);
         BankStatementLineDto Unmatch(int lineId);
+
+        /// <summary>Mark a line excluded (posts nothing). Matched lines must be unmatched first.</summary>
+        BankStatementLineDto Exclude(int lineId, ExcludeBankStatementLineRequest request, string actor);
+
+        /// <summary>Clear exclusion and return the line to Unmatched.</summary>
+        BankStatementLineDto Include(int lineId);
 
         /// <summary>Post a bank transaction for an unmatched line and link the new ledger line to it.</summary>
         BankStatementLineDto CreateTransaction(int lineId, CreateTransactionFromStatementLineRequest request);

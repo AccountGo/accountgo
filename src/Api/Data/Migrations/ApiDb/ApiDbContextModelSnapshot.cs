@@ -1073,6 +1073,20 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("ExcludedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExcludedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExclusionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("ExclusionReason")
+                        .HasColumnType("int");
+
                     b.Property<string>("ExternalId")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -1107,6 +1121,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("MatchedGeneralLedgerLineId");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId", "ExcludedAt" }, "IX_BankStatementLine_Company_Bank_ExcludedAt");
 
                     b.HasIndex(new[] { "CompanyId", "BankId", "PostedDate" }, "IX_BankStatementLine_Company_Bank_PostedDate");
 

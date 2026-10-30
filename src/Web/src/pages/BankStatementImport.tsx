@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Link2Off, Loader2, Plus, Upload } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { StatementLineApplyInvoiceDialog } from '../components/StatementLineApplyInvoiceDialog';
+import { StatementLineExcludeDialog } from '../components/StatementLineExcludeDialog';
 import { StatementLineExpenseDialog } from '../components/StatementLineExpenseDialog';
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
+import { STATEMENT_EXCLUSION_REASONS } from '../types/banking';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import { useCapabilities } from '../lib/entitlements';
@@ -73,6 +76,9 @@ const BankStatementImportPage: React.FC = () => {
     hasPermission('purchases.bills.post') &&
     hasPermission('purchases.payments.create');
   const canPayOpenBill = canManage && purchasesWritable && hasPermission('purchases.payments.create');
+  const salesWritable = canModule('sales') && canWrite('sales');
+  const canApplyOpenInvoice =
+    canManage && salesWritable && hasPermission('sales.receipts.create');
 
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [list, setList] = useState<BankStatementLineList | null>(null);
@@ -92,6 +98,8 @@ const BankStatementImportPage: React.FC = () => {
 
   const [createFor, setCreateFor] = useState<BankStatementLine | null>(null);
   const [expenseFor, setExpenseFor] = useState<BankStatementLine | null>(null);
+  const [applyFor, setApplyFor] = useState<BankStatementLine | null>(null);
+  const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
   const [pickedCandidate, setPickedCandidate] = useState<Record<number, string>>({});
 
   const formatCurrency = useCallback(
@@ -278,7 +286,11 @@ const BankStatementImportPage: React.FC = () => {
     }
   };
 
-  const lineAction = async (line: BankStatementLine, action: 'Match' | 'Unmatch', glLineId?: number) => {
+  const lineAction = async (
+    line: BankStatementLine,
+    action: 'Match' | 'Unmatch' | 'Include',
+    glLineId?: number,
+  ) => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -491,12 +503,13 @@ const BankStatementImportPage: React.FC = () => {
             Statement lines
             {list && (
               <span className="ml-2 font-normal text-[var(--text-muted)]">
-                {list.unmatchedCount} unmatched · {list.matchedCount} matched
+                {list.unmatchedCount} unmatched · {list.matchedCount} matched · {list.excludedCount ?? 0}{' '}
+                excluded
               </span>
             )}
           </h2>
           <div className="flex gap-1">
-            {(['unmatched', 'matched', 'all'] as StatementLineStatus[]).map((value) => (
+            {(['unmatched', 'matched', 'excluded', 'all'] as StatementLineStatus[]).map((value) => (
               <button
                 key={value}
                 type="button"
@@ -566,7 +579,17 @@ const BankStatementImportPage: React.FC = () => {
                   <td className="px-4 py-2.5">{line.reference || '—'}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(line.amount)}</td>
                   <td className="px-4 py-2.5 text-right">
-                    {canManage && line.isMatched && (
+                    {canManage && line.isExcluded && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void lineAction(line, 'Include')}
+                        className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]"
+                      >
+                        Include
+                      </button>
+                    )}
+                    {canManage && line.isMatched && !line.isExcluded && (
                       <button
                         type="button"
                         disabled={busy}
@@ -576,7 +599,7 @@ const BankStatementImportPage: React.FC = () => {
                         <Link2Off className="w-3.5 h-3.5" /> Unmatch
                       </button>
                     )}
-                    {canManage && !line.isMatched && (
+                    {canManage && !line.isMatched && !line.isExcluded && (
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         {line.candidates.length > 0 && (
                           <>
@@ -618,6 +641,24 @@ const BankStatementImportPage: React.FC = () => {
                             {canRecordExpense ? 'Record expense' : 'Pay open bill'}
                           </button>
                         )}
+                        {line.amount > 0 && canApplyOpenInvoice && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setApplyFor(line)}
+                            className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
+                          >
+                            Apply invoice
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setExcludeFor(line)}
+                          className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-[var(--text-main)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-hover)]"
+                        >
+                          Exclude
+                        </button>
                         {hasFinancials && canCreateTx && (
                           <button
                             type="button"
@@ -630,13 +671,24 @@ const BankStatementImportPage: React.FC = () => {
                         )}
                       </div>
                     )}
+                    {line.isExcluded && line.exclusionReason != null && (
+                      <div className="mt-1 text-xs text-[var(--text-muted)]">
+                        {STATEMENT_EXCLUSION_REASONS.find((r) => r.value === line.exclusionReason)?.label ||
+                          'Excluded'}
+                        {line.exclusionNote ? ` · ${line.exclusionNote}` : ''}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
               {list && list.lines.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)]">
-                    {status === 'unmatched' ? 'Nothing waiting to be matched.' : 'No statement lines.'}
+                    {status === 'unmatched'
+                      ? 'Nothing waiting to be matched.'
+                      : status === 'excluded'
+                        ? 'No excluded lines.'
+                        : 'No statement lines.'}
                   </td>
                 </tr>
               )}
@@ -652,6 +704,30 @@ const BankStatementImportPage: React.FC = () => {
           onClose={() => setExpenseFor(null)}
           onSaved={async () => {
             setExpenseFor(null);
+            await loadLines(status, page);
+          }}
+        />
+      )}
+
+      {applyFor && (
+        <StatementLineApplyInvoiceDialog
+          line={applyFor}
+          formatCurrency={formatCurrency}
+          onClose={() => setApplyFor(null)}
+          onSaved={async () => {
+            setApplyFor(null);
+            await loadLines(status, page);
+          }}
+        />
+      )}
+
+      {excludeFor && (
+        <StatementLineExcludeDialog
+          line={excludeFor}
+          formatCurrency={formatCurrency}
+          onClose={() => setExcludeFor(null)}
+          onSaved={async () => {
+            setExcludeFor(null);
             await loadLines(status, page);
           }}
         />

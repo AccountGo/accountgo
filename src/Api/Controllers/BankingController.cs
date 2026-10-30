@@ -27,6 +27,7 @@ namespace Api.Controllers
         private readonly IBankReconciliationService _reconciliations;
         private readonly IBankStatementImportService _statements;
         private readonly IStatementLineExpenseService _statementExpenses;
+        private readonly IStatementLineInvoiceService _statementInvoices;
         private readonly ITenantContext _tenant;
         private readonly IEntitlementService _entitlements;
         private readonly ApiDbContext _db;
@@ -37,6 +38,7 @@ namespace Api.Controllers
             IBankReconciliationService reconciliations,
             IBankStatementImportService statements,
             IStatementLineExpenseService statementExpenses,
+            IStatementLineInvoiceService statementInvoices,
             ITenantContext tenant,
             IEntitlementService entitlements,
             ApiDbContext db)
@@ -46,6 +48,7 @@ namespace Api.Controllers
             _reconciliations = reconciliations;
             _statements = statements;
             _statementExpenses = statementExpenses;
+            _statementInvoices = statementInvoices;
             _tenant = tenant;
             _entitlements = entitlements;
             _db = db;
@@ -792,6 +795,74 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statementExpenses.PayOpenBill(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("StatementLines/{id:int}/ApplyOpenInvoice")]
+        [RequireStatementImport]
+        [RequireModule(SystemModules.Sales)]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.SalesReceiptsCreate)]
+        public IActionResult ApplyOpenInvoiceFromStatementLine(int id, [FromBody] ApplyOpenInvoiceFromStatementLineRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statementInvoices.ApplyOpenInvoice(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("StatementLines/{id:int}/Exclude")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        public IActionResult ExcludeStatementLine(int id, [FromBody] ExcludeBankStatementLineRequest request)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statements.Exclude(id, request ?? new ExcludeBankStatementLineRequest(), GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("StatementLines/{id:int}/Include")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        public IActionResult IncludeStatementLine(int id)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statements.Include(id);
                 tx.Commit();
                 return Ok(result);
             }
