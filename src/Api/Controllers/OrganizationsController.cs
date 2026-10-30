@@ -7,6 +7,8 @@ using Api.Data;
 using Api.Filters;
 using Api.Service;
 using Core.Domain;
+using Core.Domain.Financials;
+using Core.Domain.Security;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -410,6 +412,92 @@ namespace Api.Controllers
             _db.SaveChanges();
             return Ok(ToPolicyResponse(setting));
         }
+
+        public class BooksLockModel
+        {
+            public DateTime? LockedThrough { get; set; }
+            public string Reason { get; set; }
+        }
+
+        [TenantScoped]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.FinancialsAccountsView)]
+        [HttpGet("current/books-lock")]
+        public IActionResult GetBooksLock()
+        {
+            var setting = _db.CompanySettings.FirstOrDefault()
+                ?? new CompanySetting { CompanyId = _tenant.RequireCompanyId() };
+            var history = _db.BooksLockChanges
+                .OrderByDescending(c => c.ChangedAt)
+                .ThenByDescending(c => c.Id)
+                .Take(20)
+                .ToList()
+                .Select(c => new
+                {
+                    previousLockedThrough = FormatDate(c.PreviousLockedThrough),
+                    newLockedThrough = FormatDate(c.NewLockedThrough),
+                    reason = c.Reason,
+                    changedBy = c.ChangedBy,
+                    changedAt = c.ChangedAt.ToString("o", CultureInfo.InvariantCulture)
+                });
+            return Ok(new
+            {
+                lockedThrough = FormatDate(setting.BooksLockedThrough),
+                history
+            });
+        }
+
+        [TenantScoped]
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
+        [HttpPut("current/books-lock")]
+        public IActionResult UpdateBooksLock([FromBody] BooksLockModel request)
+        {
+            if (request == null)
+                return BadRequest(new { message = "Books lock body is required." });
+
+            var setting = GetOrCreateSetting();
+            var previous = setting.BooksLockedThrough?.Date;
+            var next = request.LockedThrough?.Date;
+
+            if (next.HasValue)
+            {
+                var today = DateTime.UtcNow.Date;
+                if (next.Value > today)
+                    return BadRequest(new { message = "Books lock date cannot be after today." });
+                var earliest = setting.BooksStartDate.Date.AddDays(-1);
+                if (next.Value < earliest)
+                    return BadRequest(new
+                    {
+                        message = $"Books lock date cannot be before {earliest.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} (books start minus one day)."
+                    });
+            }
+
+            var isReopen = !next.HasValue
+                || (previous.HasValue && next.Value < previous.Value);
+            if (isReopen && string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest(new { message = "A reason is required when reopening (moving the lock earlier or clearing it)." });
+
+            if (previous == next)
+                return GetBooksLock();
+
+            setting.BooksLockedThrough = next;
+            _db.BooksLockChanges.Add(new BooksLockChange
+            {
+                CompanyId = setting.CompanyId,
+                PreviousLockedThrough = previous,
+                NewLockedThrough = next,
+                Reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim(),
+                ChangedBy = GetUserNameFromRequestHeader() ?? UserId ?? "unknown",
+                ChangedAt = DateTime.UtcNow
+            });
+            _db.SaveChanges();
+
+            return GetBooksLock();
+        }
+
+        private static string FormatDate(DateTime? date) =>
+            date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         private object ToPolicyResponse(CompanySetting s) => new
         {

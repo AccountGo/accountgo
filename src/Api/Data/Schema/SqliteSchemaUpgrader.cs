@@ -163,6 +163,7 @@ namespace Api.Data.Schema
                     new[] { "CompanySetting", "FiscalYearPattern", "INTEGER NOT NULL DEFAULT 1" },
                     new[] { "CompanySetting", "FiscalYearStartMonth", "INTEGER NULL" },
                     new[] { "CompanySetting", "BooksStartDate", "TEXT NOT NULL DEFAULT '1970-01-01'" },
+                    new[] { "CompanySetting", "BooksLockedThrough", "TEXT NULL" },
                     new[] { "CompanySetting", "IndustryTemplate", "INTEGER NOT NULL DEFAULT 1" },
                     new[] { "CompanySetting", "InventoryCostingMethod", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "CoaTemplateId", "TEXT NOT NULL DEFAULT 'legacy-default'" },
@@ -622,6 +623,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureBankStatementDescriptionRules(connection);
             EnsureBankStatementColumnMappings(connection);
             EnsureStatementOtherIncomeColumns(connection);
+            EnsureBooksLockChange(connection);
         }
 
         // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
@@ -632,6 +634,14 @@ WHERE ""DisabledModulesJson"" IS NULL
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = BankStatementColumnMappingSql;
+            cmd.ExecuteNonQuery();
+        }
+
+        // D1 0044_books_lock.sql (#455 Phase 2a)
+        private static void EnsureBooksLockChange(DbConnection connection)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = BooksLockChangeSql;
             cmd.ExecuteNonQuery();
         }
 
@@ -1026,6 +1036,18 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ON ""BankStatementColumnMapping"" (""CompanyId"", ""BankId"", ""HeaderSignature"");
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementColumnMapping_CompanyId"" ON ""BankStatementColumnMapping"" (""CompanyId"");
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementColumnMapping_BankId"" ON ""BankStatementColumnMapping"" (""BankId"");";
+
+        private const string BooksLockChangeSql = @"
+            CREATE TABLE IF NOT EXISTS ""BooksLockChange"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BooksLockChange"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""PreviousLockedThrough"" TEXT NULL,
+                ""NewLockedThrough"" TEXT NULL,
+                ""Reason"" TEXT NULL,
+                ""ChangedBy"" TEXT NOT NULL,
+                ""ChangedAt"" TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_BooksLockChange_CompanyId"" ON ""BooksLockChange"" (""CompanyId"");";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
         {

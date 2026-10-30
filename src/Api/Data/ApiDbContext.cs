@@ -207,7 +207,17 @@ namespace Api.Data
             builder.Entity<CompanySetting>().Property(s => s.BooksStartDate)
                 .HasColumnType("date")
                 .HasDefaultValue(new System.DateTime(1970, 1, 1));
+            builder.Entity<CompanySetting>().Property(s => s.BooksLockedThrough)
+                .HasColumnType("date");
             builder.Entity<CompanySetting>().Property(s => s.IndustryTemplate).HasDefaultValue(IndustryTemplate.Services);
+            builder.Entity<BooksLockChange>(entity =>
+            {
+                entity.Property(e => e.PreviousLockedThrough).HasColumnType("date");
+                entity.Property(e => e.NewLockedThrough).HasColumnType("date");
+                entity.Property(e => e.Reason).HasMaxLength(500);
+                entity.Property(e => e.ChangedBy).IsRequired().HasMaxLength(256);
+                entity.HasIndex(e => e.CompanyId);
+            });
             builder.Entity<CompanySetting>().Property(s => s.InventoryCostingMethod).HasDefaultValue(InventoryCostingMethod.None);
             builder.Entity<CompanySetting>().Property(s => s.CoaTemplateId)
                 .IsRequired()
@@ -771,6 +781,7 @@ namespace Api.Data
         public virtual DbSet<BankStatementLine> BankStatementLines { get; set; }
         public virtual DbSet<BankStatementDescriptionRule> BankStatementDescriptionRules { get; set; }
         public virtual DbSet<BankStatementColumnMapping> BankStatementColumnMappings { get; set; }
+        public virtual DbSet<BooksLockChange> BooksLockChanges { get; set; }
         public virtual DbSet<Company> Companies { get; set; }
         public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }

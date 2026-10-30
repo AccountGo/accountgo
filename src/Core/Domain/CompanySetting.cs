@@ -26,6 +26,13 @@ namespace Core.Domain
         public FiscalYearPattern FiscalYearPattern { get; set; } = FiscalYearPattern.Calendar;
         public int? FiscalYearStartMonth { get; set; }
         public DateTime BooksStartDate { get; set; } = DateTime.UtcNow.Date;
+
+        /// <summary>
+        /// Inclusive end of the locked period. Mutations dated on or before this date are refused
+        /// when the workspace has the Financials module. Null means unlocked.
+        /// </summary>
+        public DateTime? BooksLockedThrough { get; set; }
+
         public IndustryTemplate IndustryTemplate { get; set; } = IndustryTemplate.Services;
         public InventoryCostingMethod InventoryCostingMethod { get; set; } = InventoryCostingMethod.None;
         public string CoaTemplateId { get; set; } = "legacy-default";

@@ -36,6 +36,7 @@ namespace Core.Domain.Security
         public const string FinancialsJournalView = "financials.journal.view";
         public const string FinancialsJournalCreate = "financials.journal.create";
         public const string FinancialsJournalPost = "financials.journal.post";
+        public const string FinancialsPeriodsClose = "financials.periods.close";
 
         // Banking (#413)
         public const string BankingAccountsView = "banking.accounts.view";

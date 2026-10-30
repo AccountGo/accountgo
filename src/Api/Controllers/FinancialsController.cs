@@ -41,6 +41,7 @@ namespace Api.Controllers
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly ApiDbContext _db;
+        private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
 
         public FinancialsController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -48,7 +49,8 @@ namespace Api.Controllers
             IBankAccountService bankAccountService,
             Core.Tenancy.ITenantGuard tenantGuard,
             Core.Tenancy.ITenantContext tenantContext,
-            ApiDbContext db)
+            ApiDbContext db,
+            Services.Financial.IBooksLockGuard booksLockGuard)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -57,6 +59,7 @@ namespace Api.Controllers
             _tenantGuard = tenantGuard;
             _tenantContext = tenantContext;
             _db = db;
+            _booksLockGuard = booksLockGuard;
         }
 
         [HttpGet]
@@ -261,6 +264,24 @@ namespace Api.Controllers
 
             try
             {
+                try
+                {
+                    _booksLockGuard.EnsureDateAllowed(journalEntryDto.JournalDate);
+                    if (journalEntryDto.Id > 0)
+                    {
+                        var existingDate = _db.JournalEntryHeaders
+                            .Where(j => j.Id == journalEntryDto.Id)
+                            .Select(j => (DateTime?)j.Date)
+                            .FirstOrDefault();
+                        if (existingDate.HasValue)
+                            _booksLockGuard.EnsureDateAllowed(existingDate.Value);
+                    }
+                }
+                catch (Core.Domain.BooksLockedException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
+
                 if (!ModelState.IsValid)
                 {
                     errors = new string[ModelState.ErrorCount];

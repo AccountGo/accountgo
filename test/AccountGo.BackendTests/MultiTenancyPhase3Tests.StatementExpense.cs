@@ -109,6 +109,27 @@ namespace AccountGo.BackendTests
             }
         }
 
+        [Fact]
+        public async Task StatementLines_ExcludeBeforeBooksStart_WorksWithBooksLockSet()
+        {
+            var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Lock Exclude Bank", Type = 1 });
+            var early = AddStatementPayment(bank.Id, -38.71m, "Porkbun", new DateTime(2000, 5, 14));
+
+            var lockDate = DateTime.UtcNow.Date.AddDays(-30);
+            Assert.True((await Send(HttpMethod.Put, "/api/organizations/current/books-lock",
+                new { lockedThrough = IsoDate(lockDate) })).IsSuccessStatusCode);
+
+            var excluded = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{bank.Id}/StatementLines/ExcludeBeforeBooksStart");
+            Assert.True(excluded.IsSuccessStatusCode, await excluded.Content.ReadAsStringAsync());
+            Assert.Equal(1, (await excluded.Content.ReadFromJsonAsync<ExcludeBankStatementLineResultDto>()).Excluded);
+
+            WithDb(db =>
+            {
+                var earlyLine = db.BankStatementLines.Single(l => l.Id == early);
+                Assert.NotNull(earlyLine.ExcludedAt);
+            });
+        }
+
         private int AddStatementPayment(int bankId, decimal amount, string payee, DateTime posted)
         {
             using var scope = _factory.Services.CreateScope();

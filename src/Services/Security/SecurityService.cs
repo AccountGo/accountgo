@@ -187,6 +187,7 @@ namespace Services.Security
                 ("Financials", SystemPermissions.FinancialsJournalView, "View Journal"),
                 ("Financials", SystemPermissions.FinancialsJournalCreate, "Create Journal Entries"),
                 ("Financials", SystemPermissions.FinancialsJournalPost, "Post Journal Entries"),
+                ("Financials", SystemPermissions.FinancialsPeriodsClose, "Close / Lock Accounting Periods"),
 
                 ("Banking", SystemPermissions.BankingAccountsView, "View Bank Accounts"),
                 ("Banking", SystemPermissions.BankingAccountsManage, "Manage Bank Accounts"),

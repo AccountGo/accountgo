@@ -32,6 +32,7 @@ namespace Services.Banking
         private readonly IRepository<Vendor> _vendors;
         private readonly IFinancialService _financial;
         private readonly ITenantContext _tenant;
+        private readonly IBooksLockGuard? _booksLockGuard;
 
         public BankTransactionService(
             IRepository<SequenceNumber> sequenceNumbers,
@@ -44,7 +45,8 @@ namespace Services.Banking
             IRepository<Customer> customers,
             IRepository<Vendor> vendors,
             IFinancialService financial,
-            ITenantContext tenant)
+            ITenantContext tenant,
+            IBooksLockGuard? booksLockGuard = null)
             : base(sequenceNumbers, glSettings, paymentTerms, banks)
         {
             _transactions = transactions;
@@ -55,6 +57,7 @@ namespace Services.Banking
             _vendors = vendors;
             _financial = financial;
             _tenant = tenant;
+            _booksLockGuard = booksLockGuard;
         }
 
         public IReadOnlyList<BankTransactionDto> List(int bankId, DateTime? from, DateTime? to)
@@ -132,6 +135,8 @@ namespace Services.Banking
                 throw new InvalidOperationException("Change the opening balance on the bank account instead.");
             if (!tx.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("That transaction has no ledger entry to reverse.");
+
+            _booksLockGuard?.EnsureDateAllowed(tx.Date);
 
             var voidDate = (request.VoidDate ?? DateTime.UtcNow).Date;
             if (voidDate < tx.Date.Date)
