@@ -497,6 +497,7 @@ public class BankStatementImportServiceTests
             harness.Repos.Banks,
             harness.Repos.GlLines,
             harness.Repos.GlHeaders,
+            harness.Repos.Settings,
             harness.Transactions,
             new BankingTestHarness.FakeTenant(1));
 

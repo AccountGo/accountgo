@@ -752,6 +752,8 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
         public IActionResult CreateTransactionFromStatementLine(int id, [FromBody] CreateTransactionFromStatementLineRequest request)
         {
+            if (RefuseBeforeBooksStart(id) is { } refused)
+                return refused;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -802,6 +804,8 @@ namespace Api.Controllers
             if (request?.NewVendor != null && !string.IsNullOrWhiteSpace(request.NewVendor.Name)
                 && !_tenant.Permissions.Contains(SystemPermissions.PurchasesVendorsManage))
                 return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesVendorsManage);
+            if (RefuseBeforeBooksStart(request?.LineIds?.ToArray() ?? Array.Empty<int>()) is { } refused)
+                return refused;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -831,6 +835,8 @@ namespace Api.Controllers
             if (request?.NewVendor != null && !string.IsNullOrWhiteSpace(request.NewVendor.Name)
                 && !_tenant.Permissions.Contains(SystemPermissions.PurchasesVendorsManage))
                 return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesVendorsManage);
+            if (RefuseBeforeBooksStart(id) is { } refused)
+                return refused;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -855,6 +861,8 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
         public IActionResult PayOpenBillFromStatementLine(int id, [FromBody] PayOpenBillFromStatementLineRequest request)
         {
+            if (RefuseBeforeBooksStart(id) is { } refused)
+                return refused;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -889,6 +897,8 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.SalesReceiptsCreate)]
         public IActionResult RecordOtherIncomeFromStatementLine(int id, [FromBody] RecordOtherIncomeFromStatementLineRequest request)
         {
+            if (RefuseBeforeBooksStart(id) is { } refused)
+                return refused;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -913,6 +923,8 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.SalesReceiptsCreate)]
         public IActionResult ApplyOpenInvoiceFromStatementLine(int id, [FromBody] ApplyOpenInvoiceFromStatementLineRequest request)
         {
+            if (RefuseBeforeBooksStart(id) is { } refused)
+                return refused;
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -945,6 +957,28 @@ namespace Api.Controllers
             catch (TenantEntityNotFoundException)
             {
                 return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("Accounts/{bankId:int}/StatementLines/ExcludeBeforeBooksStart")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        public IActionResult ExcludeStatementLinesBeforeBooksStart(int bankId)
+        {
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statements.ExcludeBeforeBooksStart(bankId, GetUserNameFromRequestHeader() ?? string.Empty);
+                tx.Commit();
+                return Ok(result);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
@@ -1024,6 +1058,27 @@ namespace Api.Controllers
                 _tenant.RequireCompanyId(),
                 new EntitlementAction.Module(ModuleAccess.Read, SystemModules.Financials));
             return decision.Allowed;
+        }
+
+        /// <summary>
+        /// A 400 when a statement line is dated before the books start date. Nothing can be posted for it, so the
+        /// request is refused before any vendor, document or payment work starts.
+        /// </summary>
+        private IActionResult? RefuseBeforeBooksStart(params int[] lineIds)
+        {
+            if (lineIds == null || lineIds.Length == 0)
+                return null;
+            var booksStart = _db.CompanySettings.Select(s => (DateTime?)s.BooksStartDate).FirstOrDefault()?.Date;
+            if (!booksStart.HasValue)
+                return null;
+            var earliest = _db.BankStatementLines
+                .Where(l => lineIds.Contains(l.Id) && l.PostedDate < booksStart.Value)
+                .OrderBy(l => l.PostedDate)
+                .Select(l => (DateTime?)l.PostedDate)
+                .FirstOrDefault();
+            return earliest.HasValue
+                ? BadRequest(new { message = new Core.Domain.BooksStartViolationException(earliest.Value, booksStart.Value).Message })
+                : null;
         }
     }
 }

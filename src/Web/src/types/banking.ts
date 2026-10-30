@@ -394,6 +394,8 @@ export interface BankStatementCommitResult {
   duplicates: number;
   errors: number;
   autoMatched: number;
+  /** Imported lines dated before the books start date; they can only be excluded. */
+  beforeBooksStart?: number;
 }
 
 export interface BankStatementMatchCandidate {
@@ -434,6 +436,10 @@ export interface BankStatementLineList {
   totalCount: number;
   page: number;
   pageSize: number;
+  /** The workspace's books start date; lines dated before it can't be recorded. */
+  booksStartDate?: string | null;
+  /** Unmatched lines dated before the books start date. */
+  beforeBooksStartCount?: number;
 }
 
 export type StatementLineStatus = 'unmatched' | 'matched' | 'excluded' | 'all';

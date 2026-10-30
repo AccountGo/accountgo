@@ -133,6 +133,8 @@ namespace Dto.Banking
         public int Duplicates { get; set; }
         public int Errors { get; set; }
         public int AutoMatched { get; set; }
+        /// <summary>Imported lines dated before the books start date: nothing can be posted for them.</summary>
+        public int BeforeBooksStart { get; set; }
     }
 
     public class BankStatementMatchCandidateDto
@@ -179,6 +181,15 @@ namespace Dto.Banking
         public int TotalCount { get; set; }
         public int Page { get; set; }
         public int PageSize { get; set; }
+        /// <summary>The workspace's books start date; lines dated before it can only be excluded.</summary>
+        public DateTime? BooksStartDate { get; set; }
+        /// <summary>Unmatched, not excluded lines dated before <see cref="BooksStartDate"/>.</summary>
+        public int BeforeBooksStartCount { get; set; }
+    }
+
+    public class ExcludeBankStatementLineResultDto
+    {
+        public int Excluded { get; set; }
     }
 
     public class ExcludeBankStatementLineRequest

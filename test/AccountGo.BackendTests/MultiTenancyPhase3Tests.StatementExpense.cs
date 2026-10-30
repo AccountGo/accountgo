@@ -65,6 +65,50 @@ namespace AccountGo.BackendTests
             }
         }
 
+        [Fact]
+        public async Task StatementLines_BeforeBooksStart_AreFlagged_RefusedUpFront_AndBulkExcluded()
+        {
+            var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Wise", Type = 1 });
+            var early = AddStatementPayment(bank.Id, -38.71m, "Porkbun", new DateTime(2000, 5, 14));
+            var current = AddStatementPayment(bank.Id, -12.00m, "Figma", DateTime.UtcNow.Date);
+
+            var listed = await Send(HttpMethod.Get, $"/api/Banking/Accounts/{bank.Id}/StatementLines");
+            Assert.True(listed.IsSuccessStatusCode, await listed.Content.ReadAsStringAsync());
+            var list = await listed.Content.ReadFromJsonAsync<BankStatementLineListDto>();
+            Assert.NotNull(list.BooksStartDate);
+            Assert.Equal(1, list.BeforeBooksStartCount);
+
+            var refused = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{early}/RecordExpense",
+                new RecordExpenseFromStatementLineRequest
+                {
+                    NewVendor = new QuickVendorFromStatementRequest { Name = "Porkbun" },
+                    ExpenseAccountId = 1
+                });
+            Assert.Equal(System.Net.HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Contains("before the books start date", await refused.Content.ReadAsStringAsync());
+
+            var bulk = await Send(HttpMethod.Post, "/api/Banking/StatementLines/BulkRecordExpense",
+                new BulkRecordExpenseFromStatementLinesRequest { LineIds = new[] { current, early }, ExpenseAccountId = 1 });
+            Assert.Equal(System.Net.HttpStatusCode.BadRequest, bulk.StatusCode);
+
+            var excluded = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{bank.Id}/StatementLines/ExcludeBeforeBooksStart");
+            Assert.True(excluded.IsSuccessStatusCode, await excluded.Content.ReadAsStringAsync());
+            Assert.Equal(1, (await excluded.Content.ReadFromJsonAsync<ExcludeBankStatementLineResultDto>()).Excluded);
+
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                Assert.Empty(db.Vendors.Where(v => v.Party.Name == "Porkbun"));
+                Assert.Empty(db.PurchaseInvoiceHeaders);
+                var earlyLine = db.BankStatementLines.Single(l => l.Id == early);
+                Assert.NotNull(earlyLine.ExcludedAt);
+                Assert.Equal(BankStatementExclusionReasons.Other, earlyLine.ExclusionReason);
+                Assert.Contains("books start date", earlyLine.ExclusionNote);
+                Assert.Null(db.BankStatementLines.Single(l => l.Id == current).ExcludedAt);
+            }
+        }
+
         private int AddStatementPayment(int bankId, decimal amount, string payee, DateTime posted)
         {
             using var scope = _factory.Services.CreateScope();

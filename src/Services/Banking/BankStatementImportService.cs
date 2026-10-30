@@ -41,6 +41,7 @@ namespace Services.Banking
         private readonly IRepository<Bank> _banks;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
+        private readonly IRepository<CompanySetting> _settings;
         private readonly IBankTransactionService _transactions;
         private readonly ITenantContext _tenant;
 
@@ -51,6 +52,7 @@ namespace Services.Banking
             IRepository<Bank> banks,
             IRepository<GeneralLedgerLine> glLines,
             IRepository<GeneralLedgerHeader> glHeaders,
+            IRepository<CompanySetting> settings,
             IBankTransactionService transactions,
             ITenantContext tenant)
         {
@@ -60,6 +62,7 @@ namespace Services.Banking
             _banks = banks;
             _glLines = glLines;
             _glHeaders = glHeaders;
+            _settings = settings;
             _transactions = transactions;
             _tenant = tenant;
         }
@@ -206,6 +209,9 @@ namespace Services.Banking
 
             result.ImportId = import.Id;
             result.Imported = ready.Count;
+            var booksStart = BooksStartDate();
+            if (booksStart.HasValue)
+                result.BeforeBooksStart = newLines.Count(l => l.PostedDate < booksStart.Value);
             result.AutoMatched = ApplyAutoMatches(bank, newLines);
             return result;
         }
@@ -230,6 +236,10 @@ namespace Services.Banking
             var excludedCount = bankLines.Count(l => l.ExcludedAt != null);
             var unmatchedCount = bankLines.Count(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId == null);
             var matchedCount = bankLines.Count(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId != null);
+            var booksStart = BooksStartDate();
+            var beforeBooksStartCount = booksStart.HasValue
+                ? bankLines.Count(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId == null && l.PostedDate < booksStart.Value)
+                : 0;
 
             IQueryable<BankStatementLine> filtered = normalized switch
             {
@@ -259,6 +269,8 @@ namespace Services.Banking
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize,
+                BooksStartDate = booksStart,
+                BeforeBooksStartCount = beforeBooksStartCount,
                 Lines = pageRows.Select(l => ToDto(l, l.MatchedGeneralLedgerLineId.HasValue || l.ExcludedAt.HasValue
                     ? Array.Empty<PoolEntry>()
                     : CandidatesFor(l, candidatePool))).ToList()
@@ -331,6 +343,41 @@ namespace Services.Banking
             line.ExclusionNote = note;
             _lines.Update(line);
             return ToDto(line, Array.Empty<PoolEntry>());
+        }
+
+        /// <summary>
+        /// Excludes every unmatched line dated before the books start date. Nothing can be posted for those lines,
+        /// so excluding them is the only way to clear them from the unmatched list.
+        /// </summary>
+        public ExcludeBankStatementLineResultDto ExcludeBeforeBooksStart(int bankId, string actor)
+        {
+            EnsureCompany();
+            var bank = RequireBank(bankId);
+            var booksStart = BooksStartDate();
+            if (!booksStart.HasValue)
+                return new ExcludeBankStatementLineResultDto();
+
+            var companyId = _tenant.RequireCompanyId();
+            var lines = _lines.Table
+                .Where(l => l.CompanyId == companyId && l.BankId == bank.Id
+                    && l.ExcludedAt == null && l.MatchedGeneralLedgerLineId == null
+                    && l.PostedDate < booksStart.Value)
+                .ToList();
+            if (lines.Count == 0)
+                return new ExcludeBankStatementLineResultDto();
+
+            var now = DateTime.UtcNow;
+            var excludedBy = TruncateOrNull(actor, 100);
+            var note = $"Dated before the books start date ({booksStart.Value.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)}).";
+            foreach (var line in lines)
+            {
+                line.ExcludedAt = now;
+                line.ExcludedBy = excludedBy;
+                line.ExclusionReason = BankStatementExclusionReasons.Other;
+                line.ExclusionNote = note;
+                _lines.Update(line);
+            }
+            return new ExcludeBankStatementLineResultDto { Excluded = lines.Count };
         }
 
         public BankStatementLineDto Include(int lineId)
@@ -890,6 +937,16 @@ namespace Services.Banking
             if (bank == null || bank.CompanyId != _tenant.CompanyId)
                 throw new TenantEntityNotFoundException(nameof(Bank), bankId);
             return bank;
+        }
+
+        /// <summary>The workspace's books start date; postings dated before it are refused.</summary>
+        private DateTime? BooksStartDate()
+        {
+            var companyId = _tenant.RequireCompanyId();
+            return _settings.Table
+                .Where(s => s.CompanyId == companyId)
+                .Select(s => (DateTime?)s.BooksStartDate)
+                .FirstOrDefault()?.Date;
         }
 
         private static BankStatementLineDto ToDto(BankStatementLine line, IReadOnlyList<PoolEntry> candidates) => new()
