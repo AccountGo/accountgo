@@ -690,11 +690,14 @@ namespace Api.Data
                 entity.Property(e => e.Payee).HasMaxLength(200);
                 entity.Property(e => e.Memo).HasMaxLength(500);
                 entity.Property(e => e.Reference).HasMaxLength(100);
+                entity.Property(e => e.ExcludedBy).HasMaxLength(100);
+                entity.Property(e => e.ExclusionNote).HasMaxLength(500);
 
                 entity.HasIndex(e => e.CompanyId);
                 entity.HasIndex(e => e.BankStatementImportId);
                 entity.HasIndex(e => e.MatchedGeneralLedgerLineId);
                 entity.HasIndex(e => new { e.CompanyId, e.BankId, e.PostedDate }, "IX_BankStatementLine_Company_Bank_PostedDate");
+                entity.HasIndex(e => new { e.CompanyId, e.BankId, e.ExcludedAt }, "IX_BankStatementLine_Company_Bank_ExcludedAt");
                 entity.HasIndex(e => new { e.CompanyId, e.BankId, e.Source, e.ExternalId }, "UX_BankStatementLine_Company_Bank_Source_External")
                     .IsUnique()
                     .HasFilter("[ExternalId] IS NOT NULL");

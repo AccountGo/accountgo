@@ -381,6 +381,12 @@ export interface BankStatementLine {
   reference?: string | null;
   matchedGeneralLedgerLineId?: number | null;
   isMatched: boolean;
+  isExcluded?: boolean;
+  excludedAt?: string | null;
+  excludedBy?: string | null;
+  /** 1 Personal, 2 TransferBetweenAccounts, 3 Duplicate, 4 Other */
+  exclusionReason?: number | null;
+  exclusionNote?: string | null;
   candidates: BankStatementMatchCandidate[];
 }
 
@@ -388,12 +394,20 @@ export interface BankStatementLineList {
   lines: BankStatementLine[];
   unmatchedCount: number;
   matchedCount: number;
+  excludedCount?: number;
   totalCount: number;
   page: number;
   pageSize: number;
 }
 
-export type StatementLineStatus = 'unmatched' | 'matched' | 'all';
+export type StatementLineStatus = 'unmatched' | 'matched' | 'excluded' | 'all';
+
+export const STATEMENT_EXCLUSION_REASONS = [
+  { value: 1, label: 'Personal' },
+  { value: 2, label: 'Transfer between my accounts' },
+  { value: 3, label: 'Duplicate' },
+  { value: 4, label: 'Other' },
+] as const;
 
 export interface StatementExpenseCategory {
   accountId: number;

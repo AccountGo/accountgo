@@ -333,6 +333,8 @@ namespace Services.Banking
             var companyId = _tenant.RequireCompanyId();
             var line = _lines.Table.FirstOrDefault(l => l.Id == lineId && l.CompanyId == companyId)
                 ?? throw new TenantEntityNotFoundException(typeof(BankStatementLine).Name, lineId);
+            if (line.ExcludedAt.HasValue)
+                throw new InvalidOperationException("That statement line is excluded. Include it first.");
             if (line.MatchedGeneralLedgerLineId.HasValue)
                 throw new InvalidOperationException("That statement line is already matched.");
             if (line.Amount >= 0m)
@@ -373,6 +375,11 @@ namespace Services.Banking
             Reference = line.Reference,
             MatchedGeneralLedgerLineId = line.MatchedGeneralLedgerLineId,
             IsMatched = line.MatchedGeneralLedgerLineId.HasValue,
+            IsExcluded = line.ExcludedAt.HasValue,
+            ExcludedAt = line.ExcludedAt,
+            ExcludedBy = line.ExcludedBy,
+            ExclusionReason = line.ExclusionReason.HasValue ? (int)line.ExclusionReason.Value : null,
+            ExclusionNote = line.ExclusionNote,
             Candidates = Array.Empty<BankStatementMatchCandidateDto>()
         };
 

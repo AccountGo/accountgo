@@ -23,6 +23,7 @@ namespace Services.Banking
         public const int MaxListPageSize = 500;
         public const string StatusUnmatched = "unmatched";
         public const string StatusMatched = "matched";
+        public const string StatusExcluded = "excluded";
         public const string StatusAll = "all";
         public const string AlreadyImportedMessage = "Those statement lines were already imported.";
         private const string StatementLineUniqueIndexName = "UX_BankStatementLine_Company_Bank_Source_External";
@@ -156,14 +157,16 @@ namespace Services.Banking
             // Counts and the page slice stay on the query; only the current page (and the unmatched
             // set needed for candidate uniqueness) are materialised.
             var bankLines = _lines.Table.Where(l => l.CompanyId == companyId && l.BankId == bank.Id);
-            var unmatchedCount = bankLines.Count(l => l.MatchedGeneralLedgerLineId == null);
-            var matchedCount = bankLines.Count() - unmatchedCount;
+            var excludedCount = bankLines.Count(l => l.ExcludedAt != null);
+            var unmatchedCount = bankLines.Count(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId == null);
+            var matchedCount = bankLines.Count(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId != null);
 
             IQueryable<BankStatementLine> filtered = normalized switch
             {
-                StatusMatched => bankLines.Where(l => l.MatchedGeneralLedgerLineId != null),
+                StatusMatched => bankLines.Where(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId != null),
+                StatusExcluded => bankLines.Where(l => l.ExcludedAt != null),
                 StatusAll => bankLines,
-                _ => bankLines.Where(l => l.MatchedGeneralLedgerLineId == null)
+                _ => bankLines.Where(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId == null)
             };
             var totalCount = filtered.Count();
             var pageRows = filtered
@@ -174,7 +177,7 @@ namespace Services.Banking
 
             var unmatched = unmatchedCount == 0
                 ? new List<BankStatementLine>()
-                : bankLines.Where(l => l.MatchedGeneralLedgerLineId == null).ToList();
+                : bankLines.Where(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId == null).ToList();
             var candidatePool = unmatched.Count == 0
                 ? Array.Empty<PoolEntry>()
                 : LoadCandidatePool(bank, unmatched);
@@ -182,10 +185,11 @@ namespace Services.Banking
             {
                 UnmatchedCount = unmatchedCount,
                 MatchedCount = matchedCount,
+                ExcludedCount = excludedCount,
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize,
-                Lines = pageRows.Select(l => ToDto(l, l.MatchedGeneralLedgerLineId.HasValue
+                Lines = pageRows.Select(l => ToDto(l, l.MatchedGeneralLedgerLineId.HasValue || l.ExcludedAt.HasValue
                     ? Array.Empty<PoolEntry>()
                     : CandidatesFor(l, candidatePool))).ToList()
             };
@@ -196,6 +200,7 @@ namespace Services.Banking
             EnsureCompany();
             var line = RequireLine(lineId);
             var bank = RequireActiveBank(line.BankId);
+            EnsureNotExcluded(line);
             if (line.MatchedGeneralLedgerLineId.HasValue)
                 throw new InvalidOperationException("That statement line is already matched. Unmatch it first.");
 
@@ -230,11 +235,55 @@ namespace Services.Banking
             return ToDto(line, Array.Empty<PoolEntry>());
         }
 
+        public BankStatementLineDto Exclude(int lineId, ExcludeBankStatementLineRequest request, string actor)
+        {
+            EnsureCompany();
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            var line = RequireLine(lineId);
+            if (line.MatchedGeneralLedgerLineId.HasValue)
+                throw new InvalidOperationException("Unmatch the line before excluding it.");
+            if (line.ExcludedAt.HasValue)
+                throw new InvalidOperationException("That statement line is already excluded.");
+
+            if (!Enum.IsDefined(typeof(BankStatementExclusionReasons), request.Reason))
+                throw new InvalidOperationException("Pick a reason: Personal, Transfer between my accounts, Duplicate, or Other.");
+
+            var reason = (BankStatementExclusionReasons)request.Reason;
+            var note = TruncateOrNull(request.Note, 500);
+            if (reason == BankStatementExclusionReasons.Other && string.IsNullOrWhiteSpace(note))
+                throw new InvalidOperationException("Add a short note when the reason is Other.");
+
+            line.ExcludedAt = DateTime.UtcNow;
+            line.ExcludedBy = TruncateOrNull(actor, 100);
+            line.ExclusionReason = reason;
+            line.ExclusionNote = note;
+            _lines.Update(line);
+            return ToDto(line, Array.Empty<PoolEntry>());
+        }
+
+        public BankStatementLineDto Include(int lineId)
+        {
+            EnsureCompany();
+            var line = RequireLine(lineId);
+            if (!line.ExcludedAt.HasValue)
+                throw new InvalidOperationException("That statement line is not excluded.");
+
+            line.ExcludedAt = null;
+            line.ExcludedBy = null;
+            line.ExclusionReason = null;
+            line.ExclusionNote = null;
+            _lines.Update(line);
+            return ToDto(line, Array.Empty<PoolEntry>());
+        }
+
         public BankStatementLineDto CreateTransaction(int lineId, CreateTransactionFromStatementLineRequest request)
         {
             EnsureCompany();
             var line = RequireLine(lineId);
             var bank = RequireActiveBank(line.BankId);
+            EnsureNotExcluded(line);
             if (line.MatchedGeneralLedgerLineId.HasValue)
                 throw new InvalidOperationException("That statement line is already matched.");
             if (!bank.AccountId.HasValue)
@@ -465,9 +514,18 @@ namespace Services.Banking
         {
             var companyId = _tenant.RequireCompanyId();
             return _lines.Table
-                .Where(l => l.CompanyId == companyId && l.BankId == bank.Id && l.MatchedGeneralLedgerLineId == null)
+                .Where(l => l.CompanyId == companyId
+                    && l.BankId == bank.Id
+                    && l.ExcludedAt == null
+                    && l.MatchedGeneralLedgerLineId == null)
                 .OrderBy(l => l.PostedDate).ThenBy(l => l.Id)
                 .ToList();
+        }
+
+        private static void EnsureNotExcluded(BankStatementLine line)
+        {
+            if (line.ExcludedAt.HasValue)
+                throw new InvalidOperationException("That statement line is excluded. Include it before matching.");
         }
 
         // ------------------------------------------------------------ import helpers
@@ -557,9 +615,9 @@ namespace Services.Banking
             if (string.IsNullOrWhiteSpace(status))
                 return StatusUnmatched;
             var value = status.Trim().ToLowerInvariant();
-            return value is StatusUnmatched or StatusMatched or StatusAll
+            return value is StatusUnmatched or StatusMatched or StatusExcluded or StatusAll
                 ? value
-                : throw new InvalidOperationException("Status must be unmatched, matched, or all.");
+                : throw new InvalidOperationException("Status must be unmatched, matched, excluded, or all.");
         }
 
         // ------------------------------------------------------------ lookups / mapping
@@ -602,6 +660,11 @@ namespace Services.Banking
             Reference = line.Reference,
             MatchedGeneralLedgerLineId = line.MatchedGeneralLedgerLineId,
             IsMatched = line.MatchedGeneralLedgerLineId.HasValue,
+            IsExcluded = line.ExcludedAt.HasValue,
+            ExcludedAt = line.ExcludedAt,
+            ExcludedBy = line.ExcludedBy,
+            ExclusionReason = line.ExclusionReason.HasValue ? (int)line.ExclusionReason.Value : null,
+            ExclusionNote = line.ExclusionNote,
             Candidates = candidates.Select(c => new BankStatementMatchCandidateDto
             {
                 GeneralLedgerLineId = c.GeneralLedgerLineId,
