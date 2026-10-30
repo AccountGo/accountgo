@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import {
   CSV_SAMPLE_ROWS,
+  clampStatementLinePage,
   detectDelimiter,
   emptyColumnMap,
   hasAmountMapping,
@@ -89,8 +90,8 @@ const BankStatementImportPage: React.FC = () => {
     [currentOrg.currency],
   );
 
-  const loadLines = useCallback(
-    async (nextStatus: StatementLineStatus, nextPage: number) => {
+  const fetchLines = useCallback(
+    async (nextStatus: StatementLineStatus, nextPage: number): Promise<BankStatementLineList> => {
       const q = new URLSearchParams({
         status: nextStatus,
         page: String(nextPage),
@@ -101,34 +102,69 @@ const BankStatementImportPage: React.FC = () => {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || 'Could not load statement lines.');
       }
-      setList(await res.json());
+      return (await res.json()) as BankStatementLineList;
     },
     [authFetch, id],
   );
 
-  const load = useCallback(async () => {
-    if (!Number.isFinite(id)) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const accRes = await authFetch(`/api/Banking/Accounts/${id}`);
-      if (!accRes.ok) throw new Error('Bank account not found.');
-      setAccount(await accRes.json());
-      await loadLines(status, page);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not load.');
-    } finally {
-      setLoading(false);
-    }
-  }, [authFetch, id, loadLines, status, page]);
+  const loadLines = useCallback(
+    async (nextStatus: StatementLineStatus, nextPage: number) => {
+      let data = await fetchLines(nextStatus, nextPage);
+      const clamped = clampStatementLinePage(nextPage, data.totalCount, data.pageSize || LIST_PAGE_SIZE);
+      if (clamped !== nextPage) {
+        setPage(clamped);
+        data = await fetchLines(nextStatus, clamped);
+      }
+      setList(data);
+    },
+    [fetchLines],
+  );
+
+  // Account only when the bank changes — page/status changes fetch lines alone.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!Number.isFinite(id)) return;
+      setLoading(true);
+      setError(null);
+      setAccount(null);
+      setList(null);
+      setPage(1);
+      try {
+        const accRes = await authFetch(`/api/Banking/Accounts/${id}`);
+        if (!accRes.ok) throw new Error('Bank account not found.');
+        const next = (await accRes.json()) as BankAccount;
+        if (!cancelled) setAccount(next);
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, id]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!account || !Number.isFinite(id)) return;
+    let cancelled = false;
+    (async () => {
+      setError(null);
+      try {
+        await loadLines(status, page);
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load statement lines.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [account, id, loadLines, status, page]);
 
   const totalCount = list?.totalCount ?? 0;
   const pageSize = list?.pageSize ?? LIST_PAGE_SIZE;
-  const currentPage = list?.page ?? page;
+  const currentPage = clampStatementLinePage(list?.page ?? page, totalCount, pageSize);
   const showingFrom = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const showingTo = Math.min(currentPage * pageSize, totalCount);
   const canPrev = currentPage > 1;
