@@ -271,9 +271,10 @@ namespace Services.Purchasing
 
         public void AddVendor(Vendor vendor)
         {
-            vendor.AccountsPayableAccountId = _accountRepo.Table.Where(a => a.AccountCode == "20110").FirstOrDefault().Id;
-            vendor.PurchaseAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50200").FirstOrDefault().Id;
-            vendor.PurchaseDiscountAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50400").FirstOrDefault().Id;
+            // Left empty when the workspace's chart lacks the account; approving a bill then reports a missing payables account.
+            vendor.AccountsPayableAccountId = _accountRepo.Table.Where(a => a.AccountCode == "20110").Select(a => (int?)a.Id).FirstOrDefault();
+            vendor.PurchaseAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50200").Select(a => (int?)a.Id).FirstOrDefault();
+            vendor.PurchaseDiscountAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50400").Select(a => (int?)a.Id).FirstOrDefault();
 
             vendor.No = GetNextNumber(SequenceNumberTypes.Vendor).ToString();
             _vendorRepo.Insert(vendor);
