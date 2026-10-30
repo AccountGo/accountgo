@@ -362,6 +362,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
+                    b.Property<DateTime?>("BooksLockedThrough")
+                        .HasColumnType("date");
+
                     b.Property<DateTime>("BooksStartDate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("date")
@@ -1285,6 +1288,42 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .IsUnique();
 
                     b.ToTable("BankTransaction");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BooksLockChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ChangedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("NewLockedThrough")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("PreviousLockedThrough")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("BooksLockChange");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.FinancialYear", b =>

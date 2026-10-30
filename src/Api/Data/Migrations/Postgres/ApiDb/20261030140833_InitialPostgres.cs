@@ -80,6 +80,24 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                 });
 
             migrationBuilder.CreateTable(
+                name: "BooksLockChange",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    CompanyId = table.Column<int>(type: "integer", nullable: false),
+                    PreviousLockedThrough = table.Column<DateTime>(type: "date", nullable: true),
+                    NewLockedThrough = table.Column<DateTime>(type: "date", nullable: true),
+                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    ChangedBy = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    ChangedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_BooksLockChange", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Company",
                 columns: table => new
                 {
@@ -493,6 +511,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     FiscalYearPattern = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
                     FiscalYearStartMonth = table.Column<int>(type: "integer", nullable: true),
                     BooksStartDate = table.Column<DateTime>(type: "date", nullable: false, defaultValue: new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)),
+                    BooksLockedThrough = table.Column<DateTime>(type: "date", nullable: true),
                     IndustryTemplate = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
                     InventoryCostingMethod = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     CoaTemplateId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, defaultValue: "legacy-default"),
@@ -2695,6 +2714,11 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_BooksLockChange_CompanyId",
+                table: "BooksLockChange",
+                column: "CompanyId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Company_Slug",
                 table: "Company",
                 column: "Slug",
@@ -3531,6 +3555,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
             migrationBuilder.DropTable(
                 name: "BankTransaction");
+
+            migrationBuilder.DropTable(
+                name: "BooksLockChange");
 
             migrationBuilder.DropTable(
                 name: "CompanyInvitation");
