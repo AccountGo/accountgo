@@ -494,7 +494,10 @@ namespace Services.Financial
                 var dist = _accounts.Table.FirstOrDefault(a => a.AccountCode == profile.DistributionAccountCode);
                 if (dist != null)
                 {
-                    var throughEnd = TrialBalanceExcludingClosing(null, InclusiveEnd(year.EndDate));
+                    // Cumulative balance through FY end must INCLUDE earlier years' ClosingEntries
+                    // (they already zeroed prior drawings). Excluding them would re-close prior
+                    // drawings on every later close. This year's closing journal does not exist yet.
+                    var throughEnd = TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
                     if (throughEnd.TryGetValue(dist.Id, out var bal))
                         ZeroAccount(dist.Id, dist.AccountCode, dist.AccountName, bal.Debit, bal.Credit);
                 }
@@ -527,13 +530,20 @@ namespace Services.Financial
             return lines;
         }
 
-        private Dictionary<int, (decimal Debit, decimal Credit)> TrialBalanceExcludingClosing(DateTime? from, DateTime to)
+        private Dictionary<int, (decimal Debit, decimal Credit)> TrialBalanceExcludingClosing(DateTime? from, DateTime to) =>
+            TrialBalanceCore(from, to, excludeClosingEntries: true);
+
+        /// <summary>Full trial balance through <paramref name="to"/>, including ClosingEntries journals.</summary>
+        private Dictionary<int, (decimal Debit, decimal Credit)> TrialBalanceThrough(DateTime? from, DateTime to) =>
+            TrialBalanceCore(from, to, excludeClosingEntries: false);
+
+        private Dictionary<int, (decimal Debit, decimal Credit)> TrialBalanceCore(DateTime? from, DateTime to, bool excludeClosingEntries)
         {
-            var closingHeaderIds = ClosingGeneralLedgerHeaderIds();
+            var closingHeaderIds = excludeClosingEntries ? ClosingGeneralLedgerHeaderIds() : null;
             var raw = _glLines.GetAllIncluding(l => l.GeneralLedgerHeader)
                 .Where(l => l.GeneralLedgerHeader.Date <= to
                     && (!from.HasValue || l.GeneralLedgerHeader.Date >= from.Value)
-                    && !closingHeaderIds.Contains(l.GeneralLedgerHeaderId));
+                    && (closingHeaderIds == null || !closingHeaderIds.Contains(l.GeneralLedgerHeaderId)));
 
             return raw
                 .GroupBy(l => l.AccountId)

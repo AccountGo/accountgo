@@ -530,4 +530,62 @@ public class YearEndCloseTests
         Assert.Equal(FiscalYearCloseStatus.Closed, closedAgain.Status);
         Assert.Equal(D(2025, 12, 31), harness.Settings.Table.Single().BooksLockedThrough!.Value.Date);
     }
+
+    [Fact]
+    public void Close_SecondYear_ZerosOnlyThatYearsDrawings_NotPriorYearsAlreadyClosed()
+    {
+        // FY2026 and FY2027 both already ended relative to "today" (Oct 2026+).
+        using var harness = new Harness(booksStartDate: D(2026, 1, 1));
+        foreach (var fy in harness.FiscalYears.Table.ToList())
+            harness.FiscalYears.Delete(fy);
+
+        var fy2026Start = D(2026, 1, 1);
+        var fy2026End = EndOfDay(D(2026, 6, 30));
+        var fy2027Start = D(2026, 7, 1);
+        var fy2027End = EndOfDay(D(2026, 9, 30));
+        harness.FiscalYears.Insert(new FinancialYear
+        {
+            CompanyId = 1,
+            FiscalYearCode = "FY2026",
+            FiscalYearName = "FY2026",
+            StartDate = fy2026Start,
+            EndDate = fy2026End,
+            IsActive = true
+        });
+        harness.FiscalYears.Insert(new FinancialYear
+        {
+            CompanyId = 1,
+            FiscalYearCode = "FY2027",
+            FiscalYearName = "FY2027",
+            StartDate = fy2027Start,
+            EndDate = fy2027End,
+            IsActive = true
+        });
+        harness.Settings.Table.Single().BooksStartDate = fy2026Start;
+
+        const decimal profit2026 = 500m;
+        const decimal drawings2026 = 1000m;
+        const decimal profit2027 = 300m;
+        const decimal drawings2027 = 400m;
+
+        harness.Post(D(2026, 3, 1), harness.CashId, harness.RevenueId, profit2026);
+        harness.Post(D(2026, 4, 1), harness.DrawingsId, harness.CashId, drawings2026);
+        harness.Post(D(2026, 8, 1), harness.CashId, harness.RevenueId, profit2027);
+        harness.Post(D(2026, 8, 15), harness.DrawingsId, harness.CashId, drawings2027);
+
+        harness.YearEnd.Close("FY2026", acknowledgeWarnings: true, closedBy: "y1");
+        Assert.InRange(Math.Abs(NetDr(harness.Financial.TrialBalance(null, fy2026End).Single(r => r.AccountCode == "30800"))), 0m, 0.005m);
+
+        var preview2027 = harness.YearEnd.Preview("FY2027");
+        var drawingsLine = Assert.Single(preview2027.ClosingLines, l => l.AccountCode == "30800");
+        Assert.Equal("Cr", drawingsLine.DrCr);
+        Assert.Equal(drawings2027, drawingsLine.Amount);
+
+        harness.YearEnd.Close("FY2027", acknowledgeWarnings: true, closedBy: "y2");
+        Assert.InRange(Math.Abs(NetDr(harness.Financial.TrialBalance(null, fy2027End).Single(r => r.AccountCode == "30800"))), 0m, 0.005m);
+
+        var capital = harness.Financial.TrialBalance(null, fy2027End).Single(r => r.AccountCode == "30100");
+        var capitalCredit = capital.Credit - capital.Debit;
+        Assert.Equal(profit2026 - drawings2026 + profit2027 - drawings2027, capitalCredit);
+    }
 }

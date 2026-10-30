@@ -485,6 +485,26 @@ namespace Api.Controllers
             if (isReopen && string.IsNullOrWhiteSpace(request.Reason))
                 return BadRequest(new { message = "A reason is required when reopening (moving the lock earlier or clearing it)." });
 
+            var latestClosed = _db.FinancialYears
+                .Where(fy => fy.CompanyId == setting.CompanyId && fy.ClosedAt != null)
+                .OrderByDescending(fy => fy.EndDate)
+                .FirstOrDefault();
+            if (latestClosed != null)
+            {
+                var closedThrough = latestClosed.EndDate.Date;
+                var movesBeforeClosedYear = !next.HasValue || next.Value < closedThrough;
+                if (movesBeforeClosedYear)
+                {
+                    var code = latestClosed.FiscalYearCode.StartsWith("FY", StringComparison.Ordinal)
+                        ? latestClosed.FiscalYearCode
+                        : "FY" + latestClosed.FiscalYearCode;
+                    return Conflict(new
+                    {
+                        message = $"{code} is closed. Reopen it under Year-end before moving the lock before {closedThrough.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}."
+                    });
+                }
+            }
+
             if (previous == next)
                 return GetBooksLock();
 

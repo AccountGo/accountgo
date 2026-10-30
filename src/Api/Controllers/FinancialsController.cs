@@ -1422,13 +1422,19 @@ namespace Api.Controllers
         {
             try
             {
+                using var tx = BeginWriteTransaction();
                 var preview = _yearEndCloseService.Close(
                     code,
                     request?.AcknowledgeWarnings ?? false,
                     YearEndActor);
+                tx.Commit();
                 return Ok(MapYearEndPreview(preview));
             }
             catch (YearEndCloseException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
                 return BadRequest(new { message = ex.Message });
             }
@@ -1447,17 +1453,26 @@ namespace Api.Controllers
         {
             try
             {
+                using var tx = BeginWriteTransaction();
                 var preview = _yearEndCloseService.Reopen(
                     code,
                     request?.Reason ?? "",
                     YearEndActor);
+                tx.Commit();
                 return Ok(MapYearEndPreview(preview));
             }
             catch (YearEndCloseException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
+
+        private Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction BeginWriteTransaction() =>
+            RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, System.Data.IsolationLevel.Serializable);
 
         private static string FormatYearEndDate(DateTime date) =>
             date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
