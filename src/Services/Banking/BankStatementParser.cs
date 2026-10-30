@@ -49,7 +49,8 @@ namespace Services.Banking
             "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyyMMdd"
         };
 
-        private const int MaxDecimalCommaFractionDigits = 2;
+        /// <summary>OFX amounts treat the last <c>.</c> or <c>,</c> as the decimal point only when exactly this many digits follow it.</summary>
+        private const int OfxDecimalFractionDigits = 2;
 
         private static readonly char[] CandidateDelimiters = { ',', ';', '\t' };
 
@@ -413,30 +414,57 @@ namespace Services.Banking
 
         private static decimal ParseOfxAmount(string? raw)
         {
-            var amount = Math.Round(ParseAmount(NormalizeOfxDecimalComma(raw), "Amount"), 2, MidpointRounding.AwayFromZero);
+            var amount = Math.Round(ParseAmount(NormalizeOfxNumber(raw), "Amount"), 2, MidpointRounding.AwayFromZero);
             if (amount == 0m)
                 throw new FormatException("Amount is zero.");
             return amount;
         }
 
         /// <summary>
-        /// Some OFX 1.x files write the decimal separator as a comma ("12,50"). A comma is only a decimal separator when
-        /// it is the single separator and one or two digits follow it; every other comma is a thousands separator
-        /// ("1,234" is 1234) and ParseAmount drops it.
+        /// OFX 1.x amounts mix US ("1,234.56") and European ("1.234,56") grouping. The last <c>.</c> or <c>,</c>
+        /// is the decimal point only when exactly <see cref="OfxDecimalFractionDigits"/> digits follow it; every other
+        /// separator is thousands grouping and is stripped. Without a two-digit fractional part, every separator is
+        /// stripped ("1,234" → 1234).
         /// </summary>
-        private static string? NormalizeOfxDecimalComma(string? raw)
+        internal static string? NormalizeOfxNumber(string? raw)
         {
-            if (raw == null || raw.Contains('.'))
-                return raw;
+            if (raw == null)
+                return null;
 
+            var lastDot = raw.LastIndexOf('.');
             var lastComma = raw.LastIndexOf(',');
-            if (lastComma < 0 || lastComma != raw.IndexOf(','))
-                return raw;
+            var decimalAt = Math.Max(lastDot, lastComma);
+            var hasDecimal = false;
+            if (decimalAt >= 0)
+            {
+                var fractionLength = raw.Length - decimalAt - 1;
+                hasDecimal = fractionLength == OfxDecimalFractionDigits;
+                if (hasDecimal)
+                {
+                    for (var i = decimalAt + 1; i < raw.Length; i++)
+                    {
+                        if (!char.IsDigit(raw[i]))
+                        {
+                            hasDecimal = false;
+                            break;
+                        }
+                    }
+                }
+            }
 
-            var fractionDigits = raw.Length - lastComma - 1;
-            return fractionDigits is >= 1 and <= MaxDecimalCommaFractionDigits
-                ? string.Concat(raw.AsSpan(0, lastComma), ".", raw.AsSpan(lastComma + 1))
-                : raw;
+            var cleaned = new StringBuilder(raw.Length);
+            for (var i = 0; i < raw.Length; i++)
+            {
+                var ch = raw[i];
+                if (ch is '.' or ',')
+                {
+                    if (hasDecimal && i == decimalAt)
+                        cleaned.Append('.');
+                    continue;
+                }
+                cleaned.Append(ch);
+            }
+            return cleaned.ToString();
         }
 
         private static string? Truncate(string? value, int max)
