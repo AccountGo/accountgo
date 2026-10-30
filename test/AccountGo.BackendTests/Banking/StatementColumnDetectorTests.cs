@@ -96,4 +96,22 @@ public class StatementColumnDetectorTests
         Assert.Equal("created_on", StatementColumnDetector.NormalizeHeaderToken("Created On"));
         Assert.Equal("activity_id", StatementColumnDetector.NormalizeHeaderToken("activity-id"));
     }
+
+    [Fact]
+    public void DetectAmountFormat_EuropeanWhenClearCommaPresent()
+    {
+        // Lone 1.500 is ambiguous; 12,50 decides the column is European (, decimal).
+        var detection = StatementColumnDetector.DetectAmountFormat(new[] { "1.500", "12,50", "2.000,00" });
+        Assert.Equal(StatementColumnDetector.AmountDecimalKind.CommaDecimal, detection.Kind);
+        Assert.Equal(',', detection.DecimalSeparator);
+        Assert.False(detection.Ambiguous);
+    }
+
+    [Fact]
+    public void DetectAmountFormat_AmbiguousWhenOnlyThreeDigitFraction()
+    {
+        var detection = StatementColumnDetector.DetectAmountFormat(new[] { "1.500", "2.000" });
+        Assert.True(detection.Ambiguous);
+        Assert.Null(detection.DecimalSeparator);
+    }
 }

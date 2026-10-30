@@ -49,25 +49,34 @@ export function parseCsvRows(content: string, delimiter: string, maxRows = CSV_S
   return rows;
 }
 
-/** Same rule as the API: comma, semicolon, or tab — whichever appears most in the first non-blank line. */
+/**
+ * Same idea as the API: prefer the delimiter that yields a wide header-like row
+ * (date/amount/… tokens), not a short bank-info preamble.
+ */
 export function detectDelimiter(content: string): string {
-  const firstLine =
-    content
-      .replace(/^\uFEFF/, '')
-      .split(/\r\n|\r|\n/)
-      .find((line) => line.trim().length > 0) ?? '';
+  const text = content.replace(/^\uFEFF/, '');
   let best = ',';
-  let bestCount = 0;
+  let bestScore = -1;
   for (const candidate of [',', ';', '\t']) {
-    let count = 0;
-    let inQuotes = false;
-    for (const ch of firstLine) {
-      if (ch === '"') inQuotes = !inQuotes;
-      else if (ch === candidate && !inQuotes) count += 1;
+    const rows = parseCsvRows(text, candidate, 30);
+    const headerIndex = rows.findIndex((row) => {
+      const nonBlank = row.filter((c) => c.trim() !== '');
+      if (nonBlank.length < 3) return false;
+      const known = nonBlank.filter((c) =>
+        /^(date|amount|payee|description|memo|currency|status|direction|net|fee)$/i.test(c.trim()),
+      ).length;
+      return known >= 2;
+    });
+    let score: number;
+    if (headerIndex >= 0) {
+      score = 1_000_000 + rows[headerIndex].filter((c) => c.trim() !== '').length;
+    } else {
+      const first = rows.find((r) => r.some((c) => c.trim() !== ''));
+      score = first ? first.filter((c) => c.trim() !== '').length : 0;
     }
-    if (count > bestCount) {
+    if (score > bestScore) {
       best = candidate;
-      bestCount = count;
+      bestScore = score;
     }
   }
   return best;
@@ -90,10 +99,12 @@ export function emptyColumnMap(): BankStatementColumnMap {
     headerRowIndex: null,
     delimiter: null,
     dateFormat: null,
+    decimalSeparator: null,
     dateColumn: 0,
     amountColumn: null,
     depositColumn: null,
     withdrawalColumn: null,
+    feeColumn: null,
     directionColumn: null,
     payeeColumn: null,
     memoColumn: null,

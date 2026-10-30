@@ -5,6 +5,7 @@
       <Ntry>
         <Amt Ccy="USD">1250.50</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
         <BookgDt><Dt>2024-03-07</Dt></BookgDt>
         <AcctSvcrRef>CAMT-001</AcctSvcrRef>
         <NtryDtls>
@@ -17,6 +18,7 @@
       <Ntry>
         <Amt Ccy="USD">40.00</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
         <BookgDt><Dt>2024-03-08</Dt></BookgDt>
         <AcctSvcrRef>CAMT-002</AcctSvcrRef>
         <NtryDtls>

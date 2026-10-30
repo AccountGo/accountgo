@@ -41,6 +41,26 @@ namespace Services.Banking
             public int SampleCount { get; init; }
         }
 
+        public enum AmountDecimalKind
+        {
+            Unknown,
+            /// <summary>`.` is the decimal separator (US-style).</summary>
+            DotDecimal,
+            /// <summary>`,` is the decimal separator (European-style).</summary>
+            CommaDecimal,
+            Ambiguous
+        }
+
+        public sealed class AmountDetection
+        {
+            public AmountDecimalKind Kind { get; init; }
+            /// <summary>`.` or `,` when decided; null when unknown or ambiguous.</summary>
+            public char? DecimalSeparator { get; init; }
+            public bool Ambiguous => Kind == AmountDecimalKind.Ambiguous;
+            public string Summary { get; init; } = "unknown";
+            public int SampleCount { get; init; }
+        }
+
         private static readonly Regex IsoLike = new(
             @"^\d{4}-\d{2}-\d{2}([Tt ]\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?)?(Z|[+-]\d{2}:?\d{2})?$",
             RegexOptions.CultureInvariant | RegexOptions.Compiled,
@@ -170,6 +190,74 @@ namespace Services.Banking
         }
 
         /// <summary>
+        /// Decide the decimal separator for a whole amount column. Never lets a lone <c>1.500</c>
+        /// become 1.50 when the column also has European values like <c>12,50</c>.
+        /// </summary>
+        public static AmountDetection DetectAmountFormat(IEnumerable<string?> values)
+        {
+            var samples = values
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v => StripAmountNoise(v!))
+                .Where(v => v.Length > 0)
+                .Take(500)
+                .ToList();
+            if (samples.Count == 0)
+                return new AmountDetection { Kind = AmountDecimalKind.Unknown, Summary = "no amounts", SampleCount = 0 };
+
+            var clearDot = 0;
+            var clearComma = 0;
+            var ambiguousOnly = 0;
+            foreach (var sample in samples)
+            {
+                var vote = ClassifyAmountSeparators(sample);
+                switch (vote)
+                {
+                    case AmountDecimalKind.DotDecimal: clearDot++; break;
+                    case AmountDecimalKind.CommaDecimal: clearComma++; break;
+                    case AmountDecimalKind.Ambiguous: ambiguousOnly++; break;
+                }
+            }
+
+            if (clearComma > 0 && clearDot == 0)
+                return new AmountDetection
+                {
+                    Kind = AmountDecimalKind.CommaDecimal,
+                    DecimalSeparator = ',',
+                    Summary = "European (, decimal)",
+                    SampleCount = samples.Count
+                };
+            if (clearDot > 0 && clearComma == 0)
+                return new AmountDetection
+                {
+                    Kind = AmountDecimalKind.DotDecimal,
+                    DecimalSeparator = '.',
+                    Summary = "US (. decimal)",
+                    SampleCount = samples.Count
+                };
+            if (clearDot > 0 && clearComma > 0)
+                return new AmountDetection
+                {
+                    Kind = AmountDecimalKind.Ambiguous,
+                    Summary = "ambiguous (. vs , decimal)",
+                    SampleCount = samples.Count
+                };
+            if (ambiguousOnly > 0)
+                return new AmountDetection
+                {
+                    Kind = AmountDecimalKind.Ambiguous,
+                    Summary = "ambiguous (. vs , decimal)",
+                    SampleCount = samples.Count
+                };
+
+            return new AmountDetection
+            {
+                Kind = AmountDecimalKind.Unknown,
+                Summary = "no separators",
+                SampleCount = samples.Count
+            };
+        }
+
+        /// <summary>
         /// First record index that looks like a header: mostly non-numeric cells and at least one
         /// known column name. Returns null when nothing matches.
         /// </summary>
@@ -248,6 +336,47 @@ namespace Services.Banking
                 return false;
             var digits = trimmed.Count(char.IsDigit);
             return digits >= trimmed.Length / 2;
+        }
+
+        /// <summary>Keep digits and <c>.</c>/<c>,</c> only for separator voting.</summary>
+        private static string StripAmountNoise(string raw)
+        {
+            var text = raw.Trim();
+            if (text.StartsWith('(') && text.EndsWith(')'))
+                text = text[1..^1];
+            var sb = new System.Text.StringBuilder(text.Length);
+            foreach (var ch in text)
+            {
+                if (char.IsDigit(ch) || ch is '.' or ',')
+                    sb.Append(ch);
+            }
+            return sb.ToString();
+        }
+
+        private static AmountDecimalKind ClassifyAmountSeparators(string digitsAndSeps)
+        {
+            var lastDot = digitsAndSeps.LastIndexOf('.');
+            var lastComma = digitsAndSeps.LastIndexOf(',');
+            var hasDot = lastDot >= 0;
+            var hasComma = lastComma >= 0;
+
+            if (hasDot && hasComma)
+                return lastDot > lastComma ? AmountDecimalKind.DotDecimal : AmountDecimalKind.CommaDecimal;
+
+            if (hasComma)
+            {
+                var after = digitsAndSeps.Length - lastComma - 1;
+                // Exactly three trailing digits can be thousands ("1,500") or a 3-dp decimal — ambiguous alone.
+                return after == 3 ? AmountDecimalKind.Ambiguous : AmountDecimalKind.CommaDecimal;
+            }
+
+            if (hasDot)
+            {
+                var after = digitsAndSeps.Length - lastDot - 1;
+                return after == 3 ? AmountDecimalKind.Ambiguous : AmountDecimalKind.DotDecimal;
+            }
+
+            return AmountDecimalKind.Unknown;
         }
     }
 }

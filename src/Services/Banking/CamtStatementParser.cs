@@ -15,7 +15,7 @@ namespace Services.Banking
     /// <summary>ISO 20022 CAMT.053 bank-to-customer statement XML reader (#447 Phase C).</summary>
     public static class CamtStatementParser
     {
-        public static IReadOnlyList<ParsedStatementRow> Parse(string content)
+        public static IReadOnlyList<ParsedStatementRow> Parse(string content, string? accountCurrencyCode = null)
         {
             content = content.TrimStart('\uFEFF');
             if (string.IsNullOrWhiteSpace(content))
@@ -30,6 +30,10 @@ namespace Services.Banking
             {
                 throw new InvalidOperationException("The CAMT file is not valid XML.", ex);
             }
+
+            var accountCurrency = string.IsNullOrWhiteSpace(accountCurrencyCode)
+                ? null
+                : accountCurrencyCode.Trim().ToUpperInvariant();
 
             var entries = doc.Descendants().Where(e => e.Name.LocalName == "Ntry").ToList();
             if (entries.Count == 0)
@@ -48,11 +52,30 @@ namespace Services.Banking
                 var row = new ParsedStatementRow { RowNumber = number };
                 try
                 {
+                    var status = entry.Elements().FirstOrDefault(e => e.Name.LocalName == "Sts")?.Value
+                        ?? entry.Descendants().FirstOrDefault(e => e.Name.LocalName == "Sts")?.Value;
+                    // Only booked entries import; pending/info rows are reported.
+                    if (!string.IsNullOrWhiteSpace(status)
+                        && !string.Equals(status, "BOOK", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new FormatException($"{status.Trim().ToLowerInvariant()} row skipped");
+                    }
+
                     var amtEl = entry.Elements().FirstOrDefault(e => e.Name.LocalName == "Amt")
                         ?? throw new FormatException("Amount is missing.");
+                    var ccy = amtEl.Attribute("Ccy")?.Value;
+                    if (!string.IsNullOrWhiteSpace(ccy)
+                        && accountCurrency != null
+                        && !string.Equals(ccy, accountCurrency, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new FormatException(
+                            $"{ccy.Trim().ToUpperInvariant()} row skipped: this account is {accountCurrency}");
+                    }
+
                     var amount = BankStatementParser.ParseAmount(amtEl.Value, "Amount");
                     var cdtDbt = entry.Elements().FirstOrDefault(e => e.Name.LocalName == "CdtDbtInd")?.Value;
-                    if (string.Equals(cdtDbt, "DBIT", StringComparison.OrdinalIgnoreCase))
+                    var isDebit = string.Equals(cdtDbt, "DBIT", StringComparison.OrdinalIgnoreCase);
+                    if (isDebit)
                         amount = -Math.Abs(amount);
                     else
                         amount = Math.Abs(amount);
@@ -83,12 +106,17 @@ namespace Services.Banking
                     row.ExternalId = Truncate(acctSvcrRef ?? endToEnd, BankStatementParser.MaxExternalIdLength);
                     row.Reference = Truncate(endToEnd ?? acctSvcrRef, BankStatementParser.MaxReferenceLength);
 
-                    var name = entry.Descendants().FirstOrDefault(e => e.Name.LocalName == "Nm")?.Value;
+                    // Credit → debtor is the counterparty; debit → creditor.
+                    var counterparty = isDebit
+                        ? entry.Descendants().FirstOrDefault(e => e.Name.LocalName == "Cdtr")
+                            ?.Descendants().FirstOrDefault(e => e.Name.LocalName == "Nm")?.Value
+                        : entry.Descendants().FirstOrDefault(e => e.Name.LocalName == "Dbtr")
+                            ?.Descendants().FirstOrDefault(e => e.Name.LocalName == "Nm")?.Value;
                     var info = string.Join(" ",
                         entry.Descendants().Where(e => e.Name.LocalName == "Ustrd").Select(e => e.Value.Trim())
                             .Where(v => v.Length > 0));
-                    row.Payee = Truncate(name ?? (info.Length > 0 ? info : null), BankStatementParser.MaxPayeeLength);
-                    row.Memo = Truncate(info.Length > 0 ? info : name, BankStatementParser.MaxMemoLength);
+                    row.Payee = Truncate(counterparty ?? (info.Length > 0 ? info : null), BankStatementParser.MaxPayeeLength);
+                    row.Memo = Truncate(info.Length > 0 ? info : counterparty, BankStatementParser.MaxMemoLength);
                     row.ExternalId ??= SyntheticId(row, occurrences);
                 }
                 catch (FormatException ex)

@@ -36,6 +36,8 @@ namespace Services.Banking
     public static class BankStatementParser
     {
         public const int MaxContentChars = 4_000_000;
+        /// <summary>Raw upload size before base64 decode (~5 MiB). Shared worker containers must reject bigger files early.</summary>
+        public const int MaxUploadBytes = 5 * 1024 * 1024;
         public const int MaxRows = 5000;
         public const int MaxPayeeLength = 200;
         public const int MaxMemoLength = 500;
@@ -81,7 +83,7 @@ namespace Services.Banking
                     map ?? throw new InvalidOperationException("Map the CSV columns first."),
                     accountCurrencyCode),
                 BankStatementSources.Ofx => ParseOfx(content),
-                BankStatementSources.Camt => CamtStatementParser.Parse(content),
+                BankStatementSources.Camt => CamtStatementParser.Parse(content, accountCurrencyCode),
                 BankStatementSources.Mt940 => Mt940StatementParser.Parse(content),
                 BankStatementSources.Qif => QifStatementParser.Parse(content),
                 _ => throw new InvalidOperationException("Pick a supported statement file.")
@@ -136,6 +138,9 @@ namespace Services.Banking
                     if (map.NeedsDateFormatChoice)
                         throw new FormatException(
                             $"Date '{Field(fields, map.DateColumn)}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.");
+                    if (map.NeedsAmountFormatChoice)
+                        throw new FormatException(
+                            $"Amount '{Field(fields, map.AmountColumn) ?? Field(fields, map.DepositColumn) ?? Field(fields, map.WithdrawalColumn)}' needs a decimal separator ('.' or ','). Set it in the column map.");
 
                     if (map.StatusColumn.HasValue)
                     {
@@ -186,9 +191,9 @@ namespace Services.Banking
                 throw new InvalidOperationException("Pick the amount column (or deposit and withdrawal columns).");
             foreach (var column in new int?[]
                      {
-                         map.AmountColumn, map.DepositColumn, map.WithdrawalColumn, map.DirectionColumn,
-                         map.PayeeColumn, map.MemoColumn, map.ReferenceColumn, map.ExternalIdColumn,
-                         map.CurrencyColumn, map.StatusColumn
+                         map.AmountColumn, map.DepositColumn, map.WithdrawalColumn, map.FeeColumn,
+                         map.DirectionColumn, map.PayeeColumn, map.MemoColumn, map.ReferenceColumn,
+                         map.ExternalIdColumn, map.CurrencyColumn, map.StatusColumn
                      })
             {
                 if (column is < 0)
@@ -422,7 +427,11 @@ namespace Services.Banking
             decimal amount;
             if (map.AmountColumn.HasValue)
             {
-                amount = ParseAmount(Field(fields, map.AmountColumn), "Amount");
+                amount = ParseAmount(
+                    Field(fields, map.AmountColumn),
+                    "Amount",
+                    map.AmountDecimalSeparator,
+                    map.AccountCurrencyCode);
                 if (map.DirectionColumn.HasValue)
                 {
                     var direction = Field(fields, map.DirectionColumn);
@@ -439,9 +448,24 @@ namespace Services.Banking
                 var withdrawalRaw = Field(fields, map.WithdrawalColumn);
                 if (depositRaw == null && withdrawalRaw == null)
                     throw new FormatException("Amount is missing.");
-                var deposit = depositRaw == null ? 0m : Math.Abs(ParseAmount(depositRaw, "Deposit"));
-                var withdrawal = withdrawalRaw == null ? 0m : Math.Abs(ParseAmount(withdrawalRaw, "Withdrawal"));
+                var deposit = depositRaw == null
+                    ? 0m
+                    : Math.Abs(ParseAmount(depositRaw, "Deposit", map.AmountDecimalSeparator, map.AccountCurrencyCode));
+                var withdrawal = withdrawalRaw == null
+                    ? 0m
+                    : Math.Abs(ParseAmount(withdrawalRaw, "Withdrawal", map.AmountDecimalSeparator, map.AccountCurrencyCode));
                 amount = deposit - withdrawal;
+            }
+
+            if (map.FeeColumn.HasValue)
+            {
+                var feeRaw = Field(fields, map.FeeColumn);
+                if (feeRaw != null)
+                {
+                    var fee = Math.Abs(ParseAmount(feeRaw, "Fee", map.AmountDecimalSeparator, map.AccountCurrencyCode));
+                    var sign = amount >= 0 ? 1m : -1m;
+                    amount = sign * (Math.Abs(amount) - fee);
+                }
             }
 
             if (map.InvertSign)
@@ -454,9 +478,15 @@ namespace Services.Banking
 
         /// <summary>
         /// Shared CSV/OFX amount parser: currency symbols or codes, parentheses, trailing minus,
-        /// CR/DR suffixes, and US/European grouping (same rules as former OFX normaliser).
+        /// CR/DR suffixes, and US/European grouping.
+        /// When <paramref name="decimalSeparator"/> is set, that character is the decimal point for the
+        /// whole column; otherwise the per-value OFX last-separator rule applies.
         /// </summary>
-        public static decimal ParseAmount(string? raw, string label)
+        public static decimal ParseAmount(
+            string? raw,
+            string label,
+            char? decimalSeparator = null,
+            string? accountCurrencyCode = null)
         {
             if (string.IsNullOrWhiteSpace(raw))
                 throw new FormatException($"{label} is missing.");
@@ -493,6 +523,15 @@ namespace Services.Banking
                 text = text[1..].Trim();
             }
 
+            var embeddedCurrency = ExtractCurrencyCode(text);
+            if (embeddedCurrency != null
+                && !string.IsNullOrWhiteSpace(accountCurrencyCode)
+                && !string.Equals(embeddedCurrency, accountCurrencyCode, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new FormatException(
+                    $"{embeddedCurrency} row skipped: this account is {accountCurrencyCode.Trim().ToUpperInvariant()}");
+            }
+
             text = CurrencyCodeInAmount.Replace(text, string.Empty).Trim();
 
             var stripped = new StringBuilder(text.Length);
@@ -506,13 +545,41 @@ namespace Services.Banking
                     throw new FormatException($"{label} '{raw}' is not a number.");
             }
 
-            var normalized = NormalizeGroupedNumber(stripped.ToString());
+            var normalized = decimalSeparator.HasValue
+                ? NormalizeWithDecimalSeparator(stripped.ToString(), decimalSeparator.Value)
+                : NormalizeGroupedNumber(stripped.ToString());
             if (string.IsNullOrWhiteSpace(normalized)
                 || !decimal.TryParse(normalized, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
                     CultureInfo.InvariantCulture, out var amount))
                 throw new FormatException($"{label} '{raw}' is not a number.");
 
             return negative ? -amount : amount;
+        }
+
+        /// <summary>ISO 4217 code embedded in an amount cell, if any.</summary>
+        public static string? ExtractCurrencyCode(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return null;
+            var match = CurrencyCodeInAmount.Match(raw);
+            return match.Success ? match.Value.ToUpperInvariant() : null;
+        }
+
+        internal static string NormalizeWithDecimalSeparator(string raw, char decimalSeparator)
+        {
+            var grouping = decimalSeparator == '.' ? ',' : '.';
+            var cleaned = new StringBuilder(raw.Length);
+            for (var i = 0; i < raw.Length; i++)
+            {
+                var ch = raw[i];
+                if (ch == decimalSeparator)
+                    cleaned.Append('.');
+                else if (ch == grouping)
+                    continue;
+                else
+                    cleaned.Append(ch);
+            }
+            return cleaned.ToString();
         }
 
         private static string SyntheticExternalId(ParsedStatementRow row, Dictionary<string, int> occurrences)

@@ -312,6 +312,8 @@ const BankStatementImportPage: React.FC = () => {
     ((source === 1 || source === 7) && hasAmountMapping(columnMap));
   const dateFormatBlockingImport =
     !!preview?.detection?.needsDateFormatChoice && !columnMap.dateFormat;
+  const amountFormatBlockingImport =
+    !!preview?.detection?.needsAmountFormatChoice && !columnMap.decimalSeparator;
 
   const runPreview = async () => {
     if (!mappingReady) return;
@@ -522,6 +524,30 @@ const BankStatementImportPage: React.FC = () => {
                     <option value="M/d/yyyy">M/d/yyyy</option>
                   </select>
                 </div>
+                <div>
+                  <label className={labelClass} htmlFor="col-decimalSeparator">
+                    Amount decimal
+                    {preview?.detection?.needsAmountFormatChoice
+                      ? ' (required — amounts are ambiguous)'
+                      : ' (optional)'}
+                  </label>
+                  <select
+                    id="col-decimalSeparator"
+                    value={columnMap.decimalSeparator ?? ''}
+                    onChange={(e) => {
+                      setPreview(null);
+                      setColumnMap((prev) => ({
+                        ...prev,
+                        decimalSeparator: e.target.value.trim() || null,
+                      }));
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="">Detected from the column</option>
+                    <option value=".">. (US / 1,234.56)</option>
+                    <option value=",">, (European / 1.234,56)</option>
+                  </select>
+                </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-[var(--text-main)]">
                 <input
@@ -540,6 +566,11 @@ const BankStatementImportPage: React.FC = () => {
               {preview?.detection?.needsDateFormatChoice && !columnMap.dateFormat && (
                 <p className="text-xs text-amber-600">
                   Every date has day and month ≤ 12. Choose day-first or month-first — we will not guess.
+                </p>
+              )}
+              {preview?.detection?.needsAmountFormatChoice && !columnMap.decimalSeparator && (
+                <p className="text-xs text-amber-600">
+                  Amounts like 1.500 are ambiguous. Choose . or , as the decimal separator — we will not guess.
                 </p>
               )}
             </div>
@@ -561,7 +592,7 @@ const BankStatementImportPage: React.FC = () => {
                   variant="primary"
                   onClick={() => void commit()}
                   busy={busy}
-                  disabled={dateFormatBlockingImport}
+                  disabled={dateFormatBlockingImport || amountFormatBlockingImport}
                 />
               )}
             </div>

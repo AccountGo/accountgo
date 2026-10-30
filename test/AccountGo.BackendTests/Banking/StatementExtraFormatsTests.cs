@@ -25,10 +25,21 @@ public class StatementExtraFormatsTests
         var rows = QifStatementParser.Parse(Corpus("sample.qif"));
         Assert.Equal(2, rows.Count);
         Assert.All(rows, r => Assert.True(r.IsValid, r.Error));
-        Assert.Equal(new DateTime(2024, 3, 7), rows[0].PostedDate);
+        // File includes 03/13/2024 → month-first for the whole file (not silent 4 March from 03/04).
+        Assert.Equal(new DateTime(2024, 3, 13), rows[0].PostedDate);
         Assert.Equal(1250.50m, rows[0].Amount);
         Assert.Equal("Client Co", rows[0].Payee);
         Assert.Equal(-40.00m, rows[1].Amount);
+    }
+
+    [Fact]
+    public void Qif_AmbiguousDatesRequireChoice()
+    {
+        const string qif = "!Type:Bank\nD03/04/26\nT5.00\nPAlpha\n^\nD05/06/26\nT-2.00\nPBeta\n^\n";
+        var rows = QifStatementParser.Parse(qif);
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, r => Assert.False(r.IsValid));
+        Assert.All(rows, r => Assert.Contains("needs a date format", r.Error, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -73,6 +84,24 @@ public class StatementExtraFormatsTests
         Assert.Equal(new DateTime(2024, 3, 7), row.PostedDate);
         Assert.Equal(12.50m, row.Amount);
         Assert.Equal("Cafe", row.Payee);
+    }
+
+    [Fact]
+    public void Upload_RejectsOversizedBase64BeforeDecode()
+    {
+        using var h = new BankingTestHarness();
+        h.SeedCashTree();
+        var bank = h.Banks.Create(new CreateBankAccountRequest { Name = "Big", Type = 1 }, includeFullNumbers: false);
+        // ~6 MB of 'A' as base64 payload text → approx decoded size over the 5 MB cap.
+        var oversized = new string('A', (BankStatementParser.MaxUploadBytes * 4 / 3) + 64);
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            h.Statements.Preview(bank.Id, new BankStatementImportRequest
+            {
+                Source = 1,
+                ContentBase64 = oversized,
+                ColumnMap = new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1 }
+            }));
+        Assert.Contains("too large", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private static byte[] BuildMinimalXlsx()

@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using Core.Data;
 using Core.Domain;
@@ -662,9 +663,18 @@ namespace Services.Banking
             var source = (BankStatementSources)request.Source;
             if (!string.IsNullOrWhiteSpace(request.ContentBase64))
             {
+                var b64 = request.ContentBase64.Trim();
+                // Reject before decode so a huge payload never expands in a shared container.
+                var approxBytes = (b64.Length * 3L) / 4L;
+                if (approxBytes > BankStatementParser.MaxUploadBytes)
+                    throw new InvalidOperationException(
+                        $"The statement file is too large (max {BankStatementParser.MaxUploadBytes / (1024 * 1024)} MB).");
                 try
                 {
-                    var bytes = Convert.FromBase64String(request.ContentBase64.Trim());
+                    var bytes = Convert.FromBase64String(b64);
+                    if (bytes.Length > BankStatementParser.MaxUploadBytes)
+                        throw new InvalidOperationException(
+                            $"The statement file is too large (max {BankStatementParser.MaxUploadBytes / (1024 * 1024)} MB).");
                     if (source == BankStatementSources.Xlsx)
                         return XlsxStatementReader.ToCsv(bytes);
                     return StatementFileEncoding.Decode(bytes);
@@ -676,7 +686,11 @@ namespace Services.Banking
             }
             if (source == BankStatementSources.Xlsx)
                 throw new InvalidOperationException("Excel statements must be uploaded as file bytes (contentBase64).");
-            return request.Content ?? string.Empty;
+            var text = request.Content ?? string.Empty;
+            if (Encoding.UTF8.GetByteCount(text) > BankStatementParser.MaxUploadBytes)
+                throw new InvalidOperationException(
+                    $"The statement file is too large (max {BankStatementParser.MaxUploadBytes / (1024 * 1024)} MB).");
+            return text;
         }
 
         private BankStatementResolveMappingDto LookupSavedOrPreset(int bankId, string content)
@@ -703,12 +717,12 @@ namespace Services.Banking
                 }
             }
 
-            var preset = StatementImportPresets.Find(signature);
+            var preset = StatementImportPresets.FindMatching(header);
             if (preset != null)
             {
                 return new BankStatementResolveMappingDto
                 {
-                    ColumnMap = preset.CreateMap(),
+                    ColumnMap = preset.Bind(header),
                     MappingSource = "preset",
                     HeaderSignature = signature,
                     PresetName = preset.Name
@@ -814,7 +828,8 @@ namespace Services.Banking
             Currency = summary.Currency,
             Status = summary.Status,
             Header = summary.Header,
-            NeedsDateFormatChoice = summary.NeedsDateFormatChoice
+            NeedsDateFormatChoice = summary.NeedsDateFormatChoice,
+            NeedsAmountFormatChoice = summary.NeedsAmountFormatChoice
         };
 
         private static BankStatementSources ParseSource(BankStatementImportRequest request)

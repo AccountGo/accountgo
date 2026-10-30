@@ -1,0 +1,4 @@
+Date,Amount,Payee
+2024-01-01,1.500,ThousandsDot
+2024-01-02,"12,50",EuropeanDecimal
+2024-01-03,"2.000,00",Mixed

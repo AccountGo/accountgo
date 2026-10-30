@@ -26,6 +26,11 @@ test('detectDelimiter skips leading blank lines before probing', () => {
   assert.equal(detectDelimiter('\r\n\r\nDate;Amount;Payee'), ';');
 });
 
+test('detectDelimiter prefers a header-like row over a short preamble', () => {
+  const csv = 'Account Name: Demo;;;;\nCurrency;USD;;;;\nDate;Amount;Payee\n2024-01-01;10,00;Cafe\n';
+  assert.equal(detectDelimiter(csv), ';');
+});
+
 test('parseCsvRows handles quotes, doubled quotes, blank lines, and limits rows', () => {
   const rows = parseCsvRows('a,b\r\n"x, y","say ""hi"""\n\n3,4\n5,6', ',', 3);
   assert.deepEqual(rows, [

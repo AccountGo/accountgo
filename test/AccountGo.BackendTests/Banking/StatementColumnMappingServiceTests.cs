@@ -35,7 +35,8 @@ public class StatementColumnMappingServiceTests
         Assert.Equal("preset", resolved.MappingSource);
         Assert.Equal("Wise activity", resolved.PresetName);
         Assert.NotNull(resolved.ColumnMap);
-        Assert.Equal(2, resolved.ColumnMap!.DateColumn);
+        // Real Wise activity export: created_on after profile_* + activity_id.
+        Assert.Equal(4, resolved.ColumnMap!.DateColumn);
 
         var commitMap = resolved.ColumnMap;
         commitMap.DateFormat = null;

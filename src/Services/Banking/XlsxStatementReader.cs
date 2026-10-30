@@ -18,13 +18,20 @@ namespace Services.Banking
     /// </summary>
     public static class XlsxStatementReader
     {
+        /// <summary>OpenXml part character budget — keeps a shared container from expanding a malicious sheet.</summary>
+        public const long MaxCharactersInPart = 10_000_000;
+
         public static string ToCsv(byte[] bytes)
         {
             if (bytes == null || bytes.Length == 0)
                 throw new InvalidOperationException("The statement file is empty.");
+            if (bytes.Length > BankStatementParser.MaxUploadBytes)
+                throw new InvalidOperationException(
+                    $"The statement file is too large (max {BankStatementParser.MaxUploadBytes / (1024 * 1024)} MB).");
 
             using var stream = new MemoryStream(bytes, writable: false);
-            using var doc = SpreadsheetDocument.Open(stream, false);
+            var openSettings = new OpenSettings { MaxCharactersInPart = MaxCharactersInPart };
+            using var doc = SpreadsheetDocument.Open(stream, false, openSettings);
             var workbook = doc.WorkbookPart
                 ?? throw new InvalidOperationException("The Excel file has no workbook.");
             var sheet = workbook.Workbook.Sheets?.Elements<Sheet>().FirstOrDefault()
@@ -32,13 +39,15 @@ namespace Services.Banking
             var sheetId = sheet.Id?.Value
                 ?? throw new InvalidOperationException("The Excel sheet reference is missing.");
             var worksheet = (WorksheetPart)workbook.GetPartById(sheetId);
-            var shared = workbook.SharedStringTablePart?.SharedStringTable;
+            var sharedCache = BuildSharedStringCache(workbook.SharedStringTablePart?.SharedStringTable);
             var sheetData = worksheet.Worksheet.GetFirstChild<SheetData>()
                 ?? throw new InvalidOperationException("The Excel sheet is empty.");
 
             var rows = new List<List<string>>();
             foreach (var row in sheetData.Elements<Row>())
             {
+                if (rows.Count >= BankStatementParser.MaxRows + 1) // header + MaxRows data
+                    break;
                 var cells = new List<string>();
                 var expectedCol = 0;
                 foreach (var cell in row.Elements<Cell>())
@@ -49,7 +58,7 @@ namespace Services.Banking
                         cells.Add(string.Empty);
                         expectedCol++;
                     }
-                    cells.Add(GetCellText(cell, shared));
+                    cells.Add(GetCellText(cell, sharedCache));
                     expectedCol = colIndex + 1;
                 }
                 if (cells.Any(c => !string.IsNullOrWhiteSpace(c)))
@@ -72,7 +81,14 @@ namespace Services.Banking
             return sb.ToString();
         }
 
-        private static string GetCellText(Cell cell, SharedStringTable? shared)
+        private static IReadOnlyList<string> BuildSharedStringCache(SharedStringTable? shared)
+        {
+            if (shared == null)
+                return Array.Empty<string>();
+            return shared.Elements<SharedStringItem>().Select(i => i.InnerText ?? string.Empty).ToList();
+        }
+
+        private static string GetCellText(Cell cell, IReadOnlyList<string> sharedCache)
         {
             if (cell.DataType?.Value == CellValues.InlineString)
                 return cell.InlineString?.InnerText ?? string.Empty;
@@ -80,14 +96,13 @@ namespace Services.Banking
             var value = cell.CellValue?.InnerText ?? string.Empty;
             if (cell.DataType?.Value == CellValues.SharedString
                 && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
-                && shared != null)
+                && index >= 0
+                && index < sharedCache.Count)
             {
-                var item = shared.ElementAtOrDefault(index);
-                return item?.InnerText ?? string.Empty;
+                return sharedCache[index];
             }
             if (cell.DataType?.Value == CellValues.Boolean)
                 return value == "1" ? "TRUE" : "FALSE";
-            // Dates stored as OA serials — leave the number; detector/parser handle Excel serial columns.
             return value;
         }
 

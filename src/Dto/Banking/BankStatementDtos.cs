@@ -26,10 +26,17 @@ namespace Dto.Banking
         /// Required when the date column is ambiguous (every part ≤ 12).
         /// </summary>
         public string? DateFormat { get; set; }
+        /// <summary>
+        /// Decimal separator for amount columns: <c>.</c> or <c>,</c>. Wins over detection.
+        /// Required when the amount column is ambiguous (e.g. only <c>1.500</c>-style values).
+        /// </summary>
+        public string? DecimalSeparator { get; set; }
         public int DateColumn { get; set; }
         public int? AmountColumn { get; set; }
         public int? DepositColumn { get; set; }
         public int? WithdrawalColumn { get; set; }
+        /// <summary>Optional fee column (e.g. Revolut); subtracted from the amount magnitude.</summary>
+        public int? FeeColumn { get; set; }
         /// <summary>Optional direction column when the amount is unsigned (<c>in</c>/<c>out</c>, <c>CR</c>/<c>DR</c>, …).</summary>
         public int? DirectionColumn { get; set; }
         /// <summary>Optional overrides for direction tokens → +1 (in) or −1 (out).</summary>
@@ -41,7 +48,7 @@ namespace Dto.Banking
         public int? ExternalIdColumn { get; set; }
         /// <summary>Optional ISO currency column; rows that differ from the bank account are skipped.</summary>
         public int? CurrencyColumn { get; set; }
-        /// <summary>Optional status column; only <see cref="AllowedStatuses"/> (default completed/posted/booked/settled) import.</summary>
+        /// <summary>Optional status column; only <see cref="AllowedStatuses"/> (default completed/posted/booked/settled/succeeded/paid/cleared) import.</summary>
         public int? StatusColumn { get; set; }
         public List<string>? AllowedStatuses { get; set; }
         /// <summary>Flip signs for statements that list payments as positive (for example credit cards).</summary>
@@ -85,6 +92,7 @@ namespace Dto.Banking
         public string? Status { get; set; }
         public string? Header { get; set; }
         public bool NeedsDateFormatChoice { get; set; }
+        public bool NeedsAmountFormatChoice { get; set; }
     }
 
     public class BankStatementPreviewDto

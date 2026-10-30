@@ -35,7 +35,7 @@ namespace Services.Banking
         public static readonly IReadOnlySet<string> DefaultAllowedStatuses =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "completed", "posted", "booked", "settled"
+                "completed", "posted", "booked", "settled", "succeeded", "paid", "cleared"
             };
 
         public sealed class ResolveResult
@@ -71,7 +71,7 @@ namespace Services.Banking
 
             var detection = StatementColumnDetector.DetectDateFormat(dateSamples);
             var userFormat = string.IsNullOrWhiteSpace(map.DateFormat) ? null : map.DateFormat.Trim();
-            var needsChoice = detection.Ambiguous && userFormat == null;
+            var needsDateChoice = detection.Ambiguous && userFormat == null;
 
             StatementDateMode dateMode;
             string? dateFormat = userFormat;
@@ -98,6 +98,12 @@ namespace Services.Banking
                 };
             }
 
+            var amountSamples = CollectAmountSamples(records, dataStart, map);
+            var amountDetection = StatementColumnDetector.DetectAmountFormat(amountSamples);
+            var userDecimal = ParseUserDecimalSeparator(map.DecimalSeparator);
+            var needsAmountChoice = amountDetection.Ambiguous && userDecimal == null;
+            var amountDecimal = userDecimal ?? amountDetection.DecimalSeparator;
+
             var directionSigns = BuildDirectionSigns(map);
             var allowedStatuses = BuildAllowedStatuses(map);
             var accountCurrency = string.IsNullOrWhiteSpace(accountCurrencyCode)
@@ -111,10 +117,11 @@ namespace Services.Banking
                 DateColumn = map.DateColumn,
                 DateMode = dateMode,
                 DateFormat = dateFormat,
-                NeedsDateFormatChoice = needsChoice,
+                NeedsDateFormatChoice = needsDateChoice,
                 AmountColumn = map.AmountColumn,
                 DepositColumn = map.DepositColumn,
                 WithdrawalColumn = map.WithdrawalColumn,
+                FeeColumn = map.FeeColumn,
                 DirectionColumn = map.DirectionColumn,
                 DirectionSigns = directionSigns,
                 PayeeColumn = map.PayeeColumn,
@@ -126,15 +133,20 @@ namespace Services.Banking
                 StatusColumn = map.StatusColumn,
                 AllowedStatuses = allowedStatuses,
                 InvertSign = map.InvertSign,
-                DateDetection = detection
+                DateDetection = detection,
+                AmountDetection = amountDetection,
+                AmountDecimalSeparator = amountDecimal,
+                NeedsAmountFormatChoice = needsAmountChoice
             };
 
-            var amountSummary = DescribeAmount(map);
+            var amountSummary = needsAmountChoice
+                ? "ambiguous (. vs , decimal) — choose a separator"
+                : DescribeAmount(map, amountDetection);
             var currencySummary = map.CurrencyColumn.HasValue
                 ? (accountCurrency == null
                     ? "currency column mapped (no account currency set)"
                     : $"{accountCurrency} only")
-                : null;
+                : (accountCurrency != null ? $"{accountCurrency} (codes in amount checked)" : null);
             var statusSummary = map.StatusColumn.HasValue
                 ? $"import {string.Join('/', allowedStatuses.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))}"
                 : null;
@@ -148,27 +160,64 @@ namespace Services.Banking
                 Records = records,
                 Summary = new StatementDetectionSummary
                 {
-                    Date = needsChoice
+                    Date = needsDateChoice
                         ? "ambiguous (dd/MM vs MM/dd) — choose a format"
                         : detection.Summary,
                     Amount = amountSummary,
                     Currency = currencySummary,
                     Status = statusSummary,
                     Header = headerSummary,
-                    NeedsDateFormatChoice = needsChoice
+                    NeedsDateFormatChoice = needsDateChoice,
+                    NeedsAmountFormatChoice = needsAmountChoice
                 }
             };
         }
 
-        private static string DescribeAmount(BankStatementColumnMap map)
+        private static IReadOnlyList<string?> CollectAmountSamples(
+            IReadOnlyList<IReadOnlyList<string>> records,
+            int dataStart,
+            BankStatementColumnMap map)
         {
-            if (map.AmountColumn.HasValue && map.DirectionColumn.HasValue)
-                return "unsigned + direction";
-            if (map.AmountColumn.HasValue)
-                return "signed amount";
-            if (map.DepositColumn.HasValue || map.WithdrawalColumn.HasValue)
-                return "deposit / withdrawal columns";
-            return "unmapped";
+            var list = new List<string?>();
+            foreach (var row in records.Skip(dataStart))
+            {
+                if (map.AmountColumn.HasValue)
+                    list.Add(Cell(row, map.AmountColumn.Value));
+                if (map.DepositColumn.HasValue)
+                    list.Add(Cell(row, map.DepositColumn.Value));
+                if (map.WithdrawalColumn.HasValue)
+                    list.Add(Cell(row, map.WithdrawalColumn.Value));
+                if (map.FeeColumn.HasValue)
+                    list.Add(Cell(row, map.FeeColumn.Value));
+            }
+            return list;
+        }
+
+        private static char? ParseUserDecimalSeparator(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+            var trimmed = value.Trim();
+            if (trimmed is "." or ",")
+                return trimmed[0];
+            throw new InvalidOperationException("Decimal separator must be '.' or ','.");
+        }
+
+        private static string DescribeAmount(
+            BankStatementColumnMap map,
+            StatementColumnDetector.AmountDetection amountDetection)
+        {
+            var shape = map.AmountColumn.HasValue && map.DirectionColumn.HasValue
+                ? "unsigned + direction"
+                : map.AmountColumn.HasValue
+                    ? "signed amount"
+                    : map.DepositColumn.HasValue || map.WithdrawalColumn.HasValue
+                        ? "deposit / withdrawal columns"
+                        : "unmapped";
+            if (amountDetection.Kind is StatementColumnDetector.AmountDecimalKind.Unknown
+                or StatementColumnDetector.AmountDecimalKind.Ambiguous)
+                return shape;
+            return $"{shape} · {amountDetection.Summary}";
         }
 
         private static IReadOnlyDictionary<string, int> BuildDirectionSigns(BankStatementColumnMap map)
@@ -215,51 +264,43 @@ namespace Services.Banking
             return value.Length == 0 ? null : value;
         }
 
+        /// <summary>
+        /// Prefer the delimiter that yields the strongest header-like row (not the first non-blank
+        /// preamble line).
+        /// </summary>
         private static char ResolveDelimiter(string content, string? requested)
         {
             if (!string.IsNullOrEmpty(requested))
                 return requested == "\\t" || requested == "\t" ? '\t' : requested[0];
 
-            var probeLine = FirstNonBlankLine(content);
             var best = ',';
-            var bestCount = 0;
+            var bestScore = -1;
             foreach (var candidate in new[] { ',', ';', '\t' })
             {
-                var count = 0;
-                var inQuotes = false;
-                foreach (var ch in probeLine)
+                var records = BankStatementParser.SplitCsvRecords(content, candidate);
+                var headerIndex = StatementColumnDetector.DetectHeaderRow(records);
+                int score;
+                if (headerIndex.HasValue)
                 {
-                    if (ch == '"') inQuotes = !inQuotes;
-                    else if (ch == candidate && !inQuotes) count++;
+                    var header = records[headerIndex.Value];
+                    var nonBlank = header.Count(c => !string.IsNullOrWhiteSpace(c));
+                    // Prefer a wide detected header over preamble lines.
+                    score = 1_000_000 + nonBlank;
                 }
-                if (count > bestCount)
+                else
+                {
+                    var first = FirstNonBlankIndex(records);
+                    score = first.HasValue
+                        ? records[first.Value].Count(c => !string.IsNullOrWhiteSpace(c))
+                        : 0;
+                }
+                if (score > bestScore)
                 {
                     best = candidate;
-                    bestCount = count;
+                    bestScore = score;
                 }
             }
             return best;
-        }
-
-        private static string FirstNonBlankLine(string content)
-        {
-            var start = 0;
-            var length = content.Length;
-            while (start < length)
-            {
-                var end = content.IndexOfAny(new[] { '\r', '\n' }, start);
-                if (end < 0)
-                    end = length;
-                var line = content[start..end];
-                if (!string.IsNullOrWhiteSpace(line))
-                    return line;
-                start = end;
-                if (start < length && content[start] == '\r')
-                    start++;
-                if (start < length && content[start] == '\n')
-                    start++;
-            }
-            return string.Empty;
         }
     }
 }

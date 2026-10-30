@@ -319,10 +319,13 @@ export interface BankStatementColumnMap {
   headerRowIndex?: number | null;
   delimiter?: string | null;
   dateFormat?: string | null;
+  /** '.' or ',' — required when the amount column is ambiguous. */
+  decimalSeparator?: string | null;
   dateColumn: number;
   amountColumn?: number | null;
   depositColumn?: number | null;
   withdrawalColumn?: number | null;
+  feeColumn?: number | null;
   directionColumn?: number | null;
   payeeColumn?: number | null;
   memoColumn?: number | null;
@@ -362,6 +365,7 @@ export interface BankStatementDetectionSummary {
   status?: string | null;
   header?: string | null;
   needsDateFormatChoice: boolean;
+  needsAmountFormatChoice?: boolean;
 }
 
 export interface BankStatementPreview {

@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -19,9 +20,25 @@ namespace Services.Banking
             if (string.IsNullOrWhiteSpace(content))
                 throw new InvalidOperationException("The statement file is empty.");
 
+            // Decide day/month order from every D field together — never guess from a single row.
+            var dateRaw = new List<string>();
+            foreach (var rawLine in content.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None))
+            {
+                var line = rawLine.TrimEnd();
+                if (line.Length > 1 && line[0] == 'D')
+                    dateRaw.Add(NormalizeQifDateToken(line[1..].Trim()));
+            }
+
+            var dateDetection = StatementColumnDetector.DetectDateFormat(dateRaw);
+            var dateFormat = dateDetection.Ambiguous ? null : dateDetection.Format;
+            var needsDateChoice = dateDetection.Ambiguous
+                || (dateDetection.Kind == StatementColumnDetector.DateKind.Unknown
+                    && dateRaw.Any(LooksNumericSlash));
+
             var rows = new List<ParsedStatementRow>();
             var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
             DateTime? date = null;
+            string? dateError = null;
             decimal? amount = null;
             string? payee = null;
             string? memo = null;
@@ -30,7 +47,7 @@ namespace Services.Banking
 
             void Flush()
             {
-                if (date == null && amount == null && payee == null && memo == null)
+                if (date == null && dateError == null && amount == null && payee == null && memo == null)
                     return;
                 number++;
                 if (rows.Count >= BankStatementParser.MaxRows)
@@ -38,6 +55,8 @@ namespace Services.Banking
                 var row = new ParsedStatementRow { RowNumber = number };
                 try
                 {
+                    if (dateError != null)
+                        throw new FormatException(dateError);
                     if (!date.HasValue)
                         throw new FormatException("Date is missing.");
                     if (!amount.HasValue || amount.Value == 0m)
@@ -55,6 +74,7 @@ namespace Services.Banking
                 }
                 rows.Add(row);
                 date = null;
+                dateError = null;
                 amount = null;
                 payee = null;
                 memo = null;
@@ -76,7 +96,20 @@ namespace Services.Banking
                 switch (code)
                 {
                     case 'D':
-                        date = ParseQifDate(value);
+                        try
+                        {
+                            var token = NormalizeQifDateToken(value);
+                            if (needsDateChoice && LooksNumericSlash(token))
+                                throw new FormatException(
+                                    $"Date '{value}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.");
+                            date = ParseQifDate(token, dateFormat, dateDetection);
+                            dateError = null;
+                        }
+                        catch (FormatException ex)
+                        {
+                            date = null;
+                            dateError = ex.Message;
+                        }
                         break;
                     case 'T':
                     case 'U':
@@ -100,19 +133,55 @@ namespace Services.Banking
             return rows;
         }
 
-        private static DateTime ParseQifDate(string raw)
+        private static DateTime ParseQifDate(
+            string normalized,
+            string? detectedFormat,
+            StatementColumnDetector.DateDetection detection)
         {
-            // Common: M/D/YY, M/D'YY, DD/MM/YYYY
-            var normalized = raw.Replace('\'', '/');
-            string[] formats =
+            if (detection.Kind == StatementColumnDetector.DateKind.Iso8601
+                || (normalized.Length >= 10 && normalized[4] == '-' && normalized[7] == '-'))
             {
-                "M/d/yy", "M/d/yyyy", "d/M/yy", "d/M/yyyy",
-                "MM/dd/yy", "MM/dd/yyyy", "dd/MM/yy", "dd/MM/yyyy",
-                "yyyy-MM-dd"
-            };
-            if (DateTime.TryParseExact(normalized, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-                return date;
-            throw new FormatException($"Date '{raw}' is not recognised.");
+                if (DateTime.TryParseExact(normalized, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var iso))
+                    return iso;
+            }
+
+            if (!string.IsNullOrWhiteSpace(detectedFormat))
+            {
+                var formats = Expand(detectedFormat);
+                if (DateTime.TryParseExact(normalized, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var exact))
+                    return exact;
+                throw new FormatException($"Date '{normalized}' does not match the format '{detectedFormat}'.");
+            }
+
+            if (detection.Kind == StatementColumnDetector.DateKind.MonthName)
+            {
+                foreach (var f in StatementColumnDetector.MonthNameExactFormats)
+                {
+                    if (DateTime.TryParseExact(normalized, f, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var named))
+                        return named;
+                }
+            }
+
+            throw new FormatException(
+                $"Date '{normalized}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.");
+        }
+
+        private static string[] Expand(string format)
+        {
+            var trimmed = format.Trim();
+            if (trimmed.StartsWith('d') || trimmed.StartsWith('D'))
+                return new[] { trimmed, "d/M/yyyy", "dd/MM/yyyy", "d/M/yy", "dd/MM/yy", "d-M-yyyy", "dd-MM-yyyy" };
+            if (trimmed.StartsWith('M'))
+                return new[] { trimmed, "M/d/yyyy", "MM/dd/yyyy", "M/d/yy", "MM/dd/yy", "M-d-yyyy", "MM-dd-yyyy" };
+            return new[] { trimmed };
+        }
+
+        private static string NormalizeQifDateToken(string raw) => raw.Replace('\'', '/').Trim();
+
+        private static bool LooksNumericSlash(string value)
+        {
+            var parts = value.Split('/', '-', '.');
+            return parts.Length == 3 && parts.All(p => p.Length > 0 && p.All(char.IsDigit));
         }
 
         private static string SyntheticId(ParsedStatementRow row, Dictionary<string, int> occurrences)

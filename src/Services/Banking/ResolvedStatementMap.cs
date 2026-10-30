@@ -53,6 +53,12 @@ namespace Services.Banking
             StatementImportResolver.DefaultAllowedStatuses;
         public bool InvertSign { get; init; }
         public StatementColumnDetector.DateDetection? DateDetection { get; init; }
+        public StatementColumnDetector.AmountDetection? AmountDetection { get; init; }
+        /// <summary>`.` or `,` when resolved; null → per-value grouping rules (OFX-style).</summary>
+        public char? AmountDecimalSeparator { get; init; }
+        /// <summary>True when the amount column is ambiguous and the user has not chosen a separator.</summary>
+        public bool NeedsAmountFormatChoice { get; init; }
+        public int? FeeColumn { get; init; }
     }
 
     /// <summary>Human-readable detection notes for the import preview.</summary>
@@ -64,5 +70,6 @@ namespace Services.Banking
         public string? Status { get; init; }
         public string? Header { get; init; }
         public bool NeedsDateFormatChoice { get; init; }
+        public bool NeedsAmountFormatChoice { get; init; }
     }
 }
