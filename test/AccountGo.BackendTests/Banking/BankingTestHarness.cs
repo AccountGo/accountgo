@@ -10,6 +10,7 @@ using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Purchases;
 using Core.Domain.Sales;
+using Core.Domain.TaxSystem;
 using Core.Entitlements;
 using Core.Tenancy;
 using Dto.Banking;
@@ -339,6 +340,7 @@ internal sealed class BankingInMemoryRepos
     public BankingMemoryRepo<JournalEntryHeader> Journals { get; } = new();
     public BankingMemoryRepo<Customer> Customers { get; } = new();
     public BankingMemoryRepo<Vendor> Vendors { get; } = new();
+    public BankingMemoryRepo<Tax> Taxes { get; } = new();
     public BankingMemoryRepo<Party> Parties { get; } = new();
     public BankingMemoryRepo<SequenceNumber> Sequences { get; } = new();
     public BankingMemoryRepo<GeneralLedgerSetting> GlSettings { get; } = new();

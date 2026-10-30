@@ -65,5 +65,19 @@ namespace Core.Domain.Purchases
         /// <summary>Tax on top of the subtotal at the tax's rate, to the cent.</summary>
         public static decimal TaxOf(decimal subtotal, decimal? rate) =>
             rate is > 0 ? Math.Round(subtotal * rate.Value / 100m, 2, MidpointRounding.AwayFromZero) : 0;
+
+        /// <summary>
+        /// Splits a tax-inclusive (gross) amount into net + tax that sum to the gross exactly:
+        /// tax = round(gross × rate / (100 + rate)), net = gross − tax.
+        /// Callers that persist this pair must keep <see cref="TaxAmount"/> as given (not recalculate via
+        /// <see cref="TaxOf"/>), because tax-on-top of the net is not always invertible to the cent.
+        /// </summary>
+        public static (decimal Net, decimal Tax) SplitInclusive(decimal inclusive, decimal? rate)
+        {
+            if (rate is not > 0)
+                return (inclusive, 0m);
+            var tax = Math.Round(inclusive * rate.Value / (100m + rate.Value), 2, MidpointRounding.AwayFromZero);
+            return (inclusive - tax, tax);
+        }
     }
 }

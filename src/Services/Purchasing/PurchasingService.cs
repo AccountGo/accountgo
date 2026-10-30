@@ -312,7 +312,7 @@ namespace Services.Purchasing
         /// Saves a draft bill. Each line gets its account (the default when none was picked) and its tax, worked out from
         /// the line's tax rate and stored, so the bill keeps what it was entered with.
         /// </summary>
-        public void SaveBill(PurchaseInvoiceHeader bill)
+        public void SaveBill(PurchaseInvoiceHeader bill, bool preserveTaxAmounts = false)
         {
             bill.EnsureEditable();
             if (bill.Id == 0)
@@ -342,7 +342,8 @@ namespace Services.Purchasing
 
                 line.AccountId = accountId;
                 line.Cost = line.Amount;
-                line.TaxAmount = PurchaseInvoiceLine.TaxOf(line.Subtotal, tax?.Rate);
+                if (!preserveTaxAmounts)
+                    line.TaxAmount = PurchaseInvoiceLine.TaxOf(line.Subtotal, tax?.Rate);
             }
 
             bill.VendorInvoiceNo ??= "";
