@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  clampStatementLinePage,
   detectDelimiter,
   hasAmountMapping,
   importSummary,
@@ -70,4 +71,13 @@ test('importSummary describes the result', () => {
     importSummary({ imported: 3, duplicates: 2, errors: 1, autoMatched: 2 }),
     'Imported 3 lines, 2 matched automatically, 2 already imported, 1 skipped with errors.',
   );
+});
+
+test('clampStatementLinePage steps back when the last page is emptied', () => {
+  // Matched the only line on page 2 of unmatched (was 101 total → now 100).
+  assert.equal(clampStatementLinePage(2, 100, 100), 1);
+  assert.equal(clampStatementLinePage(3, 201, 100), 3);
+  assert.equal(clampStatementLinePage(3, 200, 100), 2);
+  assert.equal(clampStatementLinePage(5, 0, 100), 1);
+  assert.equal(clampStatementLinePage(0, 50, 100), 1);
 });

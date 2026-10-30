@@ -159,3 +159,14 @@ export function importSummary(result: {
   if (result.errors > 0) parts.push(`${result.errors} skipped with errors`);
   return `${parts.join(', ')}.`;
 }
+
+/**
+ * After matching or creating the last line on a page, totalCount can drop so the
+ * requested page is past the end. Clamp to the last page that still has rows (or 1).
+ */
+export function clampStatementLinePage(page: number, totalCount: number, pageSize: number): number {
+  const size = Math.max(1, pageSize);
+  const requested = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
+  const lastPage = Math.max(1, Math.ceil(Math.max(0, totalCount) / size));
+  return Math.min(requested, lastPage);
+}
