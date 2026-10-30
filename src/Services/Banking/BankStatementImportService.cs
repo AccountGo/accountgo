@@ -153,30 +153,34 @@ namespace Services.Banking
             if (pageSize > MaxListPageSize)
                 pageSize = MaxListPageSize;
 
-            var all = _lines.Table
-                .Where(l => l.CompanyId == companyId && l.BankId == bank.Id)
+            // Counts and the page slice stay on the query; only the current page (and the unmatched
+            // set needed for candidate uniqueness) are materialised.
+            var bankLines = _lines.Table.Where(l => l.CompanyId == companyId && l.BankId == bank.Id);
+            var unmatchedCount = bankLines.Count(l => l.MatchedGeneralLedgerLineId == null);
+            var matchedCount = bankLines.Count() - unmatchedCount;
+
+            IQueryable<BankStatementLine> filtered = normalized switch
+            {
+                StatusMatched => bankLines.Where(l => l.MatchedGeneralLedgerLineId != null),
+                StatusAll => bankLines,
+                _ => bankLines.Where(l => l.MatchedGeneralLedgerLineId == null)
+            };
+            var totalCount = filtered.Count();
+            var pageRows = filtered
                 .OrderBy(l => l.PostedDate).ThenBy(l => l.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToList();
 
-            var unmatched = all.Where(l => !l.MatchedGeneralLedgerLineId.HasValue).ToList();
-            var matchedCount = all.Count - unmatched.Count;
-
-            IReadOnlyList<BankStatementLine> selected = normalized switch
-            {
-                StatusMatched => all.Where(l => l.MatchedGeneralLedgerLineId.HasValue).ToList(),
-                StatusAll => all,
-                _ => unmatched
-            };
-            var totalCount = selected.Count;
-            var pageRows = selected.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-
-            // Candidate uniqueness is bank-wide, so the pool covers every unmatched line even when this page is a slice.
+            var unmatched = unmatchedCount == 0
+                ? new List<BankStatementLine>()
+                : bankLines.Where(l => l.MatchedGeneralLedgerLineId == null).ToList();
             var candidatePool = unmatched.Count == 0
                 ? Array.Empty<PoolEntry>()
                 : LoadCandidatePool(bank, unmatched);
             return new BankStatementLineListDto
             {
-                UnmatchedCount = unmatched.Count,
+                UnmatchedCount = unmatchedCount,
                 MatchedCount = matchedCount,
                 TotalCount = totalCount,
                 Page = page,
