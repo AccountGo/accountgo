@@ -214,13 +214,15 @@ public class BankStatementParserTests
 
     [Theory]
     [InlineData("1,234.56", 1234.56)]
+    [InlineData("1.234,56", 1234.56)]
+    [InlineData("1234.56", 1234.56)]
+    [InlineData("-0.50", -0.50)]
     [InlineData("-1,234.56", -1234.56)]
     [InlineData("1,234", 1234)]
     [InlineData("-12,345,678.90", -12345678.90)]
     [InlineData("12,50", 12.50)]
-    [InlineData("-0,5", -0.5)]
     [InlineData("1250.50", 1250.50)]
-    public void Ofx_AmountKeepsThousandsCommaOutOfTheDecimalPoint(string raw, double expected)
+    public void Ofx_AmountTreatsLastSeparatorAsDecimalOnlyWithExactlyTwoFractionDigits(string raw, double expected)
     {
         var ofx = $"<OFX><BANKTRANLIST><STMTTRN><DTPOSTED>20261001<TRNAMT>{raw}<FITID>T1<NAME>X</STMTTRN></BANKTRANLIST></OFX>";
 
