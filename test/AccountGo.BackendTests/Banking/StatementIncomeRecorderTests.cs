@@ -107,18 +107,7 @@ public class StatementIncomeRecorderTests
 
         harness.Entitlements.Setup(e => e.Bypass()).Returns(Mock.Of<IDisposable>());
 
-        var recorder = new StatementIncomeRecorder(
-            harness.Repos.StatementLines,
-            harness.Repos.Banks,
-            harness.Repos.Accounts,
-            harness.Repos.Customers,
-            harness.Repos.GlLines,
-            sales.Object,
-            inventory.Object,
-            financial.Object,
-            harness.Banks,
-            harness.Entitlements.Object,
-            new BankingTestHarness.FakeTenant(1));
+        var recorder = Build(harness, sales, inventory, financial);
 
         var result = recorder.Record(line.Id, new RecordOtherIncomeFromStatementLineRequest
         {
@@ -145,22 +134,133 @@ public class StatementIncomeRecorderTests
         var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
         var financial = new Mock<IFinancialService>(MockBehavior.Loose);
 
+        var recorder = Build(harness, sales, inventory, financial);
+
+        var dto = recorder.ListIncomeCategories();
+        Assert.Contains(dto.Curated, c => c.Name == "Other income");
+        Assert.Contains(dto.Curated, c => c.Name == "Interest income");
+    }
+
+
+    [Fact]
+    public void Record_rejects_non_null_TaxId()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        SeedRevenue(harness);
+        var bank = harness.CreateBank("Checking");
+        var line = SeedDeposit(harness, bank.Id, 10m, "X", BankingTestHarness.Utc(2026, 9, 2));
+        var sales = new Mock<ISalesService>(MockBehavior.Strict);
+        var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
+        var financial = new Mock<IFinancialService>(MockBehavior.Loose);
+        var recorder = Build(harness, sales, inventory, financial);
+        Assert.Throws<InvalidOperationException>(() => recorder.Record(line.Id, new RecordOtherIncomeFromStatementLineRequest
+        {
+            IncomeAccountId = harness.RequireAccount("40600").Id,
+            TaxId = 1
+        }, "t"));
+    }
+
+    [Fact]
+    public void Record_captures_seller_bill_to_and_payment_instructions_at_issue()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        SeedRevenue(harness);
+        var bank = harness.CreateBank("Checking");
+        var line = SeedDeposit(harness, bank.Id, 20m, "Gig", BankingTestHarness.Utc(2026, 9, 3));
+        harness.Repos.Accounts.Insert(new Account
+        {
+            Id = 91, CompanyId = 1, AccountCode = "10120", AccountName = "AR",
+            AccountClassId = (int)AccountClasses.Assets, DrOrCrSide = DrOrCrSide.Dr
+        });
+        var customer = new Customer
+        {
+            Id = 8, CompanyId = 1, IsSystem = true, AccountsReceivableAccountId = 91,
+            Party = new Party { Name = StatementIncomeRecorder.OtherIncomeCustomerName }
+        };
+        harness.Repos.Customers.Insert(customer);
+        var item = new Item
+        {
+            Id = 5, CompanyId = 1, Description = StatementIncomeRecorder.GeneralItemName,
+            SellMeasurementId = 1, SmallestMeasurementId = 1,
+            SalesAccountId = harness.RequireAccount("40600").Id
+        };
+
+        SalesInvoiceHeader? saved = null;
+        var sales = new Mock<ISalesService>(MockBehavior.Strict);
+        sales.Setup(s => s.SaveSalesInvoice(It.IsAny<SalesInvoiceHeader>(), It.IsAny<SalesOrderHeader>()))
+            .Callback<SalesInvoiceHeader, SalesOrderHeader>((inv, _) =>
+            {
+                saved = inv; inv.Id = 50; inv.No = "INV-50"; inv.CompanyId = 1;
+                harness.Repos.SalesInvoices.Insert(inv);
+            });
+        sales.Setup(s => s.PostSalesInvoice(50));
+        sales.Setup(s => s.GetSalesInvoiceById(50)).Returns(() => { saved!.Customer = customer; return saved; });
+        sales.Setup(s => s.AddSalesReceipt(It.IsAny<SalesReceiptHeader>()))
+            .Callback<SalesReceiptHeader>(r =>
+            {
+                r.Id = 60; r.No = "R60";
+                var hid = harness.Repos.NextGlHeaderId();
+                r.GeneralLedgerHeaderId = hid;
+                harness.Repos.GlLines.Insert(new GeneralLedgerLine
+                {
+                    Id = harness.Repos.NextGlLineId(), CompanyId = 1, GeneralLedgerHeaderId = hid,
+                    AccountId = bank.AccountId!.Value, DrCr = DrOrCrSide.Dr, Amount = 20m
+                });
+            });
+        sales.Setup(s => s.UpdateSalesInvoice(It.IsAny<SalesInvoiceHeader>()));
+        var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
+        inventory.Setup(i => i.GetAllItems()).Returns(new List<Item> { item });
+        var financial = new Mock<IFinancialService>(MockBehavior.Loose);
+        harness.Entitlements.Setup(e => e.Bypass()).Returns(Mock.Of<IDisposable>());
+
+        var tenant = new BankingTestHarness.FakeTenant(1);
+        var catalog = new DocumentLineAccountCatalog(harness.Repos.Accounts, harness.Repos.Customers, tenant);
+        var snapshots = new Mock<IIssuedInvoiceSnapshotCapture>(MockBehavior.Strict);
+        snapshots.Setup(s => s.CaptureSellerAndBillToIfIssued(It.IsAny<SalesInvoiceHeader>()));
+        snapshots.Setup(s => s.CapturePaymentInstructionsIfIssued(It.IsAny<SalesInvoiceHeader>())).Returns(true);
         var recorder = new StatementIncomeRecorder(
+            harness.Repos.StatementLines, harness.Repos.Banks, harness.Repos.Customers,
+            harness.Repos.GlLines, sales.Object, inventory.Object, financial.Object, harness.Banks,
+            catalog, snapshots.Object, new InvoicePaymentRecorder(sales.Object),
+            harness.Entitlements.Object, tenant);
+
+        recorder.Record(line.Id, new RecordOtherIncomeFromStatementLineRequest
+        {
+            IncomeAccountId = harness.RequireAccount("40600").Id
+        }, "t");
+
+        snapshots.Verify(s => s.CaptureSellerAndBillToIfIssued(It.IsAny<SalesInvoiceHeader>()), Times.Once);
+        snapshots.Verify(s => s.CapturePaymentInstructionsIfIssued(It.IsAny<SalesInvoiceHeader>()), Times.Once);
+    }
+
+
+    private static StatementIncomeRecorder Build(
+        BankingTestHarness harness,
+        Mock<ISalesService> sales,
+        Mock<IInventoryService> inventory,
+        Mock<IFinancialService> financial)
+    {
+        var tenant = new BankingTestHarness.FakeTenant(1);
+        var catalog = new DocumentLineAccountCatalog(
+            harness.Repos.Accounts, harness.Repos.Customers, tenant);
+        var snapshots = new Mock<IIssuedInvoiceSnapshotCapture>(MockBehavior.Loose);
+        var payments = new InvoicePaymentRecorder(sales.Object);
+        return new StatementIncomeRecorder(
             harness.Repos.StatementLines,
             harness.Repos.Banks,
-            harness.Repos.Accounts,
             harness.Repos.Customers,
             harness.Repos.GlLines,
             sales.Object,
             inventory.Object,
             financial.Object,
             harness.Banks,
+            catalog,
+            snapshots.Object,
+            payments,
             harness.Entitlements.Object,
-            new BankingTestHarness.FakeTenant(1));
-
-        var dto = recorder.ListIncomeCategories();
-        Assert.Contains(dto.Curated, c => c.Name == "Other income");
-        Assert.Contains(dto.Curated, c => c.Name == "Interest income");
+            tenant);
     }
 
     private static void SeedRevenue(BankingTestHarness harness)

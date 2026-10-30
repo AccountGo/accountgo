@@ -93,6 +93,48 @@ namespace Services.Financial
             return true;
         }
 
+
+        public IReadOnlyList<Account> ListIncomeLineAccounts()
+        {
+            EnsureCompany();
+            var companyId = _tenant.RequireCompanyId();
+            var childParentIds = ChildParentIds(companyId);
+
+            return _accounts.Table
+                .Where(a => a.CompanyId == companyId
+                    && a.ArchivedAt == null
+                    && !a.IsContraAccount
+                    && a.AccountClassId == (int)AccountClasses.Revenue
+                    && !a.IsCash)
+                .AsEnumerable()
+                .Where(a => !childParentIds.Contains(a.Id))
+                .OrderBy(a => a.AccountCode)
+                .ToList();
+        }
+
+        public void EnsureIncomeLineAccount(int accountId)
+        {
+            if (accountId <= 0)
+                throw new InvalidOperationException("Pick an income category.");
+            EnsureCompany();
+            var companyId = _tenant.RequireCompanyId();
+            var account = _accounts.Table.FirstOrDefault(a => a.Id == accountId && a.CompanyId == companyId)
+                ?? throw new TenantEntityNotFoundException(typeof(Account).Name, accountId);
+            if (!IsEligibleIncomeLine(account, companyId))
+                throw new InvalidOperationException("Pick a revenue category that can take an invoice posting.");
+        }
+
+        private bool IsEligibleIncomeLine(Account account, int companyId)
+        {
+            if (account.ArchivedAt != null || account.IsContraAccount || account.IsCash)
+                return false;
+            if (account.AccountClassId != (int)AccountClasses.Revenue)
+                return false;
+            if (_accounts.Table.Any(c => c.ParentAccountId == account.Id && c.CompanyId == companyId))
+                return false;
+            return true;
+        }
+
         private HashSet<int> ReceivableAccountIds(int companyId) =>
             _customers.Table
                 .Where(c => c.CompanyId == companyId && c.AccountsReceivableAccountId != null)

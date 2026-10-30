@@ -34,38 +34,44 @@ namespace Services.Banking
 
         private readonly IRepository<BankStatementLine> _lines;
         private readonly IRepository<Bank> _banks;
-        private readonly IRepository<Account> _accounts;
         private readonly IRepository<Customer> _customers;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly ISalesService _sales;
         private readonly IInventoryService _inventory;
         private readonly IFinancialService _financial;
         private readonly IBankAccountService _bankAccounts;
+        private readonly IDocumentLineAccountCatalog _lineAccounts;
+        private readonly IIssuedInvoiceSnapshotCapture _issueSnapshots;
+        private readonly IInvoicePaymentRecorder _invoicePayments;
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
 
         public StatementIncomeRecorder(
             IRepository<BankStatementLine> lines,
             IRepository<Bank> banks,
-            IRepository<Account> accounts,
             IRepository<Customer> customers,
             IRepository<GeneralLedgerLine> glLines,
             ISalesService sales,
             IInventoryService inventory,
             IFinancialService financial,
             IBankAccountService bankAccounts,
+            IDocumentLineAccountCatalog lineAccounts,
+            IIssuedInvoiceSnapshotCapture issueSnapshots,
+            IInvoicePaymentRecorder invoicePayments,
             IEntitlementService entitlements,
             ITenantContext tenant)
         {
             _lines = lines;
             _banks = banks;
-            _accounts = accounts;
             _customers = customers;
             _glLines = glLines;
             _sales = sales;
             _inventory = inventory;
             _financial = financial;
             _bankAccounts = bankAccounts;
+            _lineAccounts = lineAccounts;
+            _issueSnapshots = issueSnapshots;
+            _invoicePayments = invoicePayments;
             _entitlements = entitlements;
             _tenant = tenant;
         }
@@ -73,16 +79,7 @@ namespace Services.Banking
         public StatementIncomeCategoriesDto ListIncomeCategories()
         {
             EnsureCompany();
-            var companyId = _tenant.RequireCompanyId();
-            var leaves = _accounts.Table
-                .Where(a => a.CompanyId == companyId
-                    && a.ArchivedAt == null
-                    && !a.IsContraAccount
-                    && a.AccountClassId == (int)AccountClasses.Revenue
-                    && !a.IsCash)
-                .ToList()
-                .Where(a => !_accounts.Table.Any(c => c.ParentAccountId == a.Id && c.CompanyId == companyId))
-                .ToList();
+            var leaves = _lineAccounts.ListIncomeLineAccounts();
 
             var curated = new List<StatementIncomeCategoryDto>();
             var used = new HashSet<int>();
@@ -118,10 +115,13 @@ namespace Services.Banking
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
 
+            if (request.TaxId is > 0)
+                throw new InvalidOperationException("Tax is not supported on Record other income yet.");
+
             var line = RequireUnmatchedDepositLine(lineId);
             var bank = RequireActiveBank(line.BankId);
             var amount = Math.Abs(line.Amount);
-            EnsureIncomeAccount(request.IncomeAccountId);
+            _lineAccounts.EnsureIncomeLineAccount(request.IncomeAccountId);
 
             var customer = ResolveCustomer(request.CustomerId);
             var item = ResolveGeneralItem();
@@ -153,7 +153,6 @@ namespace Services.Banking
                 MeasurementId = measurementId,
                 Quantity = 1m,
                 Amount = amount,
-                TaxId = request.TaxId,
                 Description = description,
                 SalesAccountId = request.IncomeAccountId,
                 SalesOrderLine = orderLine
@@ -180,39 +179,22 @@ namespace Services.Banking
             invoice = _sales.GetSalesInvoiceById(invoice.Id)
                 ?? throw new InvalidOperationException("The invoice could not be reloaded after posting.");
 
+            _issueSnapshots.CaptureSellerAndBillToIfIssued(invoice);
+            _issueSnapshots.CapturePaymentInstructionsIfIssued(invoice);
+
             var depositAccountId = _bankAccounts.ResolveDepositAccountId(bank.Id);
             var arAccountId = customer.AccountsReceivableAccountId
                 ?? throw new InvalidOperationException("That customer has no accounts receivable account.");
 
-            var receipt = new SalesReceiptHeader
-            {
-                CustomerId = customer.Id,
-                Date = line.PostedDate.Date,
-                Amount = amount,
-                AccountToDebitId = depositAccountId,
-                PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "Bank Transfer" : request.PaymentMethod.Trim(),
-                ReferenceNo = FirstNonBlank(line.Reference, invoice.No),
-                Memo = FirstNonBlank(request.Memo, line.Memo, line.Payee)
-            };
-            receipt.SalesReceiptLines.Add(new SalesReceiptLine
-            {
-                Quantity = 1,
-                Amount = amount,
-                AmountPaid = amount,
-                AccountToCreditId = arAccountId
-            });
-            _sales.AddSalesReceipt(receipt);
-
-            var allocation = new CustomerAllocation
-            {
-                CustomerId = customer.Id,
-                Date = line.PostedDate.Date,
-                SalesInvoiceHeaderId = invoice.Id,
-                SalesReceiptHeaderId = receipt.Id,
-                Amount = amount
-            };
-            invoice.CustomerAllocations.Add(allocation);
-            invoice.RefreshPaymentStatus();
+            var receipt = _invoicePayments.RecordAllocatedReceipt(
+                invoice,
+                amount,
+                line.PostedDate.Date,
+                depositAccountId,
+                arAccountId,
+                request.PaymentMethod,
+                FirstNonBlank(line.Reference, invoice.No),
+                FirstNonBlank(request.Memo, line.Memo, line.Payee));
             _sales.UpdateSalesInvoice(invoice);
 
             LinkLineToBankDebit(line, bank, receipt);
@@ -325,17 +307,6 @@ namespace Services.Banking
             };
             _inventory.AddItem(item);
             return item;
-        }
-
-        private void EnsureIncomeAccount(int accountId)
-        {
-            if (accountId <= 0)
-                throw new InvalidOperationException("Pick an income category.");
-            var companyId = _tenant.RequireCompanyId();
-            var account = _accounts.Table.FirstOrDefault(a => a.Id == accountId && a.CompanyId == companyId)
-                ?? throw new TenantEntityNotFoundException(typeof(Account).Name, accountId);
-            if (account.AccountClassId != (int)AccountClasses.Revenue || account.IsContraAccount)
-                throw new InvalidOperationException("Pick an income category.");
         }
 
         private void LinkLineToBankDebit(BankStatementLine line, Bank bank, SalesReceiptHeader receipt)
