@@ -184,6 +184,109 @@ public class StatementLineExpenseServiceTests
     }
 
     [Fact]
+    public void RecordExpense_remembers_description_rule_and_FindDescriptionRule_returns_it()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        SeedExpenseTree(harness);
+        var bank = harness.CreateBank("Checking");
+        var line = ImportPayment(harness, bank.Id, -12m, "Figma", BankingTestHarness.Utc(2026, 8, 1));
+        var expenseAccountId = harness.RequireAccount("50115").Id;
+
+        var purchasing = new Mock<IPurchasingService>(MockBehavior.Strict);
+        purchasing.Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()))
+            .Callback<PurchaseInvoiceHeader, bool>((b, _) => { b.Id = 1; b.No = "B1"; harness.Repos.PurchaseInvoices.Insert(b); });
+        purchasing.Setup(p => p.ApproveBill(1, It.IsAny<string?>(), It.IsAny<DateTime>()));
+        purchasing.Setup(p => p.AddVendor(It.IsAny<Vendor>()))
+            .Callback<Vendor>(v => { v.Id = 2; v.CompanyId = 1; harness.Repos.Vendors.Insert(v); });
+        var headerId = harness.Repos.NextGlHeaderId();
+        harness.Repos.GlLines.Insert(new GeneralLedgerLine
+        {
+            Id = harness.Repos.NextGlLineId(),
+            CompanyId = 1,
+            GeneralLedgerHeaderId = headerId,
+            AccountId = bank.AccountId!.Value,
+            DrCr = DrOrCrSide.Cr,
+            Amount = 12m
+        });
+        purchasing.Setup(p => p.PayBill(1, bank.AccountId!.Value, 12m, It.IsAny<DateTime>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns(new VendorPayment { Id = 3, No = "P3", GeneralLedgerHeaderId = headerId, Amount = 12m });
+        harness.Entitlements.Setup(e => e.Bypass()).Returns(Mock.Of<IDisposable>());
+
+        var service = Build(harness, purchasing);
+        Assert.Null(service.FindDescriptionRule("Figma"));
+        service.RecordExpense(line.Id, new RecordExpenseFromStatementLineRequest
+        {
+            NewVendor = new QuickVendorFromStatementRequest { Name = "Figma" },
+            ExpenseAccountId = expenseAccountId,
+            RememberRule = true
+        }, "t");
+
+        var rule = service.FindDescriptionRule("  figma ");
+        Assert.NotNull(rule);
+        Assert.Equal("figma", rule!.DescriptionKey);
+        Assert.Equal(2, rule.VendorId);
+        Assert.Equal(expenseAccountId, rule.ExpenseAccountId);
+    }
+
+    [Fact]
+    public void BulkRecordExpense_creates_one_bill_per_line()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        SeedExpenseTree(harness);
+        var bank = harness.CreateBank("Checking");
+        var a = ImportPayment(harness, bank.Id, -10m, "Acme", BankingTestHarness.Utc(2026, 8, 2));
+        var b = ImportPayment(harness, bank.Id, -20m, "Acme", BankingTestHarness.Utc(2026, 8, 3));
+        var expenseAccountId = harness.RequireAccount("50115").Id;
+        harness.Repos.Vendors.Insert(new Vendor { Id = 9, CompanyId = 1 });
+
+        var saveCount = 0;
+        var purchasing = new Mock<IPurchasingService>(MockBehavior.Strict);
+        purchasing.Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()))
+            .Callback<PurchaseInvoiceHeader, bool>((bill, _) =>
+            {
+                saveCount++;
+                bill.Id = saveCount;
+                bill.No = $"B{saveCount}";
+                harness.Repos.PurchaseInvoices.Insert(bill);
+            });
+        purchasing.Setup(p => p.ApproveBill(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<DateTime>()));
+        purchasing.Setup(p => p.PayBill(It.IsAny<int>(), bank.AccountId!.Value, It.IsAny<decimal>(), It.IsAny<DateTime>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns((int billId, int _, decimal amount, DateTime __, string? ___, string? ____, string? _____) =>
+            {
+                var headerId = harness.Repos.NextGlHeaderId();
+                harness.Repos.GlLines.Insert(new GeneralLedgerLine
+                {
+                    Id = harness.Repos.NextGlLineId(),
+                    CompanyId = 1,
+                    GeneralLedgerHeaderId = headerId,
+                    AccountId = bank.AccountId!.Value,
+                    DrCr = DrOrCrSide.Cr,
+                    Amount = amount
+                });
+                return new VendorPayment { Id = billId + 100, No = $"P{billId}", GeneralLedgerHeaderId = headerId, Amount = amount };
+            });
+        harness.Entitlements.Setup(e => e.Bypass()).Returns(Mock.Of<IDisposable>());
+
+        var service = Build(harness, purchasing);
+        var result = service.BulkRecordExpense(new BulkRecordExpenseFromStatementLinesRequest
+        {
+            LineIds = new[] { a.Id, b.Id },
+            VendorId = 9,
+            ExpenseAccountId = expenseAccountId,
+            RememberRule = true
+        }, "t");
+
+        Assert.Equal(2, result.Results.Count);
+        Assert.Equal(2, saveCount);
+        Assert.NotNull(result.Rule);
+        Assert.Equal("acme", result.Rule!.DescriptionKey);
+    }
+
+    [Fact]
     public void RecordExpense_rejects_deposit_lines_and_already_matched()
     {
         using var harness = new BankingTestHarness();
@@ -374,6 +477,35 @@ public class StatementLineExpenseServiceTests
         Assert.NotEqual(expectedTax, PurchaseInvoiceLine.TaxOf(billLine.Amount, 12m));
     }
 
+    [Theory]
+    [InlineData("Figma INV-123 2026-03-15", "figma")]
+    [InlineData("AWS ref:AB12 fees 99.00", "aws fees")]
+    [InlineData("Store 01/02/2026 #44", "store")]
+    public void NormalizeDescriptionKey_strips_digits_dates_and_refs(string input, string expected)
+    {
+        Assert.Equal(expected, StatementLineExpenseService.NormalizeDescriptionKey(input));
+    }
+
+    [Fact]
+    public void FindDescriptionRule_skips_archived_vendor_or_account()
+    {
+        using var harness = new BankingTestHarness();
+        SeedExpenseTree(harness);
+        harness.Repos.Vendors.Insert(new Vendor { Id = 1, CompanyId = 1, ArchivedAt = DateTime.UtcNow });
+        harness.Repos.StatementDescriptionRules.Insert(new BankStatementDescriptionRule
+        {
+            Id = 1,
+            CompanyId = 1,
+            DescriptionKey = "figma",
+            VendorId = 1,
+            ExpenseAccountId = harness.RequireAccount("50115").Id,
+            CreatedAt = DateTime.UtcNow,
+            LastUsedAt = DateTime.UtcNow
+        });
+        var service = Build(harness, new Mock<IPurchasingService>(MockBehavior.Strict));
+        Assert.Null(service.FindDescriptionRule("Figma"));
+    }
+
     private static StatementLineExpenseService Build(BankingTestHarness harness, Mock<IPurchasingService> purchasing)
     {
         var tenant = new BankingTestHarness.FakeTenant(1);
@@ -384,10 +516,12 @@ public class StatementLineExpenseServiceTests
         return new StatementLineExpenseService(
             harness.Repos.StatementLines,
             harness.Repos.Banks,
+            harness.Repos.Accounts,
             harness.Repos.Vendors,
             harness.Repos.PurchaseInvoices,
             harness.Repos.GlLines,
             harness.Repos.Taxes,
+            harness.Repos.StatementDescriptionRules,
             purchasing.Object,
             harness.Banks,
             catalog,

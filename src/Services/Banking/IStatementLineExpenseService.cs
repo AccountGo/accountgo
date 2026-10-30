@@ -14,6 +14,9 @@ namespace Services.Banking
     {
         StatementExpenseCategoriesDto ListExpenseCategories();
 
+        /// <summary>Look up a remembered vendor + category for a bank description (#436 I4).</summary>
+        StatementDescriptionRuleDto? FindDescriptionRule(string? description);
+
         RecordExpenseFromStatementLineResultDto RecordExpense(
             int lineId,
             RecordExpenseFromStatementLineRequest request,
@@ -22,6 +25,11 @@ namespace Services.Banking
         PayOpenBillFromStatementLineResultDto PayOpenBill(
             int lineId,
             PayOpenBillFromStatementLineRequest request,
+            string actor);
+
+        /// <summary>One paid bill per line; never a combined bill (#436 I4).</summary>
+        BulkRecordExpenseFromStatementLinesResultDto BulkRecordExpense(
+            BulkRecordExpenseFromStatementLinesRequest request,
             string actor);
     }
 }

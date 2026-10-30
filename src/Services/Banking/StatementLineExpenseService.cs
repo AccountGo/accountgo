@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -38,10 +39,12 @@ namespace Services.Banking
 
         private readonly IRepository<BankStatementLine> _lines;
         private readonly IRepository<Bank> _banks;
+        private readonly IRepository<Account> _accounts;
         private readonly IRepository<Vendor> _vendors;
         private readonly IRepository<PurchaseInvoiceHeader> _bills;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<Tax> _taxes;
+        private readonly IRepository<BankStatementDescriptionRule> _rules;
         private readonly IPurchasingService _purchasing;
         private readonly IBankAccountService _bankAccounts;
         private readonly IDocumentLineAccountCatalog _lineAccounts;
@@ -51,10 +54,12 @@ namespace Services.Banking
         public StatementLineExpenseService(
             IRepository<BankStatementLine> lines,
             IRepository<Bank> banks,
+            IRepository<Account> accounts,
             IRepository<Vendor> vendors,
             IRepository<PurchaseInvoiceHeader> bills,
             IRepository<GeneralLedgerLine> glLines,
             IRepository<Tax> taxes,
+            IRepository<BankStatementDescriptionRule> rules,
             IPurchasingService purchasing,
             IBankAccountService bankAccounts,
             IDocumentLineAccountCatalog lineAccounts,
@@ -63,10 +68,12 @@ namespace Services.Banking
         {
             _lines = lines;
             _banks = banks;
+            _accounts = accounts;
             _vendors = vendors;
             _bills = bills;
             _glLines = glLines;
             _taxes = taxes;
+            _rules = rules;
             _purchasing = purchasing;
             _bankAccounts = bankAccounts;
             _lineAccounts = lineAccounts;
@@ -109,6 +116,20 @@ namespace Services.Banking
                 .ToList();
 
             return new StatementExpenseCategoriesDto { Curated = curated, More = more };
+        }
+
+        public StatementDescriptionRuleDto? FindDescriptionRule(string? description)
+        {
+            EnsureCompany();
+            var key = NormalizeDescriptionKey(description);
+            if (key == null)
+                return null;
+
+            var companyId = _tenant.RequireCompanyId();
+            var rule = _rules.Table.FirstOrDefault(r => r.CompanyId == companyId && r.DescriptionKey == key);
+            if (rule == null || IsRuleTargetArchived(rule))
+                return null;
+            return ToRuleDto(rule);
         }
 
         public RecordExpenseFromStatementLineResultDto RecordExpense(
@@ -177,6 +198,9 @@ namespace Services.Banking
             var payment = PayFromBank(bill.Id, bank, amount, line, request.PaymentMethod, request.Memo);
             LinkLineToBankCredit(line, bank, payment);
 
+            if (request.RememberRule)
+                RememberRule(FirstNonBlank(line.Payee, line.Memo, description), vendorId, request.ExpenseAccountId);
+
             var savedBill = _bills.GetById(bill.Id) ?? bill;
             return new RecordExpenseFromStatementLineResultDto
             {
@@ -193,6 +217,59 @@ namespace Services.Banking
                     Id = payment.Id,
                     No = payment.No
                 }
+            };
+        }
+
+        public BulkRecordExpenseFromStatementLinesResultDto BulkRecordExpense(
+            BulkRecordExpenseFromStatementLinesRequest request,
+            string actor)
+        {
+            EnsureCompany();
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+            if (request.LineIds == null || request.LineIds.Count == 0)
+                throw new InvalidOperationException("Pick at least one statement line.");
+            if (request.LineIds.Count > 50)
+                throw new InvalidOperationException("Record at most 50 lines at a time.");
+
+            // One vendor for the batch: create once if needed, then reuse the id.
+            int? sharedVendorId = request.VendorId;
+            if (sharedVendorId is null or <= 0 && request.NewVendor != null)
+            {
+                sharedVendorId = ResolveVendorId(new RecordExpenseFromStatementLineRequest
+                {
+                    NewVendor = request.NewVendor,
+                    ExpenseAccountId = request.ExpenseAccountId
+                });
+            }
+
+            var results = new List<RecordExpenseFromStatementLineResultDto>();
+            foreach (var lineId in request.LineIds.Distinct())
+            {
+                results.Add(RecordExpense(lineId, new RecordExpenseFromStatementLineRequest
+                {
+                    VendorId = sharedVendorId,
+                    ExpenseAccountId = request.ExpenseAccountId,
+                    TaxId = request.TaxId,
+                    PaymentMethod = request.PaymentMethod,
+                    Memo = request.Memo,
+                    RememberRule = false
+                }, actor));
+            }
+
+            StatementDescriptionRuleDto? ruleDto = null;
+            if (request.RememberRule && sharedVendorId is > 0)
+            {
+                var firstLine = _lines.GetById(request.LineIds[0]);
+                var keySource = FirstNonBlank(firstLine?.Payee, firstLine?.Memo, request.NewVendor?.Name);
+                var rule = RememberRule(keySource, sharedVendorId.Value, request.ExpenseAccountId);
+                ruleDto = rule == null ? null : ToRuleDto(rule);
+            }
+
+            return new BulkRecordExpenseFromStatementLinesResultDto
+            {
+                Results = results,
+                Rule = ruleDto
             };
         }
 
@@ -382,6 +459,98 @@ namespace Services.Banking
             ExclusionNote = line.ExclusionNote,
             Candidates = Array.Empty<BankStatementMatchCandidateDto>()
         };
+
+        private BankStatementDescriptionRule? RememberRule(string? description, int vendorId, int expenseAccountId)
+        {
+            var key = NormalizeDescriptionKey(description);
+            if (key == null)
+                return null;
+
+            var companyId = _tenant.RequireCompanyId();
+            var now = DateTime.UtcNow;
+            var rule = _rules.Table.FirstOrDefault(r => r.CompanyId == companyId && r.DescriptionKey == key);
+            if (rule == null)
+            {
+                rule = new BankStatementDescriptionRule
+                {
+                    CompanyId = companyId,
+                    DescriptionKey = key,
+                    VendorId = vendorId,
+                    ExpenseAccountId = expenseAccountId,
+                    CreatedAt = now,
+                    LastUsedAt = now
+                };
+                _rules.Insert(rule);
+            }
+            else
+            {
+                rule.VendorId = vendorId;
+                rule.ExpenseAccountId = expenseAccountId;
+                rule.LastUsedAt = now;
+                _rules.Update(rule);
+            }
+            return rule;
+        }
+
+        private StatementDescriptionRuleDto ToRuleDto(BankStatementDescriptionRule rule)
+        {
+            string? vendorName = null;
+            if (rule.VendorId is > 0)
+            {
+                var vendor = _vendors.GetAllIncluding(v => v.Party!).FirstOrDefault(v => v.Id == rule.VendorId.Value);
+                vendorName = vendor?.Party?.Name;
+            }
+
+            string? accountName = null;
+            if (rule.ExpenseAccountId is > 0)
+                accountName = _accounts.GetById(rule.ExpenseAccountId.Value)?.AccountName;
+
+            return new StatementDescriptionRuleDto
+            {
+                Id = rule.Id,
+                DescriptionKey = rule.DescriptionKey,
+                VendorId = rule.VendorId,
+                VendorName = vendorName,
+                ExpenseAccountId = rule.ExpenseAccountId,
+                ExpenseAccountName = accountName
+            };
+        }
+
+        private bool IsRuleTargetArchived(BankStatementDescriptionRule rule)
+        {
+            if (rule.VendorId is > 0)
+            {
+                var vendor = _vendors.Table.FirstOrDefault(v => v.Id == rule.VendorId.Value);
+                if (vendor == null || vendor.ArchivedAt != null)
+                    return true;
+            }
+            if (rule.ExpenseAccountId is > 0)
+            {
+                var account = _accounts.Table.FirstOrDefault(a => a.Id == rule.ExpenseAccountId.Value);
+                if (account == null || account.ArchivedAt != null)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Stable key for remembered rules: lowercased words with digits, dates, and ref tokens removed.
+        /// </summary>
+        public static string? NormalizeDescriptionKey(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+            var lower = value.Trim().ToLowerInvariant();
+            lower = Regex.Replace(lower, @"\b\d{4}-\d{2}-\d{2}\b", " ");
+            lower = Regex.Replace(lower, @"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", " ");
+            lower = Regex.Replace(lower, @"\b(?:ref|reference|inv|invoice|txn|trx|id)[:#-]?\s*\S+\b", " ");
+            lower = Regex.Replace(lower, @"\d+", " ");
+            lower = Regex.Replace(lower, @"[^a-z\s]+", " ");
+            var normalized = string.Join(' ', lower.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            if (normalized.Length == 0)
+                return null;
+            return normalized.Length <= 200 ? normalized : normalized[..200];
+        }
 
         private static string? FirstNonBlank(params string?[] values)
         {

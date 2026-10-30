@@ -1133,6 +1133,48 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("BankStatementLine");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementDescriptionRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DescriptionKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("ExpenseAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LastUsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex(new[] { "CompanyId", "DescriptionKey" }, "UX_BankStatementDescriptionRule_Company_DescriptionKey")
+                        .IsUnique();
+
+                    b.ToTable("BankStatementDescriptionRule");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -3641,6 +3683,23 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("BankStatementImport");
 
                     b.Navigation("MatchedGeneralLedgerLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementDescriptionRule", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Account", "ExpenseAccount")
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ExpenseAccount");
+
+                    b.Navigation("Vendor");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>

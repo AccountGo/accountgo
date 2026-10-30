@@ -616,6 +616,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             BackfillOpeningBalanceBankTransactions(connection);
             EnsureBankReconciliationSchema(connection);
             EnsureBankStatementSchema(connection);
+            EnsureBankStatementDescriptionRules(connection);
         }
 
         // D1 0039_bank_statement_lines.sql (#413 Phase 3A) + 0040 exclusion columns (#436 I3)
@@ -629,6 +630,17 @@ WHERE ""DisabledModulesJson"" IS NULL
             cmd.ExecuteNonQuery();
 
             EnsureBankStatementExclusionColumns(connection);
+        }
+
+        // D1 0041_statement_description_rules.sql (#436 I4)
+        private static void EnsureBankStatementDescriptionRules(DbConnection connection)
+        {
+            if (!TableExists(connection, "Vendor") || !TableExists(connection, "Account"))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = BankStatementDescriptionRuleSql;
+            cmd.ExecuteNonQuery();
         }
 
         private static void EnsureBankStatementExclusionColumns(DbConnection connection)
@@ -951,6 +963,24 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_PostedDate"" ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""PostedDate"");
             CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_ExcludedAt"" ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""ExcludedAt"");
             CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankStatementLine_Company_Bank_Source_External"" ON ""BankStatementLine"" (""CompanyId"", ""BankId"", ""Source"", ""ExternalId"") WHERE ""ExternalId"" IS NOT NULL;";
+
+        private const string BankStatementDescriptionRuleSql = @"
+            CREATE TABLE IF NOT EXISTS ""BankStatementDescriptionRule"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BankStatementDescriptionRule"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""DescriptionKey"" TEXT NOT NULL,
+                ""VendorId"" INTEGER NULL,
+                ""ExpenseAccountId"" INTEGER NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""LastUsedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_BankStatementDescriptionRule_Vendor_VendorId"" FOREIGN KEY (""VendorId"") REFERENCES ""Vendor"" (""Id""),
+                CONSTRAINT ""FK_BankStatementDescriptionRule_Account_ExpenseAccountId"" FOREIGN KEY (""ExpenseAccountId"") REFERENCES ""Account"" (""Id"")
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_BankStatementDescriptionRule_Company_DescriptionKey""
+                ON ""BankStatementDescriptionRule"" (""CompanyId"", ""DescriptionKey"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementDescriptionRule_CompanyId"" ON ""BankStatementDescriptionRule"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementDescriptionRule_VendorId"" ON ""BankStatementDescriptionRule"" (""VendorId"");
+            CREATE INDEX IF NOT EXISTS ""IX_BankStatementDescriptionRule_ExpenseAccountId"" ON ""BankStatementDescriptionRule"" (""ExpenseAccountId"");";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
         {
