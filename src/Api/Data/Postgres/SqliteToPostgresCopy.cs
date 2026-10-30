@@ -42,6 +42,7 @@ namespace Api.Data.Postgres
             Console.WriteLine("Applying Postgres migrations...");
             apiDb.Database.Migrate();
             identityDb.Database.Migrate();
+            HostedApiLockdown.Apply(apiDb);
 
             var sourceBuilder = new SqliteConnectionStringBuilder { DataSource = sqlitePath, Mode = SqliteOpenMode.ReadOnly };
             using var source = new SqliteConnection(sourceBuilder.ConnectionString);

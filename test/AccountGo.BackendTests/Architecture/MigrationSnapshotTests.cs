@@ -3,6 +3,7 @@
 
 #nullable enable
 using Api.Data;
+using Api.Data.Postgres;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -33,6 +34,29 @@ public class MigrationSnapshotTests
             .UseSqlServer("Server=unused;Database=unused")
             .Options;
         using var db = new ApplicationIdentityDbContext(options);
+
+        Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    // Postgres has its own migrations (Data/Migrations/Postgres): a schema change needs one there too.
+    [Fact]
+    public void Postgres_ApiDb_snapshot_matches_the_model()
+    {
+        var options = new DbContextOptionsBuilder<PostgresApiDbContext>()
+            .UseNpgsql("Host=unused;Database=unused")
+            .Options;
+        using var db = new PostgresApiDbContext(options);
+
+        Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
+    public void Postgres_IdentityDb_snapshot_matches_the_model()
+    {
+        var options = new DbContextOptionsBuilder<PostgresIdentityDbContext>()
+            .UseNpgsql("Host=unused;Database=unused")
+            .Options;
+        using var db = new PostgresIdentityDbContext(options);
 
         Assert.False(db.Database.HasPendingModelChanges());
     }
