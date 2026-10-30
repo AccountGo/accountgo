@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Api.Data.Migrations.Postgres.ApiDb
 {
     [DbContext(typeof(PostgresApiDbContext))]
-    [Migration("20261030140833_InitialPostgres")]
+    [Migration("20261030150921_InitialPostgres")]
     partial class InitialPostgres
     {
         /// <inheritdoc />
@@ -395,6 +395,11 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)")
                         .HasDefaultValue("PHP");
+
+                    b.Property<int>("EntityType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3);
 
                     b.Property<int>("FiscalYearPattern")
                         .ValueGeneratedOnAdd()
@@ -1336,6 +1341,16 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ClosedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int?>("ClosingGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
