@@ -144,7 +144,15 @@ namespace Core.Domain
     {
         Csv = 1,
         Ofx = 2,
-        Manual = 3
+        Manual = 3,
+        /// <summary>ISO 20022 bank-to-customer statement (CAMT.053) XML (#447 Phase C).</summary>
+        Camt = 4,
+        /// <summary>SWIFT MT940 text (#447 Phase C).</summary>
+        Mt940 = 5,
+        /// <summary>Quicken Interchange Format (#447 Phase C).</summary>
+        Qif = 6,
+        /// <summary>Excel workbook — first sheet, same column detection as CSV (#447 Phase C).</summary>
+        Xlsx = 7
     }
 
     /// <summary>Why a statement line was excluded from matching (#436 I3).</summary>

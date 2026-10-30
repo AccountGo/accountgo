@@ -73,10 +73,14 @@ export function detectDelimiter(content: string): string {
   return best;
 }
 
-export function sourceForFileName(fileName: string): 1 | 2 | null {
+export function sourceForFileName(fileName: string): 1 | 2 | 4 | 5 | 6 | 7 | null {
   const lower = fileName.toLowerCase();
   if (lower.endsWith('.csv') || lower.endsWith('.txt')) return 1;
   if (lower.endsWith('.ofx') || lower.endsWith('.qfx')) return 2;
+  if (lower.endsWith('.xml') || lower.endsWith('.camt')) return 4;
+  if (lower.endsWith('.sta') || lower.endsWith('.mt940') || lower.endsWith('.swi')) return 5;
+  if (lower.endsWith('.qif')) return 6;
+  if (lower.endsWith('.xlsx')) return 7;
   return null;
 }
 

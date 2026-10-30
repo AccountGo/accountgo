@@ -122,7 +122,7 @@ const BankStatementImportPage: React.FC = () => {
   const [fileName, setFileName] = useState('');
   const [content, setContent] = useState('');
   const [contentBase64, setContentBase64] = useState<string | null>(null);
-  const [source, setSource] = useState<1 | 2 | null>(null);
+  const [source, setSource] = useState<1 | 2 | 4 | 5 | 6 | 7 | null>(null);
   const [sampleRows, setSampleRows] = useState<string[][]>([]);
   const [columnMap, setColumnMap] = useState<BankStatementColumnMap>(emptyColumnMap());
   const [mappingSource, setMappingSource] = useState<string | null>(null);
@@ -238,7 +238,7 @@ const BankStatementImportPage: React.FC = () => {
     if (!file) return;
     const detected = sourceForFileName(file.name);
     if (!detected) {
-      setError('Choose a .csv, .ofx, or .qfx file.');
+      setError('Choose a .csv, .ofx, .qfx, .xml (CAMT), .mt940, .qif, or .xlsx file.');
       return;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -250,10 +250,13 @@ const BankStatementImportPage: React.FC = () => {
     setSource(detected);
     setMappingSource(null);
     setPresetName(null);
-    if (detected === 1) {
-      const delimiter = detectDelimiter(text);
-      const rows = parseCsvRows(text, delimiter, 40);
-      const headerIndex = findSampleHeaderIndex(rows);
+    const needsColumnMap = detected === 1 || detected === 7;
+    if (needsColumnMap) {
+      // XLSX is decoded server-side; for mapping UI we only have client text for CSV.
+      const mapText = detected === 1 ? text : text;
+      const delimiter = detectDelimiter(mapText);
+      const rows = detected === 1 ? parseCsvRows(mapText, delimiter, 40) : [];
+      const headerIndex = rows.length ? findSampleHeaderIndex(rows) : 0;
       const headerRow = rows[headerIndex] ?? [];
       const sample = rows.slice(headerIndex, headerIndex + CSV_SAMPLE_ROWS + 1);
       setSampleRows(sample);
@@ -265,9 +268,9 @@ const BankStatementImportPage: React.FC = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            source: 1,
+            source: detected,
             fileName: file.name,
-            content: text,
+            content: detected === 7 ? '' : text,
             contentBase64: b64,
           }),
         });
@@ -298,10 +301,15 @@ const BankStatementImportPage: React.FC = () => {
     fileName,
     content,
     contentBase64,
-    columnMap: source === 1 ? columnMap : null,
+    columnMap: source === 1 || source === 7 ? columnMap : null,
   });
 
-  const mappingReady = source === 2 || (source === 1 && hasAmountMapping(columnMap));
+  const mappingReady =
+    source === 2 ||
+    source === 4 ||
+    source === 5 ||
+    source === 6 ||
+    ((source === 1 || source === 7) && hasAmountMapping(columnMap));
   const dateFormatBlockingImport =
     !!preview?.detection?.needsDateFormatChoice && !columnMap.dateFormat;
 
@@ -443,13 +451,13 @@ const BankStatementImportPage: React.FC = () => {
           <h2 className="text-sm font-bold text-[var(--text-main)]">1. Choose a file</h2>
           <input
             type="file"
-            accept=".csv,.txt,.ofx,.qfx"
+            accept=".csv,.txt,.ofx,.qfx,.xml,.camt,.mt940,.sta,.qif,.xlsx"
             aria-label="Statement file"
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
             className="block text-sm text-[var(--text-secondary)]"
           />
 
-          {source === 1 && sampleRows.length > 0 && (
+          {(source === 1 || source === 7) && (source === 7 || sampleRows.length > 0) && (
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-[var(--text-main)]">2. Map the columns</h2>
               {mappingSource === 'saved' && (

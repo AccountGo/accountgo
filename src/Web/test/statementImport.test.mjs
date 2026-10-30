@@ -59,6 +59,10 @@ test('sourceForFileName maps extensions', () => {
   assert.equal(sourceForFileName('Statement.CSV'), 1);
   assert.equal(sourceForFileName('x.qfx'), 2);
   assert.equal(sourceForFileName('x.ofx'), 2);
+  assert.equal(sourceForFileName('stmt.camt053.xml'), 4);
+  assert.equal(sourceForFileName('export.mt940'), 5);
+  assert.equal(sourceForFileName('bank.qif'), 6);
+  assert.equal(sourceForFileName('export.xlsx'), 7);
   assert.equal(sourceForFileName('x.pdf'), null);
 });
 

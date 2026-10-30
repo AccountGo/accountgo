@@ -76,12 +76,15 @@ namespace Services.Banking
 
             return source switch
             {
-                BankStatementSources.Csv => ParseCsv(
+                BankStatementSources.Csv or BankStatementSources.Xlsx => ParseCsv(
                     content,
                     map ?? throw new InvalidOperationException("Map the CSV columns first."),
                     accountCurrencyCode),
                 BankStatementSources.Ofx => ParseOfx(content),
-                _ => throw new InvalidOperationException("Pick a CSV or OFX file.")
+                BankStatementSources.Camt => CamtStatementParser.Parse(content),
+                BankStatementSources.Mt940 => Mt940StatementParser.Parse(content),
+                BankStatementSources.Qif => QifStatementParser.Parse(content),
+                _ => throw new InvalidOperationException("Pick a supported statement file.")
             };
         }
 

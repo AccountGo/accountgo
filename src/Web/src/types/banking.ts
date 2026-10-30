@@ -307,6 +307,10 @@ export const BANK_STATEMENT_SOURCE = {
   Csv: 1,
   Ofx: 2,
   Manual: 3,
+  Camt: 4,
+  Mt940: 5,
+  Qif: 6,
+  Xlsx: 7,
 } as const;
 
 export interface BankStatementColumnMap {

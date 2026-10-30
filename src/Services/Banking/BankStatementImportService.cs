@@ -71,7 +71,7 @@ namespace Services.Banking
             var content = ResolveContent(request);
             BankStatementDetectionSummaryDto? detection = null;
             IReadOnlyList<ParsedStatementRow> rows;
-            if (source == BankStatementSources.Csv)
+            if (source is BankStatementSources.Csv or BankStatementSources.Xlsx)
             {
                 var map = request.ColumnMap ?? throw new InvalidOperationException("Map the CSV columns first.");
                 var resolved = StatementImportResolver.Resolve(content, map, bank.CurrencyCode);
@@ -88,7 +88,7 @@ namespace Services.Banking
             string? mappingSource = null;
             string? headerSignature = null;
             string? presetName = null;
-            if (source == BankStatementSources.Csv)
+            if (source is BankStatementSources.Csv or BankStatementSources.Xlsx)
             {
                 var resolvedMeta = DescribeMappingSource(bank.Id, content, request.ColumnMap);
                 mappingSource = resolvedMeta.MappingSource;
@@ -116,7 +116,7 @@ namespace Services.Banking
             EnsureCompany();
             var bank = RequireActiveBank(bankId);
             var source = ParseSource(request);
-            if (source != BankStatementSources.Csv)
+            if (source is not (BankStatementSources.Csv or BankStatementSources.Xlsx))
             {
                 return new BankStatementResolveMappingDto { MappingSource = "none" };
             }
@@ -145,7 +145,7 @@ namespace Services.Banking
             if (ready.Count == 0)
                 return result;
 
-            if (source == BankStatementSources.Csv && request.ColumnMap != null)
+            if ((source is BankStatementSources.Csv or BankStatementSources.Xlsx) && request.ColumnMap != null)
                 RememberColumnMap(bank.Id, content, request.ColumnMap);
 
             var companyId = _tenant.RequireCompanyId();
@@ -158,7 +158,7 @@ namespace Services.Banking
                 FileName = TruncateOrNull(request.FileName, 260),
                 ImportedAt = now,
                 ImportedBy = string.IsNullOrWhiteSpace(actor) ? null : actor.Trim(),
-                ColumnMapJson = source == BankStatementSources.Csv && request.ColumnMap != null
+                ColumnMapJson = (source is BankStatementSources.Csv or BankStatementSources.Xlsx) && request.ColumnMap != null
                     ? JsonSerializer.Serialize(request.ColumnMap)
                     : null
             };
@@ -659,11 +659,14 @@ namespace Services.Banking
 
         private static string ResolveContent(BankStatementImportRequest request)
         {
+            var source = (BankStatementSources)request.Source;
             if (!string.IsNullOrWhiteSpace(request.ContentBase64))
             {
                 try
                 {
                     var bytes = Convert.FromBase64String(request.ContentBase64.Trim());
+                    if (source == BankStatementSources.Xlsx)
+                        return XlsxStatementReader.ToCsv(bytes);
                     return StatementFileEncoding.Decode(bytes);
                 }
                 catch (FormatException)
@@ -671,6 +674,8 @@ namespace Services.Banking
                     throw new InvalidOperationException("The statement file bytes are not valid base64.");
                 }
             }
+            if (source == BankStatementSources.Xlsx)
+                throw new InvalidOperationException("Excel statements must be uploaded as file bytes (contentBase64).");
             return request.Content ?? string.Empty;
         }
 
@@ -815,8 +820,10 @@ namespace Services.Banking
         private static BankStatementSources ParseSource(BankStatementImportRequest request)
         {
             var source = (BankStatementSources)request.Source;
-            if (source is not (BankStatementSources.Csv or BankStatementSources.Ofx))
-                throw new InvalidOperationException("Pick a CSV or OFX file.");
+            if (source is not (BankStatementSources.Csv or BankStatementSources.Ofx
+                or BankStatementSources.Camt or BankStatementSources.Mt940
+                or BankStatementSources.Qif or BankStatementSources.Xlsx))
+                throw new InvalidOperationException("Pick a supported statement file.");
             return source;
         }
 
