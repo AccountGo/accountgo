@@ -47,6 +47,7 @@ public class BankStatementImportServiceEfTests : IDisposable
             new EfRepository<Bank>(NullLogger<Bank>.Instance, _db),
             new EfRepository<GeneralLedgerLine>(NullLogger<GeneralLedgerLine>.Instance, _db),
             new EfRepository<GeneralLedgerHeader>(NullLogger<GeneralLedgerHeader>.Instance, _db),
+            new EfRepository<CompanySetting>(NullLogger<CompanySetting>.Instance, _db),
             new Mock<IBankTransactionService>().Object,
             _tenant);
 

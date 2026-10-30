@@ -6,6 +6,7 @@ import {
   detectDelimiter,
   hasAmountMapping,
   importSummary,
+  isBeforeBooksStart,
   kindsForAmount,
   matchVendorIdByPayee,
   normalizePayeeName,
@@ -83,6 +84,21 @@ test('importSummary describes the result', () => {
     importSummary({ imported: 3, duplicates: 2, errors: 1, autoMatched: 2 }),
     'Imported 3 lines, 2 matched automatically, 2 already imported, 1 skipped with errors.',
   );
+});
+
+test('importSummary counts lines dated before the books start date', () => {
+  assert.equal(
+    importSummary({ imported: 5, duplicates: 0, errors: 0, autoMatched: 0, beforeBooksStart: 3 }),
+    'Imported 5 lines, 3 dated before your books start date.',
+  );
+  assert.equal(importSummary({ imported: 1, duplicates: 0, errors: 0, autoMatched: 0, beforeBooksStart: 0 }), 'Imported 1 line.');
+});
+
+test('isBeforeBooksStart compares calendar dates', () => {
+  assert.equal(isBeforeBooksStart('2024-05-14T00:00:00', '2026-01-01'), true);
+  assert.equal(isBeforeBooksStart('2026-01-01T00:00:00', '2026-01-01T00:00:00'), false);
+  assert.equal(isBeforeBooksStart('2026-03-01', '2026-01-01'), false);
+  assert.equal(isBeforeBooksStart('2024-05-14', null), false);
 });
 
 test('clampStatementLinePage steps back when the last page is emptied', () => {

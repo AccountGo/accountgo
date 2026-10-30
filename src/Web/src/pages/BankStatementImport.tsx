@@ -20,6 +20,7 @@ import {
   emptyColumnMap,
   hasAmountMapping,
   importSummary,
+  isBeforeBooksStart,
   parseCsvRows,
   sourceForFileName,
   suggestColumnMap,
@@ -383,6 +384,35 @@ const BankStatementImportPage: React.FC = () => {
     setExpenseFor(first);
   };
 
+  const booksStart = list?.booksStartDate ? String(list.booksStartDate).slice(0, 10) : null;
+  const beforeBooksStartCount = list?.beforeBooksStartCount ?? 0;
+
+  const excludeBeforeBooksStart = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await authFetch(`/api/Banking/Accounts/${id}/StatementLines/ExcludeBeforeBooksStart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || `Could not exclude the lines (HTTP ${res.status}).`);
+      }
+      const result = (await res.json()) as { excluded: number };
+      setSelectedIds([]);
+      setNotice(`Excluded ${result.excluded} line${result.excluded === 1 ? '' : 's'} dated before ${booksStart}.`);
+      await loadLines(status, 1);
+      setPage(1);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not exclude the lines.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const lineAction = async (
     line: BankStatementLine,
     action: 'Match' | 'Unmatch' | 'Include',
@@ -720,6 +750,30 @@ const BankStatementImportPage: React.FC = () => {
           </div>
         </div>
 
+        {list && beforeBooksStartCount > 0 && booksStart && (
+          <div
+            className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-sm flex flex-wrap items-start gap-3"
+            role="note"
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p className="flex-1 min-w-[220px]">
+              {beforeBooksStartCount} unmatched line{beforeBooksStartCount === 1 ? ' is' : 's are'} dated before your
+              books start date ({booksStart}). Nothing can be recorded before that date, so exclude{' '}
+              {beforeBooksStartCount === 1 ? 'it' : 'them'} to clear the list.
+            </p>
+            {canManage && !account.archivedAt && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void excludeBeforeBooksStart()}
+                className="h-8 px-3 rounded-lg text-xs font-semibold border border-amber-500/40 hover:bg-amber-500/10 disabled:opacity-50"
+              >
+                Exclude {beforeBooksStartCount} line{beforeBooksStartCount === 1 ? '' : 's'}
+              </button>
+            )}
+          </div>
+        )}
+
         {list && (
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--text-secondary)]">
             <p role="status">
@@ -775,11 +829,13 @@ const BankStatementImportPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-subtle)]">
-              {(list?.lines ?? []).map((line) => (
+              {(list?.lines ?? []).map((line) => {
+                const early = !line.isMatched && !line.isExcluded && isBeforeBooksStart(line.postedDate, booksStart);
+                return (
                 <tr key={line.id} className="text-[var(--text-main)] align-top">
                   {canManage && status === 'unmatched' && (
                     <td className="px-3 py-2.5">
-                      {!line.isMatched && !line.isExcluded && line.amount < 0 && (
+                      {!line.isMatched && !line.isExcluded && !early && line.amount < 0 && (
                         <input
                           type="checkbox"
                           aria-label={`Select line ${line.id}`}
@@ -790,7 +846,17 @@ const BankStatementImportPage: React.FC = () => {
                       )}
                     </td>
                   )}
-                  <td className="px-4 py-2.5 whitespace-nowrap">{String(line.postedDate).slice(0, 10)}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    {String(line.postedDate).slice(0, 10)}
+                    {early && (
+                      <div
+                        className="mt-1 inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                        title={`Dated before the books start date (${booksStart}). It can only be excluded.`}
+                      >
+                        Before books start
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5">
                     <div>{line.payee || '—'}</div>
                     {line.memo && <div className="text-xs text-[var(--text-muted)]">{line.memo}</div>}
@@ -820,7 +886,7 @@ const BankStatementImportPage: React.FC = () => {
                     )}
                     {canManage && !line.isMatched && !line.isExcluded && (
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        {line.candidates.length > 0 && (
+                        {!early && line.candidates.length > 0 && (
                           <>
                             <select
                               aria-label="Ledger line to match"
@@ -850,7 +916,7 @@ const BankStatementImportPage: React.FC = () => {
                             </button>
                           </>
                         )}
-                        {line.amount < 0 && (canRecordExpense || canPayOpenBill) && (
+                        {!early && line.amount < 0 && (canRecordExpense || canPayOpenBill) && (
                           <button
                             type="button"
                             disabled={busy}
@@ -860,7 +926,7 @@ const BankStatementImportPage: React.FC = () => {
                             {canRecordExpense ? 'Record expense' : 'Pay open bill'}
                           </button>
                         )}
-                        {line.amount > 0 && (canApplyOpenInvoice || canRecordOtherIncome) && (
+                        {!early && line.amount > 0 && (canApplyOpenInvoice || canRecordOtherIncome) && (
                           <>
                             {canApplyOpenInvoice && (
                               <button
@@ -892,7 +958,7 @@ const BankStatementImportPage: React.FC = () => {
                         >
                           Exclude
                         </button>
-                        {hasFinancials && canCreateTx && (
+                        {!early && hasFinancials && canCreateTx && (
                           <button
                             type="button"
                             disabled={busy}
@@ -913,7 +979,8 @@ const BankStatementImportPage: React.FC = () => {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {list && list.lines.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)]">

@@ -135,6 +135,7 @@ internal sealed class BankingTestHarness : IDisposable
             Repos.Banks,
             Repos.GlLines,
             Repos.GlHeaders,
+            Repos.Settings,
             transactions,
             tenant);
 
