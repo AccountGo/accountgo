@@ -43,6 +43,7 @@ public class BankStatementImportServiceEfTests : IDisposable
         _service = new BankStatementImportService(
             new EfRepository<BankStatementImport>(NullLogger<BankStatementImport>.Instance, _db),
             new EfRepository<BankStatementLine>(NullLogger<BankStatementLine>.Instance, _db),
+            new EfRepository<BankStatementColumnMapping>(NullLogger<BankStatementColumnMapping>.Instance, _db),
             new EfRepository<Bank>(NullLogger<Bank>.Instance, _db),
             new EfRepository<GeneralLedgerLine>(NullLogger<GeneralLedgerLine>.Instance, _db),
             new EfRepository<GeneralLedgerHeader>(NullLogger<GeneralLedgerHeader>.Instance, _db),

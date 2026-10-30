@@ -32,6 +32,7 @@ import type {
   BankStatementLine,
   BankStatementLineList,
   BankStatementPreview,
+  BankStatementResolveMapping,
   StatementLineStatus,
 } from '../types/banking';
 
@@ -124,6 +125,8 @@ const BankStatementImportPage: React.FC = () => {
   const [source, setSource] = useState<1 | 2 | null>(null);
   const [sampleRows, setSampleRows] = useState<string[][]>([]);
   const [columnMap, setColumnMap] = useState<BankStatementColumnMap>(emptyColumnMap());
+  const [mappingSource, setMappingSource] = useState<string | null>(null);
+  const [presetName, setPresetName] = useState<string | null>(null);
   const [preview, setPreview] = useState<BankStatementPreview | null>(null);
 
   const [createFor, setCreateFor] = useState<BankStatementLine | null>(null);
@@ -245,6 +248,8 @@ const BankStatementImportPage: React.FC = () => {
     setContent(text);
     setContentBase64(b64);
     setSource(detected);
+    setMappingSource(null);
+    setPresetName(null);
     if (detected === 1) {
       const delimiter = detectDelimiter(text);
       const rows = parseCsvRows(text, delimiter, 40);
@@ -255,6 +260,29 @@ const BankStatementImportPage: React.FC = () => {
       const suggested = headerRow.length ? suggestColumnMap(headerRow) : emptyColumnMap();
       suggested.headerRowIndex = headerIndex;
       setColumnMap(suggested);
+      try {
+        const res = await authFetch(`/api/Banking/Accounts/${id}/StatementImports/ResolveMapping`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: 1,
+            fileName: file.name,
+            content: text,
+            contentBase64: b64,
+          }),
+        });
+        if (res.ok) {
+          const resolved = (await res.json()) as BankStatementResolveMapping;
+          setMappingSource(resolved.mappingSource);
+          setPresetName(resolved.presetName ?? null);
+          if (resolved.columnMap && (resolved.mappingSource === 'saved' || resolved.mappingSource === 'preset')) {
+            const next = { ...resolved.columnMap, headerRowIndex: resolved.columnMap.headerRowIndex ?? headerIndex };
+            setColumnMap(next);
+          }
+        }
+      } catch {
+        // Client suggestion remains if resolve fails.
+      }
     } else {
       setSampleRows([]);
     }
@@ -424,6 +452,14 @@ const BankStatementImportPage: React.FC = () => {
           {source === 1 && sampleRows.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-[var(--text-main)]">2. Map the columns</h2>
+              {mappingSource === 'saved' && (
+                <p className="text-xs text-[var(--text-muted)]">Using the saved mapping for this bank and header. Confirm in Preview before import.</p>
+              )}
+              {mappingSource === 'preset' && (
+                <p className="text-xs text-[var(--text-muted)]">
+                  Starting from the {presetName ?? 'built-in'} preset. Confirm in Preview before import.
+                </p>
+              )}
               <label className="flex items-center gap-2 text-sm text-[var(--text-main)]">
                 <input
                   type="checkbox"

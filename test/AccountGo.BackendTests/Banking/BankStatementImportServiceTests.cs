@@ -493,6 +493,7 @@ public class BankStatementImportServiceTests
         new(
             harness.Repos.StatementImports,
             lines,
+            harness.Repos.ColumnMappings,
             harness.Repos.Banks,
             harness.Repos.GlLines,
             harness.Repos.GlHeaders,

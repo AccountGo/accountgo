@@ -1175,6 +1175,44 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("BankStatementDescriptionRule");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementColumnMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ColumnMapJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HeaderSignature")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId", "HeaderSignature" }, "UX_BankStatementColumnMapping_Company_Bank_Header")
+                        .IsUnique();
+
+                    b.ToTable("BankStatementColumnMapping");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -3708,6 +3746,17 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("ExpenseAccount");
 
                     b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementColumnMapping", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bank");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>

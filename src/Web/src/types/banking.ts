@@ -367,7 +367,17 @@ export interface BankStatementPreview {
   duplicateRows: number;
   errorRows: number;
   detection?: BankStatementDetectionSummary | null;
+  mappingSource?: string | null;
+  headerSignature?: string | null;
+  presetName?: string | null;
   rows: BankStatementPreviewRow[];
+}
+
+export interface BankStatementResolveMapping {
+  columnMap?: BankStatementColumnMap | null;
+  mappingSource: 'saved' | 'preset' | 'none' | string;
+  headerSignature?: string | null;
+  presetName?: string | null;
 }
 
 export interface BankStatementCommitResult {

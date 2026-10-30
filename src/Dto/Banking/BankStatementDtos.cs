@@ -96,8 +96,22 @@ namespace Dto.Banking
         public int ErrorRows { get; set; }
         /// <summary>Per-column detection notes (#447). Null for OFX.</summary>
         public BankStatementDetectionSummaryDto? Detection { get; set; }
+        /// <summary>saved | preset | request | none — where the column map came from (#447 Phase B).</summary>
+        public string? MappingSource { get; set; }
+        public string? HeaderSignature { get; set; }
+        public string? PresetName { get; set; }
         /// <summary>First rows for display; counts above cover the whole file.</summary>
         public IReadOnlyList<BankStatementPreviewRowDto> Rows { get; set; } = Array.Empty<BankStatementPreviewRowDto>();
+    }
+
+    /// <summary>Resolve a saved map or built-in preset for a CSV before preview (#447 Phase B).</summary>
+    public class BankStatementResolveMappingDto
+    {
+        public BankStatementColumnMap? ColumnMap { get; set; }
+        /// <summary>saved | preset | none</summary>
+        public string MappingSource { get; set; } = "none";
+        public string? HeaderSignature { get; set; }
+        public string? PresetName { get; set; }
     }
 
     public class BankStatementCommitResultDto

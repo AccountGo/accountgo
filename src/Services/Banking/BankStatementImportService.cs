@@ -28,8 +28,15 @@ namespace Services.Banking
         public const string AlreadyImportedMessage = "Those statement lines were already imported.";
         private const string StatementLineUniqueIndexName = "UX_BankStatementLine_Company_Bank_Source_External";
 
+        private static readonly JsonSerializerOptions ColumnMapJsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true
+        };
+
         private readonly IRepository<BankStatementImport> _imports;
         private readonly IRepository<BankStatementLine> _lines;
+        private readonly IRepository<BankStatementColumnMapping> _columnMappings;
         private readonly IRepository<Bank> _banks;
         private readonly IRepository<GeneralLedgerLine> _glLines;
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
@@ -39,6 +46,7 @@ namespace Services.Banking
         public BankStatementImportService(
             IRepository<BankStatementImport> imports,
             IRepository<BankStatementLine> lines,
+            IRepository<BankStatementColumnMapping> columnMappings,
             IRepository<Bank> banks,
             IRepository<GeneralLedgerLine> glLines,
             IRepository<GeneralLedgerHeader> glHeaders,
@@ -47,6 +55,7 @@ namespace Services.Banking
         {
             _imports = imports;
             _lines = lines;
+            _columnMappings = columnMappings;
             _banks = banks;
             _glLines = glLines;
             _glHeaders = glHeaders;
@@ -76,6 +85,17 @@ namespace Services.Banking
             var existing = ExistingExternalIds(bank.Id, source);
             var classified = Classify(rows, existing);
 
+            string? mappingSource = null;
+            string? headerSignature = null;
+            string? presetName = null;
+            if (source == BankStatementSources.Csv)
+            {
+                var resolvedMeta = DescribeMappingSource(bank.Id, content, request.ColumnMap);
+                mappingSource = resolvedMeta.MappingSource;
+                headerSignature = resolvedMeta.HeaderSignature;
+                presetName = resolvedMeta.PresetName;
+            }
+
             return new BankStatementPreviewDto
             {
                 Source = (int)source,
@@ -84,8 +104,25 @@ namespace Services.Banking
                 DuplicateRows = classified.Count(c => c.Status == RowStatus.Duplicate),
                 ErrorRows = classified.Count(c => c.Status == RowStatus.Error),
                 Detection = detection,
+                MappingSource = mappingSource,
+                HeaderSignature = headerSignature,
+                PresetName = presetName,
                 Rows = classified.Take(PreviewRowLimit).Select(ToPreviewRow).ToList()
             };
+        }
+
+        public BankStatementResolveMappingDto ResolveMapping(int bankId, BankStatementImportRequest request)
+        {
+            EnsureCompany();
+            var bank = RequireActiveBank(bankId);
+            var source = ParseSource(request);
+            if (source != BankStatementSources.Csv)
+            {
+                return new BankStatementResolveMappingDto { MappingSource = "none" };
+            }
+
+            var content = ResolveContent(request);
+            return LookupSavedOrPreset(bank.Id, content);
         }
 
         public BankStatementCommitResultDto Commit(int bankId, BankStatementImportRequest request, string actor)
@@ -107,6 +144,9 @@ namespace Services.Banking
             var ready = classified.Where(c => c.Status == RowStatus.Ready).Select(c => c.Row).ToList();
             if (ready.Count == 0)
                 return result;
+
+            if (source == BankStatementSources.Csv && request.ColumnMap != null)
+                RememberColumnMap(bank.Id, content, request.ColumnMap);
 
             var companyId = _tenant.RequireCompanyId();
             var now = DateTime.UtcNow;
@@ -632,6 +672,134 @@ namespace Services.Banking
                 }
             }
             return request.Content ?? string.Empty;
+        }
+
+        private BankStatementResolveMappingDto LookupSavedOrPreset(int bankId, string content)
+        {
+            var header = ExtractHeaderRow(content, mapHint: null);
+            if (header == null)
+                return new BankStatementResolveMappingDto { MappingSource = "none" };
+
+            var signature = StatementHeaderSignature.FromRecord(header);
+            var companyId = _tenant.RequireCompanyId();
+            var saved = _columnMappings.Table
+                .FirstOrDefault(m => m.CompanyId == companyId && m.BankId == bankId && m.HeaderSignature == signature);
+            if (saved != null)
+            {
+                var map = JsonSerializer.Deserialize<BankStatementColumnMap>(saved.ColumnMapJson, ColumnMapJsonOptions);
+                if (map != null)
+                {
+                    return new BankStatementResolveMappingDto
+                    {
+                        ColumnMap = map,
+                        MappingSource = "saved",
+                        HeaderSignature = signature
+                    };
+                }
+            }
+
+            var preset = StatementImportPresets.Find(signature);
+            if (preset != null)
+            {
+                return new BankStatementResolveMappingDto
+                {
+                    ColumnMap = preset.CreateMap(),
+                    MappingSource = "preset",
+                    HeaderSignature = signature,
+                    PresetName = preset.Name
+                };
+            }
+
+            return new BankStatementResolveMappingDto
+            {
+                MappingSource = "none",
+                HeaderSignature = signature
+            };
+        }
+
+        private BankStatementResolveMappingDto DescribeMappingSource(
+            int bankId,
+            string content,
+            BankStatementColumnMap? requestMap)
+        {
+            var lookup = LookupSavedOrPreset(bankId, content);
+            if (requestMap != null)
+            {
+                lookup.MappingSource = "request";
+                lookup.ColumnMap = requestMap;
+            }
+            return lookup;
+        }
+
+        private void RememberColumnMap(int bankId, string content, BankStatementColumnMap map)
+        {
+            var header = ExtractHeaderRow(content, map);
+            if (header == null)
+                return;
+
+            var signature = StatementHeaderSignature.FromRecord(header);
+            if (string.IsNullOrWhiteSpace(signature))
+                return;
+
+            var companyId = _tenant.RequireCompanyId();
+            var now = DateTime.UtcNow;
+            var json = JsonSerializer.Serialize(map, ColumnMapJsonOptions);
+            var existing = _columnMappings.Table
+                .FirstOrDefault(m => m.CompanyId == companyId && m.BankId == bankId && m.HeaderSignature == signature);
+            if (existing != null)
+            {
+                existing.ColumnMapJson = json;
+                existing.UpdatedAt = now;
+                _columnMappings.Update(existing);
+            }
+            else
+            {
+                _columnMappings.Insert(new BankStatementColumnMapping
+                {
+                    CompanyId = companyId,
+                    BankId = bankId,
+                    HeaderSignature = signature,
+                    ColumnMapJson = json,
+                    UpdatedAt = now
+                });
+            }
+        }
+
+        private static IReadOnlyList<string>? ExtractHeaderRow(string content, BankStatementColumnMap? mapHint)
+        {
+            content = content.TrimStart('\uFEFF');
+            if (string.IsNullOrWhiteSpace(content))
+                return null;
+
+            var delimiter = ',';
+            if (!string.IsNullOrEmpty(mapHint?.Delimiter))
+                delimiter = mapHint.Delimiter == "\\t" || mapHint.Delimiter == "\t" ? '\t' : mapHint.Delimiter[0];
+            else
+            {
+                // Mirror resolver auto-detect via a throwaway resolve with a minimal map.
+                var probe = StatementImportResolver.Resolve(
+                    content,
+                    mapHint ?? new BankStatementColumnMap { DateColumn = 0, AmountColumn = 1, HasHeaderRow = true });
+                delimiter = probe.Map.Delimiter;
+            }
+
+            var records = BankStatementParser.SplitCsvRecords(content, delimiter);
+            int? headerIndex = mapHint?.HeaderRowIndex
+                ?? StatementColumnDetector.DetectHeaderRow(records)
+                ?? (mapHint is { HasHeaderRow: false } ? null : FirstNonBlank(records));
+            if (!headerIndex.HasValue || headerIndex.Value < 0 || headerIndex.Value >= records.Count)
+                return null;
+            return records[headerIndex.Value];
+        }
+
+        private static int? FirstNonBlank(IReadOnlyList<IReadOnlyList<string>> records)
+        {
+            for (var i = 0; i < records.Count; i++)
+            {
+                if (records[i].Any(c => !string.IsNullOrWhiteSpace(c)))
+                    return i;
+            }
+            return null;
         }
 
         private static BankStatementDetectionSummaryDto ToDetectionDto(StatementDetectionSummary summary) => new()

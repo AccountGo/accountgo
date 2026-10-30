@@ -11,6 +11,12 @@ namespace Services.Banking
         /// <summary>Parse a file and report what a commit would do. Writes nothing.</summary>
         BankStatementPreviewDto Preview(int bankId, BankStatementImportRequest request);
 
+        /// <summary>
+        /// Look up a saved mapping or built-in preset for this bank + CSV header.
+        /// Never skips preview — callers still must confirm (#447 Phase B).
+        /// </summary>
+        BankStatementResolveMappingDto ResolveMapping(int bankId, BankStatementImportRequest request);
+
         /// <summary>Store new statement lines (deduped by ExternalId) and auto-match unique candidates.</summary>
         BankStatementCommitResultDto Commit(int bankId, BankStatementImportRequest request, string actor);
 
