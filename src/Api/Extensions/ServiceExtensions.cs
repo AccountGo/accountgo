@@ -206,9 +206,10 @@ namespace Api.Extensions
             if (provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase)
                 || provider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
             {
-                var postgresConnection = configuration.GetConnectionString("PostgresConnection")
+                var postgresConnection = PostgresConnectionString.Normalize(
+                    configuration.GetConnectionString("PostgresConnection")
                     ?? throw new InvalidOperationException(
-                        "DatabaseProvider is Postgres but ConnectionStrings:PostgresConnection is not set.");
+                        "DatabaseProvider is Postgres but ConnectionStrings:PostgresConnection is not set."));
 
                 Console.WriteLine("[Database Provider] Using PostgreSQL");
 
