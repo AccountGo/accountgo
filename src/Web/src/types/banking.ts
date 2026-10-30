@@ -311,16 +311,22 @@ export const BANK_STATEMENT_SOURCE = {
 
 export interface BankStatementColumnMap {
   hasHeaderRow: boolean;
+  /** 0-based record index of the header; null → server detects preamble + header. */
+  headerRowIndex?: number | null;
   delimiter?: string | null;
   dateFormat?: string | null;
   dateColumn: number;
   amountColumn?: number | null;
   depositColumn?: number | null;
   withdrawalColumn?: number | null;
+  directionColumn?: number | null;
   payeeColumn?: number | null;
   memoColumn?: number | null;
   referenceColumn?: number | null;
   externalIdColumn?: number | null;
+  currencyColumn?: number | null;
+  statusColumn?: number | null;
+  allowedStatuses?: string[] | null;
   invertSign: boolean;
 }
 
@@ -328,6 +334,8 @@ export interface BankStatementImportPayload {
   source: number;
   fileName?: string | null;
   content: string;
+  /** Raw file bytes; preferred so the API can detect UTF-8 / UTF-16 / Windows-1252. */
+  contentBase64?: string | null;
   columnMap?: BankStatementColumnMap | null;
 }
 
@@ -343,12 +351,22 @@ export interface BankStatementPreviewRow {
   error?: string | null;
 }
 
+export interface BankStatementDetectionSummary {
+  date?: string | null;
+  amount?: string | null;
+  currency?: string | null;
+  status?: string | null;
+  header?: string | null;
+  needsDateFormatChoice: boolean;
+}
+
 export interface BankStatementPreview {
   source: number;
   totalRows: number;
   readyRows: number;
   duplicateRows: number;
   errorRows: number;
+  detection?: BankStatementDetectionSummary | null;
   rows: BankStatementPreviewRow[];
 }
 

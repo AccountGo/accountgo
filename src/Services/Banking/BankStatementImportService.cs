@@ -59,7 +59,20 @@ namespace Services.Banking
             EnsureCompany();
             var bank = RequireActiveBank(bankId);
             var source = ParseSource(request);
-            var rows = BankStatementParser.Parse(source, request.Content, request.ColumnMap);
+            var content = ResolveContent(request);
+            BankStatementDetectionSummaryDto? detection = null;
+            IReadOnlyList<ParsedStatementRow> rows;
+            if (source == BankStatementSources.Csv)
+            {
+                var map = request.ColumnMap ?? throw new InvalidOperationException("Map the CSV columns first.");
+                var resolved = StatementImportResolver.Resolve(content, map, bank.CurrencyCode);
+                detection = ToDetectionDto(resolved.Summary);
+                rows = BankStatementParser.ParseCsv(content, resolved.Map, resolved.Records);
+            }
+            else
+            {
+                rows = BankStatementParser.Parse(source, content, request.ColumnMap, bank.CurrencyCode);
+            }
             var existing = ExistingExternalIds(bank.Id, source);
             var classified = Classify(rows, existing);
 
@@ -70,6 +83,7 @@ namespace Services.Banking
                 ReadyRows = classified.Count(c => c.Status == RowStatus.Ready),
                 DuplicateRows = classified.Count(c => c.Status == RowStatus.Duplicate),
                 ErrorRows = classified.Count(c => c.Status == RowStatus.Error),
+                Detection = detection,
                 Rows = classified.Take(PreviewRowLimit).Select(ToPreviewRow).ToList()
             };
         }
@@ -79,7 +93,8 @@ namespace Services.Banking
             EnsureCompany();
             var bank = RequireActiveBank(bankId);
             var source = ParseSource(request);
-            var rows = BankStatementParser.Parse(source, request.Content, request.ColumnMap);
+            var content = ResolveContent(request);
+            var rows = BankStatementParser.Parse(source, content, request.ColumnMap, bank.CurrencyCode);
             var existing = ExistingExternalIds(bank.Id, source);
             var classified = Classify(rows, existing);
 
@@ -600,6 +615,33 @@ namespace Services.Banking
                 _ => "ok"
             },
             Error = classified.Row.Error
+        };
+
+        private static string ResolveContent(BankStatementImportRequest request)
+        {
+            if (!string.IsNullOrWhiteSpace(request.ContentBase64))
+            {
+                try
+                {
+                    var bytes = Convert.FromBase64String(request.ContentBase64.Trim());
+                    return StatementFileEncoding.Decode(bytes);
+                }
+                catch (FormatException)
+                {
+                    throw new InvalidOperationException("The statement file bytes are not valid base64.");
+                }
+            }
+            return request.Content ?? string.Empty;
+        }
+
+        private static BankStatementDetectionSummaryDto ToDetectionDto(StatementDetectionSummary summary) => new()
+        {
+            Date = summary.Date,
+            Amount = summary.Amount,
+            Currency = summary.Currency,
+            Status = summary.Status,
+            Header = summary.Header,
+            NeedsDateFormatChoice = summary.NeedsDateFormatChoice
         };
 
         private static BankStatementSources ParseSource(BankStatementImportRequest request)

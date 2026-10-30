@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   clampStatementLinePage,
+  decodeStatementBytes,
   detectDelimiter,
   hasAmountMapping,
   importSummary,
@@ -93,4 +94,32 @@ test('matchVendorIdByPayee matches normalized names and ignores blanks', () => {
   assert.equal(matchVendorIdByPayee('figma  inc', vendors), 2);
   assert.equal(matchVendorIdByPayee('Unknown', vendors), null);
   assert.equal(matchVendorIdByPayee('  ', vendors), null);
+});
+
+test('suggestColumnMap maps Wise-style headers', () => {
+  const map = suggestColumnMap([
+    'transfer_id',
+    'activity_id',
+    'created_on',
+    'finished_on',
+    'status',
+    'direction',
+    'amount',
+    'currency',
+    'source_name',
+    'target_name',
+  ]);
+  assert.equal(map.dateColumn, 2);
+  assert.equal(map.externalIdColumn, 1);
+  assert.equal(map.statusColumn, 4);
+  assert.equal(map.directionColumn, 5);
+  assert.equal(map.amountColumn, 6);
+  assert.equal(map.currencyColumn, 7);
+});
+
+test('decodeStatementBytes strips UTF-8 BOM and reads UTF-16 LE', () => {
+  const bom = new Uint8Array([0xef, 0xbb, 0xbf, 0x6f, 0x6b]);
+  assert.equal(decodeStatementBytes(bom), 'ok');
+  const utf16 = new Uint8Array([0xff, 0xfe, 0x41, 0x00, 0xf1, 0x00]);
+  assert.equal(decodeStatementBytes(utf16), 'Añ');
 });

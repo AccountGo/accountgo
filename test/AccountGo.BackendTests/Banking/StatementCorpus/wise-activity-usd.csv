@@ -1,0 +1,8 @@
+Account,Wise USD
+Currency,USD
+transfer_id,activity_id,created_on,finished_on,status,direction,amount,currency,source_name,target_name
+1001,ACT-USD-001,2024-03-07T04:59:09.447Z,2024-03-07T04:59:10.100Z,completed,in,1250.50,USD,Client Co,Wallet
+1002,ACT-USD-002,2024-03-08T12:00:00.000Z,2024-03-08T12:00:01.000Z,completed,out,40.00,USD,Wallet,Vendor LLC
+1003,ACT-PHP-001,2024-03-09T08:15:30.123Z,2024-03-09T08:15:31.000Z,completed,in,1466.01,PHP,Sender PH,Wallet
+1004,ACT-INT-001,2024-03-10T01:00:00.000Z,2024-03-10T01:00:05.000Z,completed,neutral,100.00,USD,USD balance,EUR balance
+1005,ACT-PEND-001,2024-03-11T09:00:00.000Z,,pending,out,12.00,USD,Wallet,Pending Payee

@@ -83,18 +83,75 @@ export function sourceForFileName(fileName: string): 1 | 2 | null {
 export function emptyColumnMap(): BankStatementColumnMap {
   return {
     hasHeaderRow: true,
+    headerRowIndex: null,
     delimiter: null,
     dateFormat: null,
     dateColumn: 0,
     amountColumn: null,
     depositColumn: null,
     withdrawalColumn: null,
+    directionColumn: null,
     payeeColumn: null,
     memoColumn: null,
     referenceColumn: null,
     externalIdColumn: null,
+    currencyColumn: null,
+    statusColumn: null,
+    allowedStatuses: null,
     invertSign: false,
   };
+}
+
+/** Decode statement bytes: BOM (UTF-8 / UTF-16 LE/BE), else UTF-8, else Windows-1252. Mirrors StatementFileEncoding. */
+export function decodeStatementBytes(bytes: Uint8Array): string {
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  }
+  if (isValidUtf8(bytes)) {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  // Windows-1252 best-effort via latin1 code points 0x80–0x9F mapped roughly; browsers lack 1252.
+  // Prefer sending contentBase64 so the API does the authoritative decode.
+  return new TextDecoder('latin1').decode(bytes);
+}
+
+function isValidUtf8(bytes: Uint8Array): boolean {
+  let i = 0;
+  while (i < bytes.length) {
+    const b = bytes[i];
+    if (b <= 0x7f) {
+      i += 1;
+      continue;
+    }
+    let need = 0;
+    if ((b & 0xe0) === 0xc0) need = 1;
+    else if ((b & 0xf0) === 0xe0) need = 2;
+    else if ((b & 0xf8) === 0xf0) need = 3;
+    else return false;
+    if (i + need >= bytes.length) return false;
+    if (need === 1 && b < 0xc2) return false;
+    for (let j = 1; j <= need; j += 1) {
+      if ((bytes[i + j] & 0xc0) !== 0x80) return false;
+    }
+    i += 1 + need;
+  }
+  return true;
+}
+
+/** Base64 of the raw file bytes for API encoding detection. */
+export function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
 }
 
 function findHeader(headers: string[], patterns: RegExp[]): number | null {
@@ -108,16 +165,20 @@ function findHeader(headers: string[], patterns: RegExp[]): number | null {
 /** Guess a column map from header names; the user can change every choice. */
 export function suggestColumnMap(headers: string[]): BankStatementColumnMap {
   const map = emptyColumnMap();
-  map.dateColumn = findHeader(headers, [/^(posted\s*)?date$/i, /date/i]) ?? 0;
-  map.amountColumn = findHeader(headers, [/^amount$/i, /^(transaction\s*)?amount/i]);
+  map.dateColumn =
+    findHeader(headers, [/^created_on$/i, /^(posted\s*)?date$/i, /^finished_on$/i, /date/i]) ?? 0;
+  map.amountColumn = findHeader(headers, [/^signed_amount$/i, /^amount$/i, /^(transaction\s*)?amount/i]);
   if (map.amountColumn == null) {
     map.depositColumn = findHeader(headers, [/deposit/i, /credit/i, /money\s*in/i]);
     map.withdrawalColumn = findHeader(headers, [/withdraw/i, /debit/i, /money\s*out/i, /payment/i]);
   }
-  map.payeeColumn = findHeader(headers, [/^payee$/i, /^name$/i, /description/i, /merchant/i]);
-  map.memoColumn = findHeader(headers, [/^memo$/i, /^notes?$/i, /details?/i]);
+  map.directionColumn = findHeader(headers, [/^direction$/i, /^type$/i]);
+  map.payeeColumn = findHeader(headers, [/^payee$/i, /^source_name$/i, /^name$/i, /description/i, /merchant/i]);
+  map.memoColumn = findHeader(headers, [/^memo$/i, /^notes?$/i, /details?/i, /^target_name$/i]);
   map.referenceColumn = findHeader(headers, [/^ref/i, /check/i, /cheque/i]);
-  map.externalIdColumn = findHeader(headers, [/fitid/i, /transaction\s*id/i, /^id$/i]);
+  map.externalIdColumn = findHeader(headers, [/activity_id/i, /fitid/i, /transaction\s*id/i, /^id$/i]);
+  map.currencyColumn = findHeader(headers, [/^currency$/i, /^ccy$/i]);
+  map.statusColumn = findHeader(headers, [/^status$/i, /^state$/i]);
   return map;
 }
 

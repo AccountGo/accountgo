@@ -14,19 +14,36 @@ namespace Dto.Banking
     public class BankStatementColumnMap
     {
         public bool HasHeaderRow { get; set; } = true;
+        /// <summary>
+        /// 0-based record index of the header when <see cref="HasHeaderRow"/> is true.
+        /// Null → detect the first header-like row (skipping bank-info preamble).
+        /// </summary>
+        public int? HeaderRowIndex { get; set; }
         /// <summary>Single character; null/empty auto-detects comma, semicolon, or tab from the first row.</summary>
         public string? Delimiter { get; set; }
-        /// <summary>Optional .NET date format such as <c>dd/MM/yyyy</c>. Default accepts yyyy-MM-dd and M/d/yyyy.</summary>
+        /// <summary>
+        /// Optional .NET date format such as <c>dd/MM/yyyy</c>. Wins over detection.
+        /// Required when the date column is ambiguous (every part ≤ 12).
+        /// </summary>
         public string? DateFormat { get; set; }
         public int DateColumn { get; set; }
         public int? AmountColumn { get; set; }
         public int? DepositColumn { get; set; }
         public int? WithdrawalColumn { get; set; }
+        /// <summary>Optional direction column when the amount is unsigned (<c>in</c>/<c>out</c>, <c>CR</c>/<c>DR</c>, …).</summary>
+        public int? DirectionColumn { get; set; }
+        /// <summary>Optional overrides for direction tokens → +1 (in) or −1 (out).</summary>
+        public Dictionary<string, int>? DirectionValueMap { get; set; }
         public int? PayeeColumn { get; set; }
         public int? MemoColumn { get; set; }
         public int? ReferenceColumn { get; set; }
         /// <summary>Optional bank transaction id column; enables exact dedupe across overlapping files.</summary>
         public int? ExternalIdColumn { get; set; }
+        /// <summary>Optional ISO currency column; rows that differ from the bank account are skipped.</summary>
+        public int? CurrencyColumn { get; set; }
+        /// <summary>Optional status column; only <see cref="AllowedStatuses"/> (default completed/posted/booked/settled) import.</summary>
+        public int? StatusColumn { get; set; }
+        public List<string>? AllowedStatuses { get; set; }
         /// <summary>Flip signs for statements that list payments as positive (for example credit cards).</summary>
         public bool InvertSign { get; set; }
     }
@@ -36,8 +53,12 @@ namespace Dto.Banking
         /// <summary>1 CSV, 2 OFX/QFX.</summary>
         public int Source { get; set; }
         public string? FileName { get; set; }
-        /// <summary>File text.</summary>
+        /// <summary>File text (UTF-8). Ignored when <see cref="ContentBase64"/> is set.</summary>
         public string Content { get; set; } = string.Empty;
+        /// <summary>
+        /// Raw file bytes as base64. Preferred for CSV so the server can detect UTF-8 / UTF-16 / Windows-1252 (#447).
+        /// </summary>
+        public string? ContentBase64 { get; set; }
         /// <summary>Required for CSV.</summary>
         public BankStatementColumnMap? ColumnMap { get; set; }
     }
@@ -56,6 +77,16 @@ namespace Dto.Banking
         public string? Error { get; set; }
     }
 
+    public class BankStatementDetectionSummaryDto
+    {
+        public string? Date { get; set; }
+        public string? Amount { get; set; }
+        public string? Currency { get; set; }
+        public string? Status { get; set; }
+        public string? Header { get; set; }
+        public bool NeedsDateFormatChoice { get; set; }
+    }
+
     public class BankStatementPreviewDto
     {
         public int Source { get; set; }
@@ -63,6 +94,8 @@ namespace Dto.Banking
         public int ReadyRows { get; set; }
         public int DuplicateRows { get; set; }
         public int ErrorRows { get; set; }
+        /// <summary>Per-column detection notes (#447). Null for OFX.</summary>
+        public BankStatementDetectionSummaryDto? Detection { get; set; }
         /// <summary>First rows for display; counts above cover the whole file.</summary>
         public IReadOnlyList<BankStatementPreviewRowDto> Rows { get; set; } = Array.Empty<BankStatementPreviewRowDto>();
     }

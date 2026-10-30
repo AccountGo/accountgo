@@ -13,7 +13,9 @@ import { useTenantContext } from '../components/Gating';
 import { useCapabilities } from '../lib/entitlements';
 import {
   CSV_SAMPLE_ROWS,
+  bytesToBase64,
   clampStatementLinePage,
+  decodeStatementBytes,
   detectDelimiter,
   emptyColumnMap,
   hasAmountMapping,
@@ -43,21 +45,41 @@ type ColumnKey =
   | 'amountColumn'
   | 'depositColumn'
   | 'withdrawalColumn'
+  | 'directionColumn'
   | 'payeeColumn'
   | 'memoColumn'
   | 'referenceColumn'
-  | 'externalIdColumn';
+  | 'externalIdColumn'
+  | 'currencyColumn'
+  | 'statusColumn';
 
 const COLUMN_FIELDS: { key: ColumnKey; label: string; required?: boolean }[] = [
   { key: 'dateColumn', label: 'Date', required: true },
-  { key: 'amountColumn', label: 'Amount (signed)' },
+  { key: 'amountColumn', label: 'Amount' },
+  { key: 'directionColumn', label: 'Direction (in/out)' },
   { key: 'depositColumn', label: 'Deposits (if separate)' },
   { key: 'withdrawalColumn', label: 'Withdrawals (if separate)' },
   { key: 'payeeColumn', label: 'Payee / description' },
   { key: 'memoColumn', label: 'Memo' },
   { key: 'referenceColumn', label: 'Reference / check no.' },
   { key: 'externalIdColumn', label: 'Bank transaction id' },
+  { key: 'currencyColumn', label: 'Currency' },
+  { key: 'statusColumn', label: 'Status' },
 ];
+
+const HEADER_HINTS =
+  /^(date|posted|created|created_on|amount|signed_amount|direction|payee|description|memo|currency|status|activity_id|fitid)$/i;
+
+function findSampleHeaderIndex(rows: string[][]): number {
+  for (let i = 0; i < Math.min(rows.length, 30); i += 1) {
+    const nonBlank = rows[i].filter((c) => c.trim() !== '');
+    if (nonBlank.length === 0) continue;
+    const numericish = nonBlank.filter((c) => /\d/.test(c) && !HEADER_HINTS.test(c.trim())).length;
+    if (numericish > nonBlank.length / 2) continue;
+    if (nonBlank.some((c) => HEADER_HINTS.test(c.trim().replace(/\s+/g, '_')))) return i;
+  }
+  return 0;
+}
 
 const BankStatementImportPage: React.FC = () => {
   const { bankId } = useParams<{ bankId: string }>();
@@ -98,6 +120,7 @@ const BankStatementImportPage: React.FC = () => {
 
   const [fileName, setFileName] = useState('');
   const [content, setContent] = useState('');
+  const [contentBase64, setContentBase64] = useState<string | null>(null);
   const [source, setSource] = useState<1 | 2 | null>(null);
   const [sampleRows, setSampleRows] = useState<string[][]>([]);
   const [columnMap, setColumnMap] = useState<BankStatementColumnMap>(emptyColumnMap());
@@ -215,15 +238,23 @@ const BankStatementImportPage: React.FC = () => {
       setError('Choose a .csv, .ofx, or .qfx file.');
       return;
     }
-    const text = await file.text();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const text = decodeStatementBytes(bytes);
+    const b64 = bytesToBase64(bytes);
     setFileName(file.name);
     setContent(text);
+    setContentBase64(b64);
     setSource(detected);
     if (detected === 1) {
       const delimiter = detectDelimiter(text);
-      const rows = parseCsvRows(text, delimiter, CSV_SAMPLE_ROWS + 1);
-      setSampleRows(rows);
-      setColumnMap(rows.length ? suggestColumnMap(rows[0]) : emptyColumnMap());
+      const rows = parseCsvRows(text, delimiter, 40);
+      const headerIndex = findSampleHeaderIndex(rows);
+      const headerRow = rows[headerIndex] ?? [];
+      const sample = rows.slice(headerIndex, headerIndex + CSV_SAMPLE_ROWS + 1);
+      setSampleRows(sample);
+      const suggested = headerRow.length ? suggestColumnMap(headerRow) : emptyColumnMap();
+      suggested.headerRowIndex = headerIndex;
+      setColumnMap(suggested);
     } else {
       setSampleRows([]);
     }
@@ -238,10 +269,13 @@ const BankStatementImportPage: React.FC = () => {
     source,
     fileName,
     content,
+    contentBase64,
     columnMap: source === 1 ? columnMap : null,
   });
 
   const mappingReady = source === 2 || (source === 1 && hasAmountMapping(columnMap));
+  const dateFormatBlockingImport =
+    !!preview?.detection?.needsDateFormatChoice && !columnMap.dateFormat;
 
   const runPreview = async () => {
     if (!mappingReady) return;
@@ -283,6 +317,7 @@ const BankStatementImportPage: React.FC = () => {
       setNotice(importSummary(result));
       setPreview(null);
       setContent('');
+      setContentBase64(null);
       setFileName('');
       setSource(null);
       setSampleRows([]);
@@ -424,18 +459,24 @@ const BankStatementImportPage: React.FC = () => {
                 ))}
                 <div>
                   <label className={labelClass} htmlFor="col-dateFormat">
-                    Date format (required for 03/04/2026-style dates)
+                    Date format
+                    {preview?.detection?.needsDateFormatChoice ? ' (required — dates are ambiguous)' : ' (optional)'}
                   </label>
-                  <input
+                  <select
                     id="col-dateFormat"
-                    placeholder="e.g. dd/MM/yyyy or MM/dd/yyyy"
                     value={columnMap.dateFormat ?? ''}
                     onChange={(e) => {
                       setPreview(null);
                       setColumnMap((prev) => ({ ...prev, dateFormat: e.target.value.trim() || null }));
                     }}
                     className={inputClass}
-                  />
+                  >
+                    <option value="">Detected / ISO / year-first</option>
+                    <option value="dd/MM/yyyy">dd/MM/yyyy (day first)</option>
+                    <option value="MM/dd/yyyy">MM/dd/yyyy (month first)</option>
+                    <option value="d/M/yyyy">d/M/yyyy</option>
+                    <option value="M/d/yyyy">M/d/yyyy</option>
+                  </select>
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-[var(--text-main)]">
@@ -451,6 +492,11 @@ const BankStatementImportPage: React.FC = () => {
               </label>
               {!hasAmountMapping(columnMap) && (
                 <p className="text-xs text-amber-600">Pick the amount column, or the deposit and withdrawal columns.</p>
+              )}
+              {preview?.detection?.needsDateFormatChoice && !columnMap.dateFormat && (
+                <p className="text-xs text-amber-600">
+                  Every date has day and month ≤ 12. Choose day-first or month-first — we will not guess.
+                </p>
               )}
             </div>
           )}
@@ -471,6 +517,7 @@ const BankStatementImportPage: React.FC = () => {
                   variant="primary"
                   onClick={() => void commit()}
                   busy={busy}
+                  disabled={dateFormatBlockingImport}
                 />
               )}
             </div>
@@ -478,6 +525,19 @@ const BankStatementImportPage: React.FC = () => {
 
           {preview && (
             <div className="space-y-3">
+              {preview.detection && (
+                <p className="text-xs text-[var(--text-muted)]">
+                  {[
+                    preview.detection.date && `Date: ${preview.detection.date}`,
+                    preview.detection.amount && `Amount: ${preview.detection.amount}`,
+                    preview.detection.currency && `Currency: ${preview.detection.currency}`,
+                    preview.detection.status && `Status: ${preview.detection.status}`,
+                    preview.detection.header && `Header: ${preview.detection.header}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
               <p className="text-sm text-[var(--text-secondary)]">
                 {preview.totalRows} rows: {preview.readyRows} new, {preview.duplicateRows} already imported,{' '}
                 {preview.errorRows} with errors.

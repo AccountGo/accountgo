@@ -1,0 +1,8 @@
+Date,Amount,Payee
+2024-01-01,"(1,234.56)",Paren
+2024-01-02,1234.56-,TrailingMinus
+2024-01-03,"1,234.56 CR",CreditSuffix
+2024-01-04,"1,234.56 DR",DebitSuffix
+2024-01-05,"$1,234.56",Dollar
+2024-01-06,"1.234,56 €",European
+2024-01-07,"1,466.01 PHP",WithCode

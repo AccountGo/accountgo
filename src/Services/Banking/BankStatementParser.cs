@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -28,7 +29,10 @@ namespace Services.Banking
         public bool IsValid => Error == null && PostedDate.HasValue && Amount.HasValue;
     }
 
-    /// <summary>CSV and OFX/QFX statement readers. No external dependencies; never throws for bad rows.</summary>
+    /// <summary>
+    /// CSV and OFX/QFX statement readers. Detection lives in <see cref="StatementColumnDetector"/> /
+    /// <see cref="StatementImportResolver"/>; this type only applies a resolved mapping. Never throws for bad rows.
+    /// </summary>
     public static class BankStatementParser
     {
         public const int MaxContentChars = 4_000_000;
@@ -41,7 +45,7 @@ namespace Services.Banking
 
         /// <summary>
         /// Formats that read the same way everywhere (year first, or a month name). Numeric day/month orders such as
-        /// 03/04/2026 are never guessed: the column map must carry the format, or the row is refused.
+        /// 03/04/2026 are never guessed here — the resolver must supply an exact format.
         /// </summary>
         private static readonly string[] UnambiguousDateFormats =
         {
@@ -49,9 +53,21 @@ namespace Services.Banking
             "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyyMMdd"
         };
 
-        private static readonly char[] CandidateDelimiters = { ',', ';', '\t' };
+        private static readonly Regex CurrencyCodeInAmount = new(
+            @"\b[A-Z]{3}\b",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled,
+            TimeSpan.FromSeconds(1));
 
-        public static IReadOnlyList<ParsedStatementRow> Parse(BankStatementSources source, string content, BankStatementColumnMap? map)
+        private static readonly Regex CrDrSuffix = new(
+            @"\s*(?<tag>CR|DR|Cr|Dr|cr|dr)\s*$",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled,
+            TimeSpan.FromSeconds(1));
+
+        public static IReadOnlyList<ParsedStatementRow> Parse(
+            BankStatementSources source,
+            string content,
+            BankStatementColumnMap? map,
+            string? accountCurrencyCode = null)
         {
             if (string.IsNullOrWhiteSpace(content))
                 throw new InvalidOperationException("The statement file is empty.");
@@ -60,7 +76,10 @@ namespace Services.Banking
 
             return source switch
             {
-                BankStatementSources.Csv => ParseCsv(content, map ?? throw new InvalidOperationException("Map the CSV columns first.")),
+                BankStatementSources.Csv => ParseCsv(
+                    content,
+                    map ?? throw new InvalidOperationException("Map the CSV columns first."),
+                    accountCurrencyCode),
                 BankStatementSources.Ofx => ParseOfx(content),
                 _ => throw new InvalidOperationException("Pick a CSV or OFX file.")
             };
@@ -68,27 +87,40 @@ namespace Services.Banking
 
         // ---------------------------------------------------------------- CSV
 
-        public static IReadOnlyList<ParsedStatementRow> ParseCsv(string content, BankStatementColumnMap map)
+        /// <summary>Resolve the user map, then parse. Prefer this over <see cref="ParseCsv(string, ResolvedStatementMap)"/> from callers that hold a DTO map.</summary>
+        public static IReadOnlyList<ParsedStatementRow> ParseCsv(
+            string content,
+            BankStatementColumnMap map,
+            string? accountCurrencyCode = null)
         {
-            ValidateMap(map);
-            content = content.TrimStart('\uFEFF');
+            var resolved = StatementImportResolver.Resolve(content, map, accountCurrencyCode);
+            return ParseCsv(content, resolved.Map, resolved.Records);
+        }
 
-            var delimiter = ResolveDelimiter(content, map.Delimiter);
-            var records = SplitCsv(content, delimiter);
+        public static IReadOnlyList<ParsedStatementRow> ParseCsv(string content, ResolvedStatementMap map) =>
+            ParseCsv(content, map, records: null);
+
+        public static IReadOnlyList<ParsedStatementRow> ParseCsv(
+            string content,
+            ResolvedStatementMap map,
+            IReadOnlyList<IReadOnlyList<string>>? records)
+        {
+            ValidateResolvedMap(map);
+            content = content.TrimStart('\uFEFF');
+            records ??= SplitCsvRecords(content, map.Delimiter);
 
             var rows = new List<ParsedStatementRow>();
             var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
             var recordNumber = 0;
-            var headerSkipped = !map.HasHeaderRow;
+
             foreach (var fields in records)
             {
                 recordNumber++;
-                // Leading blank lines (and blanks between rows) are never the header or data.
                 if (IsBlankRecord(fields))
                     continue;
-                if (!headerSkipped)
+                if (map.HeaderRowIndex.HasValue && recordNumber - 1 <= map.HeaderRowIndex.Value)
                 {
-                    headerSkipped = true;
+                    // Skip preamble and the header row (recordNumber is 1-based; HeaderRowIndex is 0-based).
                     continue;
                 }
 
@@ -98,7 +130,30 @@ namespace Services.Banking
                 var row = new ParsedStatementRow { RowNumber = recordNumber };
                 try
                 {
-                    row.PostedDate = ParseDate(Field(fields, map.DateColumn), map.DateFormat);
+                    if (map.NeedsDateFormatChoice)
+                        throw new FormatException(
+                            $"Date '{Field(fields, map.DateColumn)}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.");
+
+                    if (map.StatusColumn.HasValue)
+                    {
+                        var status = Field(fields, map.StatusColumn);
+                        if (status == null || !map.AllowedStatuses.Contains(status))
+                            throw new FormatException(
+                                $"{(status ?? "blank")} row skipped");
+                    }
+
+                    if (map.CurrencyColumn.HasValue && map.AccountCurrencyCode != null)
+                    {
+                        var currency = Field(fields, map.CurrencyColumn);
+                        if (currency != null
+                            && !string.Equals(currency, map.AccountCurrencyCode, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new FormatException(
+                                $"{currency.ToUpperInvariant()} row skipped: this account is {map.AccountCurrencyCode}");
+                        }
+                    }
+
+                    row.PostedDate = ParseDate(Field(fields, map.DateColumn), map);
                     row.Amount = ReadAmount(fields, map);
                     row.Payee = Truncate(Field(fields, map.PayeeColumn), MaxPayeeLength);
                     row.Memo = Truncate(Field(fields, map.MemoColumn), MaxMemoLength);
@@ -118,7 +173,7 @@ namespace Services.Banking
             return rows;
         }
 
-        private static void ValidateMap(BankStatementColumnMap map)
+        private static void ValidateResolvedMap(ResolvedStatementMap map)
         {
             if (map.DateColumn < 0)
                 throw new InvalidOperationException("Pick the date column.");
@@ -126,67 +181,25 @@ namespace Services.Banking
             var hasSplit = map.DepositColumn.HasValue || map.WithdrawalColumn.HasValue;
             if (!hasAmount && !hasSplit)
                 throw new InvalidOperationException("Pick the amount column (or deposit and withdrawal columns).");
-            foreach (var column in new[]
+            foreach (var column in new int?[]
                      {
-                         map.AmountColumn, map.DepositColumn, map.WithdrawalColumn,
-                         map.PayeeColumn, map.MemoColumn, map.ReferenceColumn, map.ExternalIdColumn
+                         map.AmountColumn, map.DepositColumn, map.WithdrawalColumn, map.DirectionColumn,
+                         map.PayeeColumn, map.MemoColumn, map.ReferenceColumn, map.ExternalIdColumn,
+                         map.CurrencyColumn, map.StatusColumn
                      })
             {
                 if (column is < 0)
                     throw new InvalidOperationException("Column positions cannot be negative.");
             }
-            if (!string.IsNullOrEmpty(map.Delimiter)
-                && map.Delimiter != "\\t"
-                && map.Delimiter.Length != 1)
-                throw new InvalidOperationException("The delimiter must be a single character (or \\t for tab).");
         }
 
-        private static char ResolveDelimiter(string content, string? requested)
+        /// <summary>Public for the resolver and tests — RFC 4180 reader.</summary>
+        public static IReadOnlyList<IReadOnlyList<string>> SplitCsvRecords(string content, char delimiter)
         {
-            if (!string.IsNullOrEmpty(requested))
-                return requested == "\\t" ? '\t' : requested[0];
-
-            // Auto-detect from the first non-blank line so a leading blank does not fall back to comma.
-            var probeLine = FirstNonBlankLine(content);
-            var best = ',';
-            var bestCount = 0;
-            foreach (var candidate in CandidateDelimiters)
-            {
-                var count = 0;
-                var inQuotes = false;
-                foreach (var ch in probeLine)
-                {
-                    if (ch == '"') inQuotes = !inQuotes;
-                    else if (ch == candidate && !inQuotes) count++;
-                }
-                if (count > bestCount)
-                {
-                    best = candidate;
-                    bestCount = count;
-                }
-            }
-            return best;
-        }
-
-        private static string FirstNonBlankLine(string content)
-        {
-            var start = 0;
-            var length = content.Length;
-            while (start < length)
-            {
-                var end = content.IndexOfAny(new[] { '\r', '\n' }, start);
-                if (end < 0)
-                    end = length;
-                var line = content[start..end];
-                if (!string.IsNullOrWhiteSpace(line))
-                    return line;
-                start = end;
-                if (start < length && content[start] == '\r')
-                    start++;
-                if (start < length && content[start] == '\n')
-                    start++;
-            }
-            return string.Empty;
+            var list = new List<IReadOnlyList<string>>();
+            foreach (var row in SplitCsv(content, delimiter))
+                list.Add(row);
+            return list;
         }
 
         /// <summary>RFC 4180 reader: quoted fields may contain delimiters, doubled quotes, and line breaks.</summary>
@@ -252,7 +265,7 @@ namespace Services.Banking
             }
         }
 
-        private static bool IsBlankRecord(List<string> fields)
+        private static bool IsBlankRecord(IReadOnlyList<string> fields)
         {
             foreach (var value in fields)
             {
@@ -262,7 +275,7 @@ namespace Services.Banking
             return true;
         }
 
-        private static string? Field(List<string> fields, int? column)
+        private static string? Field(IReadOnlyList<string> fields, int? column)
         {
             if (!column.HasValue || column.Value >= fields.Count)
                 return null;
@@ -270,35 +283,152 @@ namespace Services.Banking
             return value.Length == 0 ? null : value;
         }
 
-        private static DateTime ParseDate(string? raw, string? format)
+        private static DateTime ParseDate(string? raw, ResolvedStatementMap map)
         {
             if (string.IsNullOrWhiteSpace(raw))
                 throw new FormatException("Date is missing.");
 
-            var parsed = false;
-            DateTime date;
-            if (!string.IsNullOrWhiteSpace(format))
+            return map.DateMode switch
             {
-                parsed = DateTime.TryParseExact(raw, format.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
-            }
-            else
-            {
-                parsed = DateTime.TryParseExact(raw, UnambiguousDateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
-            }
-
-            if (!parsed)
-                throw new FormatException(string.IsNullOrWhiteSpace(format)
-                    ? $"Date '{raw}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map."
-                    : $"Date '{raw}' does not match the format '{format.Trim()}'.");
-            return DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
+                StatementDateMode.ExactFormat => ParseExactDate(raw, map.DateFormat),
+                StatementDateMode.Iso8601 => ParseIso8601Date(raw),
+                StatementDateMode.MonthName => ParseMonthNameDate(raw),
+                StatementDateMode.ExcelSerial => ParseExcelSerialDate(raw),
+                StatementDateMode.EpochSeconds => ParseEpochDate(raw, milliseconds: false),
+                StatementDateMode.EpochMilliseconds => ParseEpochDate(raw, milliseconds: true),
+                StatementDateMode.UnambiguousBuiltIn => ParseUnambiguousDate(raw),
+                _ => throw new FormatException($"Date '{raw}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.")
+            };
         }
 
-        private static decimal ReadAmount(List<string> fields, BankStatementColumnMap map)
+        private static DateTime ParseExactDate(string raw, string? format)
+        {
+            if (string.IsNullOrWhiteSpace(format))
+                throw new FormatException(
+                    $"Date '{raw}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.");
+
+            // Allow both single- and double-digit day/month tokens against flexible patterns.
+            var formats = ExpandFlexibleNumericFormat(format.Trim());
+            if (!DateTime.TryParseExact(raw, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+                && !DateTime.TryParseExact(raw, formats, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out date))
+            {
+                throw new FormatException($"Date '{raw}' does not match the format '{format.Trim()}'.");
+            }
+            return AsUtcCalendarDate(date);
+        }
+
+        private static string[] ExpandFlexibleNumericFormat(string format)
+        {
+            // Keep day-first and month-first families separate — never cross the ambiguous boundary.
+            var trimmed = format.Trim();
+            if (trimmed.Contains("MMM", StringComparison.Ordinal))
+                return new[] { trimmed };
+            if (trimmed.StartsWith('d') || trimmed.StartsWith('D'))
+            {
+                return new[]
+                {
+                    trimmed, "d/M/yyyy", "dd/MM/yyyy", "d/M/yy", "dd/MM/yy",
+                    "d-M-yyyy", "dd-MM-yyyy", "d.M.yyyy", "dd.MM.yyyy"
+                };
+            }
+            if (trimmed.StartsWith('M'))
+            {
+                return new[]
+                {
+                    trimmed, "M/d/yyyy", "MM/dd/yyyy", "M/d/yy", "MM/dd/yy",
+                    "M-d-yyyy", "MM-dd-yyyy", "M.d.yyyy", "MM.dd.yyyy"
+                };
+            }
+            return new[] { trimmed };
+        }
+
+        private static DateTime ParseIso8601Date(string raw)
+        {
+            if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind | DateTimeStyles.AllowWhiteSpaces, out var dto))
+            {
+                // Calendar date as written in the file's offset — never convert via server local time.
+                return AsUtcCalendarDate(dto.DateTime);
+            }
+            throw new FormatException($"Date '{raw}' is not ISO 8601.");
+        }
+
+        private static DateTime ParseMonthNameDate(string raw)
+        {
+            foreach (var format in StatementColumnDetector.MonthNameExactFormats)
+            {
+                if (DateTime.TryParseExact(raw, format, CultureInfo.InvariantCulture,
+                        DateTimeStyles.AllowWhiteSpaces, out var date))
+                    return AsUtcCalendarDate(date);
+            }
+            throw new FormatException($"Date '{raw}' does not match a month-name format.");
+        }
+
+        private static DateTime ParseExcelSerialDate(string raw)
+        {
+            if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial)
+                || serial is < 32874 or > 73050)
+                throw new FormatException($"Date '{raw}' is not a recognised Excel serial.");
+            return AsUtcCalendarDate(DateTime.FromOADate(serial));
+        }
+
+        private static DateTime ParseEpochDate(string raw, bool milliseconds)
+        {
+            if (!long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
+                throw new FormatException($"Date '{raw}' is not a Unix epoch value.");
+            try
+            {
+                var dto = milliseconds
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(n)
+                    : DateTimeOffset.FromUnixTimeSeconds(n);
+                return AsUtcCalendarDate(dto.UtcDateTime);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                throw new FormatException($"Date '{raw}' is not a Unix epoch value.");
+            }
+        }
+
+        private static DateTime ParseUnambiguousDate(string raw)
+        {
+            // ISO first — unambiguous even with time / offset / fractional seconds.
+            if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind | DateTimeStyles.AllowWhiteSpaces, out var dto)
+                && LooksIsoLike(raw))
+                return AsUtcCalendarDate(dto.DateTime);
+
+            if (DateTime.TryParseExact(raw, UnambiguousDateFormats, CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var date)
+                || DateTime.TryParseExact(raw, UnambiguousDateFormats, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AllowWhiteSpaces, out date))
+                return AsUtcCalendarDate(date);
+
+            throw new FormatException(
+                $"Date '{raw}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.");
+        }
+
+        private static bool LooksIsoLike(string raw) =>
+            raw.Length >= 10 && raw[4] == '-' && raw[7] == '-';
+
+        /// <summary>Store the calendar day only; Kind=Utc means "date as written", not a TZ conversion.</summary>
+        private static DateTime AsUtcCalendarDate(DateTime date) =>
+            DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
+
+        private static decimal ReadAmount(IReadOnlyList<string> fields, ResolvedStatementMap map)
         {
             decimal amount;
             if (map.AmountColumn.HasValue)
             {
                 amount = ParseAmount(Field(fields, map.AmountColumn), "Amount");
+                if (map.DirectionColumn.HasValue)
+                {
+                    var direction = Field(fields, map.DirectionColumn);
+                    if (direction == null)
+                        throw new FormatException("Direction is missing.");
+                    if (!map.DirectionSigns.TryGetValue(direction, out var sign))
+                        throw new FormatException($"unknown direction '{direction}'");
+                    amount = Math.Abs(amount) * sign;
+                }
             }
             else
             {
@@ -319,38 +449,63 @@ namespace Services.Banking
             return amount;
         }
 
-        internal static decimal ParseAmount(string? raw, string label)
+        /// <summary>
+        /// Shared CSV/OFX amount parser: currency symbols or codes, parentheses, trailing minus,
+        /// CR/DR suffixes, and US/European grouping (same rules as former OFX normaliser).
+        /// </summary>
+        public static decimal ParseAmount(string? raw, string label)
         {
             if (string.IsNullOrWhiteSpace(raw))
                 throw new FormatException($"{label} is missing.");
 
             var text = raw.Trim();
             var negative = false;
+
             if (text.StartsWith('(') && text.EndsWith(')'))
             {
                 negative = true;
-                text = text[1..^1];
+                text = text[1..^1].Trim();
             }
 
-            var cleaned = new StringBuilder(text.Length);
+            var crDr = CrDrSuffix.Match(text);
+            if (crDr.Success)
+            {
+                var tag = crDr.Groups["tag"].Value;
+                if (tag.Equals("DR", StringComparison.OrdinalIgnoreCase))
+                    negative = !negative;
+                // CR keeps the sign (typically positive credit).
+                text = text[..crDr.Index].Trim();
+            }
+
+            if (text.EndsWith('-'))
+            {
+                negative = !negative;
+                text = text[..^1].Trim();
+            }
+            if (text.StartsWith('+'))
+                text = text[1..].Trim();
+            if (text.StartsWith('-'))
+            {
+                negative = !negative;
+                text = text[1..].Trim();
+            }
+
+            text = CurrencyCodeInAmount.Replace(text, string.Empty).Trim();
+
+            var stripped = new StringBuilder(text.Length);
             foreach (var ch in text)
             {
-                if (char.IsDigit(ch) || ch == '.' || ch == '-' || ch == '+')
-                    cleaned.Append(ch);
-                else if (ch is ',' or ' ' or '\u00a0' or '$' or '€' or '£' or '¥')
+                if (char.IsDigit(ch) || ch is '.' or ',')
+                    stripped.Append(ch);
+                else if (ch is ' ' or '\u00a0' or '\'' or '$' or '€' or '£' or '¥' or '₱')
                     continue;
                 else
                     throw new FormatException($"{label} '{raw}' is not a number.");
             }
 
-            var value = cleaned.ToString();
-            if (value.EndsWith('-'))
-            {
-                negative = !negative;
-                value = value[..^1];
-            }
-
-            if (!decimal.TryParse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
+            var normalized = NormalizeGroupedNumber(stripped.ToString());
+            if (string.IsNullOrWhiteSpace(normalized)
+                || !decimal.TryParse(normalized, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
                     CultureInfo.InvariantCulture, out var amount))
                 throw new FormatException($"{label} '{raw}' is not a number.");
 
@@ -434,26 +589,22 @@ namespace Services.Banking
                 throw new FormatException("Posted date is missing.");
             if (!DateTime.TryParseExact(raw[..8], "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
                 throw new FormatException($"Posted date '{raw}' is not recognised.");
-            return DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
+            return AsUtcCalendarDate(date);
         }
 
         private static decimal ParseOfxAmount(string? raw)
         {
-            var amount = Math.Round(ParseAmount(NormalizeOfxNumber(raw), "Amount"), 2, MidpointRounding.AwayFromZero);
+            var amount = Math.Round(ParseAmount(raw, "Amount"), 2, MidpointRounding.AwayFromZero);
             if (amount == 0m)
                 throw new FormatException("Amount is zero.");
             return amount;
         }
 
         /// <summary>
-        /// OFX 1.x amounts mix US and European grouping. Rules:
-        /// <list type="bullet">
-        /// <item>Both <c>.</c> and <c>,</c> present: the last one is the decimal point; the others are grouping.</item>
-        /// <item>Only <c>.</c>: once = decimal; repeated = grouping (strip all).</item>
-        /// <item>Only <c>,</c>: repeated = grouping; once = decimal unless exactly three digits follow (thousands).</item>
-        /// </list>
+        /// US / European grouping. When both <c>.</c> and <c>,</c> appear, the last one is the decimal;
+        /// a lone <c>,</c> with exactly three trailing digits is thousands.
         /// </summary>
-        internal static string? NormalizeOfxNumber(string? raw)
+        internal static string? NormalizeGroupedNumber(string? raw)
         {
             if (raw == null)
                 return null;
@@ -494,7 +645,6 @@ namespace Services.Banking
                         }
                         digitsAfter++;
                     }
-                    // A single comma with exactly three trailing digits is thousands ("1,234"), not a decimal.
                     if (!(allDigits && digitsAfter == 3))
                         decimalAt = firstComma;
                 }
@@ -514,6 +664,9 @@ namespace Services.Banking
             }
             return cleaned.ToString();
         }
+
+        /// <summary>Kept for existing OFX tests; delegates to the shared normaliser.</summary>
+        internal static string? NormalizeOfxNumber(string? raw) => NormalizeGroupedNumber(raw);
 
         private static string? Truncate(string? value, int max)
         {
