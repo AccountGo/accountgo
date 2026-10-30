@@ -38,6 +38,19 @@ namespace Core.Domain.Financials
         public int? MatchedGeneralLedgerLineId { get; set; }
         public DateTime CreatedAt { get; set; }
 
+        /// <summary>When set, the line posts nothing and is hidden from Unmatched/Matched (#436 I3).</summary>
+        public DateTime? ExcludedAt { get; set; }
+
+        [StringLength(100)]
+        public string? ExcludedBy { get; set; }
+
+        public BankStatementExclusionReasons? ExclusionReason { get; set; }
+
+        [StringLength(500)]
+        public string? ExclusionNote { get; set; }
+
+        public bool IsExcluded => ExcludedAt.HasValue;
+
         public virtual Bank Bank { get; set; } = null!;
         public virtual BankStatementImport BankStatementImport { get; set; } = null!;
         public virtual GeneralLedgerLine? MatchedGeneralLedgerLine { get; set; }

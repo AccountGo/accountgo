@@ -100,6 +100,12 @@ namespace Dto.Banking
         public string? Reference { get; set; }
         public int? MatchedGeneralLedgerLineId { get; set; }
         public bool IsMatched { get; set; }
+        public bool IsExcluded { get; set; }
+        public DateTime? ExcludedAt { get; set; }
+        public string? ExcludedBy { get; set; }
+        /// <summary>1 Personal, 2 TransferBetweenAccounts, 3 Duplicate, 4 Other.</summary>
+        public int? ExclusionReason { get; set; }
+        public string? ExclusionNote { get; set; }
         /// <summary>Unmatched lines only: uncleared ledger lines within the match window.</summary>
         public IReadOnlyList<BankStatementMatchCandidateDto> Candidates { get; set; } = Array.Empty<BankStatementMatchCandidateDto>();
     }
@@ -109,10 +115,18 @@ namespace Dto.Banking
         public IReadOnlyList<BankStatementLineDto> Lines { get; set; } = Array.Empty<BankStatementLineDto>();
         public int UnmatchedCount { get; set; }
         public int MatchedCount { get; set; }
+        public int ExcludedCount { get; set; }
         /// <summary>Rows in the filtered status set before paging.</summary>
         public int TotalCount { get; set; }
         public int Page { get; set; }
         public int PageSize { get; set; }
+    }
+
+    public class ExcludeBankStatementLineRequest
+    {
+        /// <summary>1 Personal, 2 TransferBetweenAccounts, 3 Duplicate, 4 Other.</summary>
+        public int Reason { get; set; }
+        public string? Note { get; set; }
     }
 
     public class MatchBankStatementLineRequest
