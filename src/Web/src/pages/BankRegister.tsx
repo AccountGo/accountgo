@@ -8,7 +8,11 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BalanceCheckDialog } from '../components/BalanceCheckDialog';
 import { canShowBalanceCheck } from '../lib/balanceCheck';
 import { useAuth } from '../auth/AuthContext';
-import { announceStatementImportUpgrade, useTenantContext } from '../components/Gating';
+import {
+  announceStatementImportUpgrade,
+  shouldShowUpgradeAvailableBadge,
+  useTenantContext,
+} from '../components/Gating';
 import { useCapabilities } from '../lib/entitlements';
 import { localToday } from '../lib/businessDays';
 import type { TenantContextType } from '../types';
@@ -37,7 +41,7 @@ const BankRegisterPage: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasModule, hasPermission } = useTenantContext();
-  const { canStatementImport, entitlements } = useCapabilities();
+  const { canStatementImport, canManageBilling, entitlements } = useCapabilities();
   const hasFinancials = hasModule('financials');
   const canManage = hasPermission('banking.accounts.manage');
   const canCreateTx = hasPermission('banking.transactions.create');
@@ -224,7 +228,11 @@ const BankRegisterPage: React.FC = () => {
                 icon={FileUp}
                 variant="secondary"
                 onClick={() =>
-                  announceStatementImportUpgrade(entitlements?.effectivePlan ?? entitlements?.plan)
+                  announceStatementImportUpgrade({
+                    effectivePlan: entitlements?.effectivePlan ?? entitlements?.plan,
+                    upgradeAvailable: shouldShowUpgradeAvailableBadge(entitlements),
+                    canManageBilling,
+                  })
                 }
               />
             )}

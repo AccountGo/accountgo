@@ -13,13 +13,20 @@ namespace Core.Entitlements
     /// </summary>
     public static class StatementImportAccess
     {
-        public static EntitlementDecision Evaluate(IEntitlementService entitlements, int companyId)
+        /// <param name="financialsAccess">
+        /// Read for GET/HEAD (browsing imports); Write for mutating actions so a read-only
+        /// financials grace period cannot commit/match statement lines (#436 I1 should-fix).
+        /// </param>
+        public static EntitlementDecision Evaluate(
+            IEntitlementService entitlements,
+            int companyId,
+            ModuleAccess financialsAccess = ModuleAccess.Write)
         {
             ArgumentNullException.ThrowIfNull(entitlements);
 
             var financials = entitlements.Evaluate(
                 companyId,
-                new EntitlementAction.Module(ModuleAccess.Read, "financials"));
+                new EntitlementAction.Module(financialsAccess, "financials"));
             if (financials.Allowed)
             {
                 return new EntitlementDecision(
