@@ -138,6 +138,8 @@ namespace Api.Data.Schema
                 EnsureAllIndexes(connection, logger);
                 EnsureLifecycleColumns(connection);
                 EnsureTables(connection);
+                // Outside EnsureTables so JournalEntryHeader upgrades even when optional later tables are absent.
+                EnsurePriorPeriodAdjustment(connection);
                 EnsureSecurityTables(connection);
             }
             finally
@@ -625,7 +627,6 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureStatementOtherIncomeColumns(connection);
             EnsureBooksLockChange(connection);
             EnsureEntityTypeAndYearEndClose(connection);
-            EnsurePriorPeriodAdjustment(connection);
         }
 
         // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
@@ -669,7 +670,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             cmd.ExecuteNonQuery();
         }
 
-        // D1 0047_prior_period_adjustment.sql (#455 Phase 2b-2)
+        // #455 Phase 2b-2: prior-period adjustment journals link to the closed fiscal year they correct.
         private static void EnsurePriorPeriodAdjustment(DbConnection connection)
         {
             AddColumnIfMissing(connection, "JournalEntryHeader", "AdjustsFiscalYearId", "INTEGER NULL");

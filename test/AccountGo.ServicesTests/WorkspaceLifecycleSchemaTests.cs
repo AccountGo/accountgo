@@ -10,10 +10,8 @@ namespace AccountGo.ServicesTests
 {
     public class WorkspaceLifecycleSchemaTests
     {
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void Upgrade_Phase2Schema_PreservesExistingRowsAndBackfillsCurrency(bool applyD1Migration)
+        [Fact]
+        public void Upgrade_Phase2Schema_PreservesExistingRowsAndBackfillsCurrency()
         {
             using (var connection = new SqliteConnection("Data Source=:memory:"))
             {
@@ -39,14 +37,6 @@ namespace AccountGo.ServicesTests
                         ALTER TABLE CompanyInvitation DROP COLUMN ResendCount;
                         ALTER TABLE CompanyInvitation DROP COLUMN ResendWindowStart;";
                     command.ExecuteNonQuery();
-                    if (applyD1Migration)
-                    {
-                        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-                        command.CommandText = File.ReadAllText(Path.Combine(root, "src/Api/d1/migrations/0002_workspace_lifecycle.sql"));
-                        command.ExecuteNonQuery();
-                        command.CommandText = File.ReadAllText(Path.Combine(root, "src/Api/d1/migrations/0022_company_accounting_policy.sql"));
-                        command.ExecuteNonQuery();
-                    }
                     SqliteSchemaUpgrader.Upgrade(connection);
                     SqliteSchemaUpgrader.Upgrade(connection);
                     command.CommandText = "SELECT Currency FROM CompanySetting WHERE CompanyId=1";

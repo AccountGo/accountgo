@@ -1,2 +1,0 @@
-ALTER TABLE "SalesInvoiceLine" ADD COLUMN "TaxId" INTEGER NULL REFERENCES "Tax" ("Id");
-ALTER TABLE "SalesInvoiceLine" ADD COLUMN "TaxAmount" decimal(18, 2) NOT NULL DEFAULT 0;

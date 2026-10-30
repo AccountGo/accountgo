@@ -13,8 +13,6 @@ public sealed class ServerTimingAccumulator
 
     private long _dbMilliseconds;
     private int _dbQueryCount;
-    private long _d1PrepMilliseconds;
-    private int _hasD1Prep;
 
     public void AddDbCommand(long milliseconds)
     {
@@ -24,16 +22,6 @@ public sealed class ServerTimingAccumulator
         Interlocked.Increment(ref _dbQueryCount);
     }
 
-    public void SetD1Prep(long milliseconds)
-    {
-        if (milliseconds < 0)
-            milliseconds = 0;
-        Interlocked.Exchange(ref _d1PrepMilliseconds, milliseconds);
-        Interlocked.Exchange(ref _hasD1Prep, 1);
-    }
-
     public long DbMilliseconds => Interlocked.Read(ref _dbMilliseconds);
     public int DbQueryCount => Volatile.Read(ref _dbQueryCount);
-    public bool HasD1Prep => Volatile.Read(ref _hasD1Prep) != 0;
-    public long D1PrepMilliseconds => Interlocked.Read(ref _d1PrepMilliseconds);
 }

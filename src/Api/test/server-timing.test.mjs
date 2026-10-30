@@ -5,7 +5,6 @@ import {
   formatServerTiming,
   isServerTimingEnabled,
   scrubPathForLog,
-  stripD1SyncHeaders,
   withServerTiming,
 } from "../server-timing.ts";
 
@@ -26,24 +25,6 @@ test("appendServerTimingValue never overwrites existing segments", () => {
   assert.match(merged, /db;dur=2;desc="1 query"/);
   assert.match(merged, /container;dur=50/);
   assert.match(merged, /worker;dur=80/);
-});
-
-test("stripD1SyncHeaders keeps Server-Timing and removes only sync headers", () => {
-  const headers = new Headers({
-    "Server-Timing": "app;dur=5",
-    "content-type": "application/json",
-    "x-d1-sync-encoding": "gzip",
-    "x-d1-sync-sql": "abc",
-    "x-d1-sync-sql-0": "chunk",
-    "x-d1-sync-sql-count": "1",
-  });
-  const stripped = stripD1SyncHeaders(headers);
-  assert.equal(stripped.get("Server-Timing"), "app;dur=5");
-  assert.equal(stripped.get("content-type"), "application/json");
-  assert.equal(stripped.get("x-d1-sync-encoding"), null);
-  assert.equal(stripped.get("x-d1-sync-sql"), null);
-  assert.equal(stripped.get("x-d1-sync-sql-0"), null);
-  assert.equal(stripped.get("x-d1-sync-sql-count"), null);
 });
 
 test("scrubPathForLog replaces ids, guids, hex hashes, and org slugs; drops query", () => {

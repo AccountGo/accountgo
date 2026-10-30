@@ -39,7 +39,6 @@ public class PlanPackagingLeakGuardTests
     private static readonly (string RelativePath, string Reason)[] Allowlist =
     [
         ("src/Api/Data/Migrations/", "Historical EF migrations keep prior seed/plan values."),
-        ("src/Api/d1/migrations/", "Historical D1 migrations keep prior seed/plan values."),
         ("src/Api/Data/Schema/SqliteSchemaUpgrader.cs", "Legacy plan-key rewrites for databases upgraded in place."),
         ("src/Api/Data/Seed/SeeData.cs", "EF seed must match the migration snapshot."),
     ];
