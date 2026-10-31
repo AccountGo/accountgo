@@ -411,6 +411,9 @@ public static class AccountGoApp
         builder.Services.TryAddScoped<Api.Service.IEmailSenderResolver, Api.Service.PlatformEmailSenderResolver>();
         builder.Services.TryAddScoped<Api.Service.IEmailCapabilities, Api.Service.PlatformEmailCapabilities>();
         builder.Services.TryAddScoped<Api.Service.IEmailDispatchService, Api.Service.PlatformEmailDispatchService>();
+        builder.Services.TryAddScoped<Api.Service.IInvoicePdfAppearanceProvider, Api.Service.DefaultInvoicePdfAppearanceProvider>();
+        builder.Services.TryAddScoped<Api.Service.IInvoiceBrandingCapabilities, Api.Service.DefaultInvoiceBrandingCapabilities>();
+        builder.Services.AddScoped<Api.Service.InvoicePdfRenderer>();
     }
 
     public static void ConfigureApp(WebApplication app, IReadOnlyList<IAccountGoModule> modules)

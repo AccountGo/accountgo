@@ -21,6 +21,8 @@ namespace Api.Service
         public string? IdempotencyKey { get; set; }
         /// <summary>Server-derived invoice and request fingerprint, excluding regenerated links and PDF bytes.</summary>
         public string? IntentFingerprint { get; set; }
+        /// <summary>Appearance frozen with a custom-email attachment. Retries keep the admitted value.</summary>
+        public string? AppearanceStamp { get; set; }
         public string To { get; set; } = string.Empty;
         public List<string> AdditionalTo { get; set; } = new();
         public List<string> Cc { get; set; } = new();
