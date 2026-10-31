@@ -864,18 +864,17 @@ namespace Api.Controllers
         [HttpGet]
         [Route("SalesInvoicePdf")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult SalesInvoicePdf(int id)
+        public async Task<IActionResult> SalesInvoicePdf(int id, [FromServices] Api.Service.InvoicePdfRenderer pdfs, CancellationToken ct)
         {
             var salesInvoiceDto = BuildSalesInvoiceDto(id);
             if (salesInvoiceDto == null)
                 return NotFound(new { message = $"Invoice #{id} not found." });
 
-            var document = new Api.Service.InvoicePdfDocument(
+            var rendered = await pdfs.RenderAsync(
                 salesInvoiceDto,
-                _db.CompanySettings.Select(s => s.Currency).FirstOrDefault());
-
-            var bytes = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(document);
-            return File(bytes, "application/pdf", $"Invoice-{document.InvoiceNumber}.pdf");
+                _db.CompanySettings.Select(s => s.Currency).FirstOrDefault(),
+                ct);
+            return File(rendered.Pdf, "application/pdf", $"Invoice-{rendered.InvoiceNumber}.pdf");
         }
 
         /// <summary>
@@ -891,8 +890,9 @@ namespace Api.Controllers
             bool attachPdf = false,
             [FromQuery] string[]? additionalRecipients = null,
             [FromQuery] string[]? cc = null,
-            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null) =>
-            SendInvoiceEmailAsync(id, emailDispatch, followUp: false, attachPdf, additionalRecipients, cc, sendingMode, approvedSenderId, dispatchId);
+            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null,
+            [FromServices] Api.Service.InvoicePdfRenderer? pdfs = null) =>
+            SendInvoiceEmailAsync(id, emailDispatch, followUp: false, attachPdf, additionalRecipients, cc, sendingMode, approvedSenderId, dispatchId, pdfs);
 
         /// <summary>
         /// Sends a follow-up reminder for an unpaid invoice: same PDF link/BCC as the original send, different copy.
@@ -906,8 +906,9 @@ namespace Api.Controllers
             bool attachPdf = false,
             [FromQuery] string[]? additionalRecipients = null,
             [FromQuery] string[]? cc = null,
-            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null) =>
-            SendInvoiceEmailAsync(id, emailDispatch, followUp: true, attachPdf, additionalRecipients, cc, sendingMode, approvedSenderId, dispatchId);
+            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null,
+            [FromServices] Api.Service.InvoicePdfRenderer? pdfs = null) =>
+            SendInvoiceEmailAsync(id, emailDispatch, followUp: true, attachPdf, additionalRecipients, cc, sendingMode, approvedSenderId, dispatchId, pdfs);
 
         private async Task<IActionResult> SendInvoiceEmailAsync(
             int id,
@@ -916,7 +917,8 @@ namespace Api.Controllers
             bool attachPdf,
             string[]? additionalRecipients = null,
             string[]? cc = null,
-            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null)
+            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null,
+            Api.Service.InvoicePdfRenderer? pdfs = null)
         {
             var invoice = BuildSalesInvoiceDto(id);
             if (invoice == null)
@@ -1019,11 +1021,14 @@ namespace Api.Controllers
             };
             if (attachPdf)
             {
-                var pdf = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(new Api.Service.InvoicePdfDocument(invoice, currency));
+                var rendered = pdfs == null
+                    ? Api.Service.InvoicePdfRenderer.Render(invoice, currency, Api.Service.InvoicePdfAppearance.Default)
+                    : await pdfs.RenderAsync(invoice, currency);
+                message.AppearanceStamp = rendered.AppearanceStamp;
                 message.Attachments.Add(new Api.Service.EmailAttachment
                 {
                     FileName = Api.Service.InvoiceEmailTemplate.PdfFileName(number),
-                    Content = pdf
+                    Content = rendered.Pdf
                 });
             }
             if (senderEmail != null

@@ -23,6 +23,7 @@ namespace Api.Controllers
         private readonly IConfiguration _configuration;
         private readonly ITenantContext _tenant;
         private readonly SalesInvoicePresentation _invoices;
+        private readonly InvoicePdfRenderer _pdfs;
         private readonly ApiDbContext _db;
         private readonly ILogger<PublicInvoicePdfController> _logger;
 
@@ -30,19 +31,21 @@ namespace Api.Controllers
             IConfiguration configuration,
             ITenantContext tenant,
             SalesInvoicePresentation invoices,
+            InvoicePdfRenderer pdfs,
             ApiDbContext db,
             ILogger<PublicInvoicePdfController> logger)
         {
             _configuration = configuration;
             _tenant = tenant;
             _invoices = invoices;
+            _pdfs = pdfs;
             _db = db;
             _logger = logger;
         }
 
         [HttpGet("pdf")]
         [EnableRateLimiting("invoice-pdf-link")]
-        public IActionResult Pdf(
+        public async Task<IActionResult> Pdf(
             [FromQuery] string? c,
             [FromQuery] string? i,
             [FromQuery] string? e,
@@ -84,14 +87,14 @@ namespace Api.Controllers
                     return NotFound();
 
                 var currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault();
-                var document = new InvoicePdfDocument(invoice, currency);
-                var bytes = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(document);
+                // Appearance is resolved only after the signature, invoice checks, and organization impersonation.
+                var rendered = await _pdfs.RenderAsync(invoice, currency, HttpContext.RequestAborted);
 
                 // Open in the browser (inline), not as a forced download. Never cache financial PDFs.
-                var fileName = InvoiceEmailTemplate.PdfFileName(document.InvoiceNumber);
+                var fileName = InvoiceEmailTemplate.PdfFileName(rendered.InvoiceNumber);
                 Response.Headers["Content-Disposition"] = $"inline; filename=\"{fileName}\"";
                 Response.Headers.CacheControl = "private, no-store";
-                return File(bytes, "application/pdf");
+                return File(rendered.Pdf, "application/pdf");
             }
         }
     }

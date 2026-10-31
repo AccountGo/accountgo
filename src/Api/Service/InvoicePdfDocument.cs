@@ -11,20 +11,18 @@ namespace Api.Service
     /// <summary>Lays out a sales invoice as a print-ready PDF, independent of any browser.</summary>
     public class InvoicePdfDocument : IDocument
     {
-        private const string Ink = "#0F172A";
-        private const string Secondary = "#475569";
-        private const string Muted = "#64748B";
-        private const string Rule = "#E2E8F0";
-        private const string Shade = "#F1F5F9";
-        private const string Brand = "#059669";
-
         private readonly Dto.Sales.SalesInvoice _invoice;
         private readonly string _currencyCode;
+        private readonly InvoicePdfPalette _colors;
+        private readonly bool _showAccountGoBranding;
 
-        public InvoicePdfDocument(Dto.Sales.SalesInvoice invoice, string? currencyCode)
+        public InvoicePdfDocument(Dto.Sales.SalesInvoice invoice, string? currencyCode, InvoicePdfAppearance? appearance = null)
         {
             _invoice = invoice;
             _currencyCode = InvoiceFormat.CurrencyCode(currencyCode);
+            var resolved = appearance ?? InvoicePdfAppearance.Default;
+            _colors = resolved.Colors;
+            _showAccountGoBranding = resolved.ShowAccountGoBranding;
         }
 
         private string SellerName => string.IsNullOrWhiteSpace(_invoice.Seller.Name) ? "AccountGo" : _invoice.Seller.Name;
@@ -49,7 +47,7 @@ namespace Api.Service
                 page.Size(_currencyCode is "USD" or "CAD" ? PageSizes.Letter : PageSizes.A4);
                 page.Margin(40);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(style => style.FontFamily(Fonts.Lato).FontSize(9.5f).FontColor(Ink));
+                page.DefaultTextStyle(style => style.FontFamily(Fonts.Lato).FontSize(9.5f).FontColor(_colors.Text));
 
                 page.Header().Element(ComposeHeader);
                 page.Content().Element(ComposeContent);
@@ -59,25 +57,25 @@ namespace Api.Service
 
         private void ComposeHeader(IContainer container)
         {
-            container.PaddingBottom(18).BorderBottom(1).BorderColor(Rule).PaddingBottom(18).Row(row =>
+            container.PaddingBottom(18).BorderBottom(1).BorderColor(_colors.Border).PaddingBottom(18).Row(row =>
             {
                 row.RelativeItem().Column(column =>
                 {
                     var seller = _invoice.Seller;
                     column.Item().Text(SellerName).FontSize(18).Bold();
                     foreach (var line in seller.AddressLines)
-                        column.Item().Text(line).FontSize(8.5f).FontColor(Secondary);
+                        column.Item().Text(line).FontSize(8.5f).FontColor(_colors.SecondaryText);
                     var contact = string.Join(" · ", new[] { seller.Phone, seller.Email }.Where(s => !string.IsNullOrWhiteSpace(s)));
                     if (contact.Length > 0)
-                        column.Item().Text(contact).FontSize(8.5f).FontColor(Secondary);
+                        column.Item().Text(contact).FontSize(8.5f).FontColor(_colors.SecondaryText);
                     if (!string.IsNullOrWhiteSpace(seller.TaxId))
-                        column.Item().PaddingTop(2).Text($"Tax ID: {seller.TaxId}").FontSize(8.5f).FontColor(Muted);
+                        column.Item().PaddingTop(2).Text($"Tax ID: {seller.TaxId}").FontSize(8.5f).FontColor(_colors.MutedText);
                 });
 
                 row.ConstantItem(200).AlignRight().Column(column =>
                 {
                     column.Item().AlignRight().Text("INVOICE").FontSize(22).ExtraBold().LetterSpacing(0.04f);
-                    column.Item().AlignRight().Text(InvoiceFormat.Label(_invoice)).FontSize(11).SemiBold().FontColor(Brand);
+                    column.Item().AlignRight().Text(InvoiceFormat.Label(_invoice)).FontSize(11).SemiBold().FontColor(_colors.Accent);
                     // The PDF is what the customer receives, so it only marks statuses that change what the document is.
                     if (_invoice.Status is "Paid" or "Void" or "Draft")
                         column.Item().PaddingTop(6).AlignRight().Element(ComposeStatusBadge);
@@ -89,9 +87,9 @@ namespace Api.Service
         {
             var (label, color) = _invoice.Status switch
             {
-                "Paid" => ("PAID", "#059669"),
-                "Void" => ("VOID", "#64748B"),
-                _ => ("DRAFT", "#64748B"),
+                "Paid" => ("PAID", _colors.Success),
+                "Void" => ("VOID", _colors.Neutral),
+                _ => ("DRAFT", _colors.Neutral),
             };
 
             container.Border(1).BorderColor(color).CornerRadius(4).PaddingVertical(2).PaddingHorizontal(8)
@@ -125,17 +123,17 @@ namespace Api.Service
                 row.RelativeItem().Column(column =>
                 {
                     column.Spacing(2);
-                    column.Item().Text("BILLED TO").FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
+                    column.Item().Text("BILLED TO").FontSize(7.5f).SemiBold().FontColor(_colors.MutedText).LetterSpacing(0.08f);
                     // Same order as the seller block: name, address, phone, email; the attention line follows a blank line.
                     column.Item().PaddingTop(2).Text(_invoice.CustomerName ?? "Customer").FontSize(11).Bold();
                     if (!string.IsNullOrWhiteSpace(_invoice.CustomerAddress))
-                        column.Item().Text(_invoice.CustomerAddress).FontColor(Secondary);
+                        column.Item().Text(_invoice.CustomerAddress).FontColor(_colors.SecondaryText);
                     if (!string.IsNullOrWhiteSpace(_invoice.CustomerPhone))
-                        column.Item().Text(_invoice.CustomerPhone).FontColor(Secondary);
+                        column.Item().Text(_invoice.CustomerPhone).FontColor(_colors.SecondaryText);
                     if (_invoice.Display.ShowCustomerEmail && !string.IsNullOrWhiteSpace(_invoice.CustomerEmail))
-                        column.Item().Text(_invoice.CustomerEmail).FontColor(Secondary);
+                        column.Item().Text(_invoice.CustomerEmail).FontColor(_colors.SecondaryText);
                     if (_invoice.Display.ShowAttention && !string.IsNullOrWhiteSpace(_invoice.CustomerAttention))
-                        column.Item().PaddingTop(10).Text(_invoice.CustomerAttention).FontColor(Secondary);
+                        column.Item().PaddingTop(10).Text(_invoice.CustomerAttention).FontColor(_colors.SecondaryText);
                 });
 
                 row.ConstantItem(210).Table(table =>
@@ -146,17 +144,17 @@ namespace Api.Service
                         columns.ConstantColumn(90);
                     });
 
-                    void Fact(string label, string value, string color = Ink)
+                    void Fact(string label, string value, string color)
                     {
-                        table.Cell().PaddingVertical(2).AlignRight().Text(label).FontColor(Muted);
+                        table.Cell().PaddingVertical(2).AlignRight().Text(label).FontColor(_colors.MutedText);
                         table.Cell().PaddingVertical(2).AlignRight().Text(value).SemiBold().FontColor(color);
                     }
 
-                    Fact("Invoice date", FormatDate(_invoice.InvoiceDate));
+                    Fact("Invoice date", FormatDate(_invoice.InvoiceDate), _colors.Text);
                     if (_invoice.DueDate.HasValue)
-                        Fact("Due date", FormatDate(_invoice.DueDate.Value), _invoice.Status == "Overdue" ? "#E11D48" : Ink);
+                        Fact("Due date", FormatDate(_invoice.DueDate.Value), _invoice.Status == "Overdue" ? _colors.Danger : _colors.Text);
                     if (!string.IsNullOrWhiteSpace(_invoice.ReferenceNo))
-                        Fact("Reference / PO", _invoice.ReferenceNo!);
+                        Fact("Reference / PO", _invoice.ReferenceNo!, _colors.Text);
                 });
             });
         }
@@ -185,7 +183,7 @@ namespace Api.Service
                 table.Header(header =>
                 {
                     IContainer HeaderCell(IContainer cell) =>
-                        cell.Background(Shade).PaddingVertical(7).PaddingHorizontal(6).DefaultTextStyle(s => s.FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.06f));
+                        cell.Background(_colors.Surface).PaddingVertical(7).PaddingHorizontal(6).DefaultTextStyle(s => s.FontSize(7.5f).SemiBold().FontColor(_colors.MutedText).LetterSpacing(0.06f));
 
                     header.Cell().Element(HeaderCell).Text("#");
                     header.Cell().Element(HeaderCell).Text("DESCRIPTION");
@@ -208,9 +206,9 @@ namespace Api.Service
                     var total = line.LineTotal ?? Math.Round(quantity * price * (1 - discount / 100m), 2, MidpointRounding.AwayFromZero);
 
                     IContainer BodyCell(IContainer cell) =>
-                        cell.BorderBottom(0.75f).BorderColor(Rule).PaddingVertical(7).PaddingHorizontal(6);
+                        cell.BorderBottom(0.75f).BorderColor(_colors.Border).PaddingVertical(7).PaddingHorizontal(6);
 
-                    table.Cell().Element(BodyCell).Text(index.ToString(CultureInfo.InvariantCulture)).FontColor(Muted);
+                    table.Cell().Element(BodyCell).Text(index.ToString(CultureInfo.InvariantCulture)).FontColor(_colors.MutedText);
                     table.Cell().Element(BodyCell).Text(line.ItemDescription ?? "Item");
                     table.Cell().Element(BodyCell).AlignRight().Text(quantity.ToString("0.##", CultureInfo.InvariantCulture));
                     table.Cell().Element(BodyCell).AlignRight().Text(Money(price));
@@ -228,16 +226,16 @@ namespace Api.Service
             container.Row(row =>
             {
                 row.RelativeItem();
-                row.ConstantItem(230).Background(Shade).CornerRadius(6).Padding(12).Column(column =>
+                row.ConstantItem(230).Background(_colors.Surface).CornerRadius(6).Padding(12).Column(column =>
                 {
                     column.Spacing(5);
 
-                    void Line(string label, string value, bool strong = false, string color = Ink)
+                    void Line(string label, string value, bool strong = false, string? color = null)
                     {
                         column.Item().Row(r =>
                         {
-                            var left = r.RelativeItem().Text(label).FontColor(strong ? Ink : Secondary);
-                            var right = r.AutoItem().Text(value).FontColor(color);
+                            var left = r.RelativeItem().Text(label).FontColor(strong ? _colors.Text : _colors.SecondaryText);
+                            var right = r.AutoItem().Text(value).FontColor(color ?? (strong ? _colors.Text : _colors.SecondaryText));
                             if (strong)
                             {
                                 left.Bold().FontSize(11);
@@ -252,12 +250,12 @@ namespace Api.Service
                         Line("Tax", Money(_invoice.TotalTax!.Value));
                     if (_invoice.ShippingHandlingCharge > 0)
                         Line("Shipping", Money(_invoice.ShippingHandlingCharge));
-                    column.Item().LineHorizontal(0.75f).LineColor(Rule);
+                    column.Item().LineHorizontal(0.75f).LineColor(_colors.Border);
                     Line("Total", Money(total), strong: true);
                     if (_invoice.PaidAmount > 0)
-                        Line("Amount paid", $"−{Money(_invoice.PaidAmount)}", color: Brand);
-                    column.Item().LineHorizontal(0.75f).LineColor(Rule);
-                    Line($"Balance due ({_currencyCode})", Money(_invoice.BalanceDue), strong: true, color: Brand);
+                        Line("Amount paid", $"−{Money(_invoice.PaidAmount)}", color: _colors.Success);
+                    column.Item().LineHorizontal(0.75f).LineColor(_colors.Border);
+                    Line($"Balance due ({_currencyCode})", Money(_invoice.BalanceDue), strong: true, color: _colors.Accent);
                 });
             });
         }
@@ -266,14 +264,14 @@ namespace Api.Service
         {
             container.Column(column =>
             {
-                column.Item().PaddingBottom(6).Text("PAYMENTS RECEIVED").FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
+                column.Item().PaddingBottom(6).Text("PAYMENTS RECEIVED").FontSize(7.5f).SemiBold().FontColor(_colors.MutedText).LetterSpacing(0.08f);
                 foreach (var payment in _invoice.Payments!)
                 {
-                    column.Item().BorderBottom(0.75f).BorderColor(Rule).PaddingVertical(5).Row(row =>
+                    column.Item().BorderBottom(0.75f).BorderColor(_colors.Border).PaddingVertical(5).Row(row =>
                     {
-                        row.ConstantItem(90).Text(FormatDate(payment.Date)).FontColor(Secondary);
+                        row.ConstantItem(90).Text(FormatDate(payment.Date)).FontColor(_colors.SecondaryText);
                         row.RelativeItem().Text(string.Join(" · ", new[] { payment.PaymentMethod, payment.ReferenceNo ?? payment.ReceiptNo }
-                            .Where(s => !string.IsNullOrWhiteSpace(s)))).FontColor(Secondary);
+                            .Where(s => !string.IsNullOrWhiteSpace(s)))).FontColor(_colors.SecondaryText);
                         row.AutoItem().Text(Money(payment.Amount)).SemiBold();
                     });
                 }
@@ -284,25 +282,40 @@ namespace Api.Service
         {
             container.Column(column =>
             {
-                column.Item().BorderBottom(0.75f).BorderColor(Rule).PaddingBottom(6)
-                    .Text(heading).FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
-                column.Item().PaddingTop(6).Text(text).FontColor(Ink);
+                column.Item().BorderBottom(0.75f).BorderColor(_colors.Border).PaddingBottom(6)
+                    .Text(heading).FontSize(7.5f).SemiBold().FontColor(_colors.MutedText).LetterSpacing(0.08f);
+                column.Item().PaddingTop(6).Text(text).FontColor(_colors.Text);
             });
         }
 
         private void ComposeFooter(IContainer container)
         {
-            container.BorderTop(0.75f).BorderColor(Rule).PaddingTop(8).Row(row =>
+            container.Column(column =>
             {
-                row.RelativeItem().Text($"{SellerName} · Invoice {InvoiceFormat.Label(_invoice)}").FontSize(8).FontColor(Muted);
-                row.AutoItem().Text(text =>
+                column.Item().BorderTop(0.75f).BorderColor(_colors.Border).PaddingTop(8).Row(row =>
                 {
-                    text.DefaultTextStyle(s => s.FontSize(8).FontColor(Muted));
-                    text.Span("Page ");
-                    text.CurrentPageNumber();
-                    text.Span(" of ");
-                    text.TotalPages();
+                    row.RelativeItem().Text($"{SellerName} · Invoice {InvoiceFormat.Label(_invoice)}").FontSize(8).FontColor(_colors.MutedText);
+                    row.AutoItem().Text(text =>
+                    {
+                        text.DefaultTextStyle(s => s.FontSize(8).FontColor(_colors.MutedText));
+                        text.Span("Page ");
+                        text.CurrentPageNumber();
+                        text.Span(" of ");
+                        text.TotalPages();
+                    });
                 });
+
+                // A separate full-width line keeps attribution centered when the seller name is long.
+                // Its color is fixed so a customer palette cannot paint it white-on-white.
+                if (_showAccountGoBranding)
+                {
+                    column.Item().PaddingTop(6).AlignCenter().Text(text =>
+                    {
+                        text.DefaultTextStyle(style => style.FontSize(7.5f).FontColor(InvoicePdfAppearance.AttributionColor));
+                        text.Span("Powered by ");
+                        text.Span("AccountGo").SemiBold();
+                    });
+                }
             });
         }
 
