@@ -17,6 +17,10 @@ namespace Api.Service
 
     public class EmailMessage
     {
+        /// <summary>Stable provider key for retries of one immutable dispatch.</summary>
+        public string? IdempotencyKey { get; set; }
+        /// <summary>Server-derived invoice and request fingerprint, excluding regenerated links and PDF bytes.</summary>
+        public string? IntentFingerprint { get; set; }
         public string To { get; set; } = string.Empty;
         public List<string> AdditionalTo { get; set; } = new();
         public List<string> Cc { get; set; } = new();
@@ -24,7 +28,7 @@ namespace Api.Service
         public string Html { get; set; } = string.Empty;
         /// <summary>Plain-text alternative for clients that don't render HTML.</summary>
         public string? Text { get; set; }
-        /// <summary>Display name shown before the configured sending address; the address itself never changes.</summary>
+        /// <summary>Display name shown with the server-resolved sending address.</summary>
         public string? FromName { get; set; }
         /// <summary>Specific sender email address (e.g. auth@accountgo.dev, invites@accountgo.dev). Falls back to default sending address if not set.</summary>
         public string? FromEmail { get; set; }
@@ -33,10 +37,13 @@ namespace Api.Service
         public List<EmailAttachment> Attachments { get; set; } = new();
     }
 
-    /// <summary>The provider did not take the message; the message says why, in words safe to show the sender.</summary>
+    /// <summary>A delivery failure with safe diagnostics and acceptance certainty when the provider establishes it.</summary>
     public class EmailDeliveryException : HttpRequestException
     {
-        public EmailDeliveryException(string message, Exception? inner = null) : base(message, inner) { }
+        public EmailDeliveryException(string message, Exception? inner = null, bool acceptanceUnknown = true) : base(message, inner)
+        { AcceptanceUnknown = acceptanceUnknown; }
+        /// <summary>True when transport failure may have occurred after provider acceptance.</summary>
+        public bool AcceptanceUnknown { get; }
     }
 
     public class EmailAttachment

@@ -131,6 +131,8 @@ namespace Api.Service
                     To = e.ToEmail,
                     SentAt = DateTime.SpecifyKind(e.SentAt, DateTimeKind.Utc),
                     SentBy = e.SentByEmail,
+                    DispatchId = e.DispatchId,
+                    FromEmail = e.FromEmail,
                 })
                 .ToList();
 
