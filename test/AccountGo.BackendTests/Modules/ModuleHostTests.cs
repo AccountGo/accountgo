@@ -102,6 +102,81 @@ public class ModuleHostTests
     }
 
     [Fact]
+    public async Task HostCustomization_Callback_InvokedBeforeBuild_CanRegisterMiddlewareOrServices()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), "accountgo_custom_host_" + Path.GetRandomFileName() + ".db");
+        var callbackExecuted = false;
+        var app = AccountGoApp.BuildApp([
+            "--Environment=Development",
+            "--DatabaseProvider=Sqlite",
+            $"--ConnectionStrings:SqliteConnection=Data Source={dbPath}",
+            "--SECRET_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "--urls=http://127.0.0.1:0"
+        ], [new StubModule()], builder =>
+        {
+            callbackExecuted = true;
+            builder.Services.AddTransient<IStartupFilter, CustomProbeStartupFilter>();
+        });
+
+        Assert.True(callbackExecuted);
+
+        await app.StartAsync();
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+            var customResponse = await client.GetAsync("/api/custom-synthetic-probe");
+            Assert.Equal(HttpStatusCode.NotFound, customResponse.StatusCode);
+            Assert.True(customResponse.Headers.Contains("X-Synthetic-Probe"));
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task HostCustomization_Callback_ExecutedAfterModuleConfigureServices()
+    {
+        var stub = new StubModule();
+        bool stubConfiguredBeforeHostCallback = false;
+
+        var app = AccountGoApp.BuildApp([
+            "--Environment=Development",
+            "--DatabaseProvider=InMemory",
+            "--SECRET_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "--urls=http://127.0.0.1:0"
+        ], [stub], _ =>
+        {
+            stubConfiguredBeforeHostCallback = stub.ConfigureServicesCalled;
+        });
+
+        Assert.True(stubConfiguredBeforeHostCallback);
+        await app.DisposeAsync();
+    }
+
+    private sealed class CustomProbeStartupFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
+        {
+            return app =>
+            {
+                app.Use(async (context, nextMiddleware) =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/api/custom-synthetic-probe"))
+                    {
+                        context.Response.Headers.Append("X-Synthetic-Probe", "Active");
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+                    await nextMiddleware(context);
+                });
+                next(app);
+            };
+        }
+    }
+
+    [Fact]
     public void CommunityEntitlementService_DoesNotHaveMfaFeature()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), "accountgo_comm_ent_" + Path.GetRandomFileName() + ".db");
