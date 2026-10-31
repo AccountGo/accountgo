@@ -180,6 +180,7 @@ public static class AccountGoApp
         builder.Services.AddSingleton<Api.Service.Import.ICoaFormatAdapterRegistry, Api.Service.Import.CoaFormatAdapterRegistry>();
         builder.Services.AddScoped<IAccountService, AccountService>();
         builder.Services.AddScoped<Api.Service.SalesInvoicePresentation>();
+        builder.Services.AddHostedService<Api.Service.StartupWarmup>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
         builder.Services.AddSingleton(Api.Options.EntitlementsConfiguration.FromConfiguration(builder.Configuration));
@@ -538,7 +539,15 @@ public static class AccountGoApp
         app.MapGet("/health", () => Results.Ok(new
         {
             status = "healthy",
-            modules = modules.Select(m => m.Name).ToArray()
+            modules = modules.Select(m => m.Name).ToArray(),
+            // What the runtime actually got (container CPU/GC settings); no secrets or host details.
+            runtime = new
+            {
+                processors = Environment.ProcessorCount,
+                serverGc = System.Runtime.GCSettings.IsServerGC,
+                gcHeapLimitMb = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (1024 * 1024),
+                tieredPgo = Environment.GetEnvironmentVariable("DOTNET_TieredPGO") ?? "default",
+            }
         })).AllowAnonymous();
 
         // Module-specific endpoints
