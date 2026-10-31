@@ -41,12 +41,23 @@ export function resolveContainerInstanceType(
   return DEFAULT_INSTANCE;
 }
 
-/** Single shared writer name (Phase 0). Same shape for V1 and V2. */
-export function resolveWriterContainerName(
-  containerName: string | undefined,
+/**
+ * Durable Object names: `{class generation}-{pool}-{Worker version id}`. The generation says which class (and so
+ * which container application and scheduling policy) the object belongs to: "v1" = AccountGoApiContainer (default
+ * scheduling, lite), "v2" = AccountGoApiContainerV2 (durable_object scheduling, size chosen at start()). The version
+ * id gives every deploy fresh objects, e.g. "v1-free-<id>", "v2-paid-<id>".
+ */
+export function resolveContainerObjectName(
+  generation: "v1" | "v2",
+  pool: CapacityPool,
   versionId: string | undefined
 ): string {
-  return `${containerName || "default"}-${versionId || "dev"}`;
+  return `${generation}-${pool}-${versionId || "dev"}`;
+}
+
+/** The V1 writer: free workspaces with tiered capacity on, everyone with it off. */
+export function resolveWriterContainerName(versionId: string | undefined): string {
+  return resolveContainerObjectName("v1", "free", versionId);
 }
 
 /**
@@ -78,13 +89,9 @@ export function resolvePoolInstanceType(
   return resolveContainerInstanceType(configured);
 }
 
-/** One writer per pool per deploy version, e.g. "v10-paid-<versionId>". */
-export function resolvePoolContainerName(
-  containerName: string | undefined,
-  pool: CapacityPool,
-  versionId: string | undefined
-): string {
-  return `${containerName || "default"}-${pool}-${versionId || "dev"}`;
+/** A V2 pool writer, one per pool per deploy version, e.g. "v2-paid-<versionId>". */
+export function resolvePoolContainerName(pool: CapacityPool, versionId: string | undefined): string {
+  return resolveContainerObjectName("v2", pool, versionId);
 }
 
 /**
