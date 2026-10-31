@@ -2725,6 +2725,14 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("DispatchId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("FromEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
                     b.Property<string>("BccEmail")
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
@@ -2766,6 +2774,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(320)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DispatchId")
+                        .IsUnique()
+                        .HasFilter("[DispatchId] IS NOT NULL");
 
                     b.HasIndex("SalesInvoiceHeaderId");
 

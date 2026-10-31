@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["test-ui/**/*.test.tsx", "vitest.email.config.ts"]
+}

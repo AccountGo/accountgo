@@ -547,6 +547,7 @@ namespace Api.Data
 
             builder.Entity<SalesInvoiceEmail>(entity =>
             {
+                entity.HasIndex(e => e.DispatchId).IsUnique().HasFilter("[DispatchId] IS NOT NULL");
                 entity.HasIndex(e => new { e.CompanyId, e.SentAt });
                 entity.HasIndex(e => e.SalesInvoiceHeaderId);
                 entity.HasOne<SalesInvoiceHeader>()

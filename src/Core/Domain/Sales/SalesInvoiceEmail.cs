@@ -44,5 +44,10 @@ namespace Core.Domain.Sales
         /// <summary>The email provider's id for the message, for tracing delivery questions.</summary>
         [MaxLength(100)]
         public string? ProviderMessageId { get; set; }
+        /// <summary>Stable dispatch correlation; unique when supplied so retries cannot duplicate invoice history.</summary>
+        [MaxLength(100)]
+        public string? DispatchId { get; set; }
+        [MaxLength(320)]
+        public string? FromEmail { get; set; }
     }
 }

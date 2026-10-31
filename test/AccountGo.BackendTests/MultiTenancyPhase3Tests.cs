@@ -759,7 +759,7 @@ namespace AccountGo.BackendTests
                 using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
                 {
                     // An old send no longer counts; 29 in the last hour leave room for one more.
-                    db.SalesInvoiceEmails.Add(new SalesInvoiceEmail { SalesInvoiceHeaderId = invoiceId, ToEmail = "x@example.com", Subject = "old", SentAt = DateTime.UtcNow.AddHours(-2) });
+                    db.SalesInvoiceEmails.Add(new SalesInvoiceEmail { SalesInvoiceHeaderId = invoiceId, ToEmail = "x@example.com", Subject = "old", SentAt = DateTime.UtcNow.AddHours(-2), DispatchId = "0192c530-1111-7000-8000-000000000001" });
                     for (var i = 0; i < 29; i++)
                         db.SalesInvoiceEmails.Add(new SalesInvoiceEmail { SalesInvoiceHeaderId = invoiceId, ToEmail = "x@example.com", Subject = "recent", SentAt = DateTime.UtcNow.AddMinutes(-5) });
                     db.SaveChanges();
@@ -770,6 +770,8 @@ namespace AccountGo.BackendTests
             Assert.True((await Send(HttpMethod.Post, path)).IsSuccessStatusCode);
             var count = _emails.Messages.Count;
             Assert.Equal((HttpStatusCode)429, (await Send(HttpMethod.Post, path)).StatusCode);
+            // A retained dispatch ID must not exempt a new platform send from the workspace cap.
+            Assert.Equal((HttpStatusCode)429, (await Send(HttpMethod.Post, path + "&dispatchId=0192c530-1111-7000-8000-000000000001")).StatusCode);
             Assert.Equal(count, _emails.Messages.Count);
         }
 

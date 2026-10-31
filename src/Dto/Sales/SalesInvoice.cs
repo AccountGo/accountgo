@@ -119,6 +119,8 @@ namespace Dto.Sales
 
     public class InvoiceEmailItemDto
     {
+        public string? DispatchId { get; set; }
+        public string? FromEmail { get; set; }
         public int Id { get; set; }
         public string Kind { get; set; } = "Invoice";
         public string To { get; set; } = string.Empty;
