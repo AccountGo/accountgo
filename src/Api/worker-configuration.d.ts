@@ -4,7 +4,6 @@
 interface __BaseEnv_Env {
 	CF_VERSION_METADATA: WorkerVersionMetadata;
 	ENVIRONMENT: "Development";
-	CONTAINER_NAME: "local";
 	TIERED_CAPACITY_ENABLED: "false";
 	CONTAINER_INSTANCE_TYPE_PAID: "standard-1";
 	CONTAINER_INSTANCE_TYPE_FREE: "lite";
@@ -45,7 +44,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "ENVIRONMENT" | "CONTAINER_NAME" | "TIERED_CAPACITY_ENABLED" | "CONTAINER_INSTANCE_TYPE_PAID" | "CONTAINER_INSTANCE_TYPE_FREE" | "DatabaseProvider" | "EMAIL_PROVIDER" | "PUBLIC_WEB_URL" | "AUTH_EMAIL_FROM" | "SECURITY_EMAIL_FROM" | "INVITES_EMAIL_FROM" | "SUPPORT_EMAIL" | "JwtSettings__validIssuer" | "JwtSettings__validAudience" | "Cors__AllowedOrigins__0" | "Cors__AllowedOrigins__1" | "RESEND_API_KEY" | "RESEND_EMAIL_FROM" | "RESEND_WELCOME_EMAIL_FROM" | "RESEND_FROM_NAME" | "RESEND_WELCOME_FROM_NAME" | "SECRET_KEY" | "PUBLIC_API_URL" | "ANTER_BASE_URL" | "ANTER_API_KEY" | "ANTER_PROJECT_ID" | "ANTER_AGENT_SLUG">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "ENVIRONMENT" | "TIERED_CAPACITY_ENABLED" | "CONTAINER_INSTANCE_TYPE_PAID" | "CONTAINER_INSTANCE_TYPE_FREE" | "DatabaseProvider" | "EMAIL_PROVIDER" | "PUBLIC_WEB_URL" | "AUTH_EMAIL_FROM" | "SECURITY_EMAIL_FROM" | "INVITES_EMAIL_FROM" | "SUPPORT_EMAIL" | "JwtSettings__validIssuer" | "JwtSettings__validAudience" | "Cors__AllowedOrigins__0" | "Cors__AllowedOrigins__1" | "RESEND_API_KEY" | "RESEND_EMAIL_FROM" | "RESEND_WELCOME_EMAIL_FROM" | "RESEND_FROM_NAME" | "RESEND_WELCOME_FROM_NAME" | "SECRET_KEY" | "PUBLIC_API_URL" | "ANTER_BASE_URL" | "ANTER_API_KEY" | "ANTER_PROJECT_ID" | "ANTER_AGENT_SLUG">> {}
 }
 declare module "*.txt" {
 	const value: string;

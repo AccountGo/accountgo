@@ -8,7 +8,6 @@ export interface Env {
   ENVIRONMENT?: string;
   /** Must be "Postgres" on Cloudflare (requirePersistentDatabase). */
   DatabaseProvider?: string;
-  CONTAINER_NAME?: string;
   /** Deployed default for tiered capacity: "true" routes to the CONTAINER_V2 pools. */
   TIERED_CAPACITY_ENABLED?: string;
   /** Optional KV namespace with runtime switches (key "tiered_capacity" overrides TIERED_CAPACITY_ENABLED). */

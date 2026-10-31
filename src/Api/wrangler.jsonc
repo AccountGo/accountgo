@@ -59,7 +59,6 @@
   ],
   "vars": {
     "ENVIRONMENT": "Development",
-    "CONTAINER_NAME": "local",
     "TIERED_CAPACITY_ENABLED": "false",
     "CONTAINER_INSTANCE_TYPE_PAID": "standard-1",
     "CONTAINER_INSTANCE_TYPE_FREE": "lite",
