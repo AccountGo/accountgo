@@ -23,4 +23,6 @@ test("buildContainerEnvVars passes string settings through and drops bindings", 
   assert.equal(vars.ConnectionStrings__PostgresConnection, "Host=db");
   assert.equal(vars.SOME_BINDING, undefined);
   assert.equal(vars.RESTORE_FROM_D1, undefined);
+  // The container warms its heavy paths before the build check lets traffic in.
+  assert.equal(vars.WARMUP_ON_START, "true");
 });

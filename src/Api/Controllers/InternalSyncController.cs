@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -24,10 +25,15 @@ namespace Api.Controllers
         }
 
         [HttpGet("build")]
-        public IActionResult GetBuildInfo()
+        public async Task<IActionResult> GetBuildInfo()
         {
             if (!EnsureInternalAccess(out var failure))
                 return failure!;
+
+            // The Worker sends traffic only after this check: hold it until start-up warm-up is done (bounded, so a
+            // stuck warm-up never keeps the container out of service).
+            if (Api.Service.StartupWarmup.IsEnabled(_configuration))
+                await Task.WhenAny(Api.Service.StartupWarmup.Completion, Task.Delay(TimeSpan.FromSeconds(60)));
 
             string sha = "dev";
             var possiblePaths = new[]

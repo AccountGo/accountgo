@@ -64,7 +64,7 @@ public class SecurityHotfixesTests
     }
 
     [Fact]
-    public void InternalSyncController_Returns503_WhenSecretKeyMissing()
+    public async Task InternalSyncController_Returns503_WhenSecretKeyMissing()
     {
         var prevKey = Environment.GetEnvironmentVariable("SECRET_KEY");
         var prevKeyAlt = Environment.GetEnvironmentVariable("SECRET__key");
@@ -83,7 +83,7 @@ public class SecurityHotfixesTests
             controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
             // Act
-            var result = controller.GetBuildInfo();
+            var result = await controller.GetBuildInfo();
 
             // Assert
             var statusResult = Assert.IsType<ObjectResult>(result);
