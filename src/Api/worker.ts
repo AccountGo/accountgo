@@ -1,6 +1,12 @@
 import { Container, StopParams } from "@cloudflare/containers";
 import {
+  CAPACITY_HINT_HEADER,
+  CAPACITY_POOL_HEADER,
+  CapacityRouter,
+  WORKSPACE_HEADER,
   isTieredCapacityEnabled,
+  parseCapacityPool,
+  resolvePoolContainerName,
   resolveWriterContainerName,
 } from "./container-capacity";
 import {
@@ -28,6 +34,7 @@ import {
   type ContainerHost,
 } from "./container-proxy";
 import { constantTimeEqual } from "./constant-time";
+import { RuntimeFlags, TIERED_CAPACITY_FLAG_KEY } from "./runtime-flags";
 import {
   isServerTimingEnabled,
   logSlowWorkerRequest,
@@ -385,6 +392,10 @@ export class AccountGoApiContainer extends Container<Env> {
   }
 }
 
+/** Runtime switches read from the FLAGS KV namespace (per isolate, 30 s). */
+const runtimeFlags = new RuntimeFlags();
+/** Workspace slug → capacity pool, learnt from API responses (per isolate). */
+const capacityRouter = new CapacityRouter();
 let loggedContainerName = false;
 
 interface TurnstileVerifyResponse {
@@ -538,11 +549,11 @@ export default {
       }
 
       const versionId = env.CF_VERSION_METADATA?.id || "dev";
-      const defaultName = resolveWriterContainerName(env.CONTAINER_NAME, versionId);
+      const defaultName = resolveWriterContainerName(versionId);
       containerName = request.headers.get("x-container-name") || defaultName;
     } else {
       const versionId = env.CF_VERSION_METADATA?.id || "dev";
-      containerName = resolveWriterContainerName(env.CONTAINER_NAME, versionId);
+      containerName = resolveWriterContainerName(versionId);
 
       const isDev =
         !env.CF_VERSION_METADATA?.id ||
@@ -554,8 +565,29 @@ export default {
       }
     }
 
-    const useV2 = isTieredCapacityEnabled(env.TIERED_CAPACITY_ENABLED);
+    // The FLAGS KV value (runtime switch, no deploy) wins over the deployed TIERED_CAPACITY_ENABLED var.
+    const useV2 = await runtimeFlags.isEnabled(
+      env.FLAGS,
+      TIERED_CAPACITY_FLAG_KEY,
+      isTieredCapacityEnabled(env.TIERED_CAPACITY_ENABLED)
+    );
     if (useV2) {
+      // Pool by workspace plan: paid workspaces get a V2 container on CONTAINER_INSTANCE_TYPE_PAID. Free
+      // workspaces, slugs the router has not learnt yet and requests without a workspace (sign-in, refresh,
+      // workspace list) stay on V1. Both are "lite", but a durable_object-scheduled lite container gets the
+      // documented 256 MiB (.NET heap limit 154 MB) while V1's gets far more (459 MB): the app needs 316-421 MiB,
+      // so on V2 lite a signed-in refresh pushes it into continuous GC and the whole process stalls (2026-10-31).
+      const slug = request.headers.get(WORKSPACE_HEADER);
+      const pool = isAdminRequest
+        ? parseCapacityPool(request.headers.get(CAPACITY_POOL_HEADER)) ?? "free"
+        : capacityRouter.poolFor(slug);
+      if (pool === "free") {
+        const v1 = env.CONTAINER.get(env.CONTAINER.idFromName(containerName), { locationHint: "enam" });
+        const response = await v1.fetch(request);
+        const hint = parseCapacityPool(response.headers.get(CAPACITY_HINT_HEADER));
+        if (hint) capacityRouter.remember(slug, hint);
+        return response;
+      }
       const binding = env.CONTAINER_V2;
       if (!binding) {
         console.error(
@@ -563,9 +595,18 @@ export default {
         );
         return serviceUnavailable("Tiered capacity is misconfigured", 30);
       }
-      const id = binding.idFromName(containerName);
-      const stub = binding.get(id, { locationHint: "enam" });
-      return stub.fetch(request);
+      const versionId = env.CF_VERSION_METADATA?.id || "dev";
+      const poolContainerName =
+        isAdminRequest && request.headers.get("x-container-name")
+          ? containerName
+          : resolvePoolContainerName(pool, versionId);
+      const headers = new Headers(request.headers);
+      headers.set(CAPACITY_POOL_HEADER, pool);
+      const stub = binding.get(binding.idFromName(poolContainerName), { locationHint: "enam" });
+      const response = await stub.fetch(new Request(request, { headers }));
+      const hint = parseCapacityPool(response.headers.get(CAPACITY_HINT_HEADER));
+      if (hint) capacityRouter.remember(slug, hint);
+      return response;
     }
 
     const id = env.CONTAINER.idFromName(containerName);
