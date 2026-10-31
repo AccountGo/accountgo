@@ -173,7 +173,7 @@ export const Dashboard: React.FC = () => {
             {currentOrg.whitelabel?.brandName ? `${currentOrg.name} (${currentOrg.whitelabel.brandName})` : currentOrg.name}
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            Welcome back, <span className="text-[var(--text-main)] font-medium">{user.name}</span>. Real-time metrics streaming from live SQLite database.
+            Welcome back, <span className="text-[var(--text-main)] font-medium">{user.name}</span>. Live figures from your books.
           </p>
         </div>
 
@@ -495,7 +495,7 @@ export const Dashboard: React.FC = () => {
               <span>Live Database Connected</span>
             </div>
             <p className="text-[var(--text-muted)] text-[11px] leading-relaxed">
-              All financial figures, KPIs, ledger records, and customer accounts reflect real SQLite data.
+              All financial figures, KPIs, ledger records, and customer accounts reflect your live data.
             </p>
           </div>
         </div>
