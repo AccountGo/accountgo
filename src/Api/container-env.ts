@@ -28,6 +28,8 @@ export function buildContainerEnvVars(
   const envVars: Record<string, string> = {
     ASPNETCORE_URLS: `http://+:${containerPort}`,
     ASPNETCORE_ENVIRONMENT: "Production",
+    // Run the heavy request paths once before the build check lets traffic in (StartupWarmup).
+    WARMUP_ON_START: "true",
   };
   for (const [key, value] of Object.entries(env)) {
     if (typeof value === "string") {
