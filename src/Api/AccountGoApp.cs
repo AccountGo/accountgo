@@ -25,20 +25,27 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 public static class AccountGoApp
 {
-    public static WebApplication BuildApp(string[] args, IReadOnlyList<IAccountGoModule>? modules = null)
+    public static WebApplication BuildApp(
+        string[] args,
+        IReadOnlyList<IAccountGoModule>? modules = null,
+        Action<WebApplicationBuilder>? configureBuilder = null)
     {
         modules ??= Array.Empty<IAccountGoModule>();
         var builder = WebApplication.CreateBuilder(args);
         ConfigureBuilder(builder, modules);
+        configureBuilder?.Invoke(builder);
         var app = builder.Build();
         ConfigureApp(app, modules);
         return app;
     }
 
-    public static void Run(string[] args, IReadOnlyList<IAccountGoModule>? modules = null)
+    public static void Run(
+        string[] args,
+        IReadOnlyList<IAccountGoModule>? modules = null,
+        Action<WebApplicationBuilder>? configureBuilder = null)
     {
         modules ??= Array.Empty<IAccountGoModule>();
-        var app = BuildApp(args, modules);
+        var app = BuildApp(args, modules, configureBuilder);
 
         var copyIndex = Array.IndexOf(args, "--copy-from-sqlite");
         if (copyIndex >= 0)
