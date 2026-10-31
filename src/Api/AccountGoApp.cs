@@ -534,7 +534,15 @@ public static class AccountGoApp
         app.MapGet("/health", () => Results.Ok(new
         {
             status = "healthy",
-            modules = modules.Select(m => m.Name).ToArray()
+            modules = modules.Select(m => m.Name).ToArray(),
+            // What the runtime actually got (container CPU/GC settings); no secrets or host details.
+            runtime = new
+            {
+                processors = Environment.ProcessorCount,
+                serverGc = System.Runtime.GCSettings.IsServerGC,
+                gcHeapLimitMb = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (1024 * 1024),
+                tieredPgo = Environment.GetEnvironmentVariable("DOTNET_TieredPGO") ?? "default",
+            }
         })).AllowAnonymous();
 
         // Module-specific endpoints
