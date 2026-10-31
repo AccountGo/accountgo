@@ -42,10 +42,30 @@ public interface IEmailDispatchService
 
     /// <summary>Links provider acceptance to the existing invoice history without duplicating histories on retry.</summary>
     Task RecordHistoryAsync(EmailDispatchContext context, int historyId, CancellationToken ct = default) => Task.CompletedTask;
+
+    /// <summary>
+    /// Reads appearance frozen at admission. Null means the dispatch has not been admitted.
+    /// The default has no durable payload.
+    /// </summary>
+    Task<FrozenEmailDispatchAppearance?> ReadFrozenAppearanceAsync(EmailDispatchContext context, CancellationToken ct = default) =>
+        Task.FromResult<FrozenEmailDispatchAppearance?>(null);
 }
 
 /// <summary>Provider acceptance is distinct from confirmed delivery.</summary>
 public sealed record EmailDispatchResult(string? ProviderMessageId, Guid? DispatchId = null, int? HistoryId = null);
+
+/// <summary>Appearance metadata frozen with an admitted custom dispatch, when a payload still exists.</summary>
+public sealed record FrozenEmailDispatchAppearance(bool Accepted, string? AppearanceStamp);
+
+/// <summary>
+/// Stores the invoice PDF appearance that was admitted with a custom dispatch.
+/// The caller supplies the stamp from the durable payload, after admission and before provider transport.
+/// A null stamp is ignored so a later message cannot replace an appearance whose payload is already gone.
+/// </summary>
+public interface IInvoiceDispatchAppearanceRecorder
+{
+    Task RecordAdmittedAsync(EmailDispatchContext context, string? admittedAppearanceStamp, CancellationToken ct = default);
+}
 
 /// <summary>Only a successful atomic abandonment permits replacing an unresolved custom attempt.</summary>
 public sealed record EmailDispatchDisposition(string State, bool CanAbandon);

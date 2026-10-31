@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileText, RefreshCw, Save } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { SalesInvoiceSettings, SellerNameSource } from '../types/invoicing';
+import { InvoicePdfAppearanceSection } from './InvoicePdfAppearanceSection';
 import type { BankAccountPickerItem } from '../types/banking';
 import { paymentBankChoice } from '../lib/paymentBank';
 
@@ -106,7 +107,7 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
   ];
 
   return (
-    <form onSubmit={handleSave} className="space-y-6">
+    <div className="space-y-6">
       {saved && (
         <div role="alert" aria-live="polite" className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -121,6 +122,7 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
       )}
 
       <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-5">
+        <form id="invoice-settings-form" onSubmit={handleSave} className="space-y-5">
         <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
           <div className="flex items-center gap-2.5">
             <FileText className="w-5 h-5 text-[var(--brand-primary)]" />
@@ -244,10 +246,13 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
             Prefilled on new invoices; each invoice can still be edited.
           </p>
         </div>
+        </form>
+
+        <InvoicePdfAppearanceSection canEdit={canEdit} />
 
         {canEdit ? (
           <div className="pt-1 flex items-center justify-end">
-            <button type="submit" disabled={disabled} className="btn-primary !h-11 !px-6 text-sm flex items-center gap-2">
+            <button type="submit" form="invoice-settings-form" disabled={disabled} className="btn-primary !h-11 !px-6 text-sm flex items-center gap-2">
               {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               <span>{saving ? 'Saving…' : 'Save Invoice Settings'}</span>
             </button>
@@ -256,6 +261,6 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
           <p className="text-[11px] text-[var(--text-muted)]">Only workspace owners and admins can change invoice settings.</p>
         )}
       </div>
-    </form>
+    </div>
   );
 };
