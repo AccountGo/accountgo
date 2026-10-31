@@ -63,7 +63,6 @@
   ],
   "vars": {
     "ENVIRONMENT": "Development",
-    "CONTAINER_NAME": "local",
     // Phase 0: keep false until V2 is validated. Isolation remains one shared writer.
     "TIERED_CAPACITY_ENABLED": "false",
     "CONTAINER_INSTANCE_TYPE_PAID": "standard-1",
