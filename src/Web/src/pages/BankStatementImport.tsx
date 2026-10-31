@@ -861,7 +861,16 @@ const BankStatementImportPage: React.FC = () => {
                     <div>{line.payee || '—'}</div>
                     {line.memo && <div className="text-xs text-[var(--text-muted)]">{line.memo}</div>}
                   </td>
-                  <td className="px-4 py-2.5">{line.reference || '—'}</td>
+                  <td className="px-4 py-2.5 max-w-[14rem]">
+                    {line.reference ? (
+                      // Long references (bank transfer IDs, card descriptors) are cut off; hover shows the whole value.
+                      <span className="block truncate" title={line.reference}>
+                        {line.reference}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(line.amount)}</td>
                   <td className="px-4 py-2.5 text-right">
                     {canManage && line.isExcluded && (
