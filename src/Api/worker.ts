@@ -572,6 +572,22 @@ export default {
       isTieredCapacityEnabled(env.TIERED_CAPACITY_ENABLED)
     );
     if (useV2) {
+      // Pool by workspace plan: paid workspaces get a V2 container on CONTAINER_INSTANCE_TYPE_PAID. Free
+      // workspaces, slugs the router has not learnt yet and requests without a workspace (sign-in, refresh,
+      // workspace list) stay on V1. Both are "lite", but a durable_object-scheduled lite container gets the
+      // documented 256 MiB (.NET heap limit 154 MB) while V1's gets far more (459 MB): the app needs 316-421 MiB,
+      // so on V2 lite a signed-in refresh pushes it into continuous GC and the whole process stalls (2026-10-31).
+      const slug = request.headers.get(WORKSPACE_HEADER);
+      const pool = isAdminRequest
+        ? parseCapacityPool(request.headers.get(CAPACITY_POOL_HEADER)) ?? "free"
+        : capacityRouter.poolFor(slug);
+      if (pool === "free") {
+        const v1 = env.CONTAINER.get(env.CONTAINER.idFromName(containerName), { locationHint: "enam" });
+        const response = await v1.fetch(request);
+        const hint = parseCapacityPool(response.headers.get(CAPACITY_HINT_HEADER));
+        if (hint) capacityRouter.remember(slug, hint);
+        return response;
+      }
       const binding = env.CONTAINER_V2;
       if (!binding) {
         console.error(
@@ -579,12 +595,6 @@ export default {
         );
         return serviceUnavailable("Tiered capacity is misconfigured", 30);
       }
-      // Pool by workspace plan: paid workspaces get the bigger container. A slug the router has not learnt yet,
-      // or no workspace at all (sign-in, refresh, workspace list), goes to the free pool.
-      const slug = request.headers.get(WORKSPACE_HEADER);
-      const pool = isAdminRequest
-        ? parseCapacityPool(request.headers.get(CAPACITY_POOL_HEADER)) ?? "free"
-        : capacityRouter.poolFor(slug);
       const versionId = env.CF_VERSION_METADATA?.id || "dev";
       const poolContainerName =
         isAdminRequest && request.headers.get("x-container-name")
