@@ -404,7 +404,7 @@ export const Settings: React.FC = () => {
                     className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm"
                   >
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>Organization profile updated successfully in live SQLite database.</span>
+                    <span>Organization profile updated.</span>
                   </div>
                 )}
                 {companySaveError && (
@@ -802,7 +802,7 @@ export const Settings: React.FC = () => {
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 2: FINANCIAL RULES & BANKING (Live SQLite Database Tables)            */}
+          {/* TAB 2: FINANCIAL RULES & BANKING                                           */}
           {/* ========================================================================= */}
           {currentTab === 'financials' && (
             <div
