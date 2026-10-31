@@ -445,7 +445,10 @@ public static class AccountGoApp
             context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
             context.Response.Headers.Append("X-Frame-Options", "DENY");
             context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
-            context.Response.Headers.Append("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+            if (!context.Response.Headers.ContainsKey("Content-Security-Policy"))
+            {
+                context.Response.Headers.Append("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+            }
             context.Response.Headers.Append("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
             await next();
         });
