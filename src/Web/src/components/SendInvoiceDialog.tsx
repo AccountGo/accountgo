@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Mail, Paperclip, Plus, Send, X } from 'lucide-react';
 import { ModalShell } from './ModalShell';
+import type { ApprovedEmailSender, PendingEmailAttempt } from '../lib/customEmail';
 
 interface SendInvoiceDialogProps {
   /** 'issue' asks whether to email while issuing a draft; 'send' emails an invoice that is already issued. */
@@ -24,7 +25,9 @@ interface SendInvoiceDialogProps {
   busy: boolean;
   error: string | null;
   onIssueOnly: () => void;
-  onSend: (followUp: boolean, attachPdf: boolean, additionalRecipients?: string[], cc?: string[]) => void;
+  onSend: (followUp: boolean, attachPdf: boolean, additionalRecipients?: string[], cc?: string[], approvedSenderId?: string) => void;
+  approvedSenders?: ApprovedEmailSender[];
+  pendingCustomSend?: PendingEmailAttempt | null;
   onCancel: () => void;
 }
 
@@ -49,6 +52,8 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   onIssueOnly,
   onSend,
   onCancel,
+  approvedSenders = [],
+  pendingCustomSend = null,
 }) => {
   const hasPriorEmail = !!lastSent;
   // Prior in-app email → follow-up template is locked in (still need invoice number to send).
@@ -56,11 +61,12 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   const showFollowUpToggle = mode === 'send' && followUpEligible && !hasPriorEmail;
 
   const [typed, setTyped] = useState('');
-  const [markAsFollowUp, setMarkAsFollowUp] = useState(false);
+  const [markAsFollowUp, setMarkAsFollowUp] = useState(pendingCustomSend?.followUp ?? false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [attachPdf, setAttachPdf] = useState(false);
-  const [additionalRecipients, setAdditionalRecipients] = useState<string[]>([]);
-  const [ccRecipient, setCcRecipient] = useState<string | null>(cc ?? null);
+  const [attachPdf, setAttachPdf] = useState(pendingCustomSend?.attachPdf ?? false);
+  const [additionalRecipients, setAdditionalRecipients] = useState<string[]>(pendingCustomSend?.additionalRecipients ?? []);
+  const [ccRecipient, setCcRecipient] = useState<string | null>(pendingCustomSend ? pendingCustomSend.cc[0] ?? null : cc ?? null);
+  const [selectedSender, setSelectedSender] = useState(pendingCustomSend?.senderId ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const inputId = useId();
@@ -68,7 +74,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   const advancedToggleId = useId();
   const attachPdfId = useId();
   const confirmed = normalise(typed) === normalise(invoiceNumber);
-  const asFollowUp = followUpFromHistory || markAsFollowUp;
+  const asFollowUp = pendingCustomSend?.followUp ?? (followUpFromHistory || markAsFollowUp);
 
   const maxRecipients = 3;
   const canAddRecipient = 1 + (ccRecipient ? 1 : 0) + additionalRecipients.length < maxRecipients;
@@ -115,7 +121,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
       const validExtras = additionalRecipients
         .map((r) => r.trim())
         .filter((r) => r.length > 0 && isValidEmail(r) && r.toLowerCase() !== to.toLowerCase());
-      onSend(asFollowUp, attachPdf, validExtras, ccRecipient ? [ccRecipient] : []);
+      onSend(asFollowUp, attachPdf, validExtras, ccRecipient ? [ccRecipient] : [], selectedSender || undefined);
     }
   };
 
@@ -172,6 +178,15 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
             </div>
           )}
 
+          <fieldset disabled={busy || !!pendingCustomSend} className="space-y-4">
+          {(approvedSenders.length > 0 || pendingCustomSend) && <label className="block text-sm text-[var(--text-secondary)]">
+            From
+            <select className="mt-1 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2 text-[var(--text-main)]" value={selectedSender} onChange={e => setSelectedSender(e.target.value)}>
+              <option value="">Platform sender</option>
+              {approvedSenders.map(sender => <option key={sender.id} value={sender.id} disabled={!sender.ready}>{sender.displayName} &lt;{sender.address}&gt;{sender.ready ? '' : ' — unavailable'}</option>)}
+              {pendingCustomSend && !approvedSenders.some(s => s.id === pendingCustomSend.senderId) && <option value={pendingCustomSend.senderId}>Original custom sender — currently unavailable</option>}
+            </select>
+          </label>}
           {showFollowUpToggle && (
             <label
               htmlFor={followUpToggleId}
@@ -350,6 +365,9 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
               </label>
             )}
           </div>
+
+          </fieldset>
+          {pendingCustomSend && <p className="text-xs text-amber-600">This dispatch is retained. Retry preserves its original sender, recipients, and attachments. Replacing it requires server-confirmed safe abandonment.</p>}
 
           <div className="space-y-1.5">
             <label htmlFor={inputId} className="block text-sm text-[var(--text-secondary)]">

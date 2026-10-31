@@ -24,4 +24,7 @@ public interface IAccountGoModule
     /// Map module-specific endpoints.
     /// </summary>
     void MapEndpoints(WebApplication app);
+
+    /// <summary>Initializes versioned module storage after the application database, including schema-only startup.</summary>
+    void InitializeDatabase(WebApplication app) { }
 }

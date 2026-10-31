@@ -74,6 +74,8 @@ export interface Invoice {
 }
 
 export interface InvoiceEmailItem {
+  dispatchId?: string | null;
+  fromEmail?: string | null;
   id: number;
   kind: 'Invoice' | 'FollowUp' | string;
   to: string;

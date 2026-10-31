@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -128,6 +129,8 @@ namespace Api.Service
             {
                 using var request = new HttpRequestMessage(HttpMethod.Post, ResendApiEndpoint);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                if (message.IdempotencyKey != null)
+                    request.Headers.Add("Idempotency-Key", message.IdempotencyKey);
                 request.Content = new StringContent(BuildPayload(from, message), Encoding.UTF8, "application/json");
 
                 response = await _httpClient.SendAsync(request, ct);
@@ -159,7 +162,9 @@ namespace Api.Service
                 _logger.LogWarning("To send from '{From}', add and verify your domain at https://resend.com/domains.", from);
             }
 
-            throw new EmailDeliveryException($"The email service refused it: {ProviderReason(responseContent, (int)response.StatusCode)}");
+            throw new EmailDeliveryException($"The email service refused it: {ProviderReason(responseContent, (int)response.StatusCode)}",
+                acceptanceUnknown: response.StatusCode is not (HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized
+                    or HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.UnprocessableEntity or HttpStatusCode.TooManyRequests));
         }
 
         /// <summary>Resend's own explanation ({"message": "..."}), or the status code when the body isn't one.</summary>

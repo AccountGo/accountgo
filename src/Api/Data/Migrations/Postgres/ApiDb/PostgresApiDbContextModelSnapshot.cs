@@ -2728,6 +2728,14 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("DispatchId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FromEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -2762,6 +2770,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("character varying(320)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DispatchId")
+                        .IsUnique()
+                        .HasFilter("\"DispatchId\" IS NOT NULL");
 
                     b.HasIndex("SalesInvoiceHeaderId");
 

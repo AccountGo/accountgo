@@ -21,6 +21,7 @@ import {
   RefreshCw,
   FileText,
   Percent,
+  Mail,
 } from 'lucide-react';
 import { TenantContextType, WorkspaceMember } from '../types';
 import { DEFAULT_CURRENCY } from '../lib/currency';
@@ -32,6 +33,7 @@ import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
 import { BusinessDetailsCard } from '../components/BusinessDetailsCard';
 import { InvoiceSettingsTab } from '../components/InvoiceSettingsTab';
+import { EmailSettingsTab } from '../components/EmailSettingsTab';
 import { TaxSettingsTab } from '../components/TaxSettingsTab';
 import { AccountingPolicyCard } from '../components/AccountingPolicyCard';
 import { BooksLockCard } from '../components/BooksLockCard';
@@ -65,7 +67,7 @@ export const Settings: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  type TabKey = 'general' | 'invoices' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles';
+  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles';
 
   const handleTabChange = (tab: TabKey) => {
     setSearchParams(tab === 'general' ? {} : { tab });
@@ -81,7 +83,7 @@ export const Settings: React.FC = () => {
     },
     {
       label: 'Sales',
-      items: [{ key: 'invoices', label: 'Invoices', icon: FileText }],
+      items: [{ key: 'invoices', label: 'Invoices', icon: FileText }, { key: 'email', label: 'Email', icon: Mail }],
     },
     ...(hasSalesOrPurchases
       ? [{ label: 'Sales & Purchases', items: [{ key: 'taxes' as const, label: 'Taxes', icon: Percent }] }]
@@ -742,6 +744,10 @@ export const Settings: React.FC = () => {
                 </div>
               </form>
           </ModalShell>
+
+          {currentTab === 'email' && <div role="tabpanel" id="panel-email" aria-labelledby="tab-email" tabIndex={0} className="focus:outline-none">
+            <EmailSettingsTab key={currentOrg.id} companyId={currentOrg.id} />
+          </div>}
 
           {currentTab === 'invoices' && (
             <div

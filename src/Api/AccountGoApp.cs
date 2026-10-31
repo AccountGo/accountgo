@@ -50,6 +50,8 @@ public static class AccountGoApp
         }
 
         InitializeDatabase(app, args);
+        foreach (var module in modules)
+            module.InitializeDatabase(app);
 
         if (args.Contains("--prepare-schema"))
         {
@@ -405,6 +407,9 @@ public static class AccountGoApp
 
         // Community defaults for seams a module may have registered above.
         builder.Services.TryAddSingleton<Services.Billing.IPlanCatalog, Services.Billing.CommunityPlanCatalog>();
+        builder.Services.TryAddScoped<Api.Service.IEmailSenderResolver, Api.Service.PlatformEmailSenderResolver>();
+        builder.Services.TryAddScoped<Api.Service.IEmailCapabilities, Api.Service.PlatformEmailCapabilities>();
+        builder.Services.TryAddScoped<Api.Service.IEmailDispatchService, Api.Service.PlatformEmailDispatchService>();
     }
 
     public static void ConfigureApp(WebApplication app, IReadOnlyList<IAccountGoModule> modules)
