@@ -50,8 +50,9 @@ export function resolveWriterContainerName(
 }
 
 /**
- * Phase 1 pools: paid workspaces (paid plan or comp) get a bigger container than free ones. All pools share the
- * Postgres database, so a request routed to the wrong pool is only slower, never inconsistent.
+ * Phase 1 pools: paid workspaces (paid plan or comp) get a V2 container on a bigger instance; free workspaces stay on
+ * V1 (see worker.ts for why not V2 lite). All containers share the Postgres database, so a request routed to the wrong
+ * pool is only slower, never inconsistent.
  */
 export type CapacityPool = "free" | "paid";
 
