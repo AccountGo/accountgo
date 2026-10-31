@@ -887,11 +887,12 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public Task<IActionResult> SendSalesInvoiceEmail(
             int id,
-            [FromServices] Api.Service.IEmailSender emailSender,
+            [FromServices] Api.Service.IEmailDispatchService emailDispatch,
             bool attachPdf = false,
             [FromQuery] string[]? additionalRecipients = null,
-            [FromQuery] string[]? cc = null) =>
-            SendInvoiceEmailAsync(id, emailSender, followUp: false, attachPdf, additionalRecipients, cc);
+            [FromQuery] string[]? cc = null,
+            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null) =>
+            SendInvoiceEmailAsync(id, emailDispatch, followUp: false, attachPdf, additionalRecipients, cc, sendingMode, approvedSenderId, dispatchId);
 
         /// <summary>
         /// Sends a follow-up reminder for an unpaid invoice: same PDF link/BCC as the original send, different copy.
@@ -901,23 +902,29 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public Task<IActionResult> SendSalesInvoiceFollowUpEmail(
             int id,
-            [FromServices] Api.Service.IEmailSender emailSender,
+            [FromServices] Api.Service.IEmailDispatchService emailDispatch,
             bool attachPdf = false,
             [FromQuery] string[]? additionalRecipients = null,
-            [FromQuery] string[]? cc = null) =>
-            SendInvoiceEmailAsync(id, emailSender, followUp: true, attachPdf, additionalRecipients, cc);
+            [FromQuery] string[]? cc = null,
+            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null) =>
+            SendInvoiceEmailAsync(id, emailDispatch, followUp: true, attachPdf, additionalRecipients, cc, sendingMode, approvedSenderId, dispatchId);
 
         private async Task<IActionResult> SendInvoiceEmailAsync(
             int id,
-            Api.Service.IEmailSender emailSender,
+            Api.Service.IEmailDispatchService emailDispatch,
             bool followUp,
             bool attachPdf,
             string[]? additionalRecipients = null,
-            string[]? cc = null)
+            string[]? cc = null,
+            string sendingMode = "platform", string? approvedSenderId = null, Guid? dispatchId = null)
         {
             var invoice = BuildSalesInvoiceDto(id);
             if (invoice == null)
                 return NotFound(new { message = $"Invoice #{id} not found." });
+
+            var dispatchContext = new Api.Service.EmailDispatchContext(_tenantContext.RequireCompanyId(),
+                User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value ?? "",
+                id, followUp ? "FollowUp" : "Invoice", sendingMode, approvedSenderId, dispatchId);
 
             if (followUp)
             {
@@ -968,7 +975,8 @@ namespace Api.Controllers
             // Customer addresses are whatever the workspace typed in, so cap sends to protect our domain's sending reputation.
             // Counted from the audit trail, so the cap holds across restarts and instances.
             var hourAgo = DateTime.UtcNow.AddHours(-1);
-            if (_db.SalesInvoiceEmails.Count(e => e.SentAt >= hourAgo) >= InvoiceEmailsPerHour)
+            if ((sendingMode != "custom" || dispatchId == null || !_db.SalesInvoiceEmails.Any(e => e.DispatchId == dispatchId.ToString()))
+                && _db.SalesInvoiceEmails.Count(e => e.SentAt >= hourAgo) >= InvoiceEmailsPerHour)
                 return StatusCode(StatusCodes.Status429TooManyRequests,
                     new { message = $"This workspace has reached its limit of {InvoiceEmailsPerHour} invoice emails an hour. Please try again later." });
 
@@ -1025,12 +1033,17 @@ namespace Api.Controllers
                 message.Bcc.Add(senderEmail);
             }
 
-            string? providerMessageId;
+            Api.Service.EmailDispatchResult dispatchResult;
             try
             {
                 // Deliberately not tied to the request's abort token: behind the Workers container proxy a request can read as
                 // aborted while it is still being served, and an email half-sent on cancel is worse than one that finishes.
-                providerMessageId = await emailSender.SendAsync(message, CancellationToken.None);
+                message.IntentFingerprint = Api.Service.InvoiceEmailIntent.Fingerprint(invoice, followUp, attachPdf, message);
+                dispatchResult = await emailDispatch.SendAsync(dispatchContext, message, CancellationToken.None);
+            }
+            catch (Api.Service.EmailPolicyException ex)
+            {
+                return StatusCode(ex.StatusCode, new { code = ex.Code, message = ex.Message, dispatchId });
             }
             catch (Exception ex)
             {
@@ -1038,6 +1051,12 @@ namespace Api.Controllers
                 var reason = ex is Api.Service.EmailDeliveryException ? $" {ex.Message}" : string.Empty;
                 return StatusCode(StatusCodes.Status502BadGateway, new { message = $"The email could not be sent.{reason}" });
             }
+
+            var prior = dispatchResult.DispatchId == null ? null : _db.SalesInvoiceEmails
+                .FirstOrDefault(e => e.DispatchId == dispatchResult.DispatchId.ToString());
+            if (prior != null)
+                return Ok(new { success = true, to, additionalRecipients = validAdditional, cc = validCc, bcc = message.Bcc,
+                    dispatchId = dispatchResult.DispatchId, email = ToEmailItem(prior) });
 
             var record = new Core.Domain.Sales.SalesInvoiceEmail
             {
@@ -1051,17 +1070,26 @@ namespace Api.Controllers
                 SentAt = DateTime.UtcNow,
                 SentByUserId = HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
                 SentByEmail = senderEmail,
-                ProviderMessageId = providerMessageId is { Length: > 100 } ? providerMessageId[..100] : providerMessageId,
+                ProviderMessageId = dispatchResult.ProviderMessageId is { Length: > 100 } ? dispatchResult.ProviderMessageId[..100] : dispatchResult.ProviderMessageId,
+                DispatchId = dispatchResult.DispatchId?.ToString(),
+                FromEmail = message.FromEmail,
             };
             try
             {
                 _db.SalesInvoiceEmails.Add(record);
                 _db.SaveChanges();
+                await emailDispatch.RecordHistoryAsync(dispatchContext, record.Id, CancellationToken.None);
             }
             catch (Exception ex)
             {
                 // The customer already has the email; a lost audit row must not make the user send it twice.
                 _logger.LogError(ex, "Invoice {InvoiceId} was emailed to the customer but the send could not be recorded", id);
+                if (record.DispatchId != null)
+                {
+                    _db.Entry(record).State = EntityState.Detached;
+                    var saved = _db.SalesInvoiceEmails.FirstOrDefault(e => e.DispatchId == record.DispatchId);
+                    if (saved != null) record = saved;
+                }
             }
 
             _logger.LogInformation(
@@ -1069,7 +1097,8 @@ namespace Api.Controllers
                     ? "Invoice {InvoiceId} follow-up emailed by {Sender} for workspace {CompanyId}"
                     : "Invoice {InvoiceId} emailed by {Sender} for workspace {CompanyId}",
                 id, senderEmail, _tenantContext.CompanyId);
-            return Ok(new { success = true, to, additionalRecipients = validAdditional, cc = validCc, bcc = message.Bcc, email = ToEmailItem(record) });
+            return Ok(new { success = true, to, additionalRecipients = validAdditional, cc = validCc, bcc = message.Bcc,
+                dispatchId = dispatchResult.DispatchId, email = ToEmailItem(record) });
         }
 
         private const int InvoiceEmailsPerHour = 30;
@@ -1101,6 +1130,8 @@ namespace Api.Controllers
             To = email.ToEmail,
             SentAt = DateTime.SpecifyKind(email.SentAt, DateTimeKind.Utc),
             SentBy = email.SentByEmail,
+            DispatchId = email.DispatchId,
+            FromEmail = email.FromEmail,
         };
 
         private static string? ValidEmail(string? value)

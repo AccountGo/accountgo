@@ -40,6 +40,10 @@ import type { BankAccountPickerItem } from '../types/banking';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
 import { useCapabilities } from '../lib/entitlements';
+import { pendingEmailKey, readPendingEmail } from '../lib/customEmail';
+import { recoverPendingEmail, sendInvoiceEmailRequest } from '../lib/invoiceEmailDispatch';
+import type { PendingEmailAttempt } from '../lib/customEmail';
+import { useEmailCapabilities } from '../lib/useEmailCapabilities';
 
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -50,6 +54,7 @@ export const InvoiceDetail: React.FC = () => {
   const { canCreate: canCreateResource } = useCapabilities();
   const salesWritable = canWrite('sales');
   const { authFetch, user } = useAuth();
+  const { capabilities: emailCapabilities } = useEmailCapabilities(currentOrg.id);
   const periodConfirm = useReconciledPeriodConfirm();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId: string }>();
   const location = useLocation();
@@ -369,6 +374,24 @@ export const InvoiceDetail: React.FC = () => {
   const [sendDialogMode, setSendDialogMode] = useState<'issue' | 'send' | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [pendingCustomSend, setPendingCustomSend] = useState<PendingEmailAttempt | null>(null);
+  useEffect(() => {
+    if (!invoice || !sendDialogMode) return;
+    let active = true;
+    try {
+      const key = pendingEmailKey(currentOrg.id, invoice.id);
+      const pending = readPendingEmail(sessionStorage, key);
+      setPendingCustomSend(pending);
+      if (pending) void recoverPendingEmail(authFetch, sessionStorage, key, invoice.id, pending).then(recovery => {
+        if (active) {
+          if (recovery.abandoned) setPendingCustomSend(null);
+          setSendError(recovery.message);
+        }
+      });
+    }
+    catch (err) { setSendError(err instanceof Error ? err.message : 'Pending email status could not be read.'); }
+    return () => { active = false; };
+  }, [authFetch, currentOrg.id, invoice?.id, sendDialogMode]);
   // The number an unnumbered draft takes when issued, as shown in the issue dialog.
   const [issueNumber, setIssueNumber] = useState<string | null>(null);
 
@@ -403,26 +426,11 @@ export const InvoiceDetail: React.FC = () => {
     attachPdf = false,
     additionalRecipients: string[] = [],
     cc: string[] = [],
+    approvedSenderId?: string,
   ): Promise<string> => {
     if (!invoice) return '';
-    const attach = attachPdf ? '&attachPdf=true' : '';
-    const query = (name: string, values: string[]) =>
-      values
-        .filter((r) => r.trim().length > 0)
-        .map((r) => `&${name}=${encodeURIComponent(r.trim())}`)
-        .join('');
-    const extras = query('additionalRecipients', additionalRecipients) + query('cc', cc);
-    const path = followUp
-      ? `/api/Sales/SendSalesInvoiceFollowUpEmail?id=${invoice.id}${attach}${extras}`
-      : `/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}${attach}${extras}`;
-    const res = await authFetch(path, {
-      method: 'POST',
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      throw new Error(data?.message || 'The email could not be sent.');
-    }
-    return data?.to || invoice.recipientEmail || '';
+    return (await sendInvoiceEmailRequest(authFetch, sessionStorage, { companyId: currentOrg.id, invoiceId: invoice.id,
+      followUp, attachPdf, additionalRecipients, cc, approvedSenderId }, setPendingCustomSend)) || invoice.recipientEmail || '';
   };
 
   const handleIssueClick = async () => {
@@ -464,6 +472,7 @@ export const InvoiceDetail: React.FC = () => {
     attachPdf = false,
     additionalRecipients: string[] = [],
     cc: string[] = [],
+    approvedSenderId?: string,
   ) => {
     if (!invoice || !sendDialogMode) return;
     const issuing = sendDialogMode === 'issue';
@@ -484,7 +493,7 @@ export const InvoiceDetail: React.FC = () => {
     }
 
     try {
-      const to = await emailInvoice(sendAsFollowUp, attachPdf, additionalRecipients, cc);
+      const to = await emailInvoice(sendAsFollowUp, attachPdf, additionalRecipients, cc, approvedSenderId);
       const others = additionalRecipients.length + cc.length;
       const recipientNotice =
         others > 0
@@ -1062,6 +1071,7 @@ export const InvoiceDetail: React.FC = () => {
                   <div className="text-xs text-[var(--text-muted)] sm:text-right">
                     {formatDateTime(email.sentAt)}
                     {email.sentBy && <span> · by {email.sentBy}</span>}
+                    {email.fromEmail && <span className="block" title={email.dispatchId ? `Dispatch ${email.dispatchId}` : undefined}>From {email.fromEmail}</span>}
                   </div>
                 </li>
               ))}
@@ -1248,6 +1258,9 @@ export const InvoiceDetail: React.FC = () => {
       {/* Issue / Email Invoice Modal */}
       {sendDialogMode && invoice.recipientEmail && (
         <SendInvoiceDialog
+          key={pendingCustomSend?.dispatchId ?? 'new-send'}
+          approvedSenders={emailCapabilities?.approvedSenders ?? []}
+          pendingCustomSend={pendingCustomSend}
           mode={sendDialogMode}
           invoiceNumber={invoice.no || issueNumber || ''}
           numberOnIssue={sendDialogMode === 'issue' && !invoice.no}

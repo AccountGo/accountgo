@@ -613,6 +613,10 @@ WHERE ""DisabledModulesJson"" IS NULL
             using var cmd = connection.CreateCommand();
             cmd.CommandText = SalesInvoiceEmailTableSql;
             cmd.ExecuteNonQuery();
+            AddColumnIfMissing(connection, "SalesInvoiceEmail", "DispatchId", "TEXT NULL");
+            AddColumnIfMissing(connection, "SalesInvoiceEmail", "FromEmail", "TEXT NULL");
+            cmd.CommandText = "CREATE UNIQUE INDEX IF NOT EXISTS IX_SalesInvoiceEmail_DispatchId ON SalesInvoiceEmail (DispatchId) WHERE DispatchId IS NOT NULL";
+            cmd.ExecuteNonQuery();
             cmd.CommandText = InventoryAdjustmentTableSql;
             cmd.ExecuteNonQuery();
             cmd.CommandText = EntitlementUsageTableSql;
