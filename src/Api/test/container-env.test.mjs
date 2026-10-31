@@ -25,4 +25,7 @@ test("buildContainerEnvVars passes string settings through and drops bindings", 
   assert.equal(vars.RESTORE_FROM_D1, undefined);
   // The container warms its heavy paths before the build check lets traffic in.
   assert.equal(vars.WARMUP_ON_START, "true");
+  // The image's .NET tuning must reach containers started with an explicit env (V2).
+  assert.equal(vars.DOTNET_gcServer, "0");
+  assert.equal(vars.DOTNET_TieredPGO, "0");
 });
