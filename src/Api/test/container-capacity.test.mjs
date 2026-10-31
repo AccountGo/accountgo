@@ -31,10 +31,9 @@ test("resolveContainerInstanceType maps known sizes and falls back", () => {
   assert.equal(resolveContainerInstanceType(undefined), "standard-1");
 });
 
-test("resolveWriterContainerName matches Phase 0 shared writer key", () => {
-  assert.equal(resolveWriterContainerName("v9", "abc123"), "v9-abc123");
-  assert.equal(resolveWriterContainerName(undefined, undefined), "default-dev");
-  assert.equal(resolveWriterContainerName("local", "dev"), "local-dev");
+test("resolveWriterContainerName names the V1 free writer", () => {
+  assert.equal(resolveWriterContainerName("abc123"), "v1-free-abc123");
+  assert.equal(resolveWriterContainerName(undefined), "v1-free-dev");
 });
 
 test("parseCapacityPool accepts paid and free only", () => {
@@ -53,9 +52,9 @@ test("resolvePoolInstanceType defaults paid to standard-1 and free to lite", () 
   assert.equal(resolvePoolInstanceType("free", { CONTAINER_INSTANCE_TYPE_FREE: "lite" }), "lite");
 });
 
-test("resolvePoolContainerName keeps one writer per pool per version", () => {
-  assert.equal(resolvePoolContainerName("v10", "paid", "abc"), "v10-paid-abc");
-  assert.equal(resolvePoolContainerName(undefined, "free", undefined), "default-free-dev");
+test("resolvePoolContainerName names V2 pool writers by generation and pool", () => {
+  assert.equal(resolvePoolContainerName("paid", "abc"), "v2-paid-abc");
+  assert.equal(resolvePoolContainerName("free", undefined), "v2-free-dev");
 });
 
 test("CapacityRouter sends unknown and missing workspaces to the free pool", () => {

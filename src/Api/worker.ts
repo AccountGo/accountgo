@@ -549,11 +549,11 @@ export default {
       }
 
       const versionId = env.CF_VERSION_METADATA?.id || "dev";
-      const defaultName = resolveWriterContainerName(env.CONTAINER_NAME, versionId);
+      const defaultName = resolveWriterContainerName(versionId);
       containerName = request.headers.get("x-container-name") || defaultName;
     } else {
       const versionId = env.CF_VERSION_METADATA?.id || "dev";
-      containerName = resolveWriterContainerName(env.CONTAINER_NAME, versionId);
+      containerName = resolveWriterContainerName(versionId);
 
       const isDev =
         !env.CF_VERSION_METADATA?.id ||
@@ -599,7 +599,7 @@ export default {
       const poolContainerName =
         isAdminRequest && request.headers.get("x-container-name")
           ? containerName
-          : resolvePoolContainerName(env.CONTAINER_NAME, pool, versionId);
+          : resolvePoolContainerName(pool, versionId);
       const headers = new Headers(request.headers);
       headers.set(CAPACITY_POOL_HEADER, pool);
       const stub = binding.get(binding.idFromName(poolContainerName), { locationHint: "enam" });
