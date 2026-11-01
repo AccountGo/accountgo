@@ -74,6 +74,8 @@ namespace Services.Recurring
         {
             var companyId = _tenant.RequireCompanyId();
             var runDate = scheduledRunDate.Date;
+            using var tx = _unitOfWork.BeginSerializableTransaction();
+            _unitOfWork.DiscardPendingChanges();
 
             var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId)
                 ?? throw new InvalidOperationException($"Recurring schedule {scheduleId} not found.");
@@ -108,6 +110,7 @@ namespace Services.Recurring
                     existing.UpdatedAt = DateTime.UtcNow;
                     _occurrenceRepo.Update(existing);
                 }
+                tx.Commit();
                 return existing.Id;
             }
 
@@ -141,11 +144,13 @@ namespace Services.Recurring
             try
             {
                 _occurrenceRepo.Insert(occurrence);
+                tx.Commit();
                 return occurrence.Id;
             }
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "Occurrence for schedule {ScheduleId} on {RunDate} already exists; reusing.", scheduleId, runDate);
+                tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
                 var raced = _occurrenceRepo.Table
                     .FirstOrDefault(o => o.RecurringScheduleId == scheduleId && o.ScheduledRunDate == runDate);
@@ -157,11 +162,11 @@ namespace Services.Recurring
 
         public RecurringGenerationResult ProcessOccurrence(int occurrenceId, string leaseOwner)
         {
-            // Everything runs in one serializable transaction, including the initial re-read and claim. On SQLite
-            // this is BEGIN IMMEDIATE and on Postgres SERIALIZABLE, so two concurrent callers (e.g. two run-now
-            // requests sharing the same run-now:{actor} lease) cannot both pass the status/lease/no-invoice-yet
-            // check: the second blocks, then sees the first's committed invoice link and aborts as AlreadyProcessed.
+            _tenant.RequireCompanyId();
             using var tx = _unitOfWork.BeginSerializableTransaction();
+            // Claiming and controller lookups may have tracked older versions. Read authoritative state only
+            // after acquiring the transaction; a tracking query alone would reuse those stale property values.
+            _unitOfWork.DiscardPendingChanges();
 
             var occurrence = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrenceId);
             if (occurrence == null)
@@ -496,10 +501,8 @@ namespace Services.Recurring
         /// </summary>
         private void AdvanceSeriesForOccurrence(RecurringSchedule schedule, RecurringOccurrence occurrence, bool attemptSucceeded)
         {
-            // Re-resolve the tracked rows: a fail-closed path may have cleared the change tracker, detaching the
-            // instances we were handed. Mutating a detached entity would not persist.
-            var trackedSchedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == schedule.Id) ?? schedule;
-            var trackedOccurrence = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrence.Id) ?? occurrence;
+            var trackedSchedule = schedule;
+            var trackedOccurrence = occurrence;
 
             if (trackedOccurrence.SeriesAdvanced)
             {
@@ -903,10 +906,20 @@ namespace Services.Recurring
 
         private RecurringGenerationResult Fail(RecurringOccurrence occurrence, int? salesInvoiceId, string errorCode, string message)
         {
-            // Re-load the occurrence fresh: a fail-closed path may have cleared the change tracker to discard a
-            // rolled-back draft, which detaches the instance we were handed. Mutating a detached entity would not
-            // persist, so fetch the tracked row and stamp the failure on it.
-            var tracked = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrence.Id) ?? occurrence;
+            // The document transaction has rolled back. Another attempt may have committed or reclaimed the
+            // occurrence since then, so fence this failure against the original claim inside a fresh transaction.
+            using var tx = _unitOfWork.BeginSerializableTransaction();
+            _unitOfWork.DiscardPendingChanges();
+            var tracked = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrence.Id);
+            if (tracked == null)
+                return RecurringGenerationResult.Aborted(occurrence.Id, "Occurrence not found.");
+            if (tracked.SalesInvoiceId.HasValue)
+                return RecurringGenerationResult.AlreadyProcessed(tracked.Id, tracked.SalesInvoiceId);
+            if (tracked.Status != RecurringOccurrenceStatus.Running
+                || !HoldsLease(tracked, occurrence.LeasedBy ?? string.Empty)
+                || tracked.LeasedUntil != occurrence.LeasedUntil)
+                return RecurringGenerationResult.Aborted(tracked.Id, RecurringGuardReasons.LeaseNotHeld);
+
             tracked.Status = RecurringOccurrenceStatus.Failed;
             tracked.ErrorCode = Truncate(errorCode, 50);
             tracked.ErrorMessage = Truncate(message, 2000);
@@ -930,6 +943,7 @@ namespace Services.Recurring
             }
 
             _occurrenceRepo.Update(tracked);
+            tx.Commit();
             return RecurringGenerationResult.Fail(tracked.Id, salesInvoiceId, errorCode, message);
         }
 

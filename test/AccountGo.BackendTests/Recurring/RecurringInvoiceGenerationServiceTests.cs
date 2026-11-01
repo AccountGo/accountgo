@@ -3,9 +3,13 @@
 
 #nullable enable
 using System;
+using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Api.Data;
 using Api.Tenancy;
+using Core.Data;
 using Core.Domain;
 using Core.Domain.Items;
 using Core.Domain.Recurring;
@@ -31,6 +35,7 @@ namespace AccountGo.BackendTests.Recurring
     public sealed class RecurringInvoiceGenerationServiceTests : IDisposable
     {
         private readonly SqliteConnection _connection;
+        private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"recurring-{Guid.NewGuid():N}.db");
         private readonly ApiDbContext _db;
         private readonly TenantContext _tenant = new();
         private readonly Company _company;
@@ -43,7 +48,7 @@ namespace AccountGo.BackendTests.Recurring
 
         public RecurringInvoiceGenerationServiceTests()
         {
-            _connection = new SqliteConnection("DataSource=:memory:");
+            _connection = new SqliteConnection($"Data Source={_databasePath};Pooling=False");
             _connection.Open();
             _db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(_connection).Options, tenantContext: _tenant);
             _db.Database.EnsureCreated();
@@ -63,26 +68,50 @@ namespace AccountGo.BackendTests.Recurring
             _sales.Setup(s => s.UpdateSalesInvoice(It.IsAny<SalesInvoiceHeader>()))
                 .Callback<SalesInvoiceHeader>(_ => _db.SaveChanges());
 
-            _service = new RecurringInvoiceGenerationService(
+            _service = CreateService(_db, _sales.Object);
+        }
+
+        private RecurringInvoiceGenerationService CreateService(
+            ApiDbContext db, ISalesService sales, IUnitOfWork? unitOfWork = null,
+            IRepository<RecurringOccurrence>? occurrences = null) =>
+            new RecurringInvoiceGenerationService(
                 _tenant,
-                new EfUnitOfWork(_db),
-                _sales.Object,
+                unitOfWork ?? new EfUnitOfWork(db),
+                sales,
                 _inventory.Object,
-                new EfRepository<RecurringOccurrence>(NullLogger<RecurringOccurrence>.Instance, _db),
-                new EfRepository<RecurringSchedule>(NullLogger<RecurringSchedule>.Instance, _db),
-                new EfRepository<RecurringScheduleLine>(NullLogger<RecurringScheduleLine>.Instance, _db),
-                new EfRepository<Customer>(NullLogger<Customer>.Instance, _db),
-                new EfRepository<CompanySetting>(NullLogger<CompanySetting>.Instance, _db),
-                new EfRepository<Tax>(NullLogger<Tax>.Instance, _db),
-                new EfRepository<CompanyMember>(NullLogger<CompanyMember>.Instance, _db),
-                new EfRepository<SecurityRolePermission>(NullLogger<SecurityRolePermission>.Instance, _db),
+                occurrences ?? new EfRepository<RecurringOccurrence>(NullLogger<RecurringOccurrence>.Instance, db),
+                new EfRepository<RecurringSchedule>(NullLogger<RecurringSchedule>.Instance, db),
+                new EfRepository<RecurringScheduleLine>(NullLogger<RecurringScheduleLine>.Instance, db),
+                new EfRepository<Customer>(NullLogger<Customer>.Instance, db),
+                new EfRepository<CompanySetting>(NullLogger<CompanySetting>.Instance, db),
+                new EfRepository<Tax>(NullLogger<Tax>.Instance, db),
+                new EfRepository<CompanyMember>(NullLogger<CompanyMember>.Instance, db),
+                new EfRepository<SecurityRolePermission>(NullLogger<SecurityRolePermission>.Instance, db),
                 NullLogger<RecurringInvoiceGenerationService>.Instance);
+
+        private ApiDbContext CreateSiblingContext() =>
+            new ApiDbContext(
+                new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(_connection.ConnectionString).Options,
+                tenantContext: _tenant);
+
+        private Mock<ISalesService> CreateSiblingSales(ApiDbContext db)
+        {
+            var sales = new Mock<ISalesService>(MockBehavior.Strict);
+            sales.Setup(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()))
+                .Returns<Dto.Sales.SalesInvoice>(dto =>
+                    Core.Domain.Error.Result<Dto.Sales.SalesInvoice>.Success(PersistDraftFromDto(dto, db)));
+            sales.Setup(s => s.GetSalesInvoiceById(It.IsAny<int>()))
+                .Returns<int>(id => db.SalesInvoiceHeaders.Include(h => h.SalesInvoiceLines).First(h => h.Id == id));
+            sales.Setup(s => s.UpdateSalesInvoice(It.IsAny<SalesInvoiceHeader>()))
+                .Callback<SalesInvoiceHeader>(_ => db.SaveChanges());
+            return sales;
         }
 
         public void Dispose()
         {
             _db.Dispose();
             _connection.Dispose();
+            File.Delete(_databasePath);
         }
 
         // ---- fixture builders ----
@@ -235,8 +264,9 @@ namespace AccountGo.BackendTests.Recurring
             _db.RecurringOccurrences.AsNoTracking().First(o => o.Id == occurrenceId);
 
         /// <summary>Persists a draft header from the DTO as the real CreateSalesInvoice would, stamping resolved tax.</summary>
-        private Dto.Sales.SalesInvoice PersistDraftFromDto(Dto.Sales.SalesInvoice dto)
+        private Dto.Sales.SalesInvoice PersistDraftFromDto(Dto.Sales.SalesInvoice dto, ApiDbContext? db = null)
         {
+            db ??= _db;
             var header = new SalesInvoiceHeader
             {
                 CompanyId = _company.Id,
@@ -263,8 +293,8 @@ namespace AccountGo.BackendTests.Recurring
                     Description = l.ItemDescription,
                 });
             }
-            _db.SalesInvoiceHeaders.Add(header);
-            _db.SaveChanges();
+            db.SalesInvoiceHeaders.Add(header);
+            db.SaveChanges();
             dto.Id = header.Id;
             return dto;
         }
@@ -726,6 +756,167 @@ namespace AccountGo.BackendTests.Recurring
             Assert.True(_db.RecurringOccurrences.AsNoTracking().First(o => o.Id == occ.Id).SeriesAdvanced);
             Assert.Single(_db.SalesInvoiceHeaders.Where(i => i.CompanyId == _company.Id));
             _sales.Verify(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task ProcessOccurrence_ConcurrentStaleContexts_CreateOnlyOneInvoice()
+        {
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            AddLine(schedule.Id, item.Id);
+            var occurrence = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "same-owner");
+            using var secondDb = CreateSiblingContext();
+            _ = secondDb.RecurringOccurrences.Single(o => o.Id == occurrence.Id);
+            _ = secondDb.RecurringSchedules.Single(s => s.Id == schedule.Id);
+            var secondSales = CreateSiblingSales(secondDb);
+            using var firstCreating = new ManualResetEventSlim();
+            using var secondStarting = new ManualResetEventSlim();
+            var secondService = CreateService(secondDb, secondSales.Object,
+                new BeforeTransactionUnitOfWork(new EfUnitOfWork(secondDb), _ => secondStarting.Set()));
+
+            _sales.Setup(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()))
+                .Returns<Dto.Sales.SalesInvoice>(dto =>
+                {
+                    firstCreating.Set();
+                    Assert.True(secondStarting.Wait(TimeSpan.FromSeconds(10)));
+                    return Core.Domain.Error.Result<Dto.Sales.SalesInvoice>.Success(PersistDraftFromDto(dto));
+                });
+
+            var first = Task.Run(() => _service.ProcessOccurrence(occurrence.Id, "same-owner"));
+            var second = Task.Run(() =>
+            {
+                Assert.True(firstCreating.Wait(TimeSpan.FromSeconds(10)));
+                return secondService.ProcessOccurrence(occurrence.Id, "same-owner");
+            });
+            var results = await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(60));
+
+            Assert.Equal(RecurringGenerationOutcome.DraftCreated, results[0].Outcome);
+            Assert.Equal(RecurringGenerationOutcome.AlreadyProcessed, results[1].Outcome);
+            Assert.Equal(results[0].SalesInvoiceId, results[1].SalesInvoiceId);
+            Assert.Single(_db.SalesInvoiceHeaders.AsNoTracking());
+            Assert.Equal(1, _db.RecurringSchedules.AsNoTracking().Single(s => s.Id == schedule.Id).OccurrenceCount);
+            secondSales.Verify(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()), Times.Never);
+        }
+
+        [Fact]
+        public void ProcessOccurrence_AnotherAttemptCommitsAfterRollback_DoesNotOverwriteInvoice()
+        {
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            AddLine(schedule.Id, item.Id);
+            var occurrence = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "same-owner");
+            using var secondDb = CreateSiblingContext();
+            var secondSales = CreateSiblingSales(secondDb);
+            var secondService = CreateService(secondDb, secondSales.Object);
+            RecurringGenerationResult? completed = null;
+            var unitOfWork = new BeforeTransactionUnitOfWork(new EfUnitOfWork(_db), count =>
+            {
+                if (count == 2)
+                    completed = secondService.ProcessOccurrence(occurrence.Id, "same-owner");
+            });
+            var service = CreateService(_db, _sales.Object, unitOfWork);
+            _sales.Setup(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()))
+                .Throws(new InvalidOperationException("Transient draft failure"));
+
+            var result = service.ProcessOccurrence(occurrence.Id, "same-owner");
+
+            Assert.NotNull(completed);
+            Assert.Equal(RecurringGenerationOutcome.DraftCreated, completed.Outcome);
+            Assert.Equal(RecurringGenerationOutcome.AlreadyProcessed, result.Outcome);
+            Assert.Equal(completed.SalesInvoiceId, result.SalesInvoiceId);
+            var persisted = Reload(occurrence.Id);
+            Assert.Equal(RecurringOccurrenceStatus.DraftCreated, persisted.Status);
+            Assert.Equal(completed.SalesInvoiceId, persisted.SalesInvoiceId);
+            Assert.True(persisted.SeriesAdvanced);
+            Assert.Single(_db.SalesInvoiceHeaders.AsNoTracking());
+        }
+
+        [Fact]
+        public void ProcessOccurrence_ClaimReplacedAfterRollback_DoesNotMarkNewAttemptFailed()
+        {
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            AddLine(schedule.Id, item.Id);
+            var occurrence = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "original-owner");
+            using var secondDb = CreateSiblingContext();
+            var unitOfWork = new BeforeTransactionUnitOfWork(new EfUnitOfWork(_db), count =>
+            {
+                if (count == 2)
+                {
+                    var reclaimed = secondDb.RecurringOccurrences.Single(o => o.Id == occurrence.Id);
+                    reclaimed.LeasedBy = "new-owner";
+                    reclaimed.LeasedUntil = DateTime.UtcNow.AddMinutes(10);
+                    secondDb.SaveChanges();
+                }
+            });
+            var service = CreateService(_db, _sales.Object, unitOfWork);
+            _sales.Setup(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()))
+                .Throws(new InvalidOperationException("Transient draft failure"));
+
+            var result = service.ProcessOccurrence(occurrence.Id, "original-owner");
+
+            Assert.Equal(RecurringGenerationOutcome.Aborted, result.Outcome);
+            var persisted = Reload(occurrence.Id);
+            Assert.Equal(RecurringOccurrenceStatus.Running, persisted.Status);
+            Assert.Equal("new-owner", persisted.LeasedBy);
+            Assert.False(persisted.SeriesAdvanced);
+            Assert.Equal(0, persisted.AttemptCount);
+        }
+
+        [Fact]
+        public void ProcessOccurrence_FailureSaveThrows_RollsBackFailureAndSeriesTogether()
+        {
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            AddLine(schedule.Id, item.Id);
+            schedule.NextRunDate = new DateTime(2026, 6, 1);
+            _db.SaveChanges();
+            var occurrence = AddClaimedOccurrence(schedule.Id, schedule.NextRunDate.Value, "owner");
+            var realRepo = new EfRepository<RecurringOccurrence>(NullLogger<RecurringOccurrence>.Instance, _db);
+            var occurrences = new Mock<IRepository<RecurringOccurrence>>();
+            occurrences.SetupGet(r => r.Table).Returns(() => realRepo.Table);
+            occurrences.Setup(r => r.Update(It.IsAny<RecurringOccurrence>()))
+                .Callback<RecurringOccurrence>(o =>
+                {
+                    if (o.Status == RecurringOccurrenceStatus.Failed && o.SeriesAdvanced)
+                        throw new InvalidOperationException("Interrupted failure save");
+                    realRepo.Update(o);
+                });
+            _sales.Setup(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()))
+                .Throws(new InvalidOperationException("Transient draft failure"));
+            var service = CreateService(_db, _sales.Object, occurrences: occurrences.Object);
+
+            Assert.Throws<InvalidOperationException>(() => service.ProcessOccurrence(occurrence.Id, "owner"));
+
+            var persisted = Reload(occurrence.Id);
+            Assert.Equal(RecurringOccurrenceStatus.Running, persisted.Status);
+            Assert.False(persisted.SeriesAdvanced);
+            Assert.Equal(0, persisted.AttemptCount);
+            var persistedSchedule = _db.RecurringSchedules.AsNoTracking().Single(s => s.Id == schedule.Id);
+            Assert.Equal(new DateTime(2026, 6, 1), persistedSchedule.NextRunDate);
+            Assert.Equal(0, persistedSchedule.OccurrenceCount);
+            Assert.Empty(_db.SalesInvoiceHeaders.AsNoTracking());
+        }
+
+        private sealed class BeforeTransactionUnitOfWork(IUnitOfWork inner, Action<int> beforeBegin) : IUnitOfWork
+        {
+            private int _transactionCount;
+
+            public ITransactionScope BeginSerializableTransaction()
+            {
+                beforeBegin(++_transactionCount);
+                return inner.BeginSerializableTransaction();
+            }
+
+            public void DiscardPendingChanges() => inner.DiscardPendingChanges();
         }
 
         [Fact]
