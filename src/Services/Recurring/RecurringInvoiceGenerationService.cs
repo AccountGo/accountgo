@@ -75,6 +75,18 @@ namespace Services.Recurring
             var companyId = _tenant.RequireCompanyId();
             var runDate = scheduledRunDate.Date;
 
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId)
+                ?? throw new InvalidOperationException($"Recurring schedule {scheduleId} not found.");
+
+            // A schedule that is not actively generating must neither create a new occurrence nor re-claim an
+            // existing one for processing. Checked before any claim so a paused schedule can't be run — directly
+            // via run-now or indirectly by picking up an occurrence left behind before it was paused.
+            if (schedule.Status != RecurringScheduleStatus.Active)
+                throw new InvalidRunDateException(
+                    schedule.Status == RecurringScheduleStatus.Paused
+                        ? "The schedule is paused. Resume it before generating a run."
+                        : "The schedule has ended.");
+
             var existing = _occurrenceRepo.Table
                 .FirstOrDefault(o => o.RecurringScheduleId == scheduleId && o.ScheduledRunDate == runDate);
             if (existing != null)
@@ -98,9 +110,6 @@ namespace Services.Recurring
                 }
                 return existing.Id;
             }
-
-            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId)
-                ?? throw new InvalidOperationException($"Recurring schedule {scheduleId} not found.");
 
             // A new occurrence may only be created on a date the schedule's calendar actually produces, within its
             // active window. This stops a caller-supplied date from manufacturing a second, duplicate-period
@@ -202,6 +211,13 @@ namespace Services.Recurring
             {
                 tx.Dispose();
                 return RecurringGenerationResult.Aborted(occurrenceId, "Occurrence is not a sales-invoice schedule.");
+            }
+            // A schedule paused (or ended) after this occurrence was claimed must not produce a document. Abort
+            // without failing — pausing is a temporary, reversible state, so the occurrence waits for a resume.
+            if (schedule.Status != RecurringScheduleStatus.Active)
+            {
+                tx.Dispose();
+                return RecurringGenerationResult.Aborted(occurrenceId, $"Schedule is {schedule.Status}, not Active.");
             }
 
             var lines = _lineRepo.Table
@@ -341,8 +357,12 @@ namespace Services.Recurring
         /// </summary>
         private static void ValidateRunDateOnCalendar(RecurringSchedule schedule, DateTime runDate)
         {
-            if (schedule.Status == RecurringScheduleStatus.Ended)
-                throw new InvalidRunDateException("The schedule has ended.");
+            // Defense in depth: callers gate on Active before reaching here, but keep the method self-consistent.
+            if (schedule.Status != RecurringScheduleStatus.Active)
+                throw new InvalidRunDateException(
+                    schedule.Status == RecurringScheduleStatus.Paused
+                        ? "The schedule is paused."
+                        : "The schedule has ended.");
 
             if (runDate < schedule.StartDate.Date)
                 throw new InvalidRunDateException(

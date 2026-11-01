@@ -243,8 +243,30 @@ namespace AccountGo.BackendTests
             Assert.Contains("sales.invoices.post", await autoRes.Content.ReadAsStringAsync());
         }
 
+        [SqliteFact]
+        public async Task Recurring_RunNow_PausedSchedule_IsRejected_NoDocument()
+        {
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 9);
+            int scheduleId = SeedSalesSchedule("RUN-PAUSED", RecurringAction.AutoIssue, runDate, _ownerId,
+                status: RecurringScheduleStatus.Paused);
+
+            var response = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/run", new { runDate = IsoDate(runDate) });
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("paused", (await response.Content.ReadAsStringAsync()), StringComparison.OrdinalIgnoreCase);
+
+            // No occurrence and no invoice were created.
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                Assert.Empty(db.RecurringOccurrences.Where(o => o.RecurringScheduleId == scheduleId));
+            }
+        }
+
         /// <summary>Seeds a one-line service-item sales schedule whose NextRunDate is the given run date.</summary>
-        private int SeedSalesSchedule(string tag, RecurringAction action, DateTime runDate, string automationEnabledBy)
+        private int SeedSalesSchedule(string tag, RecurringAction action, DateTime runDate, string automationEnabledBy,
+            RecurringScheduleStatus status = RecurringScheduleStatus.Active)
         {
             var scheduleId = 0;
             using var scope = _factory.Services.CreateScope();
@@ -273,7 +295,7 @@ namespace AccountGo.BackendTests
                 {
                     CompanyId = _companyId, Kind = RecurringScheduleKind.SalesInvoice, PartyId = customer.Id,
                     Name = tag, Cadence = RecurringCadence.Monthly, Interval = 1, DayOfMonth = runDate.Day,
-                    StartDate = runDate, NextRunDate = runDate, Action = action,
+                    StartDate = runDate, NextRunDate = runDate, Action = action, Status = status,
                     ServicePeriodMode = RecurringServicePeriodMode.CurrentMonth,
                     AutomationEnabledBy = automationEnabledBy,
                 };
