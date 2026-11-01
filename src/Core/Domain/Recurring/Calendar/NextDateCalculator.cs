@@ -222,7 +222,9 @@ public static class NextDateCalculator
     {
         if (interval < 1)
             throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be at least 1.");
-        
+
+        ValidateDayOfMonthForCadence(cadence, dayOfMonth, startDate);
+
         if (nextRunDate > today)
             return 0;
 
@@ -246,10 +248,18 @@ public static class NextDateCalculator
     }
 
     /// <summary>
-    /// Validates that dayOfMonth is provided for non-weekly cadences.
+    /// Validates the cadence and whether its calendar rules have the required day-of-month.
     /// </summary>
     private static void ValidateDayOfMonthForCadence(RecurringCadence cadence, int? dayOfMonth, DateTime startDate)
     {
+        if (cadence != RecurringCadence.Weekly
+            && cadence != RecurringCadence.Monthly
+            && cadence != RecurringCadence.Quarterly
+            && cadence != RecurringCadence.Yearly)
+        {
+            throw new ArgumentOutOfRangeException(nameof(cadence), cadence, "Cadence is not supported.");
+        }
+
         if (cadence != RecurringCadence.Weekly && !dayOfMonth.HasValue)
             throw new InvalidOperationException(
                 $"DayOfMonth is required for {cadence} cadence. " +

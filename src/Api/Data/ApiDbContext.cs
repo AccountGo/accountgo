@@ -192,6 +192,12 @@ namespace Api.Data
                     RequireSameCompany(Vendors, schedule.PartyId, schedule.CompanyId,
                         "RecurringSchedule Vendor");
                 }
+
+                if (schedule.PaymentTermId.HasValue)
+                {
+                    RequireSameCompany(PaymentTerms, schedule.PaymentTermId.Value, schedule.CompanyId,
+                        "RecurringSchedule PaymentTerm");
+                }
             }
 
             foreach (var entry in ChangeTracker.Entries<RecurringScheduleLine>())
