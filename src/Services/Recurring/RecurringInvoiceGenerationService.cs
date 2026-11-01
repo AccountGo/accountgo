@@ -108,7 +108,8 @@ namespace Services.Recurring
             ValidateRunDateOnCalendar(schedule, runDate);
 
             var documentDate = runDate;
-            var (periodStart, periodEnd) = NextDateCalculator.ComputeServicePeriod(documentDate, schedule.ServicePeriodMode);
+            var (periodStart, periodEnd) = NextDateCalculator.ComputeServicePeriod(
+                documentDate, schedule.ServicePeriodMode, schedule.Cadence, schedule.Interval);
 
             var occurrence = new RecurringOccurrence
             {
@@ -351,30 +352,16 @@ namespace Services.Recurring
                 throw new InvalidRunDateException(
                     $"{runDate:yyyy-MM-dd} is after the schedule end {schedule.EndDate.Value:yyyy-MM-dd}.");
 
-            // Walk the series far enough to cover a max-occurrences bound, or a generous window otherwise, and
-            // confirm the requested date is one of the produced dates. The series is anchored to the start, so a
-            // run-now for an arbitrary mid-month date is rejected rather than creating a duplicate-period document.
-            var horizon = schedule.MaxOccurrences ?? 600; // ~50 years of monthly runs; bounded.
-            var dates = NextDateCalculator.ComputeNextDates(
+            // The series is anchored to the start; confirm the requested date is actually produced by it (so a
+            // run-now for an arbitrary mid-period date is rejected rather than creating a duplicate-period document).
+            // Position is found by walking only as far as the date, so there is no fixed horizon that would reject
+            // valid far-future run dates.
+            var position = NextDateCalculator.TryGetSeriesPosition(
                 schedule.Cadence,
                 schedule.Interval,
                 schedule.StartDate,
                 schedule.DayOfMonth,
-                count: horizon,
-                endDate: schedule.EndDate,
-                maxOccurrences: schedule.MaxOccurrences);
-
-            var position = -1;
-            for (var i = 0; i < dates.Count; i++)
-            {
-                if (dates[i].Date == runDate)
-                {
-                    position = i;
-                    break;
-                }
-                if (dates[i].Date > runDate)
-                    break; // dates are ascending; no point searching further.
-            }
+                runDate);
 
             if (position < 0)
                 throw new InvalidRunDateException(

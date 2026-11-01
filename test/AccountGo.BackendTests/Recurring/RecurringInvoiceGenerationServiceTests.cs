@@ -196,10 +196,12 @@ namespace AccountGo.BackendTests.Recurring
             int scheduleId,
             DateTime documentDate,
             string leaseOwner,
-            RecurringServicePeriodMode periodMode = RecurringServicePeriodMode.CurrentMonth)
+            RecurringServicePeriodMode periodMode = RecurringServicePeriodMode.CurrentMonth,
+            RecurringCadence cadence = RecurringCadence.Monthly,
+            int interval = 1)
         {
             var (periodStart, periodEnd) = Core.Domain.Recurring.Calendar.NextDateCalculator
-                .ComputeServicePeriod(documentDate, periodMode);
+                .ComputeServicePeriod(documentDate, periodMode, cadence, interval);
             var occ = new RecurringOccurrence
             {
                 CompanyId = _company.Id,
@@ -524,6 +526,56 @@ namespace AccountGo.BackendTests.Recurring
 
             Assert.Equal(RecurringGenerationOutcome.DraftCreatedGuardFailed, result.Outcome);
             Assert.Equal(RecurringGuardReasons.MultiMonthCadence, Reload(occ.Id).GuardFailureReason);
+            _sales.Verify(s => s.PostSalesInvoice(It.IsAny<int>()), Times.Never);
+        }
+
+        // ---- #1 (follow-up): weekly runs bill their own week, not the whole month ----
+
+        [Fact]
+        public void ProcessOccurrence_AutoIssue_WeeklyWithinMonth_Issues()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var owner = AddMember("auto-user", CompanyMemberRole.Owner);
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var tax = AddTax(12m);
+            var schedule = AddSchedule(customer.Id, RecurringAction.AutoIssue, automationEnabledBy: owner.UserId,
+                cadence: RecurringCadence.Weekly);
+            AddLine(schedule.Id, item.Id, taxId: tax.Id);
+            // A week starting mid-month sits inside June.
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 8), "lease-1", cadence: RecurringCadence.Weekly);
+
+            _sales.Setup(s => s.PostSalesInvoice(It.IsAny<int>()));
+
+            var result = _service.ProcessOccurrence(occ.Id, "lease-1");
+
+            Assert.Equal(RecurringGenerationOutcome.Issued, result.Outcome);
+            // The recorded period is the week, not the month, so distinct weekly runs don't share a period.
+            var reloaded = Reload(occ.Id);
+            Assert.Equal(new DateTime(2026, 6, 8), reloaded.PeriodStart);
+            Assert.Equal(new DateTime(2026, 6, 14), reloaded.PeriodEnd);
+        }
+
+        [Fact]
+        public void ProcessOccurrence_AutoIssue_WeeklyStraddlingMonthEnd_DowngradesToDraft()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var owner = AddMember("auto-user", CompanyMemberRole.Owner);
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var tax = AddTax(12m);
+            var schedule = AddSchedule(customer.Id, RecurringAction.AutoIssue, automationEnabledBy: owner.UserId,
+                cadence: RecurringCadence.Weekly);
+            AddLine(schedule.Id, item.Id, taxId: tax.Id);
+            // A week starting June 29 runs into July -> crosses the month boundary -> must stay a draft.
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 29), "lease-1", cadence: RecurringCadence.Weekly);
+
+            var result = _service.ProcessOccurrence(occ.Id, "lease-1");
+
+            Assert.Equal(RecurringGenerationOutcome.DraftCreatedGuardFailed, result.Outcome);
+            Assert.Equal(RecurringGuardReasons.ServicePeriodCrossesMonth, Reload(occ.Id).GuardFailureReason);
             _sales.Verify(s => s.PostSalesInvoice(It.IsAny<int>()), Times.Never);
         }
 

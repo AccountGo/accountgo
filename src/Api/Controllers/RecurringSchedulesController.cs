@@ -90,12 +90,14 @@ namespace Api.Controllers
             }
             catch (InvalidRunDateException ex)
             {
+                // Domain-safe, user-facing validation message.
                 return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
+                // Don't leak internal/database detail to the caller; keep it in the logs.
                 _logger.LogError(ex, "Run-now failed for schedule {ScheduleId} on {RunDate}.", id, runDate);
-                return BadRequest(new { message = ex.Message });
+                return StatusCode(500, new { message = "Could not generate the invoice for this run. Please try again or contact support." });
             }
         }
     }

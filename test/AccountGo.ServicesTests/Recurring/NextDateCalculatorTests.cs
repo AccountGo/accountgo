@@ -729,5 +729,98 @@ namespace AccountGo.ServicesTests.Recurring
         }
 
         #endregion
+
+        #region Cadence-aware service period (#482 follow-up)
+
+        [Fact]
+        public void ServicePeriod_Weekly_IsTheWeek_NotTheMonth()
+        {
+            // A weekly run bills its own week, so two runs in one month get distinct periods.
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 6, 1), RecurringServicePeriodMode.CurrentMonth,
+                RecurringCadence.Weekly, interval: 1);
+
+            Assert.Equal(new DateTime(2026, 6, 1), start);
+            Assert.Equal(new DateTime(2026, 6, 7), end);
+        }
+
+        [Fact]
+        public void ServicePeriod_Weekly_DistinctRunsHaveDistinctPeriods()
+        {
+            var first = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 6, 1), RecurringServicePeriodMode.CurrentMonth, RecurringCadence.Weekly, 1);
+            var second = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 6, 8), RecurringServicePeriodMode.CurrentMonth, RecurringCadence.Weekly, 1);
+
+            Assert.NotEqual(first, second);
+        }
+
+        [Fact]
+        public void ServicePeriod_Weekly_StraddlingMonthEnd_CrossesBoundary()
+        {
+            // A week that spans month-end should be detectable as crossing a month boundary (so it downgrades).
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 6, 29), RecurringServicePeriodMode.CurrentMonth, RecurringCadence.Weekly, 1);
+
+            Assert.Equal(new DateTime(2026, 6, 29), start);
+            Assert.Equal(new DateTime(2026, 7, 5), end);
+            Assert.True(NextDateCalculator.ServicePeriodCrossesMonthBoundary(start, end));
+        }
+
+        [Fact]
+        public void ServicePeriod_Monthly_IsTheCalendarMonth()
+        {
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 6, 15), RecurringServicePeriodMode.CurrentMonth, RecurringCadence.Monthly, 1);
+
+            Assert.Equal(new DateTime(2026, 6, 1), start);
+            Assert.Equal(new DateTime(2026, 6, 30), end);
+        }
+
+        [Fact]
+        public void ServicePeriod_Quarterly_SpansThreeMonths()
+        {
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 1, 15), RecurringServicePeriodMode.CurrentMonth, RecurringCadence.Quarterly, 1);
+
+            Assert.Equal(new DateTime(2026, 1, 1), start);
+            Assert.Equal(new DateTime(2026, 3, 31), end);
+            Assert.True(NextDateCalculator.ServicePeriodCrossesMonthBoundary(start, end));
+        }
+
+        [Fact]
+        public void ServicePeriod_Yearly_SpansTwelveMonths()
+        {
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 1, 15), RecurringServicePeriodMode.CurrentMonth, RecurringCadence.Yearly, 1);
+
+            Assert.Equal(new DateTime(2026, 1, 1), start);
+            Assert.Equal(new DateTime(2026, 12, 31), end);
+        }
+
+        [Fact]
+        public void TryGetSeriesPosition_FindsValidDate_AndRejectsOffCalendar()
+        {
+            var start = new DateTime(2026, 1, 1);
+
+            // Day-1 monthly: Jan is position 0, Apr is position 3.
+            Assert.Equal(0, NextDateCalculator.TryGetSeriesPosition(RecurringCadence.Monthly, 1, start, 1, new DateTime(2026, 1, 1)));
+            Assert.Equal(3, NextDateCalculator.TryGetSeriesPosition(RecurringCadence.Monthly, 1, start, 1, new DateTime(2026, 4, 1)));
+
+            // The 15th is never produced by a day-1 schedule.
+            Assert.Equal(-1, NextDateCalculator.TryGetSeriesPosition(RecurringCadence.Monthly, 1, start, 1, new DateTime(2026, 4, 15)));
+        }
+
+        [Fact]
+        public void TryGetSeriesPosition_FarFutureWeeklyDate_IsFound()
+        {
+            // ~15 years of weekly runs is well past the old fixed 600 horizon; it must still resolve.
+            var start = new DateTime(2026, 1, 1);
+            var target = start.AddDays(7 * 800); // position 800
+
+            Assert.Equal(800, NextDateCalculator.TryGetSeriesPosition(RecurringCadence.Weekly, 1, start, null, target));
+        }
+
+        #endregion
     }
 }
