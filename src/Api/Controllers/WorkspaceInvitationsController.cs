@@ -138,6 +138,24 @@ namespace Api.Controllers
                 await SendAsync(invitation);
                 _db.CompanyInvitations.Add(invitation);
                 await _db.SaveChangesAsync();
+
+                if (!string.IsNullOrWhiteSpace(request.ApprovalRequestId))
+                {
+                    _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                    {
+                        CompanyId = companyId,
+                        UserName = request.ApprovedByUserId ?? UserId,
+                        AuditEventDateUTC = DateTime.UtcNow,
+                        AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                        TableName = "__InvitationApproval",
+                        RecordId = invitation.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        FieldName = "ApprovalRequestId",
+                        OriginalValue = request.ApprovedByUserId ?? string.Empty,
+                        NewValue = request.ApprovalRequestId
+                    });
+                    await _db.SaveChangesAsync();
+                }
+
                 tx.Commit();
                 return StatusCode(201, new { id = invitation.Id, email, role = role.ToString(), expiresAt = invitation.ExpiresAt });
             }

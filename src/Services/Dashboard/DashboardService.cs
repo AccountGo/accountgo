@@ -199,7 +199,7 @@ namespace Services.Dashboard
             }
 
             var perms = _tenantContext.Permissions;
-            if (perms != null && perms.Count > 0)
+            if (_tenantContext.IsResolved && perms != null && perms.Count > 0)
             {
                 var financials = perms.Contains(SystemPermissions.FinancialsAccountsView) ||
                                  perms.Contains(SystemPermissions.FinancialsJournalView) ||

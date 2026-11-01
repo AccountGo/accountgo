@@ -294,8 +294,23 @@ namespace Api.Controllers
                     .FirstOrDefault(h => h.Id == journalEntryDto.Id);
             }
 
+            string? persistedPreparer = null;
+            if (journalEntryDto != null && journalEntryDto.Id > 0 && companyId.HasValue)
+            {
+                persistedPreparer = _db.AuditLogs
+                    .AsNoTracking()
+                    .Where(a => a.CompanyId == companyId.Value &&
+                                a.TableName == "__JournalEntryPreparer" &&
+                                a.RecordId == journalEntryDto.Id.ToString(CultureInfo.InvariantCulture))
+                    .OrderByDescending(a => a.Id)
+                    .Select(a => a.NewValue)
+                    .FirstOrDefault();
+            }
+
+            var currentActorId = _tenantContext.UserId ?? User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var effectivePreparer = persistedPreparer ?? currentActorId ?? "system:draft-preparer";
+
             var isPosted = existingHeader != null && (existingHeader.Posted == true || existingHeader.GeneralLedgerHeaderId.HasValue);
-            var prepHeader = HttpContext?.Request.Headers["X-Prepared-By-User-Id"].FirstOrDefault();
             var aprHeader = HttpContext?.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
             var approverHeader = HttpContext?.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
 
@@ -307,7 +322,7 @@ namespace Api.Controllers
                 ResourceId = journalEntryDto?.Id.ToString(CultureInfo.InvariantCulture),
                 WorkflowState = isPosted ? "Posted" : "Draft",
                 IsPeriodLockedOrClosed = false,
-                PreparedByUserId = prepHeader ?? "system:draft-preparer",
+                PreparedByUserId = effectivePreparer,
                 IndependentApproverUserId = approverHeader,
                 ApprovalRequestId = aprHeader
             };
@@ -484,6 +499,26 @@ namespace Api.Controllers
                 else
                 {
                     _financialService.UpdateJournalEntry(journalEntry, false);
+                }
+
+                // S1: Persist trusted preparer identity in AuditLogs
+                var preparerUserId = _tenantContext.UserId ?? User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var currentCompanyId = _tenantContext.CompanyId;
+                if (!string.IsNullOrWhiteSpace(preparerUserId) && journalEntry.Id > 0 && currentCompanyId.HasValue)
+                {
+                    _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                    {
+                        CompanyId = currentCompanyId.Value,
+                        UserName = preparerUserId,
+                        AuditEventDateUTC = DateTime.UtcNow,
+                        AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                        TableName = "__JournalEntryPreparer",
+                        RecordId = journalEntry.Id.ToString(CultureInfo.InvariantCulture),
+                        FieldName = "PreparedByUserId",
+                        OriginalValue = string.Empty,
+                        NewValue = preparerUserId
+                    });
+                    _db.SaveChanges();
                 }
 
                 return Ok(new { id = journalEntry.Id });

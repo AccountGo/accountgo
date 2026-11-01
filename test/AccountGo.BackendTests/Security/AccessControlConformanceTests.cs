@@ -380,11 +380,11 @@ namespace AccountGo.BackendTests.Security
 
             using var scope = _fixture.Factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
 
             // 1. Entitlement denial (module disabled on plan)
             var denyingEntitlements = new StubEntitlementService(_ =>
                 new EntitlementDecision(false, "MODULE_NOT_SUBSCRIBED", "Financials module is not enabled.", RequiredModule: "financials"));
-            var tenant = new TenantContext();
             using (tenant.ImpersonateUser(companyId, owner.Id, slug, CompanyMemberRole.Owner))
             {
                 var authWithDeniedEntitlement = new AccessAuthorizationService(tenant, denyingEntitlements, db);
@@ -467,16 +467,25 @@ namespace AccountGo.BackendTests.Security
                 Assert.Equal(AccessReasonCode.SeparationOfDutiesViolation, sodDenied.ReasonCode);
                 Assert.Equal(StatusCodes.Status403Forbidden, sodDenied.HttpStatus);
 
-                // 3d. Separation of duties satisfied when an independent approver is recorded
+                // 3d. Separation of duties satisfied when an independent approval is recorded
+                var (approvalReqId, _) = await AccessAuthorizationService.RecordAuthenticatedApprovalAsync(
+                    db,
+                    companyId,
+                    approver.Id,
+                    AccessOperationCatalog.FinancialsJournalPost,
+                    resourceId: "123");
+
                 var sodAllowed = authService.Authorize(
                     AccessOperationCatalog.FinancialsJournalPost,
                     new AccessResourceContext
                     {
                         WorkspaceCompanyId = companyId,
                         ResourceCompanyId = companyId,
+                        ResourceId = "123",
                         WorkflowState = "Draft",
                         PreparedByUserId = owner.Id,
-                        IndependentApproverUserId = approver.Id
+                        IndependentApproverUserId = approver.Id,
+                        ApprovalRequestId = approvalReqId
                     });
                 Assert.True(sodAllowed.Allowed);
             }

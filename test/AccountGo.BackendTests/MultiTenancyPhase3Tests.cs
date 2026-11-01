@@ -2024,16 +2024,49 @@ namespace AccountGo.BackendTests
             }
         }
 
-        private async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, bool scoped = true)
+        private async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, bool scoped = true, IDictionary<string, string> extraHeaders = null)
         {
             using (var request = new HttpRequestMessage(method, path))
             {
                 var bearer = token ?? _ownerToken;
                 if (!string.IsNullOrEmpty(bearer)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
                 if (scoped) request.Headers.Add("X-AccountGo-Org", _slug);
+                if (extraHeaders != null)
+                {
+                    foreach (var kvp in extraHeaders)
+                    {
+                        request.Headers.Add(kvp.Key, kvp.Value);
+                    }
+                }
                 if (body != null) request.Content = JsonContent.Create(body);
                 return await _client.SendAsync(request);
             }
+        }
+
+        private async Task<IDictionary<string, string>> ApproveJournalPostAsync(int journalId)
+        {
+            var approver = await CreateUser($"approver-{Guid.NewGuid():N}@example.com");
+            string reqId = null;
+            WithDb(db =>
+            {
+                db.CompanyMembers.Add(new CompanyMember
+                {
+                    CompanyId = _companyId,
+                    UserId = approver.Item2,
+                    Role = CompanyMemberRole.Admin,
+                    Status = CompanyMemberStatus.Active
+                });
+                db.SaveChanges();
+                var res = Api.Authorization.AccessAuthorizationService.RecordAuthenticatedApprovalAsync(
+                    db, _companyId, approver.Item2, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, resourceId: journalId.ToString()).GetAwaiter().GetResult();
+                reqId = res.RequestId;
+            });
+
+            return new Dictionary<string, string>
+            {
+                { "X-Approval-Request-Id", reqId },
+                { "X-Approved-By-User-Id", approver.Item2 }
+            };
         }
 
         private static async Task<JsonElement> Json(HttpResponseMessage response)
