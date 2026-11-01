@@ -5,6 +5,7 @@ using Core.Domain.Donations;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
+using Core.Domain.Recurring;
 using Core.Domain.Sales;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
@@ -210,6 +211,7 @@ namespace Api.Data
                 .HasDefaultValue("legacy-default");
             builder.Entity<CompanySetting>().Property(s => s.MfaPolicy).HasDefaultValue(MfaPolicy.Optional);
             builder.Entity<CompanySetting>().Property(s => s.RequireMfaEveryLogin).HasDefaultValue(false);
+            builder.Entity<CompanySetting>().Property(s => s.Timezone).IsRequired().HasMaxLength(50).HasDefaultValue("UTC");
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
             builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);
@@ -745,6 +747,102 @@ namespace Api.Data
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
+            #region Recurring Schedules (#479 Phase 1)
+
+            builder.Entity<RecurringSchedule>(entity =>
+            {
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Notes).HasMaxLength(2000);
+                entity.Property(e => e.PaymentInstructions).HasMaxLength(2000);
+                entity.Property(e => e.VendorInvoiceNumberPattern).HasMaxLength(100);
+                entity.Property(e => e.AutomationEnabledBy).HasMaxLength(256);
+
+                // Dates are stored as date-only
+                entity.Property(e => e.StartDate).HasColumnType("date");
+                entity.Property(e => e.EndDate).HasColumnType("date");
+                entity.Property(e => e.NextRunDate).HasColumnType("date");
+
+                // Indexes
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => new { e.CompanyId, e.Status }, "IX_RecurringSchedule_Company_Status");
+                entity.HasIndex(e => new { e.CompanyId, e.Kind, e.PartyId }, "IX_RecurringSchedule_Company_Kind_Party");
+                entity.HasIndex(e => new { e.CompanyId, e.NextRunDate }, "IX_RecurringSchedule_Company_NextRunDate")
+                    .HasFilter("[Status] = 1 AND [NextRunDate] IS NOT NULL"); // Only active schedules with next run date
+
+                // Relationships
+                entity.HasOne(e => e.Company).WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<RecurringScheduleLine>(entity =>
+            {
+                entity.Property(e => e.Description).HasMaxLength(500);
+                entity.Property(e => e.Quantity).HasColumnType("decimal(18, 4)").HasDefaultValue(1m);
+                entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+                entity.Property(e => e.Discount).HasColumnType("decimal(18, 4)").HasDefaultValue(0m);
+
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => e.RecurringScheduleId);
+
+                entity.HasOne(e => e.Schedule).WithMany(s => s.Lines)
+                    .HasForeignKey(e => e.RecurringScheduleId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Item).WithMany()
+                    .HasForeignKey(e => e.ItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Tax).WithMany()
+                    .HasForeignKey(e => e.TaxId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Account).WithMany()
+                    .HasForeignKey(e => e.AccountId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<RecurringOccurrence>(entity =>
+            {
+                entity.Property(e => e.IdempotencyKey).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.ErrorCode).HasMaxLength(50);
+                entity.Property(e => e.ErrorMessage).HasMaxLength(2000);
+                entity.Property(e => e.GuardFailureReason).HasMaxLength(500);
+                entity.Property(e => e.ActionBy).HasMaxLength(256);
+                entity.Property(e => e.SkipReason).HasMaxLength(500);
+                entity.Property(e => e.LeasedBy).HasMaxLength(100);
+
+                // Dates are stored as date-only
+                entity.Property(e => e.PeriodStart).HasColumnType("date");
+                entity.Property(e => e.PeriodEnd).HasColumnType("date");
+                entity.Property(e => e.DocumentDate).HasColumnType("date");
+                entity.Property(e => e.DueDate).HasColumnType("date");
+                entity.Property(e => e.LeasedUntil).HasColumnType("datetime");
+
+                // Unique index: one occurrence per company + schedule + period start
+                entity.HasIndex(e => new { e.CompanyId, e.RecurringScheduleId, e.PeriodStart }, "UX_RecurringOccurrence_Company_Schedule_Period")
+                    .IsUnique();
+
+                // Index for finding due occurrences
+                entity.HasIndex(e => new { e.CompanyId, e.Status, e.DocumentDate }, "IX_RecurringOccurrence_Company_Status_DocumentDate");
+
+                // Index for lease expiration (worker uses this to find expired leases)
+                entity.HasIndex(e => new { e.CompanyId, e.Status, e.LeasedUntil }, "IX_RecurringOccurrence_Company_Status_Lease");
+
+                // Index for idempotency key lookups
+                entity.HasIndex(e => e.IdempotencyKey);
+
+                // Relationships
+                entity.HasOne(e => e.Schedule).WithMany(s => s.Occurrences)
+                    .HasForeignKey(e => e.RecurringScheduleId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.SalesInvoice).WithMany()
+                    .HasForeignKey(e => e.SalesInvoiceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.PurchaseInvoice).WithMany()
+                    .HasForeignKey(e => e.PurchaseInvoiceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            #endregion
+
             builder.Seed();
             /* Medhat END */
         }
@@ -826,6 +924,9 @@ namespace Api.Data
         public virtual DbSet<Vendor> Vendors { get; set; }
         public virtual DbSet<VendorPayment> VendorPayments { get; set; }
         public virtual DbSet<Party> Parties { get; set; }
+        public virtual DbSet<RecurringSchedule> RecurringSchedules { get; set; }
+        public virtual DbSet<RecurringScheduleLine> RecurringScheduleLines { get; set; }
+        public virtual DbSet<RecurringOccurrence> RecurringOccurrences { get; set; }
 
         #region Audit Logs
         private void SaveAuditLog()

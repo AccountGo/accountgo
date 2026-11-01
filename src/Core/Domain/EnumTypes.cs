@@ -169,7 +169,9 @@ namespace Core.Domain
     public enum SalesInvoiceOrigins
     {
         /// <summary>One-line invoice issued and paid from a statement "Record other income" action.</summary>
-        StatementOtherIncome = 1
+        StatementOtherIncome = 1,
+        /// <summary>Generated from a recurring schedule (#479 Phase 1).</summary>
+        RecurringSchedule = 2
     }
 
     public enum AddressTypes
