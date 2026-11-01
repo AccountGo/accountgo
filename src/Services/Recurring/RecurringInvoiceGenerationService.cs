@@ -369,18 +369,21 @@ namespace Services.Recurring
                         ? "The schedule is paused. Resume it before generating a run."
                         : "The schedule has ended.");
 
-            var resolved = (runDate ?? schedule.NextRunDate)?.Date;
-            if (resolved == null)
+            // Manual execution runs only the schedule's next due occurrence. There must be a next run date to run —
+            // an exhausted or never-scheduled schedule has nothing to generate here, and a failed past occurrence is
+            // recovered through the retry endpoint, not by naming its date in run-now.
+            if (!schedule.NextRunDate.HasValue)
                 throw new InvalidRunDateException(
-                    "No run date to generate. Set the schedule's next run date first.");
-            var effectiveRunDate = resolved.Value;
+                    "This schedule has no next run date. There is nothing to run; retry a failed occurrence from its history instead.");
 
-            // Manual execution runs only the schedule's next due occurrence — never an arbitrary later date, which
-            // would silently skip and un-record the intervening periods. If the caller names a date it must be the
-            // current next run date; anything else is rejected so missed periods are not glossed over.
-            if (schedule.NextRunDate.HasValue && effectiveRunDate != schedule.NextRunDate.Value.Date)
+            var nextRunDate = schedule.NextRunDate.Value.Date;
+            var effectiveRunDate = (runDate?.Date) ?? nextRunDate;
+
+            // If the caller names a date it must be the current next run date; an arbitrary later date is rejected so
+            // the intervening periods are never silently skipped and left unrecorded.
+            if (effectiveRunDate != nextRunDate)
                 throw new InvalidRunDateException(
-                    $"This schedule's next run is {schedule.NextRunDate.Value:yyyy-MM-dd}. " +
+                    $"This schedule's next run is {nextRunDate:yyyy-MM-dd}. " +
                     "A manual run can only generate the next occurrence.");
 
             // #480: archiving the client pauses the schedule. Do this before creating an occurrence so an archived
@@ -451,7 +454,18 @@ namespace Services.Recurring
             // the same (schedule, run date), so retrying by occurrence id goes through the identical claim path and
             // keeps the same idempotency key. It never advances NextRunDate.
             var claimedId = EnsureOccurrence(schedule.Id, occurrence.ScheduledRunDate, leaseOwner, leaseUntil);
-            return ProcessOccurrence(claimedId, leaseOwner);
+            var result = ProcessOccurrence(claimedId, leaseOwner);
+
+            // A retry is the point where a previously-failed occurrence actually completes. If that occurrence was
+            // the schedule's final allowed run — the series is already exhausted (NextRunDate cleared) but the
+            // schedule was left Active by the failed final run — a now-successful retry finalizes it as Ended. Retry
+            // never advances the series; this only closes out a schedule that has no remaining occurrences.
+            var retrySucceeded = result.Outcome != RecurringGenerationOutcome.Failed
+                && result.Outcome != RecurringGenerationOutcome.Aborted;
+            if (retrySucceeded)
+                EndScheduleIfExhausted(schedule.Id, occurrence.ScheduledRunDate);
+
+            return result;
         }
 
         /// <summary>
@@ -484,12 +498,7 @@ namespace Services.Recurring
             }
 
             // Past the end date or the occurrence limit: the series is over.
-            var position = NextDateCalculator.TryGetSeriesPosition(
-                tracked.Cadence, tracked.Interval, tracked.StartDate, tracked.DayOfMonth, next);
-            var pastEnd = tracked.EndDate.HasValue && next > tracked.EndDate.Value.Date;
-            var pastMax = tracked.MaxOccurrences.HasValue && position >= 0 && position >= tracked.MaxOccurrences.Value;
-
-            if (pastEnd || pastMax)
+            if (SeriesExhaustedAt(tracked, next))
             {
                 // No more forward runs either way. End the schedule only when the exhausting run succeeded; a failed
                 // final run leaves it Active (NextRunDate cleared) so the failed occurrence can still be retried.
@@ -506,6 +515,56 @@ namespace Services.Recurring
 
             tracked.OccurrenceCount += 1;
             _scheduleRepo.Update(tracked);
+        }
+
+        /// <summary>
+        /// Finalizes a schedule as <see cref="RecurringScheduleStatus.Ended"/> when a now-successful retry completed
+        /// its last allowed occurrence. Only acts on a schedule left in the exhausted-but-active state by a failed
+        /// final run (Active with no next run date) whose series has no occurrence after <paramref name="runDate"/>.
+        /// Never advances the series.
+        /// </summary>
+        private void EndScheduleIfExhausted(int scheduleId, DateTime runDate)
+        {
+            var tracked = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId);
+            if (tracked == null)
+                return;
+            // Only a schedule a failed final run left Active-with-no-next-date is a candidate; anything else (still
+            // has a next date, already Ended, or Paused) is not for this path to touch.
+            if (tracked.Status != RecurringScheduleStatus.Active || tracked.NextRunDate.HasValue)
+                return;
+
+            DateTime next;
+            try
+            {
+                next = NextDateCalculator.ComputeNextDate(
+                    tracked.Cadence, tracked.Interval, runDate, tracked.DayOfMonth, tracked.StartDate);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not evaluate series end for schedule {ScheduleId} after retry of {RunDate}.",
+                    tracked.Id, runDate);
+                return;
+            }
+
+            if (SeriesExhaustedAt(tracked, next))
+            {
+                tracked.Status = RecurringScheduleStatus.Ended;
+                tracked.NeedsAttention = false;
+                _scheduleRepo.Update(tracked);
+            }
+        }
+
+        /// <summary>
+        /// True when <paramref name="next"/> (the date after a just-run occurrence) falls past the schedule's end
+        /// date or its occurrence limit — i.e. the schedule has no further run.
+        /// </summary>
+        private static bool SeriesExhaustedAt(RecurringSchedule schedule, DateTime next)
+        {
+            var position = NextDateCalculator.TryGetSeriesPosition(
+                schedule.Cadence, schedule.Interval, schedule.StartDate, schedule.DayOfMonth, next);
+            var pastEnd = schedule.EndDate.HasValue && next > schedule.EndDate.Value.Date;
+            var pastMax = schedule.MaxOccurrences.HasValue && position >= 0 && position >= schedule.MaxOccurrences.Value;
+            return pastEnd || pastMax;
         }
 
         private void PauseForArchivedCustomer(RecurringSchedule schedule)
