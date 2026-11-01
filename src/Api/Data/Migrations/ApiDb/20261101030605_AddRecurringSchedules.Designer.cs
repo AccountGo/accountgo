@@ -2572,7 +2572,7 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("LeasedUntil")
-                        .HasColumnType("datetime");
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("PeriodEnd")
                         .HasColumnType("date");

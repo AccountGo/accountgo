@@ -2566,7 +2566,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTime?>("LeasedUntil")
-                        .HasColumnType("datetime");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("PeriodEnd")
                         .HasColumnType("date");

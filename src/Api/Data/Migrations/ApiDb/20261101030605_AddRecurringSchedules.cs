@@ -76,7 +76,7 @@ namespace Api.Data.Migrations.ApiDb
                     DueDate = table.Column<DateTime>(type: "date", nullable: true),
                     Status = table.Column<int>(type: "int", nullable: false),
                     IdempotencyKey = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    LeasedUntil = table.Column<DateTime>(type: "datetime", nullable: true),
+                    LeasedUntil = table.Column<DateTime>(type: "datetime2", nullable: true),
                     LeasedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     AttemptCount = table.Column<int>(type: "int", nullable: false),
                     ErrorCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
