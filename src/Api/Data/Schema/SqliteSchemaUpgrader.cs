@@ -159,6 +159,7 @@ namespace Api.Data.Schema
                 var columns = new[]
                 {
                     new[] { "Company", "DeletedAt", "TEXT NULL" },
+                    new[] { "Company", "AccessBootstrapAvailable", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "AspNetUsers", "DeletedAt", "TEXT NULL" },
                     new[] { "CompanySetting", "Currency", "TEXT NOT NULL DEFAULT 'PHP'" },
                     new[] { "CompanySetting", "ReportingFramework", "INTEGER NOT NULL DEFAULT 1" },
@@ -1342,7 +1343,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                         ""PolicyVersion"" TEXT NOT NULL,
                         ""TargetMembershipRevisionAtRequest"" INTEGER NOT NULL DEFAULT 0,
                         ""BoundApprovalId"" TEXT NULL,
-                        CONSTRAINT ""FK_WorkspaceAccessRequest_Company_CompanyId"" FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE,
+                        CONSTRAINT ""FK_WorkspaceAccessRequest_Company_CompanyId"" FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE NO ACTION,
                         CONSTRAINT ""FK_WorkspaceAccessRequest_CompanyMember_TargetMemberId"" FOREIGN KEY (""TargetMemberId"") REFERENCES ""CompanyMember"" (""Id"") ON DELETE CASCADE
                     );
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspaceAccessRequest_CompanyId_RequestId"" ON ""WorkspaceAccessRequest"" (""CompanyId"", ""RequestId"");
@@ -1420,7 +1421,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                         ""PolicyVersion"" TEXT NOT NULL,
                         ""TargetMembershipRevisionAtRequest"" INTEGER NOT NULL DEFAULT 0,
                         ""BoundApprovalId"" TEXT NULL,
-                        CONSTRAINT ""FK_WorkspaceAccessRequest_Company_CompanyId"" FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE,
+                        CONSTRAINT ""FK_WorkspaceAccessRequest_Company_CompanyId"" FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE NO ACTION,
                         CONSTRAINT ""FK_WorkspaceAccessRequest_CompanyMember_TargetMemberId"" FOREIGN KEY (""TargetMemberId"") REFERENCES ""CompanyMember"" (""Id"") ON DELETE CASCADE
                     );
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspaceAccessRequest_CompanyId_RequestId"" ON ""WorkspaceAccessRequest"" (""CompanyId"", ""RequestId"");

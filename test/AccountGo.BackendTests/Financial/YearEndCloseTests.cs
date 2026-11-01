@@ -187,7 +187,8 @@ public class YearEndCloseTests
         public Harness(
             EntityType entityType = EntityType.SoleProprietor,
             DateTime? booksLockedThrough = null,
-            DateTime? booksStartDate = null)
+            DateTime? booksStartDate = null,
+            bool periodCloseOnly = false)
         {
             var permanentCode = entityType == EntityType.Corporation ? "30300" : "30100";
             var booksStart = booksStartDate ?? D(2025, 1, 1);
@@ -247,6 +248,9 @@ public class YearEndCloseTests
             Tenant.Setup(t => t.IsResolved).Returns(true);
             Tenant.Setup(t => t.CompanyId).Returns(1);
             Tenant.Setup(t => t.RequireCompanyId()).Returns(1);
+            Tenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
+            Tenant.Setup(t => t.UserId).Returns("period-closer");
+            Tenant.Setup(t => t.Permissions).Returns(new HashSet<string> { SystemPermissions.FinancialsPeriodsClose });
             Entitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
                 .Returns(new EntitlementDecision(true, null, null));
 
@@ -270,7 +274,9 @@ public class YearEndCloseTests
                 GlSettings,
                 Settings,
                 booksLockGuard: Guard,
-                auth: Mock.Of<IAccessAuthorizationService>(a => a.Authorize(It.IsAny<string>(), It.IsAny<AccessResourceContext>(), It.IsAny<AccessActorContext>()) == AccessDecision.Allow("test", "test", "test")));
+                auth: periodCloseOnly
+                    ? new Api.Authorization.AccessAuthorizationService(Tenant.Object, Entitlements.Object)
+                    : Mock.Of<IAccessAuthorizationService>(a => a.Authorize(It.IsAny<string>(), It.IsAny<AccessResourceContext>(), It.IsAny<AccessActorContext>()) == AccessDecision.Allow("test", "test", "test")));
 
             YearEnd = new YearEndCloseService(
                 Financial,
@@ -488,6 +494,22 @@ public class YearEndCloseTests
         entry.GeneralLedgerLines.Add(new GeneralLedgerLine { AccountId = harness.CashId, DrCr = DrOrCrSide.Dr, Amount = 1m });
         entry.GeneralLedgerLines.Add(new GeneralLedgerLine { AccountId = harness.OwnerCapitalId, DrCr = DrOrCrSide.Cr, Amount = 1m });
         Assert.Throws<BooksLockedException>(() => harness.Financial.ValidateGeneralLedgerEntry(entry));
+    }
+
+    [Fact]
+    public void Reopen_WithOnlyPeriodClosePermission_ReversesTheClosingJournal()
+    {
+        using var harness = new Harness(periodCloseOnly: true);
+        harness.Post(D(2025, 6, 1), harness.CashId, harness.RevenueId, 800m);
+        harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "period-closer");
+        var closingId = harness.FiscalYears.Table.Single(f => f.FiscalYearCode == Harness.Fy2025Code).ClosingGeneralLedgerHeaderId;
+
+        var reopened = harness.YearEnd.Reopen(Harness.Fy2025Code, "Correcting accrual", "period-closer");
+
+        Assert.Equal(FiscalYearCloseStatus.Ended, reopened.Status);
+        var reversal = Assert.Single(harness.GlHeaders.Table.Where(h => h.ReversedGeneralLedgerHeaderId == closingId));
+        Assert.Equal(800m, reversal.GeneralLedgerLines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount));
+        Assert.Equal(800m, reversal.GeneralLedgerLines.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount));
     }
 
     [Fact]

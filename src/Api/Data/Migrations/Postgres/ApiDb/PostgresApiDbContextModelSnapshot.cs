@@ -138,6 +138,11 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AccessBootstrapAvailable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("ActiveModulesJson")
                         .HasColumnType("text");
 
@@ -214,6 +219,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         new
                         {
                             Id = 1,
+                            AccessBootstrapAvailable = false,
                             BillingManagedManually = false,
                             CRA = "012345678",
                             CancelAtPeriodEnd = false,
@@ -4964,7 +4970,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasOne("Core.Domain.Company", "Company")
                         .WithMany()
                         .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("Core.Domain.CompanyMember", "TargetMember")
