@@ -398,11 +398,19 @@ namespace Services.Recurring
             var occurrenceId = EnsureOccurrence(scheduleId, effectiveRunDate, leaseOwner, leaseUntil);
             var result = ProcessOccurrence(occurrenceId, leaseOwner);
 
-            // Advance the series by exactly one occurrence once the run has been attempted. Aborted means no attempt
-            // was made (e.g. a live lease held elsewhere), so the series is left where it is. A failed attempt still
-            // advances the next date — the series must not stall — but it does not end the schedule, because the
-            // final period has not actually succeeded and its failed occurrence must stay retryable.
-            if (result.Outcome != RecurringGenerationOutcome.Aborted)
+            // Advance the series by exactly one occurrence once the run has been attempted. Two cases must NOT
+            // advance:
+            //  - Aborted: no attempt was made (e.g. a live lease held elsewhere), so the series stays put.
+            //  - AlreadyProcessed: this is an idempotent replay (a concurrent run-now blocked on the serializable
+            //    transaction and then saw the first caller's committed invoice). The first caller already advanced
+            //    the series; advancing again would double-count OccurrenceCount and skip a period. AdvanceNextRunDate
+            //    itself also re-checks the stored next date to stay safe against concurrent advancement, but we skip
+            //    the replay outcome here outright.
+            // A failed attempt still advances the next date — the series must not stall — but it does not end the
+            // schedule, because the final period has not actually succeeded and its failed occurrence must stay
+            // retryable.
+            if (result.Outcome != RecurringGenerationOutcome.Aborted
+                && result.Outcome != RecurringGenerationOutcome.AlreadyProcessed)
             {
                 var attemptSucceeded = result.Outcome != RecurringGenerationOutcome.Failed;
                 AdvanceNextRunDate(schedule, effectiveRunDate, attemptSucceeded);
@@ -460,10 +468,17 @@ namespace Services.Recurring
             // the schedule's final allowed run — the series is already exhausted (NextRunDate cleared) but the
             // schedule was left Active by the failed final run — a now-successful retry finalizes it as Ended. Retry
             // never advances the series; this only closes out a schedule that has no remaining occurrences.
+            //
+            // A guard downgrade (DraftCreatedGuardFailed) counts as "the occurrence produced a document" and so is
+            // eligible to finalize the series, but it recorded a guard-failure reason that still needs review — so
+            // the schedule is ended WITHOUT clearing NeedsAttention. Only a clean success clears attention.
             var retrySucceeded = result.Outcome != RecurringGenerationOutcome.Failed
                 && result.Outcome != RecurringGenerationOutcome.Aborted;
             if (retrySucceeded)
-                EndScheduleIfExhausted(schedule.Id, occurrence.ScheduledRunDate);
+            {
+                var clearAttention = result.Outcome != RecurringGenerationOutcome.DraftCreatedGuardFailed;
+                EndScheduleIfExhausted(schedule.Id, occurrence.ScheduledRunDate, clearAttention);
+            }
 
             return result;
         }
@@ -481,6 +496,21 @@ namespace Services.Recurring
             // draft), which detaches the schedule we were handed; mutating a detached entity would not persist.
             // Re-load the tracked row before advancing.
             var tracked = _scheduleRepo.Table.FirstOrDefault(s => s.Id == schedule.Id) ?? schedule;
+
+            // Concurrency guard: advancement must be idempotent against the attempted run date. Two concurrent
+            // run-now requests can both read the same NextRunDate; the serializable transaction in ProcessOccurrence
+            // ensures only one actually creates the document (the other replays as AlreadyProcessed and is already
+            // filtered out by the caller), but a reload here is the authoritative check. Only advance when the
+            // stored next date still equals the date we attempted. If a concurrent request already advanced the
+            // series past this date, do nothing — otherwise OccurrenceCount would be double-counted and a period
+            // skipped.
+            if (tracked.NextRunDate?.Date != attemptedRunDate.Date)
+            {
+                _logger.LogInformation(
+                    "Schedule {ScheduleId} next run date already advanced past {RunDate}; skipping advance.",
+                    tracked.Id, attemptedRunDate);
+                return;
+            }
 
             DateTime next;
             try
@@ -521,9 +551,11 @@ namespace Services.Recurring
         /// Finalizes a schedule as <see cref="RecurringScheduleStatus.Ended"/> when a now-successful retry completed
         /// its last allowed occurrence. Only acts on a schedule left in the exhausted-but-active state by a failed
         /// final run (Active with no next run date) whose series has no occurrence after <paramref name="runDate"/>.
-        /// Never advances the series.
+        /// Never advances the series. <paramref name="clearAttention"/> is false when the completing occurrence was a
+        /// guard downgrade (DraftCreatedGuardFailed): the series ends, but the recorded guard-failure reason still
+        /// needs review, so the attention flag is preserved.
         /// </summary>
-        private void EndScheduleIfExhausted(int scheduleId, DateTime runDate)
+        private void EndScheduleIfExhausted(int scheduleId, DateTime runDate, bool clearAttention)
         {
             var tracked = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId);
             if (tracked == null)
@@ -549,7 +581,10 @@ namespace Services.Recurring
             if (SeriesExhaustedAt(tracked, next))
             {
                 tracked.Status = RecurringScheduleStatus.Ended;
-                tracked.NeedsAttention = false;
+                // A clean success clears attention. A guard downgrade ends the series but leaves NeedsAttention set
+                // so the recorded guard-failure reason is still surfaced for review.
+                if (clearAttention)
+                    tracked.NeedsAttention = false;
                 _scheduleRepo.Update(tracked);
             }
         }

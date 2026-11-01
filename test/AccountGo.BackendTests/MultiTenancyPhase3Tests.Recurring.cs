@@ -702,6 +702,151 @@ namespace AccountGo.BackendTests
             }
         }
 
+        [SqliteFact]
+        public void Recurring_RunSchedule_ReplayRun_DoesNotAdvanceTwice()
+        {
+            // HIGH finding: advancement must be idempotent against the attempted run date. Model two concurrent
+            // run-now requests that both read the same NextRunDate before either advances: the first creates the
+            // draft and advances; the second (whose serializable transaction collapses to an idempotent replay)
+            // must NOT advance NextRunDate again nor double-count OccurrenceCount. The second caller's stale view of
+            // NextRunDate is reproduced by resetting it back to the run date, leaving the existing draft occurrence.
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 6);
+            int scheduleId = SeedSalesSchedule("ADV-REPLAY", RecurringAction.CreateDraft, runDate, _ownerId);
+
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+
+                var first = generation.RunSchedule(scheduleId, runDate, "run-a", DateTime.UtcNow.AddMinutes(5));
+                Assert.Equal(RecurringGenerationOutcome.DraftCreated, first.Outcome);
+
+                var afterFirst = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                Assert.Equal(runDate.AddMonths(1), afterFirst.NextRunDate);
+                Assert.Equal(1, afterFirst.OccurrenceCount);
+
+                // A second caller that read the pre-advance NextRunDate: reset the stored date back to the run date
+                // (the draft occurrence for that date still exists), then run again. The occurrence already produced
+                // a document, so ProcessOccurrence replays as AlreadyProcessed.
+                afterFirst.NextRunDate = runDate;
+                db.SaveChanges();
+
+                var second = generation.RunSchedule(scheduleId, runDate, "run-b", DateTime.UtcNow.AddMinutes(5));
+                Assert.Equal(RecurringGenerationOutcome.AlreadyProcessed, second.Outcome);
+                Assert.Equal(first.SalesInvoiceId, second.SalesInvoiceId);
+
+                // The replay neither advanced the series again nor double-counted: OccurrenceCount stays 1 and the
+                // date is left exactly as the replay found it (never advanced a second time).
+                var afterSecond = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                Assert.Equal(1, afterSecond.OccurrenceCount);
+                Assert.Equal(runDate, afterSecond.NextRunDate);
+                Assert.Single(db.RecurringOccurrences.Where(o => o.RecurringScheduleId == scheduleId));
+            }
+        }
+
+        [SqliteFact]
+        public void Recurring_RetryOccurrence_FinalGuardDowngrade_EndsSchedule_ButKeepsAttention()
+        {
+            // MEDIUM finding: a successful retry whose outcome is a guard downgrade (draft, not a posted invoice)
+            // still finalizes the exhausted schedule, but must NOT clear NeedsAttention — the recorded guard-failure
+            // reason still needs review. Reproduce: a one-occurrence auto-issue schedule whose final run fails
+            // (books locked), then retry with the books unlocked but a quarterly cadence that downgrades to a draft.
+            var runMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var runDate = runMonth.AddDays(21); // 22nd
+            int scheduleId = SeedSalesSchedule("FINAL-DOWNGRADE", RecurringAction.AutoIssue, runDate, _ownerId);
+
+            int occurrenceId;
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                    schedule.MaxOccurrences = 1;                       // this run is the last allowed one
+                    schedule.Cadence = RecurringCadence.Quarterly;     // quarterly => auto-issue downgrades to draft
+                    db.SaveChanges();
+
+                    var setting = db.CompanySettings.Single();
+                    setting.BooksLockedThrough = runMonth.AddMonths(4).AddDays(-1); // lock through the quarter
+                    db.SaveChanges();
+
+                    var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+                    var failed = generation.RunSchedule(scheduleId, null, "run-final", DateTime.UtcNow.AddMinutes(5));
+                    Assert.Equal(RecurringGenerationOutcome.Failed, failed.Outcome); // fail-closed books guard first
+
+                    var reloaded = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                    Assert.Null(reloaded.NextRunDate);                 // exhausted
+                    Assert.Equal(RecurringScheduleStatus.Active, reloaded.Status); // not yet ended
+                    occurrenceId = db.RecurringOccurrences.Single(o => o.RecurringScheduleId == scheduleId).Id;
+                }
+            }
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var setting = db.CompanySettings.Single();
+                    setting.BooksLockedThrough = null; // unlock: the only remaining blocker is the cadence downgrade
+                    db.SaveChanges();
+
+                    var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+                    var retry = generation.RetryOccurrence(occurrenceId, "retry-dg", DateTime.UtcNow.AddMinutes(5));
+                    Assert.Equal(RecurringGenerationOutcome.DraftCreatedGuardFailed, retry.Outcome);
+
+                    var reloaded = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                    // The exhausted schedule is finalized...
+                    Assert.Equal(RecurringScheduleStatus.Ended, reloaded.Status);
+                    Assert.Null(reloaded.NextRunDate);
+                    // ...but attention is preserved because the final occurrence recorded a guard failure to review.
+                    Assert.True(reloaded.NeedsAttention);
+
+                    var occurrence = db.RecurringOccurrences.Single(o => o.Id == occurrenceId);
+                    Assert.Equal(RecurringOccurrenceStatus.DraftCreated, occurrence.Status);
+                    Assert.NotNull(occurrence.GuardFailureReason);
+                }
+            }
+        }
+
+        [SqliteFact]
+        public async Task Recurring_RetryEndpoint_PermissionSplit_PostRequiredForAutoIssue()
+        {
+            // MEDIUM finding (coverage): the retry endpoint's auto-issue post gate now goes through the shared
+            // authorization service. A member with create-but-not-post must be denied retrying an auto-issue
+            // occurrence. Seed a failed auto-issue occurrence (books locked), then retry as a Sales Representative.
+            var runMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var runDate = runMonth.AddDays(23); // 24th
+            int scheduleId = SeedSalesSchedule("RETRY-PERM", RecurringAction.AutoIssue, runDate, _ownerId);
+
+            int occurrenceId;
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var setting = db.CompanySettings.Single();
+                    setting.BooksLockedThrough = runMonth.AddMonths(1).AddDays(-1);
+                    db.SaveChanges();
+
+                    var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+                    var failed = generation.RunSchedule(scheduleId, null, "run-1", DateTime.UtcNow.AddMinutes(5));
+                    Assert.Equal(RecurringGenerationOutcome.Failed, failed.Outcome);
+                    occurrenceId = db.RecurringOccurrences.Single(o => o.RecurringScheduleId == scheduleId).Id;
+                }
+            }
+
+            // _otherToken joins as a Sales Representative: has sales.invoices.create, not sales.invoices.post.
+            await JoinOther();
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
+                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
+
+            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/occurrences/{occurrenceId}/retry",
+                body: null, token: _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+            Assert.Contains("sales.invoices.post", await res.Content.ReadAsStringAsync());
+        }
+
         /// <summary>Seeds a one-line service-item sales schedule whose NextRunDate is the given run date.</summary>
         private int SeedSalesSchedule(string tag, RecurringAction action, DateTime runDate, string automationEnabledBy,
             RecurringScheduleStatus status = RecurringScheduleStatus.Active)
