@@ -24,17 +24,20 @@ namespace Api.Controllers
     {
         private readonly IRecurringInvoiceGenerationService _generation;
         private readonly Core.Data.IRepository<RecurringSchedule> _scheduleRepo;
+        private readonly Core.Data.IRepository<RecurringOccurrence> _occurrenceRepo;
         private readonly Core.Tenancy.ITenantContext _tenant;
         private readonly ILogger<RecurringSchedulesController> _logger;
 
         public RecurringSchedulesController(
             IRecurringInvoiceGenerationService generation,
             Core.Data.IRepository<RecurringSchedule> scheduleRepo,
+            Core.Data.IRepository<RecurringOccurrence> occurrenceRepo,
             Core.Tenancy.ITenantContext tenant,
             ILogger<RecurringSchedulesController> logger)
         {
             _generation = generation;
             _scheduleRepo = scheduleRepo;
+            _occurrenceRepo = occurrenceRepo;
             _tenant = tenant;
             _logger = logger;
         }
@@ -68,27 +71,14 @@ namespace Api.Controllers
                 && !_tenant.Permissions.Contains(Core.Domain.Security.SystemPermissions.SalesInvoicesPost))
                 return RequirePermissionAttribute.Denied(Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
 
-            var runDate = (request?.RunDate ?? schedule.NextRunDate)?.Date;
-            if (runDate == null)
-                return BadRequest(new { message = "No run date to generate. Pass runDate or set the schedule's next run date." });
-
             try
             {
-                // A short, immediate lease owned by this request; the worker/lease lifecycle proper is #480.
+                // A short, immediate lease owned by this request. The service resolves the run date (defaulting to
+                // the schedule's NextRunDate), runs the single idempotent occurrence, and advances the series on a
+                // forward run. Archiving the client pauses the schedule instead of generating.
                 var leaseOwner = $"run-now:{actor}";
-                var occurrenceId = _generation.EnsureOccurrence(id, runDate.Value, leaseOwner, DateTime.UtcNow.AddMinutes(5));
-                var result = _generation.ProcessOccurrence(occurrenceId, leaseOwner);
-
-                return Ok(new
-                {
-                    occurrenceId = result.OccurrenceId,
-                    outcome = result.Outcome.ToString(),
-                    salesInvoiceId = result.SalesInvoiceId,
-                    errorCode = result.ErrorCode,
-                    // Only curated, safe text is returned. A failure's raw detail (which may carry database or
-                    // internal information) stays in the occurrence's ErrorMessage and the logs, never the response.
-                    message = SafeMessageFor(result),
-                });
+                var result = _generation.RunSchedule(id, request?.RunDate, leaseOwner, DateTime.UtcNow.AddMinutes(5));
+                return Ok(ResponseFor(result));
             }
             catch (InvalidRunDateException ex)
             {
@@ -98,10 +88,67 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 // Don't leak internal/database detail to the caller; keep it in the logs.
-                _logger.LogError(ex, "Run-now failed for schedule {ScheduleId} on {RunDate}.", id, runDate);
+                _logger.LogError(ex, "Run-now failed for schedule {ScheduleId}.", id);
                 return StatusCode(500, new { message = "Could not generate the invoice for this run. Please try again or contact support." });
             }
         }
+
+        /// <summary>
+        /// Retries one specific occurrence by id (a failed or crashed run). Re-processes it against its own
+        /// idempotency key and never advances the schedule's next run date. Needs the invoice-create permission; an
+        /// auto-issue schedule also needs the post permission because the retry may post to the ledger.
+        /// </summary>
+        [HttpPost("occurrences/{occurrenceId}/retry")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult RetryOccurrence(int occurrenceId)
+        {
+            var actor = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            if (string.IsNullOrWhiteSpace(actor))
+                return Unauthorized();
+
+            var occurrence = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrenceId);
+            if (occurrence == null)
+                return NotFound(new { message = $"Occurrence {occurrenceId} not found." });
+
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == occurrence.RecurringScheduleId);
+            if (schedule == null)
+                return NotFound(new { message = "The occurrence's schedule could not be found." });
+            if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
+                return BadRequest(new { message = "This occurrence does not belong to a sales-invoice schedule." });
+
+            // Same permission split as run-now: retrying an auto-issue schedule may post to the ledger.
+            if (schedule.Action == RecurringAction.AutoIssue
+                && !_tenant.Permissions.Contains(Core.Domain.Security.SystemPermissions.SalesInvoicesPost))
+                return RequirePermissionAttribute.Denied(Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
+
+            try
+            {
+                var leaseOwner = $"retry:{actor}";
+                var result = _generation.RetryOccurrence(occurrenceId, leaseOwner, DateTime.UtcNow.AddMinutes(5));
+                return Ok(ResponseFor(result));
+            }
+            catch (InvalidRunDateException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Retry failed for occurrence {OccurrenceId}.", occurrenceId);
+                return StatusCode(500, new { message = "Could not retry this run. Please try again or contact support." });
+            }
+        }
+
+        /// <summary>The curated, safe response body shared by run-now and retry.</summary>
+        private static object ResponseFor(RecurringGenerationResult result) => new
+        {
+            occurrenceId = result.OccurrenceId,
+            outcome = result.Outcome.ToString(),
+            salesInvoiceId = result.SalesInvoiceId,
+            errorCode = result.ErrorCode,
+            // Only curated, safe text is returned. A failure's raw detail (which may carry database or
+            // internal information) stays in the occurrence's ErrorMessage and the logs, never the response.
+            message = SafeMessageFor(result),
+        };
 
         /// <summary>
         /// Curated, safe response text for a generation result. Downgrade reasons are fixed, non-sensitive strings
@@ -115,6 +162,14 @@ namespace Api.Controllers
                 case RecurringGenerationOutcome.DraftCreatedGuardFailed:
                     // These come from RecurringGuardReasons: fixed, reviewable, non-sensitive.
                     return result.Message;
+
+                case RecurringGenerationOutcome.Aborted:
+                    // Only surface the one abort reason that is a user-facing, fixed string the UI should explain:
+                    // the schedule was paused because its client is archived. Other aborts (lease held elsewhere,
+                    // occurrence not found) are internal race/plumbing detail and stay out of the response.
+                    return result.Message == RecurringGuardReasons.CustomerArchivedSchedulePaused
+                        ? result.Message
+                        : null;
 
                 case RecurringGenerationOutcome.Failed:
                     return result.ErrorCode switch
