@@ -53,7 +53,10 @@ public sealed class DefaultInvoiceBrandingCapabilities(ITenantContext tenant) : 
             UnavailableReason: "Invoice appearance customization is unavailable.",
             HasRetainedSettings: false,
             EffectiveShowsAccountGoBranding: true,
-            InactiveReason: null));
+            InactiveReason: null,
+            CanUseCompanyLogo: false,
+            CanManageCompanyLogo: false,
+            LogoLimits: null));
 }
 
 /// <summary>Reads and writes organization appearance settings. Present only when a module provides it.</summary>
