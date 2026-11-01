@@ -25,20 +25,20 @@ namespace Api.Controllers
         private readonly IRecurringInvoiceGenerationService _generation;
         private readonly Core.Data.IRepository<RecurringSchedule> _scheduleRepo;
         private readonly Core.Data.IRepository<RecurringOccurrence> _occurrenceRepo;
-        private readonly Core.Tenancy.ITenantContext _tenant;
+        private readonly Core.Authorization.IAccessAuthorizationService _authorization;
         private readonly ILogger<RecurringSchedulesController> _logger;
 
         public RecurringSchedulesController(
             IRecurringInvoiceGenerationService generation,
             Core.Data.IRepository<RecurringSchedule> scheduleRepo,
             Core.Data.IRepository<RecurringOccurrence> occurrenceRepo,
-            Core.Tenancy.ITenantContext tenant,
+            Core.Authorization.IAccessAuthorizationService authorization,
             ILogger<RecurringSchedulesController> logger)
         {
             _generation = generation;
             _scheduleRepo = scheduleRepo;
             _occurrenceRepo = occurrenceRepo;
-            _tenant = tenant;
+            _authorization = authorization;
             _logger = logger;
         }
 
@@ -70,9 +70,13 @@ namespace Api.Controllers
                 return BadRequest(new { message = "This schedule does not generate sales invoices." });
 
             // Auto-issue may post to the ledger, so a run-now on such a schedule also needs the post permission.
-            if (schedule.Action == RecurringAction.AutoIssue
-                && !_tenant.Permissions.Contains(Core.Domain.Security.SystemPermissions.SalesInvoicesPost))
-                return RequirePermissionAttribute.Denied(Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
+            // Resolve it through the shared authorization service (live grants) rather than a cached snapshot.
+            if (schedule.Action == RecurringAction.AutoIssue)
+            {
+                var denied = DenyIfMissingPostPermission();
+                if (denied != null)
+                    return denied;
+            }
 
             try
             {
@@ -119,10 +123,14 @@ namespace Api.Controllers
             if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
                 return BadRequest(new { message = "This occurrence does not belong to a sales-invoice schedule." });
 
-            // Same permission split as run-now: retrying an auto-issue schedule may post to the ledger.
-            if (schedule.Action == RecurringAction.AutoIssue
-                && !_tenant.Permissions.Contains(Core.Domain.Security.SystemPermissions.SalesInvoicesPost))
-                return RequirePermissionAttribute.Denied(Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
+            // Same permission split as run-now: retrying an auto-issue schedule may post to the ledger. Resolve the
+            // post permission through the shared authorization service (live grants), not a cached snapshot.
+            if (schedule.Action == RecurringAction.AutoIssue)
+            {
+                var denied = DenyIfMissingPostPermission();
+                if (denied != null)
+                    return denied;
+            }
 
             try
             {
@@ -139,6 +147,35 @@ namespace Api.Controllers
                 _logger.LogError(ex, "Retry failed for occurrence {OccurrenceId}.", occurrenceId);
                 return StatusCode(500, new { message = "Could not retry this run. Please try again or contact support." });
             }
+        }
+
+        /// <summary>
+        /// Checks the invoice-post permission through the shared <see cref="Core.Authorization.IAccessAuthorizationService"/>
+        /// (which resolves live grants) and returns a 403 result if it is missing, or null if allowed. Used for the
+        /// extra in-body auto-issue gate so it stays consistent with the attribute-based authorization path rather
+        /// than reading a potentially stale tenant permission snapshot.
+        /// </summary>
+        private IActionResult? DenyIfMissingPostPermission()
+        {
+            var decision = _authorization.AuthorizePermission(
+                Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
+            if (decision.Allowed)
+                return null;
+
+            if (decision.ReasonCode == Core.Authorization.AccessReasonCode.PermissionDenied)
+                return RequirePermissionAttribute.Denied(
+                    decision.MissingPermission ?? Core.Domain.Security.SystemPermissions.SalesInvoicesPost,
+                    decision.PolicyId,
+                    decision.PolicyVersion);
+
+            var problem = new ProblemDetails
+            {
+                Title = decision.SafeTitle,
+                Detail = decision.SafeMessage,
+                Status = decision.HttpStatus,
+            };
+            problem.Extensions["code"] = decision.ReasonCodeString;
+            return new ObjectResult(problem) { StatusCode = decision.HttpStatus };
         }
 
         /// <summary>The curated, safe response body shared by run-now and retry.</summary>
