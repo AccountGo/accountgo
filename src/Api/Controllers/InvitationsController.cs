@@ -117,6 +117,7 @@ namespace Api.Controllers
                 var invitation = find();
                 if (invitation == null)
                     return NotFound();
+                using var impersonation = _tenant?.Impersonate(invitation.CompanyId);
                 if (!string.Equals(user.Email, invitation.Email, StringComparison.OrdinalIgnoreCase))
                     return Problem(statusCode: 403, title: "This invitation was sent to a different email");
                 if (invitation.AcceptedAt.HasValue || invitation.ExpiresAt <= DateTime.UtcNow)
@@ -158,6 +159,47 @@ namespace Api.Controllers
                         FunctionalPermissions = inviterPermissions
                     };
 
+                    var approvalRow = _db.AuditLogs
+                        .AsNoTracking()
+                        .Where(a => a.CompanyId == invitation.CompanyId &&
+                                    a.TableName == "__InvitationApproval" &&
+                                    a.RecordId == invitation.Id.ToString())
+                        .OrderByDescending(a => a.Id)
+                        .FirstOrDefault();
+
+                    var approvalRequestId = approvalRow?.NewValue;
+                    var approverUserId = approvalRow?.OriginalValue;
+
+                    if (string.IsNullOrWhiteSpace(approvalRequestId))
+                    {
+                        var matchingApproval = _db.AuditLogs
+                            .AsNoTracking()
+                            .Where(a => a.CompanyId == invitation.CompanyId &&
+                                        a.TableName == AccessAuthorizationService.ApprovalAuditTableName &&
+                                        a.OriginalValue == "Approved")
+                            .OrderByDescending(a => a.Id)
+                            .ToList()
+                            .FirstOrDefault(a =>
+                            {
+                                if (string.IsNullOrWhiteSpace(a.NewValue)) return false;
+                                try
+                                {
+                                    var p = JsonSerializer.Deserialize<AccessAuthorizationService.PersistedAccessApprovalPayload>(a.NewValue);
+                                    return p != null &&
+                                           string.Equals(p.TargetEmail, invitation.Email, StringComparison.OrdinalIgnoreCase) &&
+                                           string.Equals(p.OperationKey, AccessOperationCatalog.WorkspaceInvitationsCreate, StringComparison.Ordinal) &&
+                                           p.ExpiresAtUtc > DateTimeOffset.UtcNow;
+                                }
+                                catch { return false; }
+                            });
+
+                        if (matchingApproval != null)
+                        {
+                            approvalRequestId = matchingApproval.RecordId;
+                            approverUserId = matchingApproval.UserName;
+                        }
+                    }
+
                     var delegationDecision = AuthService.Authorize(
                         AccessOperationCatalog.WorkspaceInvitationsCreate,
                         new AccessResourceContext
@@ -167,7 +209,9 @@ namespace Api.Controllers
                             TargetUserId = user.Id,
                             TargetEmail = invitation.Email,
                             RequestedWorkspaceRole = invitation.Role,
-                            RequestedSecurityRoleIds = distinctRoles
+                            RequestedSecurityRoleIds = distinctRoles,
+                            ApprovalRequestId = approvalRequestId,
+                            IndependentApproverUserId = approverUserId
                         },
                         actorOverride: inviterActor);
 

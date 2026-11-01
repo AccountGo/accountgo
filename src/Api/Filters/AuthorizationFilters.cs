@@ -167,7 +167,21 @@ namespace Api.Filters
             {
                 var companyId = tenantContext.CompanyId.Value;
                 var dto = context.ActionArguments.Values.OfType<Dto.Financial.JournalEntry>().FirstOrDefault();
-                var prepHeader = context.HttpContext.Request.Headers["X-Prepared-By-User-Id"].FirstOrDefault();
+                string? persistedPreparer = null;
+                if (db != null && dto != null && dto.Id > 0)
+                {
+                    persistedPreparer = db.AuditLogs
+                        .AsNoTracking()
+                        .Where(a => a.CompanyId == companyId &&
+                                    a.TableName == "__JournalEntryPreparer" &&
+                                    a.RecordId == dto.Id.ToString())
+                        .OrderByDescending(a => a.Id)
+                        .Select(a => a.NewValue)
+                        .FirstOrDefault();
+                }
+
+                var currentActorId = tenantContext.UserId;
+                var effectivePreparer = persistedPreparer ?? currentActorId ?? "system:draft-preparer";
                 var aprHeader = context.HttpContext.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
                 var approverHeader = context.HttpContext.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
 
@@ -187,7 +201,7 @@ namespace Api.Filters
                             ResourceId = dto.Id.ToString(CultureInfo.InvariantCulture),
                             WorkflowState = "Draft",
                             IsPeriodLockedOrClosed = false,
-                            PreparedByUserId = prepHeader ?? "system:draft-preparer",
+                            PreparedByUserId = effectivePreparer,
                             IndependentApproverUserId = approverHeader,
                             ApprovalRequestId = aprHeader
                         };
@@ -202,7 +216,7 @@ namespace Api.Filters
                         ResourceId = dto.Id.ToString(CultureInfo.InvariantCulture),
                         WorkflowState = isPosted ? "Posted" : "Draft",
                         IsPeriodLockedOrClosed = false,
-                        PreparedByUserId = prepHeader ?? "system:draft-preparer",
+                        PreparedByUserId = effectivePreparer,
                         IndependentApproverUserId = approverHeader,
                         ApprovalRequestId = aprHeader
                     };
@@ -215,7 +229,7 @@ namespace Api.Filters
                     ResourceType = "JournalEntry",
                     WorkflowState = "Draft",
                     IsPeriodLockedOrClosed = false,
-                    PreparedByUserId = prepHeader ?? "system:draft-preparer",
+                    PreparedByUserId = effectivePreparer,
                     IndependentApproverUserId = approverHeader,
                     ApprovalRequestId = aprHeader
                 };

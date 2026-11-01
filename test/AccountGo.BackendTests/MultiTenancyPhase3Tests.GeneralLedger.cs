@@ -238,7 +238,8 @@ namespace AccountGo.BackendTests
                 db.SaveChanges();
             });
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft, _otherToken)).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, _otherToken)).StatusCode);
+            var apr = await ApproveJournalPostAsync(draft.Id);
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, _otherToken, extraHeaders: apr)).StatusCode);
         }
 
         [Fact]
@@ -253,7 +254,8 @@ namespace AccountGo.BackendTests
             draft.JournalEntryLines = (await (await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + draft.Id))
                 .Content.ReadFromJsonAsync<Dto.Financial.JournalEntry>()).JournalEntryLines;
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft)).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft)).StatusCode);
+            var apr = await ApproveJournalPostAsync(draft.Id);
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr)).StatusCode);
             var posted = Assert.Single((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray());
             Assert.Equal(draft.JournalDate, posted.GetProperty("date").GetDateTime());
             Assert.Equal("Updated draft", posted.GetProperty("description").GetString());
@@ -263,7 +265,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(25m, posted.GetProperty("totalCredit").GetDecimal());
             draft.Memo = "Must not replace posted memo";
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft)).StatusCode);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft)).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr)).StatusCode);
             var after = Assert.Single((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray());
             Assert.Equal(posted.GetRawText(), after.GetRawText());
             var voucher = await Json(await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + draft.Id));
@@ -278,12 +280,14 @@ namespace AccountGo.BackendTests
             draft.JournalEntryLines[1].Amount = 20m;
             var saved = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft);
             draft.Id = (await Json(saved)).GetProperty("id").GetInt32();
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft)).StatusCode);
+            var apr1 = await ApproveJournalPostAsync(draft.Id);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr1)).StatusCode);
             WithDb(db => Assert.Empty(db.GeneralLedgerHeaders));
             draft.JournalEntryLines[1].Amount = 25m;
             draft.JournalDate = new DateTime(1900, 1, 1);
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft)).StatusCode);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft)).StatusCode);
+            var apr2 = await ApproveJournalPostAsync(draft.Id);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr2)).StatusCode);
             WithDb(db =>
             {
                 Assert.Empty(db.GeneralLedgerHeaders);
@@ -336,7 +340,8 @@ namespace AccountGo.BackendTests
             var save = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
             draft.Id = (await Json(save)).GetProperty("id").GetInt32();
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft)).StatusCode);
+            var apr = await ApproveJournalPostAsync(draft.Id);
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr)).StatusCode);
             var posted = Assert.Single((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray());
             Assert.Equal(3, posted.GetProperty("lines").GetArrayLength());
             Assert.Equal(2, posted.GetProperty("lines").EnumerateArray().Count(l => l.GetProperty("accountId").GetInt32() == cash));

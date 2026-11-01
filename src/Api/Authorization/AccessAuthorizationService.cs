@@ -254,68 +254,85 @@ namespace Api.Authorization
                     ? AccessPolicyDomain.WorkspaceGovernance
                     : AccessPolicyDomain.WorkspaceFunctional;
 
+            // S5: Fail closed immediately if an operationKey is explicitly specified but not registered in catalog
+            if (!string.IsNullOrWhiteSpace(operationKey) && !AccessOperationCatalog.TryGet(operationKey, out _))
+            {
+                return AccessDecision.Deny(
+                    AccessReasonCode.UnknownOperation,
+                    operationKey,
+                    "POL-UNKNOWN",
+                    CatalogVersion,
+                    StatusCodes.Status403Forbidden,
+                    "Forbidden",
+                    $"The specified operation '{operationKey}' is not registered in the catalog.");
+            }
+
             var syntheticKey = !string.IsNullOrWhiteSpace(operationKey)
                 ? operationKey!
                 : hasPerm
                     ? (requiredPermissionsAll?.FirstOrDefault() ?? requiredPermissionsAny?.FirstOrDefault() ?? "workspace.functional.adhoc")
                     : "workspace.governance.adhoc";
 
-            // Always start from the registered catalog policy when available, and merge any additional
-            // ad-hoc requirements onto it so catalog rules (workflow state, SoD, resource ownership,
-            // modules, features, step-up, delegation) can never be bypassed by an adapter filter.
-            AccessOperationCatalog.TryGet(syntheticKey, out var catalogPolicy);
-            if (catalogPolicy == null && requiredPermissionsAll is { Count: 1 })
+            // Always start from the registered catalog policy when available.
+            // S4: Evaluate catalog policy and additional requirements conjunctively (AND), never erasing requirements.
+            AccessOperationPolicy? catalogPolicy = null;
+            if (!string.IsNullOrWhiteSpace(operationKey))
+            {
+                AccessOperationCatalog.TryGet(operationKey, out catalogPolicy);
+            }
+            else if (requiredPermissionsAll is { Count: 1 })
             {
                 AccessOperationCatalog.TryGet(AccessOperationCatalog.ForPermission(requiredPermissionsAll[0]), out catalogPolicy);
             }
 
-            AccessOperationPolicy effectivePolicy;
+            var actor = ResolveActorContext(actorOverride);
+
             if (catalogPolicy != null)
             {
-                var mergedGov = allowedGovernanceRoles is { Count: > 0 }
-                    ? (catalogPolicy.AllowedGovernanceRoles.Count > 0
-                        ? catalogPolicy.AllowedGovernanceRoles.Intersect(allowedGovernanceRoles).ToArray()
-                        : allowedGovernanceRoles)
-                    : catalogPolicy.AllowedGovernanceRoles;
-
-                var mergedPermsAll = requiredPermissionsAll is { Count: > 0 }
-                    ? catalogPolicy.RequiredPermissionsAll.Union(requiredPermissionsAll, StringComparer.OrdinalIgnoreCase).ToArray()
-                    : catalogPolicy.RequiredPermissionsAll;
-
-                var mergedPermsAny = requiredPermissionsAny is { Count: > 0 }
-                    ? (catalogPolicy.RequiredPermissionsAny.Count > 0
-                        ? catalogPolicy.RequiredPermissionsAny.Intersect(requiredPermissionsAny, StringComparer.OrdinalIgnoreCase).ToArray()
-                        : requiredPermissionsAny)
-                    : catalogPolicy.RequiredPermissionsAny;
-
-                var mergedModules = requiredModulesAny is { Count: > 0 }
-                    ? (catalogPolicy.RequiredModulesAny.Count > 0
-                        ? catalogPolicy.RequiredModulesAny.Union(requiredModulesAny, StringComparer.OrdinalIgnoreCase).ToArray()
-                        : requiredModulesAny)
-                    : catalogPolicy.RequiredModulesAny;
-
-                var effectiveDomain = (mergedGov.Count > 0 && (mergedPermsAll.Count > 0 || mergedPermsAny.Count > 0) && catalogPolicy.Domain != AccessPolicyDomain.WorkspaceFunctional)
-                    ? AccessPolicyDomain.WorkspaceComposite
-                    : catalogPolicy.Domain;
-
-                effectivePolicy = catalogPolicy with
+                try
                 {
-                    Domain = effectiveDomain,
-                    AllowedGovernanceRoles = mergedGov,
-                    RequiredPermissionsAll = mergedPermsAll,
-                    RequiredPermissionsAny = mergedPermsAny,
-                    RequiredModulesAny = mergedModules,
-                    RequiredFeature = !string.IsNullOrWhiteSpace(requiredFeature) ? requiredFeature : catalogPolicy.RequiredFeature
-                };
+                    var catalogDecision = EvaluatePolicyAsync(catalogPolicy, resource, actor, CancellationToken.None)
+                        .GetAwaiter()
+                        .GetResult();
+
+                    if (!catalogDecision.Allowed)
+                    {
+                        return catalogDecision;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Authorization dependency failure during catalog check '{OperationKey}'. Failing closed.", syntheticKey);
+                    return AccessDecision.Deny(
+                        AccessReasonCode.PolicyDependencyFailure,
+                        syntheticKey,
+                        catalogPolicy.PolicyId,
+                        catalogPolicy.PolicyVersion,
+                        StatusCodes.Status503ServiceUnavailable,
+                        "Authorization Unavailable",
+                        "Access could not be verified due to an internal policy dependency error.");
+                }
             }
-            else
+
+            // Evaluate additional ad-hoc requirement constraints
+            var hasExtraGov = allowedGovernanceRoles is { Count: > 0 };
+            var hasExtraPermsAll = requiredPermissionsAll is { Count: > 0 };
+            var hasExtraPermsAny = requiredPermissionsAny is { Count: > 0 };
+            var hasExtraModules = requiredModulesAny is { Count: > 0 };
+            var hasExtraFeature = !string.IsNullOrWhiteSpace(requiredFeature);
+
+            if (catalogPolicy == null || hasExtraGov || hasExtraPermsAll || hasExtraPermsAny || hasExtraModules || hasExtraFeature)
             {
-                effectivePolicy = new AccessOperationPolicy
+                var effectiveDomain = (hasExtraGov && (hasExtraPermsAll || hasExtraPermsAny))
+                    ? AccessPolicyDomain.WorkspaceComposite
+                    : (hasExtraGov ? AccessPolicyDomain.WorkspaceGovernance : domain);
+
+                var adhocPolicy = new AccessOperationPolicy
                 {
                     OperationKey = syntheticKey,
                     PolicyId = $"POL-REQ-{syntheticKey.ToUpperInvariant()}",
                     PolicyVersion = CatalogVersion,
-                    Domain = domain,
+                    Domain = effectiveDomain,
                     AllowedGovernanceRoles = allowedGovernanceRoles ?? Array.Empty<CompanyMemberRole>(),
                     RequiredPermissionsAll = requiredPermissionsAll ?? Array.Empty<string>(),
                     RequiredPermissionsAny = requiredPermissionsAny ?? Array.Empty<string>(),
@@ -323,27 +340,28 @@ namespace Api.Authorization
                     RequiredFeature = requiredFeature,
                     RequiresResolvedTenant = true
                 };
+
+                try
+                {
+                    return EvaluatePolicyAsync(adhocPolicy, resource, actor, CancellationToken.None)
+                        .GetAwaiter()
+                        .GetResult();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Authorization dependency failure during requirement check '{OperationKey}'. Failing closed.", syntheticKey);
+                    return AccessDecision.Deny(
+                        AccessReasonCode.PolicyDependencyFailure,
+                        syntheticKey,
+                        adhocPolicy.PolicyId,
+                        adhocPolicy.PolicyVersion,
+                        StatusCodes.Status503ServiceUnavailable,
+                        "Authorization Unavailable",
+                        "Access could not be verified due to an internal policy dependency error.");
+                }
             }
 
-            try
-            {
-                var actor = ResolveActorContext(actorOverride);
-                return EvaluatePolicyAsync(effectivePolicy, resource, actor, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Authorization dependency failure during requirement check '{OperationKey}'. Failing closed.", syntheticKey);
-                return AccessDecision.Deny(
-                    AccessReasonCode.PolicyDependencyFailure,
-                    syntheticKey,
-                    effectivePolicy.PolicyId,
-                    effectivePolicy.PolicyVersion,
-                    StatusCodes.Status503ServiceUnavailable,
-                    "Authorization Unavailable",
-                    "Access could not be verified due to an internal policy dependency error.");
-            }
+            return AccessDecision.Allow(catalogPolicy.OperationKey, catalogPolicy.PolicyId, catalogPolicy.PolicyVersion);
         }
 
         public IReadOnlySet<string> GetAuthorizedDashboardDomains(AccessActorContext? actorOverride = null)
@@ -351,7 +369,8 @@ namespace Api.Authorization
             var actor = ResolveActorContext(actorOverride);
             if (actor.TrustDomain != ActorTrustDomain.WorkspaceUser ||
                 actor.MembershipStatus != CompanyMemberStatus.Active ||
-                !actor.CompanyId.HasValue)
+                !actor.CompanyId.HasValue ||
+                _entitlements == null)
             {
                 return EmptyStringSet;
             }
@@ -362,7 +381,7 @@ namespace Api.Authorization
             bool IsModuleAllowed(params string[] modules)
             {
                 if (_entitlements == null || !actor.CompanyId.HasValue || modules.Length == 0)
-                    return true;
+                    return false;
                 return _entitlements.Evaluate(
                     actor.CompanyId.Value,
                     new EntitlementAction.Module(ModuleAccess.Read, modules)).Allowed;
@@ -1261,11 +1280,10 @@ namespace Api.Authorization
             AccessResourceContext? resource,
             CancellationToken cancellationToken)
         {
+            // S7: Without a database connection, approval verification cannot be proved. Fail closed.
             if (_db == null || !companyId.HasValue)
             {
-                return !string.IsNullOrWhiteSpace(approverUserId) &&
-                       !string.Equals(approverUserId, actorUserId, StringComparison.Ordinal) &&
-                       !string.Equals(approverUserId, targetUserId, StringComparison.Ordinal);
+                return false;
             }
 
             if (string.IsNullOrWhiteSpace(approverUserId) && string.IsNullOrWhiteSpace(approvalRequestId))
@@ -1282,23 +1300,10 @@ namespace Api.Authorization
                 }
             }
 
-            // For financial transaction operations (e.g. journal posting SoD), verify independent approver membership
-            if (operationKey != AccessOperationCatalog.WorkspaceMembersAssignFunctionalRoles &&
-                operationKey != AccessOperationCatalog.WorkspaceInvitationsCreate)
-            {
-                if (string.IsNullOrWhiteSpace(approverUserId))
-                    return false;
-
-                var isMember = await _db.CompanyMembers.AsNoTracking()
-                    .AnyAsync(m => m.CompanyId == companyId.Value &&
-                                   m.UserId == approverUserId &&
-                                   m.Status == CompanyMemberStatus.Active, cancellationToken);
-                return isMember;
-            }
-
             // Require a server-persisted approval record created by an authenticated independent approver.
             // Caller-supplied approvedByUserId strings without a matching persisted approval record are rejected.
-            var candidates = await _db.AuditLogs.AsNoTracking()
+            var candidates = await _db.AuditLogs
+                .AsNoTracking()
                 .Where(a => a.CompanyId == companyId.Value &&
                             a.TableName == ApprovalAuditTableName &&
                             a.OriginalValue == "Approved")

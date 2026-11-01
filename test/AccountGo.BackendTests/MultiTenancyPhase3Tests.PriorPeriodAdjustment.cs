@@ -96,7 +96,8 @@ namespace AccountGo.BackendTests
             var saved = await save.Content.ReadFromJsonAsync<JsonElement>();
             ppa.Id = saved.GetProperty("id").GetInt32();
 
-            var post = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", ppa);
+            var apr = await ApproveJournalPostAsync(ppa.Id);
+            var post = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", ppa, extraHeaders: apr);
             Assert.True(post.IsSuccessStatusCode, await post.Content.ReadAsStringAsync());
 
             var bs = await Send(HttpMethod.Get,

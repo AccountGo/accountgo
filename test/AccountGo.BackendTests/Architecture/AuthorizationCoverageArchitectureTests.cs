@@ -274,7 +274,8 @@ namespace AccountGo.BackendTests.Architecture
                 typeof(DonorsController),
                 typeof(TaxController),
                 typeof(AuditController),
-                typeof(DashboardController)
+                typeof(DashboardController),
+                typeof(CommonController)
             };
 
             foreach (var controller in businessControllers)
