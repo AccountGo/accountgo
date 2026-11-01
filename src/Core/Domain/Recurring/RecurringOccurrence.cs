@@ -5,7 +5,7 @@ namespace Core.Domain.Recurring;
 
 /// <summary>
 /// A single run of a recurring schedule, tracking the period, document, and status.
-/// Uniquely identified by company + schedule + period start.
+/// Uniquely identified by company + schedule + scheduled run date.
 /// </summary>
 public partial class RecurringOccurrence : BaseEntity, ICompanyOwned
 {
@@ -14,6 +14,9 @@ public partial class RecurringOccurrence : BaseEntity, ICompanyOwned
 
     /// <summary>The schedule that owns this occurrence.</summary>
     public int RecurringScheduleId { get; set; }
+
+    /// <summary>The calendar date this run was scheduled to occur. This is the idempotency key component.</summary>
+    public DateTime ScheduledRunDate { get; set; }
 
     /// <summary>Start of the service period this occurrence covers.</summary>
     public DateTime PeriodStart { get; set; }
@@ -31,7 +34,7 @@ public partial class RecurringOccurrence : BaseEntity, ICompanyOwned
     public RecurringOccurrenceStatus Status { get; set; } = RecurringOccurrenceStatus.Scheduled;
 
     /// <summary>
-    /// Idempotency key for deduplication. Format: {scheduleId}-{periodStart:yyyy-MM-dd}.
+    /// Idempotency key for deduplication. Format: {companyId}-{scheduleId}-{scheduledRunDate:yyyy-MM-dd}.
     /// </summary>
     public string IdempotencyKey { get; set; } = "";
 

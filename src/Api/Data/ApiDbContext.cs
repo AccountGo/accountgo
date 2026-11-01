@@ -781,6 +781,7 @@ namespace Api.Data
                 entity.Property(e => e.Quantity).HasColumnType("decimal(18, 4)").HasDefaultValue(1m);
                 entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
                 entity.Property(e => e.Discount).HasColumnType("decimal(18, 4)").HasDefaultValue(0m);
+                entity.Property(e => e.DiscountType).HasDefaultValue(RecurringDiscountType.Percentage);
 
                 entity.HasIndex(e => e.CompanyId);
                 entity.HasIndex(e => e.RecurringScheduleId);
@@ -810,14 +811,16 @@ namespace Api.Data
                 entity.Property(e => e.LeasedBy).HasMaxLength(100);
 
                 // Dates are stored as date-only
+                entity.Property(e => e.ScheduledRunDate).HasColumnType("date");
                 entity.Property(e => e.PeriodStart).HasColumnType("date");
                 entity.Property(e => e.PeriodEnd).HasColumnType("date");
                 entity.Property(e => e.DocumentDate).HasColumnType("date");
                 entity.Property(e => e.DueDate).HasColumnType("date");
                 entity.Property(e => e.LeasedUntil).HasColumnType("datetime");
 
-                // Unique index: one occurrence per company + schedule + period start
-                entity.HasIndex(e => new { e.CompanyId, e.RecurringScheduleId, e.PeriodStart }, "UX_RecurringOccurrence_Company_Schedule_Period")
+                // Unique index: one occurrence per company + schedule + scheduled run date
+                // This is the idempotency key - prevents duplicate runs for the same calendar date
+                entity.HasIndex(e => new { e.CompanyId, e.RecurringScheduleId, e.ScheduledRunDate }, "UX_RecurringOccurrence_Company_Schedule_RunDate")
                     .IsUnique();
 
                 // Index for finding due occurrences
@@ -829,10 +832,10 @@ namespace Api.Data
                 // Index for idempotency key lookups
                 entity.HasIndex(e => e.IdempotencyKey);
 
-                // Relationships
+                // Relationships - Restrict delete to preserve occurrence ledger when schedule is deleted
                 entity.HasOne(e => e.Schedule).WithMany(s => s.Occurrences)
                     .HasForeignKey(e => e.RecurringScheduleId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.SalesInvoice).WithMany()
                     .HasForeignKey(e => e.SalesInvoiceId)
                     .OnDelete(DeleteBehavior.Restrict);

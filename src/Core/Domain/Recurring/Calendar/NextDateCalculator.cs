@@ -14,13 +14,15 @@ public static class NextDateCalculator
     /// Used for preview and for advancing NextRunDate.
     /// </summary>
     /// <param name="cadence">How often to run.</param>
-    /// <param name="interval">Interval multiplier (e.g., 2 for every 2 months).</param>
+    /// <param name="interval">Interval multiplier (e.g., 2 for every 2 months). Must be >= 1.</param>
     /// <param name="startDate">The anchor date; weekday for weekly, day-of-month for others.</param>
-    /// <param name="dayOfMonth">For monthly/quarterly/yearly: the day of month (1-31). Day 31 = last day of month.</param>
+    /// <param name="dayOfMonth">For monthly/quarterly/yearly: the day of month (1-31). Day 31 = last day of month. Required for non-weekly cadences.</param>
     /// <param name="count">How many dates to compute.</param>
     /// <param name="endDate">Optional end date; stops returning dates after this.</param>
     /// <param name="maxOccurrences">Optional max occurrences; stops after this many.</param>
     /// <returns>List of computed dates.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when interval is less than 1.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when dayOfMonth is not set for non-weekly cadence.</exception>
     public static IReadOnlyList<DateTime> ComputeNextDates(
         RecurringCadence cadence,
         int interval,
@@ -30,21 +32,25 @@ public static class NextDateCalculator
         DateTime? endDate = null,
         int? maxOccurrences = null)
     {
+        if (interval < 1)
+            throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be at least 1.");
+        
+        ValidateDayOfMonthForCadence(cadence, dayOfMonth, startDate);
+
         var dates = new List<DateTime>();
-        var current = ComputeFirstDate(cadence, interval, startDate, dayOfMonth);
-        var occurrenceCount = 0;
+        var position = 0;
 
         while (dates.Count < count)
         {
+            var current = ComputeDateAtPosition(cadence, interval, startDate, dayOfMonth, position);
+            
             if (endDate.HasValue && current > endDate.Value)
                 break;
-            if (maxOccurrences.HasValue && occurrenceCount >= maxOccurrences.Value)
+            if (maxOccurrences.HasValue && position >= maxOccurrences.Value)
                 break;
 
             dates.Add(current);
-            occurrenceCount++;
-
-            current = ComputeSubsequentDate(cadence, interval, current, dayOfMonth);
+            position++;
         }
 
         return dates;
@@ -52,6 +58,7 @@ public static class NextDateCalculator
 
     /// <summary>
     /// Computes the first occurrence date from the schedule start.
+    /// The first occurrence is always on or after the start date.
     /// </summary>
     public static DateTime ComputeFirstDate(
         RecurringCadence cadence,
@@ -59,46 +66,68 @@ public static class NextDateCalculator
         DateTime startDate,
         int? dayOfMonth)
     {
+        if (interval < 1)
+            throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be at least 1.");
+        
+        ValidateDayOfMonthForCadence(cadence, dayOfMonth, startDate);
+
         // The start date itself is the first occurrence (time component ignored)
         var date = startDate.Date;
 
         return cadence switch
         {
             RecurringCadence.Weekly => date,
-            RecurringCadence.Monthly => AdjustToDayOfMonth(date, dayOfMonth),
-            RecurringCadence.Quarterly => AdjustToDayOfMonth(date, dayOfMonth),
-            RecurringCadence.Yearly => AdjustToDayOfMonth(date, dayOfMonth),
+            RecurringCadence.Monthly => AdjustToDayOfMonth(date, dayOfMonth!.Value),
+            RecurringCadence.Quarterly => AdjustToDayOfMonth(date, dayOfMonth!.Value),
+            RecurringCadence.Yearly => AdjustToDayOfMonth(date, dayOfMonth!.Value),
             _ => date
         };
     }
 
     /// <summary>
     /// Computes the next occurrence date after the given date.
+    /// The next date is computed from the schedule's anchor (start date), not from afterDate,
+    /// to ensure the series does not shift when runs are skipped or retried.
     /// </summary>
     public static DateTime ComputeNextDate(
         RecurringCadence cadence,
         int interval,
         DateTime afterDate,
-        int? dayOfMonth)
+        int? dayOfMonth,
+        DateTime startDate)
     {
-        var next = ComputeSubsequentDate(cadence, interval, afterDate, dayOfMonth);
-        return next;
+        if (interval < 1)
+            throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be at least 1.");
+        
+        ValidateDayOfMonthForCadence(cadence, dayOfMonth, startDate);
+
+        // Find the position of the first date AFTER afterDate
+        var position = 0;
+        var current = ComputeDateAtPosition(cadence, interval, startDate, dayOfMonth, position);
+        
+        while (current <= afterDate)
+        {
+            position++;
+            current = ComputeDateAtPosition(cadence, interval, startDate, dayOfMonth, position);
+        }
+        
+        return current;
     }
 
     /// <summary>
     /// Adjusts a date to the specified day of month, handling month-end edge cases.
     /// Day 31 means: last day of the month (31 Jan, 28/29 Feb, 31 Mar, 30 Apr, etc.)
+    /// Values above 31 are clamped to the month's last day.
     /// </summary>
-    public static DateTime AdjustToDayOfMonth(DateTime date, int? dayOfMonth)
+    public static DateTime AdjustToDayOfMonth(DateTime date, int dayOfMonth)
     {
-        if (!dayOfMonth.HasValue || dayOfMonth.Value <= 0)
-            return date;
+        if (dayOfMonth <= 0)
+            throw new ArgumentOutOfRangeException(nameof(dayOfMonth), "Day of month must be at least 1.");
 
-        var requestedDay = dayOfMonth.Value;
         var daysInMonth = DateTime.DaysInMonth(date.Year, date.Month);
 
         // If requesting day 31 (or any day beyond the month's last day), use the last day
-        var actualDay = Math.Min(requestedDay, daysInMonth);
+        var actualDay = Math.Min(dayOfMonth, daysInMonth);
 
         return new DateTime(date.Year, date.Month, actualDay);
     }
@@ -162,45 +191,72 @@ public static class NextDateCalculator
     /// <param name="nextRunDate">The scheduled next run date.</param>
     /// <param name="today">Today's date (in workspace timezone).</param>
     /// <param name="cadence">The cadence to determine period boundaries.</param>
-    /// <param name="interval">The interval multiplier.</param>
+    /// <param name="interval">The interval multiplier. Must be >= 1.</param>
     /// <param name="dayOfMonth">The day of month for monthly cadences.</param>
+    /// <param name="startDate">The schedule's start date (anchor for the series).</param>
     /// <returns>Number of missed periods (0 if on schedule).</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when interval is less than 1.</exception>
     public static int CountOverduePeriods(
         DateTime nextRunDate,
         DateTime today,
         RecurringCadence cadence,
         int interval,
-        int? dayOfMonth)
+        int? dayOfMonth,
+        DateTime startDate)
     {
+        if (interval < 1)
+            throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be at least 1.");
+        
         if (nextRunDate > today)
             return 0;
 
+        // Count how many scheduled dates are in the range [nextRunDate, today]
         var count = 0;
-        var current = nextRunDate;
+        var position = 0;
+        var current = ComputeDateAtPosition(cadence, interval, startDate, dayOfMonth, position);
+        
+        // Safety limit to prevent infinite loops
+        var maxIterations = 10000;
 
-        while (current <= today)
+        while (current <= today && count < maxIterations)
         {
-            count++;
-            current = ComputeSubsequentDate(cadence, interval, current, dayOfMonth);
+            if (current >= nextRunDate)
+                count++;
+            position++;
+            current = ComputeDateAtPosition(cadence, interval, startDate, dayOfMonth, position);
         }
-
+        
         return count;
     }
 
-    // Private helper to compute subsequent date
-    private static DateTime ComputeSubsequentDate(
+    /// <summary>
+    /// Validates that dayOfMonth is provided for non-weekly cadences.
+    /// </summary>
+    private static void ValidateDayOfMonthForCadence(RecurringCadence cadence, int? dayOfMonth, DateTime startDate)
+    {
+        if (cadence != RecurringCadence.Weekly && !dayOfMonth.HasValue)
+            throw new InvalidOperationException(
+                $"DayOfMonth is required for {cadence} cadence. " +
+                $"Schedule starting {startDate:yyyy-MM-dd} must specify which day of the month to run.");
+    }
+
+    /// <summary>
+    /// Computes the date at a specific position in the series (0-indexed from start).
+    /// </summary>
+    private static DateTime ComputeDateAtPosition(
         RecurringCadence cadence,
         int interval,
-        DateTime currentDate,
-        int? dayOfMonth)
+        DateTime startDate,
+        int? dayOfMonth,
+        int position)
     {
         return cadence switch
         {
-            RecurringCadence.Weekly => currentDate.AddDays(7 * interval),
-            RecurringCadence.Monthly => AdjustToDayOfMonth(currentDate.AddMonths(interval), dayOfMonth),
-            RecurringCadence.Quarterly => AdjustToDayOfMonth(currentDate.AddMonths(3 * interval), dayOfMonth),
-            RecurringCadence.Yearly => AdjustToDayOfMonth(currentDate.AddYears(interval), dayOfMonth),
-            _ => currentDate.AddDays(1)
+            RecurringCadence.Weekly => startDate.AddDays(7 * interval * position),
+            RecurringCadence.Monthly => AdjustToDayOfMonth(startDate.AddMonths(interval * position), dayOfMonth!.Value),
+            RecurringCadence.Quarterly => AdjustToDayOfMonth(startDate.AddMonths(3 * interval * position), dayOfMonth!.Value),
+            RecurringCadence.Yearly => AdjustToDayOfMonth(startDate.AddYears(interval * position), dayOfMonth!.Value),
+            _ => startDate.AddDays(position)
         };
     }
 }
