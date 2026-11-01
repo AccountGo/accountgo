@@ -9,12 +9,17 @@ import {
 } from "../container-errors.ts";
 import {
   ContainerUnavailableError,
+  PayloadTooLargeError,
   RestoreState,
   bufferRequest,
   fetchFromContainer,
+  isInvoiceLogoRoute,
+  maxRequestBodyBytesForRoute,
+  payloadTooLargeResponse,
   toRequest,
   unavailableResponse,
   watchContainerExit,
+  MAX_LOGO_REQUEST_BYTES,
 } from "../container-proxy.ts";
 
 const ATTEMPTS = 4;
@@ -321,4 +326,78 @@ test("bufferRequest keeps GET bodiless and lets a POST body be sent twice", asyn
   assert.equal(await toRequest(p).text(), "abc");
   assert.equal(await toRequest(p).text(), "abc");
   assert.equal(toRequest(p).headers.get("content-type"), "text/plain");
+});
+
+test("isInvoiceLogoRoute and maxRequestBodyBytesForRoute handle variants and methods", () => {
+  assert.equal(isInvoiceLogoRoute("/api/invoice-branding/logo"), true);
+  assert.equal(isInvoiceLogoRoute("/api/invoice-branding/logo/"), true);
+  assert.equal(isInvoiceLogoRoute("/API/INVOICE-BRANDING/LOGO"), true);
+  assert.equal(isInvoiceLogoRoute("/api/invoice-branding/logo/image"), false);
+  assert.equal(isInvoiceLogoRoute("/api/invoice-branding/settings"), false);
+
+  assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "PUT"), MAX_LOGO_REQUEST_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo/", "put"), MAX_LOGO_REQUEST_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "GET"), undefined);
+  assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "DELETE"), undefined);
+  assert.equal(maxRequestBodyBytesForRoute("/api/other", "PUT"), undefined);
+});
+
+test("bufferRequest rejects declared Content-Length over limit with PayloadTooLargeError", async () => {
+  const req = new Request("http://app.test/api/invoice-branding/logo", {
+    method: "PUT",
+    headers: { "content-length": "1000" },
+    body: "hello world",
+  });
+  await assert.rejects(
+    async () => {
+      await bufferRequest(req.url, req, new Headers(req.headers), { maxBytes: 100 });
+    },
+    (err) => {
+      assert.ok(err instanceof PayloadTooLargeError);
+      assert.equal(err.maxBytes, 100);
+      assert.match(err.message, /100 bytes/);
+      return true;
+    }
+  );
+});
+
+test("bufferRequest cancels stream and rejects actual stream length over limit", async () => {
+  let cancelled = false;
+  const stream = new ReadableStream({
+    pull(controller) {
+      controller.enqueue(new Uint8Array(60));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const req = new Request("http://app.test/api/invoice-branding/logo", {
+    method: "PUT",
+    headers: {},
+    body: stream,
+    duplex: "half",
+  });
+
+  await assert.rejects(
+    async () => {
+      await bufferRequest(req.url, req, new Headers(req.headers), { maxBytes: 100 });
+    },
+    (err) => {
+      assert.ok(err instanceof PayloadTooLargeError);
+      assert.equal(err.maxBytes, 100);
+      return true;
+    }
+  );
+  assert.equal(cancelled, true);
+});
+
+test("payloadTooLargeResponse returns 413 application/problem+json", async () => {
+  const err = new PayloadTooLargeError("Request body exceeds maximum allowed size of 100 bytes", 100);
+  const res = payloadTooLargeResponse(err);
+  assert.equal(res.status, 413);
+  assert.equal(res.headers.get("content-type"), "application/problem+json");
+  const json = await res.json();
+  assert.equal(json.status, 413);
+  assert.equal(json.title, "Payload Too Large");
+  assert.match(json.detail, /100 bytes/);
 });

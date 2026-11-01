@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, RotateCcw, Save } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { getPasskeyAssertion, isWebAuthnSupported } from '../lib/webauthn';
+import { InvoiceLogoSection, type InvoiceLogoLimits, type InvoiceLogoMetadata } from './InvoiceLogoSection';
+
+export { InvoiceLogoSection, type InvoiceLogoLimits, type InvoiceLogoMetadata };
 
 export interface InvoicePdfPalette {
   text: string;
@@ -25,6 +28,9 @@ export interface InvoiceBrandingCapabilities {
   hasRetainedSettings: boolean;
   effectiveShowsAccountGoBranding: boolean;
   inactiveReason: string | null;
+  canUseCompanyLogo?: boolean;
+  canManageCompanyLogo?: boolean;
+  logoLimits?: InvoiceLogoLimits | null;
 }
 
 export interface InvoiceBrandingSettings {
@@ -330,6 +336,12 @@ export function InvoicePdfAppearanceSection({ canEdit }: { canEdit: boolean }) {
           <button type="button" className="rounded-xl border px-3 py-2 text-xs" disabled={busy || code.length !== 6} onClick={() => void verify(false)}>Verify code</button>
           {isWebAuthnSupported() && <button type="button" className="ml-2 rounded-xl border px-3 py-2 text-xs" disabled={busy} onClick={() => void verify(true)}>Use passkey</button>}
         </div>
+      )}
+      {capabilities.canUseCompanyLogo !== false && (
+        <InvoiceLogoSection
+          canManage={canEdit && (capabilities.canManageCompanyLogo ?? capabilities.canManageSettings)}
+          disabled={busy}
+        />
       )}
       {!capabilities.canCustomizeInvoiceAppearance && capabilities.unavailableReason && !capabilities.hasRetainedSettings && (
         <p className="text-[11px] text-[var(--text-muted)]">{capabilities.unavailableReason}</p>
