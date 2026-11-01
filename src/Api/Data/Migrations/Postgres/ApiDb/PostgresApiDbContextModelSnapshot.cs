@@ -3525,6 +3525,82 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("VendorContact");
                 });
 
+            modelBuilder.Entity("Core.Domain.WorkspaceAccessRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AppliedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ApproverUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BoundApprovalId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DecidedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DecisionReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PolicyVersion")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestedRoleIdsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequesterUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TargetMemberId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("TargetMembershipRevisionAtRequest")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TargetUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TargetMemberId");
+
+                    b.HasIndex("CompanyId", "RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "Status");
+
+                    b.ToTable("WorkspaceAccessRequest", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditableAttribute", b =>
                 {
                     b.HasOne("Core.Domain.Auditing.AuditableEntity", "AuditableEntity")
@@ -4881,6 +4957,25 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Contact");
 
                     b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceAccessRequest", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.CompanyMember", "TargetMember")
+                        .WithMany()
+                        .HasForeignKey("TargetMemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("TargetMember");
                 });
 
             modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>

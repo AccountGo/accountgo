@@ -198,19 +198,6 @@ namespace Services.Dashboard
                 return (financials, sales, purchases);
             }
 
-            var perms = _tenantContext.Permissions;
-            if (_tenantContext.IsResolved && perms != null && perms.Count > 0)
-            {
-                var financials = perms.Contains(SystemPermissions.FinancialsAccountsView) ||
-                                 perms.Contains(SystemPermissions.FinancialsJournalView) ||
-                                 perms.Contains(SystemPermissions.ReportsView);
-                var sales = perms.Contains(SystemPermissions.SalesInvoicesView) ||
-                            perms.Contains(SystemPermissions.SalesCustomersView);
-                var purchases = perms.Contains(SystemPermissions.PurchasesBillsView) ||
-                                perms.Contains(SystemPermissions.PurchasesVendorsView);
-                return (financials, sales, purchases);
-            }
-
             return (false, false, false);
         }
 
@@ -221,9 +208,7 @@ namespace Services.Dashboard
                 return _authorizationService.GetAuthorizedDashboardDomains().Contains("banking");
             }
 
-            return _tenantContext.IsResolved
-                && _tenantContext.Permissions != null
-                && _tenantContext.Permissions.Contains(SystemPermissions.BankingAccountsView);
+            return false;
         }
 
         /// <summary>

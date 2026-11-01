@@ -113,8 +113,10 @@ namespace Api.Filters
             var tenantContext = context.HttpContext.RequestServices.GetRequiredService<ITenantContext>();
             var entitlements = context.HttpContext.RequestServices.GetService<IEntitlementService>();
             var db = context.HttpContext.RequestServices.GetService<ApiDbContext>();
+            var httpContextAccessor = context.HttpContext.RequestServices.GetService<IHttpContextAccessor>()
+                ?? new HttpContextAccessor { HttpContext = context.HttpContext };
             var authService = context.HttpContext.RequestServices.GetService<IAccessAuthorizationService>()
-                ?? new AccessAuthorizationService(tenantContext, entitlements, db);
+                ?? new AccessAuthorizationService(tenantContext, entitlements, db, httpContextAccessor);
 
             var resourceContext = ResolveActionResourceContext(context, tenantContext, db, _permission);
 
@@ -357,8 +359,10 @@ namespace Api.Filters
             var tenantContext = context.HttpContext.RequestServices.GetRequiredService<ITenantContext>();
             var entitlements = context.HttpContext.RequestServices.GetService<IEntitlementService>();
             var db = context.HttpContext.RequestServices.GetService<ApiDbContext>();
+            var httpContextAccessor = context.HttpContext.RequestServices.GetService<IHttpContextAccessor>()
+                ?? new HttpContextAccessor { HttpContext = context.HttpContext };
             var authService = context.HttpContext.RequestServices.GetService<IAccessAuthorizationService>()
-                ?? new AccessAuthorizationService(tenantContext, entitlements, db);
+                ?? new AccessAuthorizationService(tenantContext, entitlements, db, httpContextAccessor);
 
             var resourceContext = RequirePermissionAttribute.ResolveActionResourceContext(context, tenantContext, db, OperationKey);
             var decision = await authService.AuthorizeAsync(OperationKey, resourceContext, cancellationToken: context.HttpContext.RequestAborted);
