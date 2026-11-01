@@ -11,6 +11,30 @@ namespace AccountGo.ServicesTests
     public class WorkspaceLifecycleSchemaTests
     {
         [Fact]
+        public void Upgrade_LegacyCompany_KeepsAccessBootstrapUnavailable()
+        {
+            using var connection = new SqliteConnection("Data Source=:memory:");
+            connection.Open();
+            using (var db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection).Options))
+                db.Database.EnsureCreated();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Company') WHERE name = 'AccessBootstrapAvailable'";
+            if ((long)command.ExecuteScalar()! > 0)
+            {
+                command.CommandText = "ALTER TABLE Company DROP COLUMN AccessBootstrapAvailable";
+                command.ExecuteNonQuery();
+            }
+
+            SqliteSchemaUpgrader.Upgrade(connection);
+            SqliteSchemaUpgrader.Upgrade(connection);
+
+            command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Company') WHERE name = 'AccessBootstrapAvailable'";
+            Assert.Equal(1L, command.ExecuteScalar());
+            command.CommandText = "SELECT AccessBootstrapAvailable FROM Company WHERE Id = 1";
+            Assert.Equal(0L, command.ExecuteScalar());
+        }
+
+        [Fact]
         public void Upgrade_Phase2Schema_PreservesExistingRowsAndBackfillsCurrency()
         {
             using (var connection = new SqliteConnection("Data Source=:memory:"))

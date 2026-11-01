@@ -138,6 +138,11 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AccessBootstrapAvailable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("ActiveModulesJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -215,6 +220,7 @@ namespace Api.Data.Migrations.ApiDb
                         new
                         {
                             Id = 1,
+                            AccessBootstrapAvailable = false,
                             BillingManagedManually = false,
                             CRA = "012345678",
                             CancelAtPeriodEnd = false,
@@ -4969,7 +4975,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Company", "Company")
                         .WithMany()
                         .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("Core.Domain.CompanyMember", "TargetMember")

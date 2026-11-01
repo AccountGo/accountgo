@@ -48,6 +48,8 @@ namespace Core.Domain
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string? CreatedByUserId { get; set; }
+        /// <summary>One-time access setup for a new workspace; permanently closed by functional grants or another administrator.</summary>
+        public bool AccessBootstrapAvailable { get; set; }
         public DateTime? DeletedAt { get; set; }
     }
 }

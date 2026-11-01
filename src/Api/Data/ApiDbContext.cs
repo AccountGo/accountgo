@@ -111,6 +111,7 @@ namespace Api.Data
         // Every SaveChanges/SaveChangesAsync overload funnels into these two.
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
+            EnforceAccessBootstrapLifecycle();
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
@@ -119,10 +120,46 @@ namespace Api.Data
 
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
+            EnforceAccessBootstrapLifecycle();
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        // Close setup in the same write as the first functional grant or independent administrator.
+        // Checking pending and persisted membership also covers removal, demotion and suspension.
+        private void EnforceAccessBootstrapLifecycle()
+        {
+            var members = ChangeTracker.Entries<CompanyMember>()
+                .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+                .ToList();
+            var grants = ChangeTracker.Entries<CompanyMemberSecurityRole>()
+                .Where(e => e.State == EntityState.Added).Select(e => e.Entity).ToList();
+            if (members.Count == 0 && grants.Count == 0)
+                return;
+
+            var grantedMemberIds = grants.Select(g => g.CompanyMemberId).Where(id => id > 0).ToList();
+            var grantCompanyIds = CompanyMembers.AsNoTracking()
+                .Where(m => grantedMemberIds.Contains(m.Id)).Select(m => m.CompanyId).ToHashSet();
+            grantCompanyIds.UnionWith(grants.Where(g => g.CompanyMember != null).Select(g => g.CompanyMember.CompanyId));
+            var companyIds = members.Select(e => e.Entity.CompanyId).Concat(grantCompanyIds)
+                .Where(id => id > 0).Distinct().ToList();
+            foreach (var companyId in companyIds)
+            {
+                var company = Companies.SingleOrDefault(c => c.Id == companyId);
+                if (company?.AccessBootstrapAvailable != true)
+                    continue;
+
+                var independentAdministrator = CompanyMembers.AsNoTracking().Any(m => m.CompanyId == companyId
+                    && m.UserId != company.CreatedByUserId && m.Status == CompanyMemberStatus.Active
+                    && (m.Role == CompanyMemberRole.Owner || m.Role == CompanyMemberRole.Admin))
+                    || members.Any(e => e.Entity.CompanyId == companyId && e.State != EntityState.Deleted
+                        && e.Entity.UserId != company.CreatedByUserId && e.Entity.Status == CompanyMemberStatus.Active
+                        && (e.Entity.Role == CompanyMemberRole.Owner || e.Entity.Role == CompanyMemberRole.Admin));
+                if (grantCompanyIds.Contains(companyId) || independentAdministrator)
+                    company.AccessBootstrapAvailable = false;
+            }
         }
 
         /// <summary>
@@ -183,6 +220,7 @@ namespace Api.Data
             base.OnModelCreating(builder);
             builder.Entity<Company>().HasQueryFilter(c => c.DeletedAt == null);
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
+            builder.Entity<Company>().Property(c => c.AccessBootstrapAvailable).HasDefaultValue(false);
             builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
             builder.Entity<CompanySetting>().Property(s => s.AccountingBasis).HasDefaultValue(AccountingBasis.Accrual);
             builder.Entity<CompanySetting>().Property(s => s.ReportingFramework).HasDefaultValue(ReportingFramework.IfrsForSmes);
@@ -554,7 +592,7 @@ namespace Api.Data
                 entity.HasOne(e => e.Company)
                     .WithMany()
                     .HasForeignKey(e => e.CompanyId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.NoAction);
                 entity.HasOne(e => e.TargetMember)
                     .WithMany()
                     .HasForeignKey(e => e.TargetMemberId)

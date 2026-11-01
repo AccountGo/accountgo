@@ -19,6 +19,55 @@ namespace AccountGo.BackendTests.Security
             _fixture = fixture;
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task AccessSetup_AfterSecondAdministratorDemotedOrRemoved_RemainsUnavailable(bool remove)
+        {
+            var slug = "bootstrap-history-" + Guid.NewGuid().ToString("N")[..6];
+            var owner = await _fixture.CreateUser($"owner-{slug}@example.com");
+            var admin = await _fixture.CreateUser($"admin-{slug}@example.com");
+            var companyId = await _fixture.CreateWorkspaceWithZeroFunctionalRoles(owner.Token, "Bootstrap history", slug);
+            await _fixture.AddMemberDirectAsync(companyId, admin.Id, CompanyMemberRole.Admin, Array.Empty<string>());
+            int memberId;
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                memberId = db.CompanyMembers.Single(m => m.CompanyId == companyId && m.UserId == admin.Id).Id;
+            }
+
+            var change = await _fixture.Send(remove ? HttpMethod.Delete : HttpMethod.Patch,
+                $"/api/organizations/current/members/{memberId}", remove ? null : new { role = "Member" },
+                token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.NoContent, change.StatusCode);
+
+            var status = await _fixture.Send(HttpMethod.Get, "/api/organizations/current/access-setup/status", token: owner.Token, org: slug);
+            Assert.False((await AccessControlConformanceTests.Fixture.Json(status)).GetProperty("isEligibleForBootstrap").GetBoolean());
+            var setup = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-setup", new { }, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.Forbidden, setup.StatusCode);
+        }
+
+        [Fact]
+        public async Task AccessSetup_LegacyWorkspaceWithoutInitialEligibility_DeniesSelfGrant()
+        {
+            var slug = "bootstrap-legacy-" + Guid.NewGuid().ToString("N")[..6];
+            var owner = await _fixture.CreateUser($"owner-{slug}@example.com");
+            int companyId;
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var plan = db.Companies.Select(c => c.Plan).First();
+                var company = new Company { Name = "Legacy workspace", Slug = slug, Plan = plan, CreatedByUserId = owner.Id };
+                db.Companies.Add(company);
+                await db.SaveChangesAsync();
+                companyId = company.Id;
+            }
+            await _fixture.AddMemberDirectAsync(companyId, owner.Id, CompanyMemberRole.Owner, Array.Empty<string>());
+
+            var setup = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-setup", new { }, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.Forbidden, setup.StatusCode);
+        }
+
         [Fact]
         public async Task AC1_Reproduction_TwoPersonZeroRoleWorkspace_OffersRequestRoute_PendingAccessIneffective()
         {

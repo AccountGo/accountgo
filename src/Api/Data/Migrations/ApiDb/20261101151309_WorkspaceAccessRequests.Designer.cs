@@ -4972,7 +4972,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Company", "Company")
                         .WithMany()
                         .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("Core.Domain.CompanyMember", "TargetMember")

@@ -173,6 +173,7 @@ namespace Services.Financial
             var actor = string.IsNullOrWhiteSpace(reopenedBy) ? "system" : reopenedBy.Trim();
 
             using (_booksLockGuard.Bypass())
+            using (_financial.AllowClosingEntries())
             {
                 if (year.ClosingGeneralLedgerHeaderId.HasValue)
                 {

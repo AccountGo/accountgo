@@ -67,7 +67,8 @@ namespace Api.Service
                 Name = name.Trim(), Slug = slug,
                 ShortName = string.IsNullOrWhiteSpace(shortName) ? name.Trim().Substring(0, Math.Min(4, name.Trim().Length)).ToUpperInvariant() : shortName.Trim(),
                 CompanyCode = RandomNumberGenerator.GetInt32(100, 1000).ToString(),
-                Plan = plan, SubscriptionStatus = "active", CreatedByUserId = userId
+                Plan = plan, SubscriptionStatus = "active", CreatedByUserId = userId,
+                AccessBootstrapAvailable = initialSecurityRoleIds == null || !initialSecurityRoleIds.Any()
             };
             _db.Companies.Add(company);
             var member = new CompanyMember

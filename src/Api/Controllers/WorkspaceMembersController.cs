@@ -767,6 +767,7 @@ namespace Api.Controllers
         public async System.Threading.Tasks.Task<IActionResult> GetAccessSetupStatus()
         {
             var companyId = _tenant.RequireCompanyId();
+            var company = await _db.Companies.AsNoTracking().SingleAsync(c => c.Id == companyId);
             var alreadyBootstrapped = await _db.AuditLogs
                 .AnyAsync(a => a.CompanyId == companyId && a.TableName == "__AccessBootstrap" && a.RecordId == "bootstrap");
 
@@ -782,7 +783,9 @@ namespace Api.Controllers
             var totalFunctionalRoles = await _db.CompanyMemberSecurityRoles
                 .CountAsync(sr => sr.CompanyMember.CompanyId == companyId);
 
-            var eligible = !alreadyBootstrapped && adminCount <= 1 && callerMember?.Role == CompanyMemberRole.Owner;
+            var eligible = company.AccessBootstrapAvailable && !alreadyBootstrapped && adminCount == 1
+                && totalFunctionalRoles == 0 && callerMember?.Role == CompanyMemberRole.Owner
+                && callerMember.Status == CompanyMemberStatus.Active && company.CreatedByUserId == UserId;
 
             return Ok(new
             {
@@ -813,6 +816,12 @@ namespace Api.Controllers
 
                 if (callerMember == null || callerMember.Role != CompanyMemberRole.Owner)
                     return Problem(statusCode: 403, title: "Forbidden", detail: "Only a workspace Owner can perform initial access setup.");
+
+                var company = await _db.Companies.SingleAsync(c => c.Id == companyId);
+                if (!company.AccessBootstrapAvailable || company.CreatedByUserId != callerUserId
+                    || await _db.CompanyMemberSecurityRoles.AnyAsync(sr => sr.CompanyMember.CompanyId == companyId))
+                    return Problem(statusCode: 403, title: "Bootstrap unavailable",
+                        detail: "Initial access setup is no longer available. Request functional roles through independent approval.");
 
                 // AC7: Permanent boundary check: Has bootstrap ever been completed for this company?
                 var alreadyBootstrapped = await _db.AuditLogs
@@ -860,6 +869,8 @@ namespace Api.Controllers
                         _db.CompanyMemberSecurityRoles.Add(link);
                     }
                 }
+
+                company.AccessBootstrapAvailable = false;
 
                 // Audit log
                 _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog

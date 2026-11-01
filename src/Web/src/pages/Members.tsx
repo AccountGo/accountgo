@@ -292,8 +292,8 @@ export const Members: React.FC = () => {
             </label>
           )}
 
-          {form !== 'invite' && form !== 'request' && form !== 'setup' && (
-            form.role === 'Owner' ? (
+          {form !== 'request' && form !== 'setup' && (
+            typeof form === 'object' && form.role === 'Owner' ? (
               <p>Ownership is changed using Transfer ownership, not role editing.</p>
             ) : (
               <label className="block">Workspace role

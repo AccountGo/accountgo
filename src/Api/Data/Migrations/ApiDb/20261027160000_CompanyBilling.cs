@@ -57,12 +57,8 @@ namespace Api.Data.Migrations.ApiDb
                 nullable: false,
                 defaultValue: false);
 
-            migrationBuilder.UpdateData(
-                table: "Company",
-                keyColumn: "Id",
-                keyValue: 1,
-                columns: new[] { "BillingProvider", "BillingCustomerId", "BillingSubscriptionId", "CurrentPeriodEnd", "CancelAtPeriodEnd", "BillingManagedManually" },
-                values: new object[] { null, null, null, null, false, false });
+            // AddColumn already initializes existing rows to null/false. This hand-authored
+            // migration has no target model, so a redundant UpdateData cannot resolve column types.
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)

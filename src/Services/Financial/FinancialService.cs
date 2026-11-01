@@ -441,7 +441,11 @@ namespace Services.Financial
             {
                 decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
             }
-            if (!decision.Allowed && _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose).Allowed)
+            if (!decision.Allowed && entry?.DocumentType == DocumentTypes.JournalEntry
+                && AllowClosingEntriesDepth.Value > 0 && entry.ReversedGeneralLedgerHeaderId.HasValue
+                && _journalEntryRepo.Table.Any(j => j.GeneralLedgerHeaderId == entry.ReversedGeneralLedgerHeaderId
+                    && j.VoucherType == JournalVoucherTypes.ClosingEntries && j.Posted == true)
+                && _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose).Allowed)
             {
                 decision = Core.Authorization.AccessDecision.Allow(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, "POL-CLOSE", "1.0");
             }
@@ -488,10 +492,6 @@ namespace Services.Financial
             if (!decision.Allowed && entry?.DocumentType == DocumentTypes.PurchaseInvoicePayment)
             {
                 decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
-            }
-            if (!decision.Allowed && _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose).Allowed)
-            {
-                decision = Core.Authorization.AccessDecision.Allow(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, "POL-CLOSE", "1.0");
             }
             if (!decision.Allowed)
             {
