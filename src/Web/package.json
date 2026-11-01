@@ -41,7 +41,7 @@
     "@cloudflare/workers-types": "^5.20261019.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "16.3.3",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
