@@ -372,34 +372,38 @@ namespace Services.Recurring
             var resolved = (runDate ?? schedule.NextRunDate)?.Date;
             if (resolved == null)
                 throw new InvalidRunDateException(
-                    "No run date to generate. Pass a run date or set the schedule's next run date.");
+                    "No run date to generate. Set the schedule's next run date first.");
             var effectiveRunDate = resolved.Value;
+
+            // Manual execution runs only the schedule's next due occurrence — never an arbitrary later date, which
+            // would silently skip and un-record the intervening periods. If the caller names a date it must be the
+            // current next run date; anything else is rejected so missed periods are not glossed over.
+            if (schedule.NextRunDate.HasValue && effectiveRunDate != schedule.NextRunDate.Value.Date)
+                throw new InvalidRunDateException(
+                    $"This schedule's next run is {schedule.NextRunDate.Value:yyyy-MM-dd}. " +
+                    "A manual run can only generate the next occurrence.");
 
             // #480: archiving the client pauses the schedule. Do this before creating an occurrence so an archived
             // client produces no new document; pausing is reversible and the schedule is flagged for attention so a
             // person can see why it stopped. Existing open invoices are untouched.
-            var customer = _customerRepo.Table.FirstOrDefault(c => c.Id == schedule.PartyId);
-            if (customer == null)
-                throw new InvalidRunDateException("The schedule's customer could not be found.");
-            if (customer.ArchivedAt != null)
+            if (CustomerArchived(schedule.PartyId))
             {
                 PauseForArchivedCustomer(schedule);
                 return RecurringGenerationResult.Aborted(0, RecurringGuardReasons.CustomerArchivedSchedulePaused);
             }
 
-            // Whether this run moves the series forward is decided against the schedule's current NextRunDate before
-            // we touch it: a run on or after NextRunDate advances the series; a manual run of an earlier date (a
-            // catch-up on a missed period) does not pull the series backward.
-            var advancesSeries = !schedule.NextRunDate.HasValue || effectiveRunDate >= schedule.NextRunDate.Value.Date;
-
             var occurrenceId = EnsureOccurrence(scheduleId, effectiveRunDate, leaseOwner, leaseUntil);
             var result = ProcessOccurrence(occurrenceId, leaseOwner);
 
-            // Advance only when the run actually attempted this occurrence (anything other than an abort, which
-            // means no attempt was made — e.g. a live lease held elsewhere) and only for a forward run. A failed
-            // attempt still advances: the failed occurrence is retried against its own key, not by rewinding here.
-            if (advancesSeries && result.Outcome != RecurringGenerationOutcome.Aborted)
-                AdvanceNextRunDate(schedule, effectiveRunDate);
+            // Advance the series by exactly one occurrence once the run has been attempted. Aborted means no attempt
+            // was made (e.g. a live lease held elsewhere), so the series is left where it is. A failed attempt still
+            // advances the next date — the series must not stall — but it does not end the schedule, because the
+            // final period has not actually succeeded and its failed occurrence must stay retryable.
+            if (result.Outcome != RecurringGenerationOutcome.Aborted)
+            {
+                var attemptSucceeded = result.Outcome != RecurringGenerationOutcome.Failed;
+                AdvanceNextRunDate(schedule, effectiveRunDate, attemptSucceeded);
+            }
 
             return result;
         }
@@ -435,6 +439,14 @@ namespace Services.Recurring
             if (schedule.Status != RecurringScheduleStatus.Active)
                 return RecurringGenerationResult.Aborted(occurrenceId, $"Schedule is {schedule.Status}, not Active.");
 
+            // Same archived-client policy as a fresh run: if the customer was archived after the failed attempt, a
+            // retry must not quietly produce a draft for an archived client. Pause the schedule and flag it instead.
+            if (CustomerArchived(schedule.PartyId))
+            {
+                PauseForArchivedCustomer(schedule);
+                return RecurringGenerationResult.Aborted(occurrenceId, RecurringGuardReasons.CustomerArchivedSchedulePaused);
+            }
+
             // Re-claim the occurrence under this owner, then process. EnsureOccurrence re-claims a failed row for
             // the same (schedule, run date), so retrying by occurrence id goes through the identical claim path and
             // keeps the same idempotency key. It never advances NextRunDate.
@@ -443,11 +455,13 @@ namespace Services.Recurring
         }
 
         /// <summary>
-        /// Advances the schedule's <see cref="RecurringSchedule.NextRunDate"/> to the next calendar date after the
-        /// run just attempted, respecting the end date and occurrence limit. When the series is exhausted the next
-        /// date is cleared and the schedule is marked ended, so no further run is offered.
+        /// Advances the schedule's <see cref="RecurringSchedule.NextRunDate"/> by one occurrence after a run.
+        /// Respects the end date and occurrence limit: when the series is exhausted the next date is cleared so no
+        /// further run is offered. The schedule is marked <see cref="RecurringScheduleStatus.Ended"/> only when the
+        /// exhausting run actually <paramref name="attemptSucceeded"/>; a failed final run clears the next date but
+        /// leaves the schedule Active so its failed occurrence stays retryable.
         /// </summary>
-        private void AdvanceNextRunDate(RecurringSchedule schedule, DateTime attemptedRunDate)
+        private void AdvanceNextRunDate(RecurringSchedule schedule, DateTime attemptedRunDate, bool attemptSucceeded)
         {
             // ProcessOccurrence may have cleared the change tracker on a fail-closed path (to discard a rolled-back
             // draft), which detaches the schedule we were handed; mutating a detached entity would not persist.
@@ -477,8 +491,13 @@ namespace Services.Recurring
 
             if (pastEnd || pastMax)
             {
+                // No more forward runs either way. End the schedule only when the exhausting run succeeded; a failed
+                // final run leaves it Active (NextRunDate cleared) so the failed occurrence can still be retried.
                 tracked.NextRunDate = null;
-                tracked.Status = RecurringScheduleStatus.Ended;
+                if (attemptSucceeded)
+                    tracked.Status = RecurringScheduleStatus.Ended;
+                else
+                    tracked.NeedsAttention = true;
             }
             else
             {
@@ -491,11 +510,21 @@ namespace Services.Recurring
 
         private void PauseForArchivedCustomer(RecurringSchedule schedule)
         {
-            schedule.Status = RecurringScheduleStatus.Paused;
-            schedule.NeedsAttention = true;
-            _scheduleRepo.Update(schedule);
+            // Re-load the tracked row: a prior ProcessOccurrence may have cleared the change tracker.
+            var tracked = _scheduleRepo.Table.FirstOrDefault(s => s.Id == schedule.Id) ?? schedule;
+            tracked.Status = RecurringScheduleStatus.Paused;
+            tracked.NeedsAttention = true;
+            _scheduleRepo.Update(tracked);
             _logger.LogInformation(
-                "Schedule {ScheduleId} paused: customer {CustomerId} is archived.", schedule.Id, schedule.PartyId);
+                "Schedule {ScheduleId} paused: customer {CustomerId} is archived.", tracked.Id, tracked.PartyId);
+        }
+
+        /// <summary>True when the schedule's customer has been archived (and is therefore not billable).</summary>
+        private bool CustomerArchived(int partyId)
+        {
+            var customer = _customerRepo.Table.FirstOrDefault(c => c.Id == partyId)
+                ?? throw new InvalidRunDateException("The schedule's customer could not be found.");
+            return customer.ArchivedAt != null;
         }
 
         // ----- run-date validation -----

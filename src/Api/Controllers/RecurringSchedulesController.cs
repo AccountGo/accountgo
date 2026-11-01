@@ -44,7 +44,10 @@ namespace Api.Controllers
 
         public sealed class RunNowRequest
         {
-            /// <summary>Which scheduled run to generate. Defaults to the schedule's NextRunDate.</summary>
+            /// <summary>
+            /// Optional confirmation of which run to generate. A manual run always generates the schedule's current
+            /// next run date; when supplied, this must equal that date or the request is rejected.
+            /// </summary>
             public DateTime? RunDate { get; set; }
         }
 
