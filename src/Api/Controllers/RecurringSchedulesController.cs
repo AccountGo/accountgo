@@ -46,11 +46,11 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Generates the document for one run of a schedule. Issuing requires the invoice-post permission because a
-        /// successful auto-issue schedule will post to the ledger; draft-only schedules still create a draft.
+        /// Generates the document for one run of a schedule. Creating the draft needs the invoice-create
+        /// permission; an auto-issue schedule also needs the post permission because it may post to the ledger.
         /// </summary>
         [HttpPost("{id}/run")]
-        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public IActionResult RunNow(int id, [FromBody] RunNowRequest? request = null)
         {
             var actor = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
@@ -62,6 +62,11 @@ namespace Api.Controllers
                 return NotFound(new { message = $"Recurring schedule {id} not found." });
             if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
                 return BadRequest(new { message = "This schedule does not generate sales invoices." });
+
+            // Auto-issue may post to the ledger, so a run-now on such a schedule also needs the post permission.
+            if (schedule.Action == RecurringAction.AutoIssue
+                && !_tenant.Permissions.Contains(Core.Domain.Security.SystemPermissions.SalesInvoicesPost))
+                return RequirePermissionAttribute.Denied(Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
 
             var runDate = (request?.RunDate ?? schedule.NextRunDate)?.Date;
             if (runDate == null)
@@ -82,6 +87,10 @@ namespace Api.Controllers
                     errorCode = result.ErrorCode,
                     message = result.Message,
                 });
+            }
+            catch (InvalidRunDateException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {

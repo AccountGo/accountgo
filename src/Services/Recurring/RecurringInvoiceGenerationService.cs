@@ -102,6 +102,11 @@ namespace Services.Recurring
             var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId)
                 ?? throw new InvalidOperationException($"Recurring schedule {scheduleId} not found.");
 
+            // A new occurrence may only be created on a date the schedule's calendar actually produces, within its
+            // active window. This stops a caller-supplied date from manufacturing a second, duplicate-period
+            // document in a month that already has a legitimate run (each distinct date is a distinct idempotency key).
+            ValidateRunDateOnCalendar(schedule, runDate);
+
             var documentDate = runDate;
             var (periodStart, periodEnd) = NextDateCalculator.ComputeServicePeriod(documentDate, schedule.ServicePeriodMode);
 
@@ -142,29 +147,61 @@ namespace Services.Recurring
 
         public RecurringGenerationResult ProcessOccurrence(int occurrenceId, string leaseOwner)
         {
+            // Everything runs in one serializable transaction, including the initial re-read and claim. On SQLite
+            // this is BEGIN IMMEDIATE and on Postgres SERIALIZABLE, so two concurrent callers (e.g. two run-now
+            // requests sharing the same run-now:{actor} lease) cannot both pass the status/lease/no-invoice-yet
+            // check: the second blocks, then sees the first's committed invoice link and aborts as AlreadyProcessed.
+            using var tx = _unitOfWork.BeginSerializableTransaction();
+
             var occurrence = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrenceId);
             if (occurrence == null)
+            {
+                tx.Dispose();
                 return RecurringGenerationResult.Aborted(occurrenceId, "Occurrence not found.");
+            }
 
             // Idempotent replay: the occurrence already produced a document.
             if (occurrence.SalesInvoiceId.HasValue &&
                 (occurrence.Status == RecurringOccurrenceStatus.DraftCreated ||
                  occurrence.Status == RecurringOccurrenceStatus.Issued))
             {
-                return RecurringGenerationResult.AlreadyProcessed(occurrenceId, occurrence.SalesInvoiceId);
+                var invoiceId0 = occurrence.SalesInvoiceId;
+                tx.Dispose();
+                return RecurringGenerationResult.AlreadyProcessed(occurrenceId, invoiceId0);
             }
 
             // Only a leased, in-progress occurrence may be processed, and only by its lease owner.
             if (occurrence.Status != RecurringOccurrenceStatus.Running)
+            {
+                tx.Dispose();
                 return RecurringGenerationResult.Aborted(occurrenceId, $"Occurrence is {occurrence.Status}, not Running.");
+            }
             if (!HoldsLease(occurrence, leaseOwner))
+            {
+                tx.Dispose();
                 return RecurringGenerationResult.Aborted(occurrenceId, RecurringGuardReasons.LeaseNotHeld);
+            }
+            // Belt and braces for same-lease concurrency: never create a second document for an occurrence that
+            // already carries one, even if its status was left mid-flight.
+            if (occurrence.SalesInvoiceId.HasValue)
+            {
+                var invoiceId0 = occurrence.SalesInvoiceId;
+                tx.Dispose();
+                return RecurringGenerationResult.AlreadyProcessed(occurrenceId, invoiceId0);
+            }
 
             var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == occurrence.RecurringScheduleId);
             if (schedule == null)
+            {
+                tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
                 return Fail(occurrence, null, RecurringErrorCodes.InvalidSchedule, "Parent schedule not found.");
+            }
             if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
+            {
+                tx.Dispose();
                 return RecurringGenerationResult.Aborted(occurrenceId, "Occurrence is not a sales-invoice schedule.");
+            }
 
             var lines = _lineRepo.Table
                 .Where(l => l.RecurringScheduleId == schedule.Id)
@@ -173,11 +210,11 @@ namespace Services.Recurring
 
             var customer = _customerRepo.Table.FirstOrDefault(c => c.Id == schedule.PartyId);
             if (customer == null)
+            {
+                tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
                 return Fail(occurrence, null, RecurringErrorCodes.InvalidSchedule, "Customer not found for schedule.");
-
-            // Build + save the draft, then decide draft-vs-issue. Both happen in one transaction so a posting
-            // failure rolls the whole attempt back; the occurrence is then marked failed in a fresh write.
-            using var tx = _unitOfWork.BeginSerializableTransaction();
+            }
 
             Dto.Sales.SalesInvoice draftDto;
             try
@@ -187,21 +224,49 @@ namespace Services.Recurring
             catch (RecurringGenerationException ex)
             {
                 tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
                 return Fail(occurrence, null, ex.ErrorCode, ex.Message);
             }
 
             // CreateSalesInvoice goes through the same path the sales UI uses: it builds the backing sales order,
-            // saves a Draft, and resolves per-line tax amounts.
-            var createResult = _salesService.CreateSalesInvoice(draftDto);
-            if (createResult.IsFailure || createResult.Value?.Id is not int invoiceId || invoiceId == 0)
+            // saves a Draft, and resolves per-line tax amounts. It can throw for a missing/archived tax or a
+            // mis-set item; a throw must leave the occurrence Failed (and attention-visible), not Running.
+            SalesInvoiceHeader invoice;
+            try
             {
-                var reason = createResult.IsFailure ? createResult.Error.Message : "Could not create the draft invoice.";
+                var createResult = _salesService.CreateSalesInvoice(draftDto);
+                if (createResult.IsFailure || createResult.Value?.Id is not int createdId || createdId == 0)
+                {
+                    var reason = createResult.IsFailure ? createResult.Error.Message : "Could not create the draft invoice.";
+                    tx.Dispose();
+                    _unitOfWork.DiscardPendingChanges();
+                    return Fail(occurrence, null, RecurringErrorCodes.InvalidSchedule, reason);
+                }
+
+                invoice = _salesService.GetSalesInvoiceById(createdId);
+                // Stamp the recurring origin so the document is identifiable for audit, reporting, and later
+                // lifecycle handling. The DTO path does not carry Origin, so set it on the saved header.
+                invoice.Origin = SalesInvoiceOrigins.RecurringSchedule;
+                _salesService.UpdateSalesInvoice(invoice);
+            }
+            catch (RecurringGenerationException ex)
+            {
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
-                return Fail(occurrence, null, RecurringErrorCodes.InvalidSchedule, reason);
+                return Fail(occurrence, null, ex.ErrorCode, ex.Message);
+            }
+            catch (Exception ex)
+            {
+                // A tax that no longer resolves (missing/archived) is a fail-closed tax error; anything else is an
+                // invalid-schedule setup error. Either way the occurrence must be marked failed, never left Running.
+                tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
+                var code = ex.Message.Contains("tax", StringComparison.OrdinalIgnoreCase)
+                    ? RecurringErrorCodes.TaxNotResolved
+                    : RecurringErrorCodes.InvalidSchedule;
+                return Fail(occurrence, null, code, ex.Message);
             }
 
-            var invoice = _salesService.GetSalesInvoiceById(invoiceId);
             occurrence.SalesInvoiceId = invoice.Id;
             occurrence.UpdatedAt = DateTime.UtcNow;
 
@@ -265,6 +330,59 @@ namespace Services.Recurring
             _occurrenceRepo.Update(occurrence);
             tx.Commit();
             return RecurringGenerationResult.Issued(occurrenceId, invoice.Id);
+        }
+
+        // ----- run-date validation -----
+
+        /// <summary>
+        /// Confirms <paramref name="runDate"/> is a date the schedule's calendar actually produces and is within the
+        /// schedule's active window (start, end, max occurrences). Throws <see cref="InvalidRunDateException"/> otherwise.
+        /// </summary>
+        private static void ValidateRunDateOnCalendar(RecurringSchedule schedule, DateTime runDate)
+        {
+            if (schedule.Status == RecurringScheduleStatus.Ended)
+                throw new InvalidRunDateException("The schedule has ended.");
+
+            if (runDate < schedule.StartDate.Date)
+                throw new InvalidRunDateException(
+                    $"{runDate:yyyy-MM-dd} is before the schedule start {schedule.StartDate:yyyy-MM-dd}.");
+
+            if (schedule.EndDate.HasValue && runDate > schedule.EndDate.Value.Date)
+                throw new InvalidRunDateException(
+                    $"{runDate:yyyy-MM-dd} is after the schedule end {schedule.EndDate.Value:yyyy-MM-dd}.");
+
+            // Walk the series far enough to cover a max-occurrences bound, or a generous window otherwise, and
+            // confirm the requested date is one of the produced dates. The series is anchored to the start, so a
+            // run-now for an arbitrary mid-month date is rejected rather than creating a duplicate-period document.
+            var horizon = schedule.MaxOccurrences ?? 600; // ~50 years of monthly runs; bounded.
+            var dates = NextDateCalculator.ComputeNextDates(
+                schedule.Cadence,
+                schedule.Interval,
+                schedule.StartDate,
+                schedule.DayOfMonth,
+                count: horizon,
+                endDate: schedule.EndDate,
+                maxOccurrences: schedule.MaxOccurrences);
+
+            var position = -1;
+            for (var i = 0; i < dates.Count; i++)
+            {
+                if (dates[i].Date == runDate)
+                {
+                    position = i;
+                    break;
+                }
+                if (dates[i].Date > runDate)
+                    break; // dates are ascending; no point searching further.
+            }
+
+            if (position < 0)
+                throw new InvalidRunDateException(
+                    $"{runDate:yyyy-MM-dd} is not a scheduled run date for this schedule.");
+
+            if (schedule.MaxOccurrences.HasValue && position >= schedule.MaxOccurrences.Value)
+                throw new InvalidRunDateException(
+                    $"{runDate:yyyy-MM-dd} is past the schedule's {schedule.MaxOccurrences.Value}-occurrence limit.");
         }
 
         // ----- draft construction -----
@@ -373,6 +491,12 @@ namespace Services.Recurring
                 return dateResult;
 
             // Downgradeable guards: a valid draft exists; a person can review and issue it.
+
+            // Only monthly-period schedules may auto-issue. Quarterly and yearly schedules bill a period that
+            // spans several calendar months, so their service period can never sit inside the document's month;
+            // per the accounting rule they always stay drafts for a person to review.
+            if (schedule.Cadence == RecurringCadence.Quarterly || schedule.Cadence == RecurringCadence.Yearly)
+                return GuardResult.Downgrade(RecurringGuardReasons.MultiMonthCadence);
 
             // Service period and document date must fall in the same calendar month.
             if (NextDateCalculator.ServicePeriodCrossesMonthBoundary(occurrence.PeriodStart, occurrence.PeriodEnd)

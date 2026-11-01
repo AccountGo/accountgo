@@ -2,10 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #nullable enable
+using System;
 using Core.Domain.Recurring;
 
 namespace Services.Recurring
 {
+    /// <summary>
+    /// Thrown when a requested run date is not valid for a schedule: not on its calendar, outside its start/end
+    /// window, past its occurrence limit, or the schedule has ended. The API maps this to a 400.
+    /// </summary>
+    public sealed class InvalidRunDateException : Exception
+    {
+        public InvalidRunDateException(string message) : base(message) { }
+    }
+
     /// <summary>
     /// What happened when the generation service processed a single recurring occurrence.
     /// </summary>
@@ -76,6 +86,9 @@ namespace Services.Recurring
         public const string ServicePeriodCrossesMonth =
             "The service period and document date are not in the same calendar month.";
 
+        public const string MultiMonthCadence =
+            "Quarterly and yearly schedules bill a multi-month period and are not auto-issued.";
+
         public const string ClientNotActive =
             "The client is archived.";
 
@@ -87,8 +100,7 @@ namespace Services.Recurring
     }
 
     /// <summary>The result of processing one occurrence.</summary>
-    public sealed class RecurringGenerationResult
-    {
+    public sealed class RecurringGenerationResult    {
         public RecurringGenerationOutcome Outcome { get; init; }
 
         /// <summary>The processed occurrence id, when one was involved.</summary>
