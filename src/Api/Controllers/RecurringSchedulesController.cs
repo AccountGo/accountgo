@@ -83,7 +83,7 @@ namespace Api.Controllers
                 // A short, immediate lease owned by this request. The service resolves the run date (defaulting to
                 // the schedule's NextRunDate), runs the single idempotent occurrence, and advances the series on a
                 // forward run. Archiving the client pauses the schedule instead of generating.
-                var leaseOwner = $"run-now:{actor}";
+                var leaseOwner = $"run-now:{actor}:{Guid.NewGuid():N}";
                 var result = _generation.RunSchedule(id, request?.RunDate, leaseOwner, DateTime.UtcNow.AddMinutes(5));
                 return Ok(ResponseFor(result));
             }
@@ -134,7 +134,7 @@ namespace Api.Controllers
 
             try
             {
-                var leaseOwner = $"retry:{actor}";
+                var leaseOwner = $"retry:{actor}:{Guid.NewGuid():N}";
                 var result = _generation.RetryOccurrence(occurrenceId, leaseOwner, DateTime.UtcNow.AddMinutes(5));
                 return Ok(ResponseFor(result));
             }
