@@ -4,6 +4,9 @@
 #nullable disable
 using System;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
 using Api.Data;
 using Core.Domain;
 using Core.Domain.Items;
@@ -174,6 +177,117 @@ namespace AccountGo.BackendTests
                     Assert.Single(db.RecurringOccurrences.Where(o => o.RecurringScheduleId == scheduleId));
                 }
             }
+        }
+
+        // ---- #1 (follow-up): run-now returns curated error text, never raw internal detail ----
+
+        [SqliteFact]
+        public async Task Recurring_RunNow_LockedDate_ReturnsCuratedMessage_NotRawDetail()
+        {
+            // Books locked through the end of the run month, so an auto-issue run fails closed on the posting date.
+            var runMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var runDate = runMonth.AddDays(14); // 15th
+            int scheduleId = SeedSalesSchedule("RUN-LOCK", RecurringAction.AutoIssue, runDate, _ownerId);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var setting = db.CompanySettings.Single();
+                    setting.BooksLockedThrough = runMonth.AddMonths(1).AddDays(-1); // end of the run month
+                    db.SaveChanges();
+                }
+            }
+
+            var response = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/run", new { runDate = IsoDate(runDate) });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await Json(response);
+
+            Assert.Equal("Failed", body.GetProperty("outcome").GetString());
+            Assert.Equal("BOOKS_LOCKED", body.GetProperty("errorCode").GetString());
+            var message = body.GetProperty("message").GetString() ?? "";
+            // Curated, safe text only; no raw exception/stack/SQL detail.
+            Assert.Contains("locked period", message);
+            Assert.DoesNotContain("Exception", message);
+            Assert.DoesNotContain("SQLite", message);
+            Assert.DoesNotContain(" at ", message);
+        }
+
+        // ---- permission split: create vs post on run-now ----
+
+        [SqliteFact]
+        public async Task Recurring_RunNow_PermissionSplit_CreateAllowsDraft_PostRequiredForAutoIssue()
+        {
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 12);
+
+            // A draft-only schedule and an auto-issue schedule, both owned by the workspace.
+            int draftScheduleId = SeedSalesSchedule("RUN-PERM-DRAFT", RecurringAction.CreateDraft, runDate, _ownerId);
+            int autoScheduleId = SeedSalesSchedule("RUN-PERM-AUTO", RecurringAction.AutoIssue, runDate, _ownerId);
+
+            // _otherToken joins as a Sales Representative: has sales.invoices.create, not sales.invoices.post.
+            await JoinOther();
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
+                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
+
+            // Draft-only run-now needs only create -> allowed.
+            var draftRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{draftScheduleId}/run",
+                new { runDate = IsoDate(runDate) }, token: _otherToken);
+            Assert.Equal(HttpStatusCode.OK, draftRes.StatusCode);
+            Assert.Equal("DraftCreated", (await Json(draftRes)).GetProperty("outcome").GetString());
+
+            // Auto-issue run-now may post -> requires post, which the Sales Rep lacks -> 403.
+            var autoRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{autoScheduleId}/run",
+                new { runDate = IsoDate(runDate) }, token: _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, autoRes.StatusCode);
+            Assert.Contains("sales.invoices.post", await autoRes.Content.ReadAsStringAsync());
+        }
+
+        /// <summary>Seeds a one-line service-item sales schedule whose NextRunDate is the given run date.</summary>
+        private int SeedSalesSchedule(string tag, RecurringAction action, DateTime runDate, string automationEnabledBy)
+        {
+            var scheduleId = 0;
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var salesAccountId = db.Accounts.Single(a => a.AccountCode == "40100").Id;
+                var measurementId = db.Measurements.First().Id;
+
+                var customer = new Core.Domain.Sales.Customer { CompanyId = _companyId, No = tag + "-CUST" };
+                db.Customers.Add(customer);
+                var category = new Core.Domain.Items.ItemCategory { CompanyId = _companyId, Name = tag + "-Cat", ItemType = Core.Domain.ItemTypes.Service };
+                db.ItemCategories.Add(category);
+                db.SaveChanges();
+
+                var item = new Core.Domain.Items.Item
+                {
+                    CompanyId = _companyId, No = tag + "-ITEM", Description = "Service " + tag,
+                    ItemCategoryId = category.Id, SalesAccountId = salesAccountId,
+                    SellMeasurementId = measurementId, SmallestMeasurementId = measurementId, Price = 100m,
+                };
+                db.Items.Add(item);
+                db.SaveChanges();
+
+                var schedule = new RecurringSchedule
+                {
+                    CompanyId = _companyId, Kind = RecurringScheduleKind.SalesInvoice, PartyId = customer.Id,
+                    Name = tag, Cadence = RecurringCadence.Monthly, Interval = 1, DayOfMonth = runDate.Day,
+                    StartDate = runDate, NextRunDate = runDate, Action = action,
+                    ServicePeriodMode = RecurringServicePeriodMode.CurrentMonth,
+                    AutomationEnabledBy = automationEnabledBy,
+                };
+                db.RecurringSchedules.Add(schedule);
+                db.SaveChanges();
+                scheduleId = schedule.Id;
+
+                db.RecurringScheduleLines.Add(new RecurringScheduleLine
+                {
+                    CompanyId = _companyId, RecurringScheduleId = schedule.Id, ItemId = item.Id, Quantity = 1, Amount = 100m,
+                });
+                db.SaveChanges();
+            }
+            return scheduleId;
         }
     }
 }

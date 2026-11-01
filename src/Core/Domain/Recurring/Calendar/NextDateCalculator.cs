@@ -228,10 +228,15 @@ public static class NextDateCalculator
 
     /// <summary>
     /// Computes the service period for a document date using the schedule's cadence and interval, so the period
-    /// reflects what the run actually bills: a week for weekly, a calendar month for monthly, a quarter for
-    /// quarterly, a year for yearly. A truthful period is what lets the auto-issue same-month guard distinguish a
-    /// weekly run (which may sit inside one month) from a multi-month run, and stops two runs in one month from
-    /// recording the same period.
+    /// reflects what the run actually bills: a week-span for weekly, the interval's months for monthly, the
+    /// quarter(s) for quarterly, the year(s) for yearly. A truthful period is what lets the auto-issue same-month
+    /// guard distinguish a run that sits inside one month from a multi-month run, and stops two runs from recording
+    /// the same period.
+    ///
+    /// <paramref name="servicePeriodMode"/> is generalized from its monthly origin: <c>CurrentMonth</c> is the
+    /// current period for the cadence, and <c>PreviousMonth</c> is the period immediately before it (one whole
+    /// cadence span earlier), so an April quarterly run in PreviousMonth mode bills the previous quarter, not a
+    /// March-anchored quarter.
     /// </summary>
     public static (DateTime PeriodStart, DateTime PeriodEnd) ComputeServicePeriod(
         DateTime documentDate,
@@ -242,37 +247,43 @@ public static class NextDateCalculator
         if (interval < 1)
             interval = 1;
 
+        var previous = servicePeriodMode == RecurringServicePeriodMode.PreviousMonth;
+
         switch (cadence)
         {
             case RecurringCadence.Weekly:
             {
-                // The run bills the week(s) it covers: the run date through interval*7 - 1 days later.
-                var start = documentDate.Date;
-                var end = start.AddDays(7 * interval - 1);
+                // The run bills interval weeks. PreviousMonth shifts back one whole span (the prior interval weeks).
+                var spanDays = 7 * interval;
+                var start = documentDate.Date.AddDays(previous ? -spanDays : 0);
+                var end = start.AddDays(spanDays - 1);
                 return (start, end);
             }
 
             case RecurringCadence.Monthly:
-                // Preserve the current/previous-month choice for calendar-month billing.
-                return ComputeServicePeriod(documentDate, servicePeriodMode);
+            {
+                // interval months, anchored at the document month; PreviousMonth shifts back one whole span.
+                var firstOfMonth = new DateTime(documentDate.Year, documentDate.Month, 1);
+                var start = firstOfMonth.AddMonths(previous ? -interval : 0);
+                var end = GetLastDayOfMonth(start.AddMonths(interval - 1));
+                return (start, end);
+            }
 
             case RecurringCadence.Quarterly:
             {
-                var baseMonth = servicePeriodMode == RecurringServicePeriodMode.PreviousMonth
-                    ? documentDate.AddMonths(-1)
-                    : documentDate;
-                var start = new DateTime(baseMonth.Year, baseMonth.Month, 1);
-                var end = GetLastDayOfMonth(start.AddMonths(3 * interval - 1));
+                var spanMonths = 3 * interval;
+                var firstOfMonth = new DateTime(documentDate.Year, documentDate.Month, 1);
+                var start = firstOfMonth.AddMonths(previous ? -spanMonths : 0);
+                var end = GetLastDayOfMonth(start.AddMonths(spanMonths - 1));
                 return (start, end);
             }
 
             case RecurringCadence.Yearly:
             {
-                var baseMonth = servicePeriodMode == RecurringServicePeriodMode.PreviousMonth
-                    ? documentDate.AddMonths(-1)
-                    : documentDate;
-                var start = new DateTime(baseMonth.Year, baseMonth.Month, 1);
-                var end = GetLastDayOfMonth(start.AddMonths(12 * interval - 1));
+                var spanMonths = 12 * interval;
+                var firstOfMonth = new DateTime(documentDate.Year, documentDate.Month, 1);
+                var start = firstOfMonth.AddMonths(previous ? -spanMonths : 0);
+                var end = GetLastDayOfMonth(start.AddMonths(spanMonths - 1));
                 return (start, end);
             }
 

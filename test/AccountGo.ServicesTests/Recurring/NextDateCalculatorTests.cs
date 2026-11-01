@@ -799,6 +799,60 @@ namespace AccountGo.ServicesTests.Recurring
         }
 
         [Fact]
+        public void ServicePeriod_Monthly_Interval2_SpansTwoMonths()
+        {
+            // Every two months: the recorded period must cover both months, not just the document month.
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 6, 15), RecurringServicePeriodMode.CurrentMonth, RecurringCadence.Monthly, 2);
+
+            Assert.Equal(new DateTime(2026, 6, 1), start);
+            Assert.Equal(new DateTime(2026, 7, 31), end);
+        }
+
+        [Fact]
+        public void ServicePeriod_Monthly_PreviousMonth_ShiftsBackOneSpan()
+        {
+            // interval 2, PreviousMonth: the span is the two months immediately before the document month.
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 6, 15), RecurringServicePeriodMode.PreviousMonth, RecurringCadence.Monthly, 2);
+
+            Assert.Equal(new DateTime(2026, 4, 1), start);
+            Assert.Equal(new DateTime(2026, 5, 31), end);
+        }
+
+        [Fact]
+        public void ServicePeriod_Quarterly_PreviousMonth_IsThePreviousQuarter()
+        {
+            // An April quarterly run billing the previous period must record Jan-Mar, not a March-anchored quarter.
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 4, 1), RecurringServicePeriodMode.PreviousMonth, RecurringCadence.Quarterly, 1);
+
+            Assert.Equal(new DateTime(2026, 1, 1), start);
+            Assert.Equal(new DateTime(2026, 3, 31), end);
+        }
+
+        [Fact]
+        public void ServicePeriod_Yearly_PreviousMonth_IsThePriorYearSpan()
+        {
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 1, 15), RecurringServicePeriodMode.PreviousMonth, RecurringCadence.Yearly, 1);
+
+            Assert.Equal(new DateTime(2025, 1, 1), start);
+            Assert.Equal(new DateTime(2025, 12, 31), end);
+        }
+
+        [Fact]
+        public void ServicePeriod_Weekly_PreviousMonth_IsThePriorWeekSpan()
+        {
+            // PreviousMonth is generalized to "the previous period"; for weekly that is the prior interval weeks.
+            var (start, end) = NextDateCalculator.ComputeServicePeriod(
+                new DateTime(2026, 6, 15), RecurringServicePeriodMode.PreviousMonth, RecurringCadence.Weekly, 1);
+
+            Assert.Equal(new DateTime(2026, 6, 8), start);
+            Assert.Equal(new DateTime(2026, 6, 14), end);
+        }
+
+        [Fact]
         public void TryGetSeriesPosition_FindsValidDate_AndRejectsOffCalendar()
         {
             var start = new DateTime(2026, 1, 1);

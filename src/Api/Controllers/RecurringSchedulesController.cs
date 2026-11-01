@@ -85,7 +85,9 @@ namespace Api.Controllers
                     outcome = result.Outcome.ToString(),
                     salesInvoiceId = result.SalesInvoiceId,
                     errorCode = result.ErrorCode,
-                    message = result.Message,
+                    // Only curated, safe text is returned. A failure's raw detail (which may carry database or
+                    // internal information) stays in the occurrence's ErrorMessage and the logs, never the response.
+                    message = SafeMessageFor(result),
                 });
             }
             catch (InvalidRunDateException ex)
@@ -98,6 +100,38 @@ namespace Api.Controllers
                 // Don't leak internal/database detail to the caller; keep it in the logs.
                 _logger.LogError(ex, "Run-now failed for schedule {ScheduleId} on {RunDate}.", id, runDate);
                 return StatusCode(500, new { message = "Could not generate the invoice for this run. Please try again or contact support." });
+            }
+        }
+
+        /// <summary>
+        /// Curated, safe response text for a generation result. Downgrade reasons are fixed, non-sensitive strings
+        /// and are passed through; a failure is described by its error code only — its raw detail (possibly carrying
+        /// database or internal information) is left in the occurrence's ErrorMessage and the logs.
+        /// </summary>
+        private static string? SafeMessageFor(RecurringGenerationResult result)
+        {
+            switch (result.Outcome)
+            {
+                case RecurringGenerationOutcome.DraftCreatedGuardFailed:
+                    // These come from RecurringGuardReasons: fixed, reviewable, non-sensitive.
+                    return result.Message;
+
+                case RecurringGenerationOutcome.Failed:
+                    return result.ErrorCode switch
+                    {
+                        RecurringErrorCodes.TaxNotResolved =>
+                            "The tax on a line could not be resolved. Fix the line's tax and try again.",
+                        RecurringErrorCodes.BooksLocked =>
+                            "The document date is in a locked period or outside the open books. Choose a different date or unlock the period.",
+                        RecurringErrorCodes.InvalidSchedule =>
+                            "The schedule could not be turned into a valid invoice. Review its lines and client.",
+                        RecurringErrorCodes.PostFailed =>
+                            "The invoice could not be posted to the ledger. Please try again or contact support.",
+                        _ => "The run could not be completed.",
+                    };
+
+                default:
+                    return null;
             }
         }
     }
