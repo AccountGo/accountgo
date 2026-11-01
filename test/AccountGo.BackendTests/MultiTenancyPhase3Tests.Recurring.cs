@@ -556,6 +556,11 @@ namespace AccountGo.BackendTests
                     var retry = generation.RetryOccurrence(occurrenceId, "retry-final", DateTime.UtcNow.AddMinutes(5));
                     Assert.NotEqual(RecurringGenerationOutcome.Aborted, retry.Outcome);
                     Assert.NotNull(retry.SalesInvoiceId);
+
+                    // Finding 2: the successful retry of the final occurrence now finalizes the exhausted schedule.
+                    var reloaded = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                    Assert.Equal(RecurringScheduleStatus.Ended, reloaded.Status);
+                    Assert.Null(reloaded.NextRunDate);
                 }
             }
         }
@@ -609,6 +614,90 @@ namespace AccountGo.BackendTests
                     // The occurrence is still the failed one; no document was produced on the archived retry.
                     var occurrence = db.RecurringOccurrences.Single(o => o.Id == occurrenceId);
                     Assert.Null(occurrence.SalesInvoiceId);
+                }
+            }
+        }
+
+        [SqliteFact]
+        public void Recurring_RunSchedule_NoNextRunDate_IsRejected_EvenWithCallerDate()
+        {
+            // Finding 1: with no NextRunDate (exhausted or never-scheduled), a manual run must be refused even when
+            // the caller names a date — otherwise an exhausted schedule could be run outside the next-occurrence flow.
+            var seedDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 2);
+            int scheduleId = SeedSalesSchedule("NO-NEXT", RecurringAction.CreateDraft, seedDate, _ownerId);
+
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                // Put the schedule in the exhausted-but-active state: no next run date.
+                var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                schedule.NextRunDate = null;
+                db.SaveChanges();
+
+                var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+
+                // Caller-supplied date must not be accepted.
+                var ex1 = Assert.Throws<InvalidRunDateException>(() =>
+                    generation.RunSchedule(scheduleId, seedDate, "run-x", DateTime.UtcNow.AddMinutes(5)));
+                Assert.Contains("no next run date", ex1.Message, StringComparison.OrdinalIgnoreCase);
+
+                // And the default (no date) path is equally refused.
+                var ex2 = Assert.Throws<InvalidRunDateException>(() =>
+                    generation.RunSchedule(scheduleId, null, "run-x", DateTime.UtcNow.AddMinutes(5)));
+                Assert.Contains("no next run date", ex2.Message, StringComparison.OrdinalIgnoreCase);
+
+                Assert.Empty(db.RecurringOccurrences.Where(o => o.RecurringScheduleId == scheduleId));
+            }
+        }
+
+        [SqliteFact]
+        public void Recurring_RetryOccurrence_MidSeries_DoesNotEndSchedule()
+        {
+            // A retry of a non-final failed occurrence must not end the schedule: the series still has runs left, so
+            // NextRunDate stays set and the schedule stays Active after a successful retry.
+            var runMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var runDate = runMonth.AddDays(19); // 20th
+            int scheduleId = SeedSalesSchedule("MID-RETRY", RecurringAction.AutoIssue, runDate, _ownerId);
+
+            int occurrenceId;
+            DateTime advancedNextRunDate;
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    // No end/max: the series continues indefinitely, so this occurrence is not the final one.
+                    var setting = db.CompanySettings.Single();
+                    setting.BooksLockedThrough = runMonth.AddMonths(1).AddDays(-1);
+                    db.SaveChanges();
+
+                    var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+                    var failed = generation.RunSchedule(scheduleId, null, "run-1", DateTime.UtcNow.AddMinutes(5));
+                    Assert.Equal(RecurringGenerationOutcome.Failed, failed.Outcome);
+
+                    var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                    advancedNextRunDate = schedule.NextRunDate!.Value; // advanced to next month (non-null)
+                    occurrenceId = db.RecurringOccurrences.Single(o => o.RecurringScheduleId == scheduleId).Id;
+                }
+            }
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var setting = db.CompanySettings.Single();
+                    setting.BooksLockedThrough = null;
+                    db.SaveChanges();
+
+                    var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+                    var retry = generation.RetryOccurrence(occurrenceId, "retry-1", DateTime.UtcNow.AddMinutes(5));
+                    Assert.NotEqual(RecurringGenerationOutcome.Aborted, retry.Outcome);
+
+                    var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                    Assert.Equal(RecurringScheduleStatus.Active, schedule.Status); // not ended
+                    Assert.Equal(advancedNextRunDate, schedule.NextRunDate);       // series unchanged by retry
                 }
             }
         }

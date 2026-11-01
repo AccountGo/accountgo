@@ -35,8 +35,10 @@ namespace Services.Recurring
         /// #480: runs the schedule's next due occurrence manually and advances the series by one.
         ///
         /// A manual run always generates the schedule's current
-        /// <see cref="Core.Domain.Recurring.RecurringSchedule.NextRunDate"/>; when <paramref name="runDate"/> is
-        /// supplied it must equal that date (a guard against silently skipping intervening periods) or
+        /// <see cref="Core.Domain.Recurring.RecurringSchedule.NextRunDate"/>; it is rejected when there is no next
+        /// run date (an exhausted or never-scheduled schedule has nothing to run — recover a failed past occurrence
+        /// through <see cref="RetryOccurrence"/> instead). When <paramref name="runDate"/> is supplied it must equal
+        /// that next date (a guard against silently skipping intervening periods) or
         /// <see cref="InvalidRunDateException"/> is thrown. The single idempotent occurrence for that date is
         /// ensured and processed through <see cref="EnsureOccurrence"/> + <see cref="ProcessOccurrence"/>, then
         /// <c>NextRunDate</c> advances by exactly one calendar step, respecting the end date and occurrence limit.
@@ -55,8 +57,11 @@ namespace Services.Recurring
         /// under <paramref name="leaseOwner"/> and processes it again against its own idempotency key. This never
         /// advances the schedule's <see cref="Core.Domain.Recurring.RecurringSchedule.NextRunDate"/>: a retry of an
         /// earlier run must not move the series. If the customer has since been archived the schedule is paused
-        /// instead of producing a document. Returns <see cref="RecurringGenerationOutcome.Aborted"/> when the
-        /// occurrence cannot be retried (missing, already completed, or held by a live lease).
+        /// instead of producing a document. When the retried occurrence was the schedule's last allowed run — the
+        /// series is exhausted but the schedule was left Active by the failed final run — a now-successful retry
+        /// finalizes the schedule as <see cref="Core.Domain.Recurring.RecurringScheduleStatus.Ended"/>. Returns
+        /// <see cref="RecurringGenerationOutcome.Aborted"/> when the occurrence cannot be retried (missing, already
+        /// completed, or held by a live lease).
         /// </summary>
         RecurringGenerationResult RetryOccurrence(int occurrenceId, string leaseOwner, DateTime leaseUntil);
     }
