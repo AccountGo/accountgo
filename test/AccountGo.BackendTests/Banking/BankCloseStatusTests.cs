@@ -200,12 +200,18 @@ public class BankCloseStatusTests
             .Returns(new List<BalanceSheet>());
         var sales = new Mock<ISalesService>(MockBehavior.Loose);
         var purchasing = new Mock<IPurchasingService>(MockBehavior.Loose);
+        var auth = new Mock<Core.Authorization.IAccessAuthorizationService>();
+        var domains = new HashSet<string> { "financials" };
+        if (permissions.Contains(SystemPermissions.BankingAccountsView)) domains.Add("banking");
+        auth.Setup(a => a.GetAuthorizedDashboardDomains(It.IsAny<Core.Authorization.AccessActorContext?>())).Returns(domains);
+
         return new DashboardService(
             financial.Object,
             sales.Object,
             purchasing.Object,
             harness.Banks,
-            new BankingTestHarness.FakeTenant(1, permissions));
+            new BankingTestHarness.FakeTenant(1, permissions),
+            auth.Object);
     }
 
     [Fact]

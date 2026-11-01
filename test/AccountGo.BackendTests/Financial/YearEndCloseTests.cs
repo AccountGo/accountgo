@@ -5,6 +5,7 @@
 using System;
 using System.Globalization;
 using System.Linq;
+using Core.Authorization;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -268,7 +269,8 @@ public class YearEndCloseTests
                 Mock.Of<IRepository<Item>>(),
                 GlSettings,
                 Settings,
-                booksLockGuard: Guard);
+                booksLockGuard: Guard,
+                auth: Mock.Of<IAccessAuthorizationService>(a => a.Authorize(It.IsAny<string>(), It.IsAny<AccessResourceContext>(), It.IsAny<AccessActorContext>()) == AccessDecision.Allow("test", "test", "test")));
 
             YearEnd = new YearEndCloseService(
                 Financial,

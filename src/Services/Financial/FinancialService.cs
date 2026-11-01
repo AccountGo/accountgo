@@ -58,6 +58,8 @@ namespace Services.Financial
         private readonly Services.Banking.IReconciledPeriodGuard _reconciledPeriodGuard;
         private readonly IBooksLockGuard _booksLockGuard;
         private readonly Core.Authorization.IAccessAuthorizationService _auth;
+        private readonly IRepository<Core.Domain.Auditing.AuditLog> _auditLogRepo;
+        private readonly Microsoft.AspNetCore.Http.IHttpContextAccessor _httpContextAccessor;
 
         private static readonly System.Threading.AsyncLocal<int> AllowClosingEntriesDepth = new();
 
@@ -93,11 +95,15 @@ namespace Services.Financial
             IRepository<BankStatementLine> bankStatementLineRepo = null,
             Services.Banking.IReconciledPeriodGuard reconciledPeriodGuard = null,
             IBooksLockGuard booksLockGuard = null,
-            Core.Authorization.IAccessAuthorizationService auth = null
+            Core.Authorization.IAccessAuthorizationService auth = null,
+            IRepository<Core.Domain.Auditing.AuditLog> auditLogRepo = null,
+            Microsoft.AspNetCore.Http.IHttpContextAccessor httpContextAccessor = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
             _auth = auth;
+            _auditLogRepo = auditLogRepo;
+            _httpContextAccessor = httpContextAccessor;
             _entitlements = entitlements;
             _booksLockGuard = booksLockGuard;
             _inventoryService = inventoryService;
@@ -142,14 +148,9 @@ namespace Services.Financial
         {
             if (_auth != null)
             {
-                var actor = _auth.ResolveActorContext();
-                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
-                    !string.IsNullOrWhiteSpace(actor.UserId))
-                {
-                    var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView, actorOverride: actor);
-                    if (!decision.Allowed)
-                        return new Dto.Financial.GeneralLedgerTransactionPage { Items = new List<Dto.Financial.GeneralLedgerTransaction>(), TotalCount = 0 };
-                }
+                var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView);
+                if (!decision.Allowed)
+                    return new Dto.Financial.GeneralLedgerTransactionPage { Items = new List<Dto.Financial.GeneralLedgerTransaction>(), TotalCount = 0 };
             }
 
             if (skip < 0) throw new ArgumentOutOfRangeException(nameof(skip), "Skip must be zero or greater.");
@@ -329,17 +330,12 @@ namespace Services.Financial
 
         public IEnumerable<Account> GetAccounts()
         {
-            if (_auth != null)
-            {
-                var actor = _auth.ResolveActorContext();
-                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
-                    !string.IsNullOrWhiteSpace(actor.UserId))
-                {
-                    var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsView, actorOverride: actor);
-                    if (!decision.Allowed)
-                        return Enumerable.Empty<Account>();
-                }
-            }
+            if (_auth == null)
+                return Enumerable.Empty<Account>();
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsView);
+            if (!decision.Allowed)
+                return Enumerable.Empty<Account>();
 
             var accounts = _accountRepo.GetAllIncluding(c => c.Company,
                 a => a.AccountClass,
@@ -353,17 +349,12 @@ namespace Services.Financial
 
         public Account GetAccount(int id)
         {
-            if (_auth != null)
-            {
-                var actor = _auth.ResolveActorContext();
-                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
-                    !string.IsNullOrWhiteSpace(actor.UserId))
-                {
-                    var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsView, actorOverride: actor);
-                    if (!decision.Allowed)
-                        return null;
-                }
-            }
+            if (_auth == null)
+                return null;
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsView);
+            if (!decision.Allowed)
+                return null;
 
             var account = _accountRepo.GetAllIncluding(a => a.GeneralLedgerLines,
                 a => a.AccountClass,
@@ -378,6 +369,12 @@ namespace Services.Financial
 
         public Account GetAccountByAccountCode(string accountcode)
         {
+            if (_auth == null)
+                return null;
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsView);
+            if (!decision.Allowed)
+                return null;
             var account = _accountRepo.GetAllIncluding(a => a.GeneralLedgerLines,
                 a => a.AccountClass,
                 a => a.ChildAccounts,
@@ -467,6 +464,13 @@ namespace Services.Financial
 
         public IEnumerable<JournalEntryHeader> GetJournalEntries()
         {
+            if (_auth == null)
+                return Enumerable.Empty<JournalEntryHeader>();
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView);
+            if (!decision.Allowed)
+                return Enumerable.Empty<JournalEntryHeader>();
+
             var journalEntries = _journalEntryRepo.GetAllIncluding(je => je.JournalEntryLines,
                 je => je.Party,
                 je => je.GeneralLedgerHeader,
@@ -497,18 +501,20 @@ namespace Services.Financial
 
         public void AddJournalEntry(JournalEntryHeader journalEntry)
         {
-            if (_auth != null)
+            if (_auth == null)
+                throw new InvalidOperationException("Authorization service dependency is required.");
+
+            if (journalEntry?.VoucherType == JournalVoucherTypes.ClosingEntries && AllowClosingEntriesDepth.Value > 0)
             {
-                var actor = _auth.ResolveActorContext();
-                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
-                    !string.IsNullOrWhiteSpace(actor.UserId))
-                {
-                    if (actor.MembershipStatus != Core.Domain.CompanyMemberStatus.Active ||
-                        !actor.FunctionalPermissions.Contains(Core.Authorization.AccessOperationCatalog.FinancialsJournalCreate))
-                    {
-                        throw new InvalidOperationException("Unauthorized to create journal entry.");
-                    }
-                }
+                var closeDecision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose);
+                if (!closeDecision.Allowed)
+                    throw new InvalidOperationException(closeDecision.SafeMessage ?? "Unauthorized to close fiscal period.");
+            }
+            else
+            {
+                var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalCreate);
+                if (!decision.Allowed)
+                    throw new InvalidOperationException(decision.SafeMessage ?? "Unauthorized to create journal entry.");
             }
 
             ValidateJournalVoucherRules(journalEntry);
@@ -1900,6 +1906,13 @@ namespace Services.Financial
 
         public void UpdateAccount(Account account)
         {
+            if (_auth == null)
+                throw new InvalidOperationException("Authorization service dependency is required.");
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsManage);
+            if (!decision.Allowed)
+                throw new InvalidOperationException(decision.SafeMessage ?? "Unauthorized to update account.");
+
             if (account.IsContraAccount && account.ContraAccounts.Count > 0)
                 throw new Exception("An account cannot have contra account if the account is already contra account.");
 
@@ -1909,7 +1922,7 @@ namespace Services.Financial
             if (account.ParentAccountId.HasValue && account.ParentAccountId.Value != -1)
             {
                 var parent = GetAccount(account.ParentAccountId.Value);
-                if (account.Id == parent.ParentAccountId)
+                if (parent != null && account.Id == parent.ParentAccountId)
                     throw new Exception("Cyclic parent/child account.");
             }
 
@@ -1918,6 +1931,13 @@ namespace Services.Financial
 
         public void AddAccount(Account account)
         {
+            if (_auth == null)
+                throw new InvalidOperationException("Authorization service dependency is required.");
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsManage);
+            if (!decision.Allowed)
+                throw new InvalidOperationException(decision.SafeMessage ?? "Unauthorized to add account.");
+
             if (account.IsContraAccount && account.ContraAccounts.Count > 0)
                 throw new Exception("An account cannot have contra account if the account is already contra account.");
 
@@ -1927,7 +1947,7 @@ namespace Services.Financial
             if (account.ParentAccountId.HasValue)
             {
                 var parent = GetAccount(account.ParentAccountId.Value);
-                if (account.Id == parent.ParentAccountId)
+                if (parent != null && account.Id == parent.ParentAccountId)
                     throw new Exception("Cyclic parent/child account.");
             }
 
@@ -1936,6 +1956,13 @@ namespace Services.Financial
 
         public JournalEntryHeader GetJournalEntry(int id, bool fromGL = false)
         {
+            if (_auth == null)
+                return null;
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView);
+            if (!decision.Allowed)
+                return null;
+
             if (fromGL)
             {
                 var je = _journalEntryRepo.GetAllIncluding(j => j.GeneralLedgerHeader,
@@ -1965,17 +1992,105 @@ namespace Services.Financial
             if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("Posted journal entries cannot be edited or posted again.");
 
-            if (_auth != null)
+            if (_auth == null)
+                throw new InvalidOperationException("Authorization service dependency is required.");
+
+            string aprHeader = null;
+            if (posted)
             {
-                var actor = _auth.ResolveActorContext();
-                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
-                    !string.IsNullOrWhiteSpace(actor.UserId))
+                if (journalEntry.VoucherType == JournalVoucherTypes.ClosingEntries && AllowClosingEntriesDepth.Value > 0)
                 {
-                    var perm = posted ? Core.Authorization.AccessOperationCatalog.FinancialsJournalPost : Core.Authorization.AccessOperationCatalog.FinancialsJournalCreate;
-                    if (actor.MembershipStatus != Core.Domain.CompanyMemberStatus.Active ||
-                        !actor.FunctionalPermissions.Contains(perm))
+                    var closeDecision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose);
+                    if (!closeDecision.Allowed)
+                        throw new InvalidOperationException(closeDecision.SafeMessage ?? "Unauthorized to close fiscal period.");
+                }
+                else
+                {
+                    string persistedPreparer = null;
+                    if (_auditLogRepo != null && journalEntry.Id > 0)
                     {
-                        throw new InvalidOperationException(posted ? "Unauthorized to post journal entry." : "Unauthorized to update journal entry.");
+                        var idStr = journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        persistedPreparer = _auditLogRepo.Table
+                            .Where(a => a.TableName == "__JournalEntryPreparer" && a.RecordId == idStr)
+                            .OrderByDescending(a => a.Id)
+                            .Select(a => a.NewValue)
+                            .FirstOrDefault();
+                    }
+
+                    var actor = _auth.ResolveActorContext();
+                    var effectivePreparer = persistedPreparer ?? actor?.UserId ?? "system:draft-preparer";
+
+                    var req = _httpContextAccessor?.HttpContext?.Request;
+                    aprHeader = req?.Headers["X-Approval-Request-Id"].FirstOrDefault();
+                    var approverHeader = req?.Headers["X-Approved-By-User-Id"].FirstOrDefault();
+
+                    var isAlreadyPosted = journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue;
+                    var postResource = new Core.Authorization.AccessResourceContext
+                    {
+                        WorkspaceCompanyId = journalEntry.CompanyId > 0 ? journalEntry.CompanyId : null,
+                        ResourceCompanyId = journalEntry.CompanyId > 0 ? journalEntry.CompanyId : null,
+                        ResourceType = "JournalEntry",
+                        ResourceId = journalEntry.Id > 0 ? journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
+                        WorkflowState = isAlreadyPosted ? "Posted" : "Draft",
+                        IsPeriodLockedOrClosed = false,
+                        PreparedByUserId = effectivePreparer,
+                        IndependentApproverUserId = approverHeader,
+                        ApprovalRequestId = aprHeader
+                    };
+
+                    var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, postResource);
+                    if (!decision.Allowed)
+                        throw new InvalidOperationException(decision.SafeMessage ?? "Unauthorized to post journal entry.");
+                }
+            }
+            else
+            {
+                if (journalEntry.VoucherType == JournalVoucherTypes.ClosingEntries && AllowClosingEntriesDepth.Value > 0)
+                {
+                    var closeDecision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose);
+                    if (!closeDecision.Allowed)
+                        throw new InvalidOperationException(closeDecision.SafeMessage ?? "Unauthorized to close fiscal period.");
+                }
+                else
+                {
+                    var editResource = new Core.Authorization.AccessResourceContext
+                    {
+                        WorkspaceCompanyId = journalEntry.CompanyId > 0 ? journalEntry.CompanyId : null,
+                        ResourceCompanyId = journalEntry.CompanyId > 0 ? journalEntry.CompanyId : null,
+                        ResourceType = "JournalEntry",
+                        ResourceId = journalEntry.Id > 0 ? journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
+                        WorkflowState = "Draft"
+                    };
+                    var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalCreate, editResource);
+                    if (!decision.Allowed)
+                        throw new InvalidOperationException(decision.SafeMessage ?? "Unauthorized to update journal entry.");
+
+                    if (_auditLogRepo != null && journalEntry.Id > 0)
+                    {
+                        var idStr = journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        var pendingApprovals = _auditLogRepo.Table
+                            .Where(a => a.TableName == "__AccessDelegationApproval" &&
+                                        a.OriginalValue == "Approved")
+                            .ToList();
+
+                        foreach (var row in pendingApprovals)
+                        {
+                            if (string.IsNullOrWhiteSpace(row.NewValue)) continue;
+                            try
+                            {
+                                var p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(row.NewValue);
+                                if (p != null &&
+                                    string.Equals(p.OperationKey, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) &&
+                                    string.Equals(p.ResourceId, idStr, StringComparison.Ordinal))
+                                {
+                                    row.OriginalValue = "Revoked";
+                                    p.Status = "Revoked";
+                                    row.NewValue = System.Text.Json.JsonSerializer.Serialize(p);
+                                    _auditLogRepo.Update(row);
+                                }
+                            }
+                            catch { }
+                        }
                     }
                 }
             }
@@ -2015,6 +2130,29 @@ namespace Services.Financial
                     {
                         journalEntry.GeneralLedgerHeader = glEntry;
                         journalEntry.Posted = true;
+
+                        if (_auditLogRepo != null && !string.IsNullOrWhiteSpace(aprHeader))
+                        {
+                            var approvalRow = _auditLogRepo.Table
+                                .FirstOrDefault(a => a.TableName == "__AccessDelegationApproval" &&
+                                                    a.RecordId == aprHeader &&
+                                                    a.OriginalValue == "Approved");
+                            if (approvalRow != null && !string.IsNullOrWhiteSpace(approvalRow.NewValue))
+                            {
+                                try
+                                {
+                                    var p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(approvalRow.NewValue);
+                                    if (p != null)
+                                    {
+                                        approvalRow.OriginalValue = "Consumed";
+                                        p.Status = "Consumed";
+                                        approvalRow.NewValue = System.Text.Json.JsonSerializer.Serialize(p);
+                                        _auditLogRepo.Update(approvalRow);
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
                     }
                 }
             }
@@ -2024,14 +2162,30 @@ namespace Services.Financial
 
         public GeneralLedgerHeader GetGeneralLedgerHeader(int id)
         {
+            if (_auth == null)
+                return null;
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView);
+            if (!decision.Allowed)
+                return null;
+
             return _generalLedgerRepository.Table.Where(gl => gl.Id == id).FirstOrDefault();
         }
 
-        public IEnumerable<GeneralLedgerLine> GetGeneralLedgerLines(int generalLedgerHeaderId) =>
-            _generalLedgerRepository.GetAllIncluding(gl => gl.GeneralLedgerLines)
+        public IEnumerable<GeneralLedgerLine> GetGeneralLedgerLines(int generalLedgerHeaderId)
+        {
+            if (_auth == null)
+                return Enumerable.Empty<GeneralLedgerLine>();
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView);
+            if (!decision.Allowed)
+                return Enumerable.Empty<GeneralLedgerLine>();
+
+            return _generalLedgerRepository.GetAllIncluding(gl => gl.GeneralLedgerLines)
                 .Where(gl => gl.Id == generalLedgerHeaderId)
                 .SelectMany(gl => gl.GeneralLedgerLines)
                 .ToList();
+        }
 
         /// <summary>
         /// An entry that undoes another, not yet saved: the same lines with debits and credits swapped, dated on the

@@ -52,12 +52,19 @@ public class DashboardMoneyInBankTests
         var permissions = canViewBanks
             ? new HashSet<string> { SystemPermissions.FinancialsAccountsView, SystemPermissions.BankingAccountsView }
             : new HashSet<string> { SystemPermissions.FinancialsAccountsView };
+
+        var auth = new Mock<Core.Authorization.IAccessAuthorizationService>();
+        var domains = new HashSet<string> { "financials" };
+        if (canViewBanks) domains.Add("banking");
+        auth.Setup(a => a.GetAuthorizedDashboardDomains(It.IsAny<Core.Authorization.AccessActorContext?>())).Returns(domains);
+
         var service = new DashboardService(
             financial.Object,
             new Mock<ISalesService>(MockBehavior.Loose).Object,
             new Mock<IPurchasingService>(MockBehavior.Loose).Object,
             harness.Banks,
-            new BankingTestHarness.FakeTenant(1, permissions));
+            new BankingTestHarness.FakeTenant(1, permissions),
+            auth.Object);
         return service.GetDashboardSummary().Kpis;
     }
 

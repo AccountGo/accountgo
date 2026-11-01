@@ -37,21 +37,22 @@ namespace Api.Authorization
 
         public static long BumpGlobalSecurityRevision() => Interlocked.Increment(ref _globalSecurityRevision);
 
-        public sealed record PersistedAccessApprovalPayload
+        public static string ComputeJournalFingerprint(
+            DateTime date,
+            string? memo,
+            int voucherType,
+            IEnumerable<(int AccountId, DrOrCrSide DrCr, decimal Amount, string? Memo)> lines)
         {
-            public string RequestId { get; init; } = string.Empty;
-            public int CompanyId { get; init; }
-            public string ApproverUserId { get; init; } = string.Empty;
-            public string OperationKey { get; init; } = string.Empty;
-            public int? TargetMemberId { get; init; }
-            public string? TargetUserId { get; init; }
-            public string? TargetEmail { get; init; }
-            public string? ResourceId { get; init; }
-            public int[] SecurityRoleIds { get; init; } = Array.Empty<int>();
-            public string PolicyVersion { get; init; } = string.Empty;
-            public DateTimeOffset CreatedAtUtc { get; init; }
-            public DateTimeOffset ExpiresAtUtc { get; init; }
-            public string Status { get; set; } = "Approved";
+            var lineParts = (lines ?? Enumerable.Empty<(int, DrOrCrSide, decimal, string?)>())
+                .OrderBy(l => l.AccountId)
+                .ThenBy(l => l.DrCr)
+                .ThenBy(l => l.Amount)
+                .Select(l => $"{l.AccountId}:{l.DrCr}:{l.Amount.ToString("F4", CultureInfo.InvariantCulture)}:{l.Memo}");
+
+            var raw = $"{date:yyyy-MM-dd}:{memo}:{voucherType}:{string.Join("|", lineParts)}";
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(raw));
+            return Convert.ToHexString(hash);
         }
 
         /// <summary>
@@ -285,11 +286,11 @@ namespace Api.Authorization
                 AccessOperationCatalog.TryGet(AccessOperationCatalog.ForPermission(requiredPermissionsAll[0]), out catalogPolicy);
             }
 
-            var actor = ResolveActorContext(actorOverride);
-
-            if (catalogPolicy != null)
+            try
             {
-                try
+                var actor = ResolveActorContext(actorOverride);
+
+                if (catalogPolicy != null)
                 {
                     var catalogDecision = EvaluatePolicyAsync(catalogPolicy, resource, actor, CancellationToken.None)
                         .GetAwaiter()
@@ -300,68 +301,53 @@ namespace Api.Authorization
                         return catalogDecision;
                     }
                 }
-                catch (Exception ex)
+
+                // Evaluate additional ad-hoc requirement constraints
+                var hasExtraGov = allowedGovernanceRoles is { Count: > 0 };
+                var hasExtraPermsAll = requiredPermissionsAll is { Count: > 0 };
+                var hasExtraPermsAny = requiredPermissionsAny is { Count: > 0 };
+                var hasExtraModules = requiredModulesAny is { Count: > 0 };
+                var hasExtraFeature = !string.IsNullOrWhiteSpace(requiredFeature);
+
+                if (catalogPolicy == null || hasExtraGov || hasExtraPermsAll || hasExtraPermsAny || hasExtraModules || hasExtraFeature)
                 {
-                    _logger?.LogError(ex, "Authorization dependency failure during catalog check '{OperationKey}'. Failing closed.", syntheticKey);
-                    return AccessDecision.Deny(
-                        AccessReasonCode.PolicyDependencyFailure,
-                        syntheticKey,
-                        catalogPolicy.PolicyId,
-                        catalogPolicy.PolicyVersion,
-                        StatusCodes.Status503ServiceUnavailable,
-                        "Authorization Unavailable",
-                        "Access could not be verified due to an internal policy dependency error.");
-                }
-            }
+                    var effectiveDomain = (hasExtraGov && (hasExtraPermsAll || hasExtraPermsAny))
+                        ? AccessPolicyDomain.WorkspaceComposite
+                        : (hasExtraGov ? AccessPolicyDomain.WorkspaceGovernance : domain);
 
-            // Evaluate additional ad-hoc requirement constraints
-            var hasExtraGov = allowedGovernanceRoles is { Count: > 0 };
-            var hasExtraPermsAll = requiredPermissionsAll is { Count: > 0 };
-            var hasExtraPermsAny = requiredPermissionsAny is { Count: > 0 };
-            var hasExtraModules = requiredModulesAny is { Count: > 0 };
-            var hasExtraFeature = !string.IsNullOrWhiteSpace(requiredFeature);
+                    var adhocPolicy = new AccessOperationPolicy
+                    {
+                        OperationKey = syntheticKey,
+                        PolicyId = $"POL-REQ-{syntheticKey.ToUpperInvariant()}",
+                        PolicyVersion = CatalogVersion,
+                        Domain = effectiveDomain,
+                        AllowedGovernanceRoles = allowedGovernanceRoles ?? Array.Empty<CompanyMemberRole>(),
+                        RequiredPermissionsAll = requiredPermissionsAll ?? Array.Empty<string>(),
+                        RequiredPermissionsAny = requiredPermissionsAny ?? Array.Empty<string>(),
+                        RequiredModulesAny = requiredModulesAny ?? Array.Empty<string>(),
+                        RequiredFeature = requiredFeature,
+                        RequiresResolvedTenant = true
+                    };
 
-            if (catalogPolicy == null || hasExtraGov || hasExtraPermsAll || hasExtraPermsAny || hasExtraModules || hasExtraFeature)
-            {
-                var effectiveDomain = (hasExtraGov && (hasExtraPermsAll || hasExtraPermsAny))
-                    ? AccessPolicyDomain.WorkspaceComposite
-                    : (hasExtraGov ? AccessPolicyDomain.WorkspaceGovernance : domain);
-
-                var adhocPolicy = new AccessOperationPolicy
-                {
-                    OperationKey = syntheticKey,
-                    PolicyId = $"POL-REQ-{syntheticKey.ToUpperInvariant()}",
-                    PolicyVersion = CatalogVersion,
-                    Domain = effectiveDomain,
-                    AllowedGovernanceRoles = allowedGovernanceRoles ?? Array.Empty<CompanyMemberRole>(),
-                    RequiredPermissionsAll = requiredPermissionsAll ?? Array.Empty<string>(),
-                    RequiredPermissionsAny = requiredPermissionsAny ?? Array.Empty<string>(),
-                    RequiredModulesAny = requiredModulesAny ?? Array.Empty<string>(),
-                    RequiredFeature = requiredFeature,
-                    RequiresResolvedTenant = true
-                };
-
-                try
-                {
                     return EvaluatePolicyAsync(adhocPolicy, resource, actor, CancellationToken.None)
                         .GetAwaiter()
                         .GetResult();
                 }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Authorization dependency failure during requirement check '{OperationKey}'. Failing closed.", syntheticKey);
-                    return AccessDecision.Deny(
-                        AccessReasonCode.PolicyDependencyFailure,
-                        syntheticKey,
-                        adhocPolicy.PolicyId,
-                        adhocPolicy.PolicyVersion,
-                        StatusCodes.Status503ServiceUnavailable,
-                        "Authorization Unavailable",
-                        "Access could not be verified due to an internal policy dependency error.");
-                }
-            }
 
-            return AccessDecision.Allow(catalogPolicy.OperationKey, catalogPolicy.PolicyId, catalogPolicy.PolicyVersion);
+                return AccessDecision.Allow(catalogPolicy.OperationKey, catalogPolicy.PolicyId, catalogPolicy.PolicyVersion);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Authorization dependency failure during requirement check '{OperationKey}'. Failing closed.", syntheticKey);
+                return AccessDecision.Deny(
+                    AccessReasonCode.PolicyDependencyFailure,
+                    syntheticKey,
+                    catalogPolicy?.PolicyId ?? $"POL-REQ-{syntheticKey.ToUpperInvariant()}",
+                    catalogPolicy?.PolicyVersion ?? CatalogVersion,
+                    StatusCodes.Status503ServiceUnavailable,
+                    "Authorization Unavailable",
+                    "Access could not be verified due to an internal policy dependency error.");
+            }
         }
 
         public IReadOnlySet<string> GetAuthorizedDashboardDomains(AccessActorContext? actorOverride = null)
@@ -487,6 +473,16 @@ namespace Api.Authorization
             var resolvedCompanyId = companyId ?? (_tenantContext.IsResolved && _db == null ? 1 : null);
             if (_tenantContext.IsResolved && resolvedCompanyId.HasValue)
             {
+                if (_db != null && string.IsNullOrWhiteSpace(effectiveUserId) && _tenantContext.Role.HasValue)
+                {
+                    var autoMember = _db.CompanyMembers.AsNoTracking()
+                        .FirstOrDefault(m => m.CompanyId == resolvedCompanyId.Value && m.Role == _tenantContext.Role.Value && m.Status == CompanyMemberStatus.Active);
+                    if (autoMember != null)
+                    {
+                        effectiveUserId = autoMember.UserId;
+                    }
+                }
+
                 if (_db != null && !string.IsNullOrWhiteSpace(effectiveUserId))
                 {
                     var isCompanyDeleted = _db.Companies.AsNoTracking()
@@ -1374,9 +1370,37 @@ namespace Api.Authorization
                     {
                         continue;
                     }
+
+                    var je = int.TryParse(resource?.ResourceId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var jId)
+                        ? await _db.JournalEntryHeaders.AsNoTracking()
+                            .Include(j => j.JournalEntryLines)
+                            .FirstOrDefaultAsync(j => j.CompanyId == companyId.Value && j.Id == jId, cancellationToken)
+                        : null;
+
+                    if (je != null)
+                    {
+                        if (string.IsNullOrWhiteSpace(payload.ResourceFingerprint))
+                            continue;
+
+                        var currentFingerprint = ComputeJournalFingerprint(
+                            je.Date,
+                            je.Memo,
+                            (int)(je.VoucherType ?? 0),
+                            je.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                        if (!string.Equals(payload.ResourceFingerprint, currentFingerprint, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+                    }
                 }
                 else
                 {
+                    if (!string.IsNullOrWhiteSpace(operationKey) &&
+                        !string.Equals(payload.OperationKey, operationKey, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     var targetMatched =
                         (resource?.TargetMemberId.HasValue == true && payload.TargetMemberId == resource.TargetMemberId) ||
                         (!string.IsNullOrWhiteSpace(resource?.TargetUserId) && string.Equals(payload.TargetUserId, resource.TargetUserId, StringComparison.Ordinal)) ||
@@ -1464,6 +1488,23 @@ namespace Api.Authorization
                 .OrderBy(id => id)
                 .ToArray();
 
+            string? resourceFingerprint = null;
+            if (string.Equals(operationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) &&
+                int.TryParse(resourceId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var jId))
+            {
+                var je = await db.JournalEntryHeaders.AsNoTracking()
+                    .Include(j => j.JournalEntryLines)
+                    .FirstOrDefaultAsync(j => j.CompanyId == companyId && j.Id == jId, cancellationToken);
+                if (je != null)
+                {
+                    resourceFingerprint = ComputeJournalFingerprint(
+                        je.Date,
+                        je.Memo,
+                        (int)(je.VoucherType ?? 0),
+                        je.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                }
+            }
+
             var payload = new PersistedAccessApprovalPayload
             {
                 RequestId = requestId,
@@ -1474,6 +1515,7 @@ namespace Api.Authorization
                 TargetUserId = targetUserId,
                 TargetEmail = targetEmail?.Trim().ToLowerInvariant(),
                 ResourceId = resourceId,
+                ResourceFingerprint = resourceFingerprint,
                 SecurityRoleIds = sortedRoles,
                 PolicyVersion = AccessOperationCatalog.CurrentVersion,
                 CreatedAtUtc = now,
@@ -1540,7 +1582,47 @@ namespace Api.Authorization
             return true;
         }
 
-        public static async Task ConsumeMatchingApprovalAsync(
+        public static async Task InvalidateApprovalsForResourceAsync(
+            ApiDbContext db,
+            int companyId,
+            string operationKey,
+            string resourceId,
+            CancellationToken cancellationToken = default)
+        {
+            var rows = await db.AuditLogs
+                .Where(a => a.CompanyId == companyId &&
+                            a.TableName == ApprovalAuditTableName &&
+                            a.OriginalValue == "Approved")
+                .ToListAsync(cancellationToken);
+
+            var modified = false;
+            foreach (var row in rows)
+            {
+                if (string.IsNullOrWhiteSpace(row.NewValue)) continue;
+                try
+                {
+                    var p = JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(row.NewValue);
+                    if (p != null &&
+                        string.Equals(p.OperationKey, operationKey, StringComparison.Ordinal) &&
+                        string.Equals(p.ResourceId, resourceId, StringComparison.Ordinal))
+                    {
+                        row.OriginalValue = "Revoked";
+                        p.Status = "Revoked";
+                        row.NewValue = JsonSerializer.Serialize(p);
+                        modified = true;
+                    }
+                }
+                catch { }
+            }
+
+            if (modified)
+            {
+                await db.SaveChangesAsync(cancellationToken);
+                BumpGlobalSecurityRevision();
+            }
+        }
+
+        public static async Task<bool> ConsumeMatchingApprovalAsync(
             ApiDbContext db,
             int companyId,
             string? actorUserId,
@@ -1550,6 +1632,7 @@ namespace Api.Authorization
             IReadOnlyList<int>? requestedRoleIds,
             string? approvalRequestId = null,
             string? approverUserId = null,
+            string? operationKey = null,
             CancellationToken cancellationToken = default)
         {
             var rows = await db.AuditLogs
@@ -1560,7 +1643,7 @@ namespace Api.Authorization
                 .ToListAsync(cancellationToken);
 
             if (rows.Count == 0)
-                return;
+                return false;
 
             var requestedSorted = (requestedRoleIds ?? Array.Empty<int>()).Distinct().OrderBy(x => x).ToArray();
             var now = DateTimeOffset.UtcNow;
@@ -1583,6 +1666,10 @@ namespace Api.Authorization
                 if (payload == null || payload.Status != "Approved" || payload.ExpiresAtUtc <= now)
                     continue;
 
+                if (!string.IsNullOrWhiteSpace(operationKey) &&
+                    !string.Equals(payload.OperationKey, operationKey, StringComparison.Ordinal))
+                    continue;
+
                 if (!string.IsNullOrWhiteSpace(approvalRequestId) &&
                     !string.Equals(payload.RequestId, approvalRequestId, StringComparison.Ordinal))
                     continue;
@@ -1595,25 +1682,30 @@ namespace Api.Authorization
                     string.Equals(payload.ApproverUserId, actorUserId, StringComparison.Ordinal))
                     continue;
 
-                var targetMatched =
-                    (targetMemberId.HasValue && payload.TargetMemberId == targetMemberId) ||
-                    (!string.IsNullOrWhiteSpace(targetUserId) && string.Equals(payload.TargetUserId, targetUserId, StringComparison.Ordinal)) ||
-                    (!string.IsNullOrWhiteSpace(targetEmail) && string.Equals(payload.TargetEmail, targetEmail, StringComparison.OrdinalIgnoreCase));
+                if (requestedSorted.Length > 0)
+                {
+                    var targetMatched =
+                        (targetMemberId.HasValue && payload.TargetMemberId == targetMemberId) ||
+                        (!string.IsNullOrWhiteSpace(targetUserId) && string.Equals(payload.TargetUserId, targetUserId, StringComparison.Ordinal)) ||
+                        (!string.IsNullOrWhiteSpace(targetEmail) && string.Equals(payload.TargetEmail, targetEmail, StringComparison.OrdinalIgnoreCase));
 
-                if (!targetMatched)
-                    continue;
+                    if (!targetMatched)
+                        continue;
 
-                var approvedSorted = (payload.SecurityRoleIds ?? Array.Empty<int>()).Distinct().OrderBy(x => x).ToArray();
-                if (!approvedSorted.SequenceEqual(requestedSorted))
-                    continue;
+                    var approvedSorted = (payload.SecurityRoleIds ?? Array.Empty<int>()).Distinct().OrderBy(x => x).ToArray();
+                    if (!approvedSorted.SequenceEqual(requestedSorted))
+                        continue;
+                }
 
                 row.OriginalValue = "Consumed";
                 payload.Status = "Consumed";
                 row.NewValue = JsonSerializer.Serialize(payload);
                 await db.SaveChangesAsync(cancellationToken);
                 BumpGlobalSecurityRevision();
-                break;
+                return true;
             }
+
+            return false;
         }
     }
 }

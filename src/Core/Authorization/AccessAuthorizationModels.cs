@@ -322,4 +322,22 @@ namespace Core.Authorization
 
         void InvalidateContextCache();
     }
+
+    public sealed record PersistedAccessApprovalPayload
+    {
+        public string RequestId { get; init; } = string.Empty;
+        public int CompanyId { get; init; }
+        public string ApproverUserId { get; init; } = string.Empty;
+        public string OperationKey { get; init; } = string.Empty;
+        public int? TargetMemberId { get; init; }
+        public string? TargetUserId { get; init; }
+        public string? TargetEmail { get; init; }
+        public string? ResourceId { get; init; }
+        public string? ResourceFingerprint { get; init; }
+        public int[] SecurityRoleIds { get; init; } = Array.Empty<int>();
+        public string PolicyVersion { get; init; } = string.Empty;
+        public DateTimeOffset CreatedAtUtc { get; init; }
+        public DateTimeOffset ExpiresAtUtc { get; init; }
+        public string Status { get; set; } = "Approved";
+    }
 }
