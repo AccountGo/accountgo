@@ -32,20 +32,21 @@ namespace Services.Recurring
         RecurringGenerationResult ProcessOccurrence(int occurrenceId, string leaseOwner);
 
         /// <summary>
-        /// #480: runs one scheduled occurrence manually and advances the series.
+        /// #480: runs the schedule's next due occurrence manually and advances the series by one.
         ///
-        /// Resolves the run date (the schedule's <see cref="Core.Domain.Recurring.RecurringSchedule.NextRunDate"/>
-        /// when none is supplied), ensures and processes the single idempotent occurrence for it through
-        /// <see cref="EnsureOccurrence"/> + <see cref="ProcessOccurrence"/>, and then — only when the run moved the
-        /// series forward (the run date is on or after the current <c>NextRunDate</c>) — advances
-        /// <c>NextRunDate</c> to the next calendar date, respecting the end date and occurrence limit. A failed
-        /// attempt still advances the series: the failed occurrence is retried against its own key via
-        /// <see cref="RetryOccurrence"/>, never by rewinding <c>NextRunDate</c>.
+        /// A manual run always generates the schedule's current
+        /// <see cref="Core.Domain.Recurring.RecurringSchedule.NextRunDate"/>; when <paramref name="runDate"/> is
+        /// supplied it must equal that date (a guard against silently skipping intervening periods) or
+        /// <see cref="InvalidRunDateException"/> is thrown. The single idempotent occurrence for that date is
+        /// ensured and processed through <see cref="EnsureOccurrence"/> + <see cref="ProcessOccurrence"/>, then
+        /// <c>NextRunDate</c> advances by exactly one calendar step, respecting the end date and occurrence limit.
+        /// A failed attempt still advances the next date so the series does not stall, but it does not end the
+        /// schedule: the failed occurrence stays retryable via <see cref="RetryOccurrence"/>.
         ///
         /// Before any occurrence is created, if the schedule's customer has been archived the schedule is paused and
-        /// flagged for attention and no document is produced (a <see cref="RecurringGenerationOutcome.Aborted"/>
-        /// result carrying the reason). Throws <see cref="InvalidRunDateException"/> for a paused/ended schedule, an
-        /// off-calendar date, or one outside the schedule's window.
+        /// flagged for attention and no document is produced (an <see cref="RecurringGenerationOutcome.Aborted"/>
+        /// result carrying the reason). Throws <see cref="InvalidRunDateException"/> for a paused/ended schedule, a
+        /// mismatched run date, or when there is no next run date set.
         /// </summary>
         RecurringGenerationResult RunSchedule(int scheduleId, DateTime? runDate, string leaseOwner, DateTime leaseUntil);
 
@@ -53,7 +54,8 @@ namespace Services.Recurring
         /// #480: retries one specific occurrence by id. Re-claims the occurrence (a failed or crashed-mid-run row)
         /// under <paramref name="leaseOwner"/> and processes it again against its own idempotency key. This never
         /// advances the schedule's <see cref="Core.Domain.Recurring.RecurringSchedule.NextRunDate"/>: a retry of an
-        /// earlier run must not move the series. Returns <see cref="RecurringGenerationOutcome.Aborted"/> when the
+        /// earlier run must not move the series. If the customer has since been archived the schedule is paused
+        /// instead of producing a document. Returns <see cref="RecurringGenerationOutcome.Aborted"/> when the
         /// occurrence cannot be retried (missing, already completed, or held by a live lease).
         /// </summary>
         RecurringGenerationResult RetryOccurrence(int occurrenceId, string leaseOwner, DateTime leaseUntil);
