@@ -131,6 +131,38 @@ public static class NextDateCalculator
     }
 
     /// <summary>
+    /// Finds the zero-based position of <paramref name="target"/> in the schedule's series, or -1 if the target is
+    /// not a produced date. Walks only as far as the target (the series is ascending), so there is no fixed horizon
+    /// that would reject otherwise-valid far-future dates; a large safety cap guards against pathological input.
+    /// </summary>
+    public static int TryGetSeriesPosition(
+        RecurringCadence cadence,
+        int interval,
+        DateTime startDate,
+        int? dayOfMonth,
+        DateTime target)
+    {
+        if (interval < 1)
+            throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be at least 1.");
+
+        ValidateDayOfMonthForCadence(cadence, dayOfMonth, startDate);
+
+        var targetDate = target.Date;
+        const int safetyCap = 1_000_000; // far beyond any real schedule; prevents a runaway loop.
+
+        for (var position = 0; position < safetyCap; position++)
+        {
+            var current = ComputeDateAtPosition(cadence, interval, startDate, dayOfMonth, position).Date;
+            if (current == targetDate)
+                return position;
+            if (current > targetDate)
+                return -1; // ascending series passed the target without hitting it.
+        }
+
+        return -1;
+    }
+
+    /// <summary>
     /// Adjusts a date to the specified day of month, handling month-end edge cases.
     /// Day 31 means: last day of the month (31 Jan, 28/29 Feb, 31 Mar, 30 Apr, etc.)
     /// Values above 31 are clamped to the month's last day.
@@ -166,7 +198,9 @@ public static class NextDateCalculator
     }
 
     /// <summary>
-    /// Computes the service period start and end dates for a given document date.
+    /// Computes the service period start and end dates for a given document date (monthly semantics).
+    /// Overload kept for callers that bill a calendar month; see the cadence-aware overload for weekly,
+    /// quarterly, and yearly spans.
     /// </summary>
     /// <param name="documentDate">The invoice or bill date.</param>
     /// <param name="servicePeriodMode">Whether service is in current month or previous month.</param>
@@ -190,6 +224,61 @@ public static class NextDateCalculator
                 GetLastDayOfMonth(documentDate)
             )
         };
+    }
+
+    /// <summary>
+    /// Computes the service period for a document date using the schedule's cadence and interval, so the period
+    /// reflects what the run actually bills: a week for weekly, a calendar month for monthly, a quarter for
+    /// quarterly, a year for yearly. A truthful period is what lets the auto-issue same-month guard distinguish a
+    /// weekly run (which may sit inside one month) from a multi-month run, and stops two runs in one month from
+    /// recording the same period.
+    /// </summary>
+    public static (DateTime PeriodStart, DateTime PeriodEnd) ComputeServicePeriod(
+        DateTime documentDate,
+        RecurringServicePeriodMode servicePeriodMode,
+        RecurringCadence cadence,
+        int interval)
+    {
+        if (interval < 1)
+            interval = 1;
+
+        switch (cadence)
+        {
+            case RecurringCadence.Weekly:
+            {
+                // The run bills the week(s) it covers: the run date through interval*7 - 1 days later.
+                var start = documentDate.Date;
+                var end = start.AddDays(7 * interval - 1);
+                return (start, end);
+            }
+
+            case RecurringCadence.Monthly:
+                // Preserve the current/previous-month choice for calendar-month billing.
+                return ComputeServicePeriod(documentDate, servicePeriodMode);
+
+            case RecurringCadence.Quarterly:
+            {
+                var baseMonth = servicePeriodMode == RecurringServicePeriodMode.PreviousMonth
+                    ? documentDate.AddMonths(-1)
+                    : documentDate;
+                var start = new DateTime(baseMonth.Year, baseMonth.Month, 1);
+                var end = GetLastDayOfMonth(start.AddMonths(3 * interval - 1));
+                return (start, end);
+            }
+
+            case RecurringCadence.Yearly:
+            {
+                var baseMonth = servicePeriodMode == RecurringServicePeriodMode.PreviousMonth
+                    ? documentDate.AddMonths(-1)
+                    : documentDate;
+                var start = new DateTime(baseMonth.Year, baseMonth.Month, 1);
+                var end = GetLastDayOfMonth(start.AddMonths(12 * interval - 1));
+                return (start, end);
+            }
+
+            default:
+                return ComputeServicePeriod(documentDate, servicePeriodMode);
+        }
     }
 
     /// <summary>
