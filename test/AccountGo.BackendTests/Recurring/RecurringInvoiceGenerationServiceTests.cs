@@ -121,7 +121,8 @@ namespace AccountGo.BackendTests.Recurring
             RecurringAction action,
             string? automationEnabledBy = null,
             RecurringServicePeriodMode periodMode = RecurringServicePeriodMode.CurrentMonth,
-            RecurringCadence cadence = RecurringCadence.Monthly)
+            RecurringCadence cadence = RecurringCadence.Monthly,
+            RecurringScheduleStatus status = RecurringScheduleStatus.Active)
         {
             var schedule = new RecurringSchedule
             {
@@ -134,6 +135,7 @@ namespace AccountGo.BackendTests.Recurring
                 DayOfMonth = 1,
                 StartDate = new DateTime(2026, 1, 1),
                 Action = action,
+                Status = status,
                 ServicePeriodMode = periodMode,
                 AutomationEnabledBy = automationEnabledBy,
             };
@@ -695,6 +697,90 @@ namespace AccountGo.BackendTests.Recurring
             Assert.True(id > 0);
             var occ = _db.RecurringOccurrences.AsNoTracking().Single(o => o.Id == id);
             Assert.Equal(new DateTime(2026, 4, 1), occ.ScheduledRunDate);
+        }
+
+        // ---- paused/ended schedules must not generate ----
+
+        [Fact]
+        public void EnsureOccurrence_PausedSchedule_NewDate_Throws()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft, status: RecurringScheduleStatus.Paused);
+
+            var ex = Assert.Throws<InvalidRunDateException>(() =>
+                _service.EnsureOccurrence(schedule.Id, new DateTime(2026, 4, 1), "lease-1", DateTime.UtcNow.AddMinutes(5)));
+            Assert.Contains("paused", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(_db.RecurringOccurrences.Where(o => o.RecurringScheduleId == schedule.Id));
+        }
+
+        [Fact]
+        public void EnsureOccurrence_PausedSchedule_DoesNotReclaimExistingScheduledOccurrence()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft, status: RecurringScheduleStatus.Paused);
+
+            // An occurrence that already exists (e.g. created before the schedule was paused), still Scheduled.
+            var occ = new RecurringOccurrence
+            {
+                CompanyId = _company.Id,
+                RecurringScheduleId = schedule.Id,
+                ScheduledRunDate = new DateTime(2026, 4, 1),
+                DocumentDate = new DateTime(2026, 4, 1),
+                PeriodStart = new DateTime(2026, 4, 1),
+                PeriodEnd = new DateTime(2026, 4, 30),
+                Status = RecurringOccurrenceStatus.Scheduled,
+                IdempotencyKey = $"{_company.Id}-{schedule.Id}-2026-04-01",
+                CreatedAt = DateTime.UtcNow,
+            };
+            _db.RecurringOccurrences.Add(occ);
+            _db.SaveChanges();
+
+            Assert.Throws<InvalidRunDateException>(() =>
+                _service.EnsureOccurrence(schedule.Id, new DateTime(2026, 4, 1), "lease-1", DateTime.UtcNow.AddMinutes(5)));
+
+            // The occurrence was not claimed (still Scheduled, no lease).
+            var reloaded = _db.RecurringOccurrences.AsNoTracking().Single(o => o.Id == occ.Id);
+            Assert.Equal(RecurringOccurrenceStatus.Scheduled, reloaded.Status);
+            Assert.Null(reloaded.LeasedBy);
+        }
+
+        [Fact]
+        public void ProcessOccurrence_SchedulePausedAfterClaim_Aborts_NoDocument()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            // Active at claim time, so the occurrence is legitimately Running...
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            AddLine(schedule.Id, item.Id);
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "lease-1");
+
+            // ...then the schedule is paused before the run is processed.
+            schedule.Status = RecurringScheduleStatus.Paused;
+            _db.SaveChanges();
+
+            var result = _service.ProcessOccurrence(occ.Id, "lease-1");
+
+            Assert.Equal(RecurringGenerationOutcome.Aborted, result.Outcome);
+            var reloaded = Reload(occ.Id);
+            Assert.Null(reloaded.SalesInvoiceId);
+            Assert.NotEqual(RecurringOccurrenceStatus.DraftCreated, reloaded.Status);
+            _sales.Verify(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()), Times.Never);
+        }
+
+        [Fact]
+        public void EnsureOccurrence_EndedSchedule_Throws()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft, status: RecurringScheduleStatus.Ended);
+
+            var ex = Assert.Throws<InvalidRunDateException>(() =>
+                _service.EnsureOccurrence(schedule.Id, new DateTime(2026, 4, 1), "lease-1", DateTime.UtcNow.AddMinutes(5)));
+            Assert.Contains("ended", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

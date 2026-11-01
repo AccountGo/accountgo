@@ -71,7 +71,7 @@ public partial class RecurringSchedule : BaseEntity, ICompanyOwned
     /// <summary>How revenue/expense is recognized. V1 only supports OnDocumentDate.</summary>
     public RecurringRecognitionMode RecognitionMode { get; set; } = RecurringRecognitionMode.OnDocumentDate;
 
-    /// <summary>Which month the service period falls in: current month or previous month.</summary>
+    /// <summary>Which period the run bills: the current cadence period or the one immediately before it. See <see cref="RecurringServicePeriodMode"/>.</summary>
     public RecurringServicePeriodMode ServicePeriodMode { get; set; } = RecurringServicePeriodMode.CurrentMonth;
 
     /// <summary>Payment terms to copy to generated documents.</summary>
