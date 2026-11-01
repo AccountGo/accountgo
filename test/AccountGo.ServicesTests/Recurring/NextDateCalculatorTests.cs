@@ -291,6 +291,117 @@ namespace AccountGo.ServicesTests.Recurring
 
         #endregion
 
+        #region First Date Must Be On Or After Start Date
+
+        [Fact]
+        public void FirstDate_Monthly_DayOfMonthBeforeStartDay_AdvancesOneMonth()
+        {
+            // Arrange: Start Mar 15 with DayOfMonth = 1
+            // The first occurrence should be Apr 1, NOT Mar 1 (which is before the start)
+            var startDate = new DateTime(2025, 3, 15);
+
+            // Act
+            var dates = NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Monthly,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: 1,
+                count: 3);
+
+            // Assert: First occurrence is Apr 1, not Mar 1
+            Assert.Equal(3, dates.Count);
+            Assert.Equal(new DateTime(2025, 4, 1), dates[0]);
+            Assert.Equal(new DateTime(2025, 5, 1), dates[1]);
+            Assert.Equal(new DateTime(2025, 6, 1), dates[2]);
+        }
+
+        [Fact]
+        public void FirstDate_Monthly_DayOfMonthEqualsStartDay_ReturnsSameDay()
+        {
+            // Arrange: Start Mar 15 with DayOfMonth = 15
+            var startDate = new DateTime(2025, 3, 15);
+
+            // Act
+            var dates = NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Monthly,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: 15,
+                count: 3);
+
+            // Assert: First occurrence is Mar 15
+            Assert.Equal(3, dates.Count);
+            Assert.Equal(new DateTime(2025, 3, 15), dates[0]);
+            Assert.Equal(new DateTime(2025, 4, 15), dates[1]);
+            Assert.Equal(new DateTime(2025, 5, 15), dates[2]);
+        }
+
+        [Fact]
+        public void FirstDate_Monthly_DayOfMonthAfterStartDay_ReturnsSameMonth()
+        {
+            // Arrange: Start Mar 5 with DayOfMonth = 15
+            // First occurrence should be Mar 15 (after start, same month)
+            var startDate = new DateTime(2025, 3, 5);
+
+            // Act
+            var dates = NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Monthly,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: 15,
+                count: 3);
+
+            // Assert: First occurrence is Mar 15
+            Assert.Equal(3, dates.Count);
+            Assert.Equal(new DateTime(2025, 3, 15), dates[0]);
+            Assert.Equal(new DateTime(2025, 4, 15), dates[1]);
+            Assert.Equal(new DateTime(2025, 5, 15), dates[2]);
+        }
+
+        [Fact]
+        public void FirstDate_Quarterly_DayOfMonthBeforeStartDay_AdvancesOneQuarter()
+        {
+            // Arrange: Start Mar 15 with DayOfMonth = 1
+            var startDate = new DateTime(2025, 3, 15);
+
+            // Act
+            var dates = NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Quarterly,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: 1,
+                count: 3);
+
+            // Assert: First occurrence is Jun 1 (3 months later)
+            Assert.Equal(3, dates.Count);
+            Assert.Equal(new DateTime(2025, 6, 1), dates[0]);
+            Assert.Equal(new DateTime(2025, 9, 1), dates[1]);
+            Assert.Equal(new DateTime(2025, 12, 1), dates[2]);
+        }
+
+        [Fact]
+        public void FirstDate_Yearly_DayOfMonthBeforeStartDay_AdvancesOneYear()
+        {
+            // Arrange: Start Jun 15 with DayOfMonth = 1, running yearly
+            var startDate = new DateTime(2025, 6, 15);
+
+            // Act
+            var dates = NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Yearly,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: 1,
+                count: 3);
+
+            // Assert: First occurrence is Jun 1, 2026 (1 year later)
+            Assert.Equal(3, dates.Count);
+            Assert.Equal(new DateTime(2026, 6, 1), dates[0]);
+            Assert.Equal(new DateTime(2027, 6, 1), dates[1]);
+            Assert.Equal(new DateTime(2028, 6, 1), dates[2]);
+        }
+
+        #endregion
+
         #region Validation Tests
 
         [Fact]

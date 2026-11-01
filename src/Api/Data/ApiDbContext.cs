@@ -115,6 +115,7 @@ namespace Api.Data
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
+            EnforceRecurringScheduleConsistency();
             return base.SaveChanges(acceptAllChangesOnSuccess);
         }
 
@@ -123,7 +124,87 @@ namespace Api.Data
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
+            EnforceRecurringScheduleConsistency();
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        /// <summary>
+        /// #479: RecurringSchedule lines and occurrences must have the same CompanyId as their parent schedule.
+        /// Also validates that Item, Tax, Account, and Party references belong to the same company.
+        /// </summary>
+        private void EnforceRecurringScheduleConsistency()
+        {
+            foreach (var entry in ChangeTracker.Entries<RecurringScheduleLine>())
+            {
+                if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
+                    continue;
+
+                var line = entry.Entity;
+                var scheduleId = line.RecurringScheduleId;
+                
+                // Find the parent schedule (may be in memory or in the database)
+                var schedule = RecurringSchedules.Local.FirstOrDefault(s => s.Id == scheduleId)
+                    ?? RecurringSchedules.FirstOrDefault(s => s.Id == scheduleId);
+                
+                if (schedule != null && line.CompanyId != schedule.CompanyId)
+                {
+                    throw new CrossTenantWriteException(
+                        $"RecurringScheduleLine CompanyId ({line.CompanyId}) must match its RecurringSchedule CompanyId ({schedule.CompanyId}).");
+                }
+
+                // Validate that Item, Tax, Account belong to the same company
+                if (line.ItemId.HasValue)
+                {
+                    var item = Items.Local.FirstOrDefault(i => i.Id == line.ItemId.Value)
+                        ?? Items.FirstOrDefault(i => i.Id == line.ItemId.Value);
+                    if (item != null && item.CompanyId != line.CompanyId)
+                    {
+                        throw new CrossTenantWriteException(
+                            $"RecurringScheduleLine references Item {line.ItemId} from a different company.");
+                    }
+                }
+
+                if (line.TaxId.HasValue)
+                {
+                    var tax = Taxes.Local.FirstOrDefault(t => t.Id == line.TaxId.Value)
+                        ?? Taxes.FirstOrDefault(t => t.Id == line.TaxId.Value);
+                    if (tax != null && tax.CompanyId != line.CompanyId)
+                    {
+                        throw new CrossTenantWriteException(
+                            $"RecurringScheduleLine references Tax {line.TaxId} from a different company.");
+                    }
+                }
+
+                if (line.AccountId.HasValue)
+                {
+                    var account = Accounts.Local.FirstOrDefault(a => a.Id == line.AccountId.Value)
+                        ?? Accounts.FirstOrDefault(a => a.Id == line.AccountId.Value);
+                    if (account != null && account.CompanyId != line.CompanyId)
+                    {
+                        throw new CrossTenantWriteException(
+                            $"RecurringScheduleLine references Account {line.AccountId} from a different company.");
+                    }
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<RecurringOccurrence>())
+            {
+                if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
+                    continue;
+
+                var occurrence = entry.Entity;
+                var scheduleId = occurrence.RecurringScheduleId;
+                
+                // Find the parent schedule (may be in memory or in the database)
+                var schedule = RecurringSchedules.Local.FirstOrDefault(s => s.Id == scheduleId)
+                    ?? RecurringSchedules.FirstOrDefault(s => s.Id == scheduleId);
+                
+                if (schedule != null && occurrence.CompanyId != schedule.CompanyId)
+                {
+                    throw new CrossTenantWriteException(
+                        $"RecurringOccurrence CompanyId ({occurrence.CompanyId}) must match its RecurringSchedule CompanyId ({schedule.CompanyId}).");
+                }
+            }
         }
 
         /// <summary>
@@ -816,7 +897,8 @@ namespace Api.Data
                 entity.Property(e => e.PeriodEnd).HasColumnType("date");
                 entity.Property(e => e.DocumentDate).HasColumnType("date");
                 entity.Property(e => e.DueDate).HasColumnType("date");
-                entity.Property(e => e.LeasedUntil).HasColumnType("datetime");
+                // LeasedUntil uses timestamp with time zone on Postgres, datetime2 on SQL Server.
+                // No explicit type needed here - let the provider choose.
 
                 // Unique index: one occurrence per company + schedule + scheduled run date
                 // This is the idempotency key - prevents duplicate runs for the same calendar date

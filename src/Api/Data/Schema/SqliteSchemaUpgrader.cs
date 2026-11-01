@@ -1143,8 +1143,8 @@ WHERE ""DisabledModulesJson"" IS NULL
         }
 
         private const string RecurringScheduleTablesSql = @"
-            CREATE TABLE IF NOT EXISTS ""RecurringSchedule"" (
-                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringSchedule"" PRIMARY KEY AUTOINCREMENT,
+            CREATE TABLE IF NOT EXISTS ""RecurringSchedules"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringSchedules"" PRIMARY KEY AUTOINCREMENT,
                 ""CompanyId"" INTEGER NOT NULL,
                 ""Kind"" INTEGER NOT NULL,
                 ""PartyId"" INTEGER NOT NULL,
@@ -1168,15 +1168,16 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""AutomationEnabledBy"" TEXT NULL,
                 ""AutomationEnabledAt"" TEXT NULL,
                 ""ConsecutiveFailures"" INTEGER NOT NULL DEFAULT 0,
-                ""NeedsAttention"" INTEGER NOT NULL DEFAULT 0
+                ""NeedsAttention"" INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT ""FK_RecurringSchedules_Company_CompanyId"" FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE
             );
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_CompanyId"" ON ""RecurringSchedule"" (""CompanyId"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_Status"" ON ""RecurringSchedule"" (""CompanyId"", ""Status"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_Kind_Party"" ON ""RecurringSchedule"" (""CompanyId"", ""Kind"", ""PartyId"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_NextRunDate"" ON ""RecurringSchedule"" (""CompanyId"", ""NextRunDate"") WHERE ""Status"" = 1 AND ""NextRunDate"" IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedules_CompanyId"" ON ""RecurringSchedules"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_Status"" ON ""RecurringSchedules"" (""CompanyId"", ""Status"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_Kind_Party"" ON ""RecurringSchedules"" (""CompanyId"", ""Kind"", ""PartyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_NextRunDate"" ON ""RecurringSchedules"" (""CompanyId"", ""NextRunDate"") WHERE ""Status"" = 1 AND ""NextRunDate"" IS NOT NULL;
 
-            CREATE TABLE IF NOT EXISTS ""RecurringScheduleLine"" (
-                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringScheduleLine"" PRIMARY KEY AUTOINCREMENT,
+            CREATE TABLE IF NOT EXISTS ""RecurringScheduleLines"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringScheduleLines"" PRIMARY KEY AUTOINCREMENT,
                 ""CompanyId"" INTEGER NOT NULL,
                 ""RecurringScheduleId"" INTEGER NOT NULL,
                 ""Description"" TEXT NULL,
@@ -1187,16 +1188,20 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""DiscountType"" INTEGER NOT NULL DEFAULT 0,
                 ""TaxId"" INTEGER NULL,
                 ""AccountId"" INTEGER NULL,
-                ""SortOrder"" INTEGER NOT NULL DEFAULT 0
+                ""SortOrder"" INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT ""FK_RecurringScheduleLines_RecurringSchedules_RecurringScheduleId"" FOREIGN KEY (""RecurringScheduleId"") REFERENCES ""RecurringSchedules"" (""Id"") ON DELETE CASCADE,
+                CONSTRAINT ""FK_RecurringScheduleLines_Item_ItemId"" FOREIGN KEY (""ItemId"") REFERENCES ""Item"" (""Id"") ON DELETE RESTRICT,
+                CONSTRAINT ""FK_RecurringScheduleLines_Tax_TaxId"" FOREIGN KEY (""TaxId"") REFERENCES ""Tax"" (""Id"") ON DELETE RESTRICT,
+                CONSTRAINT ""FK_RecurringScheduleLines_Account_AccountId"" FOREIGN KEY (""AccountId"") REFERENCES ""Account"" (""Id"") ON DELETE RESTRICT
             );
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLine_CompanyId"" ON ""RecurringScheduleLine"" (""CompanyId"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLine_RecurringScheduleId"" ON ""RecurringScheduleLine"" (""RecurringScheduleId"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLine_ItemId"" ON ""RecurringScheduleLine"" (""ItemId"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLine_TaxId"" ON ""RecurringScheduleLine"" (""TaxId"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLine_AccountId"" ON ""RecurringScheduleLine"" (""AccountId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_CompanyId"" ON ""RecurringScheduleLines"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_RecurringScheduleId"" ON ""RecurringScheduleLines"" (""RecurringScheduleId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_ItemId"" ON ""RecurringScheduleLines"" (""ItemId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_TaxId"" ON ""RecurringScheduleLines"" (""TaxId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_AccountId"" ON ""RecurringScheduleLines"" (""AccountId"");
 
-            CREATE TABLE IF NOT EXISTS ""RecurringOccurrence"" (
-                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringOccurrence"" PRIMARY KEY AUTOINCREMENT,
+            CREATE TABLE IF NOT EXISTS ""RecurringOccurrences"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringOccurrences"" PRIMARY KEY AUTOINCREMENT,
                 ""CompanyId"" INTEGER NOT NULL,
                 ""RecurringScheduleId"" INTEGER NOT NULL,
                 ""ScheduledRunDate"" TEXT NOT NULL,
@@ -1217,15 +1222,18 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""UpdatedAt"" TEXT NULL,
                 ""GuardFailureReason"" TEXT NULL,
                 ""ActionBy"" TEXT NULL,
-                ""SkipReason"" TEXT NULL
+                ""SkipReason"" TEXT NULL,
+                CONSTRAINT ""FK_RecurringOccurrences_RecurringSchedules_RecurringScheduleId"" FOREIGN KEY (""RecurringScheduleId"") REFERENCES ""RecurringSchedules"" (""Id"") ON DELETE RESTRICT,
+                CONSTRAINT ""FK_RecurringOccurrences_SalesInvoiceHeader_SalesInvoiceId"" FOREIGN KEY (""SalesInvoiceId"") REFERENCES ""SalesInvoiceHeader"" (""Id"") ON DELETE RESTRICT,
+                CONSTRAINT ""FK_RecurringOccurrences_PurchaseInvoiceHeader_PurchaseInvoiceId"" FOREIGN KEY (""PurchaseInvoiceId"") REFERENCES ""PurchaseInvoiceHeader"" (""Id"") ON DELETE RESTRICT
             );
-            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_RecurringOccurrence_Company_Schedule_RunDate"" ON ""RecurringOccurrence"" (""CompanyId"", ""RecurringScheduleId"", ""ScheduledRunDate"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_Company_Status_DocumentDate"" ON ""RecurringOccurrence"" (""CompanyId"", ""Status"", ""DocumentDate"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_Company_Status_Lease"" ON ""RecurringOccurrence"" (""CompanyId"", ""Status"", ""LeasedUntil"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_IdempotencyKey"" ON ""RecurringOccurrence"" (""IdempotencyKey"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_SalesInvoiceId"" ON ""RecurringOccurrence"" (""SalesInvoiceId"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_PurchaseInvoiceId"" ON ""RecurringOccurrence"" (""PurchaseInvoiceId"");
-            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_RecurringScheduleId"" ON ""RecurringOccurrence"" (""RecurringScheduleId"");";
+            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_RecurringOccurrence_Company_Schedule_RunDate"" ON ""RecurringOccurrences"" (""CompanyId"", ""RecurringScheduleId"", ""ScheduledRunDate"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_Company_Status_DocumentDate"" ON ""RecurringOccurrences"" (""CompanyId"", ""Status"", ""DocumentDate"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_Company_Status_Lease"" ON ""RecurringOccurrences"" (""CompanyId"", ""Status"", ""LeasedUntil"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrences_IdempotencyKey"" ON ""RecurringOccurrences"" (""IdempotencyKey"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrences_SalesInvoiceId"" ON ""RecurringOccurrences"" (""SalesInvoiceId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrences_PurchaseInvoiceId"" ON ""RecurringOccurrences"" (""PurchaseInvoiceId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrences_RecurringScheduleId"" ON ""RecurringOccurrences"" (""RecurringScheduleId"");";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
         {
