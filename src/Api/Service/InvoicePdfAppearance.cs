@@ -135,11 +135,40 @@ public sealed record InvoicePdfPalette(
     }
 }
 
+/// <summary>Trusted normalized invoice logo image bytes and metadata.</summary>
+public sealed record InvoicePdfLogo(
+    byte[] Bytes,
+    string Hash,
+    int Width = 0,
+    int Height = 0);
+
+/// <summary>Logo file and dimension limits.</summary>
+public sealed record InvoiceLogoLimits(
+    int MaxUploadBytes = 2 * 1024 * 1024,
+    int MaxStoredBytes = 512 * 1024,
+    int MaxDimensionPixels = 4096,
+    int MaxTotalPixels = 4_000_000,
+    int MaxNormalizedDimension = 1024)
+{
+    public static InvoiceLogoLimits Default { get; } = new();
+}
+
+/// <summary>Safe metadata describing the current organization logo.</summary>
+public sealed record InvoiceLogoMetadata(
+    bool HasLogo,
+    int Revision,
+    string? Hash,
+    int? Width,
+    int? Height,
+    int? ByteCount,
+    InvoiceLogoLimits Limits);
+
 /// <summary>Resolved invoice PDF appearance. Callers pass this in; the document does not load it.</summary>
 public sealed record InvoicePdfAppearance(
     InvoicePdfPalette Colors,
     bool ShowAccountGoBranding = true,
-    int SettingsRevision = 0)
+    int SettingsRevision = 0,
+    InvoicePdfLogo? Logo = null)
 {
     /// <summary>Footer attribution color. Customers cannot change it.</summary>
     public const string AttributionColor = "#64748B";
@@ -150,7 +179,9 @@ public sealed record InvoicePdfAppearance(
     /// <summary>Stable hash of the colors and attribution flag.</summary>
     public string Fingerprint()
     {
-        var json = JsonSerializer.Serialize(new { Colors, ShowAccountGoBranding });
+        var json = Logo?.Hash is { Length: > 0 }
+            ? JsonSerializer.Serialize(new { Colors, ShowAccountGoBranding, LogoHash = Logo.Hash })
+            : JsonSerializer.Serialize(new { Colors, ShowAccountGoBranding });
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
 
@@ -160,13 +191,19 @@ public sealed record InvoicePdfAppearance(
 }
 
 /// <summary>Appearance frozen with one email attachment, independent of later setting edits.</summary>
-public sealed record InvoicePdfAppearanceStamp(string Hash, bool HideAccountGoBranding, bool RequiresEntitlement, int SettingsRevision)
+public sealed record InvoicePdfAppearanceStamp(
+    string Hash,
+    bool HideAccountGoBranding,
+    bool RequiresEntitlement,
+    int SettingsRevision,
+    string? LogoHash = null)
 {
     public static InvoicePdfAppearanceStamp From(InvoicePdfAppearance appearance) => new(
         appearance.Fingerprint(),
         !appearance.ShowAccountGoBranding,
         appearance.RequiresEntitlement,
-        appearance.SettingsRevision);
+        appearance.SettingsRevision,
+        appearance.Logo?.Hash);
 
     public static string Serialize(InvoicePdfAppearance appearance) =>
         JsonSerializer.Serialize(From(appearance));
@@ -203,7 +240,10 @@ public sealed record InvoiceBrandingCapabilities(
     string? UnavailableReason,
     bool HasRetainedSettings,
     bool EffectiveShowsAccountGoBranding,
-    string? InactiveReason);
+    string? InactiveReason,
+    bool CanUseCompanyLogo = false,
+    bool CanManageCompanyLogo = false,
+    InvoiceLogoLimits? LogoLimits = null);
 
 /// <summary>Raised when a palette cannot be stored or previewed.</summary>
 public sealed class InvoiceBrandingValidationException(string message) : ArgumentException(message);
