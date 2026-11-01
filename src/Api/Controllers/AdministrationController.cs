@@ -25,6 +25,7 @@ using Api.Data;
 namespace Api.Controllers
 {
     [Core.Tenancy.TenantScoped]
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class AdministrationController : BaseController
@@ -178,6 +179,7 @@ namespace Api.Controllers
         // GET companies (listed every workspace) and POST company were removed in Phase 2.
         // Use GET/POST /api/organizations, which only lists the caller's memberships and makes the creator Owner.
 
+        [Api.Filters.RequirePermission(Core.Domain.Security.SystemPermissions.AuditLogsView)]
         [HttpGet]
         [Route("auditlogs")] // api/Administration/AuditLogs
         public IActionResult AuditLogs()

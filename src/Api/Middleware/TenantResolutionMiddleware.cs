@@ -186,15 +186,12 @@ namespace Api.Middleware
                 return false;
             }
 
+            // Resolve functional permissions strictly from assigned CompanyMemberSecurityRoles.
+            // Workspace governance roles (Owner, Admin, Member) never automatically confer business permissions.
+            var roleIds = member.SecurityRoles.Select(r => r.SecurityRoleId).ToList();
             HashSet<string> permissions;
-            if (member.Role == CompanyMemberRole.Owner || member.Role == CompanyMemberRole.Admin)
+            if (roleIds.Count > 0)
             {
-                var allPerms = await db.Set<SecurityPermission>().Select(p => p.Name).ToListAsync();
-                permissions = new HashSet<string>(allPerms, StringComparer.OrdinalIgnoreCase);
-            }
-            else
-            {
-                var roleIds = member.SecurityRoles.Select(r => r.SecurityRoleId).ToList();
                 var memberPerms = await db.Set<SecurityRolePermission>()
                     .Where(srp => roleIds.Contains(srp.SecurityRoleId))
                     .Select(srp => srp.SecurityPermission.Name)
@@ -202,10 +199,21 @@ namespace Api.Middleware
                     .ToListAsync();
                 permissions = new HashSet<string>(memberPerms, StringComparer.OrdinalIgnoreCase);
             }
+            else
+            {
+                permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
 
             if (tenantContext is TenantContext tc)
             {
-                tc.SetTenant(company.Id, company.Slug ?? fallbackSlug, member.Role, permissions);
+                tc.SetTenant(
+                    company.Id,
+                    company.Slug ?? fallbackSlug,
+                    member.Role,
+                    permissions,
+                    userId,
+                    member.Id,
+                    Core.Authorization.ActorTrustDomain.WorkspaceUser);
             }
 
             return true;

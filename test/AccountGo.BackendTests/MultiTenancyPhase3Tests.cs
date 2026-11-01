@@ -92,6 +92,18 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
             var created = await Json(response);
             _companyId = int.Parse(created.GetProperty("id").GetString());
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var ownerMemberId = db.CompanyMembers.Single(m => m.CompanyId == _companyId && m.UserId == _ownerId).Id;
+                var roleIds = db.SecurityRoles
+                    .Where(r => r.Name == "Accountant" || r.Name == "Sales Representative" || r.Name == "Purchasing Agent")
+                    .Select(r => r.Id)
+                    .ToList();
+                foreach (var roleId in roleIds)
+                    db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = ownerMemberId, SecurityRoleId = roleId });
+                await db.SaveChangesAsync();
+            }
         }
 
         public Task DisposeAsync()
@@ -1200,6 +1212,8 @@ namespace AccountGo.BackendTests
         public async Task MembershipChanges_RemovePermissionsAndAccessOnNextRequest()
         {
             await JoinOther("Admin");
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
+                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
             var invoice = await NewInvoice();
             Assert.True((await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice, _otherToken)).IsSuccessStatusCode);
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
@@ -1338,6 +1352,13 @@ namespace AccountGo.BackendTests
         [Fact]
         public async Task GlobalRoleListing_IsPlatformOnly_WorkspaceRolesCarryPermissionsAndMemberCounts()
         {
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var ownerMemberId = db.CompanyMembers.Single(m => m.CompanyId == _companyId && m.UserId == _ownerId).Id;
+                db.CompanyMemberSecurityRoles.RemoveRange(db.CompanyMemberSecurityRoles.Where(r => r.CompanyMemberId == ownerMemberId));
+                await db.SaveChangesAsync();
+            }
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Administration/roles")).StatusCode);
 
             var viewerId = ViewerRoleId();

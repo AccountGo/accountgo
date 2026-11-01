@@ -81,6 +81,19 @@ namespace AccountGo.BackendTests.Financial
             _companyId = idProp.ValueKind == JsonValueKind.String
                 ? int.Parse(idProp.GetString()!)
                 : idProp.GetInt32();
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<Api.Data.ApiDbContext>();
+                var ownerMember = db.CompanyMembers.Single(m => m.CompanyId == _companyId && m.UserId == _userId);
+                var accountantRoleId = db.SecurityRoles.Single(r => r.Name == "Accountant").Id;
+                db.CompanyMemberSecurityRoles.Add(new Core.Domain.CompanyMemberSecurityRole
+                {
+                    CompanyMemberId = ownerMember.Id,
+                    SecurityRoleId = accountantRoleId
+                });
+                await db.SaveChangesAsync();
+            }
         }
 
         public Task DisposeAsync()

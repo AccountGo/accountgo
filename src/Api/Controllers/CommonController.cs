@@ -13,10 +13,12 @@ using Dto.Financial;
 using System.Linq;
 using System;
 using Core.Domain;
+using Api.Filters;
 
 namespace Api.Controllers
 {
     [Core.Tenancy.TenantScoped]
+    [RequireWorkspaceRole(CompanyMemberRole.Member)]
     [Route("api/[controller]")]
     public class CommonController : BaseController
     {

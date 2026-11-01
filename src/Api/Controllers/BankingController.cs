@@ -7,6 +7,7 @@ using System.Data;
 using System.Globalization;
 using Api.Data;
 using Api.Filters;
+using Core.Authorization;
 using Core.Domain.Security;
 using Core.Entitlements;
 using Core.Tenancy;
@@ -72,6 +73,7 @@ namespace Api.Controllers
         }
 
         [HttpGet("Accounts/Picker")]
+        [RequireOperation(AccessOperationCatalog.BankingAccountsPicker)]
         public IActionResult Picker()
         {
             if (!CanPickBanks())

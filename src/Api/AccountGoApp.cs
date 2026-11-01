@@ -192,6 +192,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
         builder.Services.AddSingleton(Api.Options.EntitlementsConfiguration.FromConfiguration(builder.Configuration));
         builder.Services.AddScoped<Core.Entitlements.IEntitlementService, Services.Entitlements.CommunityEntitlementService>();
+        builder.Services.AddScoped<Core.Authorization.IAccessAuthorizationService, Api.Authorization.AccessAuthorizationService>();
         // Community default: billing off, immediate plan switches. A module may replace IBillingProvider.
         builder.Services.AddScoped<Core.Billing.IBillingProvider, Services.Billing.CommunityBillingProvider>();
         builder.Services.AddMemoryCache();

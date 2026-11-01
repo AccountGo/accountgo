@@ -1,4 +1,6 @@
 using Api.Data;
+using Api.Filters;
+using Core.Domain.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DonorDto = Dto.Donors.Donor;
@@ -7,6 +9,7 @@ using DonorEntity = Core.Domain.Donations.Donor;
 namespace Api.Controllers
 {
     [Core.Tenancy.TenantScoped]
+    [RequireModule(SystemModules.Donations)]
     [ApiController]
     [Route("api/donors")]
     public class DonorsController : BaseController
@@ -18,6 +21,7 @@ namespace Api.Controllers
             _context = context;
         }
 
+        [RequirePermission(SystemPermissions.DonationsView)]
         [HttpGet]
         [ProducesResponseType(typeof(List<DonorDto>), StatusCodes.Status200OK)]
         public async Task<ActionResult<List<DonorDto>>> GetDonorsAsync(CancellationToken cancellationToken)
@@ -26,6 +30,7 @@ namespace Api.Controllers
             return Ok(donors.Select(ToDto).OrderBy(donor => donor.Name).ToList());
         }
 
+        [RequirePermission(SystemPermissions.DonationsView)]
         [HttpGet("{id:int}")]
         [ProducesResponseType(typeof(DonorDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -38,6 +43,7 @@ namespace Api.Controllers
             return Ok(ToDto(donor));
         }
 
+        [RequirePermission(SystemPermissions.DonationsManage)]
         [HttpPost]
         [ProducesResponseType(typeof(DonorDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -50,6 +56,7 @@ namespace Api.Controllers
             return CreatedAtAction("GetDonor", new { id = donor.Id }, ToDto(donor));
         }
 
+        [RequirePermission(SystemPermissions.DonationsManage)]
         [HttpPut("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -65,6 +72,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
+        [RequirePermission(SystemPermissions.DonationsManage)]
         [HttpDelete("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
