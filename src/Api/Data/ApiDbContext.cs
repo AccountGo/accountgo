@@ -129,62 +129,98 @@ namespace Api.Data
         }
 
         /// <summary>
-        /// #479: RecurringSchedule lines and occurrences must have the same CompanyId as their parent schedule.
-        /// Also validates that Item, Tax, Account, and Party references belong to the same company.
+        /// #479: RecurringSchedule rows and the ids they point at must all live in the same company.
+        /// Lines and occurrences must match their parent schedule's CompanyId, and every FK
+        /// (schedule party, line item/tax/account, occurrence invoice) must resolve to a row in
+        /// that same company.
+        ///
+        /// This check <b>fails closed</b>: when an id is set but no row with that id exists in the
+        /// expected company, it throws. A foreign key only proves the id exists somewhere; it does
+        /// not prove tenant ownership. Lookups therefore use <see cref="EntityFrameworkExtensions.IgnoreQueryFilters"/>
+        /// so a cross-company row is visible to this check (and then rejected) instead of being
+        /// silently hidden by the tenant query filter.
         /// </summary>
         private void EnforceRecurringScheduleConsistency()
         {
+            // Resolve a row's CompanyId by id, consulting the change tracker first (for rows added
+            // in this unit of work that are not yet in the database) then the database with tenant
+            // filters ignored. Returns null only when no such id exists anywhere.
+            int? ResolveCompanyId<TEntity>(DbSet<TEntity> set, int id)
+                where TEntity : BaseEntity, ICompanyOwned
+            {
+                var local = set.Local.FirstOrDefault(e => e.Id == id);
+                if (local != null)
+                    return local.CompanyId;
+
+                return set.IgnoreQueryFilters()
+                    .Where(e => e.Id == id)
+                    .Select(e => (int?)e.CompanyId)
+                    .FirstOrDefault();
+            }
+
+            void RequireSameCompany<TEntity>(DbSet<TEntity> set, int id, int expectedCompanyId, string label)
+                where TEntity : BaseEntity, ICompanyOwned
+            {
+                var companyId = ResolveCompanyId(set, id);
+                if (companyId == null)
+                {
+                    throw new CrossTenantWriteException(
+                        $"{label} {id} does not exist or is not visible; cannot verify it belongs to company {expectedCompanyId}.");
+                }
+                if (companyId.Value != expectedCompanyId)
+                {
+                    throw new CrossTenantWriteException(
+                        $"{label} {id} belongs to company {companyId.Value}, not {expectedCompanyId}.");
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<RecurringSchedule>())
+            {
+                if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
+                    continue;
+
+                var schedule = entry.Entity;
+
+                // PartyId points at a Customer (sales) or Vendor (bill), both of which are company-owned.
+                if (schedule.Kind == RecurringScheduleKind.SalesInvoice)
+                {
+                    RequireSameCompany(Customers, schedule.PartyId, schedule.CompanyId,
+                        "RecurringSchedule Customer");
+                }
+                else
+                {
+                    RequireSameCompany(Vendors, schedule.PartyId, schedule.CompanyId,
+                        "RecurringSchedule Vendor");
+                }
+            }
+
             foreach (var entry in ChangeTracker.Entries<RecurringScheduleLine>())
             {
                 if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
                     continue;
 
                 var line = entry.Entity;
-                var scheduleId = line.RecurringScheduleId;
-                
-                // Find the parent schedule (may be in memory or in the database)
-                var schedule = RecurringSchedules.Local.FirstOrDefault(s => s.Id == scheduleId)
-                    ?? RecurringSchedules.FirstOrDefault(s => s.Id == scheduleId);
-                
-                if (schedule != null && line.CompanyId != schedule.CompanyId)
+
+                var parentCompanyId = ResolveCompanyId(RecurringSchedules, line.RecurringScheduleId);
+                if (parentCompanyId == null)
                 {
                     throw new CrossTenantWriteException(
-                        $"RecurringScheduleLine CompanyId ({line.CompanyId}) must match its RecurringSchedule CompanyId ({schedule.CompanyId}).");
+                        $"RecurringScheduleLine references schedule {line.RecurringScheduleId}, which does not exist.");
+                }
+                if (parentCompanyId.Value != line.CompanyId)
+                {
+                    throw new CrossTenantWriteException(
+                        $"RecurringScheduleLine CompanyId ({line.CompanyId}) must match its RecurringSchedule CompanyId ({parentCompanyId.Value}).");
                 }
 
-                // Validate that Item, Tax, Account belong to the same company
                 if (line.ItemId.HasValue)
-                {
-                    var item = Items.Local.FirstOrDefault(i => i.Id == line.ItemId.Value)
-                        ?? Items.FirstOrDefault(i => i.Id == line.ItemId.Value);
-                    if (item != null && item.CompanyId != line.CompanyId)
-                    {
-                        throw new CrossTenantWriteException(
-                            $"RecurringScheduleLine references Item {line.ItemId} from a different company.");
-                    }
-                }
+                    RequireSameCompany(Items, line.ItemId.Value, line.CompanyId, "RecurringScheduleLine Item");
 
                 if (line.TaxId.HasValue)
-                {
-                    var tax = Taxes.Local.FirstOrDefault(t => t.Id == line.TaxId.Value)
-                        ?? Taxes.FirstOrDefault(t => t.Id == line.TaxId.Value);
-                    if (tax != null && tax.CompanyId != line.CompanyId)
-                    {
-                        throw new CrossTenantWriteException(
-                            $"RecurringScheduleLine references Tax {line.TaxId} from a different company.");
-                    }
-                }
+                    RequireSameCompany(Taxes, line.TaxId.Value, line.CompanyId, "RecurringScheduleLine Tax");
 
                 if (line.AccountId.HasValue)
-                {
-                    var account = Accounts.Local.FirstOrDefault(a => a.Id == line.AccountId.Value)
-                        ?? Accounts.FirstOrDefault(a => a.Id == line.AccountId.Value);
-                    if (account != null && account.CompanyId != line.CompanyId)
-                    {
-                        throw new CrossTenantWriteException(
-                            $"RecurringScheduleLine references Account {line.AccountId} from a different company.");
-                    }
-                }
+                    RequireSameCompany(Accounts, line.AccountId.Value, line.CompanyId, "RecurringScheduleLine Account");
             }
 
             foreach (var entry in ChangeTracker.Entries<RecurringOccurrence>())
@@ -193,17 +229,26 @@ namespace Api.Data
                     continue;
 
                 var occurrence = entry.Entity;
-                var scheduleId = occurrence.RecurringScheduleId;
-                
-                // Find the parent schedule (may be in memory or in the database)
-                var schedule = RecurringSchedules.Local.FirstOrDefault(s => s.Id == scheduleId)
-                    ?? RecurringSchedules.FirstOrDefault(s => s.Id == scheduleId);
-                
-                if (schedule != null && occurrence.CompanyId != schedule.CompanyId)
+
+                var parentCompanyId = ResolveCompanyId(RecurringSchedules, occurrence.RecurringScheduleId);
+                if (parentCompanyId == null)
                 {
                     throw new CrossTenantWriteException(
-                        $"RecurringOccurrence CompanyId ({occurrence.CompanyId}) must match its RecurringSchedule CompanyId ({schedule.CompanyId}).");
+                        $"RecurringOccurrence references schedule {occurrence.RecurringScheduleId}, which does not exist.");
                 }
+                if (parentCompanyId.Value != occurrence.CompanyId)
+                {
+                    throw new CrossTenantWriteException(
+                        $"RecurringOccurrence CompanyId ({occurrence.CompanyId}) must match its RecurringSchedule CompanyId ({parentCompanyId.Value}).");
+                }
+
+                if (occurrence.SalesInvoiceId.HasValue)
+                    RequireSameCompany(SalesInvoiceHeaders, occurrence.SalesInvoiceId.Value, occurrence.CompanyId,
+                        "RecurringOccurrence SalesInvoice");
+
+                if (occurrence.PurchaseInvoiceId.HasValue)
+                    RequireSameCompany(PurchaseInvoiceHeaders, occurrence.PurchaseInvoiceId.Value, occurrence.CompanyId,
+                        "RecurringOccurrence PurchaseInvoice");
             }
         }
 

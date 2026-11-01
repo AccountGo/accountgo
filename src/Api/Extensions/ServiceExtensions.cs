@@ -181,6 +181,15 @@ namespace Api.Extensions
                 var sqliteConnection = configuration.GetConnectionString("SqliteConnection")
                     ?? "Data Source=accountgo.db;Foreign Keys=True;";
 
+                // SQLite enforces ON DELETE RESTRICT (and other FK actions) only when the per-connection
+                // PRAGMA foreign_keys is ON. The Microsoft.Data.Sqlite provider emits that pragma when the
+                // connection string sets Foreign Keys=True, so force it on regardless of how the string was
+                // configured; otherwise the FK constraints we declare are stored but never enforced at runtime.
+                sqliteConnection = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(sqliteConnection)
+                {
+                    ForeignKeys = true
+                }.ToString();
+
                 Console.WriteLine("[Database Provider] Using SQLite");
 
                 services.AddDbContext<ApiDbContext>((sp, options) =>

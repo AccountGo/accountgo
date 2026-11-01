@@ -606,7 +606,11 @@ namespace AccountGo.BackendTests
             {
                 "InternalSyncController.cs",
                 "SqliteSchemaUpgrader.cs",
-                "CompanyProvisioningService.cs"
+                "CompanyProvisioningService.cs",
+                // #479: the recurring-schedule consistency hook deliberately looks past the tenant
+                // filter so a cross-company foreign key is visible to the check and then rejected
+                // (fail closed). This is the tenant enforcement core itself.
+                "ApiDbContext.cs"
             };
 
             var solutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));

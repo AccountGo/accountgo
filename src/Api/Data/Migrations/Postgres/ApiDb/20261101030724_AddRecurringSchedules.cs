@@ -77,7 +77,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     DueDate = table.Column<DateTime>(type: "date", nullable: true),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     IdempotencyKey = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    LeasedUntil = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LeasedUntil = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     LeasedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     AttemptCount = table.Column<int>(type: "integer", nullable: false),
                     ErrorCode = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
