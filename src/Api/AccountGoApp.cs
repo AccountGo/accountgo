@@ -221,6 +221,9 @@ public static class AccountGoApp
         // generic repository
         builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(EfRepository<>));
 
+        // unit of work (transaction seam over the EF context)
+        builder.Services.AddScoped<Core.Data.IUnitOfWork, EfUnitOfWork>();
+
         // custom repositories
         builder.Services.AddScoped(typeof(Core.Data.ISalesOrderRepository), typeof(SalesOrderRepository));
         builder.Services.AddScoped(typeof(Core.Data.IPurchaseOrderRepository), typeof(PurchaseOrderRepository));
@@ -228,6 +231,7 @@ public static class AccountGoApp
 
         // domain services
         builder.Services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));
+        builder.Services.AddScoped(typeof(Services.Recurring.IRecurringInvoiceGenerationService), typeof(Services.Recurring.RecurringInvoiceGenerationService));
         builder.Services.AddScoped(typeof(Services.Donations.IDonationsService), typeof(Services.Donations.DonationsService));
         builder.Services.AddScoped(typeof(Services.Dashboard.IDashboardService), typeof(Services.Dashboard.DashboardService));
         builder.Services.AddScoped(typeof(Services.Financial.IFinancialService), typeof(Services.Financial.FinancialService));

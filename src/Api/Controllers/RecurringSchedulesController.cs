@@ -1,0 +1,93 @@
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+#nullable enable
+using System;
+using System.Linq;
+using System.Security.Claims;
+using Api.Filters;
+using Core.Domain.Recurring;
+using Microsoft.AspNetCore.Mvc;
+using Services.Recurring;
+
+namespace Api.Controllers
+{
+    /// <summary>
+    /// #482: manual control over recurring sales-invoice schedules. "Run now" does not bypass the occurrence
+    /// model — it creates or retrieves the single idempotent occurrence for a run date and processes it through
+    /// the same <see cref="IRecurringInvoiceGenerationService"/> the worker (#480) will use.
+    /// </summary>
+    [Core.Tenancy.TenantScoped]
+    [Route("api/[controller]")]
+    [RequireModule("sales")]
+    public class RecurringSchedulesController : BaseController
+    {
+        private readonly IRecurringInvoiceGenerationService _generation;
+        private readonly Core.Data.IRepository<RecurringSchedule> _scheduleRepo;
+        private readonly Core.Tenancy.ITenantContext _tenant;
+        private readonly ILogger<RecurringSchedulesController> _logger;
+
+        public RecurringSchedulesController(
+            IRecurringInvoiceGenerationService generation,
+            Core.Data.IRepository<RecurringSchedule> scheduleRepo,
+            Core.Tenancy.ITenantContext tenant,
+            ILogger<RecurringSchedulesController> logger)
+        {
+            _generation = generation;
+            _scheduleRepo = scheduleRepo;
+            _tenant = tenant;
+            _logger = logger;
+        }
+
+        public sealed class RunNowRequest
+        {
+            /// <summary>Which scheduled run to generate. Defaults to the schedule's NextRunDate.</summary>
+            public DateTime? RunDate { get; set; }
+        }
+
+        /// <summary>
+        /// Generates the document for one run of a schedule. Issuing requires the invoice-post permission because a
+        /// successful auto-issue schedule will post to the ledger; draft-only schedules still create a draft.
+        /// </summary>
+        [HttpPost("{id}/run")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
+        public IActionResult RunNow(int id, [FromBody] RunNowRequest? request = null)
+        {
+            var actor = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            if (string.IsNullOrWhiteSpace(actor))
+                return Unauthorized();
+
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == id);
+            if (schedule == null)
+                return NotFound(new { message = $"Recurring schedule {id} not found." });
+            if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
+                return BadRequest(new { message = "This schedule does not generate sales invoices." });
+
+            var runDate = (request?.RunDate ?? schedule.NextRunDate)?.Date;
+            if (runDate == null)
+                return BadRequest(new { message = "No run date to generate. Pass runDate or set the schedule's next run date." });
+
+            try
+            {
+                // A short, immediate lease owned by this request; the worker/lease lifecycle proper is #480.
+                var leaseOwner = $"run-now:{actor}";
+                var occurrenceId = _generation.EnsureOccurrence(id, runDate.Value, leaseOwner, DateTime.UtcNow.AddMinutes(5));
+                var result = _generation.ProcessOccurrence(occurrenceId, leaseOwner);
+
+                return Ok(new
+                {
+                    occurrenceId = result.OccurrenceId,
+                    outcome = result.Outcome.ToString(),
+                    salesInvoiceId = result.SalesInvoiceId,
+                    errorCode = result.ErrorCode,
+                    message = result.Message,
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Run-now failed for schedule {ScheduleId} on {RunDate}.", id, runDate);
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+    }
+}
