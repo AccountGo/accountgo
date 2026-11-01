@@ -6,6 +6,7 @@ import {
   CreditCard,
   FileEdit,
   Copy,
+  Repeat,
   Ban,
   Clock,
   CheckCircle2,
@@ -652,6 +653,7 @@ export const InvoiceDetail: React.FC = () => {
               items={[
                 // Opens a new invoice prefilled from this one; nothing is saved until the user saves it.
                 canCreate && { label: 'Duplicate invoice', icon: Copy, to: `/org/${orgSlug}/sales/new?from=${invoice.id}` },
+                canCreate && { label: 'Make recurring', icon: Repeat, to: `/org/${orgSlug}/sales/recurring/new?from=${invoice.id}` },
                 canEdit && { label: 'Edit invoice', icon: FileEdit, to: `/org/${orgSlug}/sales/${invoice.id}/edit` },
                 { label: isPrinting ? 'Preparing print…' : 'Print', icon: Printer, onSelect: () => void handlePrint() },
                 canDelete && 'separator',
