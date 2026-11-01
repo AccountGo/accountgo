@@ -50,6 +50,12 @@ namespace Services.Recurring
         /// The occurrence had already produced a document (idempotent replay). No new document was created.
         /// </summary>
         AlreadyProcessed = 5,
+
+        /// <summary>
+        /// The occurrence was skipped by a person (#484): no document was created, a reason was recorded, and the
+        /// series advanced by one without changing the calendar anchor.
+        /// </summary>
+        Skipped = 6,
     }
 
     /// <summary>
@@ -161,6 +167,13 @@ namespace Services.Recurring
             SalesInvoiceId = salesInvoiceId,
             ErrorCode = errorCode,
             Message = message,
+        };
+
+        public static RecurringGenerationResult Skipped(int occurrenceId, string reason) => new()
+        {
+            Outcome = RecurringGenerationOutcome.Skipped,
+            OccurrenceId = occurrenceId,
+            Message = reason,
         };
     }
 }

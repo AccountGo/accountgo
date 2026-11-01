@@ -23,6 +23,7 @@ namespace Api.Controllers
     public class RecurringSchedulesController : BaseController
     {
         private readonly IRecurringInvoiceGenerationService _generation;
+        private readonly IRecurringScheduleService _schedules;
         private readonly Core.Data.IRepository<RecurringSchedule> _scheduleRepo;
         private readonly Core.Data.IRepository<RecurringOccurrence> _occurrenceRepo;
         private readonly Core.Authorization.IAccessAuthorizationService _authorization;
@@ -30,12 +31,14 @@ namespace Api.Controllers
 
         public RecurringSchedulesController(
             IRecurringInvoiceGenerationService generation,
+            IRecurringScheduleService schedules,
             Core.Data.IRepository<RecurringSchedule> scheduleRepo,
             Core.Data.IRepository<RecurringOccurrence> occurrenceRepo,
             Core.Authorization.IAccessAuthorizationService authorization,
             ILogger<RecurringSchedulesController> logger)
         {
             _generation = generation;
+            _schedules = schedules;
             _scheduleRepo = scheduleRepo;
             _occurrenceRepo = occurrenceRepo;
             _authorization = authorization;
@@ -49,6 +52,231 @@ namespace Api.Controllers
             /// next run date; when supplied, this must equal that date or the request is rejected.
             /// </summary>
             public DateTime? RunDate { get; set; }
+        }
+
+        /// <summary>Skip the next occurrence: a reason is required; it records a skip, not a document.</summary>
+        public sealed class SkipRequest
+        {
+            public DateTime? RunDate { get; set; }
+            public string? Reason { get; set; }
+        }
+
+        /// <summary>An optional reason for a pause or end.</summary>
+        public sealed class ReasonRequest
+        {
+            public string? Reason { get; set; }
+        }
+
+        /// <summary>Editor payload for the next-dates preview (no persistence).</summary>
+        public sealed class PreviewRequest
+        {
+            public RecurringCadence Cadence { get; set; } = RecurringCadence.Monthly;
+            public int Interval { get; set; } = 1;
+            public DateTime StartDate { get; set; }
+            public int? DayOfMonth { get; set; }
+            public DateTime? EndDate { get; set; }
+            public int? MaxOccurrences { get; set; }
+            public int Count { get; set; } = 3;
+        }
+
+        // ----- #484: list / detail / occurrences / preview -----
+
+        /// <summary>Lists sales-invoice schedules, optionally filtered by status or needs-attention.</summary>
+        [HttpGet]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
+        public IActionResult List([FromQuery] string? status = null, [FromQuery] bool needsAttention = false)
+        {
+            RecurringScheduleStatus? parsed = null;
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                if (!Enum.TryParse<RecurringScheduleStatus>(status, ignoreCase: true, out var s))
+                    return BadRequest(new { message = "Unknown status filter." });
+                parsed = s;
+            }
+            return Ok(_schedules.ListSchedules(parsed, needsAttention));
+        }
+
+        /// <summary>Full detail for one schedule (lines + upcoming dates).</summary>
+        [HttpGet("{id}")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
+        public IActionResult Get(int id)
+        {
+            var detail = _schedules.GetSchedule(id);
+            if (detail == null)
+                return NotFound(new { message = $"Recurring schedule {id} not found." });
+            return Ok(detail);
+        }
+
+        /// <summary>Occurrence history for one schedule, newest first.</summary>
+        [HttpGet("{id}/occurrences")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
+        public IActionResult Occurrences(int id)
+        {
+            // A missing/other-tenant schedule yields an empty history rather than leaking existence.
+            return Ok(_schedules.GetOccurrences(id));
+        }
+
+        /// <summary>Preview the next run dates for editor input (no persistence).</summary>
+        [HttpPost("preview")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
+        public IActionResult Preview([FromBody] PreviewRequest request)
+        {
+            try
+            {
+                var dates = _schedules.PreviewDates(
+                    request.Cadence, request.Interval, request.StartDate, request.DayOfMonth,
+                    request.EndDate, request.MaxOccurrences, request.Count);
+                return Ok(new { dates });
+            }
+            catch (RecurringScheduleValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // ----- #484: create / update -----
+
+        /// <summary>Creates a new sales-invoice schedule. Needs invoice-create; auto-issue also needs post.</summary>
+        [HttpPost]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult Create([FromBody] RecurringScheduleInput input)
+        {
+            var actor = Actor();
+            if (actor == null) return Unauthorized();
+            if (input.Action == RecurringAction.AutoIssue)
+            {
+                var denied = DenyIfMissingPostPermission();
+                if (denied != null) return denied;
+            }
+            try
+            {
+                var id = _schedules.CreateSchedule(input, actor);
+                return Ok(new { id });
+            }
+            catch (RecurringScheduleValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Updates an existing schedule. Needs invoice-create; auto-issue also needs post.</summary>
+        [HttpPut("{id}")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult Update(int id, [FromBody] RecurringScheduleInput input)
+        {
+            var actor = Actor();
+            if (actor == null) return Unauthorized();
+            input.Id = id;
+            if (input.Action == RecurringAction.AutoIssue)
+            {
+                var denied = DenyIfMissingPostPermission();
+                if (denied != null) return denied;
+            }
+            try
+            {
+                _schedules.UpdateSchedule(input, actor);
+                return NoContent();
+            }
+            catch (RecurringScheduleValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // ----- #484: lifecycle actions -----
+
+        /// <summary>Skips the schedule's next occurrence; records a reason, creates no document, advances by one.</summary>
+        [HttpPost("{id}/skip")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult Skip(int id, [FromBody] SkipRequest request)
+        {
+            var actor = Actor();
+            if (actor == null) return Unauthorized();
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest(new { message = "A reason is required to skip a run." });
+
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == id);
+            if (schedule == null)
+                return NotFound(new { message = $"Recurring schedule {id} not found." });
+            if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
+                return BadRequest(new { message = "This schedule does not generate sales invoices." });
+
+            try
+            {
+                var leaseOwner = $"skip:{actor}:{Guid.NewGuid():N}";
+                var result = _generation.SkipNextOccurrence(
+                    id, request.RunDate, actor, request.Reason!.Trim(), leaseOwner, DateTime.UtcNow.AddMinutes(5));
+                return Ok(ResponseFor(result));
+            }
+            catch (InvalidRunDateException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Skip failed for schedule {ScheduleId}.", id);
+                return StatusCode(500, new { message = "Could not skip this run. Please try again or contact support." });
+            }
+        }
+
+        /// <summary>Pauses an active schedule. Existing invoices are untouched.</summary>
+        [HttpPost("{id}/pause")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult Pause(int id, [FromBody] ReasonRequest? request = null)
+        {
+            var actor = Actor();
+            if (actor == null) return Unauthorized();
+            try
+            {
+                _schedules.PauseSchedule(id, actor, request?.Reason?.Trim());
+                return NoContent();
+            }
+            catch (RecurringScheduleValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Resumes a paused schedule without catch-up; refuses an archived customer.</summary>
+        [HttpPost("{id}/resume")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult Resume(int id)
+        {
+            var actor = Actor();
+            if (actor == null) return Unauthorized();
+            try
+            {
+                _schedules.ResumeSchedule(id, actor);
+                return NoContent();
+            }
+            catch (RecurringScheduleValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Ends a schedule permanently. Existing invoices are untouched.</summary>
+        [HttpPost("{id}/end")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult End(int id, [FromBody] ReasonRequest? request = null)
+        {
+            var actor = Actor();
+            if (actor == null) return Unauthorized();
+            try
+            {
+                _schedules.EndSchedule(id, actor, request?.Reason?.Trim());
+                return NoContent();
+            }
+            catch (RecurringScheduleValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private string? Actor()
+        {
+            var actor = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            return string.IsNullOrWhiteSpace(actor) ? null : actor;
         }
 
         /// <summary>
@@ -201,6 +429,10 @@ namespace Api.Controllers
             {
                 case RecurringGenerationOutcome.DraftCreatedGuardFailed:
                     // These come from RecurringGuardReasons: fixed, reviewable, non-sensitive.
+                    return result.Message;
+
+                case RecurringGenerationOutcome.Skipped:
+                    // The skip reason is user-entered text the caller just supplied; safe to echo back.
                     return result.Message;
 
                 case RecurringGenerationOutcome.Aborted:

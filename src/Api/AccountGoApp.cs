@@ -232,6 +232,7 @@ public static class AccountGoApp
         // domain services
         builder.Services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));
         builder.Services.AddScoped(typeof(Services.Recurring.IRecurringInvoiceGenerationService), typeof(Services.Recurring.RecurringInvoiceGenerationService));
+        builder.Services.AddScoped(typeof(Services.Recurring.IRecurringScheduleService), typeof(Services.Recurring.RecurringScheduleService));
         builder.Services.AddScoped(typeof(Services.Donations.IDonationsService), typeof(Services.Donations.DonationsService));
         builder.Services.AddScoped(typeof(Services.Dashboard.IDashboardService), typeof(Services.Dashboard.DashboardService));
         builder.Services.AddScoped(typeof(Services.Financial.IFinancialService), typeof(Services.Financial.FinancialService));

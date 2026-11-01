@@ -64,5 +64,17 @@ namespace Services.Recurring
         /// completed, or held by a live lease).
         /// </summary>
         RecurringGenerationResult RetryOccurrence(int occurrenceId, string leaseOwner, DateTime leaseUntil);
+
+        /// <summary>
+        /// #484: skips the schedule's current next due occurrence. Records the <paramref name="reason"/> and the
+        /// acting user on the occurrence, marks it <see cref="Core.Domain.Recurring.RecurringOccurrenceStatus.Skipped"/>,
+        /// generates no document, and advances the series by exactly one calendar step — without changing the
+        /// calendar anchor (later dates do not shift). Exactly-once: like a run, the advance is keyed on the
+        /// occurrence so a replay cannot skip-and-advance twice. Rejected with
+        /// <see cref="InvalidRunDateException"/> for a paused/ended schedule, when there is no next run date, or when
+        /// the named <paramref name="runDate"/> does not equal the current next run date. If the customer has been
+        /// archived the schedule is paused instead (an <see cref="RecurringGenerationOutcome.Aborted"/> result).
+        /// </summary>
+        RecurringGenerationResult SkipNextOccurrence(int scheduleId, DateTime? runDate, string actingUser, string reason, string leaseOwner, DateTime leaseUntil);
     }
 }

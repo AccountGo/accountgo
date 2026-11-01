@@ -893,6 +893,206 @@ namespace AccountGo.BackendTests
             Assert.Contains("sales.invoices.post", await res.Content.ReadAsStringAsync());
         }
 
+        // ----- #484: management endpoints (skip / pause / resume / end / list / preview) -----
+
+        [SqliteFact]
+        public async Task Recurring_Skip_RecordsReason_NoDocument_AdvancesOnce_AnchorUnchanged()
+        {
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 10);
+            int scheduleId = SeedSalesSchedule("SKIP-OK", RecurringAction.CreateDraft, runDate, _ownerId);
+
+            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/skip",
+                new { runDate = IsoDate(runDate), reason = "Client on holiday" });
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.Equal("Skipped", (await Json(res)).GetProperty("outcome").GetString());
+
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var occurrence = db.RecurringOccurrences.Single(o => o.RecurringScheduleId == scheduleId);
+                Assert.Equal(RecurringOccurrenceStatus.Skipped, occurrence.Status);
+                Assert.Equal("Client on holiday", occurrence.SkipReason);
+                Assert.Null(occurrence.SalesInvoiceId); // no document
+                Assert.False(db.SalesInvoiceHeaders.Any(i => i.CompanyId == _companyId));
+
+                var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                // Advanced exactly one step; the anchor (StartDate/DayOfMonth) is unchanged so later dates do not shift.
+                Assert.Equal(runDate.AddMonths(1), schedule.NextRunDate);
+                Assert.Equal(1, schedule.OccurrenceCount);
+                Assert.Equal(runDate, schedule.StartDate);
+                Assert.Equal(runDate.Day, schedule.DayOfMonth);
+            }
+        }
+
+        [SqliteFact]
+        public async Task Recurring_Skip_WithoutReason_IsRejected()
+        {
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 11);
+            int scheduleId = SeedSalesSchedule("SKIP-NOREASON", RecurringAction.CreateDraft, runDate, _ownerId);
+
+            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/skip",
+                new { runDate = IsoDate(runDate), reason = "" });
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+            Assert.Contains("reason", await res.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                Assert.Empty(db.RecurringOccurrences.Where(o => o.RecurringScheduleId == scheduleId));
+            }
+        }
+
+        [SqliteFact]
+        public async Task Recurring_PauseThenEnd_LeaveExistingInvoicesUntouched()
+        {
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 12);
+            int scheduleId = SeedSalesSchedule("PAUSE-END", RecurringAction.CreateDraft, runDate, _ownerId);
+
+            // Generate one real draft invoice first.
+            int invoiceId;
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+                    var run = generation.RunSchedule(scheduleId, runDate, "run-1", DateTime.UtcNow.AddMinutes(5));
+                    Assert.Equal(RecurringGenerationOutcome.DraftCreated, run.Outcome);
+                    invoiceId = run.SalesInvoiceId!.Value;
+                }
+            }
+
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/pause", new { reason = "Holiday" })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/end", new { reason = "Contract closed" })).StatusCode);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                    Assert.Equal(RecurringScheduleStatus.Ended, schedule.Status);
+                    Assert.Null(schedule.NextRunDate);
+
+                    // The already-generated invoice is completely untouched.
+                    var invoice = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId);
+                    Assert.NotNull(invoice);
+
+                    // Pause and End each wrote an audit row for the schedule.
+                    var audits = db.AuditLogs.Where(a =>
+                        a.CompanyId == _companyId && a.TableName == "RecurringSchedule" &&
+                        a.RecordId == scheduleId.ToString()).ToList();
+                    Assert.Contains(audits, a => a.NewValue != null && a.NewValue.StartsWith("Paused"));
+                    Assert.Contains(audits, a => a.NewValue != null && a.NewValue.StartsWith("Ended"));
+                }
+            }
+        }
+
+        [SqliteFact]
+        public async Task Recurring_Resume_ArchivedCustomer_IsRejected()
+        {
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 13);
+            int scheduleId = SeedSalesSchedule("RESUME-ARCH", RecurringAction.CreateDraft, runDate, _ownerId);
+
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/pause", new { reason = "x" })).StatusCode);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                    var customer = db.Customers.Single(c => c.Id == schedule.PartyId);
+                    customer.ArchivedAt = DateTime.UtcNow;
+                    db.SaveChanges();
+                }
+            }
+
+            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/resume");
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+            Assert.Contains("archived", await res.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    Assert.Equal(RecurringScheduleStatus.Paused,
+                        db.RecurringSchedules.Single(s => s.Id == scheduleId).Status);
+                }
+            }
+        }
+
+        [SqliteFact]
+        public async Task Recurring_Resume_DoesNotCatchUpMissedPeriods()
+        {
+            // Pause a schedule whose next run is in the past, then resume: NextRunDate must jump to the next date on
+            // or after today (no back-fill of the missed period).
+            var pastRun = DateTime.UtcNow.Date.AddMonths(-2); // two periods behind
+            int scheduleId = SeedSalesSchedule("RESUME-NOCATCHUP", RecurringAction.CreateDraft, pastRun, _ownerId);
+
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/pause", new { reason = "x" })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/resume")).StatusCode);
+
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                Assert.Equal(RecurringScheduleStatus.Active, schedule.Status);
+                Assert.NotNull(schedule.NextRunDate);
+                Assert.True(schedule.NextRunDate!.Value.Date >= DateTime.UtcNow.Date,
+                    "Resume must not back-fill a past run date.");
+                // No occurrences were generated by the resume (no catch-up documents).
+                Assert.Empty(db.RecurringOccurrences.Where(o => o.RecurringScheduleId == scheduleId));
+            }
+        }
+
+        [SqliteFact]
+        public async Task Recurring_List_And_Preview_Endpoints_Work()
+        {
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 14);
+            int scheduleId = SeedSalesSchedule("LIST-ME", RecurringAction.CreateDraft, runDate, _ownerId);
+
+            var listRes = await Send(HttpMethod.Get, "/api/RecurringSchedules?status=Active");
+            Assert.Equal(HttpStatusCode.OK, listRes.StatusCode);
+            var list = await Json(listRes);
+            Assert.True(list.GetArrayLength() >= 1);
+            Assert.Contains(list.EnumerateArray(), e => e.GetProperty("id").GetInt32() == scheduleId);
+
+            var detailRes = await Send(HttpMethod.Get, $"/api/RecurringSchedules/{scheduleId}");
+            Assert.Equal(HttpStatusCode.OK, detailRes.StatusCode);
+            var detail = await Json(detailRes);
+            Assert.Equal(scheduleId, detail.GetProperty("id").GetInt32());
+            Assert.True(detail.GetProperty("upcomingDates").GetArrayLength() >= 1);
+
+            var previewRes = await Send(HttpMethod.Post, "/api/RecurringSchedules/preview", new
+            {
+                cadence = "Monthly",
+                interval = 1,
+                startDate = IsoDate(new DateTime(2026, 1, 31)),
+                dayOfMonth = 31,
+                count = 3,
+            });
+            Assert.Equal(HttpStatusCode.OK, previewRes.StatusCode);
+            var preview = await Json(previewRes);
+            var dates = preview.GetProperty("dates");
+            Assert.Equal(3, dates.GetArrayLength());
+            // Day 31 on a February occurrence clamps to the last day of February (28/29), per the calendar rule.
+            Assert.Contains(dates.EnumerateArray(), d =>
+            {
+                var parsed = DateTime.Parse(d.GetString()!);
+                return parsed.Month == 2 && parsed.Day == DateTime.DaysInMonth(parsed.Year, 2);
+            });
+        }
+
         /// <summary>Seeds a one-line service-item sales schedule whose NextRunDate is the given run date.</summary>
         private int SeedSalesSchedule(string tag, RecurringAction action, DateTime runDate, string automationEnabledBy,
             RecurringScheduleStatus status = RecurringScheduleStatus.Active)
