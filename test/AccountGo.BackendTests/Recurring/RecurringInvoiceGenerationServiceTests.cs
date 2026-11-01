@@ -59,6 +59,9 @@ namespace AccountGo.BackendTests.Recurring
                 .Returns<Dto.Sales.SalesInvoice>(dto => Core.Domain.Error.Result<Dto.Sales.SalesInvoice>.Success(PersistDraftFromDto(dto)));
             _sales.Setup(s => s.GetSalesInvoiceById(It.IsAny<int>()))
                 .Returns<int>(id => _db.SalesInvoiceHeaders.Include(h => h.SalesInvoiceLines).First(h => h.Id == id));
+            // The service stamps the recurring Origin on the saved header via the void UpdateSalesInvoice overload.
+            _sales.Setup(s => s.UpdateSalesInvoice(It.IsAny<SalesInvoiceHeader>()))
+                .Callback<SalesInvoiceHeader>(_ => _db.SaveChanges());
 
             _service = new RecurringInvoiceGenerationService(
                 _tenant,
@@ -117,7 +120,8 @@ namespace AccountGo.BackendTests.Recurring
             int customerId,
             RecurringAction action,
             string? automationEnabledBy = null,
-            RecurringServicePeriodMode periodMode = RecurringServicePeriodMode.CurrentMonth)
+            RecurringServicePeriodMode periodMode = RecurringServicePeriodMode.CurrentMonth,
+            RecurringCadence cadence = RecurringCadence.Monthly)
         {
             var schedule = new RecurringSchedule
             {
@@ -125,7 +129,7 @@ namespace AccountGo.BackendTests.Recurring
                 Kind = RecurringScheduleKind.SalesInvoice,
                 PartyId = customerId,
                 Name = "Retainer",
-                Cadence = RecurringCadence.Monthly,
+                Cadence = cadence,
                 Interval = 1,
                 DayOfMonth = 1,
                 StartDate = new DateTime(2026, 1, 1),
@@ -305,6 +309,10 @@ namespace AccountGo.BackendTests.Recurring
             var reloaded = Reload(occ.Id);
             Assert.Equal(RecurringOccurrenceStatus.Issued, reloaded.Status);
             _sales.Verify(s => s.PostSalesInvoice(result.SalesInvoiceId!.Value), Times.Once);
+
+            // #5: the generated invoice is stamped with the recurring origin.
+            var saved = _db.SalesInvoiceHeaders.AsNoTracking().First(i => i.Id == result.SalesInvoiceId!.Value);
+            Assert.Equal(Core.Domain.SalesInvoiceOrigins.RecurringSchedule, saved.Origin);
         }
 
         [Fact]
@@ -493,6 +501,148 @@ namespace AccountGo.BackendTests.Recurring
 
             Assert.Equal(first, second);
             Assert.Single(_db.RecurringOccurrences.Where(o => o.RecurringScheduleId == schedule.Id));
+        }
+
+        // ---- #2: quarterly/yearly must stay drafts even when all other guards pass ----
+
+        [Theory]
+        [InlineData(RecurringCadence.Quarterly)]
+        [InlineData(RecurringCadence.Yearly)]
+        public void ProcessOccurrence_AutoIssue_MultiMonthCadence_DowngradesToDraft(RecurringCadence cadence)
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var owner = AddMember("auto-user", CompanyMemberRole.Owner);
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var tax = AddTax(12m);
+            var schedule = AddSchedule(customer.Id, RecurringAction.AutoIssue, automationEnabledBy: owner.UserId, cadence: cadence);
+            AddLine(schedule.Id, item.Id, taxId: tax.Id);
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "lease-1");
+
+            var result = _service.ProcessOccurrence(occ.Id, "lease-1");
+
+            Assert.Equal(RecurringGenerationOutcome.DraftCreatedGuardFailed, result.Outcome);
+            Assert.Equal(RecurringGuardReasons.MultiMonthCadence, Reload(occ.Id).GuardFailureReason);
+            _sales.Verify(s => s.PostSalesInvoice(It.IsAny<int>()), Times.Never);
+        }
+
+        // ---- #6: a tax that no longer resolves makes CreateSalesInvoice throw; fail closed, never left Running ----
+
+        [Fact]
+        public void ProcessOccurrence_CreateThrowsForArchivedTax_FailsClosed_NotLeftRunning()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var tax = AddTax(12m, active: false); // archived
+            var schedule = AddSchedule(customer.Id, RecurringAction.AutoIssue);
+            AddLine(schedule.Id, item.Id, taxId: tax.Id);
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "lease-1");
+
+            // The real CreateSalesInvoice throws for an archived tax. Simulate that for this occurrence's draft.
+            _sales.Setup(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()))
+                .Throws(new InvalidOperationException($"{tax.TaxName} is archived. Pick another tax for this line."));
+
+            var result = _service.ProcessOccurrence(occ.Id, "lease-1");
+
+            Assert.Equal(RecurringGenerationOutcome.Failed, result.Outcome);
+            Assert.Equal(RecurringErrorCodes.TaxNotResolved, result.ErrorCode);
+            var reloaded = Reload(occ.Id);
+            Assert.Equal(RecurringOccurrenceStatus.Failed, reloaded.Status);
+            Assert.NotEqual(RecurringOccurrenceStatus.Running, reloaded.Status);
+            Assert.Null(reloaded.SalesInvoiceId);
+        }
+
+        // ---- #1: a second process of the same occurrence creates no second document ----
+
+        [Fact]
+        public void ProcessOccurrence_SecondCallSameOccurrence_DoesNotCreateSecondInvoice()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            AddLine(schedule.Id, item.Id);
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "lease-1");
+
+            var first = _service.ProcessOccurrence(occ.Id, "lease-1");
+            Assert.Equal(RecurringGenerationOutcome.DraftCreated, first.Outcome);
+
+            // A second call (same lease, e.g. a duplicate run-now) must be an idempotent no-op, not a new invoice.
+            var second = _service.ProcessOccurrence(occ.Id, "lease-1");
+            Assert.Equal(RecurringGenerationOutcome.AlreadyProcessed, second.Outcome);
+            Assert.Equal(first.SalesInvoiceId, second.SalesInvoiceId);
+            Assert.Single(_db.SalesInvoiceHeaders.Where(i => i.CompanyId == _company.Id));
+            _sales.Verify(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()), Times.Once);
+        }
+
+        // ---- #3: run-date validation in EnsureOccurrence ----
+
+        [Fact]
+        public void EnsureOccurrence_NonScheduledDate_Throws()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            // Monthly on day 1 from 2026-01-01; the 15th is never a run date.
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+
+            Assert.Throws<InvalidRunDateException>(() =>
+                _service.EnsureOccurrence(schedule.Id, new DateTime(2026, 6, 15), "lease-1", DateTime.UtcNow.AddMinutes(5)));
+        }
+
+        [Fact]
+        public void EnsureOccurrence_BeforeStartDate_Throws()
+        {
+            AddCompanySetting(new DateTime(2025, 1, 1));
+            var customer = AddCustomer();
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft); // starts 2026-01-01
+
+            Assert.Throws<InvalidRunDateException>(() =>
+                _service.EnsureOccurrence(schedule.Id, new DateTime(2025, 12, 1), "lease-1", DateTime.UtcNow.AddMinutes(5)));
+        }
+
+        [Fact]
+        public void EnsureOccurrence_AfterEndDate_Throws()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            schedule.EndDate = new DateTime(2026, 3, 31);
+            _db.SaveChanges();
+
+            Assert.Throws<InvalidRunDateException>(() =>
+                _service.EnsureOccurrence(schedule.Id, new DateTime(2026, 6, 1), "lease-1", DateTime.UtcNow.AddMinutes(5)));
+        }
+
+        [Fact]
+        public void EnsureOccurrence_PastMaxOccurrences_Throws()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            schedule.MaxOccurrences = 2; // only 2026-01-01 and 2026-02-01
+            _db.SaveChanges();
+
+            // The 3rd run date (2026-03-01) is past the limit.
+            Assert.Throws<InvalidRunDateException>(() =>
+                _service.EnsureOccurrence(schedule.Id, new DateTime(2026, 3, 1), "lease-1", DateTime.UtcNow.AddMinutes(5)));
+        }
+
+        [Fact]
+        public void EnsureOccurrence_ValidSeriesDate_Creates()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+
+            var id = _service.EnsureOccurrence(schedule.Id, new DateTime(2026, 4, 1), "lease-1", DateTime.UtcNow.AddMinutes(5));
+
+            Assert.True(id > 0);
+            var occ = _db.RecurringOccurrences.AsNoTracking().Single(o => o.Id == id);
+            Assert.Equal(new DateTime(2026, 4, 1), occ.ScheduledRunDate);
         }
     }
 }
