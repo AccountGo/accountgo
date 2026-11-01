@@ -1,0 +1,528 @@
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Core.Data;
+using Core.Domain;
+using Core.Domain.Items;
+using Core.Domain.Recurring;
+using Core.Domain.Recurring.Calendar;
+using Core.Domain.Sales;
+using Core.Domain.Security;
+using Core.Domain.TaxSystem;
+using Core.Tenancy;
+using Microsoft.Extensions.Logging;
+using Services.Inventory;
+using Services.Sales;
+
+namespace Services.Recurring
+{
+    /// <summary>
+    /// #482: processes a claimed sales-invoice occurrence into a draft invoice, and issues it when the schedule
+    /// asks for auto-issue and every guard in the ticket passes. See <see cref="IRecurringInvoiceGenerationService"/>.
+    /// </summary>
+    public sealed class RecurringInvoiceGenerationService : IRecurringInvoiceGenerationService
+    {
+        private readonly ITenantContext _tenant;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ISalesService _salesService;
+        private readonly IInventoryService _inventoryService;
+        private readonly IRepository<RecurringOccurrence> _occurrenceRepo;
+        private readonly IRepository<RecurringSchedule> _scheduleRepo;
+        private readonly IRepository<RecurringScheduleLine> _lineRepo;
+        private readonly IRepository<Customer> _customerRepo;
+        private readonly IRepository<CompanySetting> _companySettingRepo;
+        private readonly IRepository<Tax> _taxRepo;
+        private readonly IRepository<CompanyMember> _memberRepo;
+        private readonly IRepository<SecurityRolePermission> _rolePermissionRepo;
+        private readonly ILogger<RecurringInvoiceGenerationService> _logger;
+
+        public RecurringInvoiceGenerationService(
+            ITenantContext tenant,
+            IUnitOfWork unitOfWork,
+            ISalesService salesService,
+            IInventoryService inventoryService,
+            IRepository<RecurringOccurrence> occurrenceRepo,
+            IRepository<RecurringSchedule> scheduleRepo,
+            IRepository<RecurringScheduleLine> lineRepo,
+            IRepository<Customer> customerRepo,
+            IRepository<CompanySetting> companySettingRepo,
+            IRepository<Tax> taxRepo,
+            IRepository<CompanyMember> memberRepo,
+            IRepository<SecurityRolePermission> rolePermissionRepo,
+            ILogger<RecurringInvoiceGenerationService> logger)
+        {
+            _tenant = tenant;
+            _unitOfWork = unitOfWork;
+            _salesService = salesService;
+            _inventoryService = inventoryService;
+            _occurrenceRepo = occurrenceRepo;
+            _scheduleRepo = scheduleRepo;
+            _lineRepo = lineRepo;
+            _customerRepo = customerRepo;
+            _companySettingRepo = companySettingRepo;
+            _taxRepo = taxRepo;
+            _memberRepo = memberRepo;
+            _rolePermissionRepo = rolePermissionRepo;
+            _logger = logger;
+        }
+
+        public int EnsureOccurrence(int scheduleId, DateTime scheduledRunDate, string leaseOwner, DateTime leaseUntil)
+        {
+            var companyId = _tenant.RequireCompanyId();
+            var runDate = scheduledRunDate.Date;
+
+            var existing = _occurrenceRepo.Table
+                .FirstOrDefault(o => o.RecurringScheduleId == scheduleId && o.ScheduledRunDate == runDate);
+            if (existing != null)
+            {
+                // Claim an occurrence that is free to run: still Scheduled, or Running with an expired lease
+                // (a crashed prior attempt). A live lease held by someone else, or an already-finished occurrence,
+                // is returned untouched for ProcessOccurrence to treat as abort/replay.
+                var leaseExpired = !existing.LeasedUntil.HasValue || existing.LeasedUntil.Value < DateTime.UtcNow;
+                if (existing.Status == RecurringOccurrenceStatus.Scheduled
+                    || (existing.Status == RecurringOccurrenceStatus.Running && leaseExpired)
+                    || (existing.Status == RecurringOccurrenceStatus.Failed && !existing.SalesInvoiceId.HasValue))
+                {
+                    existing.Status = RecurringOccurrenceStatus.Running;
+                    existing.LeasedBy = leaseOwner;
+                    existing.LeasedUntil = leaseUntil;
+                    existing.ErrorCode = null;
+                    existing.ErrorMessage = null;
+                    existing.GuardFailureReason = null;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    _occurrenceRepo.Update(existing);
+                }
+                return existing.Id;
+            }
+
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId)
+                ?? throw new InvalidOperationException($"Recurring schedule {scheduleId} not found.");
+
+            var documentDate = runDate;
+            var (periodStart, periodEnd) = NextDateCalculator.ComputeServicePeriod(documentDate, schedule.ServicePeriodMode);
+
+            var occurrence = new RecurringOccurrence
+            {
+                CompanyId = companyId,
+                RecurringScheduleId = scheduleId,
+                ScheduledRunDate = runDate,
+                PeriodStart = periodStart,
+                PeriodEnd = periodEnd,
+                DocumentDate = documentDate,
+                Status = RecurringOccurrenceStatus.Running,
+                IdempotencyKey = BuildIdempotencyKey(companyId, scheduleId, runDate),
+                LeasedBy = leaseOwner,
+                LeasedUntil = leaseUntil,
+                AttemptCount = 0,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            // The unique (CompanyId, ScheduleId, ScheduledRunDate) index makes this safe under a race: a
+            // concurrent insert of the same run date throws on SaveChanges, and we fall back to the existing row.
+            try
+            {
+                _occurrenceRepo.Insert(occurrence);
+                return occurrence.Id;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Occurrence for schedule {ScheduleId} on {RunDate} already exists; reusing.", scheduleId, runDate);
+                _unitOfWork.DiscardPendingChanges();
+                var raced = _occurrenceRepo.Table
+                    .FirstOrDefault(o => o.RecurringScheduleId == scheduleId && o.ScheduledRunDate == runDate);
+                if (raced != null)
+                    return raced.Id;
+                throw;
+            }
+        }
+
+        public RecurringGenerationResult ProcessOccurrence(int occurrenceId, string leaseOwner)
+        {
+            var occurrence = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrenceId);
+            if (occurrence == null)
+                return RecurringGenerationResult.Aborted(occurrenceId, "Occurrence not found.");
+
+            // Idempotent replay: the occurrence already produced a document.
+            if (occurrence.SalesInvoiceId.HasValue &&
+                (occurrence.Status == RecurringOccurrenceStatus.DraftCreated ||
+                 occurrence.Status == RecurringOccurrenceStatus.Issued))
+            {
+                return RecurringGenerationResult.AlreadyProcessed(occurrenceId, occurrence.SalesInvoiceId);
+            }
+
+            // Only a leased, in-progress occurrence may be processed, and only by its lease owner.
+            if (occurrence.Status != RecurringOccurrenceStatus.Running)
+                return RecurringGenerationResult.Aborted(occurrenceId, $"Occurrence is {occurrence.Status}, not Running.");
+            if (!HoldsLease(occurrence, leaseOwner))
+                return RecurringGenerationResult.Aborted(occurrenceId, RecurringGuardReasons.LeaseNotHeld);
+
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == occurrence.RecurringScheduleId);
+            if (schedule == null)
+                return Fail(occurrence, null, RecurringErrorCodes.InvalidSchedule, "Parent schedule not found.");
+            if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
+                return RecurringGenerationResult.Aborted(occurrenceId, "Occurrence is not a sales-invoice schedule.");
+
+            var lines = _lineRepo.Table
+                .Where(l => l.RecurringScheduleId == schedule.Id)
+                .OrderBy(l => l.SortOrder)
+                .ToList();
+
+            var customer = _customerRepo.Table.FirstOrDefault(c => c.Id == schedule.PartyId);
+            if (customer == null)
+                return Fail(occurrence, null, RecurringErrorCodes.InvalidSchedule, "Customer not found for schedule.");
+
+            // Build + save the draft, then decide draft-vs-issue. Both happen in one transaction so a posting
+            // failure rolls the whole attempt back; the occurrence is then marked failed in a fresh write.
+            using var tx = _unitOfWork.BeginSerializableTransaction();
+
+            Dto.Sales.SalesInvoice draftDto;
+            try
+            {
+                draftDto = BuildDraftDto(schedule, lines, customer, occurrence);
+            }
+            catch (RecurringGenerationException ex)
+            {
+                tx.Dispose();
+                return Fail(occurrence, null, ex.ErrorCode, ex.Message);
+            }
+
+            // CreateSalesInvoice goes through the same path the sales UI uses: it builds the backing sales order,
+            // saves a Draft, and resolves per-line tax amounts.
+            var createResult = _salesService.CreateSalesInvoice(draftDto);
+            if (createResult.IsFailure || createResult.Value?.Id is not int invoiceId || invoiceId == 0)
+            {
+                var reason = createResult.IsFailure ? createResult.Error.Message : "Could not create the draft invoice.";
+                tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
+                return Fail(occurrence, null, RecurringErrorCodes.InvalidSchedule, reason);
+            }
+
+            var invoice = _salesService.GetSalesInvoiceById(invoiceId);
+            occurrence.SalesInvoiceId = invoice.Id;
+            occurrence.UpdatedAt = DateTime.UtcNow;
+
+            var autoIssue = schedule.Action == RecurringAction.AutoIssue;
+            if (!autoIssue)
+            {
+                occurrence.Status = RecurringOccurrenceStatus.DraftCreated;
+                _occurrenceRepo.Update(occurrence);
+                tx.Commit();
+                return RecurringGenerationResult.Draft(occurrenceId, invoice.Id);
+            }
+
+            // Auto-issue path: evaluate the #482 guards.
+            var guard = EvaluateAutoIssueGuards(schedule, customer, invoice, occurrence);
+
+            if (guard.Decision == GuardDecision.DowngradeToDraft)
+            {
+                occurrence.Status = RecurringOccurrenceStatus.DraftCreated;
+                occurrence.GuardFailureReason = guard.Reason;
+                occurrence.UpdatedAt = DateTime.UtcNow;
+                _occurrenceRepo.Update(occurrence);
+                tx.Commit();
+                return RecurringGenerationResult.DraftGuardFailed(occurrenceId, invoice.Id, guard.Reason!);
+            }
+
+            if (guard.Decision == GuardDecision.FailClosed)
+            {
+                // Do not post. Roll back the whole attempt (including the draft) and mark the occurrence failed.
+                tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
+                return Fail(occurrence, null, guard.ErrorCode!, guard.Reason!);
+            }
+
+            // All guards passed: issue (post GL) and complete the occurrence in the same transaction.
+            try
+            {
+                _salesService.PostSalesInvoice(invoice.Id);
+            }
+            catch (Core.Domain.BooksLockedException ex)
+            {
+                tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
+                return Fail(occurrence, null, RecurringErrorCodes.BooksLocked, ex.Message);
+            }
+            catch (Core.Domain.BooksStartViolationException ex)
+            {
+                tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
+                return Fail(occurrence, null, RecurringErrorCodes.BooksLocked, ex.Message);
+            }
+            catch (Exception ex)
+            {
+                tx.Dispose();
+                _unitOfWork.DiscardPendingChanges();
+                return Fail(occurrence, null, RecurringErrorCodes.PostFailed, ex.Message);
+            }
+
+            occurrence.Status = RecurringOccurrenceStatus.Issued;
+            occurrence.GuardFailureReason = null;
+            occurrence.UpdatedAt = DateTime.UtcNow;
+            _occurrenceRepo.Update(occurrence);
+            tx.Commit();
+            return RecurringGenerationResult.Issued(occurrenceId, invoice.Id);
+        }
+
+        // ----- draft construction -----
+
+        private Dto.Sales.SalesInvoice BuildDraftDto(
+            RecurringSchedule schedule,
+            IReadOnlyList<RecurringScheduleLine> lines,
+            Customer customer,
+            RecurringOccurrence occurrence)
+        {
+            if (lines.Count == 0)
+                throw new RecurringGenerationException(RecurringErrorCodes.InvalidSchedule, "The schedule has no lines to invoice.");
+
+            var dto = new Dto.Sales.SalesInvoice
+            {
+                CustomerId = customer.Id,
+                InvoiceDate = occurrence.DocumentDate.Date,
+                PaymentTermId = schedule.PaymentTermId,
+                Notes = schedule.Notes,
+                PaymentInstructions = schedule.PaymentInstructions,
+                No = null,
+                SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
+            };
+
+            foreach (var line in lines)
+            {
+                if (!line.ItemId.HasValue)
+                    throw new RecurringGenerationException(
+                        RecurringErrorCodes.InvalidSchedule,
+                        "A schedule line has no item. Free-text lines can't be generated into an invoice yet.");
+
+                var item = _inventoryService.GetItemById(line.ItemId.Value)
+                    ?? throw new RecurringGenerationException(
+                        RecurringErrorCodes.InvalidSchedule, $"Item {line.ItemId} not found.");
+
+                var measurementId = item.SellMeasurementId ?? item.SmallestMeasurementId
+                    ?? throw new RecurringGenerationException(
+                        RecurringErrorCodes.InvalidSchedule,
+                        $"Item {item.No} has no unit of measure to copy onto the invoice.");
+
+                dto.SalesInvoiceLines!.Add(new Dto.Sales.SalesInvoiceLine
+                {
+                    ItemId = item.Id,
+                    MeasurementId = measurementId,
+                    Quantity = line.Quantity,
+                    Amount = line.Amount,
+                    Discount = ToPercentDiscount(line),
+                    TaxId = line.TaxId,
+                    SalesAccountId = line.AccountId,
+                    ItemDescription = SalesInvoiceLine.DescriptionFor(line.Description, item),
+                });
+            }
+
+            return dto;
+        }
+
+        /// <summary>
+        /// The sales invoice line stores discount as a percentage. Convert an absolute schedule discount into the
+        /// equivalent percentage of the gross line so the posted figures match the schedule's intent.
+        /// </summary>
+        private static decimal ToPercentDiscount(RecurringScheduleLine line)
+        {
+            if (line.DiscountType == RecurringDiscountType.Percentage)
+                return line.Discount;
+
+            var gross = line.Quantity * line.Amount;
+            if (gross <= 0)
+                return 0;
+            var percent = line.Discount / gross * 100m;
+            return Math.Round(Math.Clamp(percent, 0m, 100m), 6, MidpointRounding.AwayFromZero);
+        }
+
+        // ----- guard evaluation -----
+
+        private enum GuardDecision { Pass, DowngradeToDraft, FailClosed }
+
+        private readonly struct GuardResult
+        {
+            public GuardDecision Decision { get; init; }
+            public string? Reason { get; init; }
+            public string? ErrorCode { get; init; }
+
+            public static GuardResult Pass() => new() { Decision = GuardDecision.Pass };
+            public static GuardResult Downgrade(string reason) => new() { Decision = GuardDecision.DowngradeToDraft, Reason = reason };
+            public static GuardResult Fail(string code, string reason) => new() { Decision = GuardDecision.FailClosed, ErrorCode = code, Reason = reason };
+        }
+
+        private GuardResult EvaluateAutoIssueGuards(
+            RecurringSchedule schedule,
+            Customer customer,
+            SalesInvoiceHeader invoice,
+            RecurringOccurrence occurrence)
+        {
+            // Fail-closed guards first: a locked/out-of-range posting date or a tax that won't resolve must never
+            // slip through to a draft-and-forget; per #482 they fail the occurrence without posting.
+
+            // Tax resolution: a line that names a tax which is missing/archived cannot be issued; and a line that
+            // resolves to zero tax because resolution failed must not be issued silently.
+            var taxResult = CheckTaxResolves(invoice);
+            if (taxResult.Decision == GuardDecision.FailClosed)
+                return taxResult;
+
+            // Posting date must be after BooksLockedThrough and on/after books start.
+            var dateResult = CheckPostingDate(invoice.Date);
+            if (dateResult.Decision == GuardDecision.FailClosed)
+                return dateResult;
+
+            // Downgradeable guards: a valid draft exists; a person can review and issue it.
+
+            // Service period and document date must fall in the same calendar month.
+            if (NextDateCalculator.ServicePeriodCrossesMonthBoundary(occurrence.PeriodStart, occurrence.PeriodEnd)
+                || occurrence.DocumentDate.Year != occurrence.PeriodStart.Year
+                || occurrence.DocumentDate.Month != occurrence.PeriodStart.Month)
+            {
+                return GuardResult.Downgrade(RecurringGuardReasons.ServicePeriodCrossesMonth);
+            }
+
+            // Client must be active.
+            if (customer.ArchivedAt != null)
+                return GuardResult.Downgrade(RecurringGuardReasons.ClientNotActive);
+
+            // No stock-tracked lines.
+            if (HasStockTrackedLine(invoice))
+                return GuardResult.Downgrade(RecurringGuardReasons.StockTrackedLine);
+
+            // Auto-issue must have been enabled by a user still authorized to post invoices.
+            if (!AutomationActorCanPost(schedule))
+                return GuardResult.Downgrade(RecurringGuardReasons.AutomationActorNotAuthorized);
+
+            return GuardResult.Pass();
+        }
+
+        private GuardResult CheckTaxResolves(SalesInvoiceHeader invoice)
+        {
+            var taxes = _taxRepo.Table.ToList();
+            foreach (var line in invoice.SalesInvoiceLines)
+            {
+                if (!line.TaxId.HasValue)
+                {
+                    // A line with no tax is allowed only when it genuinely has no tax. We cannot distinguish a
+                    // deliberate zero-tax line from a failed resolution here, so a null TaxId is treated as "no tax
+                    // expected" — the schedule line is the source of truth for whether tax applies.
+                    continue;
+                }
+
+                var tax = taxes.FirstOrDefault(t => t.Id == line.TaxId.Value);
+                if (tax == null)
+                    return GuardResult.Fail(RecurringErrorCodes.TaxNotResolved,
+                        $"Tax {line.TaxId} on a line could not be found; refusing to issue.");
+                if (!tax.IsActive)
+                    return GuardResult.Fail(RecurringErrorCodes.TaxNotResolved,
+                        $"Tax {tax.TaxName} is archived; refusing to issue at a wrong tax.");
+                if (tax.Rate != 0 && line.TaxAmount == 0)
+                    return GuardResult.Fail(RecurringErrorCodes.TaxNotResolved,
+                        $"Tax {tax.TaxName} resolved to zero on a taxable line; refusing to issue.");
+            }
+
+            return GuardResult.Pass();
+        }
+
+        private GuardResult CheckPostingDate(DateTime documentDate)
+        {
+            var setting = _companySettingRepo.Table.FirstOrDefault();
+            if (setting == null)
+                return GuardResult.Pass();
+
+            if (documentDate.Date < setting.BooksStartDate.Date)
+                return GuardResult.Fail(RecurringErrorCodes.BooksLocked,
+                    $"Document date {documentDate:yyyy-MM-dd} is before books start {setting.BooksStartDate:yyyy-MM-dd}.");
+
+            if (setting.BooksLockedThrough.HasValue && documentDate.Date <= setting.BooksLockedThrough.Value.Date)
+                return GuardResult.Fail(RecurringErrorCodes.BooksLocked,
+                    $"Document date {documentDate:yyyy-MM-dd} is in a locked period (locked through {setting.BooksLockedThrough.Value:yyyy-MM-dd}).");
+
+            return GuardResult.Pass();
+        }
+
+        private bool HasStockTrackedLine(SalesInvoiceHeader invoice)
+        {
+            foreach (var line in invoice.SalesInvoiceLines)
+            {
+                var item = _inventoryService.GetItemById(line.ItemId);
+                if (item?.ItemCategory?.ItemType == ItemTypes.Purchased)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Resolves the permissions of the user who enabled auto-issue (stored on the schedule) in this company,
+        /// mirroring how the request pipeline resolves a member's permissions, and confirms they may post invoices.
+        /// </summary>
+        private bool AutomationActorCanPost(RecurringSchedule schedule)
+        {
+            var userId = schedule.AutomationEnabledBy;
+            if (string.IsNullOrWhiteSpace(userId))
+                return false;
+
+            var member = _memberRepo.Table
+                .Where(m => m.CompanyId == schedule.CompanyId
+                    && m.UserId == userId
+                    && m.Status == CompanyMemberStatus.Active)
+                .Select(m => new { m.Id, m.Role })
+                .FirstOrDefault();
+            if (member == null)
+                return false;
+
+            // Owners and admins hold every permission, exactly as the request pipeline grants them.
+            if (member.Role == CompanyMemberRole.Owner || member.Role == CompanyMemberRole.Admin)
+                return true;
+
+            var roleIds = _memberRepo.Table
+                .Where(m => m.Id == member.Id)
+                .SelectMany(m => m.SecurityRoles.Select(r => r.SecurityRoleId))
+                .ToList();
+            if (roleIds.Count == 0)
+                return false;
+
+            return _rolePermissionRepo.Table
+                .Any(srp => roleIds.Contains(srp.SecurityRoleId)
+                    && srp.SecurityPermission.Name == SystemPermissions.SalesInvoicesPost);
+        }
+
+        // ----- helpers -----
+
+        private static bool HoldsLease(RecurringOccurrence occurrence, string leaseOwner) =>
+            !string.IsNullOrEmpty(leaseOwner)
+            && string.Equals(occurrence.LeasedBy, leaseOwner, StringComparison.Ordinal)
+            && occurrence.LeasedUntil.HasValue
+            && occurrence.LeasedUntil.Value >= DateTime.UtcNow;
+
+        private RecurringGenerationResult Fail(RecurringOccurrence occurrence, int? salesInvoiceId, string errorCode, string message)
+        {
+            // Re-load the occurrence fresh: a fail-closed path may have cleared the change tracker to discard a
+            // rolled-back draft, which detaches the instance we were handed. Mutating a detached entity would not
+            // persist, so fetch the tracked row and stamp the failure on it.
+            var tracked = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrence.Id) ?? occurrence;
+            tracked.Status = RecurringOccurrenceStatus.Failed;
+            tracked.ErrorCode = Truncate(errorCode, 50);
+            tracked.ErrorMessage = Truncate(message, 2000);
+            tracked.AttemptCount += 1;
+            tracked.SalesInvoiceId = salesInvoiceId;
+            tracked.GuardFailureReason = null;
+            tracked.UpdatedAt = DateTime.UtcNow;
+            _occurrenceRepo.Update(tracked);
+            return RecurringGenerationResult.Fail(tracked.Id, salesInvoiceId, errorCode, message);
+        }
+
+        private static string BuildIdempotencyKey(int companyId, int scheduleId, DateTime runDate) =>
+            $"{companyId}-{scheduleId}-{runDate:yyyy-MM-dd}";
+
+        private static string Truncate(string value, int max) =>
+            value.Length <= max ? value : value.Substring(0, max);
+
+        private sealed class RecurringGenerationException : Exception
+        {
+            public string ErrorCode { get; }
+            public RecurringGenerationException(string errorCode, string message) : base(message) => ErrorCode = errorCode;
+        }
+    }
+}
