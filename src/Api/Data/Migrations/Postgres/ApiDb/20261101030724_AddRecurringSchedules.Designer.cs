@@ -2589,6 +2589,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<DateTime>("ScheduledRunDate")
                         .HasColumnType("date");
 
+                    b.Property<bool>("SeriesAdvanced")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("SkipReason")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

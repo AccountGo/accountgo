@@ -633,7 +633,100 @@ namespace AccountGo.BackendTests.Recurring
             _sales.Verify(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()), Times.Once);
         }
 
-        // ---- #3: run-date validation in EnsureOccurrence ----
+        // ---- #480: exactly-once series advancement (concurrency / crash safety) ----
+
+        [Fact]
+        public void RunSchedule_AdvancesSeriesOnce_AndMarksOccurrenceAdvanced()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            schedule.NextRunDate = new DateTime(2026, 6, 1);
+            _db.SaveChanges();
+            AddLine(schedule.Id, item.Id);
+
+            var result = _service.RunSchedule(schedule.Id, new DateTime(2026, 6, 1), "run-1", DateTime.UtcNow.AddMinutes(5));
+            Assert.Equal(RecurringGenerationOutcome.DraftCreated, result.Outcome);
+
+            var reloaded = _db.RecurringSchedules.AsNoTracking().First(s => s.Id == schedule.Id);
+            Assert.Equal(new DateTime(2026, 7, 1), reloaded.NextRunDate);
+            Assert.Equal(1, reloaded.OccurrenceCount);
+            var occurrence = _db.RecurringOccurrences.AsNoTracking().Single(o => o.RecurringScheduleId == schedule.Id);
+            Assert.True(occurrence.SeriesAdvanced);
+        }
+
+        [Fact]
+        public void RunSchedule_ReplayOfCompletedOccurrence_DoesNotAdvanceOrCountTwice()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            schedule.NextRunDate = new DateTime(2026, 6, 1);
+            _db.SaveChanges();
+            AddLine(schedule.Id, item.Id);
+
+            var first = _service.RunSchedule(schedule.Id, new DateTime(2026, 6, 1), "run-1", DateTime.UtcNow.AddMinutes(5));
+            Assert.Equal(RecurringGenerationOutcome.DraftCreated, first.Outcome);
+
+            // A slow/duplicate caller still holding the original date. The serializable ProcessOccurrence sees the
+            // committed document and replays; because the occurrence already advanced the series, the schedule must
+            // be untouched (no second advance, no second count, no second invoice).
+            var replay = _db.RecurringSchedules.First(s => s.Id == schedule.Id);
+            replay.NextRunDate = new DateTime(2026, 6, 1);
+            _db.SaveChanges();
+
+            var second = _service.RunSchedule(schedule.Id, new DateTime(2026, 6, 1), "run-2", DateTime.UtcNow.AddMinutes(5));
+            Assert.Equal(RecurringGenerationOutcome.AlreadyProcessed, second.Outcome);
+            Assert.Equal(first.SalesInvoiceId, second.SalesInvoiceId);
+
+            var reloaded = _db.RecurringSchedules.AsNoTracking().First(s => s.Id == schedule.Id);
+            Assert.Equal(new DateTime(2026, 6, 1), reloaded.NextRunDate); // untouched by the replay
+            Assert.Equal(1, reloaded.OccurrenceCount);
+            Assert.Single(_db.SalesInvoiceHeaders.Where(i => i.CompanyId == _company.Id));
+            _sales.Verify(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()), Times.Once);
+        }
+
+        [Fact]
+        public void RunSchedule_RecoversCompletedButUnadvancedOccurrence_ExactlyOnce()
+        {
+            // Crash safety: the invoice committed but the series advance did not (SeriesAdvanced=false, NextRunDate
+            // still on the completed occurrence). The next run must recover by advancing exactly once, creating no
+            // second document.
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var schedule = AddSchedule(customer.Id, RecurringAction.CreateDraft);
+            schedule.NextRunDate = new DateTime(2026, 6, 1);
+            _db.SaveChanges();
+            AddLine(schedule.Id, item.Id);
+
+            var first = _service.RunSchedule(schedule.Id, new DateTime(2026, 6, 1), "run-1", DateTime.UtcNow.AddMinutes(5));
+            Assert.Equal(RecurringGenerationOutcome.DraftCreated, first.Outcome);
+
+            // Reproduce the stranded post-crash state.
+            var stranded = _db.RecurringSchedules.First(s => s.Id == schedule.Id);
+            stranded.NextRunDate = new DateTime(2026, 6, 1);
+            stranded.OccurrenceCount = 0;
+            var occ = _db.RecurringOccurrences.First(o => o.RecurringScheduleId == schedule.Id);
+            occ.SeriesAdvanced = false;
+            _db.SaveChanges();
+
+            var recover = _service.RunSchedule(schedule.Id, new DateTime(2026, 6, 1), "run-2", DateTime.UtcNow.AddMinutes(5));
+            Assert.Equal(RecurringGenerationOutcome.AlreadyProcessed, recover.Outcome);
+            Assert.Equal(first.SalesInvoiceId, recover.SalesInvoiceId);
+
+            var reloaded = _db.RecurringSchedules.AsNoTracking().First(s => s.Id == schedule.Id);
+            Assert.Equal(new DateTime(2026, 7, 1), reloaded.NextRunDate); // advanced by recovery
+            Assert.Equal(1, reloaded.OccurrenceCount);                    // counted exactly once
+            Assert.True(_db.RecurringOccurrences.AsNoTracking().First(o => o.Id == occ.Id).SeriesAdvanced);
+            Assert.Single(_db.SalesInvoiceHeaders.Where(i => i.CompanyId == _company.Id));
+            _sales.Verify(s => s.CreateSalesInvoice(It.IsAny<Dto.Sales.SalesInvoice>()), Times.Once);
+        }
 
         [Fact]
         public void EnsureOccurrence_NonScheduledDate_Throws()

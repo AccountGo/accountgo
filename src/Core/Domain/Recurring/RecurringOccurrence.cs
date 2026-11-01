@@ -68,6 +68,14 @@ public partial class RecurringOccurrence : BaseEntity, ICompanyOwned
     /// <summary>Why auto-issue or auto-approve did not happen (for drafts that needed review).</summary>
     public string? GuardFailureReason { get; set; }
 
+    /// <summary>
+    /// True once the owning schedule's <see cref="RecurringSchedule.NextRunDate"/> has been advanced past this
+    /// occurrence. Set atomically in the same write that commits the occurrence's terminal state, so the series is
+    /// advanced exactly once per occurrence even across crashes and concurrent/replayed runs. A terminal occurrence
+    /// left with this still false is an interrupted run whose advancement a later run (or replay) completes.
+    /// </summary>
+    public bool SeriesAdvanced { get; set; }
+
     /// <summary>User who manually skipped or released this occurrence.</summary>
     public string? ActionBy { get; set; }
 

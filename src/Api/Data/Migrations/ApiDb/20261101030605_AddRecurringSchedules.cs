@@ -87,7 +87,8 @@ namespace Api.Data.Migrations.ApiDb
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     GuardFailureReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     ActionBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
-                    SkipReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true)
+                    SkipReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    SeriesAdvanced = table.Column<bool>(type: "bit", nullable: false, defaultValue: false)
                 },
                 constraints: table =>
                 {

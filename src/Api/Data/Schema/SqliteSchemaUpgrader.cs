@@ -729,6 +729,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             AddColumnIfMissing(connection, "BankStatementLine", "ExcludedBy", "TEXT NULL");
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionReason", "INTEGER NULL");
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionNote", "TEXT NULL");
+            AddColumnIfMissing(connection, "RecurringOccurrences", "SeriesAdvanced", "INTEGER NOT NULL DEFAULT 0");
 
             using var idx = connection.CreateCommand();
             idx.CommandText = @"CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_ExcludedAt""
@@ -1223,6 +1224,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""GuardFailureReason"" TEXT NULL,
                 ""ActionBy"" TEXT NULL,
                 ""SkipReason"" TEXT NULL,
+                ""SeriesAdvanced"" INTEGER NOT NULL DEFAULT 0,
                 CONSTRAINT ""FK_RecurringOccurrences_RecurringSchedules_RecurringScheduleId"" FOREIGN KEY (""RecurringScheduleId"") REFERENCES ""RecurringSchedules"" (""Id"") ON DELETE RESTRICT,
                 CONSTRAINT ""FK_RecurringOccurrences_SalesInvoiceHeader_SalesInvoiceId"" FOREIGN KEY (""SalesInvoiceId"") REFERENCES ""SalesInvoiceHeader"" (""Id"") ON DELETE RESTRICT,
                 CONSTRAINT ""FK_RecurringOccurrences_PurchaseInvoiceHeader_PurchaseInvoiceId"" FOREIGN KEY (""PurchaseInvoiceId"") REFERENCES ""PurchaseInvoiceHeader"" (""Id"") ON DELETE RESTRICT
