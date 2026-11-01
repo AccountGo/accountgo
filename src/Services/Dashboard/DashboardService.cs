@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Core.Authorization;
 using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Security;
@@ -23,19 +24,22 @@ namespace Services.Dashboard
         private readonly IPurchasingService _purchasingService;
         private readonly IBankAccountService _bankAccountService;
         private readonly ITenantContext _tenantContext;
+        private readonly IAccessAuthorizationService? _authorizationService;
 
         public DashboardService(
             IFinancialService financialService,
             ISalesService salesService,
             IPurchasingService purchasingService,
             IBankAccountService bankAccountService,
-            ITenantContext tenantContext)
+            ITenantContext tenantContext,
+            IAccessAuthorizationService? authorizationService = null)
         {
             _financialService = financialService;
             _salesService = salesService;
             _purchasingService = purchasingService;
             _bankAccountService = bankAccountService;
             _tenantContext = tenantContext;
+            _authorizationService = authorizationService;
         }
 
         public DashboardSummaryDto GetDashboardSummary(
@@ -46,14 +50,30 @@ namespace Services.Dashboard
             int recentActivity = 5)
         {
             var (rangeStart, rangeEnd) = ResolveDateRange(from, to);
+            var (canViewFinancials, canViewSales, canViewPurchases) = ResolveAuthorizedDomains();
+            var canViewBanks = CanViewBankAccounts();
 
-            var accounts = _financialService.GetAccounts().ToList();
-            var ledger = _financialService.MasterGeneralLedger(rangeStart, rangeEnd).ToList();
-            var balanceSheet = _financialService.BalanceSheet().ToList();
-            var customers = _salesService.GetCustomers().ToList();
-            var salesInvoices = _salesService.GetSalesInvoices().ToList();
-            var salesReceipts = _salesService.GetSalesReceipts().ToList();
-            var purchaseInvoices = _purchasingService.GetPurchaseInvoices().ToList();
+            var accounts = (canViewFinancials || canViewBanks)
+                ? (_financialService.GetAccounts()?.ToList() ?? new List<Account>())
+                : new List<Account>();
+            var ledger = canViewFinancials
+                ? (_financialService.MasterGeneralLedger(rangeStart, rangeEnd)?.ToList() ?? new List<MasterGeneralLedger>())
+                : new List<MasterGeneralLedger>();
+            var balanceSheet = canViewFinancials
+                ? (_financialService.BalanceSheet()?.ToList() ?? new List<BalanceSheet>())
+                : new List<BalanceSheet>();
+            var customers = canViewSales
+                ? (_salesService.GetCustomers()?.ToList() ?? new List<Core.Domain.Sales.Customer>())
+                : new List<Core.Domain.Sales.Customer>();
+            var salesInvoices = canViewSales
+                ? (_salesService.GetSalesInvoices()?.ToList() ?? new List<Core.Domain.Sales.SalesInvoiceHeader>())
+                : new List<Core.Domain.Sales.SalesInvoiceHeader>();
+            var salesReceipts = canViewSales
+                ? (_salesService.GetSalesReceipts()?.ToList() ?? new List<Core.Domain.Sales.SalesReceiptHeader>())
+                : new List<Core.Domain.Sales.SalesReceiptHeader>();
+            var purchaseInvoices = canViewPurchases
+                ? (_purchasingService.GetPurchaseInvoices()?.ToList() ?? new List<Core.Domain.Purchases.PurchaseInvoiceHeader>())
+                : new List<Core.Domain.Purchases.PurchaseInvoiceHeader>();
 
             var revenueAccountIds = accounts
                 .Where(a => a.AccountClassId == (int)AccountClasses.Revenue)
@@ -66,21 +86,29 @@ namespace Services.Dashboard
                 .ToHashSet();
 
             // Workspaces without bank records still hold cash in the postable cash accounts (e.g. 10111).
-            var bankAccountIds = _financialService.GetCashAndBanks()
-                .Where(b => b.AccountId.HasValue)
-                .Select(b => b.AccountId!.Value)
-                .Concat(accounts
-                    .Where(a => a.CanPost() && (a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash)))
-                    .Select(a => a.Id))
-                .ToHashSet();
+            var bankAccountIds = canViewFinancials
+                ? (_financialService.GetCashAndBanks() ?? Enumerable.Empty<Bank>())
+                    .Where(b => b.AccountId.HasValue)
+                    .Select(b => b.AccountId!.Value)
+                    .Concat(accounts
+                        .Where(a => a.CanPost() && (a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash)))
+                        .Select(a => a.Id))
+                    .ToHashSet()
+                : new HashSet<int>();
 
-            var moneyInBank = BuildMoneyInBank(accounts);
+            var moneyInBank = canViewFinancials
+                ? BuildMoneyInBank(accounts)
+                : (Total: 0m, BankBalances: CanViewBankAccounts() ? new List<DashboardBankBalanceDto>() : null, UnassignedCash: 0m);
 
             // IncomeStatement excludes ClosingEntries so YTD is unchanged after year-end close.
-            var incomeItems = (_financialService.IncomeStatement(rangeStart, rangeEnd) ?? Enumerable.Empty<IncomeStatement>()).ToList();
+            var incomeItems = canViewFinancials
+                ? (_financialService.IncomeStatement(rangeStart, rangeEnd) ?? Enumerable.Empty<IncomeStatement>()).ToList()
+                : new List<IncomeStatement>();
             var totalSalesYtd = RoundMoney(incomeItems.Where(i => !i.IsExpense).Sum(i => i.Amount));
             var totalExpensesYtd = RoundMoney(incomeItems.Where(i => i.IsExpense).Sum(i => i.Amount));
-            var cashFlowYtd = ComputeNetAmount(ledger, bankAccountIds, normalBalanceIsDebit: true);
+            var cashFlowYtd = canViewFinancials
+                ? ComputeNetAmount(ledger, bankAccountIds, normalBalanceIsDebit: true)
+                : 0m;
 
             var summary = new DashboardSummaryDto
             {
@@ -159,9 +187,44 @@ namespace Services.Dashboard
             return summary;
         }
 
-        private bool CanViewBankAccounts() =>
-            _tenantContext.IsResolved
-            && _tenantContext.Permissions.Contains(SystemPermissions.BankingAccountsView);
+        private (bool CanViewFinancials, bool CanViewSales, bool CanViewPurchases) ResolveAuthorizedDomains()
+        {
+            if (_authorizationService != null)
+            {
+                var domains = _authorizationService.GetAuthorizedDashboardDomains();
+                var financials = domains.Contains("financials");
+                var sales = domains.Contains("sales");
+                var purchases = domains.Contains("purchases");
+                return (financials, sales, purchases);
+            }
+
+            var perms = _tenantContext.Permissions;
+            if (_tenantContext.IsResolved && perms != null && perms.Count > 0)
+            {
+                var financials = perms.Contains(SystemPermissions.FinancialsAccountsView) ||
+                                 perms.Contains(SystemPermissions.FinancialsJournalView) ||
+                                 perms.Contains(SystemPermissions.ReportsView);
+                var sales = perms.Contains(SystemPermissions.SalesInvoicesView) ||
+                            perms.Contains(SystemPermissions.SalesCustomersView);
+                var purchases = perms.Contains(SystemPermissions.PurchasesBillsView) ||
+                                perms.Contains(SystemPermissions.PurchasesVendorsView);
+                return (financials, sales, purchases);
+            }
+
+            return (false, false, false);
+        }
+
+        private bool CanViewBankAccounts()
+        {
+            if (_authorizationService != null)
+            {
+                return _authorizationService.GetAuthorizedDashboardDomains().Contains("banking");
+            }
+
+            return _tenantContext.IsResolved
+                && _tenantContext.Permissions != null
+                && _tenantContext.Permissions.Contains(SystemPermissions.BankingAccountsView);
+        }
 
         /// <summary>
         /// Money in bank split per bank account plus cash accounts no bank record covers. An archived bank is listed (and

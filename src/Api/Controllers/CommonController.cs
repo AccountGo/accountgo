@@ -13,6 +13,9 @@ using Dto.Financial;
 using System.Linq;
 using System;
 using Core.Domain;
+using Core.Domain.Security;
+using Core.Authorization;
+using Api.Filters;
 
 namespace Api.Controllers
 {
@@ -44,6 +47,8 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("Customers")] // api/Common/Customers
+        [RequireModule(SystemModules.Sales)]
+        [RequirePermission(SystemPermissions.SalesCustomersView)]
         public IActionResult Customers()
         {
             var customers = _salesService.GetCustomers();
@@ -61,6 +66,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("PaymentTerms")] // api/Common/PaymentTerms
+        [RequireOperation(AccessOperationCatalog.WorkspaceCurrentView)]
         public IActionResult PaymentTerms()
         {
             var paymentterms = _administrationService.GetPaymentTerms();
@@ -69,6 +75,8 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("Items")] // api/Common/Items
+        [RequireModule(SystemModules.Inventory)]
+        [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems().OrderBy(i => i.Description);
@@ -91,6 +99,8 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("Measurements")] // api/Common/Measurements
+        [RequireModule(SystemModules.Inventory)]
+        [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult Measurements()
         {
             return new ObjectResult(_inventoryService.GetMeasurements().OrderBy(m => m.Description));
@@ -98,6 +108,8 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("Vendors")] // api/Common/Vendors
+        [RequireModule(SystemModules.Purchases)]
+        [RequirePermission(SystemPermissions.PurchasesVendorsView)]
         public IActionResult Vendors()
         {
             var vendors = _purchasingService.GetVendors();
@@ -114,6 +126,8 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("ItemCategories")] // api/Common/ItemCategories
+        [RequireModule(SystemModules.Inventory)]
+        [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult ItemCategories()
         {
             var itemcategories = _inventoryService.GetItemCategories();
@@ -122,6 +136,8 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("CashBanks")] // api/Common/CashBanks
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
         public IActionResult CashBanks()
         {
             // #413 1B: active banks only via BankAccountService (archived excluded).
@@ -139,6 +155,8 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("PostingAccounts")] // api/Common/PostingAccounts
+        [RequireModule(SystemModules.Financials)]
+        [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public IActionResult PostingAccounts()
         {
             var accounts = _financialService.GetAccounts()
@@ -155,6 +173,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("PaymentMethods")] // api/Common/PaymentMethods
+        [RequireOperation(AccessOperationCatalog.WorkspaceCurrentView)]
         public IActionResult PaymentMethods()
         {
             var paymentMethods = new List<Dto.Common.Status>

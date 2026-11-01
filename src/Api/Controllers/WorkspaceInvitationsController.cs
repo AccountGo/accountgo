@@ -6,14 +6,18 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Api.Authorization;
 using Api.Data;
 using Api.Filters;
 using Api.Service;
+using Core.Authorization;
 using Core.Domain;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Controllers
 {
@@ -29,16 +33,28 @@ namespace Api.Controllers
         private readonly ITenantContext _tenant;
         private readonly WorkspaceInvitationService _invitations;
         private readonly Core.Entitlements.IEntitlementService _entitlements;
+        private readonly IAccessAuthorizationService _authorizationService;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
+        private IAccessAuthorizationService AuthService =>
+            _authorizationService
+            ?? HttpContext?.RequestServices?.GetService<IAccessAuthorizationService>()
+            ?? new AccessAuthorizationService(
+                _tenant,
+                _entitlements ?? HttpContext?.RequestServices?.GetService<Core.Entitlements.IEntitlementService>(),
+                _db,
+                new HttpContextAccessor { HttpContext = HttpContext },
+                HttpContext?.RequestServices?.GetService<Api.Service.IMfaGate>());
+
         public WorkspaceInvitationsController(ApiDbContext db, ApplicationIdentityDbContext identity, ITenantContext tenant, WorkspaceInvitationService invitations,
-            Core.Entitlements.IEntitlementService entitlements = null)
+            Core.Entitlements.IEntitlementService entitlements = null, IAccessAuthorizationService authorizationService = null)
         {
             _db = db;
             _identity = identity;
             _tenant = tenant;
             _invitations = invitations;
             _entitlements = entitlements;
+            _authorizationService = authorizationService;
         }
 
         [HttpGet]
@@ -57,6 +73,10 @@ namespace Api.Controllers
             public string Email { get; set; }
             public string Role { get; set; } = "Member";
             public List<int> SecurityRoleIds { get; set; } = new List<int>();
+#nullable enable
+            public string? ApprovedByUserId { get; set; }
+            public string? ApprovalRequestId { get; set; }
+#nullable restore
         }
 
         [HttpPost]
@@ -74,10 +94,29 @@ namespace Api.Controllers
             using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
             {
                 var user = _identity.Users.SingleOrDefault(u => u.NormalizedEmail == email.ToUpperInvariant());
+                if (user != null && user.Id == UserId)
+                    return Problem(statusCode: 403, title: "Self-grant denied", detail: "You cannot invite yourself to elevate roles.");
                 if (user != null && user.DeletedAt != null)
                     return Problem(statusCode: 409, title: AccountDeletionService.ClosedEmailTitle);
                 if (user != null && _db.CompanyMembers.Any(m => m.CompanyId == companyId && m.UserId == user.Id))
                     return Problem(statusCode: 409, title: "User is already a workspace member");
+                if (request.SecurityRoleIds.Count > 0)
+                {
+                    var decision = AuthService.Authorize(
+                        AccessOperationCatalog.WorkspaceInvitationsCreate,
+                        new AccessResourceContext
+                        {
+                            WorkspaceCompanyId = companyId,
+                            TargetUserId = user?.Id,
+                            TargetEmail = email,
+                            RequestedWorkspaceRole = role,
+                            RequestedSecurityRoleIds = request.SecurityRoleIds.Distinct().ToList(),
+                            IndependentApproverUserId = request.ApprovedByUserId,
+                            ApprovalRequestId = request.ApprovalRequestId
+                        });
+                    if (!decision.Allowed)
+                        return Problem(statusCode: decision.HttpStatus, title: decision.SafeTitle, detail: decision.SafeMessage);
+                }
                 var hourAgo = DateTime.UtcNow.AddHours(-1);
                 if (_db.CompanyInvitations.Count(i => i.CompanyId == companyId && i.CreatedAt > hourAgo) >= 20)
                     return Problem(statusCode: 429, title: "Workspace invitation limit reached", detail: "Limit: 20 invitations per hour.");
@@ -99,6 +138,24 @@ namespace Api.Controllers
                 await SendAsync(invitation);
                 _db.CompanyInvitations.Add(invitation);
                 await _db.SaveChangesAsync();
+
+                if (!string.IsNullOrWhiteSpace(request.ApprovalRequestId))
+                {
+                    _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                    {
+                        CompanyId = companyId,
+                        UserName = request.ApprovedByUserId ?? UserId,
+                        AuditEventDateUTC = DateTime.UtcNow,
+                        AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                        TableName = "__InvitationApproval",
+                        RecordId = invitation.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        FieldName = "ApprovalRequestId",
+                        OriginalValue = request.ApprovedByUserId ?? string.Empty,
+                        NewValue = request.ApprovalRequestId
+                    });
+                    await _db.SaveChangesAsync();
+                }
+
                 tx.Commit();
                 return StatusCode(201, new { id = invitation.Id, email, role = role.ToString(), expiresAt = invitation.ExpiresAt });
             }

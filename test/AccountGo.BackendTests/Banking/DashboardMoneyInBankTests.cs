@@ -50,8 +50,8 @@ public class DashboardMoneyInBankTests
             .Returns(new List<BalanceSheet>());
 
         var permissions = canViewBanks
-            ? new HashSet<string> { SystemPermissions.BankingAccountsView }
-            : new HashSet<string>();
+            ? new HashSet<string> { SystemPermissions.FinancialsAccountsView, SystemPermissions.BankingAccountsView }
+            : new HashSet<string> { SystemPermissions.FinancialsAccountsView };
         var service = new DashboardService(
             financial.Object,
             new Mock<ISalesService>(MockBehavior.Loose).Object,

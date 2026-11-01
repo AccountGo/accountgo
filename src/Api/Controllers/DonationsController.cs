@@ -1,4 +1,6 @@
 using Api.ActionFilters;
+using Api.Filters;
+using Core.Domain.Security;
 using Dto.Donations;
 using Microsoft.AspNetCore.Mvc;
 using Services.Donations;
@@ -7,6 +9,7 @@ using Services.Financial;
 namespace Api.Controllers
 {
     [Core.Tenancy.TenantScoped]
+    [RequireModule(SystemModules.Donations)]
     [Route("api/[controller]")]
     public class DonationsController : BaseController
     {
@@ -24,6 +27,7 @@ namespace Api.Controllers
             _tenantGuard = tenantGuard;
         }
 
+        [RequirePermission(SystemPermissions.DonationsView)]
         [HttpGet("DonationAccounts")]
         public IActionResult DonationAccounts()
         {
@@ -39,6 +43,7 @@ namespace Api.Controllers
             return Ok(accounts);
         }
 
+        [RequirePermission(SystemPermissions.DonationsView)]
         [HttpGet]
         [Route("DonationInvoices")]
         public IActionResult DonationInvoices()
@@ -89,6 +94,7 @@ namespace Api.Controllers
             return Ok(donationInvoicesDto);
         }
 
+        [RequirePermission(SystemPermissions.DonationsView)]
         [HttpGet]
         [Route("DonationInvoice")]
         public IActionResult DonationInvoice(int id)
@@ -136,6 +142,7 @@ namespace Api.Controllers
             return Ok(invoiceDto);
         }
 
+        [RequirePermission(SystemPermissions.DonationsManage)]
         [HttpPost("CreateDonationInvoice")]
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult CreateDonationInvoice([FromBody] DonationInvoice donationInvoiceDto)
@@ -149,6 +156,7 @@ namespace Api.Controllers
             return Ok(result.Value);
         }
 
+        [RequirePermission(SystemPermissions.DonationsManage)]
         [HttpPost("UpdateDonationInvoice")]
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult UpdateDonationInvoice([FromBody] DonationInvoice donationInvoiceDto)
@@ -171,6 +179,7 @@ namespace Api.Controllers
             _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(dto.GlAccountId, nameof(dto.GlAccountId));
         }
 
+        [RequirePermission(SystemPermissions.DonationsManage)]
         [HttpDelete("DeleteDonationInvoice")]
         public async Task<IActionResult> DeleteDonationInvoice(int id)
         {

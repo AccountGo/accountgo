@@ -4,14 +4,19 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
+using Api.Authorization;
 using Api.Data;
 using Api.Service;
+using Api.Tenancy;
+using Core.Authorization;
 using Core.Domain;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Controllers
 {
@@ -24,15 +29,33 @@ namespace Api.Controllers
         private readonly ApiDbContext _db;
         private readonly ApplicationIdentityDbContext _identity;
         private readonly Core.Entitlements.IEntitlementService _entitlements;
+        private readonly ITenantContext _tenant;
+        private readonly IAccessAuthorizationService _authorizationService;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
-        public InvitationsController(ApiDbContext db, ApplicationIdentityDbContext identity,
-            Core.Entitlements.IEntitlementService entitlements = null)
+        public InvitationsController(
+            ApiDbContext db,
+            ApplicationIdentityDbContext identity,
+            Core.Entitlements.IEntitlementService entitlements = null,
+            ITenantContext tenant = null,
+            IAccessAuthorizationService authorizationService = null)
         {
             _db = db;
             _identity = identity;
             _entitlements = entitlements;
+            _tenant = tenant;
+            _authorizationService = authorizationService;
         }
+
+        private IAccessAuthorizationService AuthService =>
+            _authorizationService
+            ?? HttpContext?.RequestServices?.GetService<IAccessAuthorizationService>()
+            ?? new AccessAuthorizationService(
+                _tenant ?? HttpContext?.RequestServices?.GetService<ITenantContext>() ?? new TenantContext(),
+                _entitlements ?? HttpContext?.RequestServices?.GetService<Core.Entitlements.IEntitlementService>(),
+                _db,
+                new HttpContextAccessor { HttpContext = HttpContext },
+                HttpContext?.RequestServices?.GetService<Api.Service.IMfaGate>());
 
         [HttpGet("pending")]
         public IActionResult Pending()
@@ -94,6 +117,7 @@ namespace Api.Controllers
                 var invitation = find();
                 if (invitation == null)
                     return NotFound();
+                using var impersonation = _tenant?.Impersonate(invitation.CompanyId);
                 if (!string.Equals(user.Email, invitation.Email, StringComparison.OrdinalIgnoreCase))
                     return Problem(statusCode: 403, title: "This invitation was sent to a different email");
                 if (invitation.AcceptedAt.HasValue || invitation.ExpiresAt <= DateTime.UtcNow)
@@ -101,8 +125,100 @@ namespace Api.Controllers
                 var roles = JsonSerializer.Deserialize<List<int>>(invitation.SecurityRoleIdsJson);
                 if (roles == null || !WorkspaceMembersController.ValidSecurityRoles(_db, roles))
                     return Problem(statusCode: 409, title: "Invitation security roles are no longer available", detail: "Ask the workspace administrator for a new invitation.");
+                if (string.Equals(invitation.InvitedByUserId, user.Id, StringComparison.Ordinal))
+                    return Problem(statusCode: 403, title: "Self-grant denied", detail: "You cannot accept an invitation you created for yourself.");
+                var inviter = _db.CompanyMembers.Include(m => m.SecurityRoles)
+                    .SingleOrDefault(m => m.CompanyId == invitation.CompanyId && m.UserId == invitation.InvitedByUserId && m.Status == CompanyMemberStatus.Active);
+                if (inviter == null || (inviter.Role != CompanyMemberRole.Owner && inviter.Role != CompanyMemberRole.Admin)
+                    || (invitation.Role == CompanyMemberRole.Admin && inviter.Role != CompanyMemberRole.Owner))
+                    return Problem(statusCode: 403, title: "Invitation authority no longer valid", detail: "The administrator who issued this invitation no longer has authority to grant access.");
                 if (_db.CompanyMembers.Any(m => m.CompanyId == invitation.CompanyId && m.UserId == user.Id))
                     return Problem(statusCode: 409, title: "You are already a workspace member");
+
+                var distinctRoles = roles.Distinct().ToList();
+                if (distinctRoles.Count > 0)
+                {
+                    var inviterRoleIds = inviter.SecurityRoles.Select(sr => sr.SecurityRoleId).ToList();
+                    var inviterPermissions = inviterRoleIds.Count > 0
+                        ? _db.Set<Core.Domain.Security.SecurityRolePermission>()
+                            .AsNoTracking()
+                            .Where(srp => inviterRoleIds.Contains(srp.SecurityRoleId) && srp.SecurityPermission != null)
+                            .Select(srp => srp.SecurityPermission.Name)
+                            .Distinct()
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                        : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    var inviterActor = new AccessActorContext
+                    {
+                        TrustDomain = ActorTrustDomain.WorkspaceUser,
+                        UserId = inviter.UserId,
+                        CompanyId = invitation.CompanyId,
+                        MemberId = inviter.Id,
+                        WorkspaceRole = inviter.Role,
+                        MembershipStatus = inviter.Status,
+                        FunctionalPermissions = inviterPermissions
+                    };
+
+                    var approvalRow = _db.AuditLogs
+                        .AsNoTracking()
+                        .Where(a => a.CompanyId == invitation.CompanyId &&
+                                    a.TableName == "__InvitationApproval" &&
+                                    a.RecordId == invitation.Id.ToString())
+                        .OrderByDescending(a => a.Id)
+                        .FirstOrDefault();
+
+                    var approvalRequestId = approvalRow?.NewValue;
+                    var approverUserId = approvalRow?.OriginalValue;
+
+                    if (string.IsNullOrWhiteSpace(approvalRequestId))
+                    {
+                        var matchingApproval = _db.AuditLogs
+                            .AsNoTracking()
+                            .Where(a => a.CompanyId == invitation.CompanyId &&
+                                        a.TableName == AccessAuthorizationService.ApprovalAuditTableName &&
+                                        a.OriginalValue == "Approved")
+                            .OrderByDescending(a => a.Id)
+                            .ToList()
+                            .FirstOrDefault(a =>
+                            {
+                                if (string.IsNullOrWhiteSpace(a.NewValue)) return false;
+                                try
+                                {
+                                    var p = JsonSerializer.Deserialize<AccessAuthorizationService.PersistedAccessApprovalPayload>(a.NewValue);
+                                    return p != null &&
+                                           string.Equals(p.TargetEmail, invitation.Email, StringComparison.OrdinalIgnoreCase) &&
+                                           string.Equals(p.OperationKey, AccessOperationCatalog.WorkspaceInvitationsCreate, StringComparison.Ordinal) &&
+                                           p.ExpiresAtUtc > DateTimeOffset.UtcNow;
+                                }
+                                catch { return false; }
+                            });
+
+                        if (matchingApproval != null)
+                        {
+                            approvalRequestId = matchingApproval.RecordId;
+                            approverUserId = matchingApproval.UserName;
+                        }
+                    }
+
+                    var delegationDecision = AuthService.Authorize(
+                        AccessOperationCatalog.WorkspaceInvitationsCreate,
+                        new AccessResourceContext
+                        {
+                            WorkspaceCompanyId = invitation.CompanyId,
+                            ResourceCompanyId = invitation.CompanyId,
+                            TargetUserId = user.Id,
+                            TargetEmail = invitation.Email,
+                            RequestedWorkspaceRole = invitation.Role,
+                            RequestedSecurityRoleIds = distinctRoles,
+                            ApprovalRequestId = approvalRequestId,
+                            IndependentApproverUserId = approverUserId
+                        },
+                        actorOverride: inviterActor);
+
+                    if (!delegationDecision.Allowed)
+                        return Problem(statusCode: delegationDecision.HttpStatus, title: delegationDecision.SafeTitle, detail: delegationDecision.SafeMessage);
+                }
+
                 // The pending invitation already holds a seat, so this only fails when the workspace is over its limit
                 // (e.g. invitations sent before limits applied).
                 _entitlements?.EnsureCanCreate(invitation.CompanyId, Core.Entitlements.MeteredResource.Seats, count: 0);
@@ -111,13 +227,25 @@ namespace Api.Controllers
                     CompanyId = invitation.CompanyId, UserId = user.Id, Role = invitation.Role,
                     Status = CompanyMemberStatus.Active, JoinedAt = DateTime.UtcNow, InvitedByUserId = invitation.InvitedByUserId
                 };
-                foreach (var id in roles.Distinct())
+                foreach (var id in distinctRoles)
                     member.SecurityRoles.Add(new CompanyMemberSecurityRole { SecurityRoleId = id });
                 _db.CompanyMembers.Add(member);
                 invitation.AcceptedAt = DateTime.UtcNow;
                 invitation.AcceptedByUserId = user.Id;
                 _db.SaveChanges();
+                if (distinctRoles.Count > 0)
+                {
+                    AccessAuthorizationService.ConsumeMatchingApprovalAsync(
+                        _db,
+                        invitation.CompanyId,
+                        inviter.UserId,
+                        null,
+                        user.Id,
+                        invitation.Email,
+                        distinctRoles).GetAwaiter().GetResult();
+                }
                 tx.Commit();
+                AuthService.InvalidateContextCache();
                 return Ok(new { slug = _db.Companies.Where(c => c.Id == invitation.CompanyId).Select(c => c.Slug).Single(), role = member.Role.ToString() });
             }
         }

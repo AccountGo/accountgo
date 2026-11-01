@@ -92,6 +92,18 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
             var created = await Json(response);
             _companyId = int.Parse(created.GetProperty("id").GetString());
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var ownerMemberId = db.CompanyMembers.Single(m => m.CompanyId == _companyId && m.UserId == _ownerId).Id;
+                var roleIds = db.SecurityRoles
+                    .Where(r => r.Name == "Accountant" || r.Name == "Sales Representative" || r.Name == "Purchasing Agent")
+                    .Select(r => r.Id)
+                    .ToList();
+                foreach (var roleId in roleIds)
+                    db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = ownerMemberId, SecurityRoleId = roleId });
+                await db.SaveChangesAsync();
+            }
         }
 
         public Task DisposeAsync()
@@ -1200,6 +1212,8 @@ namespace AccountGo.BackendTests
         public async Task MembershipChanges_RemovePermissionsAndAccessOnNextRequest()
         {
             await JoinOther("Admin");
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
+                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
             var invoice = await NewInvoice();
             Assert.True((await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice, _otherToken)).IsSuccessStatusCode);
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
@@ -1338,6 +1352,13 @@ namespace AccountGo.BackendTests
         [Fact]
         public async Task GlobalRoleListing_IsPlatformOnly_WorkspaceRolesCarryPermissionsAndMemberCounts()
         {
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var ownerMemberId = db.CompanyMembers.Single(m => m.CompanyId == _companyId && m.UserId == _ownerId).Id;
+                db.CompanyMemberSecurityRoles.RemoveRange(db.CompanyMemberSecurityRoles.Where(r => r.CompanyMemberId == ownerMemberId));
+                await db.SaveChangesAsync();
+            }
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Administration/roles")).StatusCode);
 
             var viewerId = ViewerRoleId();
@@ -2003,16 +2024,49 @@ namespace AccountGo.BackendTests
             }
         }
 
-        private async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, bool scoped = true)
+        private async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, bool scoped = true, IDictionary<string, string> extraHeaders = null)
         {
             using (var request = new HttpRequestMessage(method, path))
             {
                 var bearer = token ?? _ownerToken;
                 if (!string.IsNullOrEmpty(bearer)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
                 if (scoped) request.Headers.Add("X-AccountGo-Org", _slug);
+                if (extraHeaders != null)
+                {
+                    foreach (var kvp in extraHeaders)
+                    {
+                        request.Headers.Add(kvp.Key, kvp.Value);
+                    }
+                }
                 if (body != null) request.Content = JsonContent.Create(body);
                 return await _client.SendAsync(request);
             }
+        }
+
+        private async Task<IDictionary<string, string>> ApproveJournalPostAsync(int journalId)
+        {
+            var approver = await CreateUser($"approver-{Guid.NewGuid():N}@example.com");
+            string reqId = null;
+            WithDb(db =>
+            {
+                db.CompanyMembers.Add(new CompanyMember
+                {
+                    CompanyId = _companyId,
+                    UserId = approver.Item2,
+                    Role = CompanyMemberRole.Admin,
+                    Status = CompanyMemberStatus.Active
+                });
+                db.SaveChanges();
+                var res = Api.Authorization.AccessAuthorizationService.RecordAuthenticatedApprovalAsync(
+                    db, _companyId, approver.Item2, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, resourceId: journalId.ToString()).GetAwaiter().GetResult();
+                reqId = res.RequestId;
+            });
+
+            return new Dictionary<string, string>
+            {
+                { "X-Approval-Request-Id", reqId },
+                { "X-Approved-By-User-Id", approver.Item2 }
+            };
         }
 
         private static async Task<JsonElement> Json(HttpResponseMessage response)

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Services.Administration;
 using Api.Filters;
+using Core.Authorization;
 using Core.Domain.Security;
 
 namespace Api.Controllers
@@ -23,6 +24,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
+        [RequireOperation(AccessOperationCatalog.TaxSettingsView)]
         public IActionResult List() => Ok(_adminService.ListTaxSettings());
 
         [HttpPost]
@@ -68,6 +70,7 @@ namespace Api.Controllers
         /// <returns></returns>
         [HttpGet]
         [Route("GetTax")]
+        [RequireOperation(AccessOperationCatalog.TaxSettingsView)]
         public IActionResult GetTax(int itemId, int partyId, int type = 0)
         {
             //var taxes = _taxService.GetIntersectionTaxes(itemId, partyId);
@@ -101,6 +104,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("TaxGroups")] // api/Tax/TaxGroups
+        [RequireOperation(AccessOperationCatalog.TaxSettingsView)]
         public IActionResult TaxGroups()
         {
             var taxGroupsDto = new List<TaxGroup>();
@@ -124,6 +128,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("ItemTaxGroups")] // api/Tax/ItemTaxGroups
+        [RequireOperation(AccessOperationCatalog.TaxSettingsView)]
         public IActionResult ItemTaxGroups()
         {
             var itemTaxGroupsDto = new List<ItemTaxGroup>();
@@ -146,6 +151,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("Taxes")] // api/Tax/Taxes
+        [RequireOperation(AccessOperationCatalog.TaxSettingsView)]
         public IActionResult Taxes()
         {
             var taxes = _taxService.GetTaxes(true);
@@ -232,6 +238,7 @@ namespace Api.Controllers
             return new ObjectResult(taxSystemDto);
         }
 
+        [RequirePermission(SystemPermissions.AdminTaxesManage)]
         [HttpDelete]
         [Route("deletetaxgroup")]
         public async Task<IActionResult> DeleteTaxGroup([FromQuery] int id)
@@ -246,6 +253,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
+        [RequirePermission(SystemPermissions.AdminTaxesManage)]
         [HttpDelete]
         [Route("deleteitemtaxgroup")]
         public async Task<IActionResult> DeleteItemTaxGroup([FromQuery] int id)

@@ -443,7 +443,14 @@ namespace AccountGo.BackendTests.Settings
             {
                 var response = await Send(HttpMethod.Post, "/api/organizations", new { name, slug }, token, scoped: false);
                 Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-                return int.Parse((await Json(response)).GetProperty("id").GetString(), CultureInfo.InvariantCulture);
+                var companyId = int.Parse((await Json(response)).GetProperty("id").GetString(), CultureInfo.InvariantCulture);
+                using var scope = Factory.Services.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var ownerMember = db.CompanyMembers.Single(m => m.CompanyId == companyId && m.Role == CompanyMemberRole.Owner);
+                var accountantRoleId = db.SecurityRoles.Single(r => r.Name == "Accountant").Id;
+                db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = ownerMember.Id, SecurityRoleId = accountantRoleId });
+                await db.SaveChangesAsync();
+                return companyId;
             }
 
             public async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, string org = null, bool scoped = true)
