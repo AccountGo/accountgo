@@ -121,6 +121,34 @@ export interface WorkspaceInvitation {
   expiresAt: string;
 }
 
+export interface WorkspaceAccessRequestItem {
+  requestId: string;
+  requesterUserId: string;
+  requesterEmail?: string;
+  targetMemberId: number;
+  targetUserId: string;
+  targetEmail?: string;
+  requestedRoleIds: number[];
+  requestedRoleNames: string[];
+  reason?: string;
+  status: 'Pending' | 'Approved' | 'Applied' | 'Rejected' | 'Cancelled' | 'Expired';
+  createdAtUtc: string;
+  expiresAtUtc: string;
+  decidedAtUtc?: string;
+  approverUserId?: string;
+  approverEmail?: string;
+  decisionReason?: string;
+  canApprove: boolean;
+  canCancel: boolean;
+}
+
+export interface AccessSetupStatus {
+  alreadyBootstrapped: boolean;
+  adminCount: number;
+  totalFunctionalRoles: number;
+  isEligibleForBootstrap: boolean;
+}
+
 export interface PendingInvitation {
   id: number;
   workspaceName: string;

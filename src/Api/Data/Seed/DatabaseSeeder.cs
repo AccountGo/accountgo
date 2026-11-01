@@ -24,7 +24,12 @@ namespace Api.Data.Seed
         {
             using var scope = _serviceProvider.CreateScope();
             var tenantContext = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
-            using (tenantContext.Impersonate(1, "ph-financials", Core.Domain.CompanyMemberRole.Owner))
+            var allPermissions = typeof(Core.Domain.Security.SystemPermissions)
+                .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)
+                .Where(fi => fi.IsLiteral && !fi.IsInitOnly && fi.FieldType == typeof(string))
+                .Select(fi => (string)fi.GetValue(null)!)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            using (tenantContext.Impersonate(1, "ph-financials", Core.Domain.CompanyMemberRole.Owner, allPermissions))
             // The demo books create many invoices, bills and banks; plan limits don't apply to seeding.
             using (scope.ServiceProvider.GetService<Core.Entitlements.IEntitlementService>()?.Bypass())
             {

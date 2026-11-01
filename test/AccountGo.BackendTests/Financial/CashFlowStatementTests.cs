@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Core.Authorization;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -39,7 +40,8 @@ namespace AccountGo.BackendTests.Financial
                 Mock.Of<IRepository<Bank>>(),
                 Mock.Of<IRepository<Item>>(),
                 glSettingRepo ?? Mock.Of<IRepository<GeneralLedgerSetting>>(),
-                Mock.Of<IRepository<CompanySetting>>());
+                Mock.Of<IRepository<CompanySetting>>(),
+                auth: Mock.Of<IAccessAuthorizationService>(a => a.Authorize(It.IsAny<string>(), It.IsAny<AccessResourceContext>(), It.IsAny<AccessActorContext>()) == AccessDecision.Allow("test", "test", "test")));
         }
 
         [Fact]

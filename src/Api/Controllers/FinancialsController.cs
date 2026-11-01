@@ -351,6 +351,21 @@ namespace Api.Controllers
 
                 _financialService.UpdateJournalEntry(je, true);
 
+                if (companyId.HasValue && !string.IsNullOrWhiteSpace(aprHeader))
+                {
+                    AccessAuthorizationService.ConsumeMatchingApprovalAsync(
+                        _db,
+                        companyId.Value,
+                        actorUserId: null,
+                        targetMemberId: null,
+                        targetUserId: null,
+                        targetEmail: null,
+                        requestedRoleIds: null,
+                        approvalRequestId: aprHeader,
+                        approverUserId: approverHeader,
+                        operationKey: AccessOperationCatalog.FinancialsJournalPost).GetAwaiter().GetResult();
+                }
+
                 return new OkObjectResult(Ok());
             }
             catch (Exception ex)
@@ -519,6 +534,15 @@ namespace Api.Controllers
                         NewValue = preparerUserId
                     });
                     _db.SaveChanges();
+                }
+
+                if (!isNew && journalEntry.Id > 0 && currentCompanyId.HasValue)
+                {
+                    AccessAuthorizationService.InvalidateApprovalsForResourceAsync(
+                        _db,
+                        currentCompanyId.Value,
+                        AccessOperationCatalog.FinancialsJournalPost,
+                        journalEntry.Id.ToString(CultureInfo.InvariantCulture)).GetAwaiter().GetResult();
                 }
 
                 return Ok(new { id = journalEntry.Id });

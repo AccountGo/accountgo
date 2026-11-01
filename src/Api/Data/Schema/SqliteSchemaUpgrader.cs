@@ -63,7 +63,8 @@ namespace Api.Data.Schema
             "TaxGroupTax",
             "Vendor",
             "VendorContact",
-            "VendorPayment"
+            "VendorPayment",
+            "WorkspaceAccessRequest"
         };
 
         public static void Upgrade(DbConnection connection, ILogger? logger = null)
@@ -1321,6 +1322,31 @@ WHERE ""DisabledModulesJson"" IS NULL
                     );
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CompanyInvitation_TokenHash"" ON ""CompanyInvitation"" (""TokenHash"");
                     CREATE INDEX IF NOT EXISTS ""IX_CompanyInvitation_CompanyId_Email"" ON ""CompanyInvitation"" (""CompanyId"", ""Email"");
+
+                    CREATE TABLE IF NOT EXISTS ""WorkspaceAccessRequest"" (
+                        ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_WorkspaceAccessRequest"" PRIMARY KEY AUTOINCREMENT,
+                        ""CompanyId"" INTEGER NOT NULL,
+                        ""RequestId"" TEXT NOT NULL,
+                        ""RequesterUserId"" TEXT NOT NULL,
+                        ""TargetUserId"" TEXT NOT NULL,
+                        ""TargetMemberId"" INTEGER NOT NULL,
+                        ""RequestedRoleIdsJson"" TEXT NOT NULL DEFAULT '[]',
+                        ""Reason"" TEXT NULL,
+                        ""Status"" INTEGER NOT NULL,
+                        ""ApproverUserId"" TEXT NULL,
+                        ""DecisionReason"" TEXT NULL,
+                        ""CreatedAtUtc"" TEXT NOT NULL,
+                        ""ExpiresAtUtc"" TEXT NOT NULL,
+                        ""DecidedAtUtc"" TEXT NULL,
+                        ""AppliedAtUtc"" TEXT NULL,
+                        ""PolicyVersion"" TEXT NOT NULL,
+                        ""TargetMembershipRevisionAtRequest"" INTEGER NOT NULL DEFAULT 0,
+                        ""BoundApprovalId"" TEXT NULL,
+                        CONSTRAINT ""FK_WorkspaceAccessRequest_Company_CompanyId"" FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE,
+                        CONSTRAINT ""FK_WorkspaceAccessRequest_CompanyMember_TargetMemberId"" FOREIGN KEY (""TargetMemberId"") REFERENCES ""CompanyMember"" (""Id"") ON DELETE CASCADE
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspaceAccessRequest_CompanyId_RequestId"" ON ""WorkspaceAccessRequest"" (""CompanyId"", ""RequestId"");
+                    CREATE INDEX IF NOT EXISTS ""IX_WorkspaceAccessRequest_CompanyId_Status"" ON ""WorkspaceAccessRequest"" (""CompanyId"", ""Status"");
                 ";
                 cmd.ExecuteNonQuery();
             }
@@ -1374,6 +1400,31 @@ WHERE ""DisabledModulesJson"" IS NULL
                 cmd.CommandText = @"
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CompanyInvitation_TokenHash"" ON ""CompanyInvitation"" (""TokenHash"");
                     CREATE INDEX IF NOT EXISTS ""IX_CompanyInvitation_CompanyId_Email"" ON ""CompanyInvitation"" (""CompanyId"", ""Email"");
+
+                    CREATE TABLE IF NOT EXISTS ""WorkspaceAccessRequest"" (
+                        ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_WorkspaceAccessRequest"" PRIMARY KEY AUTOINCREMENT,
+                        ""CompanyId"" INTEGER NOT NULL,
+                        ""RequestId"" TEXT NOT NULL,
+                        ""RequesterUserId"" TEXT NOT NULL,
+                        ""TargetUserId"" TEXT NOT NULL,
+                        ""TargetMemberId"" INTEGER NOT NULL,
+                        ""RequestedRoleIdsJson"" TEXT NOT NULL DEFAULT '[]',
+                        ""Reason"" TEXT NULL,
+                        ""Status"" INTEGER NOT NULL,
+                        ""ApproverUserId"" TEXT NULL,
+                        ""DecisionReason"" TEXT NULL,
+                        ""CreatedAtUtc"" TEXT NOT NULL,
+                        ""ExpiresAtUtc"" TEXT NOT NULL,
+                        ""DecidedAtUtc"" TEXT NULL,
+                        ""AppliedAtUtc"" TEXT NULL,
+                        ""PolicyVersion"" TEXT NOT NULL,
+                        ""TargetMembershipRevisionAtRequest"" INTEGER NOT NULL DEFAULT 0,
+                        ""BoundApprovalId"" TEXT NULL,
+                        CONSTRAINT ""FK_WorkspaceAccessRequest_Company_CompanyId"" FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE,
+                        CONSTRAINT ""FK_WorkspaceAccessRequest_CompanyMember_TargetMemberId"" FOREIGN KEY (""TargetMemberId"") REFERENCES ""CompanyMember"" (""Id"") ON DELETE CASCADE
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspaceAccessRequest_CompanyId_RequestId"" ON ""WorkspaceAccessRequest"" (""CompanyId"", ""RequestId"");
+                    CREATE INDEX IF NOT EXISTS ""IX_WorkspaceAccessRequest_CompanyId_Status"" ON ""WorkspaceAccessRequest"" (""CompanyId"", ""Status"");
                 ";
                 cmd.ExecuteNonQuery();
             }

@@ -94,6 +94,11 @@ namespace Core.Authorization
         public const string WorkspaceMembersUpdateGovernanceRole = "workspace.members.update_governance_role";
         public const string WorkspaceMembersAssignFunctionalRoles = "workspace.members.assign_functional_roles";
         public const string WorkspaceMembersRemove = "workspace.members.remove";
+        public const string WorkspaceAccessRequestsCreate = "workspace.access_requests.create";
+        public const string WorkspaceAccessRequestsView = "workspace.access_requests.view";
+        public const string WorkspaceAccessRequestsReview = "workspace.access_requests.review";
+        public const string WorkspaceAccessRequestsCancel = "workspace.access_requests.cancel";
+        public const string WorkspaceAccessSetup = "workspace.access_setup.execute";
         public const string WorkspaceInvitationsList = "workspace.invitations.list";
         public const string WorkspaceInvitationsCreate = "workspace.invitations.create";
         public const string WorkspaceInvitationsResend = "workspace.invitations.resend";
@@ -579,6 +584,31 @@ namespace Core.Authorization
                     "POL-GOV-MEM-REMOVE",
                     new[] { CompanyMemberRole.Owner, CompanyMemberRole.Admin, CompanyMemberRole.Member },
                     description: "Remove a workspace member or self-leave (subject to target hierarchy and last-owner protection)."),
+                Governance(
+                    WorkspaceAccessRequestsCreate,
+                    "POL-GOV-ACREQ-CREATE",
+                    new[] { CompanyMemberRole.Owner, CompanyMemberRole.Admin, CompanyMemberRole.Member },
+                    description: "Create an access request for functional roles for self or on-behalf."),
+                Governance(
+                    WorkspaceAccessRequestsView,
+                    "POL-GOV-ACREQ-VIEW",
+                    new[] { CompanyMemberRole.Owner, CompanyMemberRole.Admin, CompanyMemberRole.Member },
+                    description: "View workspace access requests."),
+                Governance(
+                    WorkspaceAccessRequestsReview,
+                    "POL-GOV-ACREQ-REVIEW",
+                    new[] { CompanyMemberRole.Owner, CompanyMemberRole.Admin },
+                    description: "Review (approve/reject) an access request for functional roles with independent verification."),
+                Governance(
+                    WorkspaceAccessRequestsCancel,
+                    "POL-GOV-ACREQ-CANCEL",
+                    new[] { CompanyMemberRole.Owner, CompanyMemberRole.Admin, CompanyMemberRole.Member },
+                    description: "Cancel a pending access request."),
+                Governance(
+                    WorkspaceAccessSetup,
+                    "POL-GOV-AC-SETUP",
+                    new[] { CompanyMemberRole.Owner },
+                    description: "Execute single-administrator initial access bootstrap setup."),
                 Governance(
                     WorkspaceInvitationsList,
                     "POL-GOV-INV-LIST",

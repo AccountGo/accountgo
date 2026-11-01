@@ -89,15 +89,21 @@ namespace Api.Tenancy
 
         public IDisposable ImpersonateUser(int companyId, string userId, string? slug = null, CompanyMemberRole? role = null, IReadOnlySet<string>? permissions = null)
         {
+            var effectiveUser = string.IsNullOrWhiteSpace(userId) ? _resolvedState.UserId : userId;
+            var isScoped = permissions != null && permissions.Count > 0 && string.IsNullOrWhiteSpace(effectiveUser);
+            var domain = isScoped
+                ? ActorTrustDomain.ScopedService
+                : (!string.IsNullOrWhiteSpace(effectiveUser) ? ActorTrustDomain.WorkspaceUser : ActorTrustDomain.Unauthenticated);
+
             var state = new TenantState
             {
                 CompanyId = companyId,
                 CompanySlug = slug ?? $"org-{companyId}",
                 Role = role ?? CompanyMemberRole.Owner,
                 Permissions = permissions ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-                UserId = string.IsNullOrWhiteSpace(userId) ? _resolvedState.UserId : userId,
+                UserId = isScoped ? "system:scoped-service" : effectiveUser,
                 MemberId = _resolvedState.MemberId,
-                ActorDomain = ActorTrustDomain.WorkspaceUser
+                ActorDomain = domain
             };
             _impersonationStack.Push(state);
             Interlocked.Increment(ref _revision);
