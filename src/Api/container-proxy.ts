@@ -151,13 +151,39 @@ export function payloadTooLargeResponse(err: PayloadTooLargeError): Response {
 export const MAX_LOGO_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_LOGO_REQUEST_BYTES = 2 * 1024 * 1024 + 64 * 1024; // 2 MiB file + 64 KiB multipart overhead
 
+export function canonicalizePath(pathname: string): string {
+  let path = pathname.split(/[?#]/)[0];
+  for (let i = 0; i < 3; i++) {
+    if (!path.includes("%")) break;
+    try {
+      const decoded = decodeURIComponent(path);
+      if (decoded === path) break;
+      path = decoded;
+    } catch {
+      path = path.replace(/%(?![0-9a-fA-F]{2})/g, "%25");
+      try {
+        path = decodeURIComponent(path);
+      } catch {
+        break;
+      }
+    }
+  }
+  return path.replace(/\/+/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
 export function isInvoiceLogoRoute(pathname: string): boolean {
-  const normalized = pathname.replace(/\/+$/, "").toLowerCase();
-  return normalized === "/api/invoice-branding/logo";
+  const raw = pathname.split(/[?#]/)[0].replace(/\/+/g, "/").replace(/\/+$/, "").toLowerCase();
+  const canonical = canonicalizePath(pathname);
+  return raw === "/api/invoice-branding/logo" || canonical === "/api/invoice-branding/logo";
 }
 
 export function maxRequestBodyBytesForRoute(pathname: string, method?: string): number | undefined {
-  if (method && method.toUpperCase() !== "PUT") return undefined;
+  if (method) {
+    const m = method.toUpperCase();
+    if (m === "GET" || m === "HEAD" || m === "DELETE" || m === "OPTIONS") {
+      return undefined;
+    }
+  }
   if (isInvoiceLogoRoute(pathname)) {
     return MAX_LOGO_REQUEST_BYTES;
   }

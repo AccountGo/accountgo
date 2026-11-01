@@ -328,18 +328,47 @@ test("bufferRequest keeps GET bodiless and lets a POST body be sent twice", asyn
   assert.equal(toRequest(p).headers.get("content-type"), "text/plain");
 });
 
-test("isInvoiceLogoRoute and maxRequestBodyBytesForRoute handle variants and methods", () => {
+test("isInvoiceLogoRoute and maxRequestBodyBytesForRoute handle variants, percent-encoding, and methods", () => {
   assert.equal(isInvoiceLogoRoute("/api/invoice-branding/logo"), true);
   assert.equal(isInvoiceLogoRoute("/api/invoice-branding/logo/"), true);
   assert.equal(isInvoiceLogoRoute("/API/INVOICE-BRANDING/LOGO"), true);
+  assert.equal(isInvoiceLogoRoute("/api//invoice-branding///logo/"), true);
+  assert.equal(isInvoiceLogoRoute("/api/invoice-branding/%6cogo"), true);
+  assert.equal(isInvoiceLogoRoute("/api/invoice%2dbranding/logo"), true);
+  assert.equal(isInvoiceLogoRoute("/api/invoice-branding/%4c%4f%47%4f"), true);
+  assert.equal(isInvoiceLogoRoute("/api/invoice-branding/logo%2f"), true);
   assert.equal(isInvoiceLogoRoute("/api/invoice-branding/logo/image"), false);
   assert.equal(isInvoiceLogoRoute("/api/invoice-branding/settings"), false);
 
   assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "PUT"), MAX_LOGO_REQUEST_BYTES);
-  assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo/", "put"), MAX_LOGO_REQUEST_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/%6cogo", "PUT"), MAX_LOGO_REQUEST_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/invoice%2dbranding/logo", "POST"), MAX_LOGO_REQUEST_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/%4c%4f%47%4f/", "put"), MAX_LOGO_REQUEST_BYTES);
   assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "GET"), undefined);
   assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "DELETE"), undefined);
   assert.equal(maxRequestBodyBytesForRoute("/api/other", "PUT"), undefined);
+});
+
+test("bufferRequest rejects percent-encoded logo route when body exceeds limit", async () => {
+  const req = new Request("http://app.test/api/invoice-branding/%6cogo", {
+    method: "PUT",
+    headers: { "content-length": "4194304" },
+    body: new Uint8Array(4 * 1024 * 1024),
+    duplex: "half",
+  });
+  const maxBytes = maxRequestBodyBytesForRoute("/api/invoice-branding/%6cogo", "PUT");
+  assert.equal(maxBytes, MAX_LOGO_REQUEST_BYTES);
+
+  await assert.rejects(
+    async () => {
+      await bufferRequest(req.url, req, new Headers(req.headers), { maxBytes });
+    },
+    (err) => {
+      assert.ok(err instanceof PayloadTooLargeError);
+      assert.equal(err.maxBytes, MAX_LOGO_REQUEST_BYTES);
+      return true;
+    }
+  );
 });
 
 test("bufferRequest rejects declared Content-Length over limit with PayloadTooLargeError", async () => {
