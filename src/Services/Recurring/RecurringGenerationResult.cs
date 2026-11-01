@@ -97,6 +97,9 @@ namespace Services.Recurring
 
         public const string LeaseNotHeld =
             "This run does not hold the occurrence lease.";
+
+        public const string CustomerArchivedSchedulePaused =
+            "The customer is archived; the schedule was paused. Existing invoices are unchanged.";
     }
 
     /// <summary>The result of processing one occurrence.</summary>

@@ -349,6 +349,155 @@ namespace Services.Recurring
             return RecurringGenerationResult.Issued(occurrenceId, invoice.Id);
         }
 
+        // ----- #480: manual run and retry -----
+
+        public RecurringGenerationResult RunSchedule(int scheduleId, DateTime? runDate, string leaseOwner, DateTime leaseUntil)
+        {
+            _tenant.RequireCompanyId();
+
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId)
+                ?? throw new InvalidRunDateException($"Recurring schedule {scheduleId} not found.");
+
+            if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
+                throw new InvalidRunDateException("This schedule does not generate sales invoices.");
+
+            // A paused or ended schedule must not generate. Surface it the same way EnsureOccurrence would, before
+            // any occurrence work, so the caller gets a clear 400 and nothing is created.
+            if (schedule.Status != RecurringScheduleStatus.Active)
+                throw new InvalidRunDateException(
+                    schedule.Status == RecurringScheduleStatus.Paused
+                        ? "The schedule is paused. Resume it before generating a run."
+                        : "The schedule has ended.");
+
+            var resolved = (runDate ?? schedule.NextRunDate)?.Date;
+            if (resolved == null)
+                throw new InvalidRunDateException(
+                    "No run date to generate. Pass a run date or set the schedule's next run date.");
+            var effectiveRunDate = resolved.Value;
+
+            // #480: archiving the client pauses the schedule. Do this before creating an occurrence so an archived
+            // client produces no new document; pausing is reversible and the schedule is flagged for attention so a
+            // person can see why it stopped. Existing open invoices are untouched.
+            var customer = _customerRepo.Table.FirstOrDefault(c => c.Id == schedule.PartyId);
+            if (customer == null)
+                throw new InvalidRunDateException("The schedule's customer could not be found.");
+            if (customer.ArchivedAt != null)
+            {
+                PauseForArchivedCustomer(schedule);
+                return RecurringGenerationResult.Aborted(0, RecurringGuardReasons.CustomerArchivedSchedulePaused);
+            }
+
+            // Whether this run moves the series forward is decided against the schedule's current NextRunDate before
+            // we touch it: a run on or after NextRunDate advances the series; a manual run of an earlier date (a
+            // catch-up on a missed period) does not pull the series backward.
+            var advancesSeries = !schedule.NextRunDate.HasValue || effectiveRunDate >= schedule.NextRunDate.Value.Date;
+
+            var occurrenceId = EnsureOccurrence(scheduleId, effectiveRunDate, leaseOwner, leaseUntil);
+            var result = ProcessOccurrence(occurrenceId, leaseOwner);
+
+            // Advance only when the run actually attempted this occurrence (anything other than an abort, which
+            // means no attempt was made — e.g. a live lease held elsewhere) and only for a forward run. A failed
+            // attempt still advances: the failed occurrence is retried against its own key, not by rewinding here.
+            if (advancesSeries && result.Outcome != RecurringGenerationOutcome.Aborted)
+                AdvanceNextRunDate(schedule, effectiveRunDate);
+
+            return result;
+        }
+
+        public RecurringGenerationResult RetryOccurrence(int occurrenceId, string leaseOwner, DateTime leaseUntil)
+        {
+            _tenant.RequireCompanyId();
+
+            var occurrence = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrenceId);
+            if (occurrence == null)
+                return RecurringGenerationResult.Aborted(occurrenceId, "Occurrence not found.");
+
+            // Idempotent: an occurrence that already produced a document is not retried — return the existing link.
+            if (occurrence.SalesInvoiceId.HasValue
+                && (occurrence.Status == RecurringOccurrenceStatus.DraftCreated
+                    || occurrence.Status == RecurringOccurrenceStatus.Issued))
+                return RecurringGenerationResult.AlreadyProcessed(occurrenceId, occurrence.SalesInvoiceId);
+
+            // Only a failed (or crashed-mid-run with an expired lease) occurrence with no document is retryable.
+            // A still-scheduled occurrence, a live lease held by someone else, or a terminal state is left alone.
+            var leaseExpired = !occurrence.LeasedUntil.HasValue || occurrence.LeasedUntil.Value < DateTime.UtcNow;
+            var retryable =
+                (occurrence.Status == RecurringOccurrenceStatus.Failed && !occurrence.SalesInvoiceId.HasValue)
+                || (occurrence.Status == RecurringOccurrenceStatus.Running && leaseExpired && !occurrence.SalesInvoiceId.HasValue);
+            if (!retryable)
+                return RecurringGenerationResult.Aborted(occurrenceId,
+                    $"Occurrence is {occurrence.Status} and cannot be retried.");
+
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == occurrence.RecurringScheduleId);
+            if (schedule == null)
+                return RecurringGenerationResult.Aborted(occurrenceId, "Parent schedule not found.");
+            // A retry must not resurrect a paused/ended schedule's generation.
+            if (schedule.Status != RecurringScheduleStatus.Active)
+                return RecurringGenerationResult.Aborted(occurrenceId, $"Schedule is {schedule.Status}, not Active.");
+
+            // Re-claim the occurrence under this owner, then process. EnsureOccurrence re-claims a failed row for
+            // the same (schedule, run date), so retrying by occurrence id goes through the identical claim path and
+            // keeps the same idempotency key. It never advances NextRunDate.
+            var claimedId = EnsureOccurrence(schedule.Id, occurrence.ScheduledRunDate, leaseOwner, leaseUntil);
+            return ProcessOccurrence(claimedId, leaseOwner);
+        }
+
+        /// <summary>
+        /// Advances the schedule's <see cref="RecurringSchedule.NextRunDate"/> to the next calendar date after the
+        /// run just attempted, respecting the end date and occurrence limit. When the series is exhausted the next
+        /// date is cleared and the schedule is marked ended, so no further run is offered.
+        /// </summary>
+        private void AdvanceNextRunDate(RecurringSchedule schedule, DateTime attemptedRunDate)
+        {
+            // ProcessOccurrence may have cleared the change tracker on a fail-closed path (to discard a rolled-back
+            // draft), which detaches the schedule we were handed; mutating a detached entity would not persist.
+            // Re-load the tracked row before advancing.
+            var tracked = _scheduleRepo.Table.FirstOrDefault(s => s.Id == schedule.Id) ?? schedule;
+
+            DateTime next;
+            try
+            {
+                next = NextDateCalculator.ComputeNextDate(
+                    tracked.Cadence, tracked.Interval, attemptedRunDate, tracked.DayOfMonth, tracked.StartDate);
+            }
+            catch (Exception ex)
+            {
+                // A calendar rule that can't produce a next date (e.g. bad day-of-month) must not strand the run; log
+                // and leave NextRunDate as-is for a person to correct the schedule.
+                _logger.LogWarning(ex, "Could not advance NextRunDate for schedule {ScheduleId} after {RunDate}.",
+                    tracked.Id, attemptedRunDate);
+                return;
+            }
+
+            // Past the end date or the occurrence limit: the series is over.
+            var position = NextDateCalculator.TryGetSeriesPosition(
+                tracked.Cadence, tracked.Interval, tracked.StartDate, tracked.DayOfMonth, next);
+            var pastEnd = tracked.EndDate.HasValue && next > tracked.EndDate.Value.Date;
+            var pastMax = tracked.MaxOccurrences.HasValue && position >= 0 && position >= tracked.MaxOccurrences.Value;
+
+            if (pastEnd || pastMax)
+            {
+                tracked.NextRunDate = null;
+                tracked.Status = RecurringScheduleStatus.Ended;
+            }
+            else
+            {
+                tracked.NextRunDate = next;
+            }
+
+            tracked.OccurrenceCount += 1;
+            _scheduleRepo.Update(tracked);
+        }
+
+        private void PauseForArchivedCustomer(RecurringSchedule schedule)
+        {
+            schedule.Status = RecurringScheduleStatus.Paused;
+            schedule.NeedsAttention = true;
+            _scheduleRepo.Update(schedule);
+            _logger.LogInformation(
+                "Schedule {ScheduleId} paused: customer {CustomerId} is archived.", schedule.Id, schedule.PartyId);
+        }
+
         // ----- run-date validation -----
 
         /// <summary>
