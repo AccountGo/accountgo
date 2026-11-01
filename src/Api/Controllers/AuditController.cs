@@ -33,6 +33,7 @@ namespace Api.Controllers
 
         // GET: api/Audit/Entities
         // Returns a list of all auditable entities
+        [Api.Filters.RequirePermission(Core.Domain.Security.SystemPermissions.AuditLogsView)]
         [HttpGet]
         [Route("Entities")]
         public IActionResult GetAuditableEntities()
@@ -51,6 +52,7 @@ namespace Api.Controllers
 
         // GET: api/Audit/Entity?id=1
         // Returns a specific auditable entity by ID
+        [Api.Filters.RequirePermission(Core.Domain.Security.SystemPermissions.AuditLogsView)]
         [HttpGet]
         [Route("Entity")]
         public IActionResult GetEntity(int id)
@@ -74,6 +76,7 @@ namespace Api.Controllers
 
         // POST: api/Audit/Entity
         // Creates or updates an auditable entity
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
         [HttpPost]
         [Route("Entity")]
         public IActionResult SaveEntity([FromBody] AuditableEntity model)
@@ -120,6 +123,7 @@ namespace Api.Controllers
 
         // DELETE: api/Audit/Entity/1
         // Deletes an auditable entity by ID
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
         [HttpDelete]
         [Route("Entity/{id}")]
         public IActionResult DeleteEntity(int id)
@@ -140,6 +144,7 @@ namespace Api.Controllers
 
         // GET: api/Audit/Attributes?entityId=1
         // Returns a list of auditable attributes for a specific auditable entity id.
+        [Api.Filters.RequirePermission(Core.Domain.Security.SystemPermissions.AuditLogsView)]
         [HttpGet]
         [Route("Attributes")]
         public IActionResult GetAuditableAttributes(int entityId)
@@ -159,6 +164,7 @@ namespace Api.Controllers
 
         // GET: api/Audit/Attribute?id=1
         // Returns a specific auditable attribute by its ID
+        [Api.Filters.RequirePermission(Core.Domain.Security.SystemPermissions.AuditLogsView)]
         [HttpGet]
         [Route("Attribute")]
         public IActionResult GetAttribute(int id)
@@ -183,6 +189,7 @@ namespace Api.Controllers
 
         // POST: api/Audit/Attribute
         // Creates or updates an auditable attribute
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
         [HttpPost]
         [Route("Attribute")]
         public IActionResult SaveAttribute([FromBody] AuditableAttribute model)
@@ -227,6 +234,7 @@ namespace Api.Controllers
 
         // DELETE: api/Audit/Attribute/1
         // Deletes an auditable attribute by ID
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
         [HttpDelete]
         [Route("Attribute/{id}")]
         public IActionResult DeleteAttribute(int id)

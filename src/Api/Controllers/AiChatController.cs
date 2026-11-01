@@ -22,6 +22,7 @@ namespace Api.Controllers
     /// Authenticated proxy for AccountGo Assistant → Anter agent-runner.
     /// Anter API keys never leave the server.
     /// </summary>
+    [Microsoft.AspNetCore.Authorization.Authorize]
     [TenantScoped]
     [EnableRateLimiting("ai-chat")]
     [Route("api/ai/chat")]

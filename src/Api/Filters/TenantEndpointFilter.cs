@@ -34,6 +34,24 @@ namespace Api.Filters
                         };
                         return;
                     }
+
+                    var hasAuth = descriptor.MethodInfo.GetCustomAttributes(inherit: true).Any(a => a is Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute or Microsoft.AspNetCore.Authorization.AuthorizeAttribute or RequirePermissionAttribute or RequireOperationAttribute or RequireWorkspaceRoleAttribute)
+                        || descriptor.ControllerTypeInfo.GetCustomAttributes(inherit: true).Any(a => a is Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute or Microsoft.AspNetCore.Authorization.AuthorizeAttribute or RequirePermissionAttribute or RequireOperationAttribute or RequireWorkspaceRoleAttribute);
+
+                    if (!hasAuth)
+                    {
+                        var problem = new ProblemDetails
+                        {
+                            Title = "Forbidden",
+                            Status = StatusCodes.Status403Forbidden,
+                            Detail = "Tenant-scoped endpoint has no authorization classification or guard."
+                        };
+                        context.Result = new ObjectResult(problem)
+                        {
+                            StatusCode = StatusCodes.Status403Forbidden
+                        };
+                        return;
+                    }
                 }
             }
 

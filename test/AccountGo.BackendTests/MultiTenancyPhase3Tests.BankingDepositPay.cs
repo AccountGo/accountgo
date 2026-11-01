@@ -83,8 +83,18 @@ namespace AccountGo.BackendTests
         public async Task RecordPayment_RefusesCrossTenantBankAccountId()
         {
             var ownerSlug = _slug;
-            Assert.Equal(HttpStatusCode.Created, (await Send(HttpMethod.Post, "/api/organizations",
-                new { name = "Other Co Bank Org", slug = "other-bank-org" }, token: _otherToken, scoped: false)).StatusCode);
+            var createOtherOrg = await Send(HttpMethod.Post, "/api/organizations",
+                new { name = "Other Co Bank Org", slug = "other-bank-org" }, token: _otherToken, scoped: false);
+            Assert.Equal(HttpStatusCode.Created, createOtherOrg.StatusCode);
+            var otherCompanyId = int.Parse((await Json(createOtherOrg)).GetProperty("id").GetString());
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var otherMemberId = db.CompanyMembers.Single(m => m.CompanyId == otherCompanyId && m.UserId == _otherId).Id;
+                var accountantRoleId = db.SecurityRoles.Single(r => r.Name == "Accountant").Id;
+                db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = otherMemberId, SecurityRoleId = accountantRoleId });
+                await db.SaveChangesAsync();
+            }
             _slug = "other-bank-org";
             var otherBank = await CreateBankOk(new CreateBankAccountRequest { Name = "Other Co Bank", Type = 1 }, _otherToken);
             _slug = ownerSlug;

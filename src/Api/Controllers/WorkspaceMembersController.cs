@@ -3,13 +3,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using Api.Authorization;
 using Api.Data;
 using Api.Filters;
+using Core.Authorization;
 using Core.Domain;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Controllers
 {
@@ -22,14 +26,30 @@ namespace Api.Controllers
         private readonly ApiDbContext _db;
         private readonly ApplicationIdentityDbContext _identity;
         private readonly ITenantContext _tenant;
+        private readonly IAccessAuthorizationService _authorizationService;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         private bool IsOwner => _tenant.Role == CompanyMemberRole.Owner;
 
-        public WorkspaceMembersController(ApiDbContext db, ApplicationIdentityDbContext identity, ITenantContext tenant)
+        private IAccessAuthorizationService AuthService =>
+            _authorizationService
+            ?? HttpContext?.RequestServices?.GetService<IAccessAuthorizationService>()
+            ?? new AccessAuthorizationService(
+                _tenant,
+                HttpContext?.RequestServices?.GetService<Core.Entitlements.IEntitlementService>(),
+                _db,
+                new HttpContextAccessor { HttpContext = HttpContext },
+                HttpContext?.RequestServices?.GetService<Api.Service.IMfaGate>());
+
+        public WorkspaceMembersController(
+            ApiDbContext db,
+            ApplicationIdentityDbContext identity,
+            ITenantContext tenant,
+            IAccessAuthorizationService authorizationService = null)
         {
             _db = db;
             _identity = identity;
             _tenant = tenant;
+            _authorizationService = authorizationService;
         }
 
         [HttpGet("members")]
@@ -71,10 +91,75 @@ namespace Api.Controllers
                 }).ToList());
         }
 
+#nullable enable
         public class UpdateMemberRequest
         {
-            public string Role { get; set; }
-            public List<int> SecurityRoleIds { get; set; }
+            public string? Role { get; set; }
+            public List<int>? SecurityRoleIds { get; set; }
+            public string? ApprovedByUserId { get; set; }
+            public string? ApprovalRequestId { get; set; }
+        }
+
+        public class CreateAccessApprovalRequest
+        {
+            public int? TargetMemberId { get; set; }
+            public string? TargetUserId { get; set; }
+            public string? TargetEmail { get; set; }
+            public string? OperationKey { get; set; }
+            public string? ResourceId { get; set; }
+            public List<int>? SecurityRoleIds { get; set; }
+        }
+#nullable restore
+
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPost("members/access-approvals")]
+        public async System.Threading.Tasks.Task<IActionResult> CreateAccessApproval([FromBody] CreateAccessApprovalRequest request)
+        {
+            if (request == null)
+                return Problem(statusCode: 400, title: "Invalid approval request");
+            if (request.SecurityRoleIds != null && !ValidSecurityRoles(_db, request.SecurityRoleIds))
+                return Problem(statusCode: 400, title: "Invalid workspace security roles");
+
+            var companyId = _tenant.RequireCompanyId();
+            var opKey = string.IsNullOrWhiteSpace(request.OperationKey)
+                ? AccessOperationCatalog.WorkspaceMembersAssignFunctionalRoles
+                : request.OperationKey;
+
+            try
+            {
+                var (requestId, expiresAt) = await AccessAuthorizationService.RecordAuthenticatedApprovalAsync(
+                    _db,
+                    companyId,
+                    UserId,
+                    opKey,
+                    request.TargetMemberId,
+                    request.TargetUserId,
+                    request.TargetEmail,
+                    request.SecurityRoleIds,
+                    request.ResourceId);
+
+                return StatusCode(StatusCodes.Status201Created, new
+                {
+                    approvalRequestId = requestId,
+                    approverUserId = UserId,
+                    expiresAt
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Problem(statusCode: 403, title: "Approval denied", detail: ex.Message);
+            }
+        }
+
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpDelete("members/access-approvals/{requestId}")]
+        public async System.Threading.Tasks.Task<IActionResult> RevokeAccessApproval(string requestId)
+        {
+            var companyId = _tenant.RequireCompanyId();
+            var revoked = await AccessAuthorizationService.RevokeAuthenticatedApprovalAsync(_db, companyId, requestId);
+            if (!revoked)
+                return NotFound();
+            return NoContent();
         }
 
         [RequireWorkspaceRole(CompanyMemberRole.Admin)]
@@ -95,8 +180,35 @@ namespace Api.Controllers
                     return Problem(statusCode: 403, title: "Only Owners can grant Admin");
                 if (member.Role == CompanyMemberRole.Owner && role != CompanyMemberRole.Owner && IsLastOwner())
                     return Problem(statusCode: 409, title: "The last Owner cannot be demoted");
+                if (member.UserId == UserId && request.Role != null && role != member.Role)
+                    return Problem(statusCode: 403, title: "You cannot change your own workspace role");
                 if (request.SecurityRoleIds != null && !ValidSecurityRoles(_db, request.SecurityRoleIds))
                     return Problem(statusCode: 400, title: "Invalid workspace security roles");
+
+                List<int> addedRoleIds = null;
+                if (request.SecurityRoleIds != null)
+                {
+                    var existingRoleIds = member.SecurityRoles.Select(sr => sr.SecurityRoleId).ToHashSet();
+                    addedRoleIds = request.SecurityRoleIds.Distinct().Where(id => !existingRoleIds.Contains(id)).ToList();
+                    if (addedRoleIds.Count > 0)
+                    {
+                        var decision = AuthService.Authorize(
+                            AccessOperationCatalog.WorkspaceMembersAssignFunctionalRoles,
+                            new AccessResourceContext
+                            {
+                                WorkspaceCompanyId = _tenant.RequireCompanyId(),
+                                TargetMemberId = member.Id,
+                                TargetUserId = member.UserId,
+                                TargetCurrentWorkspaceRole = member.Role,
+                                RequestedWorkspaceRole = request.Role != null ? role : (CompanyMemberRole?)null,
+                                RequestedSecurityRoleIds = addedRoleIds,
+                                IndependentApproverUserId = request.ApprovedByUserId,
+                                ApprovalRequestId = request.ApprovalRequestId
+                            });
+                        if (!decision.Allowed)
+                            return Problem(statusCode: decision.HttpStatus, title: decision.SafeTitle, detail: decision.SafeMessage);
+                    }
+                }
 
                 member.Role = role;
                 if (request.SecurityRoleIds != null)
@@ -106,7 +218,22 @@ namespace Api.Controllers
                         .Select(id => new CompanyMemberSecurityRole { CompanyMemberId = member.Id, SecurityRoleId = id }).ToList();
                 }
                 _db.SaveChanges();
+                if (addedRoleIds != null && addedRoleIds.Count > 0 &&
+                    (!string.IsNullOrWhiteSpace(request.ApprovedByUserId) || !string.IsNullOrWhiteSpace(request.ApprovalRequestId)))
+                {
+                    AccessAuthorizationService.ConsumeMatchingApprovalAsync(
+                        _db,
+                        _tenant.RequireCompanyId(),
+                        UserId,
+                        member.Id,
+                        member.UserId,
+                        null,
+                        addedRoleIds,
+                        request.ApprovalRequestId,
+                        request.ApprovedByUserId).GetAwaiter().GetResult();
+                }
                 tx.Commit();
+                AuthService.InvalidateContextCache();
                 return NoContent();
             }
         }
@@ -127,6 +254,7 @@ namespace Api.Controllers
                 _db.CompanyMembers.Remove(member);
                 _db.SaveChanges();
                 tx.Commit();
+                AuthService.InvalidateContextCache();
                 return NoContent();
             }
         }
@@ -153,6 +281,7 @@ namespace Api.Controllers
                 caller.Role = CompanyMemberRole.Admin;
                 _db.SaveChanges();
                 tx.Commit();
+                AuthService.InvalidateContextCache();
                 return NoContent();
             }
         }

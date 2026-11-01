@@ -77,6 +77,7 @@ namespace Api.Controllers
             [JsonConverter(typeof(StringEnumConverter))] public IndustryTemplate? IndustryTemplate { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public EntityType? EntityType { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
+            public System.Collections.Generic.List<int> SecurityRoleIds { get; set; }
         }
 
         /// <summary>Omitted policy fields fall back to the legacy defaults documented on <see cref="CompanyProvisionOptions"/>.</summary>
@@ -121,6 +122,8 @@ namespace Api.Controllers
             var policyErrors = CompanyAccountingPolicyRules.Validate(options, DateTime.UtcNow);
             if (policyErrors.Count > 0)
                 return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", policyErrors));
+            if (request.SecurityRoleIds != null && !WorkspaceMembersController.ValidSecurityRoles(_db, request.SecurityRoleIds))
+                return Problem(statusCode: 400, title: "Invalid workspace security roles");
 
             using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
             {
@@ -128,7 +131,7 @@ namespace Api.Controllers
                     return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
                 try
                 {
-                    var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options);
+                    var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options, request.SecurityRoleIds);
                     tx.Commit();
                     return StatusCode(201, Summary(company, CompanyMemberRole.Owner));
                 }

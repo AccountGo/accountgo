@@ -48,7 +48,7 @@ namespace Api.Service
 
         /// <summary>Creates company, ownership and defaults inside the caller's transaction.</summary>
         public Company Create(string userId, string name, string slug, string plan, string currency, string shortName = null,
-            CompanyProvisionOptions options = null)
+            CompanyProvisionOptions options = null, System.Collections.Generic.IEnumerable<int> initialSecurityRoleIds = null)
         {
             options = options ?? new CompanyProvisionOptions();
             _entitlements?.EnsureSelfServicePlan(plan);
@@ -70,11 +70,19 @@ namespace Api.Service
                 Plan = plan, SubscriptionStatus = "active", CreatedByUserId = userId
             };
             _db.Companies.Add(company);
-            _db.CompanyMembers.Add(new CompanyMember
+            var member = new CompanyMember
             {
                 Company = company, UserId = userId, Role = CompanyMemberRole.Owner,
                 Status = CompanyMemberStatus.Active, JoinedAt = DateTime.UtcNow
-            });
+            };
+            if (initialSecurityRoleIds != null)
+            {
+                foreach (var roleId in initialSecurityRoleIds.Distinct())
+                {
+                    member.SecurityRoles.Add(new CompanyMemberSecurityRole { SecurityRoleId = roleId });
+                }
+            }
+            _db.CompanyMembers.Add(member);
             _db.SaveChanges();
             _provisioning.Provision(company, options);
             return company;

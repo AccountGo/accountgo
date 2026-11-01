@@ -57,6 +57,7 @@ namespace Services.Financial
         private readonly IRepository<BankStatementLine> _bankStatementLineRepo;
         private readonly Services.Banking.IReconciledPeriodGuard _reconciledPeriodGuard;
         private readonly IBooksLockGuard _booksLockGuard;
+        private readonly Core.Authorization.IAccessAuthorizationService _auth;
 
         private static readonly System.Threading.AsyncLocal<int> AllowClosingEntriesDepth = new();
 
@@ -91,10 +92,12 @@ namespace Services.Financial
             IRepository<BankReconciliation> bankReconciliationRepo = null,
             IRepository<BankStatementLine> bankStatementLineRepo = null,
             Services.Banking.IReconciledPeriodGuard reconciledPeriodGuard = null,
-            IBooksLockGuard booksLockGuard = null
+            IBooksLockGuard booksLockGuard = null,
+            Core.Authorization.IAccessAuthorizationService auth = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
+            _auth = auth;
             _entitlements = entitlements;
             _booksLockGuard = booksLockGuard;
             _inventoryService = inventoryService;
@@ -137,6 +140,18 @@ namespace Services.Financial
             DateTime? from = null, DateTime? to = null, string accountCode = null,
             int? transactionNo = null, DocumentTypes? documentType = null, int skip = 0, int take = GeneralLedgerDefaultPageSize)
         {
+            if (_auth != null)
+            {
+                var actor = _auth.ResolveActorContext();
+                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
+                    !string.IsNullOrWhiteSpace(actor.UserId))
+                {
+                    var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView, actorOverride: actor);
+                    if (!decision.Allowed)
+                        return new Dto.Financial.GeneralLedgerTransactionPage { Items = new List<Dto.Financial.GeneralLedgerTransaction>(), TotalCount = 0 };
+                }
+            }
+
             if (skip < 0) throw new ArgumentOutOfRangeException(nameof(skip), "Skip must be zero or greater.");
             if (take < 1 || take > GeneralLedgerMaxPageSize)
                 throw new ArgumentOutOfRangeException(nameof(take), $"Take must be between 1 and {GeneralLedgerMaxPageSize}.");
@@ -314,6 +329,18 @@ namespace Services.Financial
 
         public IEnumerable<Account> GetAccounts()
         {
+            if (_auth != null)
+            {
+                var actor = _auth.ResolveActorContext();
+                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
+                    !string.IsNullOrWhiteSpace(actor.UserId))
+                {
+                    var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsView, actorOverride: actor);
+                    if (!decision.Allowed)
+                        return Enumerable.Empty<Account>();
+                }
+            }
+
             var accounts = _accountRepo.GetAllIncluding(c => c.Company,
                 a => a.AccountClass,
                 c => c.ChildAccounts,
@@ -326,6 +353,18 @@ namespace Services.Financial
 
         public Account GetAccount(int id)
         {
+            if (_auth != null)
+            {
+                var actor = _auth.ResolveActorContext();
+                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
+                    !string.IsNullOrWhiteSpace(actor.UserId))
+                {
+                    var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsView, actorOverride: actor);
+                    if (!decision.Allowed)
+                        return null;
+                }
+            }
+
             var account = _accountRepo.GetAllIncluding(a => a.GeneralLedgerLines,
                 a => a.AccountClass,
                 a => a.ChildAccounts,
@@ -458,6 +497,20 @@ namespace Services.Financial
 
         public void AddJournalEntry(JournalEntryHeader journalEntry)
         {
+            if (_auth != null)
+            {
+                var actor = _auth.ResolveActorContext();
+                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
+                    !string.IsNullOrWhiteSpace(actor.UserId))
+                {
+                    if (actor.MembershipStatus != Core.Domain.CompanyMemberStatus.Active ||
+                        !actor.FunctionalPermissions.Contains(Core.Authorization.AccessOperationCatalog.FinancialsJournalCreate))
+                    {
+                        throw new InvalidOperationException("Unauthorized to create journal entry.");
+                    }
+                }
+            }
+
             ValidateJournalVoucherRules(journalEntry);
             journalEntry.Posted = false;
 
@@ -1911,6 +1964,21 @@ namespace Services.Financial
                 throw new ArgumentNullException(nameof(journalEntry));
             if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("Posted journal entries cannot be edited or posted again.");
+
+            if (_auth != null)
+            {
+                var actor = _auth.ResolveActorContext();
+                if (actor.TrustDomain == Core.Authorization.ActorTrustDomain.WorkspaceUser &&
+                    !string.IsNullOrWhiteSpace(actor.UserId))
+                {
+                    var perm = posted ? Core.Authorization.AccessOperationCatalog.FinancialsJournalPost : Core.Authorization.AccessOperationCatalog.FinancialsJournalCreate;
+                    if (actor.MembershipStatus != Core.Domain.CompanyMemberStatus.Active ||
+                        !actor.FunctionalPermissions.Contains(perm))
+                    {
+                        throw new InvalidOperationException(posted ? "Unauthorized to post journal entry." : "Unauthorized to update journal entry.");
+                    }
+                }
+            }
 
             ValidateJournalVoucherRules(journalEntry);
 

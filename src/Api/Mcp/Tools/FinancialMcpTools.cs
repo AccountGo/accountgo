@@ -6,7 +6,9 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Api.Authorization;
 using Api.Mcp.Models;
+using Core.Authorization;
 using Core.Domain;
 using Core.Domain.Security;
 using Core.Entitlements;
@@ -30,6 +32,7 @@ namespace Api.Mcp.Tools
         private readonly IEntitlementService _entitlements;
         private readonly IPlanCatalog _plans;
         private readonly ITenantContext _tenantContext;
+        private readonly IAccessAuthorizationService _authorizationService;
         private readonly ILogger<FinancialMcpTools> _logger;
 
         public FinancialMcpTools(
@@ -38,7 +41,8 @@ namespace Api.Mcp.Tools
             IEntitlementService entitlements,
             IPlanCatalog plans,
             ITenantContext tenantContext,
-            ILogger<FinancialMcpTools>? logger = null)
+            ILogger<FinancialMcpTools>? logger = null,
+            IAccessAuthorizationService? authorizationService = null)
         {
             _financialService = financialService ?? throw new ArgumentNullException(nameof(financialService));
             _adminService = adminService ?? throw new ArgumentNullException(nameof(adminService));
@@ -46,6 +50,7 @@ namespace Api.Mcp.Tools
             _plans = plans ?? throw new ArgumentNullException(nameof(plans));
             _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
             _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<FinancialMcpTools>.Instance;
+            _authorizationService = authorizationService ?? new AccessAuthorizationService(_tenantContext, _entitlements);
         }
 
         #region Phase 1: Chart of Accounts
@@ -69,6 +74,11 @@ namespace Api.Mcp.Tools
             if (!TryAuthorizeModules(out var denied))
             {
                 return Task.FromResult(Denied<ChartOfAccountsMcpResponse>(denied));
+            }
+
+            if (!TryAuthorizePermission(SystemPermissions.FinancialsAccountsView, out var permissionDenied))
+            {
+                return Task.FromResult(Denied<ChartOfAccountsMcpResponse>(permissionDenied));
             }
 
             var allAccounts = _financialService.GetAccounts()?.ToList() ?? new List<Core.Domain.Financials.Account>();
@@ -535,16 +545,23 @@ namespace Api.Mcp.Tools
 
         private bool TryAuthorizePermission(string requiredPermission, out EntitlementDenial denial)
         {
-            if (_tenantContext.Role == CompanyMemberRole.Owner || _tenantContext.Role == CompanyMemberRole.Admin)
+            // Evaluate through the shared authorization decision contract.
+            // Workspace governance roles (Owner, Admin, Member) never bypass functional permission requirements.
+            var decision = _authorizationService.AuthorizeRequirement(
+                requiredPermissionsAll: new[] { requiredPermission },
+                requiredModulesAny: FinancialOrReportsModules,
+                operationKey: requiredPermission);
+
+            if (decision.Allowed)
             {
                 denial = default;
                 return true;
             }
 
-            if (_tenantContext.Permissions.Contains(requiredPermission))
+            if (decision.ReasonCode == AccessReasonCode.EntitlementDenied)
             {
-                denial = default;
-                return true;
+                denial = BuildPlanRestrictedDenial(FinancialOrReportsModules);
+                return false;
             }
 
             denial = new EntitlementDenial(
