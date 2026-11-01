@@ -323,5 +323,6 @@ public class ReconciledPeriodGuardTests
             Mock.Of<IRepository<GeneralLedgerSetting>>(),
             harness.Repos.Settings,
             bankReconciliationRepo: harness.Repos.Reconciliations,
-            reconciledPeriodGuard: harness.Guard);
+            reconciledPeriodGuard: harness.Guard,
+            auth: Mock.Of<Core.Authorization.IAccessAuthorizationService>(a => a.Authorize(It.IsAny<string>(), It.IsAny<Core.Authorization.AccessResourceContext>(), It.IsAny<Core.Authorization.AccessActorContext>()) == Core.Authorization.AccessDecision.Allow("test", "test", "test")));
 }

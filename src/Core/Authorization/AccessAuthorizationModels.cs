@@ -1,6 +1,9 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Domain;
@@ -20,7 +23,8 @@ namespace Core.Authorization
         PlatformAdministrator = 3,
         StaffOperator = 4,
         TransportGate = 5,
-        ServicePrincipal = 6
+        ServicePrincipal = 6,
+        ScopedService = 7
     }
 
     /// <summary>
@@ -147,6 +151,7 @@ namespace Core.Authorization
         public IReadOnlySet<string>? RequestedRolePermissions { get; init; }
         public string? IndependentApproverUserId { get; init; }
         public string? ApprovalRequestId { get; init; }
+        public string? ResourceFingerprint { get; init; }
         public bool IsWorkspaceInitialBootstrap { get; init; }
         public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 
@@ -339,5 +344,26 @@ namespace Core.Authorization
         public DateTimeOffset CreatedAtUtc { get; init; }
         public DateTimeOffset ExpiresAtUtc { get; init; }
         public string Status { get; set; } = "Approved";
+    }
+
+    public static class AccessJournalFingerprint
+    {
+        public static string Compute(
+            DateTime date,
+            string? memo,
+            int voucherType,
+            IEnumerable<(int AccountId, DrOrCrSide DrCr, decimal Amount, string? Memo)> lines)
+        {
+            var lineParts = (lines ?? Enumerable.Empty<(int, DrOrCrSide, decimal, string?)>())
+                .OrderBy(l => l.AccountId)
+                .ThenBy(l => l.DrCr)
+                .ThenBy(l => l.Amount)
+                .Select(l => $"{l.AccountId}:{l.DrCr}:{l.Amount.ToString("F4", CultureInfo.InvariantCulture)}:{l.Memo}");
+
+            var raw = $"{date:yyyy-MM-dd}:{memo}:{voucherType}:{string.Join("|", lineParts)}";
+            using var sha = SHA256.Create();
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(raw));
+            return Convert.ToHexString(hash);
+        }
     }
 }

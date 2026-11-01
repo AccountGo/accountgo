@@ -363,13 +363,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int")
                         .HasDefaultValue(1);
 
+                    b.Property<DateTime?>("BooksLockedThrough")
+                        .HasColumnType("date");
+
                     b.Property<DateTime>("BooksStartDate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("date")
                         .HasDefaultValue(new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
-
-                    b.Property<DateTime?>("BooksLockedThrough")
-                        .HasColumnType("date");
 
                     b.Property<string>("BusinessEmail")
                         .HasColumnType("nvarchar(max)");
@@ -387,17 +387,17 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
-                    b.Property<int>("EntityType")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(3);
-
                     b.Property<string>("Currency")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)")
                         .HasDefaultValue("PHP");
+
+                    b.Property<int>("EntityType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(3);
 
                     b.Property<int>("FiscalYearPattern")
                         .ValueGeneratedOnAdd()
@@ -1016,6 +1016,86 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("BankReconciliationItem");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementColumnMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ColumnMapJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HeaderSignature")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex(new[] { "CompanyId", "BankId", "HeaderSignature" }, "UX_BankStatementColumnMapping_Company_Bank_Header")
+                        .IsUnique();
+
+                    b.ToTable("BankStatementColumnMapping");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementDescriptionRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DescriptionKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("ExpenseAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LastUsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex(new[] { "CompanyId", "DescriptionKey" }, "UX_BankStatementDescriptionRule_Company_DescriptionKey")
+                        .IsUnique();
+
+                    b.ToTable("BankStatementDescriptionRule");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.BankStatementImport", b =>
                 {
                     b.Property<int>("Id")
@@ -1141,122 +1221,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("BankStatementLine");
                 });
 
-            modelBuilder.Entity("Core.Domain.Financials.BankStatementDescriptionRule", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DescriptionKey")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int?>("ExpenseAccountId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("LastUsedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("VendorId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompanyId");
-
-                    b.HasIndex("ExpenseAccountId");
-
-                    b.HasIndex("VendorId");
-
-                    b.HasIndex(new[] { "CompanyId", "DescriptionKey" }, "UX_BankStatementDescriptionRule_Company_DescriptionKey")
-                        .IsUnique();
-
-                    b.ToTable("BankStatementDescriptionRule");
-                });
-
-            modelBuilder.Entity("Core.Domain.Financials.BankStatementColumnMapping", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BankId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ColumnMapJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("HeaderSignature")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BankId");
-
-                    b.HasIndex("CompanyId");
-
-                    b.HasIndex(new[] { "CompanyId", "BankId", "HeaderSignature" }, "UX_BankStatementColumnMapping_Company_Bank_Header")
-                        .IsUnique();
-
-                    b.ToTable("BankStatementColumnMapping");
-                });
-
-            modelBuilder.Entity("Core.Domain.Financials.BooksLockChange", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("ChangedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ChangedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("NewLockedThrough")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime?>("PreviousLockedThrough")
-                        .HasColumnType("date");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompanyId");
-
-                    b.ToTable("BooksLockChange");
-                });
-
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -1332,7 +1296,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("BankTransaction");
                 });
 
-            modelBuilder.Entity("Core.Domain.Financials.FinancialYear", b =>
+            modelBuilder.Entity("Core.Domain.Financials.BooksLockChange", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1340,8 +1304,41 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("NewLockedThrough")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("PreviousLockedThrough")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("BooksLockChange");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.FinancialYear", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime?>("ClosedAt")
                         .HasColumnType("datetime2");
@@ -1351,6 +1348,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(256)");
 
                     b.Property<int?>("ClosingGeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("EndDate")
@@ -2725,6 +2725,13 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BccEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<string>("DispatchId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -2732,13 +2739,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("FromEmail")
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
-
-                    b.Property<string>("BccEmail")
-                        .HasMaxLength(320)
-                        .HasColumnType("nvarchar(320)");
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
 
                     b.Property<string>("Kind")
                         .IsRequired()
@@ -3530,6 +3530,82 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("VendorContact");
                 });
 
+            modelBuilder.Entity("Core.Domain.WorkspaceAccessRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AppliedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApproverUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BoundApprovalId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DecidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DecisionReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PolicyVersion")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RequestedRoleIdsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequesterUserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TargetMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("TargetMembershipRevisionAtRequest")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TargetUserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TargetMemberId");
+
+                    b.HasIndex("CompanyId", "RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "Status");
+
+                    b.ToTable("WorkspaceAccessRequest", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditableAttribute", b =>
                 {
                     b.HasOne("Core.Domain.Auditing.AuditableEntity", "AuditableEntity")
@@ -3765,6 +3841,34 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("GeneralLedgerLine");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementColumnMapping", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bank");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.BankStatementDescriptionRule", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Account", "ExpenseAccount")
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ExpenseAccount");
+
+                    b.Navigation("Vendor");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.BankStatementImport", b =>
                 {
                     b.HasOne("Core.Domain.Financials.Bank", "Bank")
@@ -3800,34 +3904,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("BankStatementImport");
 
                     b.Navigation("MatchedGeneralLedgerLine");
-                });
-
-            modelBuilder.Entity("Core.Domain.Financials.BankStatementDescriptionRule", b =>
-                {
-                    b.HasOne("Core.Domain.Financials.Account", "ExpenseAccount")
-                        .WithMany()
-                        .HasForeignKey("ExpenseAccountId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
-                        .WithMany()
-                        .HasForeignKey("VendorId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("ExpenseAccount");
-
-                    b.Navigation("Vendor");
-                });
-
-            modelBuilder.Entity("Core.Domain.Financials.BankStatementColumnMapping", b =>
-                {
-                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
-                        .WithMany()
-                        .HasForeignKey("BankId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Bank");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
@@ -4886,6 +4962,25 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("Contact");
 
                     b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceAccessRequest", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.CompanyMember", "TargetMember")
+                        .WithMany()
+                        .HasForeignKey("TargetMemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("TargetMember");
                 });
 
             modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>

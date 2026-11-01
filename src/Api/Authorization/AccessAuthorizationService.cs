@@ -43,16 +43,7 @@ namespace Api.Authorization
             int voucherType,
             IEnumerable<(int AccountId, DrOrCrSide DrCr, decimal Amount, string? Memo)> lines)
         {
-            var lineParts = (lines ?? Enumerable.Empty<(int, DrOrCrSide, decimal, string?)>())
-                .OrderBy(l => l.AccountId)
-                .ThenBy(l => l.DrCr)
-                .ThenBy(l => l.Amount)
-                .Select(l => $"{l.AccountId}:{l.DrCr}:{l.Amount.ToString("F4", CultureInfo.InvariantCulture)}:{l.Memo}");
-
-            var raw = $"{date:yyyy-MM-dd}:{memo}:{voucherType}:{string.Join("|", lineParts)}";
-            using var sha = System.Security.Cryptography.SHA256.Create();
-            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(raw));
-            return Convert.ToHexString(hash);
+            return AccessJournalFingerprint.Compute(date, memo, voucherType, lines);
         }
 
         /// <summary>
@@ -155,8 +146,8 @@ namespace Api.Authorization
             var currentCompanyId = _tenantContext.CompanyId;
             var httpContext = _httpContextAccessor?.HttpContext;
             var principal = httpContext?.User;
-            var claimUserId = principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-            var effectiveUserId = _tenantContext.UserId ?? claimUserId;
+            var claimUserId = principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal?.FindFirstValue("sub");
+            var effectiveUserId = string.IsNullOrWhiteSpace(_tenantContext.UserId) ? claimUserId : _tenantContext.UserId;
 
             // Always resolve live membership and functional grants from the database when available so
             // external revocations in another scope or request take effect immediately without stale cache reuse.
@@ -473,14 +464,26 @@ namespace Api.Authorization
             var resolvedCompanyId = companyId ?? (_tenantContext.IsResolved && _db == null ? 1 : null);
             if (_tenantContext.IsResolved && resolvedCompanyId.HasValue)
             {
-                if (_db != null && string.IsNullOrWhiteSpace(effectiveUserId) && _tenantContext.Role.HasValue)
+                if (_tenantContext.ActorDomain == ActorTrustDomain.ScopedService)
                 {
-                    var autoMember = _db.CompanyMembers.AsNoTracking()
-                        .FirstOrDefault(m => m.CompanyId == resolvedCompanyId.Value && m.Role == _tenantContext.Role.Value && m.Status == CompanyMemberStatus.Active);
-                    if (autoMember != null)
+                    var scopedPermissions = _tenantContext.Permissions != null
+                        ? new HashSet<string>(_tenantContext.Permissions, StringComparer.OrdinalIgnoreCase)
+                        : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    return new AccessActorContext
                     {
-                        effectiveUserId = autoMember.UserId;
-                    }
+                        TrustDomain = ActorTrustDomain.ScopedService,
+                        UserId = effectiveUserId ?? "system:scoped-service",
+                        CompanyId = resolvedCompanyId.Value,
+                        CompanySlug = _tenantContext.CompanySlug,
+                        WorkspaceRole = _tenantContext.Role,
+                        MembershipStatus = CompanyMemberStatus.Active,
+                        FunctionalPermissions = scopedPermissions,
+                        AssignedFunctionalRoles = new List<string> { "ScopedService" },
+                        IsPlatformAdministrator = isPlatformAdmin,
+                        IsMfaStepUpVerified = true,
+                        MembershipRevision = revision
+                    };
                 }
 
                 if (_db != null && !string.IsNullOrWhiteSpace(effectiveUserId))
@@ -570,22 +573,31 @@ namespace Api.Authorization
 
                 // Fallback for unit-test / in-process impersonation contexts where no UserId or DbContext is attached:
                 // Use only explicitly populated permissions on ITenantContext; never synthesize permissions from Owner/Admin.
+                var isScopedService = _tenantContext.ActorDomain == ActorTrustDomain.ScopedService;
                 var explicitPermissions = _tenantContext.Permissions != null
                     ? new HashSet<string>(_tenantContext.Permissions, StringComparer.OrdinalIgnoreCase)
                     : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+                var fallbackDomain = isScopedService
+                    ? ActorTrustDomain.ScopedService
+                    : (_db == null
+                        ? (isAuthenticated || !string.IsNullOrWhiteSpace(effectiveUserId) || _tenantContext.Permissions != null
+                            ? ActorTrustDomain.WorkspaceUser
+                            : ActorTrustDomain.Unauthenticated)
+                        : ActorTrustDomain.Unauthenticated);
+
                 return new AccessActorContext
                 {
-                    TrustDomain = _tenantContext.ActorDomain != ActorTrustDomain.Unauthenticated
-                        ? _tenantContext.ActorDomain
-                        : ActorTrustDomain.WorkspaceUser,
+                    TrustDomain = fallbackDomain,
                     UserId = effectiveUserId,
                     CompanyId = resolvedCompanyId.Value,
                     CompanySlug = _tenantContext.CompanySlug,
                     MemberId = _tenantContext.MemberId,
-                    WorkspaceRole = _tenantContext.Role ?? (_db == null ? CompanyMemberRole.Member : null),
-                    MembershipStatus = (_tenantContext.Role.HasValue || _db == null) ? CompanyMemberStatus.Active : null,
-                    FunctionalPermissions = explicitPermissions,
+                    WorkspaceRole = (isScopedService || _db == null) ? (_tenantContext.Role ?? CompanyMemberRole.Member) : null,
+                    MembershipStatus = (isScopedService || _db == null) && (_tenantContext.Role.HasValue || _tenantContext.Permissions != null)
+                        ? CompanyMemberStatus.Active
+                        : null,
+                    FunctionalPermissions = (isScopedService || _db == null) ? explicitPermissions : EmptyStringSet,
                     IsPlatformAdministrator = isPlatformAdmin,
                     IsMfaStepUpVerified = isMfaStepUpVerified,
                     MfaVerifiedAt = mfaVerifiedAt,
@@ -1371,25 +1383,36 @@ namespace Api.Authorization
                         continue;
                     }
 
-                    var je = int.TryParse(resource?.ResourceId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var jId)
-                        ? await _db.JournalEntryHeaders.AsNoTracking()
-                            .Include(j => j.JournalEntryLines)
-                            .FirstOrDefaultAsync(j => j.CompanyId == companyId.Value && j.Id == jId, cancellationToken)
-                        : null;
-
-                    if (je != null)
+                    if (!string.IsNullOrWhiteSpace(resource?.ResourceFingerprint))
                     {
-                        if (string.IsNullOrWhiteSpace(payload.ResourceFingerprint))
-                            continue;
-
-                        var currentFingerprint = ComputeJournalFingerprint(
-                            je.Date,
-                            je.Memo,
-                            (int)(je.VoucherType ?? 0),
-                            je.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
-                        if (!string.Equals(payload.ResourceFingerprint, currentFingerprint, StringComparison.Ordinal))
+                        if (string.IsNullOrWhiteSpace(payload.ResourceFingerprint) ||
+                            !string.Equals(payload.ResourceFingerprint, resource.ResourceFingerprint, StringComparison.Ordinal))
                         {
                             continue;
+                        }
+                    }
+                    else
+                    {
+                        var je = int.TryParse(resource?.ResourceId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var jId)
+                            ? await _db.JournalEntryHeaders.AsNoTracking()
+                                .Include(j => j.JournalEntryLines)
+                                .FirstOrDefaultAsync(j => j.CompanyId == companyId.Value && j.Id == jId, cancellationToken)
+                            : null;
+
+                        if (je != null)
+                        {
+                            if (string.IsNullOrWhiteSpace(payload.ResourceFingerprint))
+                                continue;
+
+                            var currentFingerprint = ComputeJournalFingerprint(
+                                je.Date,
+                                je.Memo,
+                                (int)(je.VoucherType ?? 0),
+                                je.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                            if (!string.Equals(payload.ResourceFingerprint, currentFingerprint, StringComparison.Ordinal))
+                            {
+                                continue;
+                            }
                         }
                     }
                 }
