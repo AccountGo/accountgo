@@ -25,9 +25,12 @@ import {
 import { shouldSkipPortsReady, type ReadyTiming } from "./ports-ready";
 import {
   ContainerUnavailableError,
+  PayloadTooLargeError,
   RestoreState,
   bufferRequest,
   fetchFromContainer,
+  maxRequestBodyBytesForRoute,
+  payloadTooLargeResponse,
   toRequest,
   unavailableResponse,
   watchContainerExit,
@@ -347,10 +350,11 @@ export class AccountGoApiContainer extends Container<Env> {
     cleanHeaders.delete("x-restart-container");
 
     const httpUrl = request.url.replace(/^https:/i, "http:");
+    const maxBytes = maxRequestBodyBytesForRoute(url.pathname, request.method);
 
     try {
       // Buffered so a retry resends the same bytes.
-      const buffered = await bufferRequest(httpUrl, request, cleanHeaders);
+      const buffered = await bufferRequest(httpUrl, request, cleanHeaders, { maxBytes });
       const containerStarted = Date.now();
       const containerRes = await fetchFromContainer(this.host, () => toRequest(buffered), {
         label: `proxy ${request.method} ${scrubbedRoute}`,
@@ -373,6 +377,9 @@ export class AccountGoApiContainer extends Container<Env> {
       console.error(
         `[worker] Proxy failed method=${request.method} path=${scrubbedRoute}: ${errorText(err)}`
       );
+      if (err instanceof PayloadTooLargeError) {
+        return finish(payloadTooLargeResponse(err));
+      }
       if (err instanceof ContainerUnavailableError) {
         return finish(unavailableResponse(err));
       }

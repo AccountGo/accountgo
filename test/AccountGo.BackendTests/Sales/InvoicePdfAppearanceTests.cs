@@ -111,6 +111,69 @@ public class InvoicePdfAppearanceTests
         Assert.Equal(1, provider.Calls);
     }
 
+    [Fact]
+    public void Fingerprint_WithoutLogo_PreservesExpectedBehavior()
+    {
+        var appearance1 = InvoicePdfAppearance.Default;
+        var appearance2 = InvoicePdfAppearance.Default with { Logo = null };
+        Assert.Equal(appearance1.Fingerprint(), appearance2.Fingerprint());
+        Assert.False(appearance1.RequiresEntitlement);
+    }
+
+    [Fact]
+    public void Fingerprint_WithLogo_IncludesLogoHash_AndDoesNotRequireEntitlement()
+    {
+        var logo = new InvoicePdfLogo(
+            Bytes: Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="),
+            Hash: "abc123hash",
+            Width: 1,
+            Height: 1);
+
+        var appearance = InvoicePdfAppearance.Default with { Logo = logo };
+        Assert.NotEqual(InvoicePdfAppearance.Default.Fingerprint(), appearance.Fingerprint());
+        // Universal logo: logo alone does not require entitlement
+        Assert.False(appearance.RequiresEntitlement);
+
+        var stamp = InvoicePdfAppearanceStamp.From(appearance);
+        Assert.Equal("abc123hash", stamp.LogoHash);
+        Assert.False(stamp.RequiresEntitlement);
+
+        var json = InvoicePdfAppearanceStamp.Serialize(appearance);
+        var parsed = InvoicePdfAppearanceStamp.TryParse(json);
+        Assert.NotNull(parsed);
+        Assert.Equal(stamp.Hash, parsed.Hash);
+        Assert.Equal("abc123hash", parsed.LogoHash);
+    }
+
+    [Fact]
+    public void Stamp_WithoutLogoInJson_ParsesWithNullLogoHash()
+    {
+        var legacyJson = "{\"Hash\":\"somehash\",\"HideAccountGoBranding\":false,\"RequiresEntitlement\":false,\"SettingsRevision\":2}";
+        var parsed = InvoicePdfAppearanceStamp.TryParse(legacyJson);
+        Assert.NotNull(parsed);
+        Assert.Equal("somehash", parsed.Hash);
+        Assert.Null(parsed.LogoHash);
+        Assert.False(parsed.RequiresEntitlement);
+    }
+
+    [Fact]
+    public void InvoicePdfDocument_WithLogo_RendersPdfSuccessfully()
+    {
+        var logoBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        var logo = new InvoicePdfLogo(logoBytes, "test-hash", 1, 1);
+        var appearance = InvoicePdfAppearance.Default with { Logo = logo };
+
+        var pdf = Render(Sample(lines: 3, seller: "Acme Corp"), appearance, "USD");
+        Assert.NotNull(pdf);
+        Assert.True(pdf.Length > 0);
+
+        using var document = PdfDocument.Open(pdf);
+        Assert.Equal(1, document.NumberOfPages);
+        var pageText = document.GetPage(1).Text;
+        Assert.Contains("Acme Corp", pageText);
+        Assert.Contains("Powered by AccountGo", pageText);
+    }
+
     private static void AssertCentered(UglyToad.PdfPig.Content.Page page)
     {
         var words = page.GetWords().ToList();

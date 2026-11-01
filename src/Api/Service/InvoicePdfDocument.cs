@@ -15,6 +15,7 @@ namespace Api.Service
         private readonly string _currencyCode;
         private readonly InvoicePdfPalette _colors;
         private readonly bool _showAccountGoBranding;
+        private readonly InvoicePdfLogo? _logo;
 
         public InvoicePdfDocument(Dto.Sales.SalesInvoice invoice, string? currencyCode, InvoicePdfAppearance? appearance = null)
         {
@@ -23,6 +24,7 @@ namespace Api.Service
             var resolved = appearance ?? InvoicePdfAppearance.Default;
             _colors = resolved.Colors;
             _showAccountGoBranding = resolved.ShowAccountGoBranding;
+            _logo = resolved.Logo;
         }
 
         private string SellerName => string.IsNullOrWhiteSpace(_invoice.Seller.Name) ? "AccountGo" : _invoice.Seller.Name;
@@ -61,6 +63,11 @@ namespace Api.Service
             {
                 row.RelativeItem().Column(column =>
                 {
+                    if (_logo?.Bytes is { Length: > 0 })
+                    {
+                        column.Item().PaddingBottom(8).MaxHeight(56).MaxWidth(140).Image(_logo.Bytes).FitArea();
+                    }
+
                     var seller = _invoice.Seller;
                     column.Item().Text(SellerName).FontSize(18).Bold();
                     foreach (var line in seller.AddressLines)

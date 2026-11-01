@@ -115,6 +115,16 @@ export class ContainerUnavailableError extends Error {
   }
 }
 
+export class PayloadTooLargeError extends Error {
+  readonly maxBytes: number;
+
+  constructor(message: string, maxBytes: number) {
+    super(message);
+    this.name = "PayloadTooLargeError";
+    this.maxBytes = maxBytes;
+  }
+}
+
 export function unavailableResponse(err: ContainerUnavailableError): Response {
   return serviceUnavailable(
     err.reach === "not-reached"
@@ -124,6 +134,62 @@ export function unavailableResponse(err: ContainerUnavailableError): Response {
   );
 }
 
+export function payloadTooLargeResponse(err: PayloadTooLargeError): Response {
+  return new Response(
+    JSON.stringify({
+      title: "Payload Too Large",
+      status: 413,
+      detail: err.message,
+    }),
+    {
+      status: 413,
+      headers: { "content-type": "application/problem+json" },
+    }
+  );
+}
+
+export const MAX_LOGO_FILE_BYTES = 2 * 1024 * 1024;
+export const MAX_LOGO_REQUEST_BYTES = 2 * 1024 * 1024 + 64 * 1024; // 2 MiB file + 64 KiB multipart overhead
+
+export function canonicalizePath(pathname: string): string {
+  let path = pathname.split(/[?#]/)[0];
+  for (let i = 0; i < 3; i++) {
+    if (!path.includes("%")) break;
+    try {
+      const decoded = decodeURIComponent(path);
+      if (decoded === path) break;
+      path = decoded;
+    } catch {
+      path = path.replace(/%(?![0-9a-fA-F]{2})/g, "%25");
+      try {
+        path = decodeURIComponent(path);
+      } catch {
+        break;
+      }
+    }
+  }
+  return path.replace(/\/+/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+export function isInvoiceLogoRoute(pathname: string): boolean {
+  const raw = pathname.split(/[?#]/)[0].replace(/\/+/g, "/").replace(/\/+$/, "").toLowerCase();
+  const canonical = canonicalizePath(pathname);
+  return raw === "/api/invoice-branding/logo" || canonical === "/api/invoice-branding/logo";
+}
+
+export function maxRequestBodyBytesForRoute(pathname: string, method?: string): number | undefined {
+  if (method) {
+    const m = method.toUpperCase();
+    if (m === "GET" || m === "HEAD" || m === "DELETE" || m === "OPTIONS") {
+      return undefined;
+    }
+  }
+  if (isInvoiceLogoRoute(pathname)) {
+    return MAX_LOGO_REQUEST_BYTES;
+  }
+  return undefined;
+}
+
 export type BufferedRequest = {
   url: string;
   method: string;
@@ -131,17 +197,78 @@ export type BufferedRequest = {
   body: ArrayBuffer | null;
 };
 
+export async function readBodyWithLimit(
+  bodyStream: ReadableStream<Uint8Array>,
+  maxBytes: number
+): Promise<ArrayBuffer> {
+  const reader = bodyStream.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          try {
+            await reader.cancel();
+          } catch {}
+          throw new PayloadTooLargeError(
+            `Request body exceeds maximum allowed size of ${maxBytes} bytes`,
+            maxBytes
+          );
+        }
+        chunks.push(value);
+      }
+    }
+  } catch (err) {
+    throw err;
+  }
+  const result = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result.buffer;
+}
+
 /** Reads the body once so every attempt can resend the same bytes. */
 export async function bufferRequest(
   url: string,
   request: Request,
-  headers: Headers
+  headers: Headers,
+  options?: { maxBytes?: number }
 ): Promise<BufferedRequest> {
   const method = request.method.toUpperCase();
-  const body =
-    method === "GET" || method === "HEAD" || request.body === null
-      ? null
-      : await request.arrayBuffer();
+  if (method === "GET" || method === "HEAD" || request.body === null) {
+    return { url, method, headers, body: null };
+  }
+
+  const maxBytes = options?.maxBytes;
+  if (maxBytes !== undefined) {
+    const contentLength = headers.get("content-length") || request.headers.get("content-length");
+    if (contentLength) {
+      const parsed = parseInt(contentLength, 10);
+      if (!isNaN(parsed) && parsed > maxBytes) {
+        if (request.body) {
+          try {
+            await request.body.cancel();
+          } catch {}
+        }
+        throw new PayloadTooLargeError(
+          `Request body exceeds maximum allowed size of ${maxBytes} bytes`,
+          maxBytes
+        );
+      }
+    }
+
+    const body = await readBodyWithLimit(request.body, maxBytes);
+    return { url, method, headers, body };
+  }
+
+  const body = await request.arrayBuffer();
   return { url, method, headers, body };
 }
 
