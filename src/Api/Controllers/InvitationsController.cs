@@ -136,6 +136,8 @@ namespace Api.Controllers
                     return Problem(statusCode: 409, title: "You are already a workspace member");
 
                 var distinctRoles = roles.Distinct().ToList();
+                string? approvalRequestId = null;
+                string? approverUserId = null;
                 if (distinctRoles.Count > 0)
                 {
                     var inviterRoleIds = inviter.SecurityRoles.Select(sr => sr.SecurityRoleId).ToList();
@@ -167,8 +169,8 @@ namespace Api.Controllers
                         .OrderByDescending(a => a.Id)
                         .FirstOrDefault();
 
-                    var approvalRequestId = approvalRow?.NewValue;
-                    var approverUserId = approvalRow?.OriginalValue;
+                    approvalRequestId = approvalRow?.NewValue;
+                    approverUserId = approvalRow?.OriginalValue;
 
                     if (string.IsNullOrWhiteSpace(approvalRequestId))
                     {
@@ -184,7 +186,7 @@ namespace Api.Controllers
                                 if (string.IsNullOrWhiteSpace(a.NewValue)) return false;
                                 try
                                 {
-                                    var p = JsonSerializer.Deserialize<AccessAuthorizationService.PersistedAccessApprovalPayload>(a.NewValue);
+                                    var p = JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(a.NewValue);
                                     return p != null &&
                                            string.Equals(p.TargetEmail, invitation.Email, StringComparison.OrdinalIgnoreCase) &&
                                            string.Equals(p.OperationKey, AccessOperationCatalog.WorkspaceInvitationsCreate, StringComparison.Ordinal) &&
@@ -242,7 +244,10 @@ namespace Api.Controllers
                         null,
                         user.Id,
                         invitation.Email,
-                        distinctRoles).GetAwaiter().GetResult();
+                        distinctRoles,
+                        approvalRequestId: approvalRequestId,
+                        approverUserId: approverUserId,
+                        operationKey: AccessOperationCatalog.WorkspaceInvitationsCreate).GetAwaiter().GetResult();
                 }
                 tx.Commit();
                 AuthService.InvalidateContextCache();

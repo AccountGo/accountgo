@@ -5,6 +5,7 @@
 using System;
 using System.Globalization;
 using System.Linq;
+using Core.Authorization;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -106,7 +107,8 @@ public class BooksLockTests
                 Mock.Of<IRepository<Item>>(),
                 Mock.Of<IRepository<GeneralLedgerSetting>>(),
                 Settings,
-                booksLockGuard: Guard);
+                booksLockGuard: Guard,
+                auth: Mock.Of<IAccessAuthorizationService>(a => a.Authorize(It.IsAny<string>(), It.IsAny<AccessResourceContext>(), It.IsAny<AccessActorContext>()) == AccessDecision.Allow("test", "test", "test")));
         }
 
         public void Dispose() { }
