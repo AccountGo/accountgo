@@ -434,6 +434,37 @@ namespace AccountGo.ServicesTests.Recurring
                 count: 3));
         }
 
+        [Theory]
+        [InlineData(0)]
+        [InlineData(99)]
+        public void ComputeNextDates_UnknownCadence_ThrowsArgumentOutOfRangeException(int cadenceValue)
+        {
+            var startDate = new DateTime(2025, 1, 15);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => NextDateCalculator.ComputeNextDates(
+                (RecurringCadence)cadenceValue,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: 15,
+                count: 3));
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(99)]
+        public void CountOverduePeriods_UnknownCadence_ThrowsArgumentOutOfRangeException(int cadenceValue)
+        {
+            var startDate = new DateTime(2025, 1, 15);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => NextDateCalculator.CountOverduePeriods(
+                nextRunDate: startDate,
+                today: startDate.AddMonths(1),
+                cadence: (RecurringCadence)cadenceValue,
+                interval: 1,
+                dayOfMonth: 15,
+                startDate: startDate));
+        }
+
         [Fact]
         public void ComputeNextDates_MonthlyWithoutDayOfMonth_ThrowsInvalidOperationException()
         {

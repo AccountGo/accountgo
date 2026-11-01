@@ -79,7 +79,29 @@ namespace AccountGo.ServicesTests.Recurring
             }
         }
 
-        private RecurringSchedule AddSchedule(Company owner, int partyId, RecurringScheduleKind kind)
+        private PaymentTerm AddPaymentTerm(Company owner)
+        {
+            using (_tenant.Impersonate(owner.Id, owner.Slug))
+            {
+                var paymentTerm = new PaymentTerm
+                {
+                    CompanyId = owner.Id,
+                    Description = "Net 30",
+                    PaymentType = PaymentTypes.AfterNoOfDays,
+                    DueAfterDays = 30,
+                    IsActive = true,
+                };
+                _db.PaymentTerms.Add(paymentTerm);
+                _db.SaveChanges();
+                return paymentTerm;
+            }
+        }
+
+        private RecurringSchedule AddSchedule(
+            Company owner,
+            int partyId,
+            RecurringScheduleKind kind,
+            int? paymentTermId = null)
         {
             var schedule = new RecurringSchedule
             {
@@ -91,6 +113,7 @@ namespace AccountGo.ServicesTests.Recurring
                 Interval = 1,
                 DayOfMonth = 1,
                 StartDate = new DateTime(2026, 1, 1),
+                PaymentTermId = paymentTermId,
             };
             _db.RecurringSchedules.Add(schedule);
             _db.SaveChanges();
@@ -134,6 +157,46 @@ namespace AccountGo.ServicesTests.Recurring
             // No customer with this id exists anywhere: fail closed rather than trust the id.
             Assert.Throws<CrossTenantWriteException>(() =>
                 AddSchedule(_companyA, 999999, RecurringScheduleKind.SalesInvoice));
+        }
+
+        [Fact]
+        public void Schedule_PaymentTermFromOtherCompany_Throws()
+        {
+            var customer = AddCustomer(_companyA);
+            var foreignPaymentTerm = AddPaymentTerm(_companyB);
+            ActAs(_companyA);
+
+            Assert.Throws<CrossTenantWriteException>(() =>
+                AddSchedule(
+                    _companyA,
+                    customer.Id,
+                    RecurringScheduleKind.SalesInvoice,
+                    foreignPaymentTerm.Id));
+        }
+
+        [Fact]
+        public void Schedule_PaymentTermFromSameCompany_Saves()
+        {
+            var customer = AddCustomer(_companyA);
+            var paymentTerm = AddPaymentTerm(_companyA);
+
+            var ex = Record.Exception(() =>
+                AddSchedule(
+                    _companyA,
+                    customer.Id,
+                    RecurringScheduleKind.SalesInvoice,
+                    paymentTerm.Id));
+
+            Assert.Null(ex);
+        }
+
+        [Fact]
+        public void Schedule_PaymentTermIdNotFound_Throws()
+        {
+            var customer = AddCustomer(_companyA);
+
+            Assert.Throws<CrossTenantWriteException>(() =>
+                AddSchedule(_companyA, customer.Id, RecurringScheduleKind.SalesInvoice, 999999));
         }
 
         [Fact]
