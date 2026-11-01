@@ -139,6 +139,9 @@ export const RecurringScheduleDetailPage: React.FC = () => {
   const active = schedule.status === 'Active';
   const paused = schedule.status === 'Paused';
   const ended = schedule.status === 'Ended';
+  // Run-now generates the run server-side. For an auto-issue schedule the server requires the post permission and
+  // denies (it does not downgrade), so only offer run-now when the user can actually complete it.
+  const canRunNow = canManage && active && (schedule.action !== 'AutoIssue' || canPost);
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6 text-[var(--text-main)]">
@@ -160,7 +163,7 @@ export const RecurringScheduleDetailPage: React.FC = () => {
         subtitle={[schedule.customerName, cadenceLabel(schedule.cadence, schedule.interval)].filter(Boolean).join(' · ')}
         actions={
           <>
-            {canManage && active && (
+            {canRunNow && (
               <HeaderButton
                 label="Run now"
                 icon={Run}
@@ -336,11 +339,6 @@ export const RecurringScheduleDetailPage: React.FC = () => {
             Generate the invoice for {formatRunDate(schedule.nextRunDate)} now?
             {schedule.action === 'AutoIssue' && ' It will be issued if all checks pass.'}
           </p>
-          {schedule.action === 'AutoIssue' && !canPost && (
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              You can create the draft but not post it; it will be left as a draft.
-            </p>
-          )}
           <div className="flex justify-end gap-2">
             <button onClick={() => setDialog(null)} className="px-3.5 py-2 text-sm rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-hover)]">
               Cancel

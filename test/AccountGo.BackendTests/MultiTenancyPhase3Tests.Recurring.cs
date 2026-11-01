@@ -1093,6 +1093,105 @@ namespace AccountGo.BackendTests
             });
         }
 
+        [SqliteFact]
+        public async Task Recurring_CrossTenant_SecondOrgCannotSeeOrActOnAnothersSchedule()
+        {
+            // A schedule in the first company.
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 15);
+            int scheduleId = SeedSalesSchedule("XTEN", RecurringAction.CreateDraft, runDate, _ownerId);
+
+            // _otherToken owns its own, separate company.
+            var otherOrg = await Json(await Send(HttpMethod.Post, "/api/organizations",
+                new { name = "Second Co", slug = "second-co" }, token: _otherToken, scoped: false));
+            var secondSlug = "second-co";
+
+            // Helper: a request as the second tenant (its own org header, its own token).
+            Task<HttpResponseMessage> AsSecond(HttpMethod m, string path, object body = null) =>
+                Send(m, path, body, token: _otherToken, scoped: false,
+                    extraHeaders: new System.Collections.Generic.Dictionary<string, string> { ["X-AccountGo-Org"] = secondSlug });
+
+            // The list, if reachable at all for the second company, must never contain the first company's schedule.
+            // (A fresh org may lack the Sales module, in which case the module gate returns 403 — also "no access".)
+            var listRes = await AsSecond(HttpMethod.Get, "/api/RecurringSchedules");
+            Assert.NotEqual(HttpStatusCode.InternalServerError, listRes.StatusCode);
+            if (listRes.StatusCode == HttpStatusCode.OK)
+            {
+                var list = await Json(listRes);
+                Assert.DoesNotContain(list.EnumerateArray(), e => e.GetProperty("id").GetInt32() == scheduleId);
+            }
+            else
+            {
+                Assert.Contains(listRes.StatusCode,
+                    new[] { HttpStatusCode.Forbidden, HttpStatusCode.NotFound });
+            }
+
+            // Direct detail / occurrences by the other company's id must never return the real data: a 404 (tenant
+            // scope) or 403 (module gate) or an empty occurrence list are all acceptable; 200-with-the-schedule is not.
+            var detailRes = await AsSecond(HttpMethod.Get, $"/api/RecurringSchedules/{scheduleId}");
+            Assert.NotEqual(HttpStatusCode.OK, detailRes.StatusCode);
+            var occRes = await AsSecond(HttpMethod.Get, $"/api/RecurringSchedules/{scheduleId}/occurrences");
+            if (occRes.StatusCode == HttpStatusCode.OK)
+                Assert.Equal(0, (await Json(occRes)).GetArrayLength());
+
+            // Lifecycle actions on a foreign id must never succeed (no 2xx).
+            foreach (var action in new[] { "pause", "resume", "end" })
+            {
+                var res = await AsSecond(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/{action}", new { reason = "x" });
+                Assert.False(res.IsSuccessStatusCode, $"{action} on a foreign schedule must not succeed.");
+            }
+            var skipRes = await AsSecond(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/skip",
+                new { runDate = IsoDate(runDate), reason = "x" });
+            Assert.False(skipRes.IsSuccessStatusCode, "skip on a foreign schedule must not succeed.");
+
+            // The first company's schedule is completely unchanged.
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                Assert.Equal(RecurringScheduleStatus.Active, schedule.Status);
+                Assert.Equal(runDate, schedule.NextRunDate);
+            }
+        }
+
+        [SqliteFact]
+        public async Task Recurring_Create_AutoApprove_IsRejected()
+        {
+            // AutoApprove (a vendor-bill disposition) must not persist on a sales schedule, and must not slip past
+            // the auto-issue post gate.
+            var body = new
+            {
+                customerId = SeedCustomerId("AUTOAPPROVE"),
+                name = "Bad action",
+                cadence = "Monthly",
+                interval = 1,
+                dayOfMonth = 1,
+                startDate = IsoDate(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1)),
+                action = "AutoApprove",
+                servicePeriodMode = "CurrentMonth",
+                lines = new[] { new { description = "Svc", quantity = 1, amount = 100, discount = 0, discountType = "Percentage" } },
+            };
+            var res = await Send(HttpMethod.Post, "/api/RecurringSchedules", body);
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+            Assert.Contains("draft or auto-issue", await res.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Seeds just a customer and returns its id (for create-endpoint tests).</summary>
+        private int SeedCustomerId(string tag)
+        {
+            var id = 0;
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var customer = new Core.Domain.Sales.Customer { CompanyId = _companyId, No = tag + "-CUST" };
+                db.Customers.Add(customer);
+                db.SaveChanges();
+                id = customer.Id;
+            }
+            return id;
+        }
+
         /// <summary>Seeds a one-line service-item sales schedule whose NextRunDate is the given run date.</summary>
         private int SeedSalesSchedule(string tag, RecurringAction action, DateTime runDate, string automationEnabledBy,
             RecurringScheduleStatus status = RecurringScheduleStatus.Active)

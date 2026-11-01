@@ -417,6 +417,11 @@ namespace Services.Recurring
         {
             if (string.IsNullOrWhiteSpace(input.Name))
                 throw new RecurringScheduleValidationException("A schedule name is required.");
+            // Sales schedules support only draft or auto-issue. AutoApprove is a vendor-bill disposition and must
+            // not be persisted on a sales schedule (it would also slip past the controller's auto-issue post gate).
+            if (input.Action != RecurringAction.CreateDraft && input.Action != RecurringAction.AutoIssue)
+                throw new RecurringScheduleValidationException(
+                    "A sales schedule can only create a draft or auto-issue.");
             if (input.StartDate == default)
                 throw new RecurringScheduleValidationException("A start date is required.");
             if (input.EndDate.HasValue && input.EndDate.Value.Date < input.StartDate.Date)
