@@ -74,7 +74,7 @@ public static class NextDateCalculator
         // The start date itself is the first occurrence (time component ignored)
         var date = startDate.Date;
 
-        return cadence switch
+        var adjusted = cadence switch
         {
             RecurringCadence.Weekly => date,
             RecurringCadence.Monthly => AdjustToDayOfMonth(date, dayOfMonth!.Value),
@@ -82,6 +82,22 @@ public static class NextDateCalculator
             RecurringCadence.Yearly => AdjustToDayOfMonth(date, dayOfMonth!.Value),
             _ => date
         };
+
+        // If the adjusted day is before the start date, advance one interval.
+        // Example: Start 15 March with DayOfMonth 1 -> adjusted to 1 March -> advance to 1 April.
+        if (adjusted < date)
+        {
+            adjusted = cadence switch
+            {
+                RecurringCadence.Weekly => adjusted.AddDays(7 * interval),
+                RecurringCadence.Monthly => AdjustToDayOfMonth(adjusted.AddMonths(interval), dayOfMonth!.Value),
+                RecurringCadence.Quarterly => AdjustToDayOfMonth(adjusted.AddMonths(3 * interval), dayOfMonth!.Value),
+                RecurringCadence.Yearly => AdjustToDayOfMonth(adjusted.AddYears(interval), dayOfMonth!.Value),
+                _ => adjusted.AddDays(interval)
+            };
+        }
+
+        return adjusted;
     }
 
     /// <summary>
@@ -242,6 +258,8 @@ public static class NextDateCalculator
 
     /// <summary>
     /// Computes the date at a specific position in the series (0-indexed from start).
+    /// For non-weekly cadences, if the adjusted day falls before the start date, the series
+    /// is anchored to the first valid date, not the original start date.
     /// </summary>
     private static DateTime ComputeDateAtPosition(
         RecurringCadence cadence,
@@ -250,13 +268,38 @@ public static class NextDateCalculator
         int? dayOfMonth,
         int position)
     {
-        return cadence switch
+        // For weekly cadence, no day-of-month adjustment needed
+        if (cadence == RecurringCadence.Weekly)
         {
-            RecurringCadence.Weekly => startDate.AddDays(7 * interval * position),
-            RecurringCadence.Monthly => AdjustToDayOfMonth(startDate.AddMonths(interval * position), dayOfMonth!.Value),
-            RecurringCadence.Quarterly => AdjustToDayOfMonth(startDate.AddMonths(3 * interval * position), dayOfMonth!.Value),
-            RecurringCadence.Yearly => AdjustToDayOfMonth(startDate.AddYears(interval * position), dayOfMonth!.Value),
-            _ => startDate.AddDays(position)
+            return startDate.AddDays(7 * interval * position);
+        }
+
+        // For monthly/quarterly/yearly, first compute what the first valid date is
+        var firstBaseDate = startDate;
+        var firstAdjusted = AdjustToDayOfMonth(firstBaseDate, dayOfMonth!.Value);
+        
+        // If the first adjusted date is before start, shift the anchor by one interval
+        if (firstAdjusted < startDate)
+        {
+            firstBaseDate = cadence switch
+            {
+                RecurringCadence.Monthly => startDate.AddMonths(interval),
+                RecurringCadence.Quarterly => startDate.AddMonths(3 * interval),
+                RecurringCadence.Yearly => startDate.AddYears(interval),
+                _ => startDate.AddDays(interval)
+            };
+            firstAdjusted = AdjustToDayOfMonth(firstBaseDate, dayOfMonth!.Value);
+        }
+
+        // Now compute the date at position, anchored to the first valid date
+        var baseDate = cadence switch
+        {
+            RecurringCadence.Monthly => firstBaseDate.AddMonths(interval * position),
+            RecurringCadence.Quarterly => firstBaseDate.AddMonths(3 * interval * position),
+            RecurringCadence.Yearly => firstBaseDate.AddYears(interval * position),
+            _ => firstBaseDate.AddDays(position)
         };
+
+        return AdjustToDayOfMonth(baseDate, dayOfMonth!.Value);
     }
 }
