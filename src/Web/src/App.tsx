@@ -12,6 +12,9 @@ import Invitation from './pages/Invitation';
 import { Invoices } from './pages/Invoices';
 import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
+import { RecurringSchedules } from './pages/RecurringSchedules';
+import { RecurringScheduleDetailPage } from './pages/RecurringScheduleDetail';
+import { RecurringScheduleEdit } from './pages/RecurringScheduleEdit';
 import { Parties } from './pages/Parties';
 import { PartyDetail } from './pages/PartyDetail';
 import { Bills } from './pages/Bills';
@@ -241,6 +244,38 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="sales">
                 <PartyDetail role="client" />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/recurring',
+            element: (
+              <RequiresModule module="sales">
+                <RecurringSchedules />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/recurring/new',
+            element: (
+              <RequiresModule module="sales">
+                <RecurringScheduleEdit />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/recurring/:scheduleId',
+            element: (
+              <RequiresModule module="sales">
+                <RecurringScheduleDetailPage />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/recurring/:scheduleId/edit',
+            element: (
+              <RequiresModule module="sales">
+                <RecurringScheduleEdit isEdit={true} />
               </RequiresModule>
             ),
           },
