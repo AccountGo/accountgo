@@ -69,6 +69,7 @@ namespace Api.Data.Migrations.ApiDb
                         .Annotation("SqlServer:Identity", "1, 1"),
                     CompanyId = table.Column<int>(type: "int", nullable: false),
                     RecurringScheduleId = table.Column<int>(type: "int", nullable: false),
+                    ScheduledRunDate = table.Column<DateTime>(type: "date", nullable: false),
                     PeriodStart = table.Column<DateTime>(type: "date", nullable: false),
                     PeriodEnd = table.Column<DateTime>(type: "date", nullable: false),
                     DocumentDate = table.Column<DateTime>(type: "date", nullable: false),
@@ -102,7 +103,7 @@ namespace Api.Data.Migrations.ApiDb
                         column: x => x.RecurringScheduleId,
                         principalTable: "RecurringSchedules",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_RecurringOccurrences_SalesInvoiceHeader_SalesInvoiceId",
                         column: x => x.SalesInvoiceId,
@@ -124,6 +125,7 @@ namespace Api.Data.Migrations.ApiDb
                     Quantity = table.Column<decimal>(type: "decimal(18,4)", nullable: false, defaultValue: 1m),
                     Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     Discount = table.Column<decimal>(type: "decimal(18,4)", nullable: false, defaultValue: 0m),
+                    DiscountType = table.Column<int>(type: "int", nullable: false, defaultValue: 0),
                     TaxId = table.Column<int>(type: "int", nullable: true),
                     AccountId = table.Column<int>(type: "int", nullable: true),
                     SortOrder = table.Column<int>(type: "int", nullable: false)
@@ -188,9 +190,9 @@ namespace Api.Data.Migrations.ApiDb
                 column: "SalesInvoiceId");
 
             migrationBuilder.CreateIndex(
-                name: "UX_RecurringOccurrence_Company_Schedule_Period",
+                name: "UX_RecurringOccurrence_Company_Schedule_RunDate",
                 table: "RecurringOccurrences",
-                columns: new[] { "CompanyId", "RecurringScheduleId", "PeriodStart" },
+                columns: new[] { "CompanyId", "RecurringScheduleId", "ScheduledRunDate" },
                 unique: true);
 
             migrationBuilder.CreateIndex(

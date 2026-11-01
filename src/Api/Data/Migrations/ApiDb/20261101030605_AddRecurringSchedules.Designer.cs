@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Api.Data.Migrations.ApiDb
 {
     [DbContext(typeof(ApiDbContext))]
-    [Migration("20261101021658_AddRecurringSchedules")]
+    [Migration("20261101030605_AddRecurringSchedules")]
     partial class AddRecurringSchedules
     {
         /// <inheritdoc />
@@ -2589,6 +2589,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("SalesInvoiceId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime>("ScheduledRunDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("SkipReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -2613,7 +2616,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex(new[] { "CompanyId", "Status", "LeasedUntil" }, "IX_RecurringOccurrence_Company_Status_Lease");
 
-                    b.HasIndex(new[] { "CompanyId", "RecurringScheduleId", "PeriodStart" }, "UX_RecurringOccurrence_Company_Schedule_Period")
+                    b.HasIndex(new[] { "CompanyId", "RecurringScheduleId", "ScheduledRunDate" }, "UX_RecurringOccurrence_Company_Schedule_RunDate")
                         .IsUnique();
 
                     b.ToTable("RecurringOccurrences");
@@ -2744,6 +2747,11 @@ namespace Api.Data.Migrations.ApiDb
                         .ValueGeneratedOnAdd()
                         .HasColumnType("decimal(18, 4)")
                         .HasDefaultValue(0m);
+
+                    b.Property<int>("DiscountType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<int?>("ItemId")
                         .HasColumnType("int");
@@ -4677,7 +4685,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Recurring.RecurringSchedule", "Schedule")
                         .WithMany("Occurrences")
                         .HasForeignKey("RecurringScheduleId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoice")

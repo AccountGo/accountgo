@@ -260,13 +260,112 @@ namespace AccountGo.ServicesTests.Recurring
             Assert.Equal(new DateTime(2025, 3, 15), dates[2]);
             Assert.Equal(new DateTime(2025, 4, 15), dates[3]);
 
-            // Verify: Calling ComputeNextDate after Feb 15 still gives Mar 15
+            // Verify: Calling ComputeNextDate after Feb 15 with startDate still gives Mar 15
             var nextAfterFeb = NextDateCalculator.ComputeNextDate(
                 RecurringCadence.Monthly,
                 interval: 1,
                 afterDate: new DateTime(2025, 2, 15),
-                dayOfMonth: 15);
+                dayOfMonth: 15,
+                startDate: startDate);
             Assert.Equal(new DateTime(2025, 3, 15), nextAfterFeb);
+        }
+
+        [Fact]
+        public void RetryOnLaterDate_DoesNotSkipPeriod()
+        {
+            // Arrange: Monthly on day 15, starting Jan 15
+            var startDate = new DateTime(2025, 1, 15);
+
+            // Act: Retry happens on Mar 2 (after a Feb run that got delayed)
+            // The next date should still be Mar 15, not Apr 15
+            var nextDate = NextDateCalculator.ComputeNextDate(
+                RecurringCadence.Monthly,
+                interval: 1,
+                afterDate: new DateTime(2025, 3, 2),
+                dayOfMonth: 15,
+                startDate: startDate);
+
+            // Assert: Mar 15, not Apr 15 (series stays anchored to start)
+            Assert.Equal(new DateTime(2025, 3, 15), nextDate);
+        }
+
+        #endregion
+
+        #region Validation Tests
+
+        [Fact]
+        public void ComputeNextDates_ZeroInterval_ThrowsArgumentOutOfRangeException()
+        {
+            // Arrange
+            var startDate = new DateTime(2025, 1, 15);
+
+            // Act & Assert
+            Assert.Throws<ArgumentOutOfRangeException>(() => NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Monthly,
+                interval: 0,
+                startDate: startDate,
+                dayOfMonth: 15,
+                count: 3));
+        }
+
+        [Fact]
+        public void ComputeNextDates_NegativeInterval_ThrowsArgumentOutOfRangeException()
+        {
+            // Arrange
+            var startDate = new DateTime(2025, 1, 15);
+
+            // Act & Assert
+            Assert.Throws<ArgumentOutOfRangeException>(() => NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Monthly,
+                interval: -1,
+                startDate: startDate,
+                dayOfMonth: 15,
+                count: 3));
+        }
+
+        [Fact]
+        public void ComputeNextDates_MonthlyWithoutDayOfMonth_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            var startDate = new DateTime(2025, 1, 15);
+
+            // Act & Assert
+            Assert.Throws<InvalidOperationException>(() => NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Monthly,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: null,
+                count: 3));
+        }
+
+        [Fact]
+        public void ComputeNextDates_QuarterlyWithoutDayOfMonth_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            var startDate = new DateTime(2025, 1, 15);
+
+            // Act & Assert
+            Assert.Throws<InvalidOperationException>(() => NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Quarterly,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: null,
+                count: 3));
+        }
+
+        [Fact]
+        public void ComputeNextDates_YearlyWithoutDayOfMonth_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            var startDate = new DateTime(2025, 1, 15);
+
+            // Act & Assert
+            Assert.Throws<InvalidOperationException>(() => NextDateCalculator.ComputeNextDates(
+                RecurringCadence.Yearly,
+                interval: 1,
+                startDate: startDate,
+                dayOfMonth: null,
+                count: 3));
         }
 
         #endregion
@@ -341,6 +440,7 @@ namespace AccountGo.ServicesTests.Recurring
         public void CountOverduePeriods_OnSchedule_ReturnsZero()
         {
             // Arrange: Next run date is in the future
+            var startDate = new DateTime(2025, 1, 1);
             var nextRunDate = new DateTime(2025, 2, 15);
             var today = new DateTime(2025, 1, 20);
 
@@ -350,7 +450,8 @@ namespace AccountGo.ServicesTests.Recurring
                 today,
                 RecurringCadence.Monthly,
                 interval: 1,
-                dayOfMonth: 15);
+                dayOfMonth: 15,
+                startDate: startDate);
 
             // Assert: No overdue periods
             Assert.Equal(0, overdue);
@@ -360,6 +461,7 @@ namespace AccountGo.ServicesTests.Recurring
         public void CountOverduePeriods_TwoPeriodsBehind_ReturnsTwo()
         {
             // Arrange: Next run date was Dec 15, today is Feb 20
+            var startDate = new DateTime(2025, 1, 1);
             var nextRunDate = new DateTime(2025, 1, 15);
             var today = new DateTime(2025, 2, 20);
 
@@ -369,7 +471,8 @@ namespace AccountGo.ServicesTests.Recurring
                 today,
                 RecurringCadence.Monthly,
                 interval: 1,
-                dayOfMonth: 15);
+                dayOfMonth: 15,
+                startDate: startDate);
 
             // Assert: 2 overdue periods (Jan 15, Feb 15)
             Assert.Equal(2, overdue);
@@ -379,6 +482,7 @@ namespace AccountGo.ServicesTests.Recurring
         public void CountOverduePeriods_SixPeriodsBehind_ReturnsSix()
         {
             // Arrange: Next run date was Sep 15, today is Feb 20
+            var startDate = new DateTime(2024, 9, 1);
             var nextRunDate = new DateTime(2024, 9, 15);
             var today = new DateTime(2025, 2, 20);
 
@@ -388,10 +492,29 @@ namespace AccountGo.ServicesTests.Recurring
                 today,
                 RecurringCadence.Monthly,
                 interval: 1,
-                dayOfMonth: 15);
+                dayOfMonth: 15,
+                startDate: startDate);
 
             // Assert: 6 overdue periods (Sep, Oct, Nov, Dec, Jan, Feb)
             Assert.Equal(6, overdue);
+        }
+
+        [Fact]
+        public void CountOverduePeriods_ZeroInterval_ThrowsArgumentOutOfRangeException()
+        {
+            // Arrange
+            var startDate = new DateTime(2025, 1, 1);
+            var nextRunDate = new DateTime(2025, 1, 15);
+            var today = new DateTime(2025, 2, 20);
+
+            // Act & Assert
+            Assert.Throws<ArgumentOutOfRangeException>(() => NextDateCalculator.CountOverduePeriods(
+                nextRunDate,
+                today,
+                RecurringCadence.Monthly,
+                interval: 0,
+                dayOfMonth: 15,
+                startDate: startDate));
         }
 
         #endregion
@@ -412,16 +535,23 @@ namespace AccountGo.ServicesTests.Recurring
         }
 
         [Fact]
-        public void AdjustToDayOfMonth_NoDaySpecified_ReturnsSameDate()
+        public void AdjustToDayOfMonth_Day0_ThrowsArgumentOutOfRangeException()
         {
-            // Arrange: No day specified
+            // Arrange
             var date = new DateTime(2025, 1, 15);
 
-            // Act
-            var result = NextDateCalculator.AdjustToDayOfMonth(date, null);
+            // Act & Assert - Day 0 should throw
+            Assert.Throws<ArgumentOutOfRangeException>(() => NextDateCalculator.AdjustToDayOfMonth(date, 0));
+        }
 
-            // Assert: Same date
-            Assert.Equal(date, result);
+        [Fact]
+        public void AdjustToDayOfMonth_NegativeDay_ThrowsArgumentOutOfRangeException()
+        {
+            // Arrange
+            var date = new DateTime(2025, 1, 15);
+
+            // Act & Assert - Negative day should throw
+            Assert.Throws<ArgumentOutOfRangeException>(() => NextDateCalculator.AdjustToDayOfMonth(date, -1));
         }
 
         #endregion

@@ -26,8 +26,11 @@ public partial class RecurringScheduleLine : BaseEntity, ICompanyOwned
     /// <summary>Unit price or amount.</summary>
     public decimal Amount { get; set; }
 
-    /// <summary>Discount percentage or amount (interpretation depends on discount type).</summary>
+    /// <summary>Discount value. Interpretation depends on DiscountType.</summary>
     public decimal Discount { get; set; }
+
+    /// <summary>Whether Discount is a percentage (default) or an absolute amount.</summary>
+    public RecurringDiscountType DiscountType { get; set; } = RecurringDiscountType.Percentage;
 
     /// <summary>Tax code to apply; null for no tax.</summary>
     public int? TaxId { get; set; }

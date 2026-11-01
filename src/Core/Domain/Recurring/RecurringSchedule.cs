@@ -34,13 +34,19 @@ public partial class RecurringSchedule : BaseEntity, ICompanyOwned
     /// <summary>How often to run: weekly, monthly, quarterly, yearly.</summary>
     public RecurringCadence Cadence { get; set; }
 
-    /// <summary>Interval multiplier (e.g., 2 for every 2 months). Default 1.</summary>
-    public int Interval { get; set; } = 1;
+    private int _interval = 1;
+    
+    /// <summary>Interval multiplier (e.g., 2 for every 2 months). Minimum 1. Default 1.</summary>
+    public int Interval
+    {
+        get => _interval;
+        set => _interval = value < 1 ? 1 : value;
+    }
 
     /// <summary>
     /// Day of month for monthly/quarterly/yearly cadence (1-31).
     /// Day 31 means: 31 Jan, 28/29 Feb, 31 Mar — last day of month when the month has fewer days.
-    /// Ignored for weekly cadence (uses weekday from StartDate).
+    /// Required for non-weekly cadences.
     /// </summary>
     public int? DayOfMonth { get; set; }
 
