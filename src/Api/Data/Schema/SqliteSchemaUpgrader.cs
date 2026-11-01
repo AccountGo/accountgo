@@ -47,6 +47,9 @@ namespace Api.Data.Schema
             "PurchaseOrderLine",
             "PurchaseReceiptHeader",
             "PurchaseReceiptLine",
+            "RecurringSchedules",
+            "RecurringScheduleLines",
+            "RecurringOccurrences",
             "SalesDeliveryHeader",
             "SalesDeliveryLine",
             "SalesInvoiceHeader",
@@ -238,6 +241,7 @@ namespace Api.Data.Schema
                     new[] { "CompanySetting", "MfaPolicy", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "MfaGracePeriodEndsAt", "TEXT NULL" },
                     new[] { "CompanySetting", "RequireMfaEveryLogin", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "CompanySetting", "Timezone", "TEXT NOT NULL DEFAULT 'UTC'" },
                     new[] { "AspNetUsers", "MfaReEnrollRequired", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "RefreshTokens", "MfaMethod", "TEXT NULL" },
                     new[] { "RefreshTokens", "Amr", "TEXT NULL" },
@@ -633,6 +637,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureStatementOtherIncomeColumns(connection);
             EnsureBooksLockChange(connection);
             EnsureEntityTypeAndYearEndClose(connection);
+            EnsureRecurringScheduleTables(connection);
         }
 
         // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
@@ -726,6 +731,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             AddColumnIfMissing(connection, "BankStatementLine", "ExcludedBy", "TEXT NULL");
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionReason", "INTEGER NULL");
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionNote", "TEXT NULL");
+            AddColumnIfMissing(connection, "RecurringOccurrences", "SeriesAdvanced", "INTEGER NOT NULL DEFAULT 0");
 
             using var idx = connection.CreateCommand();
             idx.CommandText = @"CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_ExcludedAt""
@@ -1127,6 +1133,111 @@ WHERE ""DisabledModulesJson"" IS NULL
                 SELECT 1 FROM ""Account"" a
                 WHERE a.""CompanyId"" = ""GeneralLedgerSetting"".""CompanyId"" AND a.""AccountCode"" = '30300'
             );";
+
+        // #479 Phase 1: Recurring schedules, lines, and occurrences
+        private static void EnsureRecurringScheduleTables(DbConnection connection)
+        {
+            if (!TableExists(connection, "Company") || !TableExists(connection, "Customer"))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = RecurringScheduleTablesSql;
+            cmd.ExecuteNonQuery();
+        }
+
+        private const string RecurringScheduleTablesSql = @"
+            CREATE TABLE IF NOT EXISTS ""RecurringSchedules"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringSchedules"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""Kind"" INTEGER NOT NULL,
+                ""PartyId"" INTEGER NOT NULL,
+                ""Name"" TEXT NOT NULL,
+                ""Status"" INTEGER NOT NULL,
+                ""Cadence"" INTEGER NOT NULL,
+                ""Interval"" INTEGER NOT NULL DEFAULT 1,
+                ""DayOfMonth"" INTEGER NULL,
+                ""StartDate"" TEXT NOT NULL,
+                ""EndDate"" TEXT NULL,
+                ""MaxOccurrences"" INTEGER NULL,
+                ""NextRunDate"" TEXT NULL,
+                ""OccurrenceCount"" INTEGER NOT NULL DEFAULT 0,
+                ""Action"" INTEGER NOT NULL,
+                ""RecognitionMode"" INTEGER NOT NULL,
+                ""ServicePeriodMode"" INTEGER NOT NULL,
+                ""PaymentTermId"" INTEGER NULL,
+                ""Notes"" TEXT NULL,
+                ""PaymentInstructions"" TEXT NULL,
+                ""VendorInvoiceNumberPattern"" TEXT NULL,
+                ""AutomationEnabledBy"" TEXT NULL,
+                ""AutomationEnabledAt"" TEXT NULL,
+                ""ConsecutiveFailures"" INTEGER NOT NULL DEFAULT 0,
+                ""NeedsAttention"" INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT ""FK_RecurringSchedules_Company_CompanyId"" FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedules_CompanyId"" ON ""RecurringSchedules"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_Status"" ON ""RecurringSchedules"" (""CompanyId"", ""Status"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_Kind_Party"" ON ""RecurringSchedules"" (""CompanyId"", ""Kind"", ""PartyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringSchedule_Company_NextRunDate"" ON ""RecurringSchedules"" (""CompanyId"", ""NextRunDate"") WHERE ""Status"" = 1 AND ""NextRunDate"" IS NOT NULL;
+
+            CREATE TABLE IF NOT EXISTS ""RecurringScheduleLines"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringScheduleLines"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""RecurringScheduleId"" INTEGER NOT NULL,
+                ""Description"" TEXT NULL,
+                ""ItemId"" INTEGER NULL,
+                ""Quantity"" NUMERIC NOT NULL DEFAULT 1,
+                ""Amount"" NUMERIC NOT NULL,
+                ""Discount"" NUMERIC NOT NULL DEFAULT 0,
+                ""DiscountType"" INTEGER NOT NULL DEFAULT 0,
+                ""TaxId"" INTEGER NULL,
+                ""AccountId"" INTEGER NULL,
+                ""SortOrder"" INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT ""FK_RecurringScheduleLines_RecurringSchedules_RecurringScheduleId"" FOREIGN KEY (""RecurringScheduleId"") REFERENCES ""RecurringSchedules"" (""Id"") ON DELETE CASCADE,
+                CONSTRAINT ""FK_RecurringScheduleLines_Item_ItemId"" FOREIGN KEY (""ItemId"") REFERENCES ""Item"" (""Id"") ON DELETE RESTRICT,
+                CONSTRAINT ""FK_RecurringScheduleLines_Tax_TaxId"" FOREIGN KEY (""TaxId"") REFERENCES ""Tax"" (""Id"") ON DELETE RESTRICT,
+                CONSTRAINT ""FK_RecurringScheduleLines_Account_AccountId"" FOREIGN KEY (""AccountId"") REFERENCES ""Account"" (""Id"") ON DELETE RESTRICT
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_CompanyId"" ON ""RecurringScheduleLines"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_RecurringScheduleId"" ON ""RecurringScheduleLines"" (""RecurringScheduleId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_ItemId"" ON ""RecurringScheduleLines"" (""ItemId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_TaxId"" ON ""RecurringScheduleLines"" (""TaxId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringScheduleLines_AccountId"" ON ""RecurringScheduleLines"" (""AccountId"");
+
+            CREATE TABLE IF NOT EXISTS ""RecurringOccurrences"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RecurringOccurrences"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""RecurringScheduleId"" INTEGER NOT NULL,
+                ""ScheduledRunDate"" TEXT NOT NULL,
+                ""PeriodStart"" TEXT NOT NULL,
+                ""PeriodEnd"" TEXT NOT NULL,
+                ""DocumentDate"" TEXT NOT NULL,
+                ""DueDate"" TEXT NULL,
+                ""Status"" INTEGER NOT NULL,
+                ""IdempotencyKey"" TEXT NOT NULL,
+                ""LeasedUntil"" TEXT NULL,
+                ""LeasedBy"" TEXT NULL,
+                ""AttemptCount"" INTEGER NOT NULL DEFAULT 0,
+                ""ErrorCode"" TEXT NULL,
+                ""ErrorMessage"" TEXT NULL,
+                ""SalesInvoiceId"" INTEGER NULL,
+                ""PurchaseInvoiceId"" INTEGER NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""UpdatedAt"" TEXT NULL,
+                ""GuardFailureReason"" TEXT NULL,
+                ""ActionBy"" TEXT NULL,
+                ""SkipReason"" TEXT NULL,
+                ""SeriesAdvanced"" INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT ""FK_RecurringOccurrences_RecurringSchedules_RecurringScheduleId"" FOREIGN KEY (""RecurringScheduleId"") REFERENCES ""RecurringSchedules"" (""Id"") ON DELETE RESTRICT,
+                CONSTRAINT ""FK_RecurringOccurrences_SalesInvoiceHeader_SalesInvoiceId"" FOREIGN KEY (""SalesInvoiceId"") REFERENCES ""SalesInvoiceHeader"" (""Id"") ON DELETE RESTRICT,
+                CONSTRAINT ""FK_RecurringOccurrences_PurchaseInvoiceHeader_PurchaseInvoiceId"" FOREIGN KEY (""PurchaseInvoiceId"") REFERENCES ""PurchaseInvoiceHeader"" (""Id"") ON DELETE RESTRICT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""UX_RecurringOccurrence_Company_Schedule_RunDate"" ON ""RecurringOccurrences"" (""CompanyId"", ""RecurringScheduleId"", ""ScheduledRunDate"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_Company_Status_DocumentDate"" ON ""RecurringOccurrences"" (""CompanyId"", ""Status"", ""DocumentDate"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrence_Company_Status_Lease"" ON ""RecurringOccurrences"" (""CompanyId"", ""Status"", ""LeasedUntil"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrences_IdempotencyKey"" ON ""RecurringOccurrences"" (""IdempotencyKey"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrences_SalesInvoiceId"" ON ""RecurringOccurrences"" (""SalesInvoiceId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrences_PurchaseInvoiceId"" ON ""RecurringOccurrences"" (""PurchaseInvoiceId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RecurringOccurrences_RecurringScheduleId"" ON ""RecurringOccurrences"" (""RecurringScheduleId"");";
 
         private static void BackfillOpeningBalanceBankTransactions(DbConnection connection)
         {
