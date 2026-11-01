@@ -703,13 +703,11 @@ namespace AccountGo.BackendTests
         }
 
         [SqliteFact]
-        public void Recurring_RunSchedule_ReplayRun_DoesNotAdvanceTwice()
+        public void Recurring_RunSchedule_IdempotentReplay_DoesNotAdvanceTwice()
         {
-            // HIGH finding: advancement must be idempotent against the attempted run date. Model two concurrent
-            // run-now requests that both read the same NextRunDate before either advances: the first creates the
-            // draft and advances; the second (whose serializable transaction collapses to an idempotent replay)
-            // must NOT advance NextRunDate again nor double-count OccurrenceCount. The second caller's stale view of
-            // NextRunDate is reproduced by resetting it back to the run date, leaving the existing draft occurrence.
+            // HIGH finding: advancement is exactly-once per occurrence. The first run advances the series and marks
+            // the occurrence SeriesAdvanced. A replay (the occurrence already produced its document) must neither
+            // advance again nor double-count OccurrenceCount, even if the caller still points at the original date.
             var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 6);
             int scheduleId = SeedSalesSchedule("ADV-REPLAY", RecurringAction.CreateDraft, runDate, _ownerId);
 
@@ -725,10 +723,10 @@ namespace AccountGo.BackendTests
                 var afterFirst = db.RecurringSchedules.Single(s => s.Id == scheduleId);
                 Assert.Equal(runDate.AddMonths(1), afterFirst.NextRunDate);
                 Assert.Equal(1, afterFirst.OccurrenceCount);
+                Assert.True(db.RecurringOccurrences.Single(o => o.RecurringScheduleId == scheduleId).SeriesAdvanced);
 
-                // A second caller that read the pre-advance NextRunDate: reset the stored date back to the run date
-                // (the draft occurrence for that date still exists), then run again. The occurrence already produced
-                // a document, so ProcessOccurrence replays as AlreadyProcessed.
+                // A replay with the original date: the occurrence already advanced the series, so this must be a
+                // no-op for the schedule. (Reset the stored date back as a stale second caller would see it.)
                 afterFirst.NextRunDate = runDate;
                 db.SaveChanges();
 
@@ -736,11 +734,59 @@ namespace AccountGo.BackendTests
                 Assert.Equal(RecurringGenerationOutcome.AlreadyProcessed, second.Outcome);
                 Assert.Equal(first.SalesInvoiceId, second.SalesInvoiceId);
 
-                // The replay neither advanced the series again nor double-counted: OccurrenceCount stays 1 and the
-                // date is left exactly as the replay found it (never advanced a second time).
                 var afterSecond = db.RecurringSchedules.Single(s => s.Id == scheduleId);
-                Assert.Equal(1, afterSecond.OccurrenceCount);
-                Assert.Equal(runDate, afterSecond.NextRunDate);
+                Assert.Equal(1, afterSecond.OccurrenceCount);                  // not double-counted
+                Assert.Equal(runDate, afterSecond.NextRunDate);                // not advanced a second time
+                Assert.Single(db.RecurringOccurrences.Where(o => o.RecurringScheduleId == scheduleId));
+            }
+        }
+
+        [SqliteFact]
+        public void Recurring_RunSchedule_RecoversUnadvancedCompletedOccurrence_ExactlyOnce()
+        {
+            // HIGH finding: a crash can commit the invoice but not the series advance, stranding NextRunDate on the
+            // completed occurrence. The next run (an idempotent replay) must recover by advancing the series exactly
+            // once, without creating another invoice. Simulate the crash in one scope (run, then roll the schedule
+            // back to the completed occurrence's date AND clear its SeriesAdvanced flag), then recover in a fresh
+            // scope with its own DbContext — as a later request would.
+            var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 7);
+            int scheduleId = SeedSalesSchedule("ADV-RECOVER", RecurringAction.CreateDraft, runDate, _ownerId);
+
+            int? firstInvoiceId;
+            using (var scope = _factory.Services.CreateScope())
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+
+                var first = generation.RunSchedule(scheduleId, runDate, "run-a", DateTime.UtcNow.AddMinutes(5));
+                Assert.Equal(RecurringGenerationOutcome.DraftCreated, first.Outcome);
+                firstInvoiceId = first.SalesInvoiceId;
+
+                // Reproduce the stranded post-crash state: document committed, but series never advanced.
+                var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                schedule.NextRunDate = runDate;
+                schedule.OccurrenceCount = 0;
+                var occurrence = db.RecurringOccurrences.Single(o => o.RecurringScheduleId == scheduleId);
+                occurrence.SeriesAdvanced = false;
+                db.SaveChanges();
+            }
+
+            using (var scope = _factory.Services.CreateScope())
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
+
+                // The next run finds the completed-but-unadvanced occurrence and recovers it.
+                var recover = generation.RunSchedule(scheduleId, runDate, "run-b", DateTime.UtcNow.AddMinutes(5));
+                Assert.Equal(RecurringGenerationOutcome.AlreadyProcessed, recover.Outcome);
+                Assert.Equal(firstInvoiceId, recover.SalesInvoiceId); // no new document
+
+                var recovered = db.RecurringSchedules.Single(s => s.Id == scheduleId);
+                Assert.Equal(runDate.AddMonths(1), recovered.NextRunDate);  // series advanced by recovery
+                Assert.Equal(1, recovered.OccurrenceCount);                 // counted exactly once
+                Assert.True(db.RecurringOccurrences.Single(o => o.RecurringScheduleId == scheduleId).SeriesAdvanced);
                 Assert.Single(db.RecurringOccurrences.Where(o => o.RecurringScheduleId == scheduleId));
             }
         }

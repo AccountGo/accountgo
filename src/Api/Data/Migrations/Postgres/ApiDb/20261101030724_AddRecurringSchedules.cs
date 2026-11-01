@@ -88,7 +88,8 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     GuardFailureReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     ActionBy = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    SkipReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
+                    SkipReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    SeriesAdvanced = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
                 },
                 constraints: table =>
                 {

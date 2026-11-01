@@ -2592,6 +2592,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("ScheduledRunDate")
                         .HasColumnType("date");
 
+                    b.Property<bool>("SeriesAdvanced")
+                        .HasColumnType("bit");
+
                     b.Property<string>("SkipReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
