@@ -365,7 +365,7 @@ namespace AccountGo.BackendTests
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
             {
                 var item = db.Items.Include(i => i.InventoryControlJournals).Single(i => i.Id == itemId);
                 scope.ServiceProvider.GetRequiredService<IStockService>()

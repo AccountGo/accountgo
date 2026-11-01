@@ -235,9 +235,9 @@ namespace Api.Controllers
                 invitation.AcceptedAt = DateTime.UtcNow;
                 invitation.AcceptedByUserId = user.Id;
                 _db.SaveChanges();
-                if (distinctRoles.Count > 0)
+                if (distinctRoles.Count > 0 && (!string.IsNullOrWhiteSpace(approvalRequestId) || !string.IsNullOrWhiteSpace(approverUserId)))
                 {
-                    AccessAuthorizationService.ConsumeMatchingApprovalAsync(
+                    var consumed = AccessAuthorizationService.ConsumeMatchingApprovalAsync(
                         _db,
                         invitation.CompanyId,
                         inviter.UserId,
@@ -248,6 +248,15 @@ namespace Api.Controllers
                         approvalRequestId: approvalRequestId,
                         approverUserId: approverUserId,
                         operationKey: AccessOperationCatalog.WorkspaceInvitationsCreate).GetAwaiter().GetResult();
+                    if (!consumed)
+                    {
+                        tx.Rollback();
+                        return StatusCode(StatusCodes.Status403Forbidden, ProblemDetailsFactory.CreateProblemDetails(
+                            HttpContext,
+                            statusCode: StatusCodes.Status403Forbidden,
+                            title: "Approval consumption failed",
+                            detail: "The independent approval could not be consumed or has expired."));
+                    }
                 }
                 tx.Commit();
                 AuthService.InvalidateContextCache();

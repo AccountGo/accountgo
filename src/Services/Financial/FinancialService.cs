@@ -146,12 +146,12 @@ namespace Services.Financial
             DateTime? from = null, DateTime? to = null, string accountCode = null,
             int? transactionNo = null, DocumentTypes? documentType = null, int skip = 0, int take = GeneralLedgerDefaultPageSize)
         {
-            if (_auth != null)
-            {
-                var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView);
-                if (!decision.Allowed)
-                    return new Dto.Financial.GeneralLedgerTransactionPage { Items = new List<Dto.Financial.GeneralLedgerTransaction>(), TotalCount = 0 };
-            }
+            if (_auth == null)
+                return new Dto.Financial.GeneralLedgerTransactionPage { Items = new List<Dto.Financial.GeneralLedgerTransaction>(), TotalCount = 0 };
+
+            var decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView);
+            if (!decision.Allowed)
+                return new Dto.Financial.GeneralLedgerTransactionPage { Items = new List<Dto.Financial.GeneralLedgerTransaction>(), TotalCount = 0 };
 
             if (skip < 0) throw new ArgumentOutOfRangeException(nameof(skip), "Skip must be zero or greater.");
             if (take < 1 || take > GeneralLedgerMaxPageSize)
@@ -410,6 +410,46 @@ namespace Services.Financial
 
         public void SaveGeneralLedgerEntry(GeneralLedgerHeader entry)
         {
+            if (_auth == null)
+                throw new InvalidOperationException("Authorization service is required to save general ledger entries.");
+
+            var requiredOp = entry?.DocumentType switch
+            {
+                DocumentTypes.SalesInvoice or DocumentTypes.SalesCreditMemo or DocumentTypes.SalesDebitMemo
+                    => Core.Authorization.AccessOperationCatalog.SalesInvoicesCreate,
+                DocumentTypes.SalesReceipt or DocumentTypes.CustomerAllocation
+                    => Core.Authorization.AccessOperationCatalog.SalesReceiptsCreate,
+                DocumentTypes.PurchaseInvoice or DocumentTypes.PurchaseCreditMemo or DocumentTypes.PurchaseDebitMemo
+                    => Core.Authorization.AccessOperationCatalog.PurchasesBillsCreate,
+                DocumentTypes.PurchaseInvoicePayment
+                    => Core.Authorization.AccessOperationCatalog.PurchasesPaymentsCreate,
+                DocumentTypes.BankTransaction
+                    => Core.Authorization.AccessOperationCatalog.BankingTransactionsCreate,
+                _ => Core.Authorization.AccessOperationCatalog.FinancialsJournalPost
+            };
+
+            var decision = _auth.Authorize(requiredOp);
+            if (!decision.Allowed && entry?.DocumentType == DocumentTypes.BankTransaction)
+            {
+                decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.BankingAccountsManage);
+            }
+            if (!decision.Allowed && (entry?.DocumentType == DocumentTypes.SalesReceipt || entry?.DocumentType == DocumentTypes.CustomerAllocation))
+            {
+                decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+            }
+            if (!decision.Allowed && entry?.DocumentType == DocumentTypes.PurchaseInvoicePayment)
+            {
+                decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+            }
+            if (!decision.Allowed && _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose).Allowed)
+            {
+                decision = Core.Authorization.AccessDecision.Allow(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, "POL-CLOSE", "1.0");
+            }
+            if (!decision.Allowed)
+            {
+                throw new InvalidOperationException($"Permission '{decision.MissingPermission ?? "financials.journal.post"}' is required for this action.");
+            }
+
             if (ValidateGeneralLedgerEntry(entry))
             {
                 _generalLedgerRepository.Insert(entry);
@@ -418,6 +458,46 @@ namespace Services.Financial
 
         public void UpdateGeneralLedgerHeader(GeneralLedgerHeader entry)
         {
+            if (_auth == null)
+                throw new InvalidOperationException("Authorization service is required to update general ledger headers.");
+
+            var requiredOp = entry?.DocumentType switch
+            {
+                DocumentTypes.SalesInvoice or DocumentTypes.SalesCreditMemo or DocumentTypes.SalesDebitMemo
+                    => Core.Authorization.AccessOperationCatalog.SalesInvoicesCreate,
+                DocumentTypes.SalesReceipt or DocumentTypes.CustomerAllocation
+                    => Core.Authorization.AccessOperationCatalog.SalesReceiptsCreate,
+                DocumentTypes.PurchaseInvoice or DocumentTypes.PurchaseCreditMemo or DocumentTypes.PurchaseDebitMemo
+                    => Core.Authorization.AccessOperationCatalog.PurchasesBillsCreate,
+                DocumentTypes.PurchaseInvoicePayment
+                    => Core.Authorization.AccessOperationCatalog.PurchasesPaymentsCreate,
+                DocumentTypes.BankTransaction
+                    => Core.Authorization.AccessOperationCatalog.BankingTransactionsCreate,
+                _ => Core.Authorization.AccessOperationCatalog.FinancialsJournalPost
+            };
+
+            var decision = _auth.Authorize(requiredOp);
+            if (!decision.Allowed && entry?.DocumentType == DocumentTypes.BankTransaction)
+            {
+                decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.BankingAccountsManage);
+            }
+            if (!decision.Allowed && (entry?.DocumentType == DocumentTypes.SalesReceipt || entry?.DocumentType == DocumentTypes.CustomerAllocation))
+            {
+                decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+            }
+            if (!decision.Allowed && entry?.DocumentType == DocumentTypes.PurchaseInvoicePayment)
+            {
+                decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+            }
+            if (!decision.Allowed && _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose).Allowed)
+            {
+                decision = Core.Authorization.AccessDecision.Allow(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, "POL-CLOSE", "1.0");
+            }
+            if (!decision.Allowed)
+            {
+                throw new InvalidOperationException($"Permission '{decision.MissingPermission ?? "financials.journal.post"}' is required for this action.");
+            }
+
             _generalLedgerRepository.Update(entry);
         }
 
@@ -458,6 +538,9 @@ namespace Services.Financial
 
         public IEnumerable<JournalEntryLine> GetJournalEntryLines()
         {
+            if (_auth == null || !_auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView).Allowed)
+                return Enumerable.Empty<JournalEntryLine>();
+
             var query = _journalEntryLineRepo.GetAllIncluding(j => j.JournalEntryHeader, a => a.Account, h => h.JournalEntryHeader.GeneralLedgerHeader);
             return query.AsEnumerable();
         }
@@ -593,6 +676,9 @@ namespace Services.Financial
 
         public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?), AccountingBasis basis = AccountingBasis.Accrual)
         {
+            if (_auth == null || !_auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsReportsView).Allowed)
+                return new List<TrialBalance>();
+
             return TrialBalanceCore(from, to, basis, excludeClosingEntries: false);
         }
 
@@ -1734,6 +1820,9 @@ namespace Services.Financial
             string accountCode = null,
             int? transactionNo = null)
         {
+            if (_auth == null || !_auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView).Allowed)
+                return new List<MasterGeneralLedger>();
+
             var allDr = (from dr in _generalLedgerLineRepository.GetAllIncluding(l => l.GeneralLedgerHeader, a => a.Account).AsEnumerable()
                          where dr.DrCr == DrOrCrSide.Dr
                          //&& GeneralLedgerHelper.IsBetween(dr.GLHeader.Date, (DateTime)fromDate, (DateTime)toDate) == true
@@ -1996,6 +2085,7 @@ namespace Services.Financial
                 throw new InvalidOperationException("Authorization service dependency is required.");
 
             string aprHeader = null;
+            string entryFingerprint = null;
             if (posted)
             {
                 if (journalEntry.VoucherType == JournalVoucherTypes.ClosingEntries && AllowClosingEntriesDepth.Value > 0)
@@ -2024,6 +2114,29 @@ namespace Services.Financial
                     aprHeader = req?.Headers["X-Approval-Request-Id"].FirstOrDefault();
                     var approverHeader = req?.Headers["X-Approved-By-User-Id"].FirstOrDefault();
 
+                    entryFingerprint = Core.Authorization.AccessJournalFingerprint.Compute(
+                        journalEntry.Date,
+                        journalEntry.Memo,
+                        (int)(journalEntry.VoucherType ?? 0),
+                        journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+
+                    if (_journalEntryRepo != null && journalEntry.Id > 0)
+                    {
+                        var storedDraft = _journalEntryRepo.GetById(journalEntry.Id);
+                        if (storedDraft != null)
+                        {
+                            var storedFingerprint = Core.Authorization.AccessJournalFingerprint.Compute(
+                                storedDraft.Date,
+                                storedDraft.Memo,
+                                (int)(storedDraft.VoucherType ?? 0),
+                                storedDraft.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                            if (!string.Equals(entryFingerprint, storedFingerprint, StringComparison.Ordinal))
+                            {
+                                throw new InvalidOperationException("The in-memory journal entry content differs from the approved stored draft. Any changes must be saved as a draft and re-approved before posting.");
+                            }
+                        }
+                    }
+
                     var isAlreadyPosted = journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue;
                     var postResource = new Core.Authorization.AccessResourceContext
                     {
@@ -2031,6 +2144,7 @@ namespace Services.Financial
                         ResourceCompanyId = journalEntry.CompanyId > 0 ? journalEntry.CompanyId : null,
                         ResourceType = "JournalEntry",
                         ResourceId = journalEntry.Id > 0 ? journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
+                        ResourceFingerprint = entryFingerprint,
                         WorkflowState = isAlreadyPosted ? "Posted" : "Draft",
                         IsPeriodLockedOrClosed = false,
                         PreparedByUserId = effectivePreparer,
@@ -2137,21 +2251,20 @@ namespace Services.Financial
                                 .FirstOrDefault(a => a.TableName == "__AccessDelegationApproval" &&
                                                     a.RecordId == aprHeader &&
                                                     a.OriginalValue == "Approved");
-                            if (approvalRow != null && !string.IsNullOrWhiteSpace(approvalRow.NewValue))
+                            if (approvalRow == null)
                             {
-                                try
-                                {
-                                    var p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(approvalRow.NewValue);
-                                    if (p != null)
-                                    {
-                                        approvalRow.OriginalValue = "Consumed";
-                                        p.Status = "Consumed";
-                                        approvalRow.NewValue = System.Text.Json.JsonSerializer.Serialize(p);
-                                        _auditLogRepo.Update(approvalRow);
-                                    }
-                                }
-                                catch { }
+                                throw new InvalidOperationException("The independent approval for posting could not be found or is not in Approved state.");
                             }
+
+                            var p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(approvalRow.NewValue);
+                            if (p == null || (!string.IsNullOrWhiteSpace(p.ResourceFingerprint) && !string.Equals(p.ResourceFingerprint, entryFingerprint, StringComparison.Ordinal)))
+                            {
+                                throw new InvalidOperationException("The independent approval content fingerprint does not match the journal entry being posted.");
+                            }
+                            approvalRow.OriginalValue = "Consumed";
+                            p.Status = "Consumed";
+                            approvalRow.NewValue = System.Text.Json.JsonSerializer.Serialize(p);
+                            _auditLogRepo.Update(approvalRow);
                         }
                     }
                 }

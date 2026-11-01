@@ -545,6 +545,22 @@ namespace Api.Data
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
+            builder.Entity<WorkspaceAccessRequest>(entity =>
+            {
+                entity.ToTable("WorkspaceAccessRequest");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.CompanyId, e.RequestId }).IsUnique();
+                entity.HasIndex(e => new { e.CompanyId, e.Status });
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.TargetMember)
+                    .WithMany()
+                    .HasForeignKey(e => e.TargetMemberId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
             builder.Entity<SalesInvoiceEmail>(entity =>
             {
                 entity.HasIndex(e => e.DispatchId).IsUnique().HasFilter("[DispatchId] IS NOT NULL");
@@ -772,6 +788,7 @@ namespace Api.Data
         public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }
         public virtual DbSet<CompanyInvitation> CompanyInvitations { get; set; }
+        public virtual DbSet<WorkspaceAccessRequest> WorkspaceAccessRequests { get; set; }
         public virtual DbSet<CompanySetting> CompanySettings { get; set; }
         public virtual DbSet<Contact> Contacts { get; set; }
         public virtual DbSet<Customer> Customers { get; set; }
