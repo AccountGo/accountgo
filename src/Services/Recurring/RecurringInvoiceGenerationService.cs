@@ -432,6 +432,104 @@ namespace Services.Recurring
             return ProcessOccurrence(occurrenceId, leaseOwner);
         }
 
+        public RecurringGenerationResult SkipNextOccurrence(
+            int scheduleId, DateTime? runDate, string actingUser, string reason, string leaseOwner, DateTime leaseUntil)
+        {
+            _tenant.RequireCompanyId();
+
+            var schedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId)
+                ?? throw new InvalidRunDateException($"Recurring schedule {scheduleId} not found.");
+
+            if (schedule.Kind != RecurringScheduleKind.SalesInvoice)
+                throw new InvalidRunDateException("This schedule does not generate sales invoices.");
+
+            if (schedule.Status != RecurringScheduleStatus.Active)
+                throw new InvalidRunDateException(
+                    schedule.Status == RecurringScheduleStatus.Paused
+                        ? "The schedule is paused. Resume it before skipping a run."
+                        : "The schedule has ended.");
+
+            if (!schedule.NextRunDate.HasValue)
+                throw new InvalidRunDateException(
+                    "This schedule has no next run date. There is nothing to skip.");
+
+            var nextRunDate = schedule.NextRunDate.Value.Date;
+            var effectiveRunDate = (runDate?.Date) ?? nextRunDate;
+
+            // Skip, like run, targets only the current next occurrence. A mismatched date is rejected so a caller
+            // cannot skip past intervening periods and leave them unrecorded.
+            if (effectiveRunDate != nextRunDate)
+                throw new InvalidRunDateException(
+                    $"This schedule's next run is {nextRunDate:yyyy-MM-dd}. A skip can only skip the next occurrence.");
+
+            // Same archived-client policy as a run: pause and flag instead of recording a skip for an archived client.
+            if (CustomerArchived(schedule.PartyId))
+            {
+                PauseForArchivedCustomer(schedule);
+                return RecurringGenerationResult.Aborted(0, RecurringGuardReasons.CustomerArchivedSchedulePaused);
+            }
+
+            var occurrenceId = EnsureOccurrence(scheduleId, effectiveRunDate, leaseOwner, leaseUntil);
+
+            // Mark the occurrence Skipped and advance the series atomically in one serializable transaction, keyed on
+            // the occurrence so a replay cannot skip-and-advance twice. The calendar anchor is untouched: advancement
+            // computes the next date from the schedule's StartDate, so later dates do not shift.
+            using var tx = _unitOfWork.BeginSerializableTransaction();
+            _unitOfWork.DiscardPendingChanges();
+
+            // Re-read the schedule inside the transaction (DiscardPendingChanges detached the copy read above), so the
+            // advance mutates a tracked row that will actually persist on commit.
+            var trackedSchedule = _scheduleRepo.Table.FirstOrDefault(s => s.Id == scheduleId);
+            if (trackedSchedule == null)
+            {
+                tx.Dispose();
+                return RecurringGenerationResult.Aborted(0, "Schedule not found.");
+            }
+
+            var occurrence = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrenceId);
+            if (occurrence == null)
+            {
+                tx.Dispose();
+                return RecurringGenerationResult.Aborted(occurrenceId, "Occurrence not found.");
+            }
+
+            // Idempotent: an occurrence that already produced a document (a race with a run) is not skipped.
+            if (occurrence.SalesInvoiceId.HasValue &&
+                (occurrence.Status == RecurringOccurrenceStatus.DraftCreated ||
+                 occurrence.Status == RecurringOccurrenceStatus.Issued))
+            {
+                var invoiceId0 = occurrence.SalesInvoiceId;
+                tx.Dispose();
+                return RecurringGenerationResult.AlreadyProcessed(occurrenceId, invoiceId0);
+            }
+
+            // Only the lease owner may skip the claimed occurrence; a live lease held elsewhere is left alone.
+            if (occurrence.Status != RecurringOccurrenceStatus.Running || !HoldsLease(occurrence, leaseOwner))
+            {
+                tx.Dispose();
+                return RecurringGenerationResult.Aborted(occurrenceId, RecurringGuardReasons.LeaseNotHeld);
+            }
+
+            // Pre-load the Customer so the #481 consistency guard resolves from the change tracker, not a DB read
+            // inside the serializable transaction.
+            _ = _customerRepo.Table.FirstOrDefault(c => c.Id == trackedSchedule.PartyId);
+
+            occurrence.Status = RecurringOccurrenceStatus.Skipped;
+            occurrence.ActionBy = actingUser;
+            occurrence.SkipReason = Truncate(reason, 500);
+            occurrence.LeasedBy = null;
+            occurrence.LeasedUntil = null;
+            occurrence.UpdatedAt = DateTime.UtcNow;
+            _occurrenceRepo.Update(occurrence);
+
+            // A skip is a terminal, successful disposition of the period: advance the series by one (attemptSucceeded
+            // so an exhausting skip ends the schedule), exactly once, without changing the anchor.
+            AdvanceSeriesForOccurrence(trackedSchedule, occurrence, attemptSucceeded: true);
+            tx.Commit();
+
+            return RecurringGenerationResult.Skipped(occurrenceId, Truncate(reason, 500));
+        }
+
         public RecurringGenerationResult RetryOccurrence(int occurrenceId, string leaseOwner, DateTime leaseUntil)
         {
             _tenant.RequireCompanyId();
@@ -439,6 +537,7 @@ namespace Services.Recurring
             var occurrence = _occurrenceRepo.Table.FirstOrDefault(o => o.Id == occurrenceId);
             if (occurrence == null)
                 return RecurringGenerationResult.Aborted(occurrenceId, "Occurrence not found.");
+
 
             // Idempotent: an occurrence that already produced a document is not retried — return the existing link.
             if (occurrence.SalesInvoiceId.HasValue
