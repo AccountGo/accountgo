@@ -12,6 +12,17 @@ import { AssistantMount, AssistantProvider } from '../assistant';
 import { PastDueBanner } from '../components/PastDueBanner';
 import { CapabilitiesProvider, useCapabilities } from '../lib/entitlements';
 
+export function evaluateHasPermission(
+  userPermissions: readonly string[] | undefined,
+  permission: string | string[]
+): boolean {
+  if (!userPermissions || userPermissions.length === 0) {
+    return false;
+  }
+  const perms = Array.isArray(permission) ? permission : [permission];
+  return perms.some((p) => userPermissions.includes(p));
+}
+
 export const OrgLayout: React.FC = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const navigate = useNavigate();
@@ -181,13 +192,9 @@ export const OrgLayout: React.FC = () => {
 
   const hasPermission = useCallback(
     (permission: string | string[]): boolean => {
-      if (currentOrg?.role === 'Owner' || currentOrg?.role === 'Admin') {
-        return true;
-      }
-      const perms = Array.isArray(permission) ? permission : [permission];
-      return perms.some((p) => userPermissions.includes(p));
+      return evaluateHasPermission(userPermissions, permission);
     },
-    [currentOrg, userPermissions]
+    [userPermissions]
   );
 
   const switchOrg = (newSlug: string) => {

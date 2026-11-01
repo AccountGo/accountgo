@@ -172,7 +172,7 @@ export const Members: React.FC = () => {
           </label>}
           <fieldset className="space-y-2">
             <legend className="font-medium mb-2">Security roles</legend>
-            <p className="text-sm text-[var(--text-muted)]">Members receive these permissions. Owners and Admins have full workspace permissions.</p>
+            <p className="text-sm text-[var(--text-muted)]">Functional roles grant access to accounting, sales, purchasing, banking, and reporting operations. Workspace roles (Owner, Admin, Member) govern workspace administration only.</p>
             {roles.map(item => <label key={item.id} className="flex items-center gap-2">
               <input type="checkbox" checked={roleIds.includes(item.id)} onChange={e =>
                 setRoleIds(ids => e.target.checked ? [...ids, item.id] : ids.filter(id => id !== item.id))} />

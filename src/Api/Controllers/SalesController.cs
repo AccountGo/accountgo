@@ -196,6 +196,7 @@ namespace Api.Controllers
             customer.SalesDiscountAccountId ??= accounts.FirstOrDefault(a => a.AccountCode == "40400")?.Id;
         }
 
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersView)]
         [HttpGet]
         [Route("Customer")]
         public IActionResult Customer(int id)
@@ -700,6 +701,7 @@ namespace Api.Controllers
             || _db.SalesReceiptHeaders.Any(r => r.CustomerId == customerId)
             || _db.CustomerAllocations.Any(a => a.CustomerId == customerId);
 
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersView)]
         [HttpGet]
         [Route("Customers")] // api/Sales/Customers
         public IActionResult Customers()
@@ -740,6 +742,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("SalesOrders")] // api/Sales/SalesOrders
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
         public IActionResult SalesOrders()
         {
             var salesOrders = _salesService.GetSalesOrders();
@@ -790,6 +793,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("SalesOrder")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
         public IActionResult SalesOrder(int id)
         {
             try
@@ -1263,6 +1267,7 @@ namespace Api.Controllers
             }
         }
 
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesQuotationsView)]
         [HttpGet]
         [Route("Quotations")] // api/Sales/Quotations
         public IActionResult Quotations()
@@ -1305,6 +1310,7 @@ namespace Api.Controllers
             return new ObjectResult(quoteDtos.OrderBy(q => q.Id).Reverse());
         }
 
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesQuotationsView)]
         [HttpGet]
         [Route("Quotation")]
         public IActionResult Quotation(int id)
@@ -1405,6 +1411,7 @@ namespace Api.Controllers
             return new ObjectResult(salesInvoicesDto);
         }
 
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsView)]
         [HttpGet]
         [Route("SalesReceipts")] // api/Sales/SalesReceipts
         public IActionResult SalesReceipts()
@@ -1434,6 +1441,7 @@ namespace Api.Controllers
             return new ObjectResult(salesReceiptsDto);
         }
 
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsView)]
         [HttpGet]
         [Route("SalesReceipt")]
         public IActionResult SalesReceipt(int id)

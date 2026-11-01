@@ -1,11 +1,14 @@
+using Api.Authorization;
 using Api.Data;
 using Api.Filters;
+using Core.Authorization;
 using Core.Domain.Security;
 using Dto.Banking;
 using Dto.Financial;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Services.Administration;
 using Services.Banking;
 using Services.Financial;
@@ -44,6 +47,8 @@ namespace Api.Controllers
         private readonly ApiDbContext _db;
         private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
         private readonly IYearEndCloseService _yearEndCloseService;
+        private readonly IAccessAuthorizationService? _authorizationService;
+        private readonly Core.Entitlements.IEntitlementService? _entitlements;
 
         public FinancialsController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -53,7 +58,9 @@ namespace Api.Controllers
             Core.Tenancy.ITenantContext tenantContext,
             ApiDbContext db,
             Services.Financial.IBooksLockGuard booksLockGuard,
-            IYearEndCloseService yearEndCloseService)
+            IYearEndCloseService yearEndCloseService,
+            IAccessAuthorizationService? authorizationService = null,
+            Core.Entitlements.IEntitlementService? entitlements = null)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -64,6 +71,51 @@ namespace Api.Controllers
             _db = db;
             _booksLockGuard = booksLockGuard;
             _yearEndCloseService = yearEndCloseService;
+            _authorizationService = authorizationService;
+            _entitlements = entitlements;
+        }
+
+        private IAccessAuthorizationService AuthService =>
+            _authorizationService
+            ?? HttpContext?.RequestServices.GetService<IAccessAuthorizationService>()
+            ?? new AccessAuthorizationService(
+                _tenantContext,
+                _entitlements ?? HttpContext?.RequestServices.GetService<Core.Entitlements.IEntitlementService>(),
+                _db);
+
+        private bool TryAuthorizeOperation(
+            string operationKey,
+            string fallbackPermission,
+            out IActionResult? deniedResult,
+            AccessResourceContext? resource = null)
+        {
+            var decision = AuthService.Authorize(operationKey, resource);
+            if (decision.Allowed)
+            {
+                deniedResult = null;
+                return true;
+            }
+
+            if (decision.ReasonCode == AccessReasonCode.PermissionDenied)
+            {
+                deniedResult = RequirePermissionAttribute.Denied(
+                    decision.MissingPermission ?? fallbackPermission,
+                    decision.PolicyId,
+                    decision.PolicyVersion);
+                return false;
+            }
+
+            var problem = new ProblemDetails
+            {
+                Title = decision.SafeTitle,
+                Detail = decision.SafeMessage,
+                Status = decision.HttpStatus
+            };
+            problem.Extensions["code"] = decision.ReasonCodeString;
+            problem.Extensions["policyId"] = decision.PolicyId;
+            problem.Extensions["policyVersion"] = decision.PolicyVersion;
+            deniedResult = new ObjectResult(problem) { StatusCode = decision.HttpStatus };
+            return false;
         }
 
         private string YearEndActor =>
@@ -74,8 +126,12 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("CashBanks")] // api/Financials/CashBanks
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
         public IActionResult CashBanks()
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.BankingAccountsView, SystemPermissions.BankingAccountsView, out var denied))
+                return denied!;
+
             // #413 1B: delegate to BankAccountService; keep the legacy DTO shape for Settings.
             var list = _bankAccountService.List(
                 includeArchived: false,
@@ -98,6 +154,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public async Task<IActionResult> Accounts()
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
+                return denied!;
+
             var accounts = _financialService.GetAccounts().ToList();
             var context = await LoadAccountValidationContextAsync();
             var accountTree = BuildAccountGrouping(accounts, null, context);
@@ -110,6 +169,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public async Task<IActionResult> Account(int id)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
+                return denied!;
+
             var account = _financialService.GetAccount(id);
             if (account == null)
                 return NotFound(new { message = $"Account #{id} not found." });
@@ -148,6 +210,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsJournalView)]
         public IActionResult JournalEntries()
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalView, SystemPermissions.FinancialsJournalView, out var denied))
+                return denied!;
+
             var journalEntries = _financialService.GetJournalEntries();
             var journalEntriesDto = new List<JournalEntry>();
 
@@ -165,6 +230,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsJournalView)]
         public IActionResult JournalEntry(int id)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalView, SystemPermissions.FinancialsJournalView, out var denied))
+                return denied!;
+
             var je = _financialService.GetJournalEntry(id);
             if (je == null)
                 return NotFound(new { message = $"Journal entry #{id} not found." });
@@ -217,6 +285,36 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsJournalPost)]
         public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
+            var companyId = _tenantContext.CompanyId;
+            Core.Domain.Financials.JournalEntryHeader? existingHeader = null;
+            if (journalEntryDto != null && journalEntryDto.Id > 0)
+            {
+                existingHeader = _db.JournalEntryHeaders
+                    .AsNoTracking()
+                    .FirstOrDefault(h => h.Id == journalEntryDto.Id);
+            }
+
+            var isPosted = existingHeader != null && (existingHeader.Posted == true || existingHeader.GeneralLedgerHeaderId.HasValue);
+            var prepHeader = HttpContext?.Request.Headers["X-Prepared-By-User-Id"].FirstOrDefault();
+            var aprHeader = HttpContext?.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
+            var approverHeader = HttpContext?.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
+
+            var postResource = new AccessResourceContext
+            {
+                WorkspaceCompanyId = companyId,
+                ResourceCompanyId = existingHeader != null ? existingHeader.CompanyId : (journalEntryDto != null && journalEntryDto.Id > 0 ? -1 : companyId),
+                ResourceType = "JournalEntry",
+                ResourceId = journalEntryDto?.Id.ToString(CultureInfo.InvariantCulture),
+                WorkflowState = isPosted ? "Posted" : "Draft",
+                IsPeriodLockedOrClosed = false,
+                PreparedByUserId = prepHeader ?? "system:draft-preparer",
+                IndependentApproverUserId = approverHeader,
+                ApprovalRequestId = aprHeader
+            };
+
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalPost, SystemPermissions.FinancialsJournalPost, out var denied, postResource))
+                return denied!;
+
             string[]? errors = null;
 
             try
@@ -232,7 +330,7 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                var je = _financialService.GetJournalEntry(journalEntryDto.Id, false);
+                var je = _financialService.GetJournalEntry(journalEntryDto!.Id, false);
                 if (je == null)
                     return NotFound(new { message = "Journal entry not found." });
 
@@ -254,6 +352,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsJournalCreate)]
         public IActionResult SaveJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalCreate, SystemPermissions.FinancialsJournalCreate, out var denied))
+                return denied!;
+
             string[]? errors = null;
 
             try
@@ -406,6 +507,9 @@ namespace Api.Controllers
             int skip = 0,
             int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalView, SystemPermissions.FinancialsJournalView, out var denied))
+                return (ActionResult)denied!;
+
             if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
                 return BadRequest(new { message = "Provide a valid date range and filters: from must not be after to." });
             if (documentType.HasValue && !Enum.IsDefined(typeof(Core.Domain.DocumentTypes), documentType.Value))
@@ -427,6 +531,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.ReportsView)]
         public ActionResult TrialBalance(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
+                return (ActionResult)denied!;
+
             if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
                 || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
                 return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
@@ -441,6 +548,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.ReportsView)]
         public ActionResult BalanceSheet(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
+                return (ActionResult)denied!;
+
             if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
                 || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
                 return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
@@ -455,6 +565,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.ReportsView)]
         public IActionResult IncomeStatement(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
+                return denied!;
+
             if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
                 || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
                 return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
@@ -468,6 +581,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.ReportsView)]
         public IActionResult CashFlow(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
+                return denied!;
+
             if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
                 || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
                 return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
@@ -483,6 +599,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public async Task<IActionResult> GetAccountByCode(string accountCode)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
+                return denied!;
+
             var account = await _accountService.GetAccountByCodeAsync(accountCode);
             if (account == null)
                 return NotFound();
@@ -518,6 +637,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
         public async Task<IActionResult> AddAccount([FromBody] Account newAccountDto)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsManage, SystemPermissions.FinancialsAccountsManage, out var denied))
+                return denied!;
+
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
@@ -573,6 +695,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
         public async Task<IActionResult> UpdateAccount(string accountCode, [FromBody] Account updatedAccountDto)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsManage, SystemPermissions.FinancialsAccountsManage, out var denied))
+                return denied!;
+
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
@@ -626,6 +751,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
         public async Task<IActionResult> DeleteAccount(string accountCode)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsManage, SystemPermissions.FinancialsAccountsManage, out var denied))
+                return denied!;
+
             var (account, errorMessage) = await _accountService.DeleteAccountAsync(accountCode);
 
             if (account == null)
@@ -645,6 +773,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
         public async Task<IActionResult> ArchiveAccount(string accountCode)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsManage, SystemPermissions.FinancialsAccountsManage, out var denied))
+                return denied!;
+
             var (account, errorMessage) = await _accountService.ArchiveAccountAsync(accountCode);
             if (account == null)
             {
@@ -669,6 +800,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
         public async Task<IActionResult> UnarchiveAccount(string accountCode)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsManage, SystemPermissions.FinancialsAccountsManage, out var denied))
+                return denied!;
+
             var (account, errorMessage) = await _accountService.UnarchiveAccountAsync(accountCode);
             if (account == null)
             {
@@ -697,6 +831,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
         public IActionResult ExportStructure()
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportStructure, SystemPermissions.FinancialsAccountsManage, out var denied))
+                return denied!;
+
             var accounts = _financialService.GetAccounts().ToList();
             var csv = GenerateStructureCsv(accounts);
             return File(Encoding.UTF8.GetBytes(csv), "text/csv", "chart-of-accounts-structure.csv");
@@ -708,6 +845,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public IActionResult ExportSnapshot()
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportSnapshot, SystemPermissions.FinancialsAccountsView, out var denied))
+                return denied!;
+
             var accounts = _financialService.GetAccounts().ToList();
             var csv = GenerateSnapshotCsv(accounts);
             return File(Encoding.UTF8.GetBytes(csv), "text/csv", "chart-of-accounts-snapshot.csv");
@@ -719,19 +859,35 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public IActionResult ExportTemplate()
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportTemplate, SystemPermissions.FinancialsAccountsView, out var denied))
+                return denied!;
+
             var csv = GenerateSampleStructureTemplate();
             return File(Encoding.UTF8.GetBytes(csv), "text/csv", "accountgo-coa-structure-template.csv");
         }
 
         [HttpGet]
         [Route("ExportAccounts")]
-        [RequireModule("financials")]
+        [RequireModule("financials", "reports")]
+        [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public IActionResult ExportAccounts([FromQuery] string mode = "structure")
         {
             if (string.Equals(mode, "snapshot", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportSnapshot, SystemPermissions.FinancialsAccountsView, out var deniedSnap))
+                    return deniedSnap!;
                 return ExportSnapshot();
+            }
+
             if (string.Equals(mode, "template", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportTemplate, SystemPermissions.FinancialsAccountsView, out var deniedTmpl))
+                    return deniedTmpl!;
                 return ExportTemplate();
+            }
+
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportStructure, SystemPermissions.FinancialsAccountsManage, out var deniedStruct))
+                return deniedStruct!;
             return ExportStructure();
         }
 
@@ -741,6 +897,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public async Task<IActionResult> GetChartStatus()
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
+                return denied!;
+
             var status = await _accountService.GetChartStatusAsync();
             return Ok(status);
         }
@@ -751,6 +910,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
         public async Task<IActionResult> ValidateImport([FromQuery] string? mode = null)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsImportMerge, SystemPermissions.FinancialsAccountsManage, out var denied))
+                return denied!;
+
             try
             {
                 var (csv, importMode, _, retireMissing, controlMappings) = await ExtractImportPayloadAsync(mode);
@@ -773,16 +935,31 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
         public async Task<IActionResult> CommitImport([FromQuery] string? mode = null, [FromQuery] bool skipErrors = false)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsImportMerge, SystemPermissions.FinancialsAccountsManage, out var denied))
+                return denied!;
+
             var (csv, importMode, skip, retireMissing, controlMappings) = await ExtractImportPayloadAsync(mode, skipErrors);
             if (string.IsNullOrWhiteSpace(csv))
                 return BadRequest(new { message = "No CSV file or content provided." });
 
             bool isCallerOwner = _tenantContext.Role == Core.Domain.CompanyMemberRole.Owner;
 
-            // Strict Owner gating for Replace and Retire-missing (§9, D9, Condition 4)
-            if ((importMode == "replace" || retireMissing) && !isCallerOwner)
+            // Strict composite policy gating for Replace and Retire-missing (requires both financials.accounts.manage and Owner governance role)
+            if (importMode == "replace" || retireMissing)
             {
-                return StatusCode(403, new { message = "Replace mode and Retire Missing require workspace Owner role." });
+                var replaceDecision = AuthService.Authorize(
+                    AccessOperationCatalog.FinancialsAccountsImportReplace,
+                    new AccessResourceContext
+                    {
+                        WorkspaceCompanyId = _tenantContext.CompanyId,
+                        ResourceCompanyId = _tenantContext.CompanyId,
+                        WorkflowState = "Mutable",
+                        IsPeriodLockedOrClosed = false
+                    });
+                if (!replaceDecision.Allowed || !isCallerOwner)
+                {
+                    return StatusCode(403, new { message = "Replace mode and Retire Missing require workspace Owner role." });
+                }
             }
 
             var (result, failedPreview) = await _accountService.CommitImportAsync(csv, importMode, skip, retireMissing, controlMappings, isCallerOwner);
@@ -1237,8 +1414,12 @@ namespace Api.Controllers
         #region Bank Management
         [HttpGet]
         [Route("Bank/{id}")] // api/Financials/Bank/1
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
         public IActionResult GetBank(int id)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.BankingAccountsView, SystemPermissions.BankingAccountsView, out var denied))
+                return denied!;
+
             try
             {
                 var bank = _bankAccountService.Get(id, includeFullNumbers: false);
@@ -1261,6 +1442,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult CreateBank([FromBody] Dto.Financial.Bank bankDto)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.BankingAccountsManage, SystemPermissions.BankingAccountsManage, out var denied))
+                return denied!;
+
             try
             {
                 if (!ModelState.IsValid)
@@ -1292,6 +1476,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult UpdateBank(int id, [FromBody] Dto.Financial.Bank bankDto)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.BankingAccountsManage, SystemPermissions.BankingAccountsManage, out var denied))
+                return denied!;
+
             try
             {
                 if (!ModelState.IsValid)
@@ -1334,6 +1521,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult DeleteBank(int id)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.BankingAccountsManage, SystemPermissions.BankingAccountsManage, out var denied))
+                return denied!;
+
             try
             {
                 using var tx = RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, System.Data.IsolationLevel.Serializable);
@@ -1373,6 +1563,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public IActionResult ListYearEndYears()
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
+                return denied!;
+
             var years = _yearEndCloseService.ListYears();
             return Ok(years.Select(MapYearEndSummary));
         }
@@ -1383,6 +1576,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
         public IActionResult PreviewYearEnd(string code)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
+                return denied!;
+
             try
             {
                 var preview = _yearEndCloseService.Preview(code);
@@ -1405,6 +1601,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
         public IActionResult CloseYearEnd(string code, [FromBody] YearEndCloseRequest request)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out var denied))
+                return denied!;
+
             try
             {
                 using var tx = BeginWriteTransaction();
@@ -1436,6 +1635,9 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
         public IActionResult ReopenYearEnd(string code, [FromBody] YearEndReopenRequest request)
         {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out var denied))
+                return denied!;
+
             try
             {
                 using var tx = BeginWriteTransaction();

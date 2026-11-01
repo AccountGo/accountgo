@@ -250,7 +250,9 @@ namespace Services.Administration
 
         public IEnumerable<AuditLog> AuditLogs()
         {
-            return _auditLogRepo.Table.AsEnumerable();
+            return _auditLogRepo.Table
+                .Where(a => a.TableName != "__AccessDelegationApproval")
+                .AsEnumerable();
         }
 
         public TenantSubscriptionDto GetCurrentSubscription()

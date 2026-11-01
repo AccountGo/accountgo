@@ -141,40 +141,56 @@ namespace AccountGo.BackendTests
             UserABId = userAB.Id;
 
             // 3. Create Memberships
-            db.CompanyMembers.AddRange(
-                new CompanyMember
+            var memberA = new CompanyMember
+            {
+                CompanyId = CompanyAId,
+                UserId = userA.Id,
+                Role = CompanyMemberRole.Owner,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            };
+            var memberB = new CompanyMember
+            {
+                CompanyId = CompanyBId,
+                UserId = userB.Id,
+                Role = CompanyMemberRole.Owner,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            };
+            var memberABA = new CompanyMember
+            {
+                CompanyId = CompanyAId,
+                UserId = userAB.Id,
+                Role = CompanyMemberRole.Owner,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            };
+            var memberABB = new CompanyMember
+            {
+                CompanyId = CompanyBId,
+                UserId = userAB.Id,
+                Role = CompanyMemberRole.Owner,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            };
+            db.CompanyMembers.AddRange(memberA, memberB, memberABA, memberABB);
+            await db.SaveChangesAsync();
+
+            var functionalRoleIds = db.SecurityRoles
+                .Where(r => !r.SysAdmin && r.Name != "SystemAdministrators")
+                .Select(r => r.Id)
+                .ToList();
+            foreach (var member in new[] { memberA, memberB, memberABA, memberABB })
+            {
+                foreach (var roleId in functionalRoleIds)
                 {
-                    CompanyId = CompanyAId,
-                    UserId = userA.Id,
-                    Role = CompanyMemberRole.Owner,
-                    Status = CompanyMemberStatus.Active,
-                    JoinedAt = DateTime.UtcNow
-                },
-                new CompanyMember
-                {
-                    CompanyId = CompanyBId,
-                    UserId = userB.Id,
-                    Role = CompanyMemberRole.Owner,
-                    Status = CompanyMemberStatus.Active,
-                    JoinedAt = DateTime.UtcNow
-                },
-                new CompanyMember
-                {
-                    CompanyId = CompanyAId,
-                    UserId = userAB.Id,
-                    Role = CompanyMemberRole.Owner,
-                    Status = CompanyMemberStatus.Active,
-                    JoinedAt = DateTime.UtcNow
-                },
-                new CompanyMember
-                {
-                    CompanyId = CompanyBId,
-                    UserId = userAB.Id,
-                    Role = CompanyMemberRole.Owner,
-                    Status = CompanyMemberStatus.Active,
-                    JoinedAt = DateTime.UtcNow
+                    db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole
+                    {
+                        CompanyMemberId = member.Id,
+                        SecurityRoleId = roleId
+                    });
                 }
-            );
+            }
             await db.SaveChangesAsync();
 
             // 4. Generate JWT tokens

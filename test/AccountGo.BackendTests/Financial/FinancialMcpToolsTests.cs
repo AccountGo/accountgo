@@ -34,6 +34,15 @@ namespace AccountGo.BackendTests.Financial
             _mockTenant.Setup(t => t.RequireCompanyId()).Returns(1);
             _mockTenant.Setup(t => t.CompanySlug).Returns("ph-financials");
             _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Owner);
+            _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>
+            {
+                SystemPermissions.FinancialsAccountsView,
+                SystemPermissions.FinancialsAccountsManage,
+                SystemPermissions.FinancialsJournalView,
+                SystemPermissions.FinancialsJournalCreate,
+                SystemPermissions.FinancialsJournalPost,
+                SystemPermissions.ReportsView
+            });
             _mockEntitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions());
             AllowModules();
 
@@ -375,7 +384,7 @@ namespace AccountGo.BackendTests.Financial
         }
 
         [Fact]
-        public async Task GetTrialBalance_OwnerBypassesPermissionCheck()
+        public async Task GetTrialBalance_OwnerWithoutReportsPermission_ReturnsAccessDenied_AndWithPermission_Succeeds()
         {
             _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Owner);
             _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>());
@@ -384,10 +393,13 @@ namespace AccountGo.BackendTests.Financial
 
             var tools = CreateTools();
 
-            var response = await tools.GetTrialBalance();
+            var deniedResponse = await tools.GetTrialBalance();
+            Assert.Equal(FinancialMcpStatus.AccessDenied, deniedResponse.Status);
 
-            Assert.Equal(FinancialMcpStatus.Success, response.Status);
-            Assert.Empty(response.Items);
+            _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string> { SystemPermissions.ReportsView });
+            var allowedResponse = await tools.GetTrialBalance();
+            Assert.Equal(FinancialMcpStatus.Success, allowedResponse.Status);
+            Assert.Empty(allowedResponse.Items);
         }
 
         [Fact]
@@ -751,6 +763,33 @@ namespace AccountGo.BackendTests.Financial
 
             Assert.NotNull(capturedTo);
             Assert.Equal(new DateTime(2026, 1, 1, 23, 59, 59, 999).AddTicks(9999), capturedTo.Value);
+        }
+
+        [Theory]
+        [InlineData(CompanyMemberRole.Owner)]
+        [InlineData(CompanyMemberRole.Admin)]
+        [InlineData(CompanyMemberRole.Member)]
+        public async Task GovernanceRoleWithoutFunctionalPermissions_FailsFinancialTools(CompanyMemberRole role)
+        {
+            _mockTenant.Setup(t => t.Role).Returns(role);
+            _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>());
+
+            var tools = CreateTools();
+
+            var coa = await tools.GetChartOfAccounts();
+            Assert.Equal(FinancialMcpStatus.AccessDenied, coa.Status);
+            Assert.Empty(coa.Accounts);
+
+            var tb = await tools.GetTrialBalance();
+            Assert.Equal(FinancialMcpStatus.AccessDenied, tb.Status);
+            Assert.Empty(tb.Items);
+
+            var gl = await tools.GetGeneralLedgerTransactions();
+            Assert.Equal(FinancialMcpStatus.AccessDenied, gl.Status);
+            Assert.Empty(gl.Transactions);
+
+            var cf = await tools.GetCashFlow();
+            Assert.Equal(FinancialMcpStatus.AccessDenied, cf.Status);
         }
 
         #endregion

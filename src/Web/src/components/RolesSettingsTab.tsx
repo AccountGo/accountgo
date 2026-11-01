@@ -267,7 +267,7 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = ({ tenantContex
           <div>
             <h3 className="text-base font-bold text-[var(--text-main)]">Tenant Roles &amp; Permissions</h3>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Select a role to inspect its permissions. Owners and Admins always have full access.
+              Select a functional role to inspect its permissions. Functional roles must be assigned explicitly; Owner and Admin workspace roles do not automatically grant financial permissions.
             </p>
           </div>
         </div>
