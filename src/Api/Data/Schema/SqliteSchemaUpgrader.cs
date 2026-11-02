@@ -145,6 +145,7 @@ namespace Api.Data.Schema
                 // Outside EnsureTables so JournalEntryHeader upgrades even when optional later tables are absent.
                 EnsurePriorPeriodAdjustment(connection);
                 EnsureSecurityTables(connection);
+                EnsureWorkspaceOperatingPolicy(connection);
             }
             finally
             {
@@ -179,6 +180,12 @@ namespace Api.Data.Schema
                     new[] { "CompanyInvitation", "ResendWindowStart", "TEXT NULL" },
                     new[] { "CompanyInvitation", "ResendCount", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "LegalName", "TEXT NULL" },
+                    new[] { "CompanySetting", "RegistrationStatus", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "CompanySetting", "RegistrationNumber", "TEXT NULL" },
+                    new[] { "CompanyMemberSecurityRole", "GrantOrigin", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "CompanyMemberSecurityRole", "GrantedAtUtc", "TEXT NULL" },
+                    new[] { "CompanyMemberSecurityRole", "GrantedByUserId", "TEXT NULL" },
+                    new[] { "CompanyMemberSecurityRole", "AccessProfileVersion", "INTEGER NULL" },
                     new[] { "CompanySetting", "BusinessEmail", "TEXT NULL" },
                     new[] { "CompanySetting", "BusinessPhone", "TEXT NULL" },
                     new[] { "CompanySetting", "SalesInvoiceSettingsJson", "TEXT NULL" },
@@ -786,6 +793,119 @@ WHERE ""DisabledModulesJson"" IS NULL
             cmd.CommandText = SecurityTablesSql;
             cmd.ExecuteNonQuery();
         }
+
+        private static void EnsureWorkspaceOperatingPolicy(DbConnection connection)
+        {
+            if (!TableExists(connection, "Company"))
+                return;
+
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = WorkspaceOperatingPolicyTablesSql;
+                cmd.ExecuteNonQuery();
+            }
+
+            // Conservative backfill — no grants, no approval relaxation.
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO ""WorkspaceOperatingSettings""
+    (""CompanyId"", ""Purpose"", ""CollaborationIntent"", ""CollaborationState"", ""ConfirmedOwnerMemberId"",
+     ""InitializedAtUtc"", ""InitializedByUserId"", ""InitializationSource"", ""EverTeamActivatedAtUtc"",
+     ""LastConfirmedAtUtc"", ""LastConfirmedByUserId"", ""PolicyRevision"", ""PolicySchemaVersion"")
+SELECT c.""Id"", 0, 0, 0, NULL, NULL, NULL, 0,
+       CASE
+           WHEN EXISTS (
+               SELECT 1 FROM ""CompanyMember"" m
+               WHERE m.""CompanyId"" = c.""Id"" AND m.""Role"" <> 1)
+             OR EXISTS (
+               SELECT 1 FROM ""CompanyInvitation"" i
+               WHERE i.""CompanyId"" = c.""Id"" AND i.""AcceptedAt"" IS NOT NULL)
+           THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+           ELSE NULL
+       END,
+       NULL, NULL, 0, 1
+FROM ""Company"" c
+WHERE NOT EXISTS (
+    SELECT 1 FROM ""WorkspaceOperatingSettings"" s WHERE s.""CompanyId"" = c.""Id"");
+
+INSERT INTO ""WorkspacePolicyCoordination"" (""CompanyId"", ""CreatedAtUtc"", ""LastAcquiredAtUtc"")
+SELECT c.""Id"", strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), NULL
+FROM ""Company"" c
+WHERE NOT EXISTS (
+    SELECT 1 FROM ""WorkspacePolicyCoordination"" x WHERE x.""CompanyId"" = c.""Id"");
+
+INSERT INTO ""WorkspaceApprovalRule""
+    (""CompanyId"", ""OperationKey"", ""RuleKind"", ""Provenance"", ""PolicySchemaVersion"",
+     ""ConfiguredAtUtc"", ""ConfiguredByUserId"", ""ConfiguredAtPolicyRevision"", ""ReviewerSecurityRoleId"")
+SELECT c.""Id"", 'financials.journal.post', 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), NULL, 0, NULL
+FROM ""Company"" c
+WHERE NOT EXISTS (
+    SELECT 1 FROM ""WorkspaceApprovalRule"" r
+    WHERE r.""CompanyId"" = c.""Id"" AND r.""OperationKey"" = 'financials.journal.post');
+";
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private const string WorkspaceOperatingPolicyTablesSql = @"
+            CREATE TABLE IF NOT EXISTS ""WorkspaceOperatingSettings"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_WorkspaceOperatingSettings"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""Purpose"" INTEGER NOT NULL DEFAULT 0,
+                ""CollaborationIntent"" INTEGER NOT NULL DEFAULT 0,
+                ""CollaborationState"" INTEGER NOT NULL DEFAULT 0,
+                ""ConfirmedOwnerMemberId"" INTEGER NULL,
+                ""InitializedAtUtc"" TEXT NULL,
+                ""InitializedByUserId"" TEXT NULL,
+                ""InitializationSource"" INTEGER NOT NULL DEFAULT 0,
+                ""EverTeamActivatedAtUtc"" TEXT NULL,
+                ""LastConfirmedAtUtc"" TEXT NULL,
+                ""LastConfirmedByUserId"" TEXT NULL,
+                ""PolicyRevision"" INTEGER NOT NULL DEFAULT 0,
+                ""PolicySchemaVersion"" INTEGER NOT NULL DEFAULT 1,
+                CONSTRAINT ""FK_WorkspaceOperatingSettings_Company_CompanyId""
+                    FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE,
+                CONSTRAINT ""FK_WorkspaceOperatingSettings_CompanyMember_ConfirmedOwnerMemberId""
+                    FOREIGN KEY (""ConfirmedOwnerMemberId"") REFERENCES ""CompanyMember"" (""Id"") ON DELETE NO ACTION
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspaceOperatingSettings_CompanyId""
+                ON ""WorkspaceOperatingSettings"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_WorkspaceOperatingSettings_ConfirmedOwnerMemberId""
+                ON ""WorkspaceOperatingSettings"" (""ConfirmedOwnerMemberId"");
+
+            CREATE TABLE IF NOT EXISTS ""WorkspaceApprovalRule"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_WorkspaceApprovalRule"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""OperationKey"" TEXT NOT NULL,
+                ""RuleKind"" INTEGER NOT NULL DEFAULT 0,
+                ""Provenance"" INTEGER NOT NULL DEFAULT 0,
+                ""PolicySchemaVersion"" INTEGER NOT NULL DEFAULT 1,
+                ""ConfiguredAtUtc"" TEXT NOT NULL,
+                ""ConfiguredByUserId"" TEXT NULL,
+                ""ConfiguredAtPolicyRevision"" INTEGER NOT NULL DEFAULT 0,
+                ""ReviewerSecurityRoleId"" INTEGER NULL,
+                CONSTRAINT ""FK_WorkspaceApprovalRule_Company_CompanyId""
+                    FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE,
+                CONSTRAINT ""FK_WorkspaceApprovalRule_SecurityRole_ReviewerSecurityRoleId""
+                    FOREIGN KEY (""ReviewerSecurityRoleId"") REFERENCES ""SecurityRole"" (""Id"") ON DELETE NO ACTION
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspaceApprovalRule_CompanyId_OperationKey""
+                ON ""WorkspaceApprovalRule"" (""CompanyId"", ""OperationKey"");
+            CREATE INDEX IF NOT EXISTS ""IX_WorkspaceApprovalRule_ReviewerSecurityRoleId""
+                ON ""WorkspaceApprovalRule"" (""ReviewerSecurityRoleId"");
+
+            CREATE TABLE IF NOT EXISTS ""WorkspacePolicyCoordination"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_WorkspacePolicyCoordination"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""CreatedAtUtc"" TEXT NOT NULL,
+                ""LastAcquiredAtUtc"" TEXT NULL,
+                CONSTRAINT ""FK_WorkspacePolicyCoordination_Company_CompanyId""
+                    FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspacePolicyCoordination_CompanyId""
+                ON ""WorkspacePolicyCoordination"" (""CompanyId"");
+        ";
 
         private const string SecurityTablesSql = @"
             CREATE TABLE IF NOT EXISTS ""RefreshTokens"" (

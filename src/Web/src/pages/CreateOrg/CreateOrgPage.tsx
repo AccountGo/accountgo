@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, ArrowRight, Check, Layers, Loader2 } from 'lucide-react';
 import { useCreateOrgWizard } from './hooks/useCreateOrgWizard';
+import { AboutStep } from './steps/AboutStep';
 import { IdentityStep } from './steps/IdentityStep';
 import { IntentStep } from './steps/IntentStep';
 import { MoneyTimeStep } from './steps/MoneyTimeStep';
@@ -10,6 +11,7 @@ import { ReviewStep } from './steps/ReviewStep';
 import type { StepId } from './lib/policyDefaults';
 
 const TITLES: Record<StepId, { title: string; subtitle: string }> = {
+  about: { title: 'About your workspace', subtitle: 'Tell us what it’s for and who will use it. These answers do not change your plan.' },
   intent: { title: 'What do you need?', subtitle: 'Pick the plan that fits. You can change it later.' },
   identity: { title: 'Create your workspace', subtitle: 'Name it and choose its web address.' },
   moneyTime: { title: 'Money & time', subtitle: 'Your books currency and when they begin.' },
@@ -98,11 +100,12 @@ export const CreateOrgPage: React.FC = () => {
                 </div>
               )}
 
+              {step === 'about' && <AboutStep state={state} errors={errors} update={update} capabilities={wizard.capabilities} />}
               {step === 'intent' && <IntentStep plan={state.plan} onChange={(plan) => update({ plan })} />}
               {step === 'identity' && <IdentityStep state={state} errors={errors} update={update} />}
               {step === 'moneyTime' && <MoneyTimeStep state={state} errors={errors} update={update} />}
               {step === 'reporting' && <ReportingStep state={state} update={update} />}
-              {step === 'review' && <ReviewStep state={state} />}
+              {step === 'review' && <ReviewStep state={state} capabilities={wizard.capabilities} />}
 
               <div className="pt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                 <button

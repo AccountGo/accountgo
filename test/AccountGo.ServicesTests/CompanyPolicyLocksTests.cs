@@ -55,7 +55,7 @@ public class CompanyPolicyLocksTests : IDisposable
         var c = new OrganizationsController(
             _tenant,
             _db,
-            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenant)),
+            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenant), _tenant),
             new CompanyAccountingPolicyService(_db),
             new Services.Billing.CommunityPlanCatalog(),
             Mock.Of<Services.Financial.IFinancialService>());
