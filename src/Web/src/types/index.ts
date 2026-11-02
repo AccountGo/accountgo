@@ -177,6 +177,7 @@ export interface AccessSetupStatus {
   adminCount: number;
   totalFunctionalRoles: number;
   isEligibleForBootstrap: boolean;
+  ownerCanManageOwnAccess?: boolean;
 }
 
 export interface PendingInvitation {

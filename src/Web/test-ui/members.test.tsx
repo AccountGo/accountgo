@@ -32,6 +32,24 @@ beforeEach(() => {
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
+it('lets a sole owner add their own functional roles', async () => {
+  authFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (options?.method === 'POST') return new Response(null, { status: 200 });
+    const value = url === '/api/organizations/current' ? { role: 'Owner' }
+      : url.endsWith('/access-setup/status') ? { ownerCanManageOwnAccess: true, isEligibleForBootstrap: false }
+      : url.endsWith('/security-roles') ? [{ id: 3, name: 'Accountant', displayName: 'Accountant' }]
+      : [];
+    return new Response(JSON.stringify(value), { status: 200 });
+  });
+  render(<Members />);
+  const buttons = await screen.findAllByRole('button', { name: 'Set up my access' });
+  fireEvent.click(buttons[0]);
+  fireEvent.click(screen.getByLabelText('Accountant'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save and activate roles' }));
+  await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/owner-access-setup',
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ securityRoleIds: [3] }) })));
+});
+
 it('lets an owner select Admin when inviting a member', async () => {
   render(<Members />);
   const invite = await screen.findByRole('button', { name: 'Invite member' });
