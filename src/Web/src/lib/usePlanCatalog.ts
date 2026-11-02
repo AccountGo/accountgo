@@ -13,6 +13,10 @@ export interface PlanCatalogEntry {
   selfService: boolean;
   /** Null when the plan has no price; never defaulted client-side. */
   monthlyPrice: number | null;
+  annualPrice?: number | null;
+  product?: string | null;
+  features?: string[];
+  limits?: Record<string, number | null>;
 }
 
 let cached: PlanCatalogEntry[] | null = null;
