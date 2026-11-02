@@ -20,7 +20,8 @@ namespace Services.Banking
         RecordExpenseFromStatementLineResultDto RecordExpense(
             int lineId,
             RecordExpenseFromStatementLineRequest request,
-            string actor);
+            string actor,
+            bool saveDraft = false);
 
         PayOpenBillFromStatementLineResultDto PayOpenBill(
             int lineId,

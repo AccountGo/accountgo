@@ -149,6 +149,7 @@ namespace Dto.Banking
 
     public class BankStatementLineDto
     {
+        public int? DraftBillId { get; set; }
         public int Id { get; set; }
         public int BankId { get; set; }
         public int BankStatementImportId { get; set; }

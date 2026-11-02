@@ -25,6 +25,43 @@ namespace AccountGo.BackendTests.Banking;
 public class StatementLineExpenseServiceTests
 {
     [Fact]
+    public void SaveDraft_is_explicit_idempotent_and_does_not_approve_pay_match_or_bypass_quota()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        SeedExpenseTree(harness);
+        var bank = harness.CreateBank("Checking");
+        var line = ImportPayment(harness, bank.Id, -49.99m, "Software", BankingTestHarness.Utc(2026, 3, 15));
+        harness.Repos.Vendors.Insert(new Vendor { Id = 7, CompanyId = 1, Party = new Party { Name = "Vendor" } });
+        var purchasing = new Mock<IPurchasingService>(MockBehavior.Strict);
+        purchasing.Setup(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()))
+            .Callback<PurchaseInvoiceHeader, bool>((bill, _) =>
+            {
+                bill.Id = 88; bill.No = "B-88"; bill.CompanyId = 1;
+                harness.Repos.PurchaseInvoices.Insert(bill);
+            });
+        var service = Build(harness, purchasing);
+        var request = new RecordExpenseFromStatementLineRequest
+        { VendorId = 7, ExpenseAccountId = harness.RequireAccount("50115").Id, Description = "Reviewed software charge" };
+        var first = service.RecordExpense(line.Id, request, "reviewer", saveDraft: true);
+        var repeated = service.RecordExpense(line.Id, request, "reviewer", saveDraft: true);
+
+        Assert.Equal(88, first.Bill.Id);
+        Assert.Equal(88, repeated.Bill.Id);
+        Assert.Equal(88, first.Line.DraftBillId);
+        Assert.Null(first.Payment);
+        Assert.False(first.Line.IsMatched);
+        Assert.True(harness.Repos.PurchaseInvoices.Table.Single().IsDraft);
+        Assert.Empty(harness.Repos.VendorPayments.Table);
+        Assert.Empty(harness.Repos.GlHeaders.Table);
+        purchasing.Verify(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()), Times.Once);
+        harness.Entitlements.Verify(e => e.Bypass(), Times.Never);
+        Assert.Throws<InvalidOperationException>(() => service.RecordExpense(line.Id, request, "reviewer"));
+        Assert.Throws<InvalidOperationException>(() => service.PayOpenBill(line.Id,
+            new PayOpenBillFromStatementLineRequest { BillId = 89 }, "reviewer"));
+    }
+
+    [Fact]
     public void ListExpenseCategories_maps_curated_by_code_and_puts_rest_in_More()
     {
         using var harness = new BankingTestHarness();

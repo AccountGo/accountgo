@@ -1198,6 +1198,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("DraftBillId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("ExcludedAt")
                         .HasColumnType("datetime2");
 

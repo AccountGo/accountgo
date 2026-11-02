@@ -1197,6 +1197,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<int?>("DraftBillId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("ExcludedAt")
                         .HasColumnType("timestamp without time zone");
 
