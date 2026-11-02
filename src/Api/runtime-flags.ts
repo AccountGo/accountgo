@@ -2,6 +2,7 @@
 
 /** KV key that switches tiered capacity at runtime ("true" / "false"); see RuntimeFlags. */
 export const TIERED_CAPACITY_FLAG_KEY = "tiered_capacity";
+export const AUTH_CAPACITY_FLAG_KEY = "auth_capacity";
 
 /** The part of a Workers KV namespace binding this module uses. */
 export interface FlagStore {

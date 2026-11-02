@@ -59,6 +59,8 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   const [devCode, setDevCode] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [googleProgress, setGoogleProgress] = useState<'selecting' | 'signing-in' | null>(null);
+  const googleAttempt = useRef(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Turnstile verification tokens and widget refs
@@ -374,7 +376,14 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
 
   return (
     <div className="min-h-screen bg-[var(--bg-canvas)] flex items-center justify-center p-4 sm:p-6 transition-colors duration-200">
-      <div className="w-full max-w-md bg-[var(--bg-surface)] backdrop-blur-2xl rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/80 ring-1 ring-white/10 relative overflow-hidden">
+      {googleProgress && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="status" aria-live="polite" aria-busy="true">
+        <div className="rounded-2xl bg-[var(--bg-surface)] p-8 text-center shadow-2xl">
+          <Loader2 aria-hidden="true" className="mx-auto mb-4 h-8 w-8 animate-spin text-[var(--brand-primary)]" />
+          <p className="font-semibold text-[var(--text-main)]">{googleProgress === 'selecting' ? 'Continue with Google' : 'Signing you in…'}</p>
+          {googleProgress === 'selecting' && <button type="button" className="mt-4 underline text-sm text-[var(--text-secondary)]" onClick={() => { googleAttempt.current = false; setGoogleProgress(null); }}>Cancel</button>}
+        </div>
+      </div>}
+      <div inert={!!googleProgress} className="w-full max-w-md bg-[var(--bg-surface)] backdrop-blur-2xl rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/80 ring-1 ring-white/10 relative overflow-hidden">
         {/* Step 1: Sign In or Sign Up Form */}
         {step === 1 && (
           <div className="space-y-6 animate-fade-in">
@@ -433,7 +442,11 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
 
             {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
               <GoogleSignInButton clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID} enabled={acceptedTerms} onError={setErrorMessage}
+                onStart={() => { googleAttempt.current = true; setGoogleProgress('selecting'); }}
                 onCredential={async (credential) => {
+                  if (!googleAttempt.current) return;
+                  googleAttempt.current = false;
+                  setGoogleProgress('signing-in');
                   setErrorMessage(null);
                   verificationOwnsNavigation.current = true;
                   try {
@@ -448,6 +461,8 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   } catch (error) {
                     verificationOwnsNavigation.current = false;
                     setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed.');
+                  } finally {
+                    setGoogleProgress(null);
                   }
                 }} />
             )}

@@ -5,6 +5,7 @@ import {
   CapacityRouter,
   WORKSPACE_HEADER,
   isTieredCapacityEnabled,
+  isPublicAuthRequest,
   parseCapacityPool,
   resolvePoolContainerName,
   resolveWriterContainerName,
@@ -37,7 +38,7 @@ import {
   type ContainerHost,
 } from "./container-proxy";
 import { constantTimeEqual } from "./constant-time";
-import { RuntimeFlags, TIERED_CAPACITY_FLAG_KEY } from "./runtime-flags";
+import { RuntimeFlags, TIERED_CAPACITY_FLAG_KEY, AUTH_CAPACITY_FLAG_KEY } from "./runtime-flags";
 import {
   isServerTimingEnabled,
   logSlowWorkerRequest,
@@ -570,6 +571,17 @@ export default {
         loggedContainerName = true;
         console.warn(`[worker] Routing public request to container: ${containerName}`);
       }
+    }
+
+    // Only pre-workspace authentication uses this independent V2 switch; workspace routing is unchanged.
+    if (!isAdminRequest && isPublicAuthRequest(url.pathname) && env.CONTAINER_V2 &&
+        await runtimeFlags.isEnabled(env.FLAGS, AUTH_CAPACITY_FLAG_KEY, isTieredCapacityEnabled(env.AUTH_CAPACITY_ENABLED))) {
+      const headers = new Headers(request.headers);
+      headers.set(CAPACITY_POOL_HEADER, "paid");
+      const versionId = env.CF_VERSION_METADATA?.id || "dev";
+      const name = resolvePoolContainerName("paid", versionId);
+      const stub = env.CONTAINER_V2.get(env.CONTAINER_V2.idFromName(name), { locationHint: "enam" });
+      return stub.fetch(new Request(request, { headers }));
     }
 
     // The FLAGS KV value (runtime switch, no deploy) wins over the deployed TIERED_CAPACITY_ENABLED var.
