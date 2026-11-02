@@ -94,3 +94,10 @@ test('derivePlanCards: monthlyPrice null shows no price on the card data', () =>
   assert.equal(cards[1].monthlyPrice, null);
   assert.equal(cards[1].actionLabel, 'Switch');
 });
+
+test('annual billing never presents the monthly price as an annual charge', async () => {
+  const { planPriceLabel } = await server.ssrLoadModule('/src/lib/planCards.ts');
+  assert.equal(planPriceLabel(15, 'month'), '$15/mo');
+  assert.equal(planPriceLabel(15, 'year'), null);
+  assert.equal(planPriceLabel(0, 'year'), '$0');
+});

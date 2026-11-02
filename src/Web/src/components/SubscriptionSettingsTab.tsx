@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
-import { derivePlanCards } from '../lib/planCards';
+import { derivePlanCards, planPriceLabel } from '../lib/planCards';
 import { useCapabilities } from '../lib/entitlements';
 import { useBilling } from '../lib/useBilling';
 import { UsageHint } from './UsageHint';
@@ -401,7 +401,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             <div className={`grid grid-cols-1 ${cards.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
               {cards.map((card) => {
                 const isCurrent = card.role === 'current';
-                const priceLabel = card.monthlyPrice != null ? `$${card.monthlyPrice}/mo` : null;
+                const priceLabel = planPriceLabel(card.monthlyPrice, billingInterval);
 
                 return (
                   <div
@@ -420,6 +420,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                         )}
                       </div>
                       <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">{card.description}</p>
+                      {billingInterval === 'year' && card.monthlyPrice != null && card.monthlyPrice > 0 && (
+                        <p className="text-xs text-[var(--text-muted)] mb-4">Annual price shown at checkout.</p>
+                      )}
                     </div>
 
                     {isCurrent ? (
