@@ -1,5 +1,6 @@
 using Core.Data;
 using Core.Domain.Security;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -385,7 +386,80 @@ namespace Services.Security
                     }
                 }
             }
+
+            EnsureWorkspaceFullAccessProfile(allDbPermissions);
         }
+
+        /// <summary>
+        /// Seeds the managed Full workspace access profile from the reviewed manifest.
+        /// Does not reflect all permissions or copy SysAdmin. Idempotent; never softens exclusions.
+        /// </summary>
+        private void EnsureWorkspaceFullAccessProfile(List<SecurityPermission> allDbPermissions)
+        {
+            var role = _securityRoleRepo.Table.FirstOrDefault(r => r.Name == WorkspaceAccessProfileKeys.FullWorkspaceAccessV1);
+            if (role == null)
+            {
+                role = new SecurityRole
+                {
+                    Name = WorkspaceAccessProfileKeys.FullWorkspaceAccessV1,
+                    DisplayName = WorkspaceAccessProfileKeys.FullWorkspaceAccessDisplayName,
+                    SysAdmin = false,
+                    System = true
+                };
+                _securityRoleRepo.Insert(role);
+            }
+            else
+            {
+                var changed = false;
+                if (role.DisplayName != WorkspaceAccessProfileKeys.FullWorkspaceAccessDisplayName)
+                {
+                    role.DisplayName = WorkspaceAccessProfileKeys.FullWorkspaceAccessDisplayName;
+                    changed = true;
+                }
+                if (role.SysAdmin)
+                {
+                    role.SysAdmin = false;
+                    changed = true;
+                }
+                if (!role.System)
+                {
+                    role.System = true;
+                    changed = true;
+                }
+                if (changed)
+                    _securityRoleRepo.Update(role);
+            }
+
+            var existingRolePerms = _securityRolePermissionRepo.Table.Where(rp => rp.SecurityRoleId == role.Id).ToList();
+            var includedIds = new HashSet<int>();
+
+            foreach (var permissionName in WorkspaceFullAccessManifest.IncludedPermissions)
+            {
+                var permEntity = allDbPermissions.FirstOrDefault(p => p.Name == permissionName);
+                if (permEntity == null)
+                    continue;
+
+                includedIds.Add(permEntity.Id);
+                if (!existingRolePerms.Any(rp => rp.SecurityPermissionId == permEntity.Id))
+                {
+                    _securityRolePermissionRepo.Insert(new SecurityRolePermission
+                    {
+                        SecurityRoleId = role.Id,
+                        SecurityPermissionId = permEntity.Id
+                    });
+                }
+            }
+
+            // Drop exclusions and unknown grants so startup cannot silently expand the profile.
+            foreach (var existing in existingRolePerms)
+            {
+                if (!includedIds.Contains(existing.SecurityPermissionId))
+                    _securityRolePermissionRepo.Delete(existing);
+            }
+        }
+
+        private static bool IsManagedWorkspaceAccessProfile(SecurityRole? role) =>
+            role != null && string.Equals(role.Name, WorkspaceAccessProfileKeys.FullWorkspaceAccessV1, StringComparison.Ordinal);
 
         public User GetUserById(int id)
         {
@@ -430,10 +504,15 @@ namespace Services.Security
 
         public void SaveRoleWithPermissions(int roleId, string name, string displayName, IEnumerable<int> permissionIds)
         {
+            if (string.Equals(name, WorkspaceAccessProfileKeys.FullWorkspaceAccessV1, StringComparison.Ordinal))
+                throw new InvalidOperationException("The managed Full workspace access profile cannot be edited through role administration.");
+
             SecurityRole role;
             if (roleId > 0)
             {
                 role = _securityRoleRepo.GetById(roleId);
+                if (IsManagedWorkspaceAccessProfile(role))
+                    throw new InvalidOperationException("The managed Full workspace access profile cannot be edited through role administration.");
                 if (role != null)
                 {
                     role.Name = name;
@@ -594,8 +673,9 @@ namespace Services.Security
 
         public void DeleteRole(int roleId)
         {
-            //RemoveRolePermission(roleId);
             var entity = _securityRoleRepo.GetById(roleId);
+            if (IsManagedWorkspaceAccessProfile(entity))
+                throw new InvalidOperationException("The managed Full workspace access profile cannot be deleted.");
 
             _securityRoleRepo.Delete(entity);
         }

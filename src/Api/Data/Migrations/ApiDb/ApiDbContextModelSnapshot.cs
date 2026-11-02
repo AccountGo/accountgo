@@ -340,8 +340,23 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccessProfileVersion")
+                        .HasColumnType("int");
+
                     b.Property<int>("CompanyMemberId")
                         .HasColumnType("int");
+
+                    b.Property<int>("GrantOrigin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("GrantedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GrantedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("SecurityRoleId")
                         .HasColumnType("int");
@@ -439,6 +454,15 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<string>("OnboardingChecklistJson")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RegistrationNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("RegistrationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<int>("ReportingFramework")
                         .ValueGeneratedOnAdd()
@@ -3887,6 +3911,143 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("WorkspaceAccessRequest", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.WorkspaceApprovalRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("ConfiguredAtPolicyRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ConfiguredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ConfiguredByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("PolicySchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("Provenance")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReviewerSecurityRoleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RuleKind")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewerSecurityRoleId");
+
+                    b.HasIndex("CompanyId", "OperationKey")
+                        .IsUnique();
+
+                    b.ToTable("WorkspaceApprovalRule", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceOperatingSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CollaborationIntent")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CollaborationState")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ConfirmedOwnerMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EverTeamActivatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("InitializationSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("InitializedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InitializedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("LastConfirmedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastConfirmedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<long>("PolicyRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("PolicySchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique();
+
+                    b.HasIndex("ConfirmedOwnerMemberId");
+
+                    b.ToTable("WorkspaceOperatingSettings", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspacePolicyCoordination", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastAcquiredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique();
+
+                    b.ToTable("WorkspacePolicyCoordination", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditableAttribute", b =>
                 {
                     b.HasOne("Core.Domain.Auditing.AuditableEntity", "AuditableEntity")
@@ -5330,6 +5491,53 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("Company");
 
                     b.Navigation("TargetMember");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceApprovalRule", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Security.SecurityRole", "ReviewerSecurityRole")
+                        .WithMany()
+                        .HasForeignKey("ReviewerSecurityRoleId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ReviewerSecurityRole");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceOperatingSettings", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.CompanyMember", "ConfirmedOwnerMember")
+                        .WithMany()
+                        .HasForeignKey("ConfirmedOwnerMemberId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ConfirmedOwnerMember");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspacePolicyCoordination", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
                 });
 
             modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>

@@ -304,6 +304,8 @@ namespace Core.Domain
         Partnership = 2,
         Corporation = 3,
         Cooperative = 4,
-        NonProfit = 5
+        NonProfit = 5,
+        /// <summary>Personal finances. Appended without renumbering prior values.</summary>
+        Individual = 6
     }
 }

@@ -271,7 +271,10 @@ namespace Api.Controllers
             if (role == null)
                 return NotFound(new ProblemDetails { Title = "Role Not Found", Detail = $"Role with ID {id} was not found.", Status = StatusCodes.Status404NotFound });
 
-            if (role.SysAdmin || role.Name == "SystemAdministrators" || role.Name == "GeneralUsers")
+            if (role.SysAdmin
+                || role.Name == "SystemAdministrators"
+                || role.Name == "GeneralUsers"
+                || role.Name == Core.Domain.Security.WorkspaceAccessProfileKeys.FullWorkspaceAccessV1)
             {
                 return BadRequest(new ProblemDetails
                 {

@@ -34,6 +34,11 @@ namespace Core.Domain
                 errors.Add("Books start date must be between 1900 and one year from today.");
             }
 
+            if (options.EntityType == EntityType.Individual && !EntityEquityMapping.IsIndividualMappingApproved)
+            {
+                errors.Add("Individual accounting entity type requires finance approval and is not currently available.");
+            }
+
             return errors;
         }
 

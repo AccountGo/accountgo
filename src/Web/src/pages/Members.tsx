@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { RefreshCw, UserPlus, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { RefreshCw, UserPlus, ShieldCheck, ShieldAlert, RotateCcw } from 'lucide-react';
 import {
   AccessSetupStatus,
   RoleItem,
+  SoloSetupEligibility,
   TenantContextType,
   WorkspaceAccessRequestItem,
   WorkspaceInvitation,
   WorkspaceMember,
+  WorkspaceOperatingPolicySummary,
   WorkspaceRole,
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
@@ -37,7 +39,21 @@ async function requireSuccess(response: Response): Promise<void> {
   } catch {
     // Non-JSON proxy responses are displayed as text.
   }
+  if (response.status === 409) {
+    throw new Error(`${message} Review the latest workspace setup and try again.`);
+  }
   throw new Error(message);
+}
+
+function journalWorkflowLabel(mode?: string): string {
+  switch (mode) {
+    case 'SingleActorAllowed':
+      return 'You can prepare and post your own journals under the single-user workflow.';
+    case 'IndependentReviewerRequired':
+      return 'Independent review is required before posting journals.';
+    default:
+      return 'Journal posting follows the workspace approval policy.';
+  }
 }
 
 export const Members: React.FC = () => {
@@ -48,6 +64,8 @@ export const Members: React.FC = () => {
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [accessRequests, setAccessRequests] = useState<WorkspaceAccessRequestItem[]>([]);
   const [setupStatus, setSetupStatus] = useState<AccessSetupStatus | null>(null);
+  const [operatingSettings, setOperatingSettings] = useState<WorkspaceOperatingPolicySummary | null>(null);
+  const [soloEligibility, setSoloEligibility] = useState<SoloSetupEligibility | null>(null);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [currentRole, setCurrentRole] = useState<WorkspaceRole>('Member');
   const [loading, setLoading] = useState(true);
@@ -68,6 +86,16 @@ export const Members: React.FC = () => {
   const canInvite = canManage && canCreateResource('seats');
   const isOwner = currentRole === 'Owner';
 
+  const isEligibleForSolo = isOwner && (soloEligibility?.status === 'Eligible' || soloEligibility?.status === 0);
+  const isRecoveryRequired = isOwner && (soloEligibility?.status === 'RecoveryRequired' || soloEligibility?.status === 2);
+  const isSoloActive = operatingSettings?.collaborationState === 'SoloActive';
+  const canReturnToSolo = Boolean(
+    isOwner &&
+    !isSoloActive &&
+    operatingSettings?.soloSetupEnabled &&
+    operatingSettings?.allowedNextActions?.includes('return_to_solo')
+  );
+
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError('');
@@ -75,6 +103,8 @@ export const Members: React.FC = () => {
     setInvitations([]);
     setAccessRequests([]);
     setSetupStatus(null);
+    setOperatingSettings(null);
+    setSoloEligibility(null);
     setRoles([]);
     setCurrentRole('Member');
     try {
@@ -83,30 +113,60 @@ export const Members: React.FC = () => {
       const workspace: { role: WorkspaceRole } = await current.json();
       setCurrentRole(workspace.role);
 
-      const fetchRequests = [
+      const isOwnerRole = workspace.role === 'Owner';
+      const coreRequests: Promise<Response>[] = [
         authFetch(`${base}/members`, { signal }),
         authFetch(`${base}/security-roles`, { signal }),
         authFetch(`${base}/access-requests`, { signal }),
-        ...(workspace.role !== 'Member' ? [authFetch(`${base}/invitations`, { signal })] : []),
-        ...(workspace.role === 'Owner' ? [authFetch(`${base}/access-setup/status`, { signal })] : []),
       ];
+      if (workspace.role !== 'Member') {
+        coreRequests.push(authFetch(`${base}/invitations`, { signal }));
+      }
+      if (isOwnerRole) {
+        coreRequests.push(authFetch(`${base}/access-setup/status`, { signal }));
+      }
 
-      const responses = await Promise.all(fetchRequests);
-      await Promise.all(responses.map(requireSuccess));
+      const coreResponses = await Promise.all(coreRequests);
+      await Promise.all(coreResponses.map(requireSuccess));
 
-      const memberRows = await responses[0].json();
-      const roleRows = await responses[1].json();
-      const requestRows = await responses[2].json();
+      const memberRows = await coreResponses[0].json();
+      const roleRows = await coreResponses[1].json();
+      const requestRows = await coreResponses[2].json();
+
       let inviteRows: WorkspaceInvitation[] = [];
       let setupInfo: AccessSetupStatus | null = null;
-
       let nextIndex = 3;
       if (workspace.role !== 'Member') {
-        inviteRows = await responses[nextIndex].json();
+        inviteRows = await coreResponses[nextIndex].json();
         nextIndex++;
       }
-      if (workspace.role === 'Owner') {
-        setupInfo = await responses[nextIndex].json();
+      if (isOwnerRole) {
+        setupInfo = await coreResponses[nextIndex].json();
+        nextIndex++;
+      }
+
+      let operatingInfo: WorkspaceOperatingPolicySummary | null = null;
+      let soloInfo: SoloSetupEligibility | null = null;
+      try {
+        const opRes = await authFetch(`${base}/operating-settings`, { signal });
+        if (opRes.ok) {
+          const parsed = await opRes.json();
+          if (parsed && !Array.isArray(parsed)) operatingInfo = parsed;
+        }
+      } catch {
+        // non-blocking
+      }
+
+      if (isOwnerRole) {
+        try {
+          const soloRes = await authFetch(`${base}/solo-setup/eligibility`, { signal });
+          if (soloRes.ok) {
+            const parsed = await soloRes.json();
+            if (parsed && !Array.isArray(parsed)) soloInfo = parsed;
+          }
+        } catch {
+          // non-blocking
+        }
       }
 
       if (signal?.aborted) return;
@@ -115,6 +175,8 @@ export const Members: React.FC = () => {
       setAccessRequests(requestRows || []);
       setInvitations(inviteRows || []);
       setSetupStatus(setupInfo);
+      setOperatingSettings(operatingInfo);
+      setSoloEligibility(soloInfo);
     } catch (err) {
       if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : 'Could not load workspace members.');
@@ -145,7 +207,11 @@ export const Members: React.FC = () => {
       if (leaving) navigate('/select-org', { replace: true });
       else await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Workspace change failed.');
+      const message = err instanceof Error ? err.message : 'Workspace change failed.';
+      setError(message);
+      if (message.includes('Review the latest workspace setup')) {
+        void load();
+      }
     } finally {
       setBusy(false);
     }
@@ -203,6 +269,45 @@ export const Members: React.FC = () => {
     }, 'Access request submitted for independent approval.');
   };
 
+  const confirmSoloSetup = () => {
+    if (!soloEligibility) return;
+    setPendingConfirm({
+      title: 'Confirm solo workspace setup?',
+      message:
+        'This grants you Full Workspace Access as the owner and configures the single-actor journal workflow. Existing approval rules remain governed by workspace policy.',
+      confirmLabel: 'Confirm solo setup',
+      destructive: false,
+      action: () =>
+        mutate(
+          'solo-setup/confirm',
+          'POST',
+          { expectedPolicyRevision: soloEligibility.policyRevision },
+          'Solo workspace setup confirmed successfully.'
+        ),
+    });
+  };
+
+  const returnToSolo = () => {
+    if (!operatingSettings) return;
+    setPendingConfirm({
+      title: 'Return workspace to just me?',
+      message:
+        'This will return the workspace to a solo operating state and revoke outstanding invitations. Existing access grants and approval rules are preserved.',
+      confirmLabel: 'Return to just me',
+      destructive: false,
+      action: () =>
+        mutate(
+          'operating-settings/return-to-solo',
+          'POST',
+          {
+            expectedPolicyRevision: operatingSettings.policyRevision ?? 0,
+            revokeOutstandingInvitations: true,
+          },
+          'Workspace returned to solo operating state.'
+        ),
+    });
+  };
+
   const visibleMembers = members.filter(m =>
     `${m.firstName} ${m.lastName} ${m.email} ${m.role}`.toLowerCase().includes(query.toLowerCase()));
 
@@ -214,7 +319,16 @@ export const Members: React.FC = () => {
         actions={
           <>
             <HeaderButton label="Refresh" icon={RefreshCw} iconOnly busy={loading} disabled={busy} onClick={() => void load()} />
-            {setupStatus?.isEligibleForBootstrap && (
+            {isEligibleForSolo && (
+              <HeaderButton
+                label="Confirm solo setup"
+                icon={ShieldCheck}
+                variant="primary"
+                disabled={busy || loading}
+                onClick={confirmSoloSetup}
+              />
+            )}
+            {setupStatus?.isEligibleForBootstrap && !isEligibleForSolo && (
               <HeaderButton
                 label="Initial setup"
                 icon={ShieldAlert}
@@ -223,12 +337,22 @@ export const Members: React.FC = () => {
                 onClick={() => openForm('setup')}
               />
             )}
-            <HeaderButton
-              label="Request functional roles"
-              icon={ShieldCheck}
-              disabled={busy || loading}
-              onClick={() => openForm('request')}
-            />
+            {canReturnToSolo && (
+              <HeaderButton
+                label="Return to just me"
+                icon={RotateCcw}
+                disabled={busy || loading}
+                onClick={returnToSolo}
+              />
+            )}
+            {(!isSoloActive || members.length > 1) && (
+              <HeaderButton
+                label="Request functional roles"
+                icon={ShieldCheck}
+                disabled={busy || loading}
+                onClick={() => openForm('request')}
+              />
+            )}
             {canInvite && (
               <HeaderButton label="Invite member" icon={UserPlus} variant="primary" disabled={busy || loading} onClick={() => openForm('invite')} />
             )}
@@ -238,7 +362,63 @@ export const Members: React.FC = () => {
       {error && <div role="alert" className="p-4 rounded-xl bg-red-500/10 text-red-400">{error}</div>}
       {notice && <div role="status" className="p-4 rounded-xl bg-emerald-500/10 text-emerald-400">{notice}</div>}
 
-      {setupStatus?.isEligibleForBootstrap && (
+      {/* Your access summary */}
+      {(operatingSettings?.ownAccessProfileDisplayName || isSoloActive) && (
+        <div className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-main)]">Your access summary</h3>
+            {isSoloActive && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">
+                Solo workspace (just me)
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-[var(--text-muted)]">
+            <span className="font-medium text-[var(--text-main)]">{currentRole}</span>
+            {operatingSettings?.ownAccessProfileDisplayName && (
+              <> · <span className="font-medium text-[var(--text-main)]">{operatingSettings.ownAccessProfileDisplayName}</span></>
+            )}
+          </p>
+          <p className="text-xs text-[var(--text-muted)]">
+            {journalWorkflowLabel(operatingSettings?.journalWorkflow)}
+          </p>
+        </div>
+      )}
+
+      {/* Eligible for Solo Setup Banner */}
+      {isEligibleForSolo && soloEligibility && (
+        <div className="p-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-emerald-400">Solo Workspace Setup Available</h2>
+            <p className="text-sm text-[var(--text-muted)]">
+              {soloEligibility.message || 'This workspace appears to have always been solo.'} Confirming solo setup grants you full workspace access and activates single-actor journal posting without requiring independent review.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium whitespace-nowrap"
+            onClick={confirmSoloSetup}
+            disabled={busy}
+          >
+            Confirm solo setup
+          </button>
+        </div>
+      )}
+
+      {/* Controlled Recovery Required Banner */}
+      {isRecoveryRequired && soloEligibility && (
+        <div className="p-5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col items-start gap-2">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-amber-400" />
+            <h2 className="font-semibold text-amber-400">Controlled Recovery Required</h2>
+          </div>
+          <p className="text-sm text-[var(--text-muted)]">
+            {soloEligibility.message || 'Ambiguous ownership or collaboration history detected. Controlled recovery is required before solo setup can be enabled.'}
+          </p>
+        </div>
+      )}
+
+      {setupStatus?.isEligibleForBootstrap && !isEligibleForSolo && (
         <div className="p-5 rounded-xl border border-sky-500/30 bg-sky-500/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <h2 className="font-semibold text-sky-400">Initial Access Setup Required</h2>
@@ -270,9 +450,27 @@ export const Members: React.FC = () => {
           </h2>
 
           {form === 'invite' && (
-            <label className="block">Email
-              <input className={input} type="email" required value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
-            </label>
+            <>
+              <label className="block">Email
+                <input className={input} type="email" required value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+              </label>
+              <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-sm space-y-1.5">
+                <p className="font-medium text-[var(--text-main)]">Sharing this workspace</p>
+                <p className="text-[var(--text-muted)]">
+                  Your access stays as assigned
+                  {currentOrg.operatingPolicy?.ownAccessProfileDisplayName
+                    ? ` (${currentOrg.operatingPolicy.ownAccessProfileDisplayName})`
+                    : ''}
+                  . The invitee receives only the functional roles you select below.
+                </p>
+                <p className="text-[var(--text-muted)]">
+                  {journalWorkflowLabel(currentOrg.operatingPolicy?.journalWorkflow)}
+                  {currentOrg.operatingPolicy?.collaborationState === 'SoloActive'
+                    ? ' Accepting this invitation activates team collaboration; it does not remove your access.'
+                    : ''}
+                </p>
+              </div>
+            </>
           )}
 
           {form === 'request' && canManage && (

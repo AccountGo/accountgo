@@ -7,8 +7,12 @@ export type AccountingBasis = 'Accrual' | 'Cash';
 export type TaxRegime = 'None' | 'SalesTax' | 'VatGst';
 export type IndustryTemplate = 'Services' | 'ProductRetail' | 'Mixed';
 export type InventoryCostingMethod = 'None' | 'Fifo' | 'WeightedAverage';
+export type WorkspacePurpose = 'Personal' | 'Business';
+export type CollaborationIntent = 'JustMe' | 'WithOthers';
 
 export interface WizardState {
+  workspacePurpose: WorkspacePurpose | '';
+  collaborationIntent: CollaborationIntent | '';
   plan: Plan;
   name: string;
   slug: string;
@@ -24,8 +28,8 @@ export interface WizardState {
   inventoryCostingMethod: InventoryCostingMethod;
 }
 
-export type StepId = 'intent' | 'identity' | 'moneyTime' | 'reporting' | 'review';
-export const STEPS: StepId[] = ['intent', 'identity', 'moneyTime', 'reporting', 'review'];
+export type StepId = 'about' | 'intent' | 'identity' | 'moneyTime' | 'reporting' | 'review';
+export const STEPS: StepId[] = ['about', 'intent', 'identity', 'moneyTime', 'reporting', 'review'];
 
 export const CURRENCIES = ['USD', 'PHP', 'EUR', 'GBP', 'CAD', 'AUD', 'SGD', 'JPY', 'INR', 'IDR', 'MYR', 'THB', 'VND', 'NZD', 'HKD', 'CNY'];
 
@@ -44,6 +48,8 @@ export const isoDate = (date: Date): string => {
 export const defaultState = (today: Date = new Date(), prefill: { name?: string; slug?: string } = {}): WizardState => {
   const name = (prefill.name ?? '').trim();
   return {
+    workspacePurpose: '',
+    collaborationIntent: '',
     plan: 'accounting',
     name,
     slug: slugify(prefill.slug || name),
@@ -58,6 +64,40 @@ export const defaultState = (today: Date = new Date(), prefill: { name?: string;
     industryTemplate: 'Services',
     inventoryCostingMethod: 'None',
   };
+};
+
+/** Merge a possibly older draft into current defaults without inventing About answers. */
+export const normalizeWizardState = (raw: Partial<WizardState> | null | undefined, today: Date = new Date()): WizardState => {
+  const base = defaultState(today);
+  if (!raw || typeof raw !== 'object') return base;
+  const purpose = raw.workspacePurpose === 'Personal' || raw.workspacePurpose === 'Business' ? raw.workspacePurpose : '';
+  const collaboration = raw.collaborationIntent === 'JustMe' || raw.collaborationIntent === 'WithOthers'
+    ? raw.collaborationIntent
+    : '';
+  return {
+    ...base,
+    ...raw,
+    workspacePurpose: purpose,
+    collaborationIntent: collaboration,
+  };
+};
+
+export interface SetupCapabilitiesPayloadOptions {
+  soloSetupEnabled?: boolean;
+}
+
+/** First step that still needs a required answer (not a numeric index). */
+export const firstIncompleteStepIndex = (
+  state: WizardState,
+  today: Date = new Date(),
+  capabilities?: SetupCapabilitiesPayloadOptions | null,
+): number => {
+  for (let index = 0; index < STEPS.length; index++) {
+    const step = STEPS[index];
+    if (step === 'review') return index;
+    if (Object.keys(validateStep(step, state, today, capabilities)).length > 0) return index;
+  }
+  return STEPS.indexOf('review');
 };
 
 // Cash basis is its own framework; every other framework is accrual (requirements 4.3).
@@ -79,8 +119,22 @@ export interface StepErrors {
   [field: string]: string;
 }
 
-export const validateStep = (step: StepId, state: WizardState, today: Date = new Date()): StepErrors => {
+export const validateStep = (
+  step: StepId,
+  state: WizardState,
+  today: Date = new Date(),
+  capabilities?: SetupCapabilitiesPayloadOptions | null,
+): StepErrors => {
   const errors: StepErrors = {};
+  const soloEnabled = capabilities?.soloSetupEnabled !== false;
+  if (step === 'about' && soloEnabled) {
+    if (state.workspacePurpose !== 'Personal' && state.workspacePurpose !== 'Business') {
+      errors.workspacePurpose = 'Choose what you will use this workspace for.';
+    }
+    if (state.collaborationIntent !== 'JustMe' && state.collaborationIntent !== 'WithOthers') {
+      errors.collaborationIntent = 'Choose who will use this workspace.';
+    }
+  }
   if (step === 'identity') {
     if (!state.name.trim()) errors.name = 'Workspace name is required.';
     const slug = slugify(state.slug);
@@ -111,23 +165,37 @@ export const validateStep = (step: StepId, state: WizardState, today: Date = new
   return errors;
 };
 
-export const validateAll = (state: WizardState, today: Date = new Date()): StepErrors => ({
-  ...validateStep('identity', state, today),
-  ...validateStep('moneyTime', state, today),
+export const validateAll = (
+  state: WizardState,
+  today: Date = new Date(),
+  capabilities?: SetupCapabilitiesPayloadOptions | null,
+): StepErrors => ({
+  ...validateStep('about', state, today, capabilities),
+  ...validateStep('identity', state, today, capabilities),
+  ...validateStep('moneyTime', state, today, capabilities),
 });
 
-export const buildPayload = (state: WizardState) => ({
-  name: state.name.trim(),
-  slug: slugify(state.slug || state.name),
-  plan: state.plan,
-  currency: state.currency.trim().toUpperCase(),
-  legalName: state.legalName.trim() || undefined,
-  reportingFramework: state.reportingFramework,
-  accountingBasis: basisForFramework(state.reportingFramework),
-  fiscalYearPattern: state.fiscalYearPattern,
-  fiscalYearStartMonth: state.fiscalYearPattern === 'Custom' ? state.fiscalYearStartMonth : null,
-  booksStartDate: state.booksStartDate,
-  taxRegime: state.taxRegime,
-  industryTemplate: state.industryTemplate,
-  inventoryCostingMethod: effectiveInventoryMethod(state),
-});
+export const buildPayload = (state: WizardState, capabilities?: SetupCapabilitiesPayloadOptions | null) => {
+  const soloEnabled = capabilities?.soloSetupEnabled !== false;
+  return {
+    name: state.name.trim(),
+    slug: slugify(state.slug || state.name),
+    plan: state.plan,
+    currency: state.currency.trim().toUpperCase(),
+    legalName: state.legalName.trim() || undefined,
+    reportingFramework: state.reportingFramework,
+    accountingBasis: basisForFramework(state.reportingFramework),
+    fiscalYearPattern: state.fiscalYearPattern,
+    fiscalYearStartMonth: state.fiscalYearPattern === 'Custom' ? state.fiscalYearStartMonth : null,
+    booksStartDate: state.booksStartDate,
+    taxRegime: state.taxRegime,
+    industryTemplate: state.industryTemplate,
+    inventoryCostingMethod: effectiveInventoryMethod(state),
+    workspacePurpose: soloEnabled ? (state.workspacePurpose || undefined) : undefined,
+    collaborationIntent: soloEnabled ? (state.collaborationIntent || undefined) : undefined,
+    ownerAccessPreset: soloEnabled && (state.collaborationIntent === 'JustMe' || state.collaborationIntent === 'WithOthers')
+      ? 'FullWorkspaceAccess'
+      : undefined,
+    initialJournalWorkflow: soloEnabled && state.collaborationIntent === 'JustMe' ? 'SingleActorAllowed' : undefined,
+  };
+};
