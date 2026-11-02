@@ -283,6 +283,7 @@ namespace Api.Data.Schema
                     new[] { "BankStatementLine", "ExcludedBy", "TEXT NULL" },
                     new[] { "BankStatementLine", "ExclusionReason", "INTEGER NULL" },
                     new[] { "BankStatementLine", "ExclusionNote", "TEXT NULL" },
+                    new[] { "BankStatementLine", "DraftBillId", "INTEGER NULL" },
                     // D1 0042_statement_other_income.sql (#436 I5)
                     new[] { "SalesInvoiceHeader", "Origin", "INTEGER NULL" },
                     new[] { "Customer", "IsSystem", "INTEGER NOT NULL DEFAULT 0" }
@@ -735,6 +736,7 @@ WHERE ""DisabledModulesJson"" IS NULL
         private static void EnsureBankStatementExclusionColumns(DbConnection connection)
         {
             AddColumnIfMissing(connection, "BankStatementLine", "ExcludedAt", "TEXT NULL");
+            AddColumnIfMissing(connection, "BankStatementLine", "DraftBillId", "INTEGER NULL");
             AddColumnIfMissing(connection, "BankStatementLine", "ExcludedBy", "TEXT NULL");
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionReason", "INTEGER NULL");
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionNote", "TEXT NULL");

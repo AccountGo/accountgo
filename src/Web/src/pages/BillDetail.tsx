@@ -12,6 +12,7 @@ import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
 import { useCapabilities } from '../lib/entitlements';
+import { BillStatementSources } from '../components/BillStatementSources';
 
 /** One bill: who it is from, its lines and the accounts they are booked to, what is still owed, and its payments. */
 export const BillDetail: React.FC = () => {
@@ -210,6 +211,7 @@ export const BillDetail: React.FC = () => {
   return (
     <div className="space-y-6">
       <ReadOnlyModuleBanner module="purchases" orgSlug={orgSlug} />
+      <BillStatementSources billId={bill.id} orgSlug={orgSlug} />
       <PageHeader
         back={{ to: listPath, label: 'Back to bills' }}
         eyebrow={bill.no ? `Bill #${bill.no}` : 'Bill'}

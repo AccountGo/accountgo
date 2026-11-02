@@ -22,6 +22,7 @@ import {
   FileText,
   Percent,
   Mail,
+  Plug,
 } from 'lucide-react';
 import { TenantContextType, WorkspaceMember } from '../types';
 import { DEFAULT_CURRENCY } from '../lib/currency';
@@ -40,6 +41,8 @@ import { BooksLockCard } from '../components/BooksLockCard';
 import { YearEndCloseCard } from '../components/YearEndCloseCard';
 import { SettingsNav, SettingsNavGroup } from '../components/SettingsNav';
 import { ModalShell } from '../components/ModalShell';
+import { IntegrationsSettingsTab } from '../components/IntegrationsSettingsTab';
+import { useIntegrations } from '../lib/integrations';
 
 interface LiveFinancialYear {
   id: number;
@@ -66,8 +69,9 @@ export const Settings: React.FC = () => {
   const { authFetch } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const integrations = useIntegrations();
 
-  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles';
+  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles' | 'integrations';
 
   const handleTabChange = (tab: TabKey) => {
     setSearchParams(tab === 'general' ? {} : { tab });
@@ -79,6 +83,7 @@ export const Settings: React.FC = () => {
       items: [
         { key: 'general', label: 'General Profile', icon: Building2 },
         { key: 'whitelabel', label: 'Whitelabel & Branding', icon: Palette },
+        ...(integrations.capabilities?.canManage ? [{ key: 'integrations' as const, label: 'Integrations', icon: Plug }] : []),
       ],
     },
     {
@@ -385,6 +390,7 @@ export const Settings: React.FC = () => {
         <SettingsNav groups={settingsSections} current={currentTab} onChange={handleTabChange} />
 
         <div className="min-w-0 space-y-6">
+          {currentTab === 'integrations' && <div role="tabpanel" id="panel-integrations" aria-labelledby="tab-integrations" tabIndex={0}><IntegrationsSettingsTab /></div>}
 
           {/* ========================================================================= */}
           {/* TAB 1: GENERAL PROFILE (Live Database Company Table)                      */}

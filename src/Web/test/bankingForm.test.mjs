@@ -79,3 +79,7 @@ test('buildCreatePayload refuses an empty name and a non-numeric opening balance
     /Opening balance must be a number/,
   );
 });
+
+test('buildCreatePayload includes the explicitly selected bank currency', () => {
+  assert.equal(buildCreatePayload({ name: 'Wise', type: 1, currencyCode: ' usd ' }).currencyCode, 'USD');
+});

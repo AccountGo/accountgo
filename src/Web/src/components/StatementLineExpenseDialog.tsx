@@ -16,7 +16,7 @@ const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[v
 const inputClass =
   'w-full h-10 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-sm text-[var(--text-main)]';
 
-type Mode = 'expense' | 'payBill';
+type Mode = 'expense' | 'payBill' | 'draft';
 
 interface WorkspaceTax {
   id: number;
@@ -30,6 +30,7 @@ interface StatementLineExpenseDialogProps {
   additionalLineIds?: number[];
   formatCurrency: (n: number) => string;
   initialMode?: Mode;
+  bankAccountName?: string;
   onSaved: () => void | Promise<void>;
   onClose: () => void;
 }
@@ -40,12 +41,13 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
   additionalLineIds = [],
   formatCurrency,
   initialMode = 'expense',
+  bankAccountName,
   onSaved,
   onClose,
 }) => {
   const { authFetch } = useAuth();
   const { hasPermission } = useTenantContext();
-  const { canModule, canWrite } = useCapabilities();
+  const { canModule, canWrite, canCreate } = useCapabilities();
   const purchasesWritable = canModule('purchases') && canWrite('purchases');
   const canRecordExpense =
     purchasesWritable &&
@@ -58,19 +60,21 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
     hasPermission('banking.accounts.manage') &&
     hasPermission('purchases.payments.create');
   const canCreateVendor = hasPermission('purchases.vendors.manage');
+  const canDraft = purchasesWritable && hasPermission('banking.accounts.manage') &&
+    hasPermission('purchases.bills.create') && canCreate('bills') && !line.draftBillId;
   const titleId = useId();
   const amount = Math.abs(line.amount);
   const bulkLineIds = useMemo(
     () => Array.from(new Set([line.id, ...additionalLineIds])),
     [line.id, additionalLineIds],
   );
-  const isBulk = bulkLineIds.length > 1;
-
   const [mode, setMode] = useState<Mode>(() => {
+    if (initialMode === 'draft' && canDraft) return 'draft';
     if (initialMode === 'payBill' && canPayOpenBill) return 'payBill';
-    if (canRecordExpense) return 'expense';
-    return canPayOpenBill ? 'payBill' : 'expense';
+    if (canRecordExpense && !line.draftBillId) return 'expense';
+    return canPayOpenBill ? 'payBill' : canDraft ? 'draft' : 'expense';
   });
+  const isBulk = mode === 'expense' && bulkLineIds.length > 1;
   const [categories, setCategories] = useState<StatementExpenseCategories | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
@@ -80,6 +84,8 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
   const [taxId, setTaxId] = useState('');
   const [billId, setBillId] = useState('');
   const [memo, setMemo] = useState(line.memo || '');
+  const [description, setDescription] = useState(line.payee || line.memo || '');
+  const [vendorInvoiceNo, setVendorInvoiceNo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -122,8 +128,9 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
         if (billRes.ok) {
           const list = (await billRes.json()) as Bill[];
           const open = list.filter((b) => !b.voidedAt && b.approved && b.balanceDue > 0.005);
-          setBills(open);
-          const exact = open.find((b) => Math.abs(b.balanceDue - amount) < 0.005);
+          const eligible = line.draftBillId ? open.filter(b => b.id === line.draftBillId) : open;
+          setBills(eligible);
+          const exact = eligible.find((b) => Math.abs(b.balanceDue - amount) < 0.005);
           if (exact) setBillId(String(exact.id));
         }
         if (taxRes.ok) {
@@ -137,7 +144,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
     return () => {
       cancelled = true;
     };
-  }, [authFetch, amount, createVendorValue, line.memo, line.payee]);
+  }, [authFetch, amount, createVendorValue, line.memo, line.payee, line.draftBillId]);
 
   useEffect(() => {
     if (!categories || expenseAccountId) return;
@@ -155,13 +162,16 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
     setBusy(true);
     setError(null);
     try {
-      if (mode === 'expense') {
+      if (mode === 'expense' || mode === 'draft') {
+        if (mode === 'draft' && !canDraft) throw new Error('You cannot create a draft for this line.');
+        if (mode === 'expense' && (!canRecordExpense || line.draftBillId)) throw new Error('Review the linked draft before recording a payment.');
         if (!expenseAccountId) throw new Error('Pick a category.');
         if (!vendorChoice) throw new Error('Pick a vendor or create one from the bank description.');
         const body: Record<string, unknown> = {
           expenseAccountId: Number(expenseAccountId),
           taxId: taxId ? Number(taxId) : null,
-          description: line.payee || line.memo || null,
+          description: description.trim() || null,
+          vendorInvoiceNo: vendorInvoiceNo.trim() || null,
           memo: memo.trim() || null,
           rememberRule: true,
         };
@@ -189,7 +199,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
             throw new Error(errBody?.message || 'Could not record the expenses.');
           }
         } else {
-          const res = await authFetch(`/api/Banking/StatementLines/${line.id}/RecordExpense`, {
+          const res = await authFetch(`/api/Banking/StatementLines/${line.id}/${mode === 'draft' ? 'DraftExpense' : 'RecordExpense'}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -238,7 +248,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
         <div className="flex items-center gap-2">
           <Receipt className="w-5 h-5 text-[var(--brand-primary)]" />
           <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">
-            {mode === 'expense'
+            {mode === 'draft' ? 'Save bill draft' : mode === 'expense'
               ? isBulk
                 ? `Record expense (${bulkLineIds.length} lines)`
                 : 'Record expense'
@@ -266,7 +276,8 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
           <div className="flex gap-1 p-1 rounded-xl bg-[var(--bg-subtle)]">
             {(
               [
-                canRecordExpense ? (['expense', 'Record expense'] as const) : null,
+                canRecordExpense && !line.draftBillId ? (['expense', 'Record expense'] as const) : null,
+                canDraft ? (['draft', 'Save draft'] as const) : null,
                 canPayOpenBill ? (['payBill', 'Pay open bill'] as const) : null,
               ] as Array<readonly [Mode, string] | null>
             )
@@ -297,7 +308,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
 
         {loading ? (
           <p className="text-sm text-[var(--text-muted)]">Loading…</p>
-        ) : mode === 'expense' ? (
+        ) : mode === 'expense' || mode === 'draft' ? (
           <>
             <div>
               <label htmlFor={`${titleId}-vendor`} className={labelClass}>
@@ -324,6 +335,14 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
               </select>
             </div>
 
+            <div>
+              <label htmlFor={`${titleId}-description`} className={labelClass}>Description</label>
+              <input id={`${titleId}-description`} className={inputClass} required value={description} onChange={e => setDescription(e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor={`${titleId}-invoice`} className={labelClass}>Vendor invoice / reference (if supplied)</label>
+              <input id={`${titleId}-invoice`} className={inputClass} value={vendorInvoiceNo} onChange={e => setVendorInvoiceNo(e.target.value)} />
+            </div>
             <div>
               <label htmlFor={`${titleId}-category`} className={labelClass}>
                 Category
@@ -416,6 +435,15 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
           <input id={`${titleId}-memo`} value={memo} onChange={(e) => setMemo(e.target.value)} className={inputClass} />
         </div>
 
+        <p role="note" className="rounded-xl bg-[var(--bg-subtle)] p-3 text-xs">
+          {mode === 'draft'
+            ? 'Save one bill draft only. No approval, payment, posting or statement match. This line stays in Needs review.'
+            : mode === 'expense'
+              ? `Record and match explicitly creates and approves a bill, records the already-made ${formatCurrency(amount)} payment, and matches this line.`
+              : `Record the already-made ${formatCurrency(amount)} payment against ${bills.find(b => b.id === Number(billId))?.no || 'the selected bill'} and match this line.`}
+          {' '}Date: {line.postedDate.slice(0, 10)}. Bank: {bankAccountName || `Account ${line.bankId}`}.
+          {' '}No payment instruction is sent to any provider. {taxId ? 'The selected tax is included in the bank gross amount.' : 'No tax selected.'}
+        </p>
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
@@ -427,10 +455,10 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
           </button>
           <button
             type="submit"
-            disabled={busy || loading}
+            disabled={busy || loading || (mode === 'draft' ? !canDraft : mode === 'expense' ? !canRecordExpense || !!line.draftBillId : !canPayOpenBill)}
             className="h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
           >
-            {busy ? 'Saving…' : mode === 'expense' ? 'Record and match' : 'Pay and match'}
+            {busy ? 'Saving…' : mode === 'draft' ? 'Save draft' : mode === 'expense' ? 'Record and match' : 'Record payment and match'}
           </button>
         </div>
       </form>

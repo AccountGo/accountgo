@@ -216,7 +216,7 @@ namespace Services.Banking
             return result;
         }
 
-        public BankStatementLineListDto ListLines(int bankId, string? status, int page = 1, int pageSize = DefaultListPageSize)
+        public BankStatementLineListDto ListLines(int bankId, string? status, int page = 1, int pageSize = DefaultListPageSize, int? lineId = null)
         {
             EnsureCompany();
             var bank = RequireBank(bankId);
@@ -248,6 +248,7 @@ namespace Services.Banking
                 StatusAll => bankLines,
                 _ => bankLines.Where(l => l.ExcludedAt == null && l.MatchedGeneralLedgerLineId == null)
             };
+            if (lineId.HasValue) filtered = filtered.Where(l => l.Id == lineId);
             var totalCount = filtered.Count();
             var pageRows = filtered
                 .OrderBy(l => l.PostedDate).ThenBy(l => l.Id)
@@ -952,6 +953,7 @@ namespace Services.Banking
 
         private static BankStatementLineDto ToDto(BankStatementLine line, IReadOnlyList<PoolEntry> candidates) => new()
         {
+            DraftBillId = line.DraftBillId,
             Id = line.Id,
             BankId = line.BankId,
             BankStatementImportId = line.BankStatementImportId,

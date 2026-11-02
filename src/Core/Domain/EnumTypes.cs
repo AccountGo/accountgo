@@ -153,7 +153,8 @@ namespace Core.Domain
         /// <summary>Quicken Interchange Format (#447 Phase C).</summary>
         Qif = 6,
         /// <summary>Excel workbook — first sheet, same column detection as CSV (#447 Phase C).</summary>
-        Xlsx = 7
+        Xlsx = 7,
+        Webhook = 8
     }
 
     /// <summary>Why a statement line was excluded from matching (#436 I3).</summary>

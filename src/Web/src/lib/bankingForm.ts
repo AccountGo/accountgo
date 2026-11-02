@@ -33,6 +33,7 @@ export function buildCreatePayload(input: {
   routingNumber?: string;
   iban?: string;
   swift?: string;
+  currencyCode?: string;
   isDefaultForReceipts?: boolean;
   isDefaultForPayments?: boolean;
   openingBalance?: string;
@@ -51,6 +52,7 @@ export function buildCreatePayload(input: {
     routingNumber: input.routingNumber?.trim() || null,
     iban: input.iban?.trim() || null,
     swift: input.swift?.trim() || null,
+    currencyCode: input.currencyCode?.trim().toUpperCase() || null,
     isDefaultForReceipts: !!input.isDefaultForReceipts,
     isDefaultForPayments: !!input.isDefaultForPayments,
   };

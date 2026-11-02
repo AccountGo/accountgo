@@ -142,7 +142,8 @@ namespace Services.Banking
         public RecordExpenseFromStatementLineResultDto RecordExpense(
             int lineId,
             RecordExpenseFromStatementLineRequest request,
-            string actor)
+            string actor,
+            bool saveDraft = false)
         {
             EnsureCompany();
             if (request == null)
@@ -150,6 +151,18 @@ namespace Services.Banking
 
             var line = RequireUnmatchedPaymentLine(lineId);
             var bank = RequireActiveBank(line.BankId);
+            if (line.DraftBillId.HasValue)
+            {
+                if (!saveDraft)
+                    throw new InvalidOperationException("This line already has a bill draft. Review that bill before recording its payment.");
+                var existing = _bills.Table.FirstOrDefault(b => b.Id == line.DraftBillId && b.CompanyId == line.CompanyId)
+                    ?? throw new InvalidOperationException("The linked bill is unavailable. Refresh before continuing.");
+                return new RecordExpenseFromStatementLineResultDto
+                {
+                    Line = ToLineDto(line),
+                    Bill = new StatementLineDocumentLinkDto { Kind = "bill", Id = existing.Id, No = existing.No }
+                };
+            }
             var amount = Math.Abs(line.Amount);
             var vendorId = ResolveVendorId(request);
             _lineAccounts.EnsureBillLineAccount(request.ExpenseAccountId);
@@ -190,6 +203,18 @@ namespace Services.Banking
                     }
                 }
             };
+
+            if (saveDraft)
+            {
+                _purchasing.SaveBill(bill, preserveTaxAmounts);
+                line.DraftBillId = bill.Id;
+                _lines.Update(line);
+                return new RecordExpenseFromStatementLineResultDto
+                {
+                    Line = ToLineDto(line),
+                    Bill = new StatementLineDocumentLinkDto { Kind = "bill", Id = bill.Id, No = bill.No }
+                };
+            }
 
             // Statement-recorded expenses do not consume the monthly Bills quota (#436 decision 4).
             using (_entitlements.Bypass())
@@ -292,6 +317,8 @@ namespace Services.Banking
                 throw new ArgumentNullException(nameof(request));
 
             var line = RequireUnmatchedPaymentLine(lineId);
+            if (line.DraftBillId.HasValue && line.DraftBillId != request.BillId)
+                throw new InvalidOperationException("This line is linked to another bill draft. Review or delete that draft first.");
             var bank = RequireActiveBank(line.BankId);
             var amount = Math.Abs(line.Amount);
             var companyId = _tenant.RequireCompanyId();
@@ -465,6 +492,7 @@ namespace Services.Banking
 
         private static BankStatementLineDto ToLineDto(BankStatementLine line) => new()
         {
+            DraftBillId = line.DraftBillId,
             Id = line.Id,
             BankId = line.BankId,
             BankStatementImportId = line.BankStatementImportId,
