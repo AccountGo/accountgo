@@ -140,3 +140,16 @@ function normalizeSlug(slug: string | null | undefined): string | null {
   const trimmed = (slug ?? "").trim().toLowerCase();
   return trimmed.length > 0 && trimmed.length <= 100 ? trimmed : null;
 }
+
+/** Authentication requests that benefit from the optional V2 public sign-in pool. */
+const PUBLIC_AUTH_PATHS = new Set([
+    "/api/auth/google", "/api/auth/signup", "/api/auth/send-otp", "/api/auth/verify-otp",
+    "/api/auth/refresh", "/api/auth/mfa/totp/verify", "/api/auth/mfa/recovery/verify",
+    "/api/auth/mfa/webauthn/assertion/options", "/api/auth/mfa/webauthn/assertion/complete",
+    "/api/auth/mfa/totp/enroll/begin", "/api/auth/mfa/totp/enroll/complete",
+    "/api/auth/mfa/webauthn/register/options", "/api/auth/mfa/webauthn/register/complete",
+]);
+
+export function isPublicAuthRequest(path: string): boolean {
+  return PUBLIC_AUTH_PATHS.has(path);
+}
