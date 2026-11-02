@@ -50,3 +50,21 @@ test('Login page includes privacy and terms acceptance checkbox and excludes edg
     await server.close();
   }
 });
+
+test('login offers Google sign-in when configured while retaining email OTP', async () => {
+  const previous = process.env.VITE_GOOGLE_CLIENT_ID;
+  process.env.VITE_GOOGLE_CLIENT_ID = 'test-client.apps.googleusercontent.com';
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' });
+  try {
+    const { Login } = await server.ssrLoadModule('/src/pages/Login.tsx');
+    const { AuthProvider } = await server.ssrLoadModule('/src/auth/AuthContext.tsx');
+    const html = renderToStaticMarkup(createElement(AuthProvider, null,
+      createElement(MemoryRouter, { initialEntries: ['/login'] }, createElement(Login, { initialMode: 'signin' }))));
+    assert.match(html, /Google/);
+    assert.match(html, /signin-accept-terms/);
+  } finally {
+    await server.close();
+    if (previous === undefined) delete process.env.VITE_GOOGLE_CLIENT_ID;
+    else process.env.VITE_GOOGLE_CLIENT_ID = previous;
+  }
+});
