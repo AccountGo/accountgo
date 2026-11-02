@@ -1330,6 +1330,20 @@ WHERE ""DisabledModulesJson"" IS NULL
                         throw;
                     }
                 }
+                else
+                {
+                    using var tx = connection.BeginTransaction();
+                    try
+                    {
+                        ApplyVersion2(connection, tx, logger);
+                        tx.Commit();
+                    }
+                    catch (Exception ex)
+                    {
+                        tx.Rollback();
+                        logger?.LogWarning(ex, "Idempotent membership backfill encountered an issue; continuing.");
+                    }
+                }
             }
             finally
             {
