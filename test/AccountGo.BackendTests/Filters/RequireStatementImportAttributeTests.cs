@@ -101,4 +101,35 @@ public class RequireStatementImportAttributeTests
         Assert.True(ran);
         Assert.Null(context.Result);
     }
+
+    [Theory]
+    [InlineData(true, ModuleAccess.Read)]
+    [InlineData(false, ModuleAccess.Write)]
+    public async Task Post_MetadataOnlyExplicitlyUsesReadIntent_AccountingStillUsesWrite(bool readOnly, ModuleAccess expected)
+    {
+        var entitlements = new Mock<IEntitlementService>();
+        entitlements.Setup(e => e.Evaluate(1, It.IsAny<EntitlementAction>()))
+            .Returns(new EntitlementDecision(true, null, null));
+        var tenant = new Mock<ITenantContext>();
+        tenant.SetupGet(t => t.IsResolved).Returns(true);
+        tenant.Setup(t => t.RequireCompanyId()).Returns(1);
+        using var services = new ServiceCollection()
+            .AddSingleton(entitlements.Object).AddSingleton(tenant.Object).BuildServiceProvider();
+        var http = new DefaultHttpContext { RequestServices = services };
+        http.Request.Method = HttpMethods.Post;
+        var context = new ActionExecutingContext(
+            new ActionContext(http, new RouteData(), new ActionDescriptor()),
+            new List<IFilterMetadata>(), new Dictionary<string, object>(), null!);
+        var ran = false;
+
+        await new RequireStatementImportAttribute { ReadOnly = readOnly }.OnActionExecutionAsync(context, () =>
+        {
+            ran = true;
+            return Task.FromResult<ActionExecutedContext>(null!);
+        });
+
+        Assert.True(ran);
+        entitlements.Verify(e => e.Evaluate(1, It.Is<EntitlementAction>(a =>
+            a is EntitlementAction.Module && ((EntitlementAction.Module)a).Access == expected)), Times.Once);
+    }
 }

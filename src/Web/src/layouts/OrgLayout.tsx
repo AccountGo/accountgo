@@ -11,6 +11,7 @@ import { useAuth } from '../auth/AuthContext';
 import { AssistantMount, AssistantProvider } from '../assistant';
 import { PastDueBanner } from '../components/PastDueBanner';
 import { CapabilitiesProvider, useCapabilities } from '../lib/entitlements';
+import { IntegrationsProvider } from '../lib/integrations';
 
 export function evaluateHasPermission(
   userPermissions: readonly string[] | undefined,
@@ -426,6 +427,9 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
   };
 
   return (
+    <IntegrationsProvider key={`${currentOrg.id}:${userProfile.id}:${userPermissions.join(',')}`}
+      companyId={currentOrg.id} canView={hasPermission('banking.accounts.view')}
+      canManage={hasPermission('banking.accounts.manage')}>
     <AssistantProvider sidebarMode={sidebarMode} setSidebarMode={setSidebarMode}>
       <div className="app-shell flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
         {/* Skip to Main Content Link for Keyboard Users (WCAG 2.4.1) */}
@@ -485,6 +489,7 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
         </AssistantMount>
       </div>
     </AssistantProvider>
+    </IntegrationsProvider>
   );
 };
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext, useParams } from 'react-router-dom';
+import { Link, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Link2Off, Loader2, Plus, Upload } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { StatementLineApplyInvoiceDialog } from '../components/StatementLineApplyInvoiceDialog';
@@ -11,6 +11,9 @@ import { STATEMENT_EXCLUSION_REASONS } from '../types/banking';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import { useCapabilities } from '../lib/entitlements';
+import { refreshIncomingReview } from '../lib/integrations';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { IncomingProvenance } from '../components/IncomingProvenance';
 import {
   CSV_SAMPLE_ROWS,
   bytesToBase64,
@@ -86,12 +89,14 @@ function findSampleHeaderIndex(rows: string[][]): number {
 const BankStatementImportPage: React.FC = () => {
   const { bankId } = useParams<{ bankId: string }>();
   const id = Number(bankId);
+  const [searchParams] = useSearchParams();
+  const focusedLineId = Number(searchParams.get('lineId')) || null;
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasPermission } = useTenantContext();
   const canManage = hasPermission('banking.accounts.manage');
   const canCreateTx = hasPermission('banking.transactions.create');
-  const { canModule, canWrite } = useCapabilities();
+  const { canModule, canWrite, canCreate } = useCapabilities();
   const hasFinancials = canModule('financials');
   const purchasesWritable = canModule('purchases') && canWrite('purchases');
   const canRecordExpense =
@@ -101,6 +106,7 @@ const BankStatementImportPage: React.FC = () => {
     hasPermission('purchases.bills.post') &&
     hasPermission('purchases.payments.create');
   const canPayOpenBill = canManage && purchasesWritable && hasPermission('purchases.payments.create');
+  const canDraft = canManage && purchasesWritable && hasPermission('purchases.bills.create') && canCreate('bills');
   const salesWritable = canModule('sales') && canWrite('sales');
   const canApplyOpenInvoice =
     canManage && salesWritable && hasPermission('sales.receipts.create');
@@ -113,7 +119,7 @@ const BankStatementImportPage: React.FC = () => {
 
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [list, setList] = useState<BankStatementLineList | null>(null);
-  const [status, setStatus] = useState<StatementLineStatus>('unmatched');
+  const [status, setStatus] = useState<StatementLineStatus>(focusedLineId ? 'all' : 'unmatched');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -132,6 +138,8 @@ const BankStatementImportPage: React.FC = () => {
 
   const [createFor, setCreateFor] = useState<BankStatementLine | null>(null);
   const [expenseFor, setExpenseFor] = useState<BankStatementLine | null>(null);
+  const [expenseMode, setExpenseMode] = useState<'expense' | 'draft'>('expense');
+  const [matchConfirm, setMatchConfirm] = useState<{ line: BankStatementLine; ledgerId: number } | null>(null);
   const [applyFor, setApplyFor] = useState<BankStatementLine | null>(null);
   const [incomeFor, setIncomeFor] = useState<BankStatementLine | null>(null);
   const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
@@ -142,9 +150,9 @@ const BankStatementImportPage: React.FC = () => {
     (n: number) =>
       new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: currentOrg.currency || 'USD',
+        currency: account?.currencyCode || currentOrg.currency || 'USD',
       }).format(n),
-    [currentOrg.currency],
+    [account?.currencyCode, currentOrg.currency],
   );
 
   const fetchLines = useCallback(
@@ -154,6 +162,7 @@ const BankStatementImportPage: React.FC = () => {
         page: String(nextPage),
         pageSize: String(LIST_PAGE_SIZE),
       });
+      if (focusedLineId) q.set('lineId', String(focusedLineId));
       const res = await authFetch(`/api/Banking/Accounts/${id}/StatementLines?${q}`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -161,7 +170,7 @@ const BankStatementImportPage: React.FC = () => {
       }
       return (await res.json()) as BankStatementLineList;
     },
-    [authFetch, id],
+    [authFetch, id, focusedLineId],
   );
 
   const loadLines = useCallback(
@@ -173,6 +182,7 @@ const BankStatementImportPage: React.FC = () => {
         data = await fetchLines(nextStatus, clamped);
       }
       setList(data);
+      refreshIncomingReview();
     },
     [fetchLines],
   );
@@ -461,10 +471,12 @@ const BankStatementImportPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Import statement"
+        title={focusedLineId ? 'Review incoming transaction' : 'Import statement'}
         subtitle={account.name}
         back={{ to: `/org/${currentOrg.slug}/banking/${account.id}`, label: 'Register' }}
       />
+      {focusedLineId && <p className="text-sm text-[var(--text-secondary)]">Receipt does not approve accounting. Review the source and suggestions below, supply missing details, or leave this item for later. <Link className="underline" to={`/org/${currentOrg.slug}/banking/needs-review`}>Back to Needs review</Link></p>}
+      {focusedLineId && <IncomingProvenance companyId={currentOrg.id} bankId={id} lineId={focusedLineId} />}
 
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm flex gap-2" role="alert">
@@ -479,7 +491,7 @@ const BankStatementImportPage: React.FC = () => {
         </div>
       )}
 
-      {canManage && !account.archivedAt && (
+      {canManage && !account.archivedAt && !focusedLineId && (
         <section className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 space-y-4 shadow-sm">
           <h2 className="text-sm font-bold text-[var(--text-main)]">1. Choose a file</h2>
           <input
@@ -913,11 +925,7 @@ const BankStatementImportPage: React.FC = () => {
                               type="button"
                               disabled={busy}
                               onClick={() =>
-                                void lineAction(
-                                  line,
-                                  'Match',
-                                  Number(pickedCandidate[line.id] ?? line.candidates[0].generalLedgerLineId),
-                                )
+                                setMatchConfirm({ line, ledgerId: Number(pickedCandidate[line.id] ?? line.candidates[0].generalLedgerLineId) })
                               }
                               className="h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
                             >
@@ -925,16 +933,21 @@ const BankStatementImportPage: React.FC = () => {
                             </button>
                           </>
                         )}
-                        {!early && line.amount < 0 && (canRecordExpense || canPayOpenBill) && (
+                        {!early && line.amount < 0 && ((canRecordExpense && !line.draftBillId) || canPayOpenBill) && (
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => setExpenseFor(line)}
+                            onClick={() => { setExpenseMode('expense'); setExpenseFor(line); }}
                             className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
                           >
-                            {canRecordExpense ? 'Record expense' : 'Pay open bill'}
+                            {canRecordExpense && !line.draftBillId ? 'Record expense' : 'Pay open bill'}
                           </button>
                         )}
+                        {!early && line.amount < 0 && canDraft && !line.draftBillId && (
+                          <button type="button" disabled={busy} onClick={() => { setExpenseMode('draft'); setExpenseFor(line); }}
+                            className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)]">Save bill draft</button>
+                        )}
+                        {line.draftBillId && <Link className="text-xs underline" to={`/org/${currentOrg.slug}/purchases/${line.draftBillId}`}>Review linked bill #{line.draftBillId}</Link>}
                         {!early && line.amount > 0 && (canApplyOpenInvoice || canRecordOtherIncome) && (
                           <>
                             {canApplyOpenInvoice && (
@@ -1008,8 +1021,10 @@ const BankStatementImportPage: React.FC = () => {
 
       {expenseFor && (
         <StatementLineExpenseDialog
+          initialMode={expenseMode}
+          bankAccountName={account.name}
           line={expenseFor}
-          additionalLineIds={selectedIds.filter((id) => id !== expenseFor.id)}
+          additionalLineIds={expenseMode === 'draft' ? [] : selectedIds.filter((id) => id !== expenseFor.id)}
           formatCurrency={formatCurrency}
           onClose={() => setExpenseFor(null)}
           onSaved={async () => {
@@ -1019,6 +1034,10 @@ const BankStatementImportPage: React.FC = () => {
           }}
         />
       )}
+      {matchConfirm && <ConfirmDialog title="Match existing ledger entry?"
+        message={`Match ${formatCurrency(matchConfirm.line.amount)} dated ${matchConfirm.line.postedDate.slice(0, 10)} in ${account.name} to ledger line ${matchConfirm.ledgerId}. This links an existing posting; it does not create another payment.`}
+        confirmLabel="Confirm match" busy={busy} onCancel={() => setMatchConfirm(null)}
+        onConfirm={() => { void lineAction(matchConfirm.line, 'Match', matchConfirm.ledgerId).then(() => setMatchConfirm(null)); }} />}
 
       {applyFor && (
         <StatementLineApplyInvoiceDialog

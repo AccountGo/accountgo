@@ -21,6 +21,9 @@ namespace Api.Filters
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
     public sealed class RequireStatementImportAttribute : Attribute, IAsyncActionFilter
     {
+        /// <summary>Use read access for metadata-only operations that do not change accounting records.</summary>
+        public bool ReadOnly { get; set; }
+
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
             var tenantContext = context.HttpContext.RequestServices.GetRequiredService<ITenantContext>();
@@ -42,7 +45,7 @@ namespace Api.Filters
             var companyId = tenantContext.RequireCompanyId();
             var entitlements = context.HttpContext.RequestServices.GetRequiredService<IEntitlementService>();
             var method = context.HttpContext.Request.Method;
-            var financialsAccess = HttpMethods.IsGet(method) || HttpMethods.IsHead(method)
+            var financialsAccess = ReadOnly || HttpMethods.IsGet(method) || HttpMethods.IsHead(method)
                 ? ModuleAccess.Read
                 : ModuleAccess.Write;
             var decision = StatementImportAccess.Evaluate(entitlements, companyId, financialsAccess);

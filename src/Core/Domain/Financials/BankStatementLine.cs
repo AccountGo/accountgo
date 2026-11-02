@@ -36,6 +36,8 @@ namespace Core.Domain.Financials
         public string? Reference { get; set; }
 
         public int? MatchedGeneralLedgerLineId { get; set; }
+        /// <summary>An explicitly created bill draft; not an accounting match or payment.</summary>
+        public int? DraftBillId { get; set; }
         public DateTime CreatedAt { get; set; }
 
         /// <summary>When set, the line posts nothing and is hidden from Unmatched/Matched (#436 I3).</summary>

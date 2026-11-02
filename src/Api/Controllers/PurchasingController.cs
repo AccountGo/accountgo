@@ -995,6 +995,8 @@ namespace Api.Controllers
 
             // Lines first, then the bill (foreign-key order).
             using var tx = _db.Database.BeginTransaction();
+            _db.BankStatementLines.Where(l => l.CompanyId == bill.CompanyId && l.DraftBillId == id)
+                .ExecuteUpdate(s => s.SetProperty(l => l.DraftBillId, (int?)null));
             _db.PurchaseInvoiceLines.RemoveRange(bill.PurchaseInvoiceLines);
             _db.SaveChanges();
             _db.PurchaseInvoiceHeaders.Remove(bill);
