@@ -306,7 +306,7 @@ namespace Api.Controllers
                 }
 
                 _securityService.AddUser(normalizedEmail, normalizedEmail,
-                    request.FirstName.Trim(), request.LastName.Trim(), new List<int>());
+                    request.FirstName?.Trim() ?? string.Empty, request.LastName?.Trim() ?? string.Empty, new List<int>());
 
                 Core.Domain.Company? company = null;
                 if (cleanSlug != null)
@@ -347,7 +347,7 @@ namespace Api.Controllers
 
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
                 // Keep delivery inside the transaction so a failed send rolls back signup and workspace creation.
-                var result = await _otpService.SendWelcomeOtpAsync(appUser, request.FirstName.Trim(), company?.Name, ipAddress);
+                var result = await _otpService.SendWelcomeOtpAsync(appUser, string.IsNullOrWhiteSpace(request.FirstName) ? "there" : request.FirstName.Trim(), company?.Name, ipAddress);
                 if (!result.Success)
                 {
                     return BadRequest(new ProblemDetails

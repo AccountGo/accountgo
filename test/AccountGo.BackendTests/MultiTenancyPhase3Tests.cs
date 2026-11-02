@@ -1260,6 +1260,16 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task Signup_WithEmailOnly_SendsOtpAndCreatesNoWorkspace()
+        {
+            var response = await Send(HttpMethod.Post, "/api/auth/signup", new { email = "email-only@example.com" }, token: "", scoped: false);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var verify = await Send(HttpMethod.Post, "/api/auth/verify-otp", new { email = "email-only@example.com", otp = OtpCode() }, token: "", scoped: false);
+            Assert.Equal(HttpStatusCode.OK, verify.StatusCode);
+            Assert.Empty((await Json(verify)).GetProperty("organizations").EnumerateArray());
+        }
+
+        [Fact]
         public async Task Signup_WithOrganization_ProvisionedOwner_NoGlobalRole_AndOtpListsOrganizations()
         {
             var response = await Send(HttpMethod.Post, "/api/auth/signup",
