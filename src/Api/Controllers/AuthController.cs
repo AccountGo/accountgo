@@ -82,6 +82,7 @@ namespace Api.Controllers
         }
 
         [AllowAnonymous]
+        [EnableRateLimiting("otp-verify")]
         [HttpPost("google")]
         public async Task<IActionResult> GoogleSignIn([FromBody] GoogleSignInRequest request)
         {
@@ -122,53 +123,25 @@ namespace Api.Controllers
                     return Forbid();
                 }
 
-                var user = await _userManager.FindByEmailAsync(payload.Email);
-                if (user != null && user.DeletedAt != null)
-                {
-                    return BadRequest(new ProblemDetails
-                    {
-                        Title = "Account Not Found",
-                        Detail = "No AccountGo profile associated with this Google address. Please contact your administrator.",
-                        Status = StatusCodes.Status400BadRequest
-                    });
-                }
+                if (string.IsNullOrWhiteSpace(payload.Subject) || string.IsNullOrWhiteSpace(payload.Email))
+                    return BadRequest(new ProblemDetails { Title = "Google Authentication Failed", Detail = "Invalid Google identity." });
+
+                // Resolve the stable provider subject first. Email alone is not proof of current ownership
+                // for third-party addresses, even when Google has previously verified it.
+                var user = await _userManager.FindByLoginAsync("Google", payload.Subject);
                 if (user == null)
                 {
-                    var autoProvision = _configuration.GetValue<bool>("Google:AutoProvision", false);
-                    if (!autoProvision)
-                    {
-                        return BadRequest(new ProblemDetails
-                        {
-                            Title = "Account Not Found",
-                            Detail = "No AccountGo profile associated with this Google address. Please contact your administrator.",
-                            Status = StatusCodes.Status400BadRequest
-                        });
-                    }
-
-                    user = new ApplicationUser
-                    {
-                        UserName = payload.Email,
-                        Email = payload.Email,
-                        EmailConfirmed = true
-                    };
-                    var createResult = await _userManager.CreateAsync(user);
-                    if (!createResult.Succeeded)
-                    {
-                        return BadRequest(new ProblemDetails
-                        {
-                            Title = "Registration Failed",
-                            Detail = string.Join(", ", System.Linq.Enumerable.Select(createResult.Errors, e => e.Description)),
-                            Status = StatusCodes.Status400BadRequest
-                        });
-                    }
+                    if (!GoogleIdentityPolicy.IsAuthoritativeEmail(payload.Email, payload.HostedDomain))
+                        return BadRequest(new ProblemDetails { Title = "Account linking required", Detail = "Sign in with your email code. This Google address cannot be linked automatically." });
+                    user = await _userManager.FindByEmailAsync(payload.Email);
+                    if (user == null || user.DeletedAt != null || !user.EmailConfirmed)
+                        return BadRequest(new ProblemDetails { Title = "Account Not Found", Detail = "Sign in or register with your email code first." });
+                    var linkResult = await _userManager.AddLoginAsync(user, new UserLoginInfo("Google", payload.Subject, "Google"));
+                    if (!linkResult.Succeeded)
+                        return BadRequest(new ProblemDetails { Title = "Account linking failed", Detail = "Unable to link this Google account. Sign in with your email code." });
                 }
-
-                // Link Google login if not already linked
-                var logins = await _userManager.GetLoginsAsync(user);
-                if (!logins.Any(l => l.LoginProvider == "Google" && l.ProviderKey == payload.Subject))
-                {
-                    await _userManager.AddLoginAsync(user, new UserLoginInfo("Google", payload.Subject, "Google"));
-                }
+                if (user.DeletedAt != null)
+                    return BadRequest(new ProblemDetails { Title = "Account Not Found", Detail = "This account is unavailable." });
 
                 Request.Cookies.TryGetValue("ag_td", out var agTdToken);
                 var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(user, "google", agTdToken);
