@@ -36,6 +36,14 @@ namespace Dto.Subscription
         public bool SelfService { get; set; } = true;
         /// <summary>Null when the plan has no price.</summary>
         public decimal? MonthlyPrice { get; set; }
+        /// <summary>Annual billing amount, or null when unavailable.</summary>
+        public decimal? AnnualPrice { get; set; }
+        /// <summary>Product group used to organize plans, when applicable.</summary>
+        public string? Product { get; set; }
+        /// <summary>Features included in this plan, when advertised by the catalog.</summary>
+        public List<string>? Features { get; set; }
+        /// <summary>Plan limits; null values represent unlimited resources.</summary>
+        public Dictionary<string, int?>? Limits { get; set; }
     }
 
     public class ModuleDefinitionDto
