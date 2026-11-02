@@ -19,6 +19,57 @@ namespace AccountGo.BackendTests.Security
             _fixture = fixture;
         }
 
+        [Fact]
+        public async Task OwnerSetup_LegacySoleOwner_CanAssignFunctionalRole()
+        {
+            var slug = "owner-recovery-" + Guid.NewGuid().ToString("N")[..6];
+            var owner = await _fixture.CreateUser($"owner-{slug}@example.com");
+            var companyId = await _fixture.CreateWorkspaceWithZeroFunctionalRoles(owner.Token, "Owner recovery", slug);
+            int roleId;
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var company = db.Companies.Single(c => c.Id == companyId);
+                company.AccessBootstrapAvailable = false;
+                roleId = db.SecurityRoles.First(r => r.Name == "Accountant").Id;
+                await db.SaveChangesAsync();
+            }
+
+            var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
+                new { securityRoleIds = new[] { roleId } }, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var verifyScope = _fixture.Factory.Services.CreateScope();
+            var verify = verifyScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var savedOwner = verify.CompanyMembers.IgnoreQueryFilters().Include(m => m.SecurityRoles)
+                .Single(m => m.CompanyId == companyId && m.UserId == owner.Id);
+            Assert.Contains(savedOwner.SecurityRoles, r => r.SecurityRoleId == roleId);
+            Assert.True(verify.AuditLogs.IgnoreQueryFilters().Any(a => a.CompanyId == companyId && a.TableName == "__OwnerAccessSetup" && a.UserName == owner.Id));
+            var accounts = await _fixture.Send(HttpMethod.Get, "/api/Financials/Accounts", token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, accounts.StatusCode);
+        }
+
+        [Fact]
+        public async Task OwnerSetup_WithAnotherActiveMember_DoesNotGrantRoles()
+        {
+            var slug = "owner-team-" + Guid.NewGuid().ToString("N")[..6];
+            var owner = await _fixture.CreateUser($"owner-{slug}@example.com");
+            var member = await _fixture.CreateUser($"member-{slug}@example.com");
+            var companyId = await _fixture.CreateWorkspaceWithZeroFunctionalRoles(owner.Token, "Owner team", slug);
+            await _fixture.AddMemberDirectAsync(companyId, member.Id, CompanyMemberRole.Member, Array.Empty<string>());
+            int roleId;
+            using (var scope = _fixture.Factory.Services.CreateScope())
+                roleId = scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.First(r => r.Name == "Accountant").Id;
+
+            var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
+                new { securityRoleIds = new[] { roleId } }, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            using var verifyScope = _fixture.Factory.Services.CreateScope();
+            var verify = verifyScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var savedOwner = verify.CompanyMembers.IgnoreQueryFilters().Include(m => m.SecurityRoles)
+                .Single(m => m.CompanyId == companyId && m.UserId == owner.Id);
+            Assert.DoesNotContain(savedOwner.SecurityRoles, r => r.SecurityRoleId == roleId);
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
