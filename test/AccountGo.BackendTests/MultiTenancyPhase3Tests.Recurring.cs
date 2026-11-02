@@ -36,12 +36,13 @@ namespace AccountGo.BackendTests
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
-                using (tenant.Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (tenant.ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var salesAccountId = db.Accounts.Single(a => a.AccountCode == "40100").Id;
+                    var arAccountId = db.Accounts.Single(a => a.AccountCode == "10120").Id;
                     var measurementId = db.Measurements.First().Id;
 
-                    var customer = new Customer { CompanyId = _companyId, No = "RECUR-CUST-1" };
+                    var customer = new Customer { CompanyId = _companyId, No = "RECUR-CUST-1", AccountsReceivableAccountId = arAccountId };
                     db.Customers.Add(customer);
 
                     var category = new ItemCategory { CompanyId = _companyId, Name = "Services", ItemType = ItemTypes.Service };
@@ -104,7 +105,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var occurrence = db.RecurringOccurrences.Single(o => o.Id == occurrenceId);
                     Assert.Equal(RecurringOccurrenceStatus.Issued, occurrence.Status);
@@ -127,7 +128,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var measurementId = db.Measurements.First().Id;
                     var salesAccountId = db.Accounts.Single(a => a.AccountCode == "40100").Id;
@@ -192,7 +193,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = runMonth.AddMonths(1).AddDays(-1); // end of the run month
@@ -331,7 +332,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = runMonth.AddMonths(1).AddDays(-1);
@@ -350,7 +351,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     // Fix the cause: unlock the books, then retry the same occurrence (downgrade to draft on an
                     // in-month auto-issue is fine — the point is the series does not move on retry).
@@ -442,7 +443,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = runMonth.AddMonths(1).AddDays(-1); // lock the whole run month
@@ -461,7 +462,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = null;
@@ -519,7 +520,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
                     schedule.MaxOccurrences = 1; // this run is the last allowed one
@@ -546,7 +547,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = null;
@@ -577,7 +578,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = runMonth.AddMonths(1).AddDays(-1);
@@ -593,7 +594,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     // Unlock the books (so it would otherwise succeed) but archive the customer before retry.
                     var setting = db.CompanySettings.Single();
@@ -665,7 +666,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     // No end/max: the series continues indefinitely, so this occurrence is not the final one.
                     var setting = db.CompanySettings.Single();
@@ -685,7 +686,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = null;
@@ -806,7 +807,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
                     schedule.MaxOccurrences = 1;                       // this run is the last allowed one
@@ -831,7 +832,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = null; // unlock: the only remaining blocker is the cadence downgrade
@@ -869,7 +870,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var setting = db.CompanySettings.Single();
                     setting.BooksLockedThrough = runMonth.AddMonths(1).AddDays(-1);
@@ -955,7 +956,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var generation = scope.ServiceProvider.GetRequiredService<IRecurringInvoiceGenerationService>();
                     var run = generation.RunSchedule(scheduleId, runDate, "run-1", DateTime.UtcNow.AddMinutes(5));
@@ -972,7 +973,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
                     Assert.Equal(RecurringScheduleStatus.Ended, schedule.Status);
@@ -1004,7 +1005,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     var schedule = db.RecurringSchedules.Single(s => s.Id == scheduleId);
                     var customer = db.Customers.Single(c => c.Id == schedule.PartyId);
@@ -1020,7 +1021,7 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
                 {
                     Assert.Equal(RecurringScheduleStatus.Paused,
                         db.RecurringSchedules.Single(s => s.Id == scheduleId).Status);
@@ -1199,12 +1200,13 @@ namespace AccountGo.BackendTests
             var scheduleId = 0;
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
             {
                 var salesAccountId = db.Accounts.Single(a => a.AccountCode == "40100").Id;
+                var arAccountId = db.Accounts.Single(a => a.AccountCode == "10120").Id;
                 var measurementId = db.Measurements.First().Id;
 
-                var customer = new Core.Domain.Sales.Customer { CompanyId = _companyId, No = tag + "-CUST" };
+                var customer = new Core.Domain.Sales.Customer { CompanyId = _companyId, No = tag + "-CUST", AccountsReceivableAccountId = arAccountId };
                 db.Customers.Add(customer);
                 var category = new Core.Domain.Items.ItemCategory { CompanyId = _companyId, Name = tag + "-Cat", ItemType = Core.Domain.ItemTypes.Service };
                 db.ItemCategories.Add(category);

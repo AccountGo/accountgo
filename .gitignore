@@ -235,3 +235,4 @@ scratch/
 
 .vscode/
 semantic-review/
+.worktrees/
