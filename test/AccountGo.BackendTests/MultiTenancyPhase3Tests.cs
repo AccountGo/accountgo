@@ -1330,6 +1330,33 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task Signup_WithAboutAnswers_WhenSoloSetupDisabled_RejectsAtomicallyWith422()
+        {
+            var slug = "signup-disabled-" + Guid.NewGuid().ToString("N")[..8];
+            var email = $"{slug}@example.com";
+            var response = await Send(HttpMethod.Post, "/api/auth/signup", new
+            {
+                email,
+                firstName = "Solo",
+                lastName = "Owner",
+                organizationName = slug,
+                organizationSlug = slug,
+                workspacePurpose = "Business",
+                collaborationIntent = "JustMe"
+            }, token: "", scoped: false);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            var body = await Json(response);
+            Assert.Equal("solo_setup_disabled", body.GetProperty("reasonCode").GetString());
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                Assert.False(identity.Users.Any(u => u.Email == email));
+                Assert.False(db.Companies.Any(c => c.Slug == slug));
+            }
+        }
+
+        [Fact]
         public async Task Invite_EmailFailure_DoesNotPersistInvitationOrInvalidatePreviousLink()
         {
             await Invite("phase3-other@example.com");

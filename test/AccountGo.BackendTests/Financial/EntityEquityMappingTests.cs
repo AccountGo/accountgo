@@ -20,6 +20,8 @@ public class EntityEquityMappingTests
         { EntityType.Cooperative, "30300", null, "30100", "Member Capital" },
         { EntityType.Cooperative, "30300", null, "30300", "Retained Surplus" },
         { EntityType.NonProfit, "30300", null, "30300", "Net Assets" },
+        { EntityType.Individual, "30100", "30800", "30100", "Personal Capital" },
+        { EntityType.Individual, "30100", "30800", "30800", "Personal Drawings" },
     };
 
     [Theory]
@@ -31,7 +33,7 @@ public class EntityEquityMappingTests
         string displayCode,
         string expectedDisplayName)
     {
-        var profile = EntityEquityMapping.GetProfile(entityType);
+        var profile = EntityEquityMapping.GetProfile(entityType, allowUnapproved: true);
 
         Assert.Equal(expectedCloseTarget, profile.CloseTargetAccountCode);
         Assert.Equal(expectedDistribution, profile.DistributionAccountCode);
@@ -45,10 +47,22 @@ public class EntityEquityMappingTests
     [InlineData("30300", "Retained Earnings", true)]
     [InlineData("30300", "Surplus Account", false)]
     [InlineData("30800", "Owner's Drawings", true)]
+    [InlineData("30800", "Personal Drawings", true)]
+    [InlineData("30100", "Personal Capital", true)]
     [InlineData("30800", "Drawings", false)]
     [InlineData("99999", "Anything", false)]
     public void IsRenameable_only_allows_template_display_names(string code, string currentName, bool expected)
     {
         Assert.Equal(expected, EntityEquityMapping.IsRenameable(code, currentName));
+    }
+
+    [Fact]
+    public void Individual_mapping_does_not_fall_through_to_corporation_retained_earnings()
+    {
+        var individual = EntityEquityMapping.GetProfile(EntityType.Individual, allowUnapproved: true);
+        var corporation = EntityEquityMapping.GetProfile(EntityType.Corporation);
+        Assert.NotEqual(corporation.CloseTargetAccountCode, individual.CloseTargetAccountCode);
+        Assert.False(EntityEquityMapping.IsIndividualMappingApproved);
+        Assert.Throws<InvalidOperationException>(() => EntityEquityMapping.GetProfile(EntityType.Individual));
     }
 }

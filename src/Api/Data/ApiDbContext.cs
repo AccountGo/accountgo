@@ -113,6 +113,7 @@ namespace Api.Data
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             EnforceAccessBootstrapLifecycle();
+            EnforceAuditLogImmutability();
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
@@ -123,11 +124,42 @@ namespace Api.Data
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
             EnforceAccessBootstrapLifecycle();
+            EnforceAuditLogImmutability();
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
             EnforceRecurringScheduleConsistency();
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        private static readonly HashSet<string> ImmutableAuditTables = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "__WorkspaceInitialization",
+            "__WorkspacePolicyTransition",
+            "__JournalPostingAuthorization"
+        };
+
+        private void EnforceAuditLogImmutability()
+        {
+            var auditEntries = ChangeTracker.Entries<Core.Domain.Auditing.AuditLog>()
+                .Where(e => e.State is EntityState.Modified or EntityState.Deleted)
+                .ToList();
+
+            foreach (var entry in auditEntries)
+            {
+                var originalTable = entry.Property(nameof(Core.Domain.Auditing.AuditLog.TableName)).OriginalValue as string;
+                var currentTable = entry.Entity.TableName;
+
+                var protectedTable = (originalTable != null && ImmutableAuditTables.Contains(originalTable))
+                    ? originalTable
+                    : (currentTable != null && ImmutableAuditTables.Contains(currentTable) ? currentTable : null);
+
+                if (protectedTable != null)
+                {
+                    throw new InvalidOperationException(
+                        $"Audit log records for '{protectedTable}' are append-only evidence and cannot be modified or deleted.");
+                }
+            }
         }
 
         // Close setup in the same write as the first functional grant or independent administrator.
@@ -151,6 +183,23 @@ namespace Api.Data
             foreach (var companyId in companyIds)
             {
                 var company = Companies.SingleOrDefault(c => c.Id == companyId);
+
+                var isCollaboratorChange = members.Any(e => e.Entity.CompanyId == companyId
+                    && company?.CreatedByUserId != null
+                    && e.Entity.UserId != company.CreatedByUserId);
+                if (isCollaboratorChange && _tenantContext?.IsResolved == true && _tenantContext.CompanyId == companyId)
+                {
+                    var settings = WorkspaceOperatingSettings.IgnoreQueryFilters().SingleOrDefault(s => s.CompanyId == companyId);
+                    if (settings != null)
+                    {
+                        settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
+                        if (settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)
+                        {
+                            settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                        }
+                    }
+                }
+
                 if (company?.AccessBootstrapAvailable != true)
                     continue;
 
@@ -697,6 +746,8 @@ namespace Api.Data
             {
                 entity.HasIndex(e => new { e.CompanyMemberId, e.SecurityRoleId }).IsUnique();
                 entity.HasIndex(e => e.SecurityRoleId);
+                entity.Property(e => e.GrantOrigin).HasDefaultValue(WorkspaceMemberGrantOrigin.LegacyExplicit);
+                entity.Property(e => e.GrantedByUserId).HasMaxLength(450);
                 entity.HasOne(e => e.CompanyMember)
                     .WithMany(m => m.SecurityRoles)
                     .HasForeignKey(e => e.CompanyMemberId)
@@ -704,6 +755,57 @@ namespace Api.Data
                 entity.HasOne(e => e.SecurityRole)
                     .WithMany()
                     .HasForeignKey(e => e.SecurityRoleId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<CompanySetting>(entity =>
+            {
+                entity.Property(e => e.RegistrationStatus).HasDefaultValue(BusinessRegistrationStatus.NotProvided);
+                entity.Property(e => e.RegistrationNumber).HasMaxLength(100);
+            });
+
+            builder.Entity<WorkspaceOperatingSettings>(entity =>
+            {
+                entity.ToTable("WorkspaceOperatingSettings");
+                entity.HasIndex(e => e.CompanyId).IsUnique();
+                entity.Property(e => e.InitializedByUserId).HasMaxLength(450);
+                entity.Property(e => e.LastConfirmedByUserId).HasMaxLength(450);
+                entity.Property(e => e.PolicyRevision).IsConcurrencyToken();
+                entity.Property(e => e.PolicySchemaVersion).HasDefaultValue(WorkspaceOperatingPolicySchema.CurrentVersion);
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.ConfirmedOwnerMember)
+                    .WithMany()
+                    .HasForeignKey(e => e.ConfirmedOwnerMemberId)
+                    .OnDelete(DeleteBehavior.NoAction);
+            });
+
+            builder.Entity<WorkspaceApprovalRule>(entity =>
+            {
+                entity.ToTable("WorkspaceApprovalRule");
+                entity.HasIndex(e => new { e.CompanyId, e.OperationKey }).IsUnique();
+                entity.Property(e => e.OperationKey).IsRequired().HasMaxLength(128);
+                entity.Property(e => e.ConfiguredByUserId).HasMaxLength(450);
+                entity.Property(e => e.PolicySchemaVersion).HasDefaultValue(WorkspaceOperatingPolicySchema.CurrentVersion);
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.ReviewerSecurityRole)
+                    .WithMany()
+                    .HasForeignKey(e => e.ReviewerSecurityRoleId)
+                    .OnDelete(DeleteBehavior.NoAction);
+            });
+
+            builder.Entity<WorkspacePolicyCoordination>(entity =>
+            {
+                entity.ToTable("WorkspacePolicyCoordination");
+                entity.HasIndex(e => e.CompanyId).IsUnique();
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
@@ -1061,6 +1163,9 @@ namespace Api.Data
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }
         public virtual DbSet<CompanyInvitation> CompanyInvitations { get; set; }
         public virtual DbSet<WorkspaceAccessRequest> WorkspaceAccessRequests { get; set; }
+        public virtual DbSet<WorkspaceOperatingSettings> WorkspaceOperatingSettings { get; set; }
+        public virtual DbSet<WorkspaceApprovalRule> WorkspaceApprovalRules { get; set; }
+        public virtual DbSet<WorkspacePolicyCoordination> WorkspacePolicyCoordinations { get; set; }
         public virtual DbSet<CompanySetting> CompanySettings { get; set; }
         public virtual DbSet<Contact> Contacts { get; set; }
         public virtual DbSet<Customer> Customers { get; set; }

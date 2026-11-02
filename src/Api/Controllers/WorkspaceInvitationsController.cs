@@ -34,6 +34,7 @@ namespace Api.Controllers
         private readonly WorkspaceInvitationService _invitations;
         private readonly Core.Entitlements.IEntitlementService _entitlements;
         private readonly IAccessAuthorizationService _authorizationService;
+        private readonly IWorkspaceApprovalPolicyResolver _approvalResolver;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         private IAccessAuthorizationService AuthService =>
@@ -47,7 +48,8 @@ namespace Api.Controllers
                 HttpContext?.RequestServices?.GetService<Api.Service.IMfaGate>());
 
         public WorkspaceInvitationsController(ApiDbContext db, ApplicationIdentityDbContext identity, ITenantContext tenant, WorkspaceInvitationService invitations,
-            Core.Entitlements.IEntitlementService entitlements = null, IAccessAuthorizationService authorizationService = null)
+            Core.Entitlements.IEntitlementService entitlements = null, IAccessAuthorizationService authorizationService = null,
+            IWorkspaceApprovalPolicyResolver approvalResolver = null)
         {
             _db = db;
             _identity = identity;
@@ -55,6 +57,7 @@ namespace Api.Controllers
             _invitations = invitations;
             _entitlements = entitlements;
             _authorizationService = authorizationService;
+            _approvalResolver = approvalResolver;
         }
 
         [HttpGet]
@@ -139,6 +142,23 @@ namespace Api.Controllers
                 _db.CompanyInvitations.Add(invitation);
                 await _db.SaveChangesAsync();
 
+                var operating = _db.WorkspaceOperatingSettings.AsNoTracking()
+                    .FirstOrDefault(s => s.CompanyId == companyId);
+                var journalMode = _db.WorkspaceApprovalRules.AsNoTracking()
+                    .Where(r => r.CompanyId == companyId
+                                && r.OperationKey == AccessOperationCatalog.FinancialsJournalPost)
+                    .Select(r => (WorkspaceApprovalRuleKind?)r.RuleKind)
+                    .FirstOrDefault();
+                WorkspaceInvitationTransition.Record(
+                    _db,
+                    companyId,
+                    invitation.Id,
+                    UserId,
+                    role,
+                    request.SecurityRoleIds.Distinct().ToList(),
+                    issuingPolicyRevision: operating?.PolicyRevision ?? 0,
+                    intendedJournalMode: journalMode?.ToString());
+
                 if (!string.IsNullOrWhiteSpace(request.ApprovalRequestId))
                 {
                     _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
@@ -153,16 +173,31 @@ namespace Api.Controllers
                         OriginalValue = request.ApprovedByUserId ?? string.Empty,
                         NewValue = request.ApprovalRequestId
                     });
-                    await _db.SaveChangesAsync();
                 }
 
+                await _db.SaveChangesAsync();
+
                 tx.Commit();
-                return StatusCode(201, new { id = invitation.Id, email, role = role.ToString(), expiresAt = invitation.ExpiresAt });
+                return StatusCode(201, new
+                {
+                    id = invitation.Id,
+                    email,
+                    role = role.ToString(),
+                    expiresAt = invitation.ExpiresAt,
+                    policyRevision = operating?.PolicyRevision ?? 0,
+                    grantFingerprint = WorkspaceInvitationTransition.ComputeGrantFingerprint(role, request.SecurityRoleIds)
+                });
             }
         }
 
+        public sealed class ResendInvitationRequest
+        {
+            public bool ConfirmChangedPolicy { get; set; }
+            public long? ExpectedPolicyRevision { get; set; }
+        }
+
         [HttpPost("{id:int}/resend")]
-        public async Task<IActionResult> Resend(int id)
+        public async Task<IActionResult> Resend(int id, [FromBody] ResendInvitationRequest? request = null)
         {
             using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
             {
@@ -179,6 +214,63 @@ namespace Api.Controllers
                 }
                 if (invitation.ResendCount >= 5)
                     return Problem(statusCode: 429, title: "Invitation resend limit reached", detail: "Limit: 5 resends per invitation per day.");
+
+                var companyId = _tenant.RequireCompanyId();
+                var securityRoleIds = string.IsNullOrWhiteSpace(invitation.SecurityRoleIdsJson)
+                    ? new List<int>()
+                    : System.Text.Json.JsonSerializer.Deserialize<List<int>>(invitation.SecurityRoleIdsJson) ?? new List<int>();
+
+                if (!WorkspaceMembersController.ValidSecurityRoles(_db, securityRoleIds))
+                    return Problem(statusCode: 400, title: "Invalid workspace security roles", detail: "Assigned security roles are no longer valid.");
+
+                var currentSettings = _db.WorkspaceOperatingSettings.SingleOrDefault(s => s.CompanyId == companyId);
+                var journalRule = _db.WorkspaceApprovalRules.SingleOrDefault(r => r.CompanyId == companyId && r.OperationKey == AccessOperationCatalog.FinancialsJournalPost);
+                var effectiveRule = _approvalResolver?.Resolve(currentSettings ?? new WorkspaceOperatingSettings { CompanyId = companyId }, journalRule, AccessOperationCatalog.FinancialsJournalPost);
+
+                var currentJournalMode = effectiveRule?.Mode.ToString();
+                var currentRevision = currentSettings?.PolicyRevision ?? 0;
+                if (request?.ExpectedPolicyRevision.HasValue == true && request.ExpectedPolicyRevision.Value != currentRevision)
+                {
+                    return Problem(
+                        statusCode: StatusCodes.Status409Conflict,
+                        title: "Workspace policy revision mismatch",
+                        detail: $"The provided expected policy revision {request.ExpectedPolicyRevision.Value} does not match the current revision {currentRevision}.");
+                }
+
+                var latestTransition = WorkspaceInvitationTransition.GetLatest(_db, companyId, invitation.Id);
+                if (latestTransition != null && !string.IsNullOrWhiteSpace(latestTransition.IntendedJournalMode))
+                {
+                    var modeChanged = !string.Equals(latestTransition.IntendedJournalMode, currentJournalMode, StringComparison.Ordinal);
+                    if (modeChanged)
+                    {
+                        if (request?.ConfirmChangedPolicy != true)
+                        {
+                            return Problem(
+                                statusCode: StatusCodes.Status409Conflict,
+                                title: "Workspace policy assumptions changed",
+                                detail: $"Workspace journal approval policy changed from {latestTransition.IntendedJournalMode} to {currentJournalMode} since this invitation was issued. Explicit reconfirmation is required to resend.");
+                        }
+
+                        if (!request.ExpectedPolicyRevision.HasValue || request.ExpectedPolicyRevision.Value != currentRevision)
+                        {
+                            return Problem(
+                                statusCode: StatusCodes.Status409Conflict,
+                                title: "Workspace policy revision mismatch",
+                                detail: $"The expected policy revision must be specified and match current revision {currentRevision} to confirm changed policy.");
+                        }
+                    }
+                }
+
+                WorkspaceInvitationTransition.Record(
+                    _db,
+                    companyId,
+                    invitation.Id,
+                    UserId,
+                    invitation.Role,
+                    securityRoleIds,
+                    issuingPolicyRevision: currentSettings?.PolicyRevision ?? 0,
+                    intendedJournalMode: currentJournalMode);
+
                 invitation.ResendCount++;
                 // Keep delivery inside the transaction so a failed send rolls back token rotation and resend limits.
                 await SendAsync(invitation);

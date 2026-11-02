@@ -13,11 +13,17 @@ export interface ChecklistInput {
   hasLegalName: boolean;
   /** At least one active bank account exists. */
   hasBankAccount?: boolean;
+  /**
+   * When SoloActive, omit Invite a teammate from the checklist.
+   * Invite remains discoverable under Members.
+   */
+  collaborationState?: string | null;
 }
 
 /** Items S1–S5 from the onboarding requirements. */
 export function buildChecklist(input: ChecklistInput): ChecklistItem[] {
   const items: ChecklistItem[] = [];
+  const soloActive = input.collaborationState === 'SoloActive';
 
   if (input.taxRegime !== 'None') {
     items.push({ id: 'tax', label: 'Confirm your tax rates', hint: 'We added a 0% placeholder — set the real rate before your first invoice.', to: 'settings?tab=taxes', done: false });
@@ -35,6 +41,8 @@ export function buildChecklist(input: ChecklistInput): ChecklistItem[] {
     items.push({ id: 'coa', label: 'Skim your chart of accounts', hint: 'Know the control accounts we seeded.', to: 'financials/accounts', done: false });
   }
   items.push({ id: 'business', label: 'Add your legal name and contact', hint: 'Printed in the From block of your invoices.', to: 'settings', done: input.hasLegalName });
-  items.push({ id: 'invite', label: 'Invite a teammate', hint: 'Optional — bring your accountant or colleague.', to: 'members', done: false });
+  if (!soloActive) {
+    items.push({ id: 'invite', label: 'Invite a teammate', hint: 'Optional — bring your accountant or colleague.', to: 'members', done: false });
+  }
   return items;
 }

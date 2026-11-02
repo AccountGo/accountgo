@@ -1,6 +1,8 @@
-import type { WizardState } from './policyDefaults';
+import { normalizeWizardState, type WizardState } from './policyDefaults';
 
-const KEY = 'accountgo.createOrgDraft.v1';
+/** Bumped when About answers became required; v1 drafts resume without inventing those answers. */
+const KEY = 'accountgo.createOrgDraft.v2';
+const LEGACY_KEY = 'accountgo.createOrgDraft.v1';
 
 export interface WizardDraft {
   state: WizardState;
@@ -9,9 +11,11 @@ export interface WizardDraft {
 
 export const loadDraft = (stepCount: number): WizardDraft | null => {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(KEY) ?? 'null');
+    const raw = window.localStorage.getItem(KEY) ?? window.localStorage.getItem(LEGACY_KEY);
+    const parsed = JSON.parse(raw ?? 'null');
     if (!parsed || typeof parsed.state !== 'object' || !Number.isInteger(parsed.stepIndex)) return null;
-    return { state: parsed.state, stepIndex: Math.min(Math.max(parsed.stepIndex, 0), stepCount - 1) };
+    const state = normalizeWizardState(parsed.state);
+    return { state, stepIndex: Math.min(Math.max(parsed.stepIndex, 0), stepCount - 1) };
   } catch {
     return null;
   }
@@ -20,6 +24,7 @@ export const loadDraft = (stepCount: number): WizardDraft | null => {
 export const saveDraft = (draft: WizardDraft): void => {
   try {
     window.localStorage.setItem(KEY, JSON.stringify(draft));
+    window.localStorage.removeItem(LEGACY_KEY);
   } catch {
     // Storage may be unavailable (private mode); the draft is a convenience only.
   }
@@ -28,6 +33,7 @@ export const saveDraft = (draft: WizardDraft): void => {
 export const clearDraft = (): void => {
   try {
     window.localStorage.removeItem(KEY);
+    window.localStorage.removeItem(LEGACY_KEY);
   } catch {
     // ignore
   }
