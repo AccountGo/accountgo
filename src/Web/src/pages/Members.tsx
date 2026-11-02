@@ -57,7 +57,7 @@ function journalWorkflowLabel(mode?: string): string {
 }
 
 export const Members: React.FC = () => {
-  const { currentOrg } = useOutletContext<TenantContextType>();
+  const { currentOrg, updateCurrentOrg } = useOutletContext<TenantContextType>();
   const { authFetch, user } = useAuth();
   const navigate = useNavigate();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -202,6 +202,13 @@ export const Members: React.FC = () => {
         ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
       });
       await requireSuccess(response);
+      if (path === 'owner-access-setup') {
+        const current = await authFetch(base);
+        if (current.ok) {
+          const updated = await current.json();
+          if (Array.isArray(updated.permissions)) updateCurrentOrg?.({ permissions: updated.permissions });
+        }
+      }
       setForm(null);
       setNotice(success);
       if (leaving) navigate('/select-org', { replace: true });
@@ -249,9 +256,9 @@ export const Members: React.FC = () => {
         reason: requestReason.trim(),
       }, 'Access request submitted for independent approval.');
     } else if (form === 'setup') {
-      void mutate('access-setup', 'POST', {
+      void mutate('owner-access-setup', 'POST', {
         securityRoleIds: roleIds,
-      }, 'Initial access setup completed successfully.');
+      }, 'Your functional roles have been updated.');
     } else {
       void mutate(`members/${form.memberId}`, 'PATCH', {
         ...(form.role !== 'Owner' ? { role } : {}),
@@ -328,9 +335,9 @@ export const Members: React.FC = () => {
                 onClick={confirmSoloSetup}
               />
             )}
-            {setupStatus?.isEligibleForBootstrap && !isEligibleForSolo && (
+            {setupStatus?.ownerCanManageOwnAccess && !isEligibleForSolo && (
               <HeaderButton
-                label="Initial setup"
+                label="Set up my access"
                 icon={ShieldAlert}
                 variant="primary"
                 disabled={busy || loading}
@@ -418,12 +425,12 @@ export const Members: React.FC = () => {
         </div>
       )}
 
-      {setupStatus?.isEligibleForBootstrap && !isEligibleForSolo && (
+      {setupStatus?.ownerCanManageOwnAccess && !isEligibleForSolo && (
         <div className="p-5 rounded-xl border border-sky-500/30 bg-sky-500/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h2 className="font-semibold text-sky-400">Initial Access Setup Required</h2>
+            <h2 className="font-semibold text-sky-400">Set up your access</h2>
             <p className="text-sm text-[var(--text-muted)]">
-              As the initial workspace administrator, you need to configure your initial functional roles (accounting, sales, purchasing) to start managing business operations. Once configured or once additional administrators join, all role assignments require independent approval.
+              As the only active member, you can add functional roles for yourself. If another member joins, role changes require the normal approval process.
             </p>
           </div>
           <button
@@ -432,7 +439,7 @@ export const Members: React.FC = () => {
             onClick={() => openForm('setup')}
             disabled={busy}
           >
-            Complete initial setup
+            Set up my access
           </button>
         </div>
       )}
@@ -445,7 +452,7 @@ export const Members: React.FC = () => {
               : form === 'request'
               ? 'Request functional roles'
               : form === 'setup'
-              ? 'Initial Access Setup'
+              ? 'Set up your functional roles'
               : `Edit access for ${form.email}`}
           </h2>
 
