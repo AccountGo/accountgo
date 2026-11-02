@@ -610,7 +610,14 @@ namespace AccountGo.BackendTests
                 // #479: the recurring-schedule consistency hook deliberately looks past the tenant
                 // filter so a cross-company foreign key is visible to the check and then rejected
                 // (fail closed). This is the tenant enforcement core itself.
-                "ApiDbContext.cs"
+                "ApiDbContext.cs",
+                // Workspace operating policy coordination, setup, and invitation acceptance
+                // execute by explicit companyId before or during tenant bootstrap.
+                "WorkspaceOperatingPolicyService.cs",
+                "WorkspacePolicyTransaction.cs",
+                "WorkspaceApprovalPolicyResolver.cs",
+                "WorkspaceInitializationApplicator.cs",
+                "InvitationsController.cs"
             };
 
             var solutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));

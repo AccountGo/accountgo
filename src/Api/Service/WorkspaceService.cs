@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Api.Data;
 using Core.Domain;
+using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Service
@@ -25,13 +26,15 @@ namespace Api.Service
     {
         private readonly ApiDbContext _db;
         private readonly CompanyProvisioningService _provisioning;
+        private readonly ITenantContext _tenant;
         private readonly Core.Entitlements.IEntitlementService _entitlements;
 
         public WorkspaceService(ApiDbContext db, CompanyProvisioningService provisioning,
-            Core.Entitlements.IEntitlementService entitlements = null)
+            ITenantContext tenant, Core.Entitlements.IEntitlementService entitlements = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _provisioning = provisioning ?? throw new ArgumentNullException(nameof(provisioning));
+            _tenant = tenant ?? throw new ArgumentNullException(nameof(tenant));
             _entitlements = entitlements;
         }
 
@@ -85,6 +88,40 @@ namespace Api.Service
             }
             _db.CompanyMembers.Add(member);
             _db.SaveChanges();
+
+            // Durable coordination + unclassified operating policy before any feature activation.
+            // No automatic solo grant here — explicit initialization owns grants and single-actor rules.
+            // Impersonate the new company so ICompanyOwned writes pass tenant enforcement (same as Provision).
+            using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+            {
+                _db.WorkspacePolicyCoordinations.Add(new WorkspacePolicyCoordination
+                {
+                    CompanyId = company.Id,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+                _db.WorkspaceOperatingSettings.Add(new WorkspaceOperatingSettings
+                {
+                    CompanyId = company.Id,
+                    Purpose = WorkspacePurpose.Unspecified,
+                    CollaborationIntent = WorkspaceCollaborationIntent.Unspecified,
+                    CollaborationState = WorkspaceCollaborationState.LegacyUnclassified,
+                    InitializationSource = WorkspaceInitializationSource.Unspecified,
+                    PolicyRevision = 0,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                });
+                _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+                {
+                    CompanyId = company.Id,
+                    OperationKey = Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
+                    RuleKind = WorkspaceApprovalRuleKind.IndependentReviewerRequired,
+                    Provenance = WorkspaceApprovalRuleProvenance.LegacyEnforced,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion,
+                    ConfiguredAtUtc = DateTime.UtcNow,
+                    ConfiguredAtPolicyRevision = 0
+                });
+                _db.SaveChanges();
+            }
+
             _provisioning.Provision(company, options);
             return company;
         }

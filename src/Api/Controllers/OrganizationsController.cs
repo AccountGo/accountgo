@@ -6,7 +6,9 @@ using System.Globalization;
 using Api.Data;
 using Api.Filters;
 using Api.Service;
+using Core.Authorization;
 using Core.Domain;
+using Microsoft.AspNetCore.Http;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Tenancy;
@@ -30,6 +32,9 @@ namespace Api.Controllers
         private readonly CompanyAccountingPolicyService _accountingPolicy;
         private readonly IPlanCatalog _plans;
         private readonly Services.Financial.IFinancialService _financial;
+        private readonly WorkspaceInitializationApplicator _workspaceInit;
+        private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
+        private readonly Api.Options.WorkspaceExperienceOptions _experience;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -38,7 +43,10 @@ namespace Api.Controllers
             WorkspaceService workspaces,
             CompanyAccountingPolicyService accountingPolicy,
             IPlanCatalog plans,
-            Services.Financial.IFinancialService financial)
+            Services.Financial.IFinancialService financial,
+            WorkspaceInitializationApplicator workspaceInit = null,
+            IWorkspaceOperatingPolicyService operatingPolicy = null,
+            Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null)
         {
             _tenant = tenant;
             _db = db;
@@ -46,6 +54,24 @@ namespace Api.Controllers
             _accountingPolicy = accountingPolicy;
             _plans = plans;
             _financial = financial;
+            _workspaceInit = workspaceInit;
+            _operatingPolicy = operatingPolicy;
+            _experience = experienceOptions?.Value != null
+                ? Api.Options.WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value)
+                : (workspaceInit?.Experience ?? new Api.Options.WorkspaceExperienceOptions());
+        }
+
+        [TenantFree]
+        [HttpGet("setup-capabilities")]
+        public IActionResult GetSetupCapabilities()
+        {
+            var options = Api.Options.WorkspaceExperienceOptions.FromEnvironment(_experience);
+            return Ok(new
+            {
+                soloSetupEnabled = options.SoloSetupEnabled,
+                personalPurposeEnabled = options.PersonalPurposeEnabled,
+                controlledRecoveryEnabled = options.ControlledRecoveryEnabled
+            });
         }
 
         [TenantFree]
@@ -78,6 +104,12 @@ namespace Api.Controllers
             [JsonConverter(typeof(StringEnumConverter))] public EntityType? EntityType { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
             public System.Collections.Generic.List<int> SecurityRoleIds { get; set; }
+
+            // Additive About answers. Omitted values keep the legacy unclassified path (no automatic full-access grant).
+            [JsonConverter(typeof(StringEnumConverter))] public WorkspacePurpose? WorkspacePurpose { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public WorkspaceCollaborationIntent? CollaborationIntent { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public OwnerAccessPreset? OwnerAccessPreset { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public WorkspaceApprovalRuleKind? InitialJournalWorkflow { get; set; }
         }
 
         /// <summary>Omitted policy fields fall back to the legacy defaults documented on <see cref="CompanyProvisionOptions"/>.</summary>
@@ -122,6 +154,29 @@ namespace Api.Controllers
             var policyErrors = CompanyAccountingPolicyRules.Validate(options, DateTime.UtcNow);
             if (policyErrors.Count > 0)
                 return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", policyErrors));
+            var wantsNewExperience = request.WorkspacePurpose.HasValue || request.CollaborationIntent.HasValue || request.OwnerAccessPreset.HasValue;
+            if (wantsNewExperience)
+            {
+                var experience = Api.Options.WorkspaceExperienceOptions.FromEnvironment(_experience);
+                if (!experience.SoloSetupEnabled)
+                {
+                    return UnprocessableEntity(new ProblemDetails
+                    {
+                        Title = "Workspace initialization disabled",
+                        Detail = "Solo/team workspace initialization is not enabled; workspace remains unclassified.",
+                        Status = StatusCodes.Status422UnprocessableEntity,
+                        Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.SoloSetupDisabled }
+                    });
+                }
+
+                if (!request.WorkspacePurpose.HasValue || !request.CollaborationIntent.HasValue)
+                    return Problem(statusCode: 400, title: "About answers required",
+                        detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
+                // Server selects the managed profile for Just me; arbitrary role IDs cannot replace initialization.
+                if (request.CollaborationIntent == WorkspaceCollaborationIntent.JustMe)
+                    request.SecurityRoleIds = null;
+            }
+
             if (request.SecurityRoleIds != null && !WorkspaceMembersController.ValidSecurityRoles(_db, request.SecurityRoleIds))
                 return Problem(statusCode: 400, title: "Invalid workspace security roles");
 
@@ -132,8 +187,35 @@ namespace Api.Controllers
                 try
                 {
                     var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options, request.SecurityRoleIds);
+                    var ownerMember = _db.CompanyMembers.Single(m => m.CompanyId == company.Id && m.UserId == UserId);
+
+                    WorkspaceInitializationResult initResult = null;
+                    if (wantsNewExperience && _workspaceInit != null)
+                    {
+                        initResult = _workspaceInit.ApplyNewWorkspace(company.Id, UserId, ownerMember.Id, new WorkspaceInitializationRequest
+                        {
+                            Purpose = request.WorkspacePurpose.Value,
+                            CollaborationIntent = request.CollaborationIntent.Value,
+                            OwnerAccessPreset = request.OwnerAccessPreset ?? OwnerAccessPreset.FullWorkspaceAccess,
+                            InitialJournalWorkflow = request.InitialJournalWorkflow
+                        });
+
+                        if (!initResult.Applied
+                            && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
+                                or "about_answers_required")
+                        {
+                            return UnprocessableEntity(new ProblemDetails
+                            {
+                                Title = "Workspace initialization rejected",
+                                Detail = initResult.Message,
+                                Status = StatusCodes.Status422UnprocessableEntity,
+                                Extensions = { ["reasonCode"] = initResult.ReasonCode }
+                            });
+                        }
+                    }
+
                     tx.Commit();
-                    return StatusCode(201, Summary(company, CompanyMemberRole.Owner));
+                    return StatusCode(201, Summary(company, CompanyMemberRole.Owner, initResult));
                 }
                 catch (InvalidAccountingPolicyException ex)
                 {
@@ -149,13 +231,160 @@ namespace Api.Controllers
             var id = _tenant.RequireCompanyId();
             var company = _db.Companies.Single(c => c.Id == id);
             var fiscalYear = _financial.CurrentFiscalYear();
+            var memberId = _db.CompanyMembers
+                .Where(m => m.CompanyId == id && m.UserId == UserId)
+                .Select(m => (int?)m.Id)
+                .FirstOrDefault();
+            var operating = _operatingPolicy?.GetSummary(id, memberId);
             return Ok(new
             {
                 id = company.Id, name = company.Name, slug = company.Slug, shortName = company.ShortName,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), subscriptionStatus = company.SubscriptionStatus,
                 role = _tenant.Role.ToString(), permissions = _tenant.Permissions,
                 currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault() ?? "USD",
-                fiscalYearEnd = fiscalYear?.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                fiscalYearEnd = fiscalYear?.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                operatingPolicy = operating == null ? null : new
+                {
+                    purpose = operating.Purpose.ToString(),
+                    collaborationIntent = operating.CollaborationIntent.ToString(),
+                    collaborationState = operating.CollaborationState.ToString(),
+                    policyRevision = operating.PolicyRevision,
+                    ownAccessProfileKey = operating.OwnAccessProfileKey,
+                    ownAccessProfileDisplayName = operating.OwnAccessProfileDisplayName,
+                    journalWorkflow = operating.NormalJournalWorkflow.Mode.ToString(),
+                    soloSetupEnabled = operating.SoloSetupEnabled,
+                    allowedNextActions = operating.AllowedNextActions
+                }
+            });
+        }
+
+        [TenantScoped]
+        [HttpGet("current/operating-settings")]
+        public IActionResult GetOperatingSettings()
+        {
+            var id = _tenant.RequireCompanyId();
+            var memberId = _db.CompanyMembers
+                .Where(m => m.CompanyId == id && m.UserId == UserId)
+                .Select(m => (int?)m.Id)
+                .FirstOrDefault();
+            var summary = _operatingPolicy?.GetSummary(id, memberId);
+            if (summary == null)
+                return Problem(statusCode: 503, title: "Operating policy unavailable");
+            return Ok(new
+            {
+                purpose = summary.Purpose.ToString(),
+                collaborationIntent = summary.CollaborationIntent.ToString(),
+                collaborationState = summary.CollaborationState.ToString(),
+                policyRevision = summary.PolicyRevision,
+                ownAccessProfileKey = summary.OwnAccessProfileKey,
+                ownAccessProfileDisplayName = summary.OwnAccessProfileDisplayName,
+                journalWorkflow = summary.NormalJournalWorkflow.Mode.ToString(),
+                soloSetupEnabled = summary.SoloSetupEnabled,
+                allowedNextActions = summary.AllowedNextActions
+            });
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Owner)]
+        [HttpGet("current/solo-setup/eligibility")]
+        public IActionResult GetSoloSetupEligibility()
+        {
+            if (string.IsNullOrWhiteSpace(UserId))
+                return Unauthorized();
+            var id = _tenant.RequireCompanyId();
+            var eligibility = _operatingPolicy?.EvaluateLegacySoloEligibility(id, UserId);
+            if (eligibility == null)
+                return Problem(statusCode: 503, title: "Operating policy unavailable");
+            return Ok(new
+            {
+                status = eligibility.Status.ToString(),
+                reasonCode = eligibility.ReasonCode,
+                message = eligibility.Message,
+                policyRevision = eligibility.PolicyRevision
+            });
+        }
+
+        public class SoloSetupConfirmRequest
+        {
+            public long ExpectedPolicyRevision { get; set; }
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Owner)]
+        [HttpPost("current/solo-setup/confirm")]
+        public IActionResult ConfirmSoloSetup([FromBody] SoloSetupConfirmRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(UserId))
+                return Unauthorized();
+            var id = _tenant.RequireCompanyId();
+            var result = _operatingPolicy?.ConfirmLegacySoloSetup(id, UserId, request?.ExpectedPolicyRevision ?? -1);
+            if (result == null)
+                return Problem(statusCode: 503, title: "Operating policy unavailable");
+            if (!result.Applied)
+            {
+                var status = result.ReasonCode is WorkspacePolicyReasonCodes.StalePolicyRevision
+                    or WorkspacePolicyReasonCodes.WorkspacePolicyConflict
+                    ? StatusCodes.Status409Conflict
+                    : StatusCodes.Status403Forbidden;
+                return StatusCode(status, new ProblemDetails
+                {
+                    Title = "Solo setup not applied",
+                    Detail = result.Message,
+                    Status = status,
+                    Extensions = { ["reasonCode"] = result.ReasonCode, ["policyRevision"] = result.PolicyRevision }
+                });
+            }
+            return Ok(new
+            {
+                applied = result.Applied,
+                reasonCode = result.ReasonCode,
+                message = result.Message,
+                policyRevision = result.PolicyRevision,
+                collaborationState = result.CollaborationState.ToString()
+            });
+        }
+
+        public class ReturnToSoloRequest
+        {
+            public long ExpectedPolicyRevision { get; set; }
+            public bool RevokeOutstandingInvitations { get; set; }
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Owner)]
+        [HttpPost("current/operating-settings/return-to-solo")]
+        public IActionResult ReturnToSolo([FromBody] ReturnToSoloRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(UserId))
+                return Unauthorized();
+            var id = _tenant.RequireCompanyId();
+            var result = _operatingPolicy?.ReturnToSolo(
+                id,
+                UserId,
+                request?.ExpectedPolicyRevision ?? -1,
+                request?.RevokeOutstandingInvitations ?? false);
+            if (result == null)
+                return Problem(statusCode: 503, title: "Operating policy unavailable");
+            if (!result.Applied)
+            {
+                var status = result.ReasonCode is WorkspacePolicyReasonCodes.StalePolicyRevision
+                    ? StatusCodes.Status409Conflict
+                    : StatusCodes.Status422UnprocessableEntity;
+                return StatusCode(status, new ProblemDetails
+                {
+                    Title = "Return to solo not applied",
+                    Detail = result.Message,
+                    Status = status,
+                    Extensions = { ["reasonCode"] = result.ReasonCode, ["policyRevision"] = result.PolicyRevision }
+                });
+            }
+            return Ok(new
+            {
+                applied = result.Applied,
+                reasonCode = result.ReasonCode,
+                message = result.Message,
+                policyRevision = result.PolicyRevision,
+                collaborationState = result.CollaborationState.ToString()
             });
         }
 
@@ -592,13 +821,22 @@ namespace Api.Controllers
             PaymentBankId = settings.PaymentBankId,
         };
 
-        private object Summary(Company company, CompanyMemberRole role)
+        private object Summary(Company company, CompanyMemberRole role, WorkspaceInitializationResult initResult = null)
         {
             return new
             {
                 id = company.Id.ToString(), name = company.Name, shortName = company.ShortName, slug = company.Slug,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, subscriptionStatus = company.SubscriptionStatus,
-                activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), role = role.ToString()
+                activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), role = role.ToString(),
+                operatingPolicy = initResult == null ? null : new
+                {
+                    initialized = initResult.Applied,
+                    reasonCode = initResult.ReasonCode,
+                    message = initResult.Message,
+                    policyRevision = initResult.PolicyRevision,
+                    accessProfileKey = initResult.AccessProfileKey,
+                    journalWorkflow = initResult.JournalMode.ToString()
+                }
             };
         }
     }

@@ -48,10 +48,12 @@ public class SignUpAndOrganizationTests : IDisposable
     private OrganizationsController NewController()
     {
         var controller = new OrganizationsController(_tenantContext, _db,
-            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext)),
+            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext), _tenantContext),
             new CompanyAccountingPolicyService(_db),
             new Services.Billing.CommunityPlanCatalog(),
-            Mock.Of<Services.Financial.IFinancialService>());
+            Mock.Of<Services.Financial.IFinancialService>(),
+            WorkspaceOperatingPolicyTestSupport.CreateInitializer(_db, _tenantContext),
+            WorkspaceOperatingPolicyTestSupport.CreateOperatingPolicy(_db, tenant: _tenantContext));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -200,6 +202,88 @@ public class SignUpAndOrganizationTests : IDisposable
         Assert.Equal(AccountingBasis.Accrual, setting.AccountingBasis);
         Assert.Equal(year.StartDate.Date, setting.BooksStartDate);
         Assert.Equal(new DateTime(DateTime.UtcNow.Year, 1, 1), year.StartDate.Date);
+
+        var operating = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, operating.CollaborationState);
+        Assert.Null(operating.InitializedAtUtc);
+        Assert.True(_db.WorkspacePolicyCoordinations.IgnoreQueryFilters().Any(c => c.CompanyId == company.Id));
+        Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired,
+            _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id).RuleKind);
+        Assert.False(_db.CompanyMemberSecurityRoles.IgnoreQueryFilters().Any(r => r.CompanyMember.CompanyId == company.Id));
+    }
+
+    [Fact]
+    public void CreateCompany_WithAboutAnswers_WhenSoloSetupDisabled_RejectsWith422()
+    {
+        var controller = NewController();
+        var request = FullRequest("disabled-solo");
+        request.WorkspacePurpose = WorkspacePurpose.Business;
+        request.CollaborationIntent = WorkspaceCollaborationIntent.JustMe;
+
+        var result = Assert.IsType<UnprocessableEntityObjectResult>(controller.Create(request));
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, result.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
+        Assert.Equal(Core.Authorization.WorkspacePolicyReasonCodes.SoloSetupDisabled, problem.Extensions["reasonCode"]?.ToString());
+        Assert.Empty(_db.Companies.Where(c => c.Slug == "disabled-solo"));
+    }
+
+    [Fact]
+    public void CreateCompany_WithAboutAnswers_WhenSoloSetupEnabled_InitializesBusinessSolo()
+    {
+        var controller = new OrganizationsController(_tenantContext, _db,
+            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext), _tenantContext),
+            new CompanyAccountingPolicyService(_db),
+            new Services.Billing.CommunityPlanCatalog(),
+            Mock.Of<Services.Financial.IFinancialService>(),
+            CreateEnabledInitializer(),
+            WorkspaceOperatingPolicyTestSupport.CreateOperatingPolicy(_db, soloSetupEnabled: true, tenant: _tenantContext));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, CallerId) }, "test"))
+            }
+        };
+
+        var request = FullRequest("solo-biz");
+        request.WorkspacePurpose = WorkspacePurpose.Business;
+        request.CollaborationIntent = WorkspaceCollaborationIntent.JustMe;
+        request.OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess;
+        request.InitialJournalWorkflow = WorkspaceApprovalRuleKind.SingleActorAllowed;
+
+        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(controller.Create(request)).StatusCode);
+
+        var company = _db.Companies.Single(c => c.Slug == "solo-biz");
+        var operating = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspaceCollaborationState.SoloActive, operating.CollaborationState);
+        Assert.NotNull(operating.InitializedAtUtc);
+        Assert.False(company.AccessBootstrapAvailable);
+        Assert.Equal(WorkspaceApprovalRuleKind.SingleActorAllowed,
+            _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id).RuleKind);
+    }
+
+    private WorkspaceInitializationApplicator CreateEnabledInitializer()
+    {
+        var options = Microsoft.Extensions.Options.Options.Create(new Api.Options.WorkspaceExperienceOptions { SoloSetupEnabled = true });
+        var policyTx = new WorkspacePolicyTransaction(_db, _tenantContext);
+        var catalog = new WorkspaceAccessProfileCatalog(
+            _db,
+            Mock.Of<Services.Security.ISecurityService>(),
+            Array.Empty<Core.Domain.Security.IWorkspaceAccessProfilePermissionContributor>());
+        // Seed managed profile permissions via real security seed path would be heavy; insert role stub.
+        if (!_db.SecurityRoles.Any(r => r.Name == Core.Domain.Security.WorkspaceAccessProfileKeys.FullWorkspaceAccessV1))
+        {
+            _db.SecurityRoles.Add(new Core.Domain.Security.SecurityRole
+            {
+                Name = Core.Domain.Security.WorkspaceAccessProfileKeys.FullWorkspaceAccessV1,
+                DisplayName = Core.Domain.Security.WorkspaceAccessProfileKeys.FullWorkspaceAccessDisplayName,
+                System = true,
+                SysAdmin = false
+            });
+            _db.SaveChanges();
+        }
+        var resolver = new WorkspaceApprovalPolicyResolver(_db);
+        return new WorkspaceInitializationApplicator(_db, policyTx, catalog, resolver, options);
     }
 
     [Fact]

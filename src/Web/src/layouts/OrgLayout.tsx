@@ -131,6 +131,7 @@ export const OrgLayout: React.FC = () => {
           permissions: string[];
           currency: string;
           fiscalYearEnd?: string;
+          operatingPolicy?: OrgDetails['operatingPolicy'];
         };
         if (mounted) {
           const resolvedOrg: OrgDetails = {
@@ -144,6 +145,7 @@ export const OrgLayout: React.FC = () => {
             currency: current.currency,
             fiscalYearEnd: current.fiscalYearEnd,
             permissions: current.permissions,
+            operatingPolicy: current.operatingPolicy ?? null,
             subscription: {
               planId: current.plan,
               planName: current.plan.charAt(0).toUpperCase() + current.plan.slice(1),

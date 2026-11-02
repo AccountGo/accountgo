@@ -339,8 +339,23 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccessProfileVersion")
+                        .HasColumnType("integer");
+
                     b.Property<int>("CompanyMemberId")
                         .HasColumnType("integer");
+
+                    b.Property<int>("GrantOrigin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("GrantedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("GrantedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
 
                     b.Property<int>("SecurityRoleId")
                         .HasColumnType("integer");
@@ -438,6 +453,15 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.Property<string>("OnboardingChecklistJson")
                         .HasColumnType("text");
+
+                    b.Property<string>("RegistrationNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("RegistrationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<int>("ReportingFramework")
                         .ValueGeneratedOnAdd()
@@ -3879,6 +3903,143 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("WorkspaceAccessRequest", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.WorkspaceApprovalRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("ConfiguredAtPolicyRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ConfiguredAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ConfiguredByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("PolicySchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("Provenance")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ReviewerSecurityRoleId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RuleKind")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewerSecurityRoleId");
+
+                    b.HasIndex("CompanyId", "OperationKey")
+                        .IsUnique();
+
+                    b.ToTable("WorkspaceApprovalRule", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceOperatingSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CollaborationIntent")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CollaborationState")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ConfirmedOwnerMemberId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("EverTeamActivatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("InitializationSource")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("InitializedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("InitializedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<DateTime?>("LastConfirmedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("LastConfirmedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<long>("PolicyRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("PolicySchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique();
+
+                    b.HasIndex("ConfirmedOwnerMemberId");
+
+                    b.ToTable("WorkspaceOperatingSettings", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspacePolicyCoordination", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("LastAcquiredAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique();
+
+                    b.ToTable("WorkspacePolicyCoordination", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditableAttribute", b =>
                 {
                     b.HasOne("Core.Domain.Auditing.AuditableEntity", "AuditableEntity")
@@ -5322,6 +5483,53 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Company");
 
                     b.Navigation("TargetMember");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceApprovalRule", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Security.SecurityRole", "ReviewerSecurityRole")
+                        .WithMany()
+                        .HasForeignKey("ReviewerSecurityRoleId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ReviewerSecurityRole");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceOperatingSettings", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.CompanyMember", "ConfirmedOwnerMember")
+                        .WithMany()
+                        .HasForeignKey("ConfirmedOwnerMemberId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ConfirmedOwnerMember");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspacePolicyCoordination", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
                 });
 
             modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>

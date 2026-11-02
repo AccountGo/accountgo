@@ -19,7 +19,8 @@ namespace Core.Domain
             "Member Capital",
             "Owner's Capital",
             "Partners' Capital",
-            "Share Capital"
+            "Share Capital",
+            "Personal Capital"
         };
 
         private static readonly HashSet<string> RenameableRetainedSurplusNames = new(StringComparer.OrdinalIgnoreCase)
@@ -32,7 +33,8 @@ namespace Core.Domain
         private static readonly HashSet<string> RenameableDrawingsNames = new(StringComparer.OrdinalIgnoreCase)
         {
             "Owner's Drawings",
-            "Partners' Drawings"
+            "Partners' Drawings",
+            "Personal Drawings"
         };
 
         private static readonly Dictionary<EntityType, EntityEquityProfile> Profiles = new()
@@ -79,16 +81,36 @@ namespace Core.Domain
                 new Dictionary<string, string>
                 {
                     ["30300"] = "Net Assets"
+                }),
+
+            // Proposed personal mapping: capital + drawings (not corporate retained earnings).
+            // Personal purpose initialization stays gated until finance review signs this profile.
+            [EntityType.Individual] = new EntityEquityProfile(
+                "30100",
+                "30800",
+                new Dictionary<string, string>
+                {
+                    ["30100"] = "Personal Capital",
+                    ["30800"] = "Personal Drawings"
                 })
         };
 
-        public static EntityEquityProfile GetProfile(EntityType entityType)
+        public static EntityEquityProfile GetProfile(EntityType entityType, bool allowUnapproved = false)
         {
+            if (entityType == EntityType.Individual && !IsIndividualMappingApproved && !allowUnapproved)
+                throw new InvalidOperationException("Individual equity mapping requires finance approval and is not currently available.");
+
             if (Profiles.TryGetValue(entityType, out var profile))
                 return profile;
 
             return Profiles[EntityType.Corporation];
         }
+
+        /// <summary>
+        /// True when the Individual equity/year-close mapping has been finance-approved for activation.
+        /// Keep false until the reviewed mapping is recorded; personal purpose init stays disabled.
+        /// </summary>
+        public static bool IsIndividualMappingApproved => false;
 
         public static bool IsRenameable(string accountCode, string currentAccountName)
         {

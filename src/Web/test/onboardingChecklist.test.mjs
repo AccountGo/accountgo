@@ -51,3 +51,15 @@ test('bank checklist item links to banking and marks done when an account exists
   }).find((i) => i.id === 'bank');
   assert.equal(done.done, true);
 });
+
+test('solo-active workspaces omit Invite a teammate from the checklist', () => {
+  assert.deepEqual(
+    ids(buildChecklist({
+      hasFinancialsModule: true,
+      taxRegime: 'None',
+      hasLegalName: false,
+      collaborationState: 'SoloActive',
+    })),
+    ['bank', 'coa', 'business'],
+  );
+});

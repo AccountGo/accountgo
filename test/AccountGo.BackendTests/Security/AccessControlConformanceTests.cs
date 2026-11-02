@@ -1000,6 +1000,8 @@ namespace AccountGo.BackendTests.Security
             public async Task AssignFunctionalRolesDirectAsync(int companyId, string userId, IEnumerable<string> roleNames)
             {
                 using var scope = Factory.Services.CreateScope();
+                var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+                using var impersonation = tenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 var member = db.CompanyMembers.Include(m => m.SecurityRoles)
                     .Single(m => m.CompanyId == companyId && m.UserId == userId);
@@ -1029,6 +1031,8 @@ namespace AccountGo.BackendTests.Security
                 CompanyMemberStatus status = CompanyMemberStatus.Active)
             {
                 using var scope = Factory.Services.CreateScope();
+                var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+                using var impersonation = tenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 var member = new CompanyMember
                 {

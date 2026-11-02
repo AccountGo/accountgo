@@ -77,6 +77,7 @@ namespace Api.Authorization
         private readonly ApiDbContext? _db;
         private readonly IHttpContextAccessor? _httpContextAccessor;
         private readonly IMfaGate? _mfaGate;
+        private readonly IWorkspaceApprovalPolicyResolver? _approvalPolicyResolver;
         private readonly ILogger<AccessAuthorizationService>? _logger;
 
         private AccessActorContext? _cachedActor;
@@ -90,6 +91,7 @@ namespace Api.Authorization
             ApiDbContext? db = null,
             IHttpContextAccessor? httpContextAccessor = null,
             IMfaGate? mfaGate = null,
+            IWorkspaceApprovalPolicyResolver? approvalPolicyResolver = null,
             ILogger<AccessAuthorizationService>? logger = null)
         {
             _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
@@ -97,6 +99,7 @@ namespace Api.Authorization
             _db = db;
             _httpContextAccessor = httpContextAccessor;
             _mfaGate = mfaGate;
+            _approvalPolicyResolver = approvalPolicyResolver;
             _logger = logger;
         }
 
@@ -991,7 +994,18 @@ namespace Api.Authorization
                         "Required preparer context for separation-of-duties verification is missing.");
                 }
 
-                if (!string.IsNullOrWhiteSpace(actor.UserId) &&
+                var singleActorAllowed = false;
+                if (string.Equals(policy.OperationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal)
+                    && targetCompanyId.HasValue
+                    && _approvalPolicyResolver != null)
+                {
+                    var effectiveRule = _approvalPolicyResolver.Resolve(targetCompanyId.Value, policy.OperationKey);
+                    // Unknown/missing policy preserves catalog SoD. Only an explicit SingleActorAllowed rule relaxes it.
+                    singleActorAllowed = effectiveRule.Mode == WorkspaceApprovalMode.SingleActorAllowed;
+                }
+
+                if (!singleActorAllowed
+                    && !string.IsNullOrWhiteSpace(actor.UserId) &&
                     string.Equals(resource.PreparedByUserId, actor.UserId, StringComparison.Ordinal))
                 {
                     var hasVerifiedApproval = await HasValidIndependentApproverAsync(

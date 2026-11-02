@@ -31,6 +31,7 @@ namespace Api.Controllers
         private readonly Core.Entitlements.IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
         private readonly IAccessAuthorizationService _authorizationService;
+        private readonly IWorkspacePolicyTransaction _policyTransaction;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public InvitationsController(
@@ -38,13 +39,15 @@ namespace Api.Controllers
             ApplicationIdentityDbContext identity,
             Core.Entitlements.IEntitlementService entitlements = null,
             ITenantContext tenant = null,
-            IAccessAuthorizationService authorizationService = null)
+            IAccessAuthorizationService authorizationService = null,
+            IWorkspacePolicyTransaction policyTransaction = null)
         {
             _db = db;
             _identity = identity;
             _entitlements = entitlements;
             _tenant = tenant;
             _authorizationService = authorizationService;
+            _policyTransaction = policyTransaction;
         }
 
         private IAccessAuthorizationService AuthService =>
@@ -221,6 +224,16 @@ namespace Api.Controllers
                         return Problem(statusCode: delegationDecision.HttpStatus, title: delegationDecision.SafeTitle, detail: delegationDecision.SafeMessage);
                 }
 
+                var currentPolicyRevision = _db.WorkspaceOperatingSettings
+                    .IgnoreQueryFilters()
+                    .Where(s => s.CompanyId == invitation.CompanyId)
+                    .Select(s => (long?)s.PolicyRevision)
+                    .FirstOrDefault() ?? 0;
+                var transition = WorkspaceInvitationTransition.ValidateOnAccept(
+                    _db, invitation, distinctRoles, currentPolicyRevision);
+                if (!transition.Ok)
+                    return Problem(statusCode: 409, title: transition.Title, detail: transition.Detail);
+
                 // The pending invitation already holds a seat, so this only fails when the workspace is over its limit
                 // (e.g. invitations sent before limits applied).
                 _entitlements?.EnsureCanCreate(invitation.CompanyId, Core.Entitlements.MeteredResource.Seats, count: 0);
@@ -230,11 +243,50 @@ namespace Api.Controllers
                     Status = CompanyMemberStatus.Active, JoinedAt = DateTime.UtcNow, InvitedByUserId = invitation.InvitedByUserId
                 };
                 foreach (var id in distinctRoles)
-                    member.SecurityRoles.Add(new CompanyMemberSecurityRole { SecurityRoleId = id });
+                {
+                    member.SecurityRoles.Add(new CompanyMemberSecurityRole
+                    {
+                        SecurityRoleId = id,
+                        GrantOrigin = WorkspaceMemberGrantOrigin.Invitation,
+                        GrantedAtUtc = DateTime.UtcNow,
+                        GrantedByUserId = invitation.InvitedByUserId
+                    });
+                }
                 _db.CompanyMembers.Add(member);
                 invitation.AcceptedAt = DateTime.UtcNow;
                 invitation.AcceptedByUserId = user.Id;
                 _db.SaveChanges();
+
+                // First accepted second human activates TeamActive under the coordination guard.
+                // Owner grants are left untouched; journal rules are preserved unless separately changed.
+                var policyTx = _policyTransaction
+                    ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+                if (policyTx != null)
+                {
+                    policyTx.Execute(invitation.CompanyId, guard =>
+                    {
+                        var settings = guard.Settings;
+                        var activeHumans = _db.CompanyMembers
+                            .IgnoreQueryFilters()
+                            .Count(m => m.CompanyId == invitation.CompanyId && m.Status == CompanyMemberStatus.Active);
+                        if (activeHumans >= 2)
+                        {
+                            if (settings.EverTeamActivatedAtUtc == null)
+                                settings.EverTeamActivatedAtUtc = DateTime.UtcNow;
+                            if (settings.CollaborationState is WorkspaceCollaborationState.SoloActive
+                                or WorkspaceCollaborationState.TeamSetupPending
+                                or WorkspaceCollaborationState.LegacyUnclassified)
+                            {
+                                settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                                settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                                settings.LastConfirmedAtUtc = DateTime.UtcNow;
+                                settings.LastConfirmedByUserId = user.Id;
+                                guard.AdvanceRevision();
+                            }
+                        }
+                    });
+                }
+
                 if (distinctRoles.Count > 0 && (!string.IsNullOrWhiteSpace(approvalRequestId) || !string.IsNullOrWhiteSpace(approverUserId)))
                 {
                     var consumed = AccessAuthorizationService.ConsumeMatchingApprovalAsync(

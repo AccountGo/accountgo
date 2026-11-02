@@ -152,6 +152,15 @@ public static class AccountGoApp
         builder.Services.AddScoped<CompanyAccountingPolicyService>();
         builder.Services.AddScoped<WorkspaceInvitationService>();
         builder.Services.AddScoped<AccountDeletionService>();
+        builder.Services.Configure<Api.Options.WorkspaceExperienceOptions>(
+            builder.Configuration.GetSection(Api.Options.WorkspaceExperienceOptions.SectionName));
+        builder.Services.PostConfigure<Api.Options.WorkspaceExperienceOptions>(options =>
+            Api.Options.WorkspaceExperienceOptions.FromEnvironment(options));
+        builder.Services.AddScoped<Core.Authorization.IWorkspaceApprovalPolicyResolver, Api.Service.WorkspaceApprovalPolicyResolver>();
+        builder.Services.AddScoped<Core.Authorization.IWorkspaceAccessProfileCatalog, Api.Service.WorkspaceAccessProfileCatalog>();
+        builder.Services.AddScoped<Core.Authorization.IWorkspacePolicyTransaction, Api.Service.WorkspacePolicyTransaction>();
+        builder.Services.AddScoped<Core.Authorization.IWorkspaceOperatingPolicyService, Api.Service.WorkspaceOperatingPolicyService>();
+        builder.Services.AddScoped<Api.Service.WorkspaceInitializationApplicator>();
         builder.Services.AddAuthentication();
         builder.Services.ConfigureIdentity();
         builder.Services.ConfigureDataProtection(builder.Configuration, builder.Environment);
