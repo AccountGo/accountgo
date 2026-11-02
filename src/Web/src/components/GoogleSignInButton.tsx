@@ -14,6 +14,8 @@ export function GoogleSignInButton({ clientId, enabled, onCredential, onError }:
 }) {
   const container = useRef<HTMLDivElement>(null);
   const callback = useRef(onCredential);
+  const isEnabled = useRef(enabled);
+  isEnabled.current = enabled;
   const reportError = useRef(onError);
   const [ready, setReady] = useState(false);
   callback.current = onCredential;
@@ -28,7 +30,7 @@ export function GoogleSignInButton({ clientId, enabled, onCredential, onError }:
     let active = true;
     const render = () => {
       if (!active || !container.current || !window.google) return;
-      window.google.accounts.id.initialize({ client_id: clientId, callback: ({ credential }) => callback.current(credential) });
+      window.google.accounts.id.initialize({ client_id: clientId, callback: ({ credential }) => { if (isEnabled.current) callback.current(credential); } });
       container.current.replaceChildren();
       window.google.accounts.id.renderButton(container.current, { theme: 'outline', size: 'large', text: 'continue_with', width: 320 });
       setReady(true);
@@ -45,10 +47,10 @@ export function GoogleSignInButton({ clientId, enabled, onCredential, onError }:
     return () => { active = false; };
   }, [clientId, enabled]);
 
-  return <div className="space-y-2 text-center">
-    <span className="text-sm text-[var(--text-secondary)]">Continue with Google</span>
-    {!enabled && <p className="text-xs text-[var(--text-muted)]">Accept the Privacy Policy and Terms of Use below to continue.</p>}
-    {enabled && !ready && <p role="status" className="text-xs">Loading Google sign-in…</p>}
+  return <div className="flex justify-center">
+    {(!enabled || !ready) && <button type="button" disabled className="w-full py-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] text-[var(--text-secondary)] font-semibold opacity-50 cursor-not-allowed flex items-center justify-center gap-3">
+      <span aria-hidden="true" className="text-lg font-bold">G</span> Continue with Google
+    </button>}
     <div ref={container} className="flex justify-center" />
   </div>;
 }

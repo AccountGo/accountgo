@@ -79,8 +79,8 @@ namespace Dto.Security
 
     public record SignUpRequest(
         [Required, EmailAddress] string Email,
-        [Required, MinLength(1, ErrorMessage = "First name is required.")] string FirstName,
-        [Required, MinLength(1, ErrorMessage = "Last name is required.")] string LastName,
+        string? FirstName = null,
+        string? LastName = null,
         string? OrganizationName = null,
         string? OrganizationSlug = null,
         string? Currency = null

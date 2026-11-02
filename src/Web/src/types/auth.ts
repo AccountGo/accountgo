@@ -54,8 +54,8 @@ export interface OtpSendResponse {
 
 export interface SignUpPayload {
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   organizationName?: string;
   organizationSlug?: string;
   currency?: string;

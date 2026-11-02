@@ -10,15 +10,13 @@ import { TurnstileWidget, TurnstileWidgetHandle } from '../components/TurnstileW
 import { MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
 import {
   Mail,
-  User,
-  Building2,
   ArrowRight,
   ArrowLeft,
   Loader2,
   AlertCircle,
   Clock,
-  Sparkles,
   Terminal,
+  Sparkles,
 } from 'lucide-react';
 
 const PRIVACY_POLICY_URL = 'https://www.accountgo.dev/legal/privacy-policy/';
@@ -53,10 +51,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
 
   // Form fields
   const [email, setEmail] = useState<string>(() => (import.meta.env.DEV ? 'admin@accountgo.ph' : ''));
-  const [firstName, setFirstName] = useState<string>('');
-  const [lastName, setLastName] = useState<string>('');
-  const [orgName, setOrgName] = useState<string>('');
-  const [orgSlug, setOrgSlug] = useState<string>('');
   const [targetOrgSlug, setTargetOrgSlug] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState<boolean>(false);
 
@@ -128,16 +122,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       }, 100);
     }
   }, [step]);
-
-  // Auto-generate slug when organization name changes
-  const handleOrgNameChange = (val: string) => {
-    setOrgName(val);
-    const generated = val
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-    setOrgSlug(generated);
-  };
 
   // Format seconds to mm:ss
   const formatTime = (seconds: number) => {
@@ -213,14 +197,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   // Submit Step 1 (Sign Up): Register account & Send Welcome OTP
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName.trim()) {
-      setErrorMessage('Please enter your first name.');
-      return;
-    }
-    if (!lastName.trim()) {
-      setErrorMessage('Please enter your last name.');
-      return;
-    }
     if (!email || !email.includes('@')) {
       setErrorMessage('Please enter a valid work email address.');
       return;
@@ -235,8 +211,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
 
     try {
       const res = await signUp({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
         email: email.trim(),
         invitationToken: invitationToken || undefined,
         'cf-turnstile-response': turnstileToken,
@@ -304,11 +278,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       const slug = targetSlugOverride || targetOrgSlug;
       setPersistedOrgSlug(slug!);
       navigate(`/org/${slug}/dashboard`, { replace: true });
-    } else if (orgName.trim()) {
-      // The workspace is created by the setup wizard, which prefills the name typed at signup.
-      const params = new URLSearchParams({ name: orgName.trim() });
-      if (orgSlug.trim()) params.set('slug', orgSlug.trim());
-      navigate(`/create-org?${params.toString()}`, { replace: true });
     } else if (fromPath && fromPath !== '/login' && fromPath !== '/signup') {
       navigate(fromPath, { replace: true });
     } else if (destinationSlug) {
@@ -409,19 +378,9 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
         {/* Step 1: Sign In or Sign Up Form */}
         {step === 1 && (
           <div className="space-y-6 animate-fade-in">
-            {/* Header: Brand Mark + Pill Badge */}
-            <div className="flex items-center justify-between">
-              <div className="w-14 h-14 rounded-2xl bg-[var(--brand-primary)]/15 ring-1 ring-[var(--brand-ring)]/40 flex items-center justify-center shadow-lg shadow-[var(--brand-primary)]/20">
-                <img
-                  src="/accountgo-mark.svg"
-                  alt="AccountGo"
-                  className="w-9 h-9 rounded-xl"
-                />
-              </div>
-
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[var(--brand-subtle)] text-[var(--brand-primary)] ring-1 ring-[var(--brand-ring)]/30">
-                <Sparkles className="w-3 h-3" />
-                <span>Passwordless OTP</span>
+            <div className="flex justify-center">
+              <div className="w-14 h-14 rounded-2xl bg-[var(--brand-primary)]/15 ring-1 ring-[var(--brand-ring)]/40 flex items-center justify-center">
+                <img src="/accountgo-mark.svg" alt="AccountGo" className="w-9 h-9 rounded-xl" />
               </div>
             </div>
 
@@ -433,7 +392,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
 
 
             {/* Heading & Subtitle */}
-            <div className="space-y-1.5">
+            <div className="space-y-2 text-center">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-main)]">
                 {mode === 'signin' ? (
                   <>
@@ -445,10 +404,13 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   </>
                 )}
               </h1>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                {mode === 'signin'
-                  ? 'Enter your registered work email to receive a single-use 6-digit sign-in code.'
-                  : 'Start managing your financials, invoicing, and organization with modern double-entry standards.'}
+              <p className="text-sm text-[var(--text-secondary)]">
+                {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+                <button type="button" className="font-semibold text-[var(--text-main)] underline underline-offset-2" onClick={() => {
+                  setMode(mode === 'signin' ? 'signup' : 'signin');
+                  setErrorMessage(null);
+                  if (email === 'admin@accountgo.ph') setEmail('');
+                }}>{mode === 'signin' ? 'Sign up' : 'Sign in'}</button>
               </p>
               {invitationToken && (
                 <p className="text-sm text-[var(--brand-primary)]">
@@ -469,7 +431,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
               </div>
             )}
 
-            {mode === 'signin' && import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+            {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
               <GoogleSignInButton clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID} enabled={acceptedTerms} onError={setErrorMessage}
                 onCredential={async (credential) => {
                   setErrorMessage(null);
@@ -488,6 +450,12 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                     setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed.');
                   }
                 }} />
+            )}
+
+            {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+              <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]" aria-hidden="true">
+                <span className="h-px flex-1 bg-[var(--border-subtle)]" />or<span className="h-px flex-1 bg-[var(--border-subtle)]" />
+              </div>
             )}
 
             {/* Form Mode: SIGN IN */}
@@ -586,17 +554,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   >
                     Already have a code? <span className="font-semibold text-[var(--brand-primary)] underline">Enter it here</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode('signup');
-                      setErrorMessage(null);
-                      if (email === 'admin@accountgo.ph') setEmail('');
-                    }}
-                    className="text-xs text-[var(--text-secondary)] hover:text-[var(--brand-primary)] transition-colors cursor-pointer"
-                  >
-                    Don't have an account? <span className="font-semibold text-[var(--brand-primary)] underline">Create one now</span>
-                  </button>
                 </div>
               </form>
             )}
@@ -604,49 +561,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
             {/* Form Mode: SIGN UP */}
             {mode === 'signup' && (
               <form onSubmit={handleSignUp} className="space-y-4">
-                {/* First Name & Last Name (2 Cols) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="signup-first-name"
-                      className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"
-                    >
-                      First Name
-                    </label>
-                    <div className="relative">
-                      <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        id="signup-first-name"
-                        type="text"
-                        required
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        placeholder="Elena"
-                        autoFocus
-                        className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[var(--bg-canvas)] text-sm font-medium text-[var(--text-main)] placeholder-[var(--text-muted)] ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--brand-primary)] focus:outline-none transition-all shadow-inner"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="signup-last-name"
-                      className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"
-                    >
-                      Last Name
-                    </label>
-                    <input
-                      id="signup-last-name"
-                      type="text"
-                      required
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Reyes"
-                      className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-canvas)] text-sm font-medium text-[var(--text-main)] placeholder-[var(--text-muted)] ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--brand-primary)] focus:outline-none transition-all shadow-inner"
-                    />
-                  </div>
-                </div>
-
                 {/* Email Address */}
                 <div className="space-y-1.5">
                   <label
@@ -669,38 +583,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                     />
                   </div>
                 </div>
-
-                {/* Initial Organization / Workspace (Optional) */}
-                {!invitationToken && (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="signup-org-name"
-                        className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"
-                      >
-                        Workspace Name
-                      </label>
-                      <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Optional</span>
-                    </div>
-                    <div className="relative">
-                      <Building2 className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        id="signup-org-name"
-                        type="text"
-                        value={orgName}
-                        onChange={(e) => handleOrgNameChange(e.target.value)}
-                        placeholder="e.g. Pacific Rim Trading"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[var(--bg-canvas)] text-sm font-medium text-[var(--text-main)] placeholder-[var(--text-muted)] ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--brand-primary)] focus:outline-none transition-all shadow-inner"
-                      />
-                    </div>
-                    {orgSlug && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] font-mono pl-1">
-                        <span>URL preview:</span>
-                        <span className="text-[var(--brand-primary)]">/org/{orgSlug}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* Turnstile Bot Protection */}
                 <div className="flex justify-center pt-1">
@@ -733,7 +615,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                 {/* Submit Sign Up */}
                 <button
                   type="submit"
-                  disabled={isSending || !email || !firstName || !lastName || !acceptedTerms}
+                  disabled={isSending || !email || !acceptedTerms}
                   aria-busy={isSending}
                   className="w-full py-3.5 px-4 rounded-xl bg-[var(--brand-primary)] text-[var(--brand-text)] font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[var(--brand-primary)]/25 hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer mt-2"
                 >
@@ -750,18 +632,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   )}
                 </button>
 
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode('signin');
-                      setErrorMessage(null);
-                    }}
-                    className="text-xs text-[var(--text-secondary)] hover:text-[var(--brand-primary)] transition-colors cursor-pointer"
-                  >
-                    Already have an account? <span className="font-semibold text-[var(--brand-primary)] underline">Sign In</span>
-                  </button>
-                </div>
               </form>
             )}
           </div>
