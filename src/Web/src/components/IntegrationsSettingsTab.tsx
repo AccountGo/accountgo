@@ -24,6 +24,7 @@ export function IntegrationsSettingsTab() {
   const [revision, setRevision] = useState(0);
   const [provider, setProvider] = useState('');
   const [label, setLabel] = useState('');
+  const [connectionName, setConnectionName] = useState('');
   const [environment, setEnvironment] = useState('sandbox');
   const [bankId, setBankId] = useState(params.get('bankId') || '');
   const [profile, setProfile] = useState('');
@@ -45,6 +46,10 @@ export function IntegrationsSettingsTab() {
   useEffect(() => {
     setBalanceCurrency(associatedBank?.currencyCode || '');
   }, [associatedBank?.id, associatedBank?.currencyCode]);
+
+  useEffect(() => {
+    setConnectionName(selected?.label || '');
+  }, [selected?.id, selected?.label]);
 
   const request = useCallback(async (url: string, init?: RequestInit) => {
     const res = await authFetch(url, init);
@@ -121,9 +126,18 @@ export function IntegrationsSettingsTab() {
   const lifecycle = (action: string) => {
     if (!selected) return;
     void run(async () => {
-      const data = await request(`/api/integrations/connections/${selected.id}/${action}`, { method: 'POST' });
+      const url = `/api/integrations/connections/${encodeURIComponent(selected.id)}`;
+      const data = await request(action === 'delete'
+        ? `${url}?revision=${encodeURIComponent(selected.revision)}` : `${url}/${action}`,
+      { method: action === 'delete' ? 'DELETE' : 'POST' });
       if (action === 'rotate-key') { setOneTimeUrl(data.webhookUrl); setGrace(data.previousKeyExpiresAt); }
       if (action === 'revoke') { setOneTimeUrl(''); setGrace(''); }
+      if (action === 'delete') {
+        setConnections(current => current.filter(c => c.id !== selected.id));
+        setSelectedId(''); setOneTimeUrl(''); setGrace(''); setDeliveries([]); setSetupIdentity(null);
+        setNotice('Revoked connection permanently deleted. Imported transactions, delivery history and audit records were retained.');
+        return;
+      }
       setNotice(action === 'revoke' ? 'Disconnected. Remove the subscription in Wise separately. Existing review items remain.' : 'Connection updated.');
     });
   };
@@ -173,6 +187,21 @@ export function IntegrationsSettingsTab() {
       }}>{c.label} ({c.status.replaceAll('_', ' ')})</button>)}</div>
     {selected && <section className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-4">
       <h3 className="font-semibold">{selected.label}</h3>
+      <form className="space-y-2" onSubmit={event => {
+        event.preventDefault();
+        void run(async () => {
+          await request(`/api/integrations/connections/${encodeURIComponent(selected.id)}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: connectionName.trim(), revision: selected.revision }),
+          });
+          setNotice('Connection name updated.');
+        });
+      }}>
+        <label className="block text-sm">Connection name<input className={input} required maxLength={200}
+          value={connectionName} disabled={busy} onChange={event => setConnectionName(event.target.value)} /></label>
+        <button type="submit" className={button}
+          disabled={busy || !connectionName.trim() || connectionName.trim() === selected.label}>Save name</button>
+      </form>
       <p className="text-sm">{selected.provider} / {selected.environment} / {selected.bankAccountName} ({selected.currency})</p>
       <p className="text-sm">Account: {selected.providerAccountRef}. Connection state: {selected.status.replaceAll('_', ' ')}.</p>
       <p className="text-sm">Last delivery: {selected.lastDeliveryAt ? new Date(selected.lastDeliveryAt).toLocaleString() : 'None yet'}</p>
@@ -216,6 +245,9 @@ export function IntegrationsSettingsTab() {
           <button className={button} type="button" disabled={busy} onClick={() => setConfirm({ action: 'rotate-key', title: 'Rotate callback URL?', message: 'A new URL will be shown once. Update the Wise subscription within the 24-hour overlap. If its UUID changes, pause and bind the replacement subscription before resuming.' })}>Rotate URL</button>
           <button className={button} type="button" disabled={busy} onClick={() => setConfirm({ action: 'revoke', title: 'Disconnect connection?', message: 'Stop accepting and processing this connection immediately. Existing review items remain. Delete the provider-side subscription separately.' })}>Disconnect</button>
         </>}
+        {selected.status === 'revoked' && <button className={button} type="button" disabled={busy}
+          onClick={() => setConfirm({ action: 'delete', title: 'Permanently delete connection?',
+            message: 'Remove this revoked connection permanently. Imported transactions, delivery history and audit records are retained. This cannot be undone. Remove the webhook in Wise separately.' })}>Permanently delete</button>}
         {capabilities.canReview && <Link className={button} to={`/org/${currentOrg.slug}/banking/needs-review?connectionId=${selected.id}`}>Review transactions</Link>}
       </div>
       <h4 className="font-semibold">Delivery history</h4>
@@ -243,7 +275,9 @@ export function IntegrationsSettingsTab() {
       <button className={button} type="button" disabled={busy || deliveries.length < 20} onClick={() => setDeliveryPage(p => p + 1)}>Next deliveries</button>
       <button className={button} type="button" disabled={busy} onClick={() => setRevision(r => r + 1)}>Refresh connection</button>
     </section>}
-    {confirm && <ConfirmDialog title={confirm.title} message={confirm.message} confirmLabel="Confirm" destructive={confirm.action === 'revoke'} busy={busy}
+    {confirm && <ConfirmDialog title={confirm.title} message={confirm.message}
+      confirmLabel={confirm.action === 'delete' ? 'Delete permanently' : 'Confirm'}
+      destructive={confirm.action === 'revoke' || confirm.action === 'delete'} busy={busy}
       onCancel={() => setConfirm(null)} onConfirm={() => lifecycle(confirm.action)} />}
   </section>;
 }

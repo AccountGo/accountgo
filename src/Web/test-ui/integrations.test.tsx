@@ -48,6 +48,15 @@ function defaultFetch(url: string, init?: RequestInit) {
     { slug: 'revolut', displayName: 'Revolut Business', category: 'Payments', description: 'Future provider', isAvailable: false },
   ]);
   if (url === '/api/Banking/Accounts') return response({ accounts: banks });
+  if (url === `/api/integrations/connections/${endpoint.id}` && method === 'PATCH') {
+    const body = JSON.parse(String(init?.body));
+    connections = connections.map(c => c.id === endpoint.id ? { ...c, label: body.label, revision: 'renamed-revision' } : c);
+    return response({ label: body.label, revision: 'renamed-revision' });
+  }
+  if (url.startsWith(`/api/integrations/connections/${endpoint.id}?revision=`) && method === 'DELETE') {
+    connections = connections.filter(c => c.id !== endpoint.id);
+    return response(null, 204);
+  }
   if (url === '/api/integrations/connections' && method === 'POST') {
     connections = [{ ...endpoint, providerAccountRef: JSON.parse(String(init?.body)).providerAccountRef ?? null }];
     return response({ id: endpoint.id, webhookUrl: 'https://api.example.test/api/webhooks/wise/whk_once' });
@@ -91,6 +100,52 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('shared integration experience', () => {
+  it('renames a connection without regenerating its callback or exposing permanent deletion before revocation', async () => {
+    connections = [{ ...endpoint }];
+    render(wrapper(<IntegrationsSettingsTab />));
+    fireEvent.click(await screen.findByRole('button', { name: /Wise GBP/ }));
+    expect(screen.queryByRole('button', { name: 'Permanently delete' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Connection name'), { target: { value: '  Daily Wise  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+    await screen.findByText('Connection name updated.');
+    await screen.findByRole('button', { name: /Daily Wise/ });
+    const rename = state.authFetch.mock.calls.find(c => c[1]?.method === 'PATCH')!;
+    expect(rename[0]).toBe(`/api/integrations/connections/${endpoint.id}`);
+    expect(JSON.parse(rename[1].body)).toEqual({ label: 'Daily Wise', revision: 'revision-1' });
+    expect(state.authFetch.mock.calls.some(c => String(c[0]).endsWith('/rotate-key'))).toBe(false);
+  });
+
+  it('requires confirmation before permanently deleting a revoked connection and removes it after success', async () => {
+    connections = [{ ...endpoint, status: 'revoked' }];
+    render(wrapper(<IntegrationsSettingsTab />));
+    fireEvent.click(await screen.findByRole('button', { name: /Wise GBP/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Permanently delete' }));
+    await screen.findByRole('alertdialog');
+    expect(state.authFetch.mock.calls.some(c => c[1]?.method === 'DELETE')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(state.authFetch.mock.calls.some(c => c[1]?.method === 'DELETE')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Permanently delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await screen.findByText('Revoked connection permanently deleted. Imported transactions, delivery history and audit records were retained.');
+    await screen.findByText('No connections yet.');
+    expect(screen.queryByRole('heading', { name: 'Wise GBP' })).toBeNull();
+    const deletion = state.authFetch.mock.calls.find(c => c[1]?.method === 'DELETE')!;
+    expect(deletion[0]).toBe(`/api/integrations/connections/${endpoint.id}?revision=revision-1`);
+  });
+
+  it('keeps the connection visible if permanent deletion is rejected', async () => {
+    connections = [{ ...endpoint, status: 'revoked' }];
+    state.authFetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      init?.method === 'DELETE' ? response({ message: 'The connection changed. Refresh before retrying.' }, 409) : defaultFetch(url, init));
+    render(wrapper(<IntegrationsSettingsTab />));
+    fireEvent.click(await screen.findByRole('button', { name: /Wise GBP/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Permanently delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await screen.findByText('The connection changed. Refresh before retrying.');
+    expect(screen.getByRole('heading', { name: 'Wise GBP' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Wise GBP/ })).toBeTruthy();
+  });
+
   it('identifies the workspace bank with its masked number and uses its currency for callback setup', async () => {
     banks = [{ ...banks[0], name: 'Wise', currencyCode: 'USD', accountNumber: '999988881234' }];
     render(wrapper(<IntegrationsSettingsTab />));
