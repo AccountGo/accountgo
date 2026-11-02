@@ -9,6 +9,13 @@ export interface PlanCardCatalogEntry {
 
 export type PlanCardRole = 'current' | 'action';
 
+/** Annual prices are not provided by the catalog; do not imply a monthly price is annual. */
+export function planPriceLabel(monthlyPrice: number | null, interval: 'month' | 'year'): string | null {
+  if (monthlyPrice == null) return null;
+  if (monthlyPrice === 0) return '$0';
+  return interval === 'month' ? `$${monthlyPrice}/mo` : null;
+}
+
 export interface DerivedPlanCard {
   key: string;
   role: PlanCardRole;
