@@ -135,6 +135,7 @@ namespace Api.Data
         private static readonly HashSet<string> ImmutableAuditTables = new(StringComparer.OrdinalIgnoreCase)
         {
             "__WorkspaceInitialization",
+            "__OwnerAccessSetup",
             "__WorkspacePolicyTransition",
             "__JournalPostingAuthorization"
         };

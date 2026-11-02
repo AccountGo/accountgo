@@ -28,6 +28,7 @@ namespace Api.Controllers
         private readonly ITenantContext _tenant;
         private readonly IAccessAuthorizationService _authorizationService;
         private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
+        private readonly IWorkspacePolicyTransaction _policyTransaction;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         private bool IsOwner => _tenant.Role == CompanyMemberRole.Owner;
 
@@ -46,13 +47,15 @@ namespace Api.Controllers
             ApplicationIdentityDbContext identity,
             ITenantContext tenant,
             IAccessAuthorizationService authorizationService = null,
-            IWorkspaceOperatingPolicyService operatingPolicy = null)
+            IWorkspaceOperatingPolicyService operatingPolicy = null,
+            IWorkspacePolicyTransaction policyTransaction = null)
         {
             _db = db;
             _identity = identity;
             _tenant = tenant;
             _authorizationService = authorizationService;
             _operatingPolicy = operatingPolicy;
+            _policyTransaction = policyTransaction;
         }
 
         [HttpGet("members")]
@@ -802,14 +805,69 @@ namespace Api.Controllers
                 && totalFunctionalRoles == 0 && callerMember?.Role == CompanyMemberRole.Owner
                 && callerMember.Status == CompanyMemberStatus.Active && company.CreatedByUserId == UserId;
 
+            var ownerCanManageOwnAccess = callerMember?.Role == CompanyMemberRole.Owner
+                && callerMember.Status == CompanyMemberStatus.Active
+                && !await _db.CompanyMembers.AnyAsync(m => m.CompanyId == companyId
+                    && m.Status == CompanyMemberStatus.Active && m.UserId != UserId);
+
             return Ok(new
             {
                 alreadyBootstrapped,
                 adminCount,
                 totalFunctionalRoles,
                 initialized,
-                isEligibleForBootstrap = eligible
+                isEligibleForBootstrap = eligible,
+                ownerCanManageOwnAccess
             });
+        }
+
+        [HttpPost("owner-access-setup")]
+        public IActionResult OwnerAccessSetup([FromBody] SetupWorkspaceAccessModel model)
+        {
+            var companyId = _tenant.RequireCompanyId();
+            var actor = UserId;
+            if (string.IsNullOrWhiteSpace(actor))
+                return Problem(statusCode: 401, title: "Unauthenticated");
+            var ids = model?.SecurityRoleIds?.Distinct().OrderBy(id => id).ToList() ?? new List<int>();
+            if (ids.Count == 0 || !ValidSecurityRoles(_db, ids))
+                return Problem(statusCode: 400, title: "Select valid functional roles.");
+
+            var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+            if (transaction == null)
+                return Problem(statusCode: 503, title: "Workspace access setup is unavailable.");
+
+            var result = transaction.Execute<IActionResult>(companyId, guard =>
+            {
+                var members = _db.CompanyMembers.Include(m => m.SecurityRoles)
+                    .Where(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active).ToList();
+                var owner = members.SingleOrDefault(m => m.UserId == actor && m.Role == CompanyMemberRole.Owner);
+                if (owner == null || members.Count != 1)
+                    return Problem(statusCode: 403, title: "Sole owner required",
+                        detail: "Only the sole active workspace owner can manage their own functional roles this way.");
+
+                var current = owner.SecurityRoles.Select(r => r.SecurityRoleId).ToHashSet();
+                var additions = ids.Where(id => !current.Contains(id)).ToList();
+                foreach (var id in additions)
+                    _db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = owner.Id, SecurityRoleId = id });
+                if (additions.Count > 0)
+                {
+                    _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                    {
+                        CompanyId = companyId, UserName = actor, AuditEventDateUTC = DateTime.UtcNow,
+                        AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                        TableName = "__OwnerAccessSetup", RecordId = owner.Id.ToString(), FieldName = "SecurityRoleIds",
+                        OriginalValue = System.Text.Json.JsonSerializer.Serialize(current.OrderBy(id => id)),
+                        NewValue = System.Text.Json.JsonSerializer.Serialize(current.Union(additions).OrderBy(id => id))
+                    });
+                }
+                return Ok(new { rolesAssigned = additions });
+            });
+            if (result is OkObjectResult)
+            {
+                AccessAuthorizationService.BumpGlobalSecurityRevision();
+                AuthService.InvalidateContextCache();
+            }
+            return result;
         }
 
         [HttpPost("access-setup")]
