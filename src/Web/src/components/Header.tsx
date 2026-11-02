@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { OrgDetails, SidebarMode } from '../types';
 import { useAssistant } from '../assistant';
+import { IncomingActivity } from './IncomingActivity';
 
 // Not wired up yet: hidden until quick search and notifications have something behind them.
 const SHOW_QUICK_SEARCH = false;
@@ -182,6 +183,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Notifications */}
+        <IncomingActivity orgSlug={currentOrg.slug} />
         {SHOW_NOTIFICATIONS && (
           <button
             type="button"

@@ -18,6 +18,7 @@ import { localToday } from '../lib/businessDays';
 import type { TenantContextType } from '../types';
 import type { BankAccount, BankRegister as BankRegisterDto } from '../types/banking';
 import { bankTypeLabel } from '../types/banking';
+import { BankLiveFeed } from '../components/BankLiveFeed';
 
 function sourcePath(orgSlug: string, type: string, id: number): string | null {
   switch (type) {
@@ -266,6 +267,7 @@ const BankRegisterPage: React.FC = () => {
         }
       />
 
+      <BankLiveFeed orgSlug={currentOrg.slug} bankId={account.id} />
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm flex gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
