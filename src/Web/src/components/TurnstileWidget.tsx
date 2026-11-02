@@ -14,6 +14,7 @@ declare global {
           'expired-callback'?: () => void;
           theme?: 'light' | 'dark' | 'auto';
           size?: 'normal' | 'flexible' | 'compact';
+          appearance?: 'always' | 'execute' | 'interaction-only';
           [key: string]: any;
         }
       ) => string;
@@ -86,6 +87,8 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidget
               if (isMounted) callbacksRef.current.onError?.(err);
             },
             theme: 'auto',
+            // Managed widget: stay hidden unless Cloudflare asks for a challenge.
+            appearance: 'interaction-only',
           });
           widgetIdRef.current = id;
         } catch {
@@ -121,7 +124,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidget
     return (
       <div
         ref={containerRef}
-        className={`cf-turnstile-container min-h-[65px] flex justify-center items-center ${className}`}
+        className={`cf-turnstile-container flex justify-center items-center ${className}`}
       />
     );
   }
