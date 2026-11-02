@@ -4,9 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { IntegrationsProvider, type Delivery, type SetupIdentity } from '../src/lib/integrations';
 import { IncomingActivity } from '../src/components/IncomingActivity';
 import { IntegrationsSettingsTab } from '../src/components/IntegrationsSettingsTab';
+import { BankAccountFormDialog } from '../src/components/BankAccountFormDialog';
 import { StatementLineExpenseDialog } from '../src/components/StatementLineExpenseDialog';
 import IncomingReview from '../src/pages/IncomingReview';
-import type { BankStatementLine } from '../src/types/banking';
+import type { BankAccount, BankStatementLine } from '../src/types/banking';
 
 const state = vi.hoisted(() => ({
   authFetch: vi.fn(), companyId: '1', permissions: new Set<string>(),
@@ -34,6 +35,7 @@ let read = false;
 let manage = true;
 let setupIdentity: SetupIdentity | null = null;
 let deliveries: Delivery[] = [];
+let banks: BankAccount[] = [];
 
 function defaultFetch(url: string, init?: RequestInit) {
   const method = init?.method || 'GET';
@@ -45,7 +47,7 @@ function defaultFetch(url: string, init?: RequestInit) {
     { slug: 'paypal', displayName: 'PayPal', category: 'Payments', description: 'Future provider', isAvailable: false },
     { slug: 'revolut', displayName: 'Revolut Business', category: 'Payments', description: 'Future provider', isAvailable: false },
   ]);
-  if (url === '/api/Banking/Accounts') return response({ accounts: [{ id: 3, name: 'GBP account', currencyCode: 'GBP', archivedAt: null }] });
+  if (url === '/api/Banking/Accounts') return response({ accounts: banks });
   if (url === '/api/integrations/connections' && method === 'POST') {
     connections = [{ ...endpoint, providerAccountRef: JSON.parse(String(init?.body)).providerAccountRef ?? null }];
     return response({ id: endpoint.id, webhookUrl: 'https://api.example.test/api/webhooks/wise/whk_once' });
@@ -82,11 +84,68 @@ beforeEach(() => {
   state.companyId = '1';
   state.permissions = new Set(['banking.accounts.manage', 'purchases.bills.create']);
   connections = []; read = false; manage = true; setupIdentity = null; deliveries = [];
+  banks = [{ id: 3, name: 'GBP account', type: 1, currencyCode: 'GBP', archivedAt: null,
+    accountNumberMasked: '**** 1234', isDefaultForReceipts: false, isDefaultForPayments: false, bookBalance: 0 }];
   localStorage.clear();
 });
 afterEach(cleanup);
 
 describe('shared integration experience', () => {
+  it('identifies the workspace bank with its masked number and uses its currency for callback setup', async () => {
+    banks = [{ ...banks[0], name: 'Wise', currencyCode: 'USD', accountNumber: '999988881234' }];
+    render(wrapper(<IntegrationsSettingsTab />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Wise' }));
+    expect(screen.getByRole('option', { name: 'Wise - **** 1234 (USD)' })).toBeTruthy();
+    expect(screen.queryByText(/999988881234/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Associated bank account'), { target: { value: '3' } });
+    expect((screen.getByLabelText('Bank account currency') as HTMLInputElement).value).toBe('USD');
+    fireEvent.click(screen.getByRole('button', { name: 'Generate callback URL' }));
+    await screen.findByLabelText('One-time callback URL');
+    const create = state.authFetch.mock.calls.find(c => c[0] === '/api/integrations/connections' && c[1]?.method === 'POST')!;
+    expect(JSON.parse(create[1].body)).toEqual(expect.objectContaining({ bankId: 3, balanceCurrency: 'USD' }));
+  });
+
+  it('distinguishes an unset workspace bank currency from a genuine currency mismatch', async () => {
+    banks = [{ ...banks[0], name: 'Wise', currencyCode: null }];
+    const view = render(wrapper(<IntegrationsSettingsTab />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Wise' }));
+    expect(screen.getByRole('option', { name: 'Wise - **** 1234 (Currency not set)' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Associated bank account'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Bank account currency'), { target: { value: 'USD' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate callback URL' }));
+    await screen.findByText('Set a currency on the associated workspace bank account before connecting Wise.');
+    expect(screen.getByRole('link', { name: 'Edit workspace bank accounts' }).getAttribute('href')).toBe('/org/workspace-1/banking');
+    expect(state.authFetch.mock.calls.some(c => c[0] === '/api/integrations/connections' && c[1]?.method === 'POST')).toBe(false);
+    view.unmount();
+
+    banks = [{ ...banks[0], currencyCode: 'GBP' }];
+    render(wrapper(<IntegrationsSettingsTab />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Wise' }));
+    fireEvent.change(screen.getByLabelText('Associated bank account'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Bank account currency'), { target: { value: 'USD' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate callback URL' }));
+    await screen.findByText('The bank account currency must match the associated bank account.');
+    expect(state.authFetch.mock.calls.some(c => c[0] === '/api/integrations/connections' && c[1]?.method === 'POST')).toBe(false);
+  });
+
+  it.each([false, true])('saves an explicit bank currency when editing=%s', async editing => {
+    const onSaved = vi.fn();
+    state.authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === (editing ? 'PUT' : 'POST')) {
+        return response({ ...banks[0], ...JSON.parse(String(init.body)) });
+      }
+      return defaultFetch(url, init);
+    });
+    render(<BankAccountFormDialog account={editing ? { ...banks[0], currencyCode: null } : undefined}
+      hasFinancials={false} onSaved={onSaved} onClose={vi.fn()} />);
+    if (!editing) fireEvent.change(screen.getByLabelText(/Display name/), { target: { value: 'Wise' } });
+    fireEvent.change(screen.getByLabelText('Currency'), { target: { value: 'usd' } });
+    fireEvent.click(screen.getByRole('button', { name: editing ? 'Save' : 'Add account' }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const save = state.authFetch.mock.calls.find(c => c[1]?.method === (editing ? 'PUT' : 'POST'))!;
+    expect(JSON.parse(save[1].body).currencyCode).toBe('USD');
+  });
+
   it('creates a one-time callback first, then binds the confirmed subscription; future providers cannot connect', async () => {
     const view = render(wrapper(<IntegrationsSettingsTab />));
     fireEvent.click(await screen.findByRole('button', { name: 'Connect Wise' }));
