@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { getOrgSlugFromLocation } from '../auth/AuthContext';
+import { getOrgSlugFromLocation, useAuth } from '../auth/AuthContext';
 import { ENTITLEMENT_DENIED_EVENT, type EntitlementCode, type EntitlementProblem } from '../lib/entitlementEvents';
+import { usePlanCatalog } from '../lib/usePlanCatalog';
+import { useBilling } from '../lib/useBilling';
+import { eligibleUpgradePlans, planPriceLabel } from '../lib/planCards';
 import { ModalShell } from './ModalShell';
 
 const TITLES: Record<EntitlementCode, string> = {
@@ -76,10 +79,57 @@ export const PlanLimitDialog: React.FC = () => {
   }, []);
 
   if (!problem) return null;
-  return <PlanLimitDialogView problem={problem} onClose={() => setProblem(null)} />;
+  return <PlanLimitDialogView problem={problem} onClose={() => setProblem(null)}>
+    {problem.canManageBilling && problem.upgradeAvailable && <UpgradeOptions problem={problem} />}
+  </PlanLimitDialogView>;
 };
 
-export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClose: () => void }> = ({ problem, onClose }) => {
+const UpgradeOptions: React.FC<{ problem: EntitlementProblem }> = ({ problem }) => {
+  const { authFetch } = useAuth();
+  const catalog = usePlanCatalog();
+  const billing = useBilling();
+  const [allowed, setAllowed] = useState<string[]>([]);
+  const [interval, setInterval] = useState<'month' | 'year'>('month');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    void authFetch('/api/entitlements').then(async response => {
+      if (!response.ok) throw new Error('Unable to load available plans.');
+      const data = await response.json();
+      if (mounted) setAllowed(Array.isArray(data.allowedTransitions) ? data.allowedTransitions.filter((key: unknown): key is string => typeof key === 'string') : []);
+    }).catch(() => { if (mounted) setError('Unable to load available plans.'); });
+    return () => { mounted = false; };
+  }, [authFetch]);
+
+  const options = billing.billingEnabled ? eligibleUpgradePlans(catalog.plans || [], allowed, problem) : [];
+  if (!options.length && !error) return null;
+  const selectPlan = async (key: string) => {
+    setBusy(true);
+    setError(null);
+    try { await billing.upgradePlan(key, interval); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to start checkout.'); }
+    finally { setBusy(false); }
+  };
+  return <div className="space-y-3">
+    {options.length > 0 && <>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-[var(--text-main)]">Available plans</h3>
+        <div role="group" aria-label="Billing interval" className="flex gap-2 text-xs">
+          {(['month', 'year'] as const).map(value => <button key={value} type="button" aria-pressed={interval === value} onClick={() => setInterval(value)} className={interval === value ? 'font-bold text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'}>{value === 'month' ? 'Monthly' : 'Annual'}</button>)}
+        </div>
+      </div>
+      {options.map(plan => <div key={plan.key} className="rounded-xl bg-[var(--bg-subtle)] p-3 flex items-center justify-between gap-3">
+        <div><p className="text-sm font-bold text-[var(--text-main)]">{plan.name}</p><p className="text-xs text-[var(--text-secondary)]">{plan.description}</p><p className="text-xs font-semibold text-[var(--text-main)]">{planPriceLabel(plan.monthlyPrice, interval, plan.annualPrice) ?? 'Price shown at checkout'}</p></div>
+        <button type="button" disabled={busy} onClick={() => void selectPlan(plan.key)} className="shrink-0 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Continue</button>
+      </div>)}
+    </>}
+    {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+  </div>;
+};
+
+export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClose: () => void; children?: React.ReactNode }> = ({ problem, onClose, children }) => {
   const closeRef = useRef<HTMLButtonElement>(null);
   const slug = typeof window === 'undefined' ? null : getOrgSlugFromLocation();
   const subscriptionHref = slug
@@ -128,6 +178,7 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
           </p>
         ) : null}
       </div>
+      {children}
       <div className="flex justify-end gap-2">
         {cta.href ? (
           <a
