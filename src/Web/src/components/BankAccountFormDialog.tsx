@@ -29,6 +29,7 @@ export const BankAccountFormDialog: React.FC<{
   const [routingNumber, setRoutingNumber] = useState(account?.routingNumber ?? '');
   const [iban, setIban] = useState(account?.iban ?? '');
   const [swift, setSwift] = useState(account?.swift ?? '');
+  const [currencyCode, setCurrencyCode] = useState(account?.currencyCode ?? '');
   const [isDefaultForReceipts, setIsDefaultForReceipts] = useState(account?.isDefaultForReceipts ?? false);
   const [isDefaultForPayments, setIsDefaultForPayments] = useState(account?.isDefaultForPayments ?? false);
   const [openingBalance, setOpeningBalance] = useState(
@@ -94,6 +95,7 @@ export const BankAccountFormDialog: React.FC<{
           routingNumber: routingNumber.trim() || null,
           iban: iban.trim() || null,
           swift: swift.trim() || null,
+          currencyCode: currencyCode.trim().toUpperCase(),
           isDefaultForReceipts,
           isDefaultForPayments,
           openingBalance: openingBalance.trim() === '' ? null : Number(openingBalance),
@@ -121,6 +123,7 @@ export const BankAccountFormDialog: React.FC<{
         routingNumber,
         iban,
         swift,
+        currencyCode,
         isDefaultForReceipts,
         isDefaultForPayments,
         openingBalance,
@@ -211,6 +214,16 @@ export const BankAccountFormDialog: React.FC<{
             <option value={2}>Savings</option>
             <option value={3}>Cash on hand</option>
           </select>
+        </div>
+
+        <div>
+          <label htmlFor={`${titleId}-currency`} className={labelClass}>
+            Currency
+          </label>
+          <input id={`${titleId}-currency`} required pattern="[A-Za-z]{3}" maxLength={3}
+            value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value.toUpperCase())}
+            className={inputClass} placeholder="USD" />
+          <p className="mt-1 text-xs text-[var(--text-muted)]">Enter the actual bank account currency. The workspace currency is not assumed.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

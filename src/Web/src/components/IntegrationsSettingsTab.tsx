@@ -40,6 +40,11 @@ export function IntegrationsSettingsTab() {
   const [notice, setNotice] = useState('');
   const [confirm, setConfirm] = useState<{ action: string; title: string; message: string } | null>(null);
   const selected = connections.find(c => c.id === selectedId);
+  const associatedBank = banks.find(b => b.id === Number(bankId));
+
+  useEffect(() => {
+    setBalanceCurrency(associatedBank?.currencyCode || '');
+  }, [associatedBank?.id, associatedBank?.currencyCode]);
 
   const request = useCallback(async (url: string, init?: RequestInit) => {
     const res = await authFetch(url, init);
@@ -94,7 +99,11 @@ export function IntegrationsSettingsTab() {
     event.preventDefault();
     void run(async () => {
       const bank = banks.find(b => b.id === Number(bankId));
-      if (!bank || balanceCurrency.toUpperCase() !== bank.currencyCode)
+      if (!bank)
+        throw new Error('Select a workspace bank account.');
+      if (!bank.currencyCode)
+        throw new Error('Set a currency on the associated workspace bank account before connecting Wise.');
+      if (balanceCurrency.toUpperCase() !== bank.currencyCode)
         throw new Error('The bank account currency must match the associated bank account.');
       if (Boolean(profile) !== Boolean(balance))
         throw new Error('Enter both existing balance-update identifiers, or leave both empty.');
@@ -144,8 +153,11 @@ export function IntegrationsSettingsTab() {
       <label className="block text-sm">Connection label<input className={input} required maxLength={200} value={label} onChange={e => setLabel(e.target.value)} /></label>
       <label className="block text-sm">Wise environment<select className={input} value={environment} onChange={e => setEnvironment(e.target.value)}><option value="sandbox">Sandbox</option><option value="production">Production</option></select></label>
       <label className="block text-sm">Associated bank account<select className={input} required value={bankId} onChange={e => setBankId(e.target.value)}>
-        <option value="">Select an account</option>{banks.map(b => <option key={b.id} value={b.id}>{b.name} ({b.currencyCode})</option>)}
+        <option value="">Select an account</option>{banks.map(b => <option key={b.id} value={b.id}>
+          {[b.name, b.accountNumberMasked].filter(Boolean).join(' - ')} ({b.currencyCode || 'Currency not set'})
+        </option>)}
       </select></label>
+      <p className="text-xs">Select an existing bank account recorded in this workspace. Account numbers are masked when recorded. <Link className="underline" to={`/org/${currentOrg.slug}/banking`}>Edit workspace bank accounts</Link>.</p>
       <label className="block text-sm">Bank account currency<input className={input} required pattern="[A-Za-z]{3}" maxLength={3} value={balanceCurrency} onChange={e => setBalanceCurrency(e.target.value.toUpperCase())} /></label>
       <p className="text-xs">For transfers, the bank association does not verify a funding account or currency. For an existing balance-update subscription only, optionally enter its identifiers. Otherwise leave both empty; confirm the identity from a verified real notification below.</p>
       <label className="block text-sm">Wise profile ID<input className={input} inputMode="numeric" pattern="[1-9][0-9]*" value={profile} onChange={e => setProfile(e.target.value)} /></label>
