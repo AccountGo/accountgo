@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
 import { clearInvitationToken, getInvitationToken, storeInvitationToken } from '../lib/invitationStorage';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { MfaChallenge } from '../components/mfa/MfaChallenge';
 import { MfaEnrollWizard } from '../components/mfa/MfaEnrollWizard';
 import { TurnstileWidget, TurnstileWidgetHandle } from '../components/TurnstileWidget';
@@ -80,6 +81,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   // Input refs for the 6 OTP boxes
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const verificationOwnsNavigation = useRef(false);
+  const googleMfa = useRef(false);
 
   // If already authenticated, redirect away
   useEffect(() => {
@@ -329,6 +331,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     try {
       const result = await verifyOtp(email, code, verifyTurnstileToken);
 
+      googleMfa.current = false;
       if (result.type === 'mfa_required') {
         setMfaChallengeData(result.data);
         setStep('mfa_challenge');
@@ -464,6 +467,27 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span className="flex-1">{errorMessage}</span>
               </div>
+            )}
+
+            {mode === 'signin' && import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+              <GoogleSignInButton clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID} enabled={acceptedTerms} onError={setErrorMessage}
+                onCredential={async (credential) => {
+                  setErrorMessage(null);
+                  verificationOwnsNavigation.current = true;
+                  try {
+                    const res = await fetch('/api/auth/google', { method: 'POST', credentials: 'include',
+                      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: credential }) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Google sign-in failed.');
+                    if (data.status === 'mfa_required') { googleMfa.current = true; setMfaChallengeData(data); setStep('mfa_challenge'); verificationOwnsNavigation.current = false; return; }
+                    if (data.status === 'mfa_enrollment_required') { googleMfa.current = true; setMfaEnrollData(data); setStep('mfa_enroll'); verificationOwnsNavigation.current = false; return; }
+                    completeSession(data);
+                    await handlePostAuthSuccess();
+                  } catch (error) {
+                    verificationOwnsNavigation.current = false;
+                    setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed.');
+                  }
+                }} />
             )}
 
             {/* Form Mode: SIGN IN */}
@@ -930,7 +954,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
               await handlePostAuthSuccess();
             }}
             onCancel={() => {
-              setStep(2);
+              setStep(googleMfa.current ? 1 : 2);
               setMfaChallengeData(null);
               setErrorMessage(null);
             }}
@@ -946,7 +970,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
               await handlePostAuthSuccess();
             }}
             onCancel={() => {
-              setStep(2);
+              setStep(googleMfa.current ? 1 : 2);
               setMfaEnrollData(null);
               setErrorMessage(null);
             }}
