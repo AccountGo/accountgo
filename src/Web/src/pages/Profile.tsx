@@ -35,8 +35,10 @@ type DeletionBlockers = {
 };
 
 export const Profile: React.FC = () => {
-  const tenantContext = useOutletContext<TenantContextType>();
-  const { currentOrg, availableOrgs, switchOrg, userPermissions } = tenantContext;
+  const tenantContext = useOutletContext<TenantContextType | null>();
+  const currentOrg = tenantContext?.currentOrg;
+  const availableOrgs = tenantContext?.availableOrgs ?? [];
+  const userPermissions = tenantContext?.userPermissions ?? [];
   const navigate = useNavigate();
   const { user, authFetch, refreshUser, clearSession, completeStepUp } = useAuth();
 
@@ -644,7 +646,7 @@ export const Profile: React.FC = () => {
   const initial = displayName.charAt(0).toUpperCase();
   // Platform staff role (global); workspace access comes from the tenant context below.
   const isSysAdmin = (user?.roles || []).includes('SystemAdministrators');
-  const hasFullWorkspaceAccess = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
+  const hasFullWorkspaceAccess = currentOrg?.role === 'Owner' || currentOrg?.role === 'Admin';
 
   return (
     <div className="space-y-6 w-full animate-in fade-in duration-200 text-[var(--text-main)]">
@@ -746,7 +748,7 @@ export const Profile: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${currentOrg ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-6`}>
         {/* Left Column: Personal Info & Password Settings */}
         <div className="lg:col-span-2 space-y-6">
           {/* Card 1: Personal Details */}
@@ -1359,7 +1361,7 @@ export const Profile: React.FC = () => {
         </div>
 
         {/* Right Column: Roles, Permissions, and Workspaces */}
-        <div className="space-y-6">
+        {currentOrg && <div className="space-y-6">
           {/* Card 4: Assigned Roles & Permissions */}
           <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
             <div className="flex items-center gap-2 pb-2 border-b border-[var(--border-subtle)]">
@@ -1438,7 +1440,7 @@ export const Profile: React.FC = () => {
                   <div
                     key={org.id}
                     onClick={() => {
-                      if (!isCurrent) switchOrg(org.slug);
+                      if (!isCurrent) tenantContext?.switchOrg(org.slug);
                     }}
                     className={`p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${
                       isCurrent
@@ -1470,7 +1472,7 @@ export const Profile: React.FC = () => {
               })}
             </div>
           </div>
-        </div>
+        </div>}
       </div>
 
       <section className="p-4 sm:p-6 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-3">
