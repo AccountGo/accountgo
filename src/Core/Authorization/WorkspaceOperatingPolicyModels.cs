@@ -16,6 +16,7 @@ namespace Core.Authorization
         public const string ApprovalPolicyChangeRequired = "approval_policy_change_required";
         public const string SoloSetupDisabled = "solo_setup_disabled";
         public const string CanaryNotEnrolled = "canary_not_enrolled";
+        public const string CanaryScopeNotAllowed = "canary_scope_not_allowed";
         public const string PersonalPurposeDisabled = "personal_purpose_disabled";
         public const string RecoveryUnavailable = "recovery_unavailable";
         public const string RecoveryRequired = "recovery_required";

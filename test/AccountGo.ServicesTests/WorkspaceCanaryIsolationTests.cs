@@ -208,15 +208,16 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
     }
 
     [Fact]
-    public void ApplyNewWorkspace_EnrolledByEmail_IsAdmitted()
+    public void ApplyNewWorkspace_EmailOnlyEnrollment_IsNotSufficient_AtInitialization()
     {
-        const string ownerId = "owner-email-enrolled";
-        const string ownerEmail = "owner@freelancer.example";
+        // The initialization boundary binds enrollment to the owner's authoritative user id, not to a
+        // request-supplied email. A workspace whose owner id is not enrolled must be rejected even if some
+        // email happens to be enrolled — the applicator must not trust a caller-supplied address.
+        const string ownerId = "owner-not-enrolled-by-id";
         var (company, owner) = SeedUninitializedCompany(ownerId);
 
-        // Enrolled by signup email only (the anonymous-signup subject), not by user id.
         var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
-            _db, _tenant, soloSetupEnabled: true, enrolledEmails: new[] { ownerEmail });
+            _db, _tenant, soloSetupEnabled: true, enrolledEmails: new[] { "owner@freelancer.example" });
 
         WorkspaceInitializationResult result;
         using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
@@ -225,12 +226,69 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
             {
                 Purpose = WorkspacePurpose.Business,
                 CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
-                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess,
-                OwnerEmail = ownerEmail
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
             });
         }
 
-        Assert.True(result.Applied);
+        Assert.False(result.Applied);
+        Assert.Equal(WorkspacePolicyReasonCodes.CanaryNotEnrolled, result.ReasonCode);
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, settings.CollaborationState);
+    }
+
+    [Fact]
+    public void ApplyNewWorkspace_EnrolledOwner_TeamIntent_IsRejected_OutOfScope()
+    {
+        // Enrolled, but requesting team (With-others) setup: out of the approved canary scope.
+        const string ownerId = "owner-team";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+
+        var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenant, soloSetupEnabled: true, enrolledUserIds: new[] { ownerId });
+
+        WorkspaceInitializationResult result;
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            result = applicator.ApplyNewWorkspace(company.Id, ownerId, owner.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = WorkspacePurpose.Business,
+                CollaborationIntent = WorkspaceCollaborationIntent.WithOthers,
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess,
+                InitialJournalWorkflow = WorkspaceApprovalRuleKind.SingleActorAllowed
+            });
+        }
+
+        Assert.False(result.Applied);
+        Assert.Equal(WorkspacePolicyReasonCodes.CanaryScopeNotAllowed, result.ReasonCode);
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, settings.CollaborationState);
+        var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
+        // The seeded independent-review rule is untouched; no single-actor grant leaked in.
+        Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, rule.RuleKind);
+    }
+
+    [Fact]
+    public void ApplyNewWorkspace_EnrolledOwner_PersonalPurpose_IsRejected_OutOfScope()
+    {
+        const string ownerId = "owner-personal";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+
+        var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenant, soloSetupEnabled: true, enrolledUserIds: new[] { ownerId });
+
+        WorkspaceInitializationResult result;
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            result = applicator.ApplyNewWorkspace(company.Id, ownerId, owner.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = WorkspacePurpose.Personal,
+                CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
+            });
+        }
+
+        Assert.False(result.Applied);
+        Assert.Equal(WorkspacePolicyReasonCodes.CanaryScopeNotAllowed, result.ReasonCode);
     }
 
     [Fact]
