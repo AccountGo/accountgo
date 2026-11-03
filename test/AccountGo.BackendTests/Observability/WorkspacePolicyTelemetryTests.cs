@@ -22,6 +22,7 @@ using Xunit;
 
 namespace AccountGo.BackendTests.Observability
 {
+    [Collection("WorkspacePolicyMeter")]
     public class WorkspacePolicyTelemetryTests : IDisposable
     {
         private readonly SqliteConnection _connection;

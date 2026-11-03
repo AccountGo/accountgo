@@ -23,7 +23,11 @@ namespace AccountGo.BackendTests.Observability
     /// Slices 3 and 4. Verifies commit-accurate, idempotent invariant detection (no double-counting of a
     /// persisted violation), the recovery sweep for crash-left violations, and the durable, unique
     /// first-useful-action marker that underpins honest measurement.
+    ///
+    /// These tests observe the process-global AccountGo.WorkspacePolicy meter, so they share a
+    /// non-parallel collection with the other meter-listening tests to keep counter measurements isolated.
     /// </summary>
+    [Collection("WorkspacePolicyMeter")]
     public sealed class WorkspaceInvariantAndMeasurementTests : IDisposable
     {
         private readonly SqliteConnection _connection;
@@ -156,37 +160,144 @@ namespace AccountGo.BackendTests.Observability
             Assert.StartsWith("inconsistent_transition:", signature);
         }
 
-        // ---- Idempotent reporting (no double-count) -----------------------------------------------
+        // ---- Idempotent reporting + recurrence (no double-count) ----------------------------------
 
         [Fact]
-        public void ReportCommittedViolation_CountsOncePerSignature_NotOnRepeatScans()
+        public void VerifyUnderLock_CountsOncePerIncident_NotOnRepeatScans()
         {
             var company = SeedCompany("idem", "owner-4", out _);
-            var settings = SeedSettings(company.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSettings(company.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
             SeedSingleActorRule(company.Id);
 
-            // First observation reports and counts once.
-            WorkspacePolicyTransaction.ReportCommittedViolation(_db, company.Id, settings);
-            // Repeated scans of the SAME persisted violation must not re-count it.
-            WorkspacePolicyTransaction.ReportCommittedViolation(_db, company.Id, settings);
-            WorkspacePolicyTransaction.ReportCommittedViolation(_db, company.Id, settings);
+            // First observation reports and counts once; repeats of the SAME persisted violation do not.
+            var o1 = WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id);
+            var o2 = WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id);
+            var o3 = WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id);
+
+            Assert.Equal(WorkspaceInvariantIncidentLog.ReconcileOutcome.NewIncident, o1);
+            Assert.Equal(WorkspaceInvariantIncidentLog.ReconcileOutcome.NoChange, o2);
+            Assert.Equal(WorkspaceInvariantIncidentLog.ReconcileOutcome.NoChange, o3);
 
             _listener.RecordObservableInstruments();
             Assert.Equal(1, CounterTotal("workspace.unauthorized_elevations.committed"));
         }
 
         [Fact]
-        public void ReportCommittedViolation_ConsistentWorkspace_CountsNothing()
+        public void VerifyUnderLock_ConsistentWorkspace_CountsNothing()
         {
             var company = SeedCompany("clean", "owner-5", out var owner);
-            var settings = SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, owner.Id, initialized: true);
+            SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, owner.Id, initialized: true);
             SeedSingleActorRule(company.Id);
 
-            WorkspacePolicyTransaction.ReportCommittedViolation(_db, company.Id, settings);
+            var outcome = WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id);
+            Assert.Equal(WorkspaceInvariantIncidentLog.ReconcileOutcome.NoChange, outcome);
 
             _listener.RecordObservableInstruments();
             Assert.Equal(0, CounterTotal("workspace.unauthorized_elevations.committed"));
             Assert.Equal(0, CounterTotal("workspace.inconsistent_transitions.committed"));
+        }
+
+        [Fact]
+        public void Incident_Resolves_ThenRecurs_CountsAsNewIncident()
+        {
+            // A violating workspace: first incident counts once.
+            var company = SeedCompany("recur", "owner-r", out var owner);
+            var settings = SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, confirmedOwnerMemberId: null, initialized: true);
+            Assert.Equal(WorkspaceInvariantIncidentLog.ReconcileOutcome.NewIncident,
+                WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id));
+            Assert.True(WorkspaceInvariantIncidentLog.GetCurrentState(_db, company.Id).HasActiveIncident);
+
+            // Fix the violation (assign a valid confirmed owner). Next verify resolves it.
+            settings.ConfirmedOwnerMemberId = owner.Id;
+            _db.SaveChanges();
+            Assert.Equal(WorkspaceInvariantIncidentLog.ReconcileOutcome.Resolved,
+                WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id));
+            Assert.False(WorkspaceInvariantIncidentLog.GetCurrentState(_db, company.Id).HasActiveIncident);
+
+            // Reintroduce the same violation: it must count again as a NEW incident (not suppressed forever).
+            settings.ConfirmedOwnerMemberId = null;
+            _db.SaveChanges();
+            Assert.Equal(WorkspaceInvariantIncidentLog.ReconcileOutcome.NewIncident,
+                WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id));
+
+            _listener.RecordObservableInstruments();
+            // Two distinct incidents observed across the lifecycle.
+            Assert.Equal(2, CounterTotal("workspace.inconsistent_transitions.committed"));
+        }
+
+        [Fact]
+        public void CurrentState_IsExposed_SeparatelyFromCounters()
+        {
+            var company = SeedCompany("state", "owner-s", out _);
+            SeedSettings(company.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSingleActorRule(company.Id);
+
+            Assert.False(WorkspaceInvariantIncidentLog.GetCurrentState(_db, company.Id).HasActiveIncident);
+            WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id);
+
+            var state = WorkspaceInvariantIncidentLog.GetCurrentState(_db, company.Id);
+            Assert.True(state.HasActiveIncident);
+            Assert.StartsWith("unauthorized_elevation:", state.Signature);
+        }
+
+        // ---- External-commit verification (controller/signup own the transaction) -----------------
+
+        [Fact]
+        public void ExternalCommit_DrainsPending_AndRecordsIncidentOnce()
+        {
+            // Reproduce the controller/signup pattern: an externally-owned transaction, nested guarded work
+            // that leaves a committed violation, an external commit, then the owner drains verification.
+            var company = SeedCompany("external", "owner-ext", out _);
+            SeedSettings(company.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSingleActorRule(company.Id);
+
+            var policyTx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            // The "controller" owns the transaction.
+            using (var outer = _db.Database.BeginTransaction())
+            {
+                // Nested guarded work observes CurrentTransaction != null and defers verification.
+                policyTx.Execute(company.Id, _ => { /* mutation already seeded; no-op guarded body */ });
+                outer.Commit();
+            }
+
+            // Before draining, nothing has been reported.
+            Assert.False(WorkspaceInvariantIncidentLog.GetCurrentState(_db, company.Id).HasActiveIncident);
+
+            // The owner drains after its external commit — this is the connection the review found missing.
+            policyTx.VerifyPendingAfterExternalCommit();
+
+            Assert.True(WorkspaceInvariantIncidentLog.GetCurrentState(_db, company.Id).HasActiveIncident);
+            _listener.RecordObservableInstruments();
+            Assert.Equal(1, CounterTotal("workspace.unauthorized_elevations.committed"));
+
+            // A second drain has nothing queued and does not double-count.
+            policyTx.VerifyPendingAfterExternalCommit();
+            _listener.RecordObservableInstruments();
+            Assert.Equal(1, CounterTotal("workspace.unauthorized_elevations.committed"));
+        }
+
+        [Fact]
+        public void ExternalRollback_DiscardsPending_NoReport()
+        {
+            var company = SeedCompany("external-rb", "owner-rb", out _);
+            SeedSettings(company.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSingleActorRule(company.Id);
+
+            var policyTx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            using (var outer = _db.Database.BeginTransaction())
+            {
+                policyTx.Execute(company.Id, _ => { });
+                outer.Rollback();
+            }
+
+            // Owner rolled back: discard queued verifications, nothing is reported.
+            policyTx.DiscardPendingVerifications();
+            policyTx.VerifyPendingAfterExternalCommit();
+
+            _listener.RecordObservableInstruments();
+            Assert.Equal(0, CounterTotal("workspace.unauthorized_elevations.committed"));
         }
 
         // ---- Recovery sweep -----------------------------------------------------------------------
@@ -256,6 +367,40 @@ namespace AccountGo.BackendTests.Observability
             Assert.Equal(1, markerCount);
         }
 
+        // ---- Immutability of durable evidence (#6) ------------------------------------------------
+
+        [Fact]
+        public void DurableMarkers_AreAppendOnly_CannotBeModifiedOrDeleted()
+        {
+            var company = SeedCompany("immutable", "owner-im", out _);
+            SeedSettings(company.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSingleActorRule(company.Id);
+
+            // Produce a first-action marker and an incident row.
+            var repo = new Api.Data.EfRepository<Core.Domain.Auditing.AuditLog>(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Core.Domain.Auditing.AuditLog>.Instance, _db);
+            using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+            {
+                WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(
+                    repo, company.Id, WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost, "owner-im", DateTime.UtcNow, DateTime.UtcNow);
+            }
+            WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, company.Id);
+
+            // Attempt to modify each protected marker row — must be rejected.
+            foreach (var table in new[]
+            {
+                WorkspaceFirstActionEvidence.FirstUsefulActionTable,
+                WorkspaceInvariantIncidentLog.IncidentTable
+            })
+            {
+                var row = _db.AuditLogs.IgnoreQueryFilters().First(a => a.CompanyId == company.Id && a.TableName == table);
+                row.NewValue = "tampered";
+                var ex = Assert.Throws<InvalidOperationException>(() => _db.SaveChanges());
+                Assert.Contains("append-only", ex.Message, StringComparison.OrdinalIgnoreCase);
+                _db.Entry(row).Reload();
+            }
+        }
+
         /// <summary>Minimal IServiceProvider that hands out the one test DbContext per scope.</summary>
         private sealed class SingleDbServiceProvider : IServiceProvider, IServiceScopeFactory, Microsoft.Extensions.DependencyInjection.IServiceScope
         {
@@ -272,4 +417,7 @@ namespace AccountGo.BackendTests.Observability
             }
         }
     }
+
+    [CollectionDefinition("WorkspacePolicyMeter", DisableParallelization = true)]
+    public sealed class WorkspacePolicyMeterCollection { }
 }

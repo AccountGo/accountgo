@@ -111,21 +111,14 @@ namespace Api.Service
                     scanned++;
                     try
                     {
-                        var signature = WorkspacePolicyTransaction.ComputeViolationSignature(db, settings.CompanyId, settings);
-                        if (signature == null)
-                            continue;
-
-                        var newly = WorkspacePolicyDurableEvidence.TryMarkViolationNewlyReported(
-                            db, settings.CompanyId, signature, DateTime.UtcNow);
-                        if (newly)
-                        {
-                            if (signature.StartsWith("inconsistent_transition:", StringComparison.Ordinal))
-                                Core.Authorization.WorkspaceOperatingPolicyMetrics.InconsistentTransitionsCommitted.Add(1);
-                            else if (signature.StartsWith("unauthorized_elevation:", StringComparison.Ordinal))
-                                Core.Authorization.WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
-                            await db.SaveChangesAsync(ct);
+                        // Verify under the company coordination lock with a consistent snapshot so an
+                        // in-flight transition (e.g. invitation acceptance committing two members while the
+                        // settings row still reads SoloActive) is not mistaken for a violation. Counter
+                        // emission and incident dedup happen inside, after the per-company commit.
+                        var outcome = WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(
+                            db, tenant: null, settings.CompanyId);
+                        if (outcome == WorkspaceInvariantIncidentLog.ReconcileOutcome.NewIncident)
                             newViolations++;
-                        }
                     }
                     catch (Exception)
                     {

@@ -35,6 +35,7 @@ namespace Api.Controllers
         private readonly WorkspaceInitializationApplicator _workspaceInit;
         private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
         private readonly Api.Options.WorkspaceExperienceOptions _experience;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -46,7 +47,8 @@ namespace Api.Controllers
             Services.Financial.IFinancialService financial,
             WorkspaceInitializationApplicator workspaceInit = null,
             IWorkspaceOperatingPolicyService operatingPolicy = null,
-            Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null)
+            Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null,
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
         {
             _tenant = tenant;
             _db = db;
@@ -56,6 +58,7 @@ namespace Api.Controllers
             _financial = financial;
             _workspaceInit = workspaceInit;
             _operatingPolicy = operatingPolicy;
+            _policyTransaction = policyTransaction;
             _experience = experienceOptions?.Value != null
                 ? Api.Options.WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value)
                 : (workspaceInit?.Experience ?? new Api.Options.WorkspaceExperienceOptions());
@@ -204,6 +207,8 @@ namespace Api.Controllers
                             && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
                                 or "about_answers_required")
                         {
+                            // Early return rolls back the transaction on dispose; drop queued verifications.
+                            _policyTransaction?.DiscardPendingVerifications();
                             return UnprocessableEntity(new ProblemDetails
                             {
                                 Title = "Workspace initialization rejected",
@@ -215,10 +220,14 @@ namespace Api.Controllers
                     }
 
                     tx.Commit();
+                    // The externally-owned transaction has committed; run deferred committed-state
+                    // verification for companies touched by the nested policy work. Never throws.
+                    _policyTransaction?.VerifyPendingAfterExternalCommit();
                     return StatusCode(201, Summary(company, CompanyMemberRole.Owner, initResult));
                 }
                 catch (InvalidAccountingPolicyException ex)
                 {
+                    _policyTransaction?.DiscardPendingVerifications();
                     return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", ex.Errors));
                 }
             }
