@@ -115,7 +115,17 @@ namespace Api.Controllers
                 return Problem(statusCode: 403, title: "Verify your email before accepting invitations");
             if (user.DeletedAt != null)
                 return Problem(statusCode: 403, title: "This account has been closed");
-            using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
+
+            var policyTx = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+            if (policyTx == null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, ProblemDetailsFactory.CreateProblemDetails(
+                    HttpContext, statusCode: 503, title: "Policy service unavailable", detail: "Workspace policy coordination is unavailable."));
+
+            var preliminaryInvitation = find();
+            if (preliminaryInvitation == null)
+                return NotFound();
+
+            return policyTx.Execute<IActionResult>(preliminaryInvitation.CompanyId, guard =>
             {
                 var invitation = find();
                 if (invitation == null)
@@ -224,13 +234,8 @@ namespace Api.Controllers
                         return Problem(statusCode: delegationDecision.HttpStatus, title: delegationDecision.SafeTitle, detail: delegationDecision.SafeMessage);
                 }
 
-                var currentPolicyRevision = _db.WorkspaceOperatingSettings
-                    .IgnoreQueryFilters()
-                    .Where(s => s.CompanyId == invitation.CompanyId)
-                    .Select(s => (long?)s.PolicyRevision)
-                    .FirstOrDefault() ?? 0;
                 var transition = WorkspaceInvitationTransition.ValidateOnAccept(
-                    _db, invitation, distinctRoles, currentPolicyRevision);
+                    _db, invitation, distinctRoles, guard.Settings.PolicyRevision);
                 if (!transition.Ok)
                     return Problem(statusCode: 409, title: transition.Title, detail: transition.Detail);
 
@@ -257,35 +262,32 @@ namespace Api.Controllers
                 invitation.AcceptedByUserId = user.Id;
                 _db.SaveChanges();
 
-                // First accepted second human activates TeamActive under the coordination guard.
-                // Owner grants are left untouched; journal rules are preserved unless separately changed.
-                var policyTx = _policyTransaction
-                    ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
-                if (policyTx != null)
+                var settings = guard.Settings;
+                var activeHumans = _db.CompanyMembers
+                    .IgnoreQueryFilters()
+                    .Count(m => m.CompanyId == invitation.CompanyId && m.Status == CompanyMemberStatus.Active);
+                if (settings.EverTeamActivatedAtUtc == null)
+                    settings.EverTeamActivatedAtUtc = DateTime.UtcNow;
+                if (activeHumans >= 2)
                 {
-                    policyTx.Execute(invitation.CompanyId, guard =>
+                    if (settings.CollaborationState is WorkspaceCollaborationState.SoloActive
+                        or WorkspaceCollaborationState.TeamSetupPending
+                        or WorkspaceCollaborationState.LegacyUnclassified)
                     {
-                        var settings = guard.Settings;
-                        var activeHumans = _db.CompanyMembers
-                            .IgnoreQueryFilters()
-                            .Count(m => m.CompanyId == invitation.CompanyId && m.Status == CompanyMemberStatus.Active);
-                        if (activeHumans >= 2)
-                        {
-                            if (settings.EverTeamActivatedAtUtc == null)
-                                settings.EverTeamActivatedAtUtc = DateTime.UtcNow;
-                            if (settings.CollaborationState is WorkspaceCollaborationState.SoloActive
-                                or WorkspaceCollaborationState.TeamSetupPending
-                                or WorkspaceCollaborationState.LegacyUnclassified)
-                            {
-                                settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
-                                settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
-                                settings.LastConfirmedAtUtc = DateTime.UtcNow;
-                                settings.LastConfirmedByUserId = user.Id;
-                                guard.AdvanceRevision();
-                            }
-                        }
-                    });
+                        settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                        settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                        settings.LastConfirmedAtUtc = DateTime.UtcNow;
+                        settings.LastConfirmedByUserId = user.Id;
+                    }
                 }
+                guard.AdvanceRevision();
+
+                WorkspaceCollaborationEvidence.Record(_db, invitation.CompanyId, WorkspaceCollaborationEvidence.EventInvitationAccepted, user.Id, user.Id, new
+                {
+                    invitationId = invitation.Id,
+                    role = invitation.Role.ToString(),
+                    securityRoleIds = distinctRoles
+                });
 
                 if (distinctRoles.Count > 0 && (!string.IsNullOrWhiteSpace(approvalRequestId) || !string.IsNullOrWhiteSpace(approverUserId)))
                 {
@@ -302,7 +304,6 @@ namespace Api.Controllers
                         operationKey: AccessOperationCatalog.WorkspaceInvitationsCreate).GetAwaiter().GetResult();
                     if (!consumed)
                     {
-                        tx.Rollback();
                         return StatusCode(StatusCodes.Status403Forbidden, ProblemDetailsFactory.CreateProblemDetails(
                             HttpContext,
                             statusCode: StatusCodes.Status403Forbidden,
@@ -310,10 +311,11 @@ namespace Api.Controllers
                             detail: "The independent approval could not be consumed or has expired."));
                     }
                 }
-                tx.Commit();
+
+                _db.SaveChanges();
                 AuthService.InvalidateContextCache();
                 return Ok(new { slug = _db.Companies.Where(c => c.Id == invitation.CompanyId).Select(c => c.Slug).Single(), role = member.Role.ToString() });
-            }
+            });
         }
 
         private CompanyInvitation Find(string token)

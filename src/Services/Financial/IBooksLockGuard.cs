@@ -20,6 +20,11 @@ namespace Services.Financial
         void EnsureDateAllowed(DateTime date);
 
         /// <summary>
+        /// Returns true when the date is on or before the books lock and the workspace has the Financials module.
+        /// </summary>
+        bool IsDateLocked(DateTime date);
+
+        /// <summary>
         /// Temporarily bypasses lock checks within a using scope (used ONLY by close/reopen).
         /// </summary>
         IDisposable Bypass();

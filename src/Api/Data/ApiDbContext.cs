@@ -24,6 +24,7 @@ namespace Api.Data
         private readonly AuditLogHelper _auditLogHelper = new();
 
         public int CurrentTenantCompanyId => _tenantContext?.CompanyId ?? -1;
+        public bool SuppressTenantSecurityCheck { get; set; }
 
         public ApiDbContext(DbContextOptions<ApiDbContext> options, ITenantContext? tenantContext = null)
             : this((DbContextOptions)options, tenantContext)
@@ -39,7 +40,7 @@ namespace Api.Data
 
         private void EnforceTenantSecurity()
         {
-            if (_tenantContext == null)
+            if (_tenantContext == null || SuppressTenantSecurityCheck)
                 return;
 
             // Only pending writes need a tenant; unchanged tracked rows (e.g. lookups) must not force one.
@@ -137,7 +138,10 @@ namespace Api.Data
             "__WorkspaceInitialization",
             "__OwnerAccessSetup",
             "__WorkspacePolicyTransition",
-            "__JournalPostingAuthorization"
+            "__JournalPostingAuthorization",
+            "__InvitationTransition",
+            "__WorkspaceOrigin",
+            "__WorkspaceCollaborationEvidence"
         };
 
         private void EnforceAuditLogImmutability()

@@ -76,6 +76,22 @@ namespace Core.Authorization
         void EnsureSeeded();
     }
 
+    /// <summary>
+    /// Test-only synchronization gate for race-condition assertions.
+    /// Not configurable from application settings or environment variables in production.
+    /// </summary>
+    public static class WorkspacePolicyTestGate
+    {
+        public static Action<int>? AfterLockAcquired { get; set; }
+        public static Action<int>? AfterAuthorizationRead { get; set; }
+
+        public static void Reset()
+        {
+            AfterLockAcquired = null;
+            AfterAuthorizationRead = null;
+        }
+    }
+
     public interface IWorkspacePolicyTransaction
     {
         /// <summary>
@@ -85,6 +101,10 @@ namespace Core.Authorization
         T Execute<T>(int companyId, Func<WorkspacePolicyGuard, T> action);
 
         void Execute(int companyId, Action<WorkspacePolicyGuard> action);
+
+        T ExecuteAcrossCompanies<T>(IEnumerable<int> companyIds, Func<IReadOnlyList<WorkspacePolicyGuard>, T> action);
+
+        void ExecuteAcrossCompanies(IEnumerable<int> companyIds, Action<IReadOnlyList<WorkspacePolicyGuard>> action);
     }
 
     /// <summary>Handle held while the company coordination row is locked.</summary>
