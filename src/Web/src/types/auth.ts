@@ -133,4 +133,6 @@ export interface AuthContextType {
   clearSession: () => void;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
   refreshUser: () => Promise<void>;
+  /** Mints a fresh session token from the refresh cookie, picking up newly granted workspace access. */
+  refreshSession: () => Promise<string | null>;
 }

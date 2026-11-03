@@ -2,20 +2,23 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreateOrgPage } from '../src/pages/CreateOrg/CreateOrgPage';
 
-const { authFetch, searchParams } = vi.hoisted(() => ({
+const { authFetch, refreshSession, navigate, searchParams } = vi.hoisted(() => ({
   authFetch: vi.fn(),
+  refreshSession: vi.fn(),
+  navigate: vi.fn(),
   searchParams: new URLSearchParams('name=Acme&slug=acme'),
 }));
 
 vi.mock('../src/auth/AuthContext', () => ({
   useAuth: () => ({
     authFetch,
+    refreshSession,
     user: { id: 'owner-1', email: 'owner@example.com' },
   }),
 }));
 
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
   useSearchParams: () => [searchParams],
 }));
 
@@ -41,8 +44,12 @@ if (typeof window !== 'undefined') {
 
 beforeEach(() => {
   mockStorage.clear();
+  searchParams.delete('continue');
   searchParams.set('name', 'Acme');
   searchParams.set('slug', 'acme');
+  refreshSession.mockReset();
+  refreshSession.mockResolvedValue('new-token');
+  navigate.mockReset();
 });
 
 afterEach(() => {
@@ -311,5 +318,108 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     expect(postCount).toBe(1);
     expect(screen.getByText('Owner · Standard access setup required')).toBeTruthy();
     expect(screen.queryByText('Purpose')).toBeNull();
+  });
+
+  it('signup continuation journey: initializes the existing workspace in place (no create), refreshes access, and reaches the first useful task', async () => {
+    // A signup-created, still-unclassified workspace: finish setup through the SAME onboarding flow via
+    // ?continue=<slug>, which must call current/initialize (NOT create a new org) and refresh access.
+    searchParams.delete('name');
+    searchParams.delete('slug');
+    searchParams.set('continue', 'acme');
+
+    const createCalls: any[] = [];
+    const initCalls: Array<{ body: any; org: string | null }> = [];
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/organizations/setup-capabilities') {
+        return new Response(
+          JSON.stringify({ soloSetupEnabled: true, personalPurposeEnabled: false, controlledRecoveryEnabled: false }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url === '/api/organizations' && init?.method === 'POST') {
+        createCalls.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ slug: 'acme' }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url === '/api/organizations/current/initialize' && init?.method === 'POST') {
+        const headers = new Headers(init.headers);
+        initCalls.push({ body: JSON.parse(String(init.body)), org: headers.get('X-AccountGo-Org') });
+        return new Response(
+          JSON.stringify({ initialized: true, collaborationState: 'SoloActive', journalWorkflow: 'SingleActorAllowed', accessProfileKey: 'full' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    render(<CreateOrgPage />);
+
+    // Choose Business + Just me, then advance to review.
+    fireEvent.click(screen.getByDisplayValue('Business'));
+    fireEvent.click(screen.getByDisplayValue('JustMe'));
+    await advanceToReview();
+
+    // The review shows the full-access, single-user outcome.
+    expect(screen.getByText('Owner · Full workspace access')).toBeTruthy();
+    expect(screen.getByText('You can prepare and post your own journals under the single-user workflow.')).toBeTruthy();
+
+    // Finish setup.
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+    await screen.findByText('Your workspace is ready');
+
+    // Initialized the EXISTING workspace in place — no create call, exactly one scoped initialize.
+    expect(createCalls).toHaveLength(0);
+    expect(initCalls).toHaveLength(1);
+    expect(initCalls[0].org).toBe('acme');
+    expect(initCalls[0].body.workspacePurpose).toBe('Business');
+    expect(initCalls[0].body.collaborationIntent).toBe('JustMe');
+    expect(initCalls[0].body.ownerAccessPreset).toBe('FullWorkspaceAccess');
+    expect(initCalls[0].body.initialJournalWorkflow).toBe('SingleActorAllowed');
+
+    // Access was refreshed so the just-granted workspace access is live before the dashboard.
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+
+    // Routed to the first useful task (the initialized workspace dashboard), not a second create.
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/org/acme/dashboard', { replace: true });
+    });
+  });
+
+  it('signup continuation journey: ineligible workspace is not duplicated and surfaces a clear message', async () => {
+    searchParams.delete('name');
+    searchParams.delete('slug');
+    searchParams.set('continue', 'acme');
+
+    const createCalls: any[] = [];
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/organizations/setup-capabilities') {
+        return new Response(
+          JSON.stringify({ soloSetupEnabled: true, personalPurposeEnabled: false, controlledRecoveryEnabled: false }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url === '/api/organizations' && init?.method === 'POST') {
+        createCalls.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ slug: 'acme' }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url === '/api/organizations/current/initialize' && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({ status: 422, reasonCode: 'not_pending_signup_workspace', detail: 'Not eligible.' }),
+          { status: 422, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    render(<CreateOrgPage />);
+    fireEvent.click(screen.getByDisplayValue('Business'));
+    fireEvent.click(screen.getByDisplayValue('JustMe'));
+    await advanceToReview();
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('already set up or is not eligible');
+    // No workspace was created as a side effect; no session refresh on a failed init.
+    expect(createCalls).toHaveLength(0);
+    expect(refreshSession).not.toHaveBeenCalled();
   });
 });

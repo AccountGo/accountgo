@@ -276,6 +276,17 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     const fromPath = (location.state as any)?.from?.pathname;
     const destinationSlug = targetSlugOverride || targetOrgSlug || getPersistedOrgSlug();
 
+    // Signup continuation: a workspace reserved during signup is left unclassified until the owner
+    // verifies. If the destination workspace exists but is not yet initialized, finish setup through the
+    // existing onboarding flow (which calls current/initialize) instead of dropping the owner on a
+    // dashboard with no functional access.
+    const signupSlug = targetSlugOverride || targetOrgSlug;
+    if (signupSlug && await workspaceNeedsSetup(signupSlug)) {
+      setPersistedOrgSlug(signupSlug);
+      navigate(`/create-org?continue=${encodeURIComponent(signupSlug)}`, { replace: true });
+      return;
+    }
+
     if (targetSlugOverride || targetOrgSlug) {
       const slug = targetSlugOverride || targetOrgSlug;
       setPersistedOrgSlug(slug!);
@@ -286,6 +297,25 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       navigate(`/org/${destinationSlug}/dashboard`, { replace: true });
     } else {
       navigate('/select-org', { replace: true, state: { fromSignIn: true } });
+    }
+  };
+
+  // True when the workspace exists but has not completed setup (no operating policy / uninitialized),
+  // i.e. a signup-created workspace awaiting its post-verification continuation.
+  const workspaceNeedsSetup = async (slug: string): Promise<boolean> => {
+    try {
+      const res = await authFetch('/api/organizations/current', {
+        headers: { 'X-AccountGo-Org': slug },
+      });
+      if (!res.ok) return false;
+      const data = await res.json().catch(() => null);
+      const policy = data?.operatingPolicy;
+      // No policy, or a policy that is still unclassified/uninitialized, means setup is incomplete.
+      if (!policy) return true;
+      const state = policy.collaborationState as string | undefined;
+      return state === 'LegacyUnclassified' || state === 'Unclassified';
+    } catch {
+      return false;
     }
   };
 
