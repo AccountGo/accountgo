@@ -1,4 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["test-ui/**/*.test.tsx", "vitest.email.config.ts"]
+  "compilerOptions": {
+    // The UI tests import app modules (e.g. Login) that read import.meta.env. The Vite client ambient
+    // types live in src/vite-env.d.ts, which is out of scope when only test-ui/ is included, so reference
+    // them directly here to keep the standard test type-check (tsc -p tsconfig.email-tests.json) green.
+    "types": ["vite/client"]
+  },
+  "include": ["test-ui/**/*.test.tsx", "vitest.email.config.ts", "src/vite-env.d.ts"]
 }

@@ -721,6 +721,85 @@ namespace AccountGo.BackendTests.Security
 
 
 
+        [Fact]
+        public async Task PendingSignupContinuation_FlagIsFalse_WhenSetupDisabled_AndInitializeStill422()
+        {
+            // Finding (round 5.1): the capability must also reflect the admission gates. With solo setup
+            // DISABLED the continuation is unavailable, so routing must not steer the owner into it even
+            // though the workspace is structurally eligible. The flag is false under the setup-off host,
+            // and initialization still returns 422 (authorization is retained, not merely hidden).
+            const string email = "gate-disabled@example.com";
+            const string slug = "gate-disabled-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Gate", "Gate Disabled", slug)).StatusCode);
+            EnrollUserIds(await ResolveUserId(email));
+            var (token, _) = await VerifyRealOtp(email);
+
+            // Sanity: with setup enabled and the owner enrolled, the capability is available.
+            Assert.True(await PendingSignupContinuationFlag(token, slug));
+
+            // Bring up a host with solo setup DISABLED against the same database and signup workspace.
+            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", "false");
+            try
+            {
+                using var offFactory = NewFactory(out var offClient);
+                using (offClient)
+                {
+                    // Capability is false because the admission gate (SoloSetupEnabled) fails...
+                    var flagResp = await SendScopedWith(offClient, HttpMethod.Get, "/api/organizations/current", token, slug, null);
+                    Assert.Equal(HttpStatusCode.OK, flagResp.StatusCode);
+                    using var doc = JsonDocument.Parse(await flagResp.Content.ReadAsStringAsync());
+                    Assert.False(doc.RootElement.GetProperty("operatingPolicy").GetProperty("pendingSignupContinuation").GetBoolean());
+
+                    // ...and initialization still fails closed with 422 (authorization retained).
+                    var init = await SendScopedWith(offClient, HttpMethod.Post, "/api/organizations/current/initialize", token, slug,
+                        new { workspacePurpose = "Business", collaborationIntent = "JustMe" });
+                    Assert.Equal(HttpStatusCode.UnprocessableEntity, init.StatusCode);
+                    Assert.False(OperatingState(slug)!.Value.Initialized);
+                }
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", "true");
+            }
+        }
+
+        [Fact]
+        public async Task PendingSignupContinuation_FlagIsFalse_WhenOwnerUnenrolled_AndInitializeStill422()
+        {
+            // Finding (round 5.1): with setup enabled but the owner NOT in the canary, the continuation is
+            // unavailable to them. The capability must be false (so routing does not send them into it) and
+            // initialization must still return 422 — enrollment is a server gate, not a routing hint.
+            const string email = "gate-unenrolled@example.com";
+            const string slug = "gate-unenrolled-books";
+            // Enroll ONLY for the anonymous signup boundary; do NOT enroll the resolved user id, so the
+            // authenticated continuation caller is unenrolled.
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Gate", "Gate Unenrolled", slug)).StatusCode);
+            var (token, _) = await VerifyRealOtp(email);
+
+            // Drop the signup email from enrollment so neither the email nor the user id is admitted now.
+            EnrollEmails(); // clears WORKSPACE_EXPERIENCE_CANARY_EMAILS
+
+            using var freshFactory = NewFactory(out var freshClient);
+            using (freshClient)
+            {
+                // Capability is false because the owner is not enrolled...
+                var flagResp = await SendScopedWith(freshClient, HttpMethod.Get, "/api/organizations/current", token, slug, null);
+                Assert.Equal(HttpStatusCode.OK, flagResp.StatusCode);
+                using var doc = JsonDocument.Parse(await flagResp.Content.ReadAsStringAsync());
+                Assert.False(doc.RootElement.GetProperty("operatingPolicy").GetProperty("pendingSignupContinuation").GetBoolean());
+
+                // ...and initialization still fails closed with 422 (authorization retained).
+                var init = await SendScopedWith(freshClient, HttpMethod.Post, "/api/organizations/current/initialize", token, slug,
+                    new { workspacePurpose = "Business", collaborationIntent = "JustMe" });
+                Assert.Equal(HttpStatusCode.UnprocessableEntity, init.StatusCode);
+                Assert.False(OperatingState(slug)!.Value.Initialized);
+            }
+        }
+
+
+
         private void EnrollEmails(params string[] emails) =>
             Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", string.Join(",", emails));
 
@@ -828,12 +907,15 @@ namespace AccountGo.BackendTests.Security
         }
 
         private Task<HttpResponseMessage> SendScoped(HttpMethod method, string path, string token, string slug, object? body)
+            => SendScopedWith(_client, method, path, token, slug, body);
+
+        private static Task<HttpResponseMessage> SendScopedWith(HttpClient client, HttpMethod method, string path, string token, string slug, object? body)
         {
             var req = new HttpRequestMessage(method, path);
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             req.Headers.Add("X-AccountGo-Org", slug);
             if (body != null) req.Content = JsonContent.Create(body);
-            return _client.SendAsync(req);
+            return client.SendAsync(req);
         }
 
         private Task<HttpResponseMessage> SendTenantFree(HttpMethod method, string path, string token, object? body = null)
