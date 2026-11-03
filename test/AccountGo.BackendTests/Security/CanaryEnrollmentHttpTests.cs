@@ -12,6 +12,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Api.Data;
 using Api.Service;
@@ -19,8 +20,10 @@ using Core.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace AccountGo.BackendTests.Security
@@ -55,6 +58,13 @@ namespace AccountGo.BackendTests.Security
                 builder.UseSetting("SECRET_KEY", SecretKey);
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
+                builder.ConfigureTestServices(services =>
+                {
+                    // Deterministic email delivery so signup commits (and the workspace persists) rather
+                    // than rolling back on a flaky dev sender.
+                    services.RemoveAll<Api.Service.IEmailSender>();
+                    services.AddSingleton<Api.Service.IEmailSender, CapturingEmailSender>();
+                });
             });
             _client = _factory.CreateClient();
             return Task.CompletedTask;
@@ -110,6 +120,29 @@ namespace AccountGo.BackendTests.Security
             if (company == null) return null;
             var s = db.WorkspaceOperatingSettings.IgnoreQueryFilters().FirstOrDefault(x => x.CompanyId == company.Id);
             return s == null ? null : (s.CollaborationState, s.InitializedAtUtc != null);
+        }
+
+        private int FunctionalGrantCount(string slug)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var company = db.Companies.IgnoreQueryFilters().First(c => c.Slug == slug);
+            return db.CompanyMemberSecurityRoles.IgnoreQueryFilters()
+                .Count(r => r.CompanyMember.CompanyId == company.Id);
+        }
+
+        private Core.Domain.WorkspaceApprovalRuleKind? JournalRuleKind(string slug)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var company = db.Companies.IgnoreQueryFilters().First(c => c.Slug == slug);
+            return db.WorkspaceApprovalRules.IgnoreQueryFilters()
+                .Where(r => r.CompanyId == company.Id
+                    && r.OperationKey == Core.Authorization.AccessOperationCatalog.FinancialsJournalPost)
+                .Select(r => (Core.Domain.WorkspaceApprovalRuleKind?)r.RuleKind)
+                .FirstOrDefault();
         }
 
         // ---- Authenticated create boundary --------------------------------------------------------
@@ -191,18 +224,96 @@ namespace AccountGo.BackendTests.Security
                     collaborationIntent = "JustMe"
                 }));
 
-                // Signup succeeds (account + unclassified workspace created) or reports a delivery issue,
-                // but it must never initialize. Assert the workspace is present yet unclassified.
+                // Signup must succeed (dev console email sender delivers in Development).
+                var respBody = await resp.Content.ReadAsStringAsync();
+                Assert.True(resp.StatusCode == HttpStatusCode.OK, $"signup => {(int)resp.StatusCode} :: {respBody}");
+
+                // The workspace exists (name/slug prefill reserved) ...
                 var state = OperatingState("freelancer-books");
-                if (state != null)
-                {
-                    Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, state.Value.State);
-                    Assert.False(state.Value.Initialized);
-                }
+                Assert.NotNull(state);
+
+                // ... but is unclassified and uninitialized: no policy was established before verification.
+                Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, state!.Value.State);
+                Assert.False(state.Value.Initialized);
+
+                // No functional access was granted to anyone (the owner has no managed/functional role).
+                Assert.Equal(0, FunctionalGrantCount("freelancer-books"));
+
+                // The journal rule remains the seeded independent-review default — no single-actor grant.
+                Assert.Equal(Core.Domain.WorkspaceApprovalRuleKind.IndependentReviewerRequired,
+                    JournalRuleKind("freelancer-books"));
             }
             finally
             {
                 Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", "");
+            }
+        }
+
+        // ---- Post-verification continuation (slice 5 dependency) ----------------------------------
+
+        [Fact]
+        public async Task PendingWorkspace_InitializesAfterVerification_ViaExistingWorkspace_NotDuplicate()
+        {
+            const string email = "continuation@example.com";
+            const string slug = "continuation-books";
+            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", email);
+            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", EnrolledUserId);
+            try
+            {
+                // 1. Signup reserves the slug and creates the workspace unclassified (no init yet).
+                var signup = await _client.PostAsync("/api/auth/signup", JsonContent.Create(new
+                {
+                    email, firstName = "Cont", organizationName = "Continuation Books",
+                    organizationSlug = slug, workspacePurpose = "Business", collaborationIntent = "JustMe"
+                }));
+                Assert.Equal(HttpStatusCode.OK, signup.StatusCode);
+                Assert.Equal(1, CompanyCount(slug));
+                Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, OperatingState(slug)!.Value.State);
+
+                // 2. Simulate verified sign-in: confirm the email and mint a token for the owner. Enroll the
+                //    resolved user id too (operators enroll the verified identity for the authenticated path).
+                string token;
+                using (var scope = _factory.Services.CreateScope())
+                {
+                    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+                    var user = await userManager.FindByEmailAsync(email);
+                    Assert.NotNull(user);
+                    user!.EmailConfirmed = true;
+                    await userManager.UpdateAsync(user);
+                    Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", user.Id);
+                    token = (await scope.ServiceProvider.GetRequiredService<IAuthenticationService>().CreateToken(user, true)).AccessToken;
+                }
+
+                // 3. Continuation: initialize the EXISTING workspace (no second workspace, no legacy flow).
+                using var req = new HttpRequestMessage(HttpMethod.Post, "/api/organizations/current/initialize");
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                req.Headers.Add("X-AccountGo-Org", slug);
+                req.Content = JsonContent.Create(new { workspacePurpose = "Business", collaborationIntent = "JustMe" });
+                var resp = await _client.SendAsync(req);
+                var body = await resp.Content.ReadAsStringAsync();
+                Assert.True(resp.StatusCode == HttpStatusCode.OK, $"initialize => {(int)resp.StatusCode} :: {body}");
+
+                // Still exactly one workspace; now SoloActive with Full access and the single-actor rule.
+                Assert.Equal(1, CompanyCount(slug));
+                var state = OperatingState(slug);
+                Assert.Equal(WorkspaceCollaborationState.SoloActive, state!.Value.State);
+                Assert.True(state.Value.Initialized);
+                Assert.True(FunctionalGrantCount(slug) >= 1);
+                Assert.Equal(Core.Domain.WorkspaceApprovalRuleKind.SingleActorAllowed, JournalRuleKind(slug));
+
+                // 4. A second continuation attempt does not re-initialize or duplicate.
+                using var req2 = new HttpRequestMessage(HttpMethod.Post, "/api/organizations/current/initialize");
+                req2.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                req2.Headers.Add("X-AccountGo-Org", slug);
+                req2.Content = JsonContent.Create(new { workspacePurpose = "Business", collaborationIntent = "JustMe" });
+                var resp2 = await _client.SendAsync(req2);
+                Assert.Equal(HttpStatusCode.UnprocessableEntity, resp2.StatusCode);
+                Assert.Equal(1, CompanyCount(slug));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", "");
+                Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", EnrolledUserId);
             }
         }
 
@@ -247,6 +358,13 @@ namespace AccountGo.BackendTests.Security
             {
                 Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", "true");
             }
+        }
+
+        /// <summary>Deterministic email sink so signup commits in tests instead of rolling back.</summary>
+        private sealed class CapturingEmailSender : Api.Service.IEmailSender
+        {
+            public Task<string?> SendAsync(Api.Service.EmailMessage message, CancellationToken ct = default)
+                => Task.FromResult<string?>("captured");
         }
     }
 
