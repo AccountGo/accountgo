@@ -258,24 +258,17 @@ namespace Api.Controllers
             var hasPurpose = !string.IsNullOrWhiteSpace(request.WorkspacePurpose);
             var hasCollaboration = !string.IsNullOrWhiteSpace(request.CollaborationIntent);
             var wantsNewExperience = hasPurpose || hasCollaboration;
-            Core.Domain.WorkspacePurpose parsedPurpose = default;
-            Core.Domain.WorkspaceCollaborationIntent parsedCollaboration = default;
             if (wantsNewExperience)
             {
-                if (_workspaceInit != null && !_workspaceInit.Experience.SoloSetupEnabled)
-                {
-                    return UnprocessableEntity(new ProblemDetails
-                    {
-                        Title = "Workspace initialization disabled",
-                        Detail = "Solo/team workspace initialization is not enabled; workspace remains unclassified.",
-                        Status = StatusCodes.Status422UnprocessableEntity,
-                        Extensions = { ["reasonCode"] = Core.Authorization.WorkspacePolicyReasonCodes.SoloSetupDisabled }
-                    });
-                }
-
+                // Signup validates the shape of the About answers so the client gets early feedback, but it
+                // NEVER initializes the workspace, grants access, or sets the single-actor policy here: the
+                // email is unverified at this point (EmailConfirmed is false until OTP) and enrollment is a
+                // trusted-audience decision bound to a verified owner. Initialization — including the canary
+                // enrollment and Business+JustMe scope checks — happens only through the authenticated
+                // create/initialization path after the owner verifies and signs in.
                 if (!hasPurpose || !hasCollaboration
-                    || !Enum.TryParse<Core.Domain.WorkspacePurpose>(request.WorkspacePurpose, ignoreCase: true, out parsedPurpose)
-                    || !Enum.TryParse<Core.Domain.WorkspaceCollaborationIntent>(request.CollaborationIntent, ignoreCase: true, out parsedCollaboration))
+                    || !Enum.TryParse<Core.Domain.WorkspacePurpose>(request.WorkspacePurpose, ignoreCase: true, out _)
+                    || !Enum.TryParse<Core.Domain.WorkspaceCollaborationIntent>(request.CollaborationIntent, ignoreCase: true, out _))
                 {
                     return Problem(statusCode: 400, title: "About answers required",
                         detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
@@ -318,39 +311,15 @@ namespace Api.Controllers
                 Core.Domain.Company? company = null;
                 if (cleanSlug != null)
                 {
-                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, _plans.DefaultPlanKey, currency);
-
-                    // Prefill name/slug is not About consent. Without both answers the workspace stays unclassified.
-                    if (wantsNewExperience && _workspaceInit != null)
-                    {
-                        var ownerAccess = Enum.TryParse<Core.Domain.OwnerAccessPreset>(request.OwnerAccessPreset, ignoreCase: true, out var preset)
-                            ? preset
-                            : Core.Domain.OwnerAccessPreset.FullWorkspaceAccess;
-                        Core.Domain.WorkspaceApprovalRuleKind? journalWorkflow = null;
-                        if (!string.IsNullOrWhiteSpace(request.InitialJournalWorkflow)
-                            && Enum.TryParse<Core.Domain.WorkspaceApprovalRuleKind>(request.InitialJournalWorkflow, ignoreCase: true, out var parsedJournal))
-                            journalWorkflow = parsedJournal;
-
-                        var ownerMember = _apiDb.CompanyMembers.Single(m => m.CompanyId == company.Id && m.UserId == appUser.Id);
-                        var initResult = _workspaceInit.ApplyNewWorkspace(company.Id, appUser.Id, ownerMember.Id, new WorkspaceInitializationRequest
-                        {
-                            Purpose = parsedPurpose,
-                            CollaborationIntent = parsedCollaboration,
-                            OwnerAccessPreset = ownerAccess,
-                            InitialJournalWorkflow = journalWorkflow
-                        });
-                        if (!initResult.Applied)
-                        {
-                            policyScope?.RolledBack();
-                            return UnprocessableEntity(new ProblemDetails
-                            {
-                                Title = "Workspace initialization rejected",
-                                Detail = initResult.Message,
-                                Status = StatusCodes.Status422UnprocessableEntity,
-                                Extensions = { ["reasonCode"] = initResult.ReasonCode }
-                            });
-                        }
-                    }
+                    // Create the workspace unclassified (name/slug prefill only). Initialization — Full
+                    // workspace access and the single-actor journal policy — is deliberately NOT applied
+                    // here: the account's email is not yet verified (EmailConfirmed is false until OTP).
+                    // Granting access or policy to an unverified address would violate the trusted-audience
+                    // boundary. The owner completes About and initializes through the authenticated
+                    // create/initialization path after verifying and signing in, where enrollment is
+                    // re-checked against the verified identity.
+                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, _plans.DefaultPlanKey, currency,
+                        markPendingSignupContinuation: true);
                 }
 
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();

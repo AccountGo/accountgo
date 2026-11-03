@@ -36,6 +36,7 @@ namespace Api.Controllers
         private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
         private readonly Api.Options.WorkspaceExperienceOptions _experience;
         private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
+        private readonly IWorkspaceCanaryEnrollment _canary;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -48,7 +49,8 @@ namespace Api.Controllers
             WorkspaceInitializationApplicator workspaceInit = null,
             IWorkspaceOperatingPolicyService operatingPolicy = null,
             Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
+            IWorkspaceCanaryEnrollment canary = null)
         {
             _tenant = tenant;
             _db = db;
@@ -59,6 +61,7 @@ namespace Api.Controllers
             _workspaceInit = workspaceInit;
             _operatingPolicy = operatingPolicy;
             _policyTransaction = policyTransaction;
+            _canary = canary;
             _experience = experienceOptions?.Value != null
                 ? Api.Options.WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value)
                 : (workspaceInit?.Experience ?? new Api.Options.WorkspaceExperienceOptions());
@@ -172,9 +175,39 @@ namespace Api.Controllers
                     });
                 }
 
+                // Canary audience gate, evaluated before any provisioning. Eligibility is resolved from
+                // trusted server enrollment keyed on the authenticated user id — never from the request.
+                // An unenrolled caller cannot initialize the new experience even with setup enabled.
+                if (_canary != null && !_canary.IsEnrolled(email: null, userId: UserId))
+                {
+                    return UnprocessableEntity(new ProblemDetails
+                    {
+                        Title = "Workspace initialization unavailable",
+                        Detail = "This account is not part of the current setup audience.",
+                        Status = StatusCodes.Status422UnprocessableEntity,
+                        Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryNotEnrolled }
+                    });
+                }
+
                 if (!request.WorkspacePurpose.HasValue || !request.CollaborationIntent.HasValue)
                     return Problem(statusCode: 400, title: "About answers required",
                         detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
+
+                // Approved-journey scope gate at the request boundary: this canary releases only the
+                // Business + Just-me solo journey. Personal purpose and team setup are out of scope and are
+                // rejected here (and again at initialization) so an enrolled caller cannot reach them.
+                if (request.WorkspacePurpose != WorkspacePurpose.Business
+                    || request.CollaborationIntent != WorkspaceCollaborationIntent.JustMe)
+                {
+                    return UnprocessableEntity(new ProblemDetails
+                    {
+                        Title = "Workspace setup not available",
+                        Detail = "The current setup audience supports business or freelance work for just you.",
+                        Status = StatusCodes.Status422UnprocessableEntity,
+                        Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed }
+                    });
+                }
+
                 // Server selects the managed profile for Just me; arbitrary role IDs cannot replace initialization.
                 if (request.CollaborationIntent == WorkspaceCollaborationIntent.JustMe)
                     request.SecurityRoleIds = null;
@@ -206,6 +239,10 @@ namespace Api.Controllers
 
                         if (!initResult.Applied
                             && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
+                                or WorkspacePolicyReasonCodes.CanaryNotEnrolled
+                                or WorkspacePolicyReasonCodes.CanaryScopeNotAllowed
+                                or WorkspacePolicyReasonCodes.NotPendingSignupWorkspace
+                                or WorkspacePolicyReasonCodes.SoloSetupNotEligible
                                 or "about_answers_required")
                         {
                             // Early return rolls back the transaction on dispose; discard this scope's work.
@@ -233,6 +270,87 @@ namespace Api.Controllers
                     return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", ex.Errors));
                 }
             }
+        }
+
+        public sealed class InitializeCurrentRequest
+        {
+            [JsonConverter(typeof(StringEnumConverter))] public WorkspacePurpose? WorkspacePurpose { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public WorkspaceCollaborationIntent? CollaborationIntent { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public OwnerAccessPreset? OwnerAccessPreset { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public WorkspaceApprovalRuleKind? InitialJournalWorkflow { get; set; }
+        }
+
+        /// <summary>
+        /// Post-verification continuation for a workspace that was created (slug reserved) during signup but
+        /// deliberately left unclassified until the owner verified their email. The authenticated, verified
+        /// Owner applies their About answers here to initialize the EXISTING workspace. This does not create
+        /// a second workspace and is not the legacy confirmation flow: it runs the same canary-gated
+        /// new-workspace initializer, which only applies to an uninitialized workspace and re-checks
+        /// enrollment and the Business + Just-me scope against the verified identity.
+        /// </summary>
+        [TenantScoped]
+        [HttpPost("current/initialize")]
+        public IActionResult InitializeCurrent([FromBody] InitializeCurrentRequest request)
+        {
+            if (_workspaceInit == null)
+                return Problem(statusCode: 503, title: "Workspace initialization unavailable");
+
+            var companyId = _tenant.RequireCompanyId();
+            if (_tenant.Role != CompanyMemberRole.Owner)
+                return Problem(statusCode: 403, title: "Only the workspace owner can complete setup.");
+
+            if (!request.WorkspacePurpose.HasValue || !request.CollaborationIntent.HasValue)
+                return Problem(statusCode: 400, title: "About answers required",
+                    detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
+
+            // Approved-journey scope at the request boundary (re-enforced in the applicator).
+            if (request.WorkspacePurpose != WorkspacePurpose.Business
+                || request.CollaborationIntent != WorkspaceCollaborationIntent.JustMe)
+            {
+                return UnprocessableEntity(new ProblemDetails
+                {
+                    Title = "Workspace setup not available",
+                    Detail = "The current setup audience supports business or freelance work for just you.",
+                    Status = StatusCodes.Status422UnprocessableEntity,
+                    Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed }
+                });
+            }
+
+            var ownerMember = _db.CompanyMembers
+                .Single(m => m.CompanyId == companyId && m.UserId == UserId && m.Role == CompanyMemberRole.Owner);
+
+            var initResult = _workspaceInit.ApplyNewWorkspace(companyId, UserId, ownerMember.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = request.WorkspacePurpose.Value,
+                CollaborationIntent = request.CollaborationIntent.Value,
+                OwnerAccessPreset = request.OwnerAccessPreset ?? OwnerAccessPreset.FullWorkspaceAccess,
+                InitialJournalWorkflow = request.InitialJournalWorkflow
+            },
+            // This continuation initializes a PRE-EXISTING workspace, so require the signup-specific
+            // pending-continuation marker: a pristine but non-signup workspace must not be initializable here.
+            requireSignupContinuationEvidence: true);
+
+            if (!initResult.Applied)
+            {
+                // Rejected when the workspace is already initialized OR fails the under-lock pending-signup
+                // eligibility proof (legacy, current/former team, transferred owner, invitation or
+                // collaboration history). No grants, journal rule, or approval policy are modified.
+                return UnprocessableEntity(new ProblemDetails
+                {
+                    Title = "Workspace initialization rejected",
+                    Detail = initResult.Message,
+                    Status = StatusCodes.Status422UnprocessableEntity,
+                    Extensions = { ["reasonCode"] = initResult.ReasonCode }
+                });
+            }
+
+            return Ok(new
+            {
+                initialized = true,
+                collaborationState = WorkspaceCollaborationState.SoloActive.ToString(),
+                journalWorkflow = initResult.JournalMode.ToString(),
+                accessProfileKey = initResult.AccessProfileKey
+            });
         }
 
         [TenantScoped]

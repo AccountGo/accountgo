@@ -43,19 +43,22 @@ namespace Api.Service
         private readonly IWorkspaceAccessProfileCatalog _accessCatalog;
         private readonly IWorkspaceApprovalPolicyResolver _approvalResolver;
         private readonly WorkspaceExperienceOptions _experience;
+        private readonly IWorkspaceCanaryEnrollment _canary;
 
         public WorkspaceInitializationApplicator(
             ApiDbContext db,
             IWorkspacePolicyTransaction policyTransaction,
             IWorkspaceAccessProfileCatalog accessCatalog,
             IWorkspaceApprovalPolicyResolver approvalResolver,
-            IOptions<WorkspaceExperienceOptions> experienceOptions)
+            IOptions<WorkspaceExperienceOptions> experienceOptions,
+            IWorkspaceCanaryEnrollment canary)
         {
             _db = db;
             _policyTransaction = policyTransaction;
             _accessCatalog = accessCatalog;
             _approvalResolver = approvalResolver;
             _experience = WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value);
+            _canary = canary;
         }
 
         public WorkspaceExperienceOptions Experience => _experience;
@@ -64,7 +67,8 @@ namespace Api.Service
             int companyId,
             string ownerUserId,
             int ownerMemberId,
-            WorkspaceInitializationRequest request)
+            WorkspaceInitializationRequest request,
+            bool requireSignupContinuationEvidence = false)
         {
             if (!_experience.SoloSetupEnabled)
             {
@@ -104,6 +108,37 @@ namespace Api.Service
                 };
             }
 
+            // Canary audience re-enforcement. Setup being enabled is necessary but not sufficient: the
+            // owner must be in the trusted enrollment. This repeats the controller check so a caller that
+            // reaches initialization directly (e.g. bypassing the pre-provision check) still cannot
+            // initialize. Enrollment is keyed on the owner's authenticated user id — the authoritative
+            // identity of the member being initialized — never on a request-supplied email.
+            if (!_canary.IsEnrolled(email: null, userId: ownerUserId))
+            {
+                return new WorkspaceInitializationResult
+                {
+                    Applied = false,
+                    ReasonCode = WorkspacePolicyReasonCodes.CanaryNotEnrolled,
+                    Message = "This workspace is not part of the current setup audience; it remains unclassified.",
+                    JournalMode = WorkspaceApprovalMode.CatalogDefault
+                };
+            }
+
+            // Approved-journey scope. This canary releases exactly the Business + Just-me solo journey.
+            // Personal purpose and team (With-others) initialization are out of scope and must not be
+            // reachable through the enrolled path, regardless of supplied answers or journal workflow.
+            if (request.Purpose != WorkspacePurpose.Business
+                || request.CollaborationIntent != WorkspaceCollaborationIntent.JustMe)
+            {
+                return new WorkspaceInitializationResult
+                {
+                    Applied = false,
+                    ReasonCode = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed,
+                    Message = "The current setup audience supports business or freelance work for just you.",
+                    JournalMode = WorkspaceApprovalMode.CatalogDefault
+                };
+            }
+
             if (request.Purpose == WorkspacePurpose.Unspecified
                 || request.CollaborationIntent == WorkspaceCollaborationIntent.Unspecified)
             {
@@ -137,6 +172,31 @@ namespace Api.Service
                         Applied = false,
                         ReasonCode = WorkspacePolicyReasonCodes.SoloSetupNotEligible,
                         Message = "Workspace is already initialized.",
+                        PolicyRevision = settings.PolicyRevision,
+                        JournalMode = _approvalResolver.Resolve(settings, FindJournalRule(companyId), AccessOperationCatalog.FinancialsJournalPost).Mode
+                    };
+                }
+
+                // Durable, server-issued eligibility proof — evaluated under the coordination lock. Being
+                // uninitialized is NOT sufficient: a legacy, current-team, former-team, or transferred-owner
+                // workspace can also be uninitialized. The workspace must be a pristine, sole-original-owner
+                // workspace with no disqualifying membership, invitation, policy-transition,
+                // ownership-transfer, or collaboration history. For the authenticated current/initialize
+                // CONTINUATION, it must additionally carry the signup-specific pending-continuation marker
+                // (generic origin evidence is insufficient — every created workspace has that), so a
+                // pristine-but-non-signup workspace cannot be initialized through that endpoint. The
+                // synchronous create path, which creates and initializes a fresh workspace in one request,
+                // runs the structural proof only.
+                var eligibility = requireSignupContinuationEvidence
+                    ? ContractAVerifier.VerifyPendingSignupContinuation(_db, companyId, ownerUserId)
+                    : ContractAVerifier.VerifySolePristineOwner(_db, companyId, ownerUserId, "initialization");
+                if (!eligibility.Allowed)
+                {
+                    return new WorkspaceInitializationResult
+                    {
+                        Applied = false,
+                        ReasonCode = WorkspacePolicyReasonCodes.NotPendingSignupWorkspace,
+                        Message = eligibility.Detail,
                         PolicyRevision = settings.PolicyRevision,
                         JournalMode = _approvalResolver.Resolve(settings, FindJournalRule(companyId), AccessOperationCatalog.FinancialsJournalPost).Mode
                     };

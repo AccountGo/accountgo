@@ -1340,8 +1340,12 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task Signup_WithAboutAnswers_WhenSoloSetupDisabled_RejectsAtomicallyWith422()
+        public async Task Signup_WithAboutAnswers_WhenSoloSetupDisabled_CreatesUnclassifiedWorkspace_WithoutInitializing()
         {
+            // New contract: signup never initializes or grants access (the email is unverified at signup).
+            // With setup disabled it still succeeds, creating the account and an UNCLASSIFIED workspace;
+            // initialization happens later through the authenticated, verified path. It must not reject the
+            // account creation just because About answers were supplied.
             var slug = "signup-disabled-" + Guid.NewGuid().ToString("N")[..8];
             var email = $"{slug}@example.com";
             var response = await Send(HttpMethod.Post, "/api/auth/signup", new
@@ -1354,15 +1358,21 @@ namespace AccountGo.BackendTests
                 workspacePurpose = "Business",
                 collaborationIntent = "JustMe"
             }, token: "", scoped: false);
-            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-            var body = await Json(response);
-            Assert.Equal("solo_setup_disabled", body.GetProperty("reasonCode").GetString());
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using (var scope = _factory.Services.CreateScope())
             {
                 var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                Assert.False(identity.Users.Any(u => u.Email == email));
-                Assert.False(db.Companies.Any(c => c.Slug == slug));
+                db.SuppressTenantSecurityCheck = true;
+                Assert.True(identity.Users.Any(u => u.Email == email));
+                var company = db.Companies.IgnoreQueryFilters().FirstOrDefault(c => c.Slug == slug);
+                Assert.NotNull(company);
+                var settings = db.WorkspaceOperatingSettings.IgnoreQueryFilters().FirstOrDefault(s => s.CompanyId == company!.Id);
+                Assert.NotNull(settings);
+                Assert.Equal(Core.Domain.WorkspaceCollaborationState.LegacyUnclassified, settings!.CollaborationState);
+                Assert.Null(settings.InitializedAtUtc);
+                // No functional grant was created for the unverified owner.
+                Assert.False(db.CompanyMemberSecurityRoles.IgnoreQueryFilters().Any(r => r.CompanyMember.CompanyId == company!.Id));
             }
         }
 
