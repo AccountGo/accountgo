@@ -19,6 +19,29 @@ namespace Core.Authorization
 
         private static readonly Meter s_meter = new(MeterName, MeterVersion);
 
+        private static System.Func<int>? s_activeIncidentObserver;
+
+        /// <summary>
+        /// Registers the durable "active invariant incidents" gauge, whose value is produced by
+        /// <paramref name="observer"/> each time the meter is observed. Wired from the Api layer where a
+        /// database query can count workspaces currently in a violating state. Idempotent: the first
+        /// registration creates the gauge; later calls just replace the observed value source. Exposing
+        /// current state separately from the new-incident counters lets monitoring see a violation that
+        /// persists across a restart even when no new incident is being recorded.
+        /// </summary>
+        public static void RegisterActiveIncidentObserver(System.Func<int> observer)
+        {
+            var isFirst = s_activeIncidentObserver == null;
+            s_activeIncidentObserver = observer;
+            if (isFirst)
+            {
+                s_meter.CreateObservableGauge(
+                    "workspace.active_invariant_incidents",
+                    () => s_activeIncidentObserver?.Invoke() ?? 0,
+                    description: "Workspaces currently in a committed invariant-violating state (durable current state).");
+            }
+        }
+
         public static readonly Counter<long> OnboardingStarts = s_meter.CreateCounter<long>(
             "workspace.onboarding.starts",
             description: "Number of workspace onboarding or initialization flows initiated.");

@@ -111,6 +111,9 @@ namespace Api.Service
             await _apiDb.SaveChangesAsync();
             await _identity.SaveChangesAsync();
             await tx.CommitAsync();
+            // Externally-owned transaction committed; run deferred committed-state verification for the
+            // affected workspaces (e.g. a workspace left in an inconsistent state by member removal).
+            _policyTransaction?.VerifyPendingAfterExternalCommit();
             return new AccountDeletionOutcome { Status = AccountDeletionStatus.Deleted, Preview = preview };
         }
 

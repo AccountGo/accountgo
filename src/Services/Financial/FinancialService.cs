@@ -61,7 +61,6 @@ namespace Services.Financial
         private readonly Core.Authorization.IWorkspaceApprovalPolicyResolver _approvalPolicyResolver;
         private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
         private readonly IRepository<Core.Domain.Auditing.AuditLog> _auditLogRepo;
-        private readonly IRepository<Core.Domain.WorkspaceOperatingSettings> _workspaceSettingsRepo;
         private readonly Microsoft.AspNetCore.Http.IHttpContextAccessor _httpContextAccessor;
 
         public const string JournalPostingAuthorizationAuditTable = "__JournalPostingAuthorization";
@@ -104,8 +103,7 @@ namespace Services.Financial
             IRepository<Core.Domain.Auditing.AuditLog> auditLogRepo = null,
             Microsoft.AspNetCore.Http.IHttpContextAccessor httpContextAccessor = null,
             Core.Authorization.IWorkspaceApprovalPolicyResolver approvalPolicyResolver = null,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
-            IRepository<Core.Domain.WorkspaceOperatingSettings> workspaceSettingsRepo = null
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -113,7 +111,6 @@ namespace Services.Financial
             _approvalPolicyResolver = approvalPolicyResolver;
             _policyTransaction = policyTransaction;
             _auditLogRepo = auditLogRepo;
-            _workspaceSettingsRepo = workspaceSettingsRepo;
             _httpContextAccessor = httpContextAccessor;
             _entitlements = entitlements;
             _booksLockGuard = booksLockGuard;
@@ -2441,18 +2438,16 @@ namespace Services.Financial
                     if (_policyTransaction == null)
                         throw new InvalidOperationException("Workspace policy transaction service is required to post journal entries.");
 
-                    // Capture whether THIS post established the durable first-action marker and the duration,
-                    // but emit the histogram only AFTER the policy transaction commits (below). The marker
-                    // write is atomic with the posting; a rollback discards both, so no false measurement.
-                    bool firstActionEstablished = false;
-                    double firstActionDurationSeconds = 0;
-
                     _policyTransaction.Execute(journalEntry.CompanyId, guard =>
                     {
                         executePosting();
 
                         if (guard.Settings.InitializedAtUtc.HasValue)
                         {
+                            // Write the durable first-action marker atomically with the posting (inside the
+                            // guard, under the coordination lock). Emit the histogram ONLY after the owning
+                            // transaction commits — whether this Execute owns it or joins a controller tx —
+                            // by enqueuing the emission. A rollback discards both marker and emission.
                             var established = Core.Authorization.WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(
                                 _auditLogRepo,
                                 journalEntry.CompanyId,
@@ -2462,21 +2457,15 @@ namespace Services.Financial
                                 DateTime.UtcNow);
                             if (established)
                             {
-                                firstActionEstablished = true;
                                 var d = (DateTime.UtcNow - guard.Settings.InitializedAtUtc.Value).TotalSeconds;
-                                firstActionDurationSeconds = d < 0 ? 0 : d;
+                                var duration = d < 0 ? 0 : d;
+                                _policyTransaction.EnqueuePostCommit(() =>
+                                    Core.Authorization.WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                                        duration,
+                                        new KeyValuePair<string, object?>("action", Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost)));
                             }
                         }
                     });
-
-                    // Post-commit: the transaction above has committed (or threw, skipping this). Emit the
-                    // first-useful-action histogram now. Delivery is best-effort, not exactly-once.
-                    if (firstActionEstablished)
-                    {
-                        Core.Authorization.WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
-                            firstActionDurationSeconds,
-                            new KeyValuePair<string, object?>("action", Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost));
-                    }
                 }
                 else
                 {
@@ -2493,37 +2482,45 @@ namespace Services.Financial
         /// Records the durable first-useful-action marker for a qualifying committed action (sales invoice
         /// or bill posting) and emits the first-useful-action histogram once, only when this call
         /// established the marker. Intended to be called by the sales/purchasing posting paths immediately
-        /// after their post persists, so emission is post-commit. "First" is established by the marker's
-        /// absence (unique per workspace across journal/invoice/bill), reliable across retries and
-        /// restarts. Note: for these paths the marker commits in its own save right after the document
-        /// posting rather than strictly within the same transaction; the journal path records atomically.
+        /// <summary>
+        /// Records the durable first-useful-action marker for a qualifying committed action (sales invoice
+        /// or bill posting) and emits the first-useful-action histogram once, only when this call
+        /// established the marker. Runs through the workspace policy transaction so the marker is written
+        /// under the per-company coordination lock (serializing against concurrent journal/invoice/bill
+        /// first-action races) and commits in the SAME transaction as the document posting (the caller's
+        /// ambient transaction, which Execute joins). The histogram emission is enqueued to run only after
+        /// that owning transaction commits; a rollback discards both the marker and the emission. "First"
+        /// is established by the marker's absence, unique per workspace across all three paths.
         /// </summary>
         public void RecordFirstUsefulActionIfFirst(int companyId, string actionKind)
         {
-            if (companyId <= 0 || _auditLogRepo == null)
+            if (companyId <= 0 || _auditLogRepo == null || _policyTransaction == null)
                 return;
 
-            DateTime? initializedAtUtc = _workspaceSettingsRepo?
-                .Table.Where(s => s.CompanyId == companyId).Select(s => s.InitializedAtUtc).FirstOrDefault();
-            if (!initializedAtUtc.HasValue)
-                return;
-
-            var established = Core.Authorization.WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(
-                _auditLogRepo,
-                companyId,
-                actionKind,
-                _auth?.ResolveActorContext()?.UserId,
-                initializedAtUtc.Value,
-                DateTime.UtcNow);
-
-            if (established)
+            _policyTransaction.Execute(companyId, guard =>
             {
-                var duration = (DateTime.UtcNow - initializedAtUtc.Value).TotalSeconds;
-                if (duration < 0) duration = 0;
-                Core.Authorization.WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
-                    duration,
-                    new KeyValuePair<string, object?>("action", actionKind));
-            }
+                var initializedAtUtc = guard.Settings.InitializedAtUtc;
+                if (!initializedAtUtc.HasValue)
+                    return;
+
+                var established = Core.Authorization.WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(
+                    _auditLogRepo,
+                    companyId,
+                    actionKind,
+                    _auth?.ResolveActorContext()?.UserId,
+                    initializedAtUtc.Value,
+                    DateTime.UtcNow);
+
+                if (established)
+                {
+                    var d = (DateTime.UtcNow - initializedAtUtc.Value).TotalSeconds;
+                    var duration = d < 0 ? 0 : d;
+                    _policyTransaction.EnqueuePostCommit(() =>
+                        Core.Authorization.WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                            duration,
+                            new KeyValuePair<string, object?>("action", actionKind)));
+                }
+            });
         }
 
         private void RecordJournalPostingAuthorizationEvidence(

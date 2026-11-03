@@ -54,6 +54,11 @@ namespace Api.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            // Always expose durable current-state to monitoring, independent of whether the one-shot sweep
+            // is enabled: the active-incident gauge reflects workspaces currently in a violating state,
+            // including incidents that persisted across a restart while new-incident counters read zero.
+            RegisterActiveIncidentGauge();
+
             if (!IsEnabled(_configuration))
                 return;
 
@@ -72,6 +77,24 @@ namespace Api.Service
                 // The sweep is a safety net; a sweep-level failure must never stop the app from serving.
                 _logger.LogWarning(ex, "Workspace invariant recovery sweep failed");
             }
+        }
+
+        private void RegisterActiveIncidentGauge()
+        {
+            Core.Authorization.WorkspaceOperatingPolicyMetrics.RegisterActiveIncidentObserver(() =>
+            {
+                try
+                {
+                    using var scope = _services.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                    db.SuppressTenantSecurityCheck = true;
+                    return WorkspaceInvariantIncidentLog.CountWorkspacesWithActiveIncident(db);
+                }
+                catch
+                {
+                    return 0;
+                }
+            });
         }
 
         /// <summary>

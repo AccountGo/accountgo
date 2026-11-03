@@ -136,6 +136,12 @@ namespace Core.Authorization
         /// verifications queued by nested guarded work (nothing committed).
         /// </summary>
         void DiscardPendingVerifications();
+
+        /// <summary>
+        /// Registers a side effect (e.g. telemetry) to run only after the owning transaction commits
+        /// durably, never on rollback.
+        /// </summary>
+        void EnqueuePostCommit(Action action);
     }
 
     /// <summary>Handle held while the company coordination row is locked.</summary>

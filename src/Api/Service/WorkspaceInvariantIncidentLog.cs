@@ -93,6 +93,24 @@ namespace Api.Service
             return ReconcileOutcome.NewIncident;
         }
 
+        /// <summary>
+        /// Counts workspaces whose latest incident-log event is an unresolved incident, i.e. that are
+        /// currently in a violating state. This is durable current-state, independent of the process-local
+        /// new-incident counters (which reset on restart), so monitoring can see a violation that persists
+        /// across restarts even when no new incident is being recorded.
+        /// </summary>
+        public static int CountWorkspacesWithActiveIncident(ApiDbContext db)
+        {
+            // Latest event per company; active when that event is not a "resolved" marker.
+            var latestPerCompany =
+                from a in db.AuditLogs.IgnoreQueryFilters()
+                where a.TableName == IncidentTable
+                group a by a.CompanyId into g
+                select g.OrderByDescending(x => x.Id).Select(x => x.FieldName).FirstOrDefault();
+
+            return latestPerCompany.Count(fieldName => fieldName != null && fieldName != EventResolved);
+        }
+
         private static void Append(ApiDbContext db, int companyId, string fieldName, string? signature, DateTime whenUtc)
         {
             db.AuditLogs.Add(new AuditLog
