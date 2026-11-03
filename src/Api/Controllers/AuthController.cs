@@ -45,6 +45,7 @@ namespace Api.Controllers
         private readonly WorkspaceService _workspaces;
         private readonly AccountDeletionService _accountDeletion;
         private readonly IPlanCatalog _plans;
+        private readonly WorkspaceInitializationApplicator _workspaceInit;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -60,7 +61,8 @@ namespace Api.Controllers
             ApiDbContext apiDb,
             WorkspaceService workspaces,
             AccountDeletionService accountDeletion,
-            IPlanCatalog plans)
+            IPlanCatalog plans,
+            WorkspaceInitializationApplicator workspaceInit = null)
         {
             _otpService = otpService;
             _authService = authService;
@@ -76,9 +78,11 @@ namespace Api.Controllers
             _workspaces = workspaces;
             _accountDeletion = accountDeletion;
             _plans = plans;
+            _workspaceInit = workspaceInit;
         }
 
         [AllowAnonymous]
+        [EnableRateLimiting("otp-verify")]
         [HttpPost("google")]
         public async Task<IActionResult> GoogleSignIn([FromBody] GoogleSignInRequest request)
         {
@@ -119,53 +123,25 @@ namespace Api.Controllers
                     return Forbid();
                 }
 
-                var user = await _userManager.FindByEmailAsync(payload.Email);
-                if (user != null && user.DeletedAt != null)
-                {
-                    return BadRequest(new ProblemDetails
-                    {
-                        Title = "Account Not Found",
-                        Detail = "No AccountGo profile associated with this Google address. Please contact your administrator.",
-                        Status = StatusCodes.Status400BadRequest
-                    });
-                }
+                if (string.IsNullOrWhiteSpace(payload.Subject) || string.IsNullOrWhiteSpace(payload.Email))
+                    return BadRequest(new ProblemDetails { Title = "Google Authentication Failed", Detail = "Invalid Google identity." });
+
+                // Resolve the stable provider subject first. Email alone is not proof of current ownership
+                // for third-party addresses, even when Google has previously verified it.
+                var user = await _userManager.FindByLoginAsync("Google", payload.Subject);
                 if (user == null)
                 {
-                    var autoProvision = _configuration.GetValue<bool>("Google:AutoProvision", false);
-                    if (!autoProvision)
-                    {
-                        return BadRequest(new ProblemDetails
-                        {
-                            Title = "Account Not Found",
-                            Detail = "No AccountGo profile associated with this Google address. Please contact your administrator.",
-                            Status = StatusCodes.Status400BadRequest
-                        });
-                    }
-
-                    user = new ApplicationUser
-                    {
-                        UserName = payload.Email,
-                        Email = payload.Email,
-                        EmailConfirmed = true
-                    };
-                    var createResult = await _userManager.CreateAsync(user);
-                    if (!createResult.Succeeded)
-                    {
-                        return BadRequest(new ProblemDetails
-                        {
-                            Title = "Registration Failed",
-                            Detail = string.Join(", ", System.Linq.Enumerable.Select(createResult.Errors, e => e.Description)),
-                            Status = StatusCodes.Status400BadRequest
-                        });
-                    }
+                    if (!GoogleIdentityPolicy.IsAuthoritativeEmail(payload.Email, payload.HostedDomain))
+                        return BadRequest(new ProblemDetails { Title = "Account linking required", Detail = "Sign in with your email code. This Google address cannot be linked automatically." });
+                    user = await _userManager.FindByEmailAsync(payload.Email);
+                    if (user == null || user.DeletedAt != null || !user.EmailConfirmed)
+                        return BadRequest(new ProblemDetails { Title = "Account Not Found", Detail = "Sign in or register with your email code first." });
+                    var linkResult = await _userManager.AddLoginAsync(user, new UserLoginInfo("Google", payload.Subject, "Google"));
+                    if (!linkResult.Succeeded)
+                        return BadRequest(new ProblemDetails { Title = "Account linking failed", Detail = "Unable to link this Google account. Sign in with your email code." });
                 }
-
-                // Link Google login if not already linked
-                var logins = await _userManager.GetLoginsAsync(user);
-                if (!logins.Any(l => l.LoginProvider == "Google" && l.ProviderKey == payload.Subject))
-                {
-                    await _userManager.AddLoginAsync(user, new UserLoginInfo("Google", payload.Subject, "Google"));
-                }
+                if (user.DeletedAt != null)
+                    return BadRequest(new ProblemDetails { Title = "Account Not Found", Detail = "This account is unavailable." });
 
                 Request.Cookies.TryGetValue("ag_td", out var agTdToken);
                 var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(user, "google", agTdToken);
@@ -276,6 +252,33 @@ namespace Api.Controllers
             if (!Regex.IsMatch(currency, "^[A-Z]{3}$"))
                 return Problem(statusCode: 400, title: "Invalid currency");
 
+            var hasPurpose = !string.IsNullOrWhiteSpace(request.WorkspacePurpose);
+            var hasCollaboration = !string.IsNullOrWhiteSpace(request.CollaborationIntent);
+            var wantsNewExperience = hasPurpose || hasCollaboration;
+            Core.Domain.WorkspacePurpose parsedPurpose = default;
+            Core.Domain.WorkspaceCollaborationIntent parsedCollaboration = default;
+            if (wantsNewExperience)
+            {
+                if (_workspaceInit != null && !_workspaceInit.Experience.SoloSetupEnabled)
+                {
+                    return UnprocessableEntity(new ProblemDetails
+                    {
+                        Title = "Workspace initialization disabled",
+                        Detail = "Solo/team workspace initialization is not enabled; workspace remains unclassified.",
+                        Status = StatusCodes.Status422UnprocessableEntity,
+                        Extensions = { ["reasonCode"] = Core.Authorization.WorkspacePolicyReasonCodes.SoloSetupDisabled }
+                    });
+                }
+
+                if (!hasPurpose || !hasCollaboration
+                    || !Enum.TryParse<Core.Domain.WorkspacePurpose>(request.WorkspacePurpose, ignoreCase: true, out parsedPurpose)
+                    || !Enum.TryParse<Core.Domain.WorkspaceCollaborationIntent>(request.CollaborationIntent, ignoreCase: true, out parsedCollaboration))
+                {
+                    return Problem(statusCode: 400, title: "About answers required",
+                        detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
+                }
+            }
+
             // Identity and domain writes share a transaction; failed provisioning or email delivery leaves no orphan.
             using (var transaction = await _apiDb.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable))
             {
@@ -303,15 +306,48 @@ namespace Api.Controllers
                 }
 
                 _securityService.AddUser(normalizedEmail, normalizedEmail,
-                    request.FirstName.Trim(), request.LastName.Trim(), new List<int>());
+                    request.FirstName?.Trim() ?? string.Empty, request.LastName?.Trim() ?? string.Empty, new List<int>());
 
                 Core.Domain.Company? company = null;
                 if (cleanSlug != null)
+                {
                     company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, _plans.DefaultPlanKey, currency);
+
+                    // Prefill name/slug is not About consent. Without both answers the workspace stays unclassified.
+                    if (wantsNewExperience && _workspaceInit != null)
+                    {
+                        var ownerAccess = Enum.TryParse<Core.Domain.OwnerAccessPreset>(request.OwnerAccessPreset, ignoreCase: true, out var preset)
+                            ? preset
+                            : Core.Domain.OwnerAccessPreset.FullWorkspaceAccess;
+                        Core.Domain.WorkspaceApprovalRuleKind? journalWorkflow = null;
+                        if (!string.IsNullOrWhiteSpace(request.InitialJournalWorkflow)
+                            && Enum.TryParse<Core.Domain.WorkspaceApprovalRuleKind>(request.InitialJournalWorkflow, ignoreCase: true, out var parsedJournal))
+                            journalWorkflow = parsedJournal;
+
+                        var ownerMember = _apiDb.CompanyMembers.Single(m => m.CompanyId == company.Id && m.UserId == appUser.Id);
+                        var initResult = _workspaceInit.ApplyNewWorkspace(company.Id, appUser.Id, ownerMember.Id, new WorkspaceInitializationRequest
+                        {
+                            Purpose = parsedPurpose,
+                            CollaborationIntent = parsedCollaboration,
+                            OwnerAccessPreset = ownerAccess,
+                            InitialJournalWorkflow = journalWorkflow
+                        });
+                        if (!initResult.Applied)
+                        {
+                            return UnprocessableEntity(new ProblemDetails
+                            {
+                                Title = "Workspace initialization rejected",
+                                Detail = initResult.Message,
+                                Status = StatusCodes.Status422UnprocessableEntity,
+                                Extensions = { ["reasonCode"] = initResult.ReasonCode }
+                            });
+                        }
+                    }
+                }
 
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
                 // Keep delivery inside the transaction so a failed send rolls back signup and workspace creation.
-                var result = await _otpService.SendWelcomeOtpAsync(appUser, request.FirstName.Trim(), company?.Name, ipAddress);
+                var result = await _otpService.SendWelcomeOtpAsync(appUser, string.IsNullOrWhiteSpace(request.FirstName) ? "there" : request.FirstName.Trim(), company?.Name, ipAddress);
                 if (!result.Success)
                 {
                     return BadRequest(new ProblemDetails

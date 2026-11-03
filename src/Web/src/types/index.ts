@@ -44,6 +44,35 @@ export interface WhitelabelConfig {
   primaryColor?: string;
 }
 
+export interface WorkspaceOperatingPolicySummary {
+  purpose?: string;
+  collaborationIntent?: string;
+  collaborationState?: string;
+  policyRevision?: number;
+  ownAccessProfileKey?: string;
+  ownAccessProfileDisplayName?: string;
+  journalWorkflow?: string;
+  soloSetupEnabled?: boolean;
+  allowedNextActions?: string[];
+}
+
+export type SoloSetupEligibilityStatus = 'Eligible' | 'Ineligible' | 'RecoveryRequired' | 0 | 1 | 2;
+
+export interface SoloSetupEligibility {
+  status: SoloSetupEligibilityStatus;
+  reasonCode: string;
+  message: string;
+  policyRevision: number;
+}
+
+export interface WorkspacePolicyMutationResult {
+  applied: boolean;
+  reasonCode?: string;
+  message?: string;
+  policyRevision: number;
+  collaborationState: string;
+}
+
 export interface OrgDetails {
   id: string;
   name: string;
@@ -59,6 +88,7 @@ export interface OrgDetails {
   avatarBg?: string;
   whitelabel?: WhitelabelConfig;
   subscription?: SubscriptionInfo;
+  operatingPolicy?: WorkspaceOperatingPolicySummary | null;
 }
 
 export interface Organization {
@@ -147,6 +177,7 @@ export interface AccessSetupStatus {
   adminCount: number;
   totalFunctionalRoles: number;
   isEligibleForBootstrap: boolean;
+  ownerCanManageOwnAccess?: boolean;
 }
 
 export interface PendingInvitation {

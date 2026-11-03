@@ -27,6 +27,8 @@ namespace Api.Controllers
         private readonly ApplicationIdentityDbContext _identity;
         private readonly ITenantContext _tenant;
         private readonly IAccessAuthorizationService _authorizationService;
+        private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
+        private readonly IWorkspacePolicyTransaction _policyTransaction;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         private bool IsOwner => _tenant.Role == CompanyMemberRole.Owner;
 
@@ -44,12 +46,16 @@ namespace Api.Controllers
             ApiDbContext db,
             ApplicationIdentityDbContext identity,
             ITenantContext tenant,
-            IAccessAuthorizationService authorizationService = null)
+            IAccessAuthorizationService authorizationService = null,
+            IWorkspaceOperatingPolicyService operatingPolicy = null,
+            IWorkspacePolicyTransaction policyTransaction = null)
         {
             _db = db;
             _identity = identity;
             _tenant = tenant;
             _authorizationService = authorizationService;
+            _operatingPolicy = operatingPolicy;
+            _policyTransaction = policyTransaction;
         }
 
         [HttpGet("members")]
@@ -252,6 +258,13 @@ namespace Api.Controllers
                 if (member.Role == CompanyMemberRole.Owner && IsLastOwner())
                     return Problem(statusCode: 409, title: "The last Owner cannot leave or be removed");
                 _db.CompanyMembers.Remove(member);
+                var settings = _db.WorkspaceOperatingSettings.SingleOrDefault(s => s.CompanyId == member.CompanyId);
+                if (settings != null)
+                {
+                    settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
+                    if (settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)
+                        settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                }
                 _db.SaveChanges();
                 tx.Commit();
                 AuthService.InvalidateContextCache();
@@ -783,17 +796,78 @@ namespace Api.Controllers
             var totalFunctionalRoles = await _db.CompanyMemberSecurityRoles
                 .CountAsync(sr => sr.CompanyMember.CompanyId == companyId);
 
-            var eligible = company.AccessBootstrapAvailable && !alreadyBootstrapped && adminCount == 1
+            var initialized = await _db.WorkspaceOperatingSettings
+                .AsNoTracking()
+                .AnyAsync(s => s.CompanyId == companyId && s.InitializedAtUtc != null);
+
+            var eligible = !initialized
+                && company.AccessBootstrapAvailable && !alreadyBootstrapped && adminCount == 1
                 && totalFunctionalRoles == 0 && callerMember?.Role == CompanyMemberRole.Owner
                 && callerMember.Status == CompanyMemberStatus.Active && company.CreatedByUserId == UserId;
+
+            var ownerCanManageOwnAccess = callerMember?.Role == CompanyMemberRole.Owner
+                && callerMember.Status == CompanyMemberStatus.Active
+                && !await _db.CompanyMembers.AnyAsync(m => m.CompanyId == companyId
+                    && m.Status == CompanyMemberStatus.Active && m.UserId != UserId);
 
             return Ok(new
             {
                 alreadyBootstrapped,
                 adminCount,
                 totalFunctionalRoles,
-                isEligibleForBootstrap = eligible
+                initialized,
+                isEligibleForBootstrap = eligible,
+                ownerCanManageOwnAccess
             });
+        }
+
+        [HttpPost("owner-access-setup")]
+        public IActionResult OwnerAccessSetup([FromBody] SetupWorkspaceAccessModel model)
+        {
+            var companyId = _tenant.RequireCompanyId();
+            var actor = UserId;
+            if (string.IsNullOrWhiteSpace(actor))
+                return Problem(statusCode: 401, title: "Unauthenticated");
+            var ids = model?.SecurityRoleIds?.Distinct().OrderBy(id => id).ToList() ?? new List<int>();
+            if (ids.Count == 0 || !ValidSecurityRoles(_db, ids))
+                return Problem(statusCode: 400, title: "Select valid functional roles.");
+
+            var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+            if (transaction == null)
+                return Problem(statusCode: 503, title: "Workspace access setup is unavailable.");
+
+            var result = transaction.Execute<IActionResult>(companyId, guard =>
+            {
+                var members = _db.CompanyMembers.Include(m => m.SecurityRoles)
+                    .Where(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active).ToList();
+                var owner = members.SingleOrDefault(m => m.UserId == actor && m.Role == CompanyMemberRole.Owner);
+                if (owner == null || members.Count != 1)
+                    return Problem(statusCode: 403, title: "Sole owner required",
+                        detail: "Only the sole active workspace owner can manage their own functional roles this way.");
+
+                var current = owner.SecurityRoles.Select(r => r.SecurityRoleId).ToHashSet();
+                var additions = ids.Where(id => !current.Contains(id)).ToList();
+                foreach (var id in additions)
+                    _db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = owner.Id, SecurityRoleId = id });
+                if (additions.Count > 0)
+                {
+                    _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                    {
+                        CompanyId = companyId, UserName = actor, AuditEventDateUTC = DateTime.UtcNow,
+                        AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                        TableName = "__OwnerAccessSetup", RecordId = owner.Id.ToString(), FieldName = "SecurityRoleIds",
+                        OriginalValue = System.Text.Json.JsonSerializer.Serialize(current.OrderBy(id => id)),
+                        NewValue = System.Text.Json.JsonSerializer.Serialize(current.Union(additions).OrderBy(id => id))
+                    });
+                }
+                return Ok(new { rolesAssigned = additions });
+            });
+            if (result is OkObjectResult)
+            {
+                AccessAuthorizationService.BumpGlobalSecurityRevision();
+                AuthService.InvalidateContextCache();
+            }
+            return result;
         }
 
         [HttpPost("access-setup")]
@@ -818,6 +892,12 @@ namespace Api.Controllers
                     return Problem(statusCode: 403, title: "Forbidden", detail: "Only a workspace Owner can perform initial access setup.");
 
                 var company = await _db.Companies.SingleAsync(c => c.Id == companyId);
+                var initialized = await _db.WorkspaceOperatingSettings
+                    .AnyAsync(s => s.CompanyId == companyId && s.InitializedAtUtc != null);
+                if (initialized)
+                    return Problem(statusCode: 403, title: "Bootstrap unavailable",
+                        detail: "This workspace is already initialized. Use membership and approval workflows instead of initial access setup.");
+
                 if (!company.AccessBootstrapAvailable || company.CreatedByUserId != callerUserId
                     || await _db.CompanyMemberSecurityRoles.AnyAsync(sr => sr.CompanyMember.CompanyId == companyId))
                     return Problem(statusCode: 403, title: "Bootstrap unavailable",
@@ -912,10 +992,17 @@ namespace Api.Controllers
                     return Problem(statusCode: 404, title: "Active member not found");
                 if (target.UserId == UserId)
                     return Problem(statusCode: 400, title: "Choose another member");
-                var caller = _db.CompanyMembers.Single(m => m.CompanyId == _tenant.RequireCompanyId() && m.UserId == UserId);
+                var companyId = _tenant.RequireCompanyId();
+                var caller = _db.CompanyMembers.Single(m => m.CompanyId == companyId && m.UserId == UserId);
                 target.Role = CompanyMemberRole.Owner;
                 caller.Role = CompanyMemberRole.Admin;
                 _db.SaveChanges();
+
+                // Update confirmed owner reference without granting Full workspace access automatically.
+                var policy = _operatingPolicy
+                    ?? HttpContext?.RequestServices?.GetService<IWorkspaceOperatingPolicyService>();
+                policy?.UpdateConfirmedOwnerMember(companyId, target.Id, UserId);
+
                 tx.Commit();
                 AuthService.InvalidateContextCache();
                 return NoContent();

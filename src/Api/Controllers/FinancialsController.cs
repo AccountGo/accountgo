@@ -350,6 +350,8 @@ namespace Api.Controllers
                     return NotFound(new { message = "Journal entry not found." });
 
                 _financialService.UpdateJournalEntry(je, true);
+                if (je.Posted != true)
+                    return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: "A user who prepared a transaction cannot independently approve or post it without a verified independent approval.");
 
                 if (companyId.HasValue && !string.IsNullOrWhiteSpace(aprHeader))
                 {

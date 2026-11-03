@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain
@@ -10,5 +11,14 @@ namespace Core.Domain
         public int SecurityRoleId { get; set; }
         public virtual CompanyMember? CompanyMember { get; set; }
         public virtual Security.SecurityRole? SecurityRole { get; set; }
+
+        /// <summary>How this grant was created. Existing rows backfill to LegacyExplicit.</summary>
+        public WorkspaceMemberGrantOrigin GrantOrigin { get; set; } = WorkspaceMemberGrantOrigin.LegacyExplicit;
+
+        public DateTime? GrantedAtUtc { get; set; }
+        public string? GrantedByUserId { get; set; }
+
+        /// <summary>Managed profile version when origin is a managed workspace profile; otherwise null.</summary>
+        public int? AccessProfileVersion { get; set; }
     }
 }

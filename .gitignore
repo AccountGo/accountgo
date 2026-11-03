@@ -234,3 +234,5 @@ src/Api/BUILD_SHA
 scratch/
 
 .vscode/
+semantic-review/
+.worktrees/

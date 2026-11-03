@@ -64,7 +64,7 @@ namespace Dto.Banking
     {
         public BankStatementLineDto Line { get; set; } = new();
         public StatementLineDocumentLinkDto Bill { get; set; } = new();
-        public StatementLineDocumentLinkDto Payment { get; set; } = new();
+        public StatementLineDocumentLinkDto? Payment { get; set; }
     }
 
     public class PayOpenBillFromStatementLineResultDto

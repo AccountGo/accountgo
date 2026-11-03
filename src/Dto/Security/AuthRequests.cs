@@ -79,8 +79,8 @@ namespace Dto.Security
 
     public record SignUpRequest(
         [Required, EmailAddress] string Email,
-        [Required, MinLength(1, ErrorMessage = "First name is required.")] string FirstName,
-        [Required, MinLength(1, ErrorMessage = "Last name is required.")] string LastName,
+        string? FirstName = null,
+        string? LastName = null,
         string? OrganizationName = null,
         string? OrganizationSlug = null,
         string? Currency = null
@@ -91,6 +91,12 @@ namespace Dto.Security
         [System.Text.Json.Serialization.JsonPropertyName("cf-turnstile-response")]
         public string TurnstileResponse { get; set; }
         #nullable restore
+
+        /// <summary>Optional About answers (enum names). Both purpose and collaborationIntent must be set to initialize.</summary>
+        public string? WorkspacePurpose { get; set; }
+        public string? CollaborationIntent { get; set; }
+        public string? OwnerAccessPreset { get; set; }
+        public string? InitialJournalWorkflow { get; set; }
     }
 
     public record SignUpResponse(

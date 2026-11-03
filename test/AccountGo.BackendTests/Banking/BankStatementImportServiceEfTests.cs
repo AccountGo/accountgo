@@ -62,6 +62,20 @@ public class BankStatementImportServiceEfTests : IDisposable
     }
 
     [Fact]
+    public void ListLines_FocusedId_ReturnsOnlyThatOwnedLineWithoutDependingOnItsPage()
+    {
+        using (_tenant.Impersonate(_companyId))
+        {
+            _service.Commit(_bankId, Csv("2026-10-06,-1.00,First,,\n2026-10-07,-2.00,Second,,\n"), "tester");
+            var id = _service.ListLines(_bankId, "all").Lines.Last().Id;
+            var focused = _service.ListLines(_bankId, "all", pageSize: 1, lineId: id);
+            Assert.Equal(1, focused.TotalCount);
+            Assert.Equal(id, Assert.Single(focused.Lines).Id);
+            Assert.Empty(_service.ListLines(_bankId, "all", lineId: id + 100).Lines);
+        }
+    }
+
+    [Fact]
     public void Commit_ListAndMatch_TranslateAgainstSqlite()
     {
         using (_tenant.Impersonate(_companyId))

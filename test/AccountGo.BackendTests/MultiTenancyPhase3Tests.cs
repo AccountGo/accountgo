@@ -1260,6 +1260,16 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task Signup_WithEmailOnly_SendsOtpAndCreatesNoWorkspace()
+        {
+            var response = await Send(HttpMethod.Post, "/api/auth/signup", new { email = "email-only@example.com" }, token: "", scoped: false);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var verify = await Send(HttpMethod.Post, "/api/auth/verify-otp", new { email = "email-only@example.com", otp = OtpCode() }, token: "", scoped: false);
+            Assert.Equal(HttpStatusCode.OK, verify.StatusCode);
+            Assert.Empty((await Json(verify)).GetProperty("organizations").EnumerateArray());
+        }
+
+        [Fact]
         public async Task Signup_WithOrganization_ProvisionedOwner_NoGlobalRole_AndOtpListsOrganizations()
         {
             var response = await Send(HttpMethod.Post, "/api/auth/signup",
@@ -1326,6 +1336,33 @@ namespace AccountGo.BackendTests
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 Assert.False(db.Users.Any(u => u.EmailAddress == "failed-signup@example.com"));
                 Assert.False(db.Companies.Any(c => c.Slug == "rolled-back"));
+            }
+        }
+
+        [Fact]
+        public async Task Signup_WithAboutAnswers_WhenSoloSetupDisabled_RejectsAtomicallyWith422()
+        {
+            var slug = "signup-disabled-" + Guid.NewGuid().ToString("N")[..8];
+            var email = $"{slug}@example.com";
+            var response = await Send(HttpMethod.Post, "/api/auth/signup", new
+            {
+                email,
+                firstName = "Solo",
+                lastName = "Owner",
+                organizationName = slug,
+                organizationSlug = slug,
+                workspacePurpose = "Business",
+                collaborationIntent = "JustMe"
+            }, token: "", scoped: false);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            var body = await Json(response);
+            Assert.Equal("solo_setup_disabled", body.GetProperty("reasonCode").GetString());
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                Assert.False(identity.Users.Any(u => u.Email == email));
+                Assert.False(db.Companies.Any(c => c.Slug == slug));
             }
         }
 

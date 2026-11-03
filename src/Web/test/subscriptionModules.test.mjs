@@ -94,3 +94,37 @@ test('derivePlanCards: monthlyPrice null shows no price on the card data', () =>
   assert.equal(cards[1].monthlyPrice, null);
   assert.equal(cards[1].actionLabel, 'Switch');
 });
+
+test('annual billing never presents the monthly price as an annual charge', async () => {
+  const { planPriceLabel } = await server.ssrLoadModule('/src/lib/planCards.ts');
+  assert.equal(planPriceLabel(15, 'month'), '$15/mo');
+  assert.equal(planPriceLabel(15, 'year'), null);
+  assert.equal(planPriceLabel(0, 'year'), '$0');
+});
+
+test('annual plan cards display the annual price supplied by the catalog', () => {
+  const cards = derivePlanCards('plan_a', ['plan_b'], [
+    { key: 'plan_a', name: 'Free', description: '', selfService: true, monthlyPrice: 0, annualPrice: 0 },
+    { key: 'plan_b', name: 'Paid', description: '', selfService: true, monthlyPrice: 10, annualPrice: 100 },
+  ]);
+  assert.equal(cards[1].annualPrice, 100);
+});
+
+test('product tabs only include plans belonging to the selected product', async () => {
+  const { plansForProduct } = await server.ssrLoadModule('/src/lib/planCards.ts');
+  const plans = [{ key: 'a', product: 'invoicing' }, { key: 'b', product: 'accounting' }, { key: 'c', product: 'invoicing' }];
+  assert.deepEqual(plansForProduct(plans, 'invoicing').map(p => p.key), ['a', 'c']);
+  assert.deepEqual(plansForProduct(plans, 'accounting').map(p => p.key), ['b']);
+});
+
+test('upgrade options only include allowed plans that resolve the denied capability', async () => {
+  const { eligibleUpgradePlans } = await server.ssrLoadModule('/src/lib/planCards.ts');
+  const plans = [
+    { key: 'solo', selfService: true, includedModules: ['sales'], features: ['white_label'], limits: { seats: 1 } },
+    { key: 'team', selfService: true, includedModules: ['sales'], features: ['white_label', 'custom_email'], limits: { seats: 3 } },
+    { key: 'hidden', selfService: false, includedModules: ['sales'], features: ['custom_email'], limits: { seats: null } },
+  ];
+  assert.deepEqual(eligibleUpgradePlans(plans, ['solo', 'team', 'hidden'], { code: 'FEATURE_NOT_ENTITLED', requiredFeature: 'custom_email' }).map(p => p.key), ['team']);
+  assert.deepEqual(eligibleUpgradePlans(plans, ['solo', 'team', 'hidden'], { code: 'QUOTA_EXCEEDED', resource: 'seats', used: 1 }).map(p => p.key), ['team']);
+  assert.deepEqual(eligibleUpgradePlans(plans, ['solo'], { code: 'QUOTA_EXCEEDED', resource: 'seats', used: 1 }).map(p => p.key), []);
+});

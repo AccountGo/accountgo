@@ -46,7 +46,19 @@ namespace Core.Domain
         public string? BusinessPhone { get; set; }
         public PostalAddress? BusinessAddress { get; set; }
 
+        /// <summary>Disclosure only — not a tax or legal determination.</summary>
+        public BusinessRegistrationStatus RegistrationStatus { get; set; } = BusinessRegistrationStatus.NotProvided;
+
+        /// <summary>Optional jurisdiction-specific registration identifier when status is Registered.</summary>
+        public string? RegistrationNumber { get; set; }
+
         public string? SalesInvoiceSettingsJson { get; set; }
+
+        /// <summary>
+        /// IANA timezone for the workspace (e.g., "UTC", "America/New_York", "Asia/Bangkok").
+        /// Used to determine "today" for recurring schedule runs. Default is UTC.
+        /// </summary>
+        public string Timezone { get; set; } = "UTC";
 
         public MfaPolicy MfaPolicy { get; set; } = MfaPolicy.Optional;
         public DateTime? MfaGracePeriodEndsAt { get; set; }

@@ -86,3 +86,12 @@ test("CapacityRouter evicts the oldest slug when full", () => {
   assert.equal(router.poolFor("b"), "paid");
   assert.equal(router.poolFor("c"), "paid");
 });
+
+test('only public authentication endpoints use the optional V2 auth pool', async () => {
+  const capacity = await import('../container-capacity.ts');
+  assert.equal(typeof capacity.isPublicAuthRequest, 'function');
+  for (const path of ['/api/auth/google', '/api/auth/signup', '/api/auth/send-otp', '/api/auth/verify-otp', '/api/auth/refresh', '/api/auth/mfa/totp/verify'])
+    assert.equal(capacity.isPublicAuthRequest(path), true, path);
+  for (const path of ['/health', '/api/auth/me', '/api/auth/logout', '/api/auth/google/extra', '/api/organizations'])
+    assert.equal(capacity.isPublicAuthRequest(path), false, path);
+});

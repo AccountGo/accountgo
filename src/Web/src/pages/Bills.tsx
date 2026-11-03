@@ -13,6 +13,7 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
 import { useCapabilities } from '../lib/entitlements';
 import { UsageHint } from '../components/UsageHint';
+import { useIntegrations } from '../lib/integrations';
 
 type StatusFilter = 'all' | 'unpaid' | 'overdue' | 'paid' | 'draft' | 'void';
 
@@ -23,6 +24,7 @@ export const Bills: React.FC = () => {
   const { entitlements, canCreate: canCreateResource } = useCapabilities();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
+  const incoming = useIntegrations();
   const purchasesWritable = canWrite('purchases');
   const canCreate = hasPermission('purchases.bills.create') && purchasesWritable && canCreateResource('bills');
   const canPay = hasPermission('purchases.payments.create') && purchasesWritable;
@@ -152,6 +154,12 @@ export const Bills: React.FC = () => {
         }
       />
       <PurchasesTabs orgSlug={currentOrg.slug} />
+      {incoming.capabilities?.canReview && (
+        <Link className="inline-block text-sm font-semibold text-[var(--brand-primary)] underline"
+          to={`/org/${currentOrg.slug}/banking/needs-review?direction=out`}>
+          Review incoming{incoming.summary ? ` (${incoming.summary.purchasePendingCount})` : ''}
+        </Link>
+      )}
       <ReadOnlyModuleBanner module="purchases" orgSlug={currentOrg.slug} />
       <UsageHint entitlements={entitlements} resource="bills" />
 

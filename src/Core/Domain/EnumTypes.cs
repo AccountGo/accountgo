@@ -153,7 +153,8 @@ namespace Core.Domain
         /// <summary>Quicken Interchange Format (#447 Phase C).</summary>
         Qif = 6,
         /// <summary>Excel workbook — first sheet, same column detection as CSV (#447 Phase C).</summary>
-        Xlsx = 7
+        Xlsx = 7,
+        Webhook = 8
     }
 
     /// <summary>Why a statement line was excluded from matching (#436 I3).</summary>
@@ -169,7 +170,9 @@ namespace Core.Domain
     public enum SalesInvoiceOrigins
     {
         /// <summary>One-line invoice issued and paid from a statement "Record other income" action.</summary>
-        StatementOtherIncome = 1
+        StatementOtherIncome = 1,
+        /// <summary>Generated from a recurring schedule (#479 Phase 1).</summary>
+        RecurringSchedule = 2
     }
 
     public enum AddressTypes
@@ -301,6 +304,8 @@ namespace Core.Domain
         Partnership = 2,
         Corporation = 3,
         Cooperative = 4,
-        NonProfit = 5
+        NonProfit = 5,
+        /// <summary>Personal finances. Appended without renumbering prior values.</summary>
+        Individual = 6
     }
 }

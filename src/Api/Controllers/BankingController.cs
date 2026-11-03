@@ -692,11 +692,12 @@ namespace Api.Controllers
             int bankId,
             [FromQuery] string? status = null,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = BankStatementImportService.DefaultListPageSize)
+            [FromQuery] int pageSize = BankStatementImportService.DefaultListPageSize,
+            [FromQuery] int? lineId = null)
         {
             try
             {
-                return Ok(_statements.ListLines(bankId, status, page, pageSize));
+                return Ok(_statements.ListLines(bankId, status, page, pageSize, lineId));
             }
             catch (TenantEntityNotFoundException)
             {
@@ -706,6 +707,23 @@ namespace Api.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpGet("StatementLines/ForBill/{billId:int}")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsView)]
+        [RequirePermission(SystemPermissions.PurchasesBillsView)]
+        public IActionResult StatementLinesForBill(int billId)
+        {
+            var companyId = _tenant.RequireCompanyId();
+            var paymentHeaders = _db.VendorPayments.Where(p => p.CompanyId == companyId &&
+                p.PurchaseInvoiceHeaderId == billId && p.GeneralLedgerHeaderId != null)
+                .Select(p => p.GeneralLedgerHeaderId);
+            var paymentLines = _db.GeneralLedgerLines.Where(l => l.CompanyId == companyId &&
+                paymentHeaders.Contains(l.GeneralLedgerHeaderId)).Select(l => (int?)l.Id);
+            return Ok(_db.BankStatementLines.AsNoTracking().Where(l => l.CompanyId == companyId &&
+                (l.DraftBillId == billId || paymentLines.Contains(l.MatchedGeneralLedgerLineId)))
+                .Select(l => new { l.Id, l.BankId }).ToList());
         }
 
         [HttpPost("StatementLines/{id:int}/Match")]
@@ -719,6 +737,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var matched = _statements.Match(id, request ?? new MatchBankStatementLineRequest());
+                AuditStatementDecision(id, "match");
                 tx.Commit();
                 return Ok(matched);
             }
@@ -743,6 +762,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var unmatched = _statements.Unmatch(id);
+                AuditStatementDecision(id, "unmatch");
                 tx.Commit();
                 return Ok(unmatched);
             }
@@ -770,6 +790,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var matched = _statements.CreateTransaction(id, request);
+                AuditStatementDecision(id, "create_transaction");
                 tx.Commit();
                 return Ok(matched);
             }
@@ -824,6 +845,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statementExpenses.BulkRecordExpense(request, GetUserNameFromRequestHeader() ?? string.Empty);
+                foreach (var lineId in request.LineIds) AuditStatementDecision(lineId, "record_expense");
                 tx.Commit();
                 return Ok(result);
             }
@@ -857,6 +879,39 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statementExpenses.RecordExpense(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                AuditStatementDecision(id, "record_expense");
+                tx.Commit();
+                return Ok(result);
+            }
+
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Creates a linked bill draft without approval, payment or a statement match.</summary>
+        [HttpPost("StatementLines/{id:int}/DraftExpense")]
+        [RequireStatementImport]
+        [RequireModule(SystemModules.Purchases)]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.PurchasesBillsCreate)]
+        public IActionResult DraftExpenseFromStatementLine(int id, [FromBody] RecordExpenseFromStatementLineRequest request)
+        {
+            if (request?.NewVendor != null && !string.IsNullOrWhiteSpace(request.NewVendor.Name)
+                && !_tenant.Permissions.Contains(SystemPermissions.PurchasesVendorsManage))
+                return RequirePermissionAttribute.Denied(SystemPermissions.PurchasesVendorsManage);
+            if (RefuseBeforeBooksStart(id) is { } refused) return refused;
+            if (RefuseIfBooksLocked(id) is { } locked) return locked;
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var result = _statementExpenses.RecordExpense(id, request, GetUserNameFromRequestHeader() ?? string.Empty, saveDraft: true);
+                AuditStatementDecision(id, "save_draft");
                 tx.Commit();
                 return Ok(result);
             }
@@ -885,6 +940,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statementExpenses.PayOpenBill(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                AuditStatementDecision(id, "record_bill_payment");
                 tx.Commit();
                 return Ok(result);
             }
@@ -923,6 +979,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statementIncome.Record(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                AuditStatementDecision(id, "record_other_income");
                 tx.Commit();
                 return Ok(result);
             }
@@ -951,6 +1008,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statementInvoices.ApplyOpenInvoice(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                AuditStatementDecision(id, "apply_invoice");
                 tx.Commit();
                 return Ok(result);
             }
@@ -975,6 +1033,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statements.Exclude(id, request ?? new ExcludeBankStatementLineRequest(), GetUserNameFromRequestHeader() ?? string.Empty);
+                AuditStatementDecision(id, "exclude");
                 tx.Commit();
                 return Ok(result);
             }
@@ -1022,6 +1081,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var result = _statements.Include(id);
+                AuditStatementDecision(id, "restore");
                 tx.Commit();
                 return Ok(result);
             }
@@ -1061,6 +1121,29 @@ namespace Api.Controllers
                 bankName = ex.BankName,
                 statementEndDate = ex.StatementEndDate.ToString("yyyy-MM-dd")
             });
+
+        private void AuditStatementDecision(int id, string action)
+        {
+            var line = _db.BankStatementLines.AsNoTracking()
+                .Single(l => l.Id == id && l.CompanyId == _tenant.RequireCompanyId());
+            _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+            {
+                CompanyId = line.CompanyId,
+                UserName = _tenant.UserId ?? GetUserNameFromRequestHeader() ?? "unknown",
+                AuditEventDateUTC = DateTime.UtcNow,
+                AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Modified,
+                TableName = "BankStatementLine",
+                RecordId = id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                FieldName = "ReviewDecision",
+                OriginalValue = string.Empty,
+                NewValue = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    action, line.BankId, line.DraftBillId, line.MatchedGeneralLedgerLineId,
+                    line.ExclusionReason, line.ExclusionNote
+                })
+            });
+            _db.SaveChanges();
+        }
 
         private Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction BeginWriteTransaction() =>
             RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, IsolationLevel.Serializable);

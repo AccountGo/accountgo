@@ -27,6 +27,7 @@ export interface ChoiceOption<T extends string> {
   title: string;
   description: string;
   badge?: string;
+  disabled?: boolean;
 }
 
 // Radio group rendered as selectable cards; native radios keep arrow-key navigation and screen reader semantics.
@@ -35,7 +36,7 @@ export function ChoiceCards<T extends string>({
 }: {
   legend: string;
   name: string;
-  value: T;
+  value: T | '';
   options: ChoiceOption<T>[];
   onChange: (value: T) => void;
   columns?: string;
@@ -46,13 +47,17 @@ export function ChoiceCards<T extends string>({
       <div className={`grid grid-cols-1 ${columns} gap-2.5`}>
         {options.map((option) => {
           const selected = option.value === value;
+          const disabled = option.disabled;
           return (
             <label
               key={option.value}
-              className={`relative flex flex-col gap-1 p-3.5 rounded-xl cursor-pointer transition-all focus-within:ring-2 focus-within:ring-[var(--brand-ring)] ${
-                selected
-                  ? 'bg-[var(--brand-subtle)] ring-2 ring-[var(--brand-primary)]'
-                  : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)]'
+              className={`relative flex flex-col gap-1 p-3.5 rounded-xl transition-all ${
+                disabled
+                  ? 'opacity-50 cursor-not-allowed bg-[var(--bg-subtle)]'
+                  : 'cursor-pointer focus-within:ring-2 focus-within:ring-[var(--brand-ring)] ' +
+                    (selected
+                      ? 'bg-[var(--brand-subtle)] ring-2 ring-[var(--brand-primary)]'
+                      : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)]')
               }`}
             >
               <input
@@ -60,7 +65,8 @@ export function ChoiceCards<T extends string>({
                 name={name}
                 value={option.value}
                 checked={selected}
-                onChange={() => onChange(option.value)}
+                disabled={disabled}
+                onChange={() => !disabled && onChange(option.value)}
                 className="sr-only"
               />
               <span className="flex items-center justify-between gap-2">

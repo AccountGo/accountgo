@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
-import { derivePlanCards } from '../lib/planCards';
+import { derivePlanCards, planPriceLabel, plansForProduct } from '../lib/planCards';
 import { useCapabilities } from '../lib/entitlements';
 import { useBilling } from '../lib/useBilling';
 import { UsageHint } from './UsageHint';
@@ -155,6 +155,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
+  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [checkoutProcessing, setCheckoutProcessing] = useState(false);
   const planBeforeCheckoutRef = React.useRef<string | null>(null);
   const versionBeforeCheckoutRef = React.useRef<string | null>(null);
@@ -362,7 +363,12 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
       </div>
 
       {billing.billingEnabled && (() => {
-        const cards = derivePlanCards(String(currentPlan), allowedTransitions, catalog.plans || []);
+        const allPlans = catalog.plans || [];
+        const grouped = allPlans.some(plan => plan.product === 'invoicing') && allPlans.some(plan => plan.product === 'accounting');
+        const product = selectedProduct ?? allPlans.find(plan => plan.key === currentPlan)?.product ?? 'invoicing';
+        const planKeys = new Set(plansForProduct(allPlans, product).map(plan => plan.key));
+        const cards = derivePlanCards(String(currentPlan), allowedTransitions, allPlans)
+          .filter(card => !grouped || planKeys.has(card.key as PlanKey));
         const showInterval = cards.some((card) => card.role === 'action');
         return (
           <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
@@ -398,10 +404,21 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
               )}
             </div>
 
+            {grouped && (
+              <div role="group" aria-label="Product" className="inline-flex rounded-xl bg-[var(--bg-subtle)] p-1">
+                {(['invoicing', 'accounting'] as const).map(option => (
+                  <button key={option} type="button" aria-pressed={product === option} onClick={() => setSelectedProduct(option)}
+                    className={`h-9 px-4 rounded-lg text-xs font-bold ${product === option ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'}`}>
+                    {option === 'invoicing' ? 'Invoicing & Bills' : 'Accounting'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {cards.length === 0 && <p className="text-sm text-[var(--text-muted)]">No plan changes are available for this product.</p>}
             <div className={`grid grid-cols-1 ${cards.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
               {cards.map((card) => {
                 const isCurrent = card.role === 'current';
-                const priceLabel = card.monthlyPrice != null ? `$${card.monthlyPrice}/mo` : null;
+                const priceLabel = planPriceLabel(card.monthlyPrice, billingInterval, card.annualPrice);
 
                 return (
                   <div
@@ -420,6 +437,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                         )}
                       </div>
                       <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">{card.description}</p>
+                      {billingInterval === 'year' && card.monthlyPrice != null && card.monthlyPrice > 0 && card.annualPrice == null && (
+                        <p className="text-xs text-[var(--text-muted)] mb-4">Annual price shown at checkout.</p>
+                      )}
                     </div>
 
                     {isCurrent ? (

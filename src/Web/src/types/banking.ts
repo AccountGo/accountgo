@@ -311,6 +311,7 @@ export const BANK_STATEMENT_SOURCE = {
   Mt940: 5,
   Qif: 6,
   Xlsx: 7,
+  Webhook: 8,
 } as const;
 
 export interface BankStatementColumnMap {
@@ -407,6 +408,7 @@ export interface BankStatementMatchCandidate {
 }
 
 export interface BankStatementLine {
+  draftBillId?: number | null;
   id: number;
   bankId: number;
   bankStatementImportId: number;

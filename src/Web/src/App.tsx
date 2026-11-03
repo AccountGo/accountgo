@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, useParams } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import OrgLayout from './layouts/OrgLayout';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
@@ -12,6 +12,9 @@ import Invitation from './pages/Invitation';
 import { Invoices } from './pages/Invoices';
 import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
+import { RecurringSchedules } from './pages/RecurringSchedules';
+import { RecurringScheduleDetailPage } from './pages/RecurringScheduleDetail';
+import { RecurringScheduleEdit } from './pages/RecurringScheduleEdit';
 import { Parties } from './pages/Parties';
 import { PartyDetail } from './pages/PartyDetail';
 import { Bills } from './pages/Bills';
@@ -26,6 +29,9 @@ import ChartOfAccounts from './pages/ChartOfAccounts';
 import Banking from './pages/Banking';
 import BankRegisterPage from './pages/BankRegister';
 import BankStatementImportPage from './pages/BankStatementImport';
+import IncomingReview from './pages/IncomingReview';
+import { IntegrationsSettingsTab } from './components/IntegrationsSettingsTab';
+import { useIntegrations } from './lib/integrations';
 import BankingTransactionsPage from './pages/BankingTransactions';
 import ReconciliationHistoryPage from './pages/ReconciliationHistory';
 import ReconcilePage from './pages/Reconcile';
@@ -66,6 +72,11 @@ const RootRedirect: React.FC = () => {
 
 const WorkspaceSettings: React.FC = () => {
   const { currentOrg } = useTenantContext();
+  const [params] = useSearchParams();
+  const { capabilities } = useIntegrations();
+  if (currentOrg.role !== 'Owner' && currentOrg.role !== 'Admin' &&
+      params.get('tab') === 'integrations' && capabilities?.canManage)
+    return <><h1 className="text-xl font-bold mb-4">Organization Settings</h1><IntegrationsSettingsTab /></>;
   return currentOrg.role === 'Owner' || currentOrg.role === 'Admin'
     ? <Settings />
     : <PermissionDeniedCard permission="Owner or Admin" />;
@@ -197,6 +208,10 @@ const router = createBrowserRouter([
             ),
           },
           {
+            path: 'banking/needs-review',
+            element: <RequiresStatementImport><IncomingReview /></RequiresStatementImport>,
+          },
+          {
             path: 'banking/:bankId/statement-import',
             element: (
               <RequiresStatementImport>
@@ -241,6 +256,38 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="sales">
                 <PartyDetail role="client" />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/recurring',
+            element: (
+              <RequiresModule module="sales">
+                <RecurringSchedules />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/recurring/new',
+            element: (
+              <RequiresModule module="sales">
+                <RecurringScheduleEdit />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/recurring/:scheduleId',
+            element: (
+              <RequiresModule module="sales">
+                <RecurringScheduleDetailPage />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/recurring/:scheduleId/edit',
+            element: (
+              <RequiresModule module="sales">
+                <RecurringScheduleEdit isEdit={true} />
               </RequiresModule>
             ),
           },

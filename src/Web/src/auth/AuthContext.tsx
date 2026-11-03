@@ -189,8 +189,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers,
       body: JSON.stringify({
         email: payload.email.trim(),
-        firstName: payload.firstName.trim(),
-        lastName: payload.lastName.trim(),
+        firstName: payload.firstName?.trim() || undefined,
+        lastName: payload.lastName?.trim() || undefined,
         organizationName: payload.organizationName?.trim() || undefined,
         organizationSlug: payload.organizationSlug?.trim() || undefined,
         currency: payload.currency || 'USD',

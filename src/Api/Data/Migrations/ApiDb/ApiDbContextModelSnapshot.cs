@@ -340,8 +340,23 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccessProfileVersion")
+                        .HasColumnType("int");
+
                     b.Property<int>("CompanyMemberId")
                         .HasColumnType("int");
+
+                    b.Property<int>("GrantOrigin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("GrantedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GrantedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("SecurityRoleId")
                         .HasColumnType("int");
@@ -440,6 +455,15 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("OnboardingChecklistJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("RegistrationNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("RegistrationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<int>("ReportingFramework")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -457,6 +481,13 @@ namespace Api.Data.Migrations.ApiDb
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(0);
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("UTC");
 
                     b.HasKey("Id");
 
@@ -1166,6 +1197,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("DraftBillId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("ExcludedAt")
                         .HasColumnType("datetime2");
@@ -2519,6 +2553,271 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("VendorPayment");
                 });
 
+            modelBuilder.Entity("Core.Domain.Recurring.RecurringOccurrence", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("GuardFailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("LeasedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("LeasedUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("PeriodEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("PurchaseInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecurringScheduleId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SalesInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ScheduledRunDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("SeriesAdvanced")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SkipReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey");
+
+                    b.HasIndex("PurchaseInvoiceId");
+
+                    b.HasIndex("RecurringScheduleId");
+
+                    b.HasIndex("SalesInvoiceId");
+
+                    b.HasIndex(new[] { "CompanyId", "Status", "DocumentDate" }, "IX_RecurringOccurrence_Company_Status_DocumentDate");
+
+                    b.HasIndex(new[] { "CompanyId", "Status", "LeasedUntil" }, "IX_RecurringOccurrence_Company_Status_Lease");
+
+                    b.HasIndex(new[] { "CompanyId", "RecurringScheduleId", "ScheduledRunDate" }, "UX_RecurringOccurrence_Company_Schedule_RunDate")
+                        .IsUnique();
+
+                    b.ToTable("RecurringOccurrences");
+                });
+
+            modelBuilder.Entity("Core.Domain.Recurring.RecurringSchedule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("AutomationEnabledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AutomationEnabledBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("Cadence")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DayOfMonth")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Interval")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxOccurrences")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("NeedsAttention")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("NextRunDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("OccurrenceCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PartyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentInstructions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecognitionMode")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ServicePeriodMode")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VendorInvoiceNumberPattern")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex(new[] { "CompanyId", "Kind", "PartyId" }, "IX_RecurringSchedule_Company_Kind_Party");
+
+                    b.HasIndex(new[] { "CompanyId", "NextRunDate" }, "IX_RecurringSchedule_Company_NextRunDate")
+                        .HasFilter("[Status] = 1 AND [NextRunDate] IS NOT NULL");
+
+                    b.HasIndex(new[] { "CompanyId", "Status" }, "IX_RecurringSchedule_Company_Status");
+
+                    b.ToTable("RecurringSchedules");
+                });
+
+            modelBuilder.Entity("Core.Domain.Recurring.RecurringScheduleLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("Discount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<int>("DiscountType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int?>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(1m);
+
+                    b.Property<int>("RecurringScheduleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TaxId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("RecurringScheduleId");
+
+                    b.HasIndex("TaxId");
+
+                    b.ToTable("RecurringScheduleLines");
+                });
+
             modelBuilder.Entity("Core.Domain.Sales.Customer", b =>
                 {
                     b.Property<int>("Id")
@@ -3612,6 +3911,143 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("WorkspaceAccessRequest", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.WorkspaceApprovalRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("ConfiguredAtPolicyRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ConfiguredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ConfiguredByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("PolicySchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("Provenance")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReviewerSecurityRoleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RuleKind")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewerSecurityRoleId");
+
+                    b.HasIndex("CompanyId", "OperationKey")
+                        .IsUnique();
+
+                    b.ToTable("WorkspaceApprovalRule", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceOperatingSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CollaborationIntent")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CollaborationState")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ConfirmedOwnerMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EverTeamActivatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("InitializationSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("InitializedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InitializedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("LastConfirmedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastConfirmedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<long>("PolicyRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("PolicySchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique();
+
+                    b.HasIndex("ConfirmedOwnerMemberId");
+
+                    b.ToTable("WorkspaceOperatingSettings", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspacePolicyCoordination", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastAcquiredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique();
+
+                    b.ToTable("WorkspacePolicyCoordination", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditableAttribute", b =>
                 {
                     b.HasOne("Core.Domain.Auditing.AuditableEntity", "AuditableEntity")
@@ -4485,6 +4921,74 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("VoidGeneralLedgerHeader");
                 });
 
+            modelBuilder.Entity("Core.Domain.Recurring.RecurringOccurrence", b =>
+                {
+                    b.HasOne("Core.Domain.Purchases.PurchaseInvoiceHeader", "PurchaseInvoice")
+                        .WithMany()
+                        .HasForeignKey("PurchaseInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Recurring.RecurringSchedule", "Schedule")
+                        .WithMany("Occurrences")
+                        .HasForeignKey("RecurringScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoice")
+                        .WithMany()
+                        .HasForeignKey("SalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PurchaseInvoice");
+
+                    b.Navigation("SalesInvoice");
+
+                    b.Navigation("Schedule");
+                });
+
+            modelBuilder.Entity("Core.Domain.Recurring.RecurringSchedule", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("Core.Domain.Recurring.RecurringScheduleLine", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Items.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Recurring.RecurringSchedule", "Schedule")
+                        .WithMany("Lines")
+                        .HasForeignKey("RecurringScheduleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.TaxSystem.Tax", "Tax")
+                        .WithMany()
+                        .HasForeignKey("TaxId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Schedule");
+
+                    b.Navigation("Tax");
+                });
+
             modelBuilder.Entity("Core.Domain.Sales.Customer", b =>
                 {
                     b.HasOne("Core.Domain.Financials.Account", "AccountsReceivableAccount")
@@ -4989,6 +5493,53 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("TargetMember");
                 });
 
+            modelBuilder.Entity("Core.Domain.WorkspaceApprovalRule", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Security.SecurityRole", "ReviewerSecurityRole")
+                        .WithMany()
+                        .HasForeignKey("ReviewerSecurityRoleId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ReviewerSecurityRole");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceOperatingSettings", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.CompanyMember", "ConfirmedOwnerMember")
+                        .WithMany()
+                        .HasForeignKey("ConfirmedOwnerMemberId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ConfirmedOwnerMember");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspacePolicyCoordination", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>
                 {
                     b.Navigation("AuditableAttributes");
@@ -5100,6 +5651,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("VendorContact");
 
                     b.Navigation("VendorPayments");
+                });
+
+            modelBuilder.Entity("Core.Domain.Recurring.RecurringSchedule", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("Occurrences");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.Customer", b =>

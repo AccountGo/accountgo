@@ -26,6 +26,8 @@ public class StatementLineActionPermissionTests
 {
     [Theory]
     [InlineData(nameof(BankingController.RecordExpenseFromStatementLine), SystemPermissions.PurchasesBillsCreate)]
+    [InlineData(nameof(BankingController.DraftExpenseFromStatementLine), SystemPermissions.PurchasesBillsCreate)]
+    [InlineData(nameof(BankingController.DraftExpenseFromStatementLine), SystemPermissions.BankingAccountsManage)]
     [InlineData(nameof(BankingController.RecordExpenseFromStatementLine), SystemPermissions.PurchasesBillsPost)]
     [InlineData(nameof(BankingController.RecordExpenseFromStatementLine), SystemPermissions.PurchasesPaymentsCreate)]
     [InlineData(nameof(BankingController.RecordExpenseFromStatementLine), SystemPermissions.BankingAccountsManage)]

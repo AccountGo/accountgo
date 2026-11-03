@@ -10,6 +10,7 @@ export interface Env {
   DatabaseProvider?: string;
   /** Deployed default for tiered capacity: "true" routes to the CONTAINER_V2 pools. */
   TIERED_CAPACITY_ENABLED?: string;
+  AUTH_CAPACITY_ENABLED?: string;
   /** Optional KV namespace with runtime switches (key "tiered_capacity" overrides TIERED_CAPACITY_ENABLED). */
   FLAGS?: KVNamespace;
   /** V2 start() instance for the paid pool (default standard-1) and the free pool (default lite). */

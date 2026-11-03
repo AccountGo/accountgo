@@ -85,24 +85,33 @@ namespace Api.Tenancy
         }
 
         public IDisposable Impersonate(int companyId, string? slug = null, CompanyMemberRole? role = null, IReadOnlySet<string>? permissions = null)
-            => ImpersonateUser(companyId, _resolvedState.UserId ?? string.Empty, slug, role, permissions);
+        {
+            var current = CurrentState;
+            return ImpersonateUser(
+                companyId,
+                current.UserId ?? string.Empty,
+                slug ?? (companyId == current.CompanyId ? current.CompanySlug : null),
+                role ?? (companyId == current.CompanyId ? current.Role : null),
+                permissions ?? (companyId == current.CompanyId ? current.Permissions : null));
+        }
 
         public IDisposable ImpersonateUser(int companyId, string userId, string? slug = null, CompanyMemberRole? role = null, IReadOnlySet<string>? permissions = null)
         {
-            var effectiveUser = string.IsNullOrWhiteSpace(userId) ? _resolvedState.UserId : userId;
+            var current = CurrentState;
+            var effectiveUser = string.IsNullOrWhiteSpace(userId) ? current.UserId : userId;
             var isScoped = permissions != null && permissions.Count > 0 && string.IsNullOrWhiteSpace(effectiveUser);
             var domain = isScoped
                 ? ActorTrustDomain.ScopedService
-                : (!string.IsNullOrWhiteSpace(effectiveUser) ? ActorTrustDomain.WorkspaceUser : ActorTrustDomain.Unauthenticated);
+                : (!string.IsNullOrWhiteSpace(effectiveUser) ? (current.ActorDomain != ActorTrustDomain.Unauthenticated ? current.ActorDomain : ActorTrustDomain.WorkspaceUser) : ActorTrustDomain.Unauthenticated);
 
             var state = new TenantState
             {
                 CompanyId = companyId,
-                CompanySlug = slug ?? $"org-{companyId}",
-                Role = role ?? CompanyMemberRole.Owner,
-                Permissions = permissions ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                CompanySlug = slug ?? (companyId == current.CompanyId ? current.CompanySlug : null) ?? $"org-{companyId}",
+                Role = role ?? (companyId == current.CompanyId ? current.Role : null) ?? CompanyMemberRole.Owner,
+                Permissions = permissions ?? (companyId == current.CompanyId ? current.Permissions : new HashSet<string>(StringComparer.OrdinalIgnoreCase)),
                 UserId = isScoped ? "system:scoped-service" : effectiveUser,
-                MemberId = _resolvedState.MemberId,
+                MemberId = companyId == current.CompanyId ? current.MemberId : null,
                 ActorDomain = domain
             };
             _impersonationStack.Push(state);

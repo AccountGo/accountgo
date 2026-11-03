@@ -5,6 +5,7 @@ using Core.Domain.Donations;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
+using Core.Domain.Recurring;
 using Core.Domain.Sales;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
@@ -112,19 +113,54 @@ namespace Api.Data
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             EnforceAccessBootstrapLifecycle();
+            EnforceAuditLogImmutability();
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
+            EnforceRecurringScheduleConsistency();
             return base.SaveChanges(acceptAllChangesOnSuccess);
         }
 
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
             EnforceAccessBootstrapLifecycle();
+            EnforceAuditLogImmutability();
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
+            EnforceRecurringScheduleConsistency();
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        private static readonly HashSet<string> ImmutableAuditTables = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "__WorkspaceInitialization",
+            "__OwnerAccessSetup",
+            "__WorkspacePolicyTransition",
+            "__JournalPostingAuthorization"
+        };
+
+        private void EnforceAuditLogImmutability()
+        {
+            var auditEntries = ChangeTracker.Entries<Core.Domain.Auditing.AuditLog>()
+                .Where(e => e.State is EntityState.Modified or EntityState.Deleted)
+                .ToList();
+
+            foreach (var entry in auditEntries)
+            {
+                var originalTable = entry.Property(nameof(Core.Domain.Auditing.AuditLog.TableName)).OriginalValue as string;
+                var currentTable = entry.Entity.TableName;
+
+                var protectedTable = (originalTable != null && ImmutableAuditTables.Contains(originalTable))
+                    ? originalTable
+                    : (currentTable != null && ImmutableAuditTables.Contains(currentTable) ? currentTable : null);
+
+                if (protectedTable != null)
+                {
+                    throw new InvalidOperationException(
+                        $"Audit log records for '{protectedTable}' are append-only evidence and cannot be modified or deleted.");
+                }
+            }
         }
 
         // Close setup in the same write as the first functional grant or independent administrator.
@@ -148,6 +184,23 @@ namespace Api.Data
             foreach (var companyId in companyIds)
             {
                 var company = Companies.SingleOrDefault(c => c.Id == companyId);
+
+                var isCollaboratorChange = members.Any(e => e.Entity.CompanyId == companyId
+                    && company?.CreatedByUserId != null
+                    && e.Entity.UserId != company.CreatedByUserId);
+                if (isCollaboratorChange && _tenantContext?.IsResolved == true && _tenantContext.CompanyId == companyId)
+                {
+                    var settings = WorkspaceOperatingSettings.IgnoreQueryFilters().SingleOrDefault(s => s.CompanyId == companyId);
+                    if (settings != null)
+                    {
+                        settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
+                        if (settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)
+                        {
+                            settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                        }
+                    }
+                }
+
                 if (company?.AccessBootstrapAvailable != true)
                     continue;
 
@@ -159,6 +212,136 @@ namespace Api.Data
                         && (e.Entity.Role == CompanyMemberRole.Owner || e.Entity.Role == CompanyMemberRole.Admin));
                 if (grantCompanyIds.Contains(companyId) || independentAdministrator)
                     company.AccessBootstrapAvailable = false;
+            }
+        }
+
+        /// <summary>
+        /// #479: RecurringSchedule rows and the ids they point at must all live in the same company.
+        /// Lines and occurrences must match their parent schedule's CompanyId, and every FK
+        /// (schedule party, line item/tax/account, occurrence invoice) must resolve to a row in
+        /// that same company.
+        ///
+        /// This check <b>fails closed</b>: when an id is set but no row with that id exists in the
+        /// expected company, it throws. A foreign key only proves the id exists somewhere; it does
+        /// not prove tenant ownership. Lookups therefore use <see cref="EntityFrameworkExtensions.IgnoreQueryFilters"/>
+        /// so a cross-company row is visible to this check (and then rejected) instead of being
+        /// silently hidden by the tenant query filter.
+        /// </summary>
+        private void EnforceRecurringScheduleConsistency()
+        {
+            // Resolve a row's CompanyId by id, consulting the change tracker first (for rows added
+            // in this unit of work that are not yet in the database) then the database with tenant
+            // filters ignored. Returns null only when no such id exists anywhere.
+            int? ResolveCompanyId<TEntity>(DbSet<TEntity> set, int id)
+                where TEntity : BaseEntity, ICompanyOwned
+            {
+                var local = set.Local.FirstOrDefault(e => e.Id == id);
+                if (local != null)
+                    return local.CompanyId;
+
+                return set.IgnoreQueryFilters()
+                    .Where(e => e.Id == id)
+                    .Select(e => (int?)e.CompanyId)
+                    .FirstOrDefault();
+            }
+
+            void RequireSameCompany<TEntity>(DbSet<TEntity> set, int id, int expectedCompanyId, string label)
+                where TEntity : BaseEntity, ICompanyOwned
+            {
+                var companyId = ResolveCompanyId(set, id);
+                if (companyId == null)
+                {
+                    throw new CrossTenantWriteException(
+                        $"{label} {id} does not exist or is not visible; cannot verify it belongs to company {expectedCompanyId}.");
+                }
+                if (companyId.Value != expectedCompanyId)
+                {
+                    throw new CrossTenantWriteException(
+                        $"{label} {id} belongs to company {companyId.Value}, not {expectedCompanyId}.");
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<RecurringSchedule>())
+            {
+                if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
+                    continue;
+
+                var schedule = entry.Entity;
+
+                // PartyId points at a Customer (sales) or Vendor (bill), both of which are company-owned.
+                if (schedule.Kind == RecurringScheduleKind.SalesInvoice)
+                {
+                    RequireSameCompany(Customers, schedule.PartyId, schedule.CompanyId,
+                        "RecurringSchedule Customer");
+                }
+                else
+                {
+                    RequireSameCompany(Vendors, schedule.PartyId, schedule.CompanyId,
+                        "RecurringSchedule Vendor");
+                }
+
+                if (schedule.PaymentTermId.HasValue)
+                {
+                    RequireSameCompany(PaymentTerms, schedule.PaymentTermId.Value, schedule.CompanyId,
+                        "RecurringSchedule PaymentTerm");
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<RecurringScheduleLine>())
+            {
+                if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
+                    continue;
+
+                var line = entry.Entity;
+
+                var parentCompanyId = ResolveCompanyId(RecurringSchedules, line.RecurringScheduleId);
+                if (parentCompanyId == null)
+                {
+                    throw new CrossTenantWriteException(
+                        $"RecurringScheduleLine references schedule {line.RecurringScheduleId}, which does not exist.");
+                }
+                if (parentCompanyId.Value != line.CompanyId)
+                {
+                    throw new CrossTenantWriteException(
+                        $"RecurringScheduleLine CompanyId ({line.CompanyId}) must match its RecurringSchedule CompanyId ({parentCompanyId.Value}).");
+                }
+
+                if (line.ItemId.HasValue)
+                    RequireSameCompany(Items, line.ItemId.Value, line.CompanyId, "RecurringScheduleLine Item");
+
+                if (line.TaxId.HasValue)
+                    RequireSameCompany(Taxes, line.TaxId.Value, line.CompanyId, "RecurringScheduleLine Tax");
+
+                if (line.AccountId.HasValue)
+                    RequireSameCompany(Accounts, line.AccountId.Value, line.CompanyId, "RecurringScheduleLine Account");
+            }
+
+            foreach (var entry in ChangeTracker.Entries<RecurringOccurrence>())
+            {
+                if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
+                    continue;
+
+                var occurrence = entry.Entity;
+
+                var parentCompanyId = ResolveCompanyId(RecurringSchedules, occurrence.RecurringScheduleId);
+                if (parentCompanyId == null)
+                {
+                    throw new CrossTenantWriteException(
+                        $"RecurringOccurrence references schedule {occurrence.RecurringScheduleId}, which does not exist.");
+                }
+                if (parentCompanyId.Value != occurrence.CompanyId)
+                {
+                    throw new CrossTenantWriteException(
+                        $"RecurringOccurrence CompanyId ({occurrence.CompanyId}) must match its RecurringSchedule CompanyId ({parentCompanyId.Value}).");
+                }
+
+                if (occurrence.SalesInvoiceId.HasValue)
+                    RequireSameCompany(SalesInvoiceHeaders, occurrence.SalesInvoiceId.Value, occurrence.CompanyId,
+                        "RecurringOccurrence SalesInvoice");
+
+                if (occurrence.PurchaseInvoiceId.HasValue)
+                    RequireSameCompany(PurchaseInvoiceHeaders, occurrence.PurchaseInvoiceId.Value, occurrence.CompanyId,
+                        "RecurringOccurrence PurchaseInvoice");
             }
         }
 
@@ -248,6 +431,7 @@ namespace Api.Data
                 .HasDefaultValue("legacy-default");
             builder.Entity<CompanySetting>().Property(s => s.MfaPolicy).HasDefaultValue(MfaPolicy.Optional);
             builder.Entity<CompanySetting>().Property(s => s.RequireMfaEveryLogin).HasDefaultValue(false);
+            builder.Entity<CompanySetting>().Property(s => s.Timezone).IsRequired().HasMaxLength(50).HasDefaultValue("UTC");
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
             builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);
@@ -563,6 +747,8 @@ namespace Api.Data
             {
                 entity.HasIndex(e => new { e.CompanyMemberId, e.SecurityRoleId }).IsUnique();
                 entity.HasIndex(e => e.SecurityRoleId);
+                entity.Property(e => e.GrantOrigin).HasDefaultValue(WorkspaceMemberGrantOrigin.LegacyExplicit);
+                entity.Property(e => e.GrantedByUserId).HasMaxLength(450);
                 entity.HasOne(e => e.CompanyMember)
                     .WithMany(m => m.SecurityRoles)
                     .HasForeignKey(e => e.CompanyMemberId)
@@ -570,6 +756,57 @@ namespace Api.Data
                 entity.HasOne(e => e.SecurityRole)
                     .WithMany()
                     .HasForeignKey(e => e.SecurityRoleId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<CompanySetting>(entity =>
+            {
+                entity.Property(e => e.RegistrationStatus).HasDefaultValue(BusinessRegistrationStatus.NotProvided);
+                entity.Property(e => e.RegistrationNumber).HasMaxLength(100);
+            });
+
+            builder.Entity<WorkspaceOperatingSettings>(entity =>
+            {
+                entity.ToTable("WorkspaceOperatingSettings");
+                entity.HasIndex(e => e.CompanyId).IsUnique();
+                entity.Property(e => e.InitializedByUserId).HasMaxLength(450);
+                entity.Property(e => e.LastConfirmedByUserId).HasMaxLength(450);
+                entity.Property(e => e.PolicyRevision).IsConcurrencyToken();
+                entity.Property(e => e.PolicySchemaVersion).HasDefaultValue(WorkspaceOperatingPolicySchema.CurrentVersion);
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.ConfirmedOwnerMember)
+                    .WithMany()
+                    .HasForeignKey(e => e.ConfirmedOwnerMemberId)
+                    .OnDelete(DeleteBehavior.NoAction);
+            });
+
+            builder.Entity<WorkspaceApprovalRule>(entity =>
+            {
+                entity.ToTable("WorkspaceApprovalRule");
+                entity.HasIndex(e => new { e.CompanyId, e.OperationKey }).IsUnique();
+                entity.Property(e => e.OperationKey).IsRequired().HasMaxLength(128);
+                entity.Property(e => e.ConfiguredByUserId).HasMaxLength(450);
+                entity.Property(e => e.PolicySchemaVersion).HasDefaultValue(WorkspaceOperatingPolicySchema.CurrentVersion);
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.ReviewerSecurityRole)
+                    .WithMany()
+                    .HasForeignKey(e => e.ReviewerSecurityRoleId)
+                    .OnDelete(DeleteBehavior.NoAction);
+            });
+
+            builder.Entity<WorkspacePolicyCoordination>(entity =>
+            {
+                entity.ToTable("WorkspacePolicyCoordination");
+                entity.HasIndex(e => e.CompanyId).IsUnique();
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
@@ -799,6 +1036,106 @@ namespace Api.Data
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
+            #region Recurring Schedules (#479 Phase 1)
+
+            builder.Entity<RecurringSchedule>(entity =>
+            {
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Notes).HasMaxLength(2000);
+                entity.Property(e => e.PaymentInstructions).HasMaxLength(2000);
+                entity.Property(e => e.VendorInvoiceNumberPattern).HasMaxLength(100);
+                entity.Property(e => e.AutomationEnabledBy).HasMaxLength(256);
+
+                // Dates are stored as date-only
+                entity.Property(e => e.StartDate).HasColumnType("date");
+                entity.Property(e => e.EndDate).HasColumnType("date");
+                entity.Property(e => e.NextRunDate).HasColumnType("date");
+
+                // Indexes
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => new { e.CompanyId, e.Status }, "IX_RecurringSchedule_Company_Status");
+                entity.HasIndex(e => new { e.CompanyId, e.Kind, e.PartyId }, "IX_RecurringSchedule_Company_Kind_Party");
+                entity.HasIndex(e => new { e.CompanyId, e.NextRunDate }, "IX_RecurringSchedule_Company_NextRunDate")
+                    .HasFilter("[Status] = 1 AND [NextRunDate] IS NOT NULL"); // Only active schedules with next run date
+
+                // Relationships
+                entity.HasOne(e => e.Company).WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<RecurringScheduleLine>(entity =>
+            {
+                entity.Property(e => e.Description).HasMaxLength(500);
+                entity.Property(e => e.Quantity).HasColumnType("decimal(18, 4)").HasDefaultValue(1m);
+                entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+                entity.Property(e => e.Discount).HasColumnType("decimal(18, 4)").HasDefaultValue(0m);
+                entity.Property(e => e.DiscountType).HasDefaultValue(RecurringDiscountType.Percentage);
+
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => e.RecurringScheduleId);
+
+                entity.HasOne(e => e.Schedule).WithMany(s => s.Lines)
+                    .HasForeignKey(e => e.RecurringScheduleId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Item).WithMany()
+                    .HasForeignKey(e => e.ItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Tax).WithMany()
+                    .HasForeignKey(e => e.TaxId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Account).WithMany()
+                    .HasForeignKey(e => e.AccountId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<RecurringOccurrence>(entity =>
+            {
+                entity.Property(e => e.IdempotencyKey).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.ErrorCode).HasMaxLength(50);
+                entity.Property(e => e.ErrorMessage).HasMaxLength(2000);
+                entity.Property(e => e.GuardFailureReason).HasMaxLength(500);
+                entity.Property(e => e.ActionBy).HasMaxLength(256);
+                entity.Property(e => e.SkipReason).HasMaxLength(500);
+                entity.Property(e => e.LeasedBy).HasMaxLength(100);
+
+                // Dates are stored as date-only
+                entity.Property(e => e.ScheduledRunDate).HasColumnType("date");
+                entity.Property(e => e.PeriodStart).HasColumnType("date");
+                entity.Property(e => e.PeriodEnd).HasColumnType("date");
+                entity.Property(e => e.DocumentDate).HasColumnType("date");
+                entity.Property(e => e.DueDate).HasColumnType("date");
+                // LeasedUntil uses timestamp with time zone on Postgres, datetime2 on SQL Server.
+                // No explicit type needed here - let the provider choose.
+
+                // Unique index: one occurrence per company + schedule + scheduled run date
+                // This is the idempotency key - prevents duplicate runs for the same calendar date
+                entity.HasIndex(e => new { e.CompanyId, e.RecurringScheduleId, e.ScheduledRunDate }, "UX_RecurringOccurrence_Company_Schedule_RunDate")
+                    .IsUnique();
+
+                // Index for finding due occurrences
+                entity.HasIndex(e => new { e.CompanyId, e.Status, e.DocumentDate }, "IX_RecurringOccurrence_Company_Status_DocumentDate");
+
+                // Index for lease expiration (worker uses this to find expired leases)
+                entity.HasIndex(e => new { e.CompanyId, e.Status, e.LeasedUntil }, "IX_RecurringOccurrence_Company_Status_Lease");
+
+                // Index for idempotency key lookups
+                entity.HasIndex(e => e.IdempotencyKey);
+
+                // Relationships - Restrict delete to preserve occurrence ledger when schedule is deleted
+                entity.HasOne(e => e.Schedule).WithMany(s => s.Occurrences)
+                    .HasForeignKey(e => e.RecurringScheduleId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.SalesInvoice).WithMany()
+                    .HasForeignKey(e => e.SalesInvoiceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.PurchaseInvoice).WithMany()
+                    .HasForeignKey(e => e.PurchaseInvoiceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            #endregion
+
             builder.Seed();
             /* Medhat END */
         }
@@ -827,6 +1164,9 @@ namespace Api.Data
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }
         public virtual DbSet<CompanyInvitation> CompanyInvitations { get; set; }
         public virtual DbSet<WorkspaceAccessRequest> WorkspaceAccessRequests { get; set; }
+        public virtual DbSet<WorkspaceOperatingSettings> WorkspaceOperatingSettings { get; set; }
+        public virtual DbSet<WorkspaceApprovalRule> WorkspaceApprovalRules { get; set; }
+        public virtual DbSet<WorkspacePolicyCoordination> WorkspacePolicyCoordinations { get; set; }
         public virtual DbSet<CompanySetting> CompanySettings { get; set; }
         public virtual DbSet<Contact> Contacts { get; set; }
         public virtual DbSet<Customer> Customers { get; set; }
@@ -881,6 +1221,9 @@ namespace Api.Data
         public virtual DbSet<Vendor> Vendors { get; set; }
         public virtual DbSet<VendorPayment> VendorPayments { get; set; }
         public virtual DbSet<Party> Parties { get; set; }
+        public virtual DbSet<RecurringSchedule> RecurringSchedules { get; set; }
+        public virtual DbSet<RecurringScheduleLine> RecurringScheduleLines { get; set; }
+        public virtual DbSet<RecurringOccurrence> RecurringOccurrences { get; set; }
 
         #region Audit Logs
         private void SaveAuditLog()

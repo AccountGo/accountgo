@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTenantContext } from './Gating';
+import { useIntegrations } from '../lib/integrations';
 
-type BankingTab = 'accounts' | 'transactions' | 'reconcile';
+type BankingTab = 'accounts' | 'transactions' | 'reconcile' | 'review';
 
 interface BankingTabsProps {
   active: BankingTab;
@@ -11,12 +12,15 @@ interface BankingTabsProps {
 
 export const BankingTabs: React.FC<BankingTabsProps> = ({ active, orgSlug }) => {
   const { hasModule } = useTenantContext();
-  if (!hasModule('financials')) return null;
+  const { capabilities, summary } = useIntegrations();
 
   const tabs: { id: BankingTab; label: string; to: string }[] = [
     { id: 'accounts', label: 'Accounts', to: `/org/${orgSlug}/banking` },
-    { id: 'transactions', label: 'Transactions', to: `/org/${orgSlug}/banking/transactions` },
-    { id: 'reconcile', label: 'Reconcile', to: `/org/${orgSlug}/banking/reconcile` },
+    ...(capabilities?.canReview ? [{ id: 'review' as const, label: `Needs review${summary ? ` (${summary.pendingCount})` : ''}`, to: `/org/${orgSlug}/banking/needs-review` }] : []),
+    ...(hasModule('financials') ? [
+      { id: 'transactions' as const, label: 'Transactions', to: `/org/${orgSlug}/banking/transactions` },
+      { id: 'reconcile' as const, label: 'Reconcile', to: `/org/${orgSlug}/banking/reconcile` },
+    ] : []),
   ];
 
   return (

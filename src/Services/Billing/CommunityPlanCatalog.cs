@@ -55,6 +55,10 @@ public sealed class CommunityPlanCatalog : IPlanCatalog
         IncludedModules = source.IncludedModules.ToList(),
         RequiredModules = source.RequiredModules.ToList(),
         SelfService = source.SelfService,
-        MonthlyPrice = source.MonthlyPrice
+        MonthlyPrice = source.MonthlyPrice,
+        AnnualPrice = source.AnnualPrice,
+        Product = source.Product,
+        Features = source.Features?.ToList(),
+        Limits = source.Limits?.ToDictionary(pair => pair.Key, pair => pair.Value)
     };
 }
