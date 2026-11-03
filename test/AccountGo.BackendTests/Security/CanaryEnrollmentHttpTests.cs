@@ -317,6 +317,78 @@ namespace AccountGo.BackendTests.Security
             }
         }
 
+        // ---- Pending-signup eligibility: team/legacy workspaces must not be initializable ---------
+
+        [Fact]
+        public async Task InitializeCurrent_TeamWorkspaceWithMembers_Rejected_NoGrantsNoRuleChange()
+        {
+            const string slug = "team-not-eligible";
+            // Enroll a specific owner id; the owner is enrolled, so only the eligibility proof can reject.
+            const string ownerId = "team-owner-id";
+            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", ownerId);
+            try
+            {
+                string token;
+                using (var scope = _factory.Services.CreateScope())
+                {
+                    var sp = scope.ServiceProvider;
+                    var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
+                    var owner = new ApplicationUser { Id = ownerId, UserName = "teamowner@example.com", Email = "teamowner@example.com", EmailConfirmed = true };
+                    Assert.True((await userManager.CreateAsync(owner)).Succeeded);
+                    sp.GetRequiredService<Services.Security.ISecurityService>().AddUser("teamowner@example.com", "teamowner@example.com", "T", "O", new List<int>());
+
+                    var second = new ApplicationUser { Id = "team-second-id", UserName = "second@example.com", Email = "second@example.com", EmailConfirmed = true };
+                    Assert.True((await userManager.CreateAsync(second)).Succeeded);
+
+                    // Build an application-created workspace (origin evidence written) then mutate it into an
+                    // uninitialized TEAM workspace: a second active member and EverTeamActivatedAtUtc set.
+                    var workspaces = sp.GetRequiredService<Api.Service.WorkspaceService>();
+                    var planKey = sp.GetRequiredService<Services.Billing.IPlanCatalog>().DefaultPlanKey;
+                    var company = workspaces.Create(ownerId, "Team Co", slug, planKey, "USD");
+
+                    var db = sp.GetRequiredService<ApiDbContext>();
+                    db.SuppressTenantSecurityCheck = true;
+                    db.CompanyMembers.Add(new CompanyMember
+                    {
+                        CompanyId = company.Id,
+                        UserId = second.Id,
+                        Role = CompanyMemberRole.Member,
+                        Status = CompanyMemberStatus.Active,
+                        JoinedAt = DateTime.UtcNow
+                    });
+                    var settings = db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+                    settings.EverTeamActivatedAtUtc = DateTime.UtcNow; // historical team activation marker
+                    db.SaveChanges();
+
+                    token = (await sp.GetRequiredService<IAuthenticationService>().CreateToken(owner, true)).AccessToken;
+                }
+
+                var grantsBefore = FunctionalGrantCount(slug);
+                var ruleBefore = JournalRuleKind(slug);
+
+                using var req = new HttpRequestMessage(HttpMethod.Post, "/api/organizations/current/initialize");
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                req.Headers.Add("X-AccountGo-Org", slug);
+                req.Content = JsonContent.Create(new { workspacePurpose = "Business", collaborationIntent = "JustMe" });
+                var resp = await _client.SendAsync(req);
+                var body = await resp.Content.ReadAsStringAsync();
+
+                // The team workspace must be rejected — it is not a pending-signup solo continuation.
+                Assert.True(resp.StatusCode == HttpStatusCode.UnprocessableEntity, $"initialize => {(int)resp.StatusCode} :: {body}");
+                Assert.Contains(Core.Authorization.WorkspacePolicyReasonCodes.NotPendingSignupWorkspace, body, StringComparison.Ordinal);
+
+                // Nothing was granted and the approval rule was not relaxed.
+                Assert.Equal(grantsBefore, FunctionalGrantCount(slug));
+                Assert.Equal(ruleBefore, JournalRuleKind(slug));
+                Assert.Equal(Core.Domain.WorkspaceApprovalRuleKind.IndependentReviewerRequired, JournalRuleKind(slug));
+                Assert.False(OperatingState(slug)!.Value.Initialized);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", EnrolledUserId);
+            }
+        }
+
         // ---- Setup-off precedence -----------------------------------------------------------------
 
         [Fact]

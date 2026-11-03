@@ -237,6 +237,8 @@ namespace Api.Controllers
                             && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
                                 or WorkspacePolicyReasonCodes.CanaryNotEnrolled
                                 or WorkspacePolicyReasonCodes.CanaryScopeNotAllowed
+                                or WorkspacePolicyReasonCodes.NotPendingSignupWorkspace
+                                or WorkspacePolicyReasonCodes.SoloSetupNotEligible
                                 or "about_answers_required")
                         {
                             return UnprocessableEntity(new ProblemDetails
@@ -316,8 +318,9 @@ namespace Api.Controllers
 
             if (!initResult.Applied)
             {
-                // Already-initialized returns SoloSetupNotEligible; a duplicate attempt is thus rejected,
-                // never silently re-initialized.
+                // Rejected when the workspace is already initialized OR fails the under-lock pending-signup
+                // eligibility proof (legacy, current/former team, transferred owner, invitation or
+                // collaboration history). No grants, journal rule, or approval policy are modified.
                 return UnprocessableEntity(new ProblemDetails
                 {
                     Title = "Workspace initialization rejected",

@@ -176,6 +176,26 @@ namespace Api.Service
                     };
                 }
 
+                // Durable, server-issued eligibility proof — evaluated under the coordination lock.
+                // Being uninitialized is NOT sufficient: a legacy, current-team, former-team, or
+                // transferred-owner workspace can also be uninitialized. The workspace must carry the
+                // immutable origin evidence bound to this owner that WorkspaceService.Create writes, and
+                // must have no disqualifying membership, invitation, policy-transition, ownership-transfer,
+                // or collaboration history. This rejects the reviewer's reproduced bypass (an uninitialized
+                // TeamActive workspace with additional active members) without touching grants or rules.
+                var eligibility = ContractAVerifier.VerifyPendingSignupContinuation(_db, companyId, ownerUserId);
+                if (!eligibility.Allowed)
+                {
+                    return new WorkspaceInitializationResult
+                    {
+                        Applied = false,
+                        ReasonCode = WorkspacePolicyReasonCodes.NotPendingSignupWorkspace,
+                        Message = eligibility.Detail,
+                        PolicyRevision = settings.PolicyRevision,
+                        JournalMode = _approvalResolver.Resolve(settings, FindJournalRule(companyId), AccessOperationCatalog.FinancialsJournalPost).Mode
+                    };
+                }
+
                 settings.Purpose = request.Purpose;
                 settings.CollaborationIntent = request.CollaborationIntent;
                 settings.ConfirmedOwnerMemberId = ownerMemberId;

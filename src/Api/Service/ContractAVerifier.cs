@@ -41,7 +41,44 @@ namespace Api.Service
                 return new ContractAVerificationResult(false, "Invalid functional roles", "Select valid functional roles.");
             }
 
+            var eligibility = VerifySolePristineOwner(db, companyId, callerUserId, "self-grant");
+            if (!eligibility.Allowed)
+                return eligibility;
+
+            return new ContractAVerificationResult(true, "Eligible", "Eligible for self-grant.", eligibility.OwnerMember);
+        }
+
+        /// <summary>
+        /// Fail-closed proof that <paramref name="companyId"/> is a pristine, never-collaborated workspace
+        /// still owned solely by its original creating owner (<paramref name="callerUserId"/>), awaiting the
+        /// approved post-verification signup continuation. This is the same structural eligibility as the
+        /// legacy self-grant: durable server-issued origin evidence bound to the caller, an uninitialized
+        /// LegacyUnclassified policy that has never activated a team, a single active original owner that was
+        /// not invited and matches the creator, and the total absence of invitation, policy-transition,
+        /// ownership-transfer, or collaboration history. A legacy, current-team, former-team,
+        /// transferred-owner, or already-initialized workspace fails here and is never granted anything.
+        /// Callers MUST invoke this inside the workspace policy coordination lock.
+        /// </summary>
+        public static ContractAVerificationResult VerifyPendingSignupContinuation(
+            ApiDbContext db,
+            int companyId,
+            string callerUserId)
+        {
+            if (string.IsNullOrWhiteSpace(callerUserId))
+                return new ContractAVerificationResult(false, "Unauthenticated", "User must be authenticated.");
+
+            return VerifySolePristineOwner(db, companyId, callerUserId, "continuation");
+        }
+
+        private static ContractAVerificationResult VerifySolePristineOwner(
+            ApiDbContext db,
+            int companyId,
+            string callerUserId,
+            string operation)
+        {
             // 1. Immutable origin row written by WorkspaceService.Create in the same transaction as initial owner.
+            //    This is the durable, server-issued evidence binding the workspace to its original creator;
+            //    backfilled or migrated legacy workspaces never receive it.
             if (!WorkspaceOriginEvidence.HasValidOrigin(db, companyId, callerUserId))
             {
                 return new ContractAVerificationResult(
@@ -64,7 +101,7 @@ namespace Api.Service
                 return new ContractAVerificationResult(
                     false,
                     "Operating policy ineligible",
-                    "Workspace operating settings are not eligible for self-grant.");
+                    $"Workspace operating settings are not eligible for {operation}.");
             }
 
             // 3. Exactly one CompanyMember row. Active, Owner, UserId == callerUserId == company.CreatedByUserId, InvitedByUserId null.
@@ -85,7 +122,7 @@ namespace Api.Service
                 return new ContractAVerificationResult(
                     false,
                     "Sole owner required",
-                    "Only a sole active workspace owner can perform self-grant.");
+                    $"Only a sole active workspace owner can perform {operation}.");
             }
 
             var owner = members[0];
@@ -112,7 +149,7 @@ namespace Api.Service
                 return new ContractAVerificationResult(
                     false,
                     "Invitation history exists",
-                    "Workspaces with invitation history cannot perform self-grant.");
+                    $"Workspaces with invitation history cannot perform {operation}.");
             }
 
             // 5. No __WorkspacePolicyTransition row, and no confirmed-owner change.
@@ -125,7 +162,7 @@ namespace Api.Service
                 return new ContractAVerificationResult(
                     false,
                     "Policy transition history exists",
-                    "Workspaces with policy transitions cannot perform self-grant.");
+                    $"Workspaces with policy transitions cannot perform {operation}.");
             }
 
             // 6. Zero __WorkspaceCollaborationEvidence indicating member removals, second members, or invitations
@@ -145,10 +182,10 @@ namespace Api.Service
                 return new ContractAVerificationResult(
                     false,
                     "Collaboration history exists",
-                    "Workspaces with collaboration evidence cannot perform self-grant.");
+                    $"Workspaces with collaboration evidence cannot perform {operation}.");
             }
 
-            return new ContractAVerificationResult(true, "Eligible", "Eligible for self-grant.", owner);
+            return new ContractAVerificationResult(true, "Eligible", $"Eligible for {operation}.", owner);
         }
     }
 }
