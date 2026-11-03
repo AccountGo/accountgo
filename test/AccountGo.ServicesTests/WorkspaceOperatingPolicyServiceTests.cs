@@ -362,4 +362,30 @@ public class WorkspaceOperatingPolicyServiceTests : IDisposable
             Assert.Equal(Core.Authorization.WorkspaceApprovalMode.IndependentReviewerRequired, result.Mode);
         }
     }
+
+    [Fact]
+    public void PolicyTransaction_SchemaMismatch_ThrowsIncompatiblePolicySchemaException()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+            settings.PolicySchemaVersion = 99;
+            _db.SaveChanges();
+
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+            var ex = Assert.Throws<Core.Authorization.IncompatiblePolicySchemaException>(() =>
+            {
+                tx.Execute(company.Id, guard =>
+                {
+                    guard.AdvanceRevision();
+                    return true;
+                });
+            });
+
+            Assert.Equal(company.Id, ex.CompanyId);
+            Assert.Equal(99, ex.RequestedSchemaVersion);
+            Assert.Equal(WorkspaceOperatingPolicySchema.CurrentVersion, ex.SupportedSchemaVersion);
+        }
+    }
 }

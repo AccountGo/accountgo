@@ -35,28 +35,7 @@ namespace Api.Controllers
             if (Api.Service.StartupWarmup.IsEnabled(_configuration))
                 await Task.WhenAny(Api.Service.StartupWarmup.Completion, Task.Delay(TimeSpan.FromSeconds(60)));
 
-            string sha = "dev";
-            var possiblePaths = new[]
-            {
-                "/app/BUILD_SHA",
-                Path.Combine(AppContext.BaseDirectory, "BUILD_SHA"),
-                Path.Combine(Directory.GetCurrentDirectory(), "BUILD_SHA"),
-                Path.Combine(Directory.GetCurrentDirectory(), "src", "Api", "BUILD_SHA")
-            };
-
-            foreach (var path in possiblePaths)
-            {
-                if (System.IO.File.Exists(path))
-                {
-                    var content = System.IO.File.ReadAllText(path).Trim();
-                    if (!string.IsNullOrEmpty(content))
-                    {
-                        sha = content;
-                        break;
-                    }
-                }
-            }
-
+            string sha = Api.Service.BuildMetadata.GetBuildSha();
             return Ok(new { sha });
         }
 

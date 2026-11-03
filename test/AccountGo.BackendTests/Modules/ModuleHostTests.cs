@@ -25,6 +25,8 @@ public class ModuleHostTests
     private sealed class HealthResponse
     {
         public string Status { get; set; } = string.Empty;
+        public bool Ready { get; set; }
+        public string Version { get; set; } = string.Empty;
         public string[] Modules { get; set; } = [];
     }
 
@@ -65,7 +67,50 @@ public class ModuleHostTests
         var health = await response.Content.ReadFromJsonAsync<HealthResponse>();
         Assert.NotNull(health);
         Assert.Equal("healthy", health.Status);
+        Assert.True(health.Ready);
+        Assert.False(string.IsNullOrWhiteSpace(health.Version));
         Assert.Empty(health.Modules);
+    }
+
+    [Fact]
+    public async Task HealthCheck_WhenDatabaseUnavailable_Returns503Unready()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), "accountgo_unready_" + Path.GetRandomFileName() + ".db");
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("DatabaseProvider", "Sqlite");
+            builder.UseSetting("ConnectionStrings:SqliteConnection", "Data Source=" + dbPath);
+            builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        });
+
+        using var client = factory.CreateClient();
+        // Initial health should be OK
+        var firstResponse = await client.GetAsync("/health");
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+
+        // Delete the database file so subsequent queries / CanConnect fails
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        if (File.Exists(dbPath))
+        {
+            File.Delete(dbPath);
+            // Recreate as a directory to make SQLite connection attempts fail
+            Directory.CreateDirectory(dbPath);
+        }
+
+        try
+        {
+            var response = await client.GetAsync("/health");
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            var health = await response.Content.ReadFromJsonAsync<HealthResponse>();
+            Assert.NotNull(health);
+            Assert.Equal("unhealthy", health.Status);
+            Assert.False(health.Ready);
+        }
+        finally
+        {
+            if (Directory.Exists(dbPath)) Directory.Delete(dbPath);
+        }
     }
 
     [Fact]

@@ -2441,6 +2441,22 @@ namespace Services.Financial
                     _policyTransaction.Execute(journalEntry.CompanyId, guard =>
                     {
                         executePosting();
+
+                        if (guard.Settings.InitializedAtUtc.HasValue)
+                        {
+                            var otherPostedCount = _journalEntryRepo.Table
+                                .Count(j => j.CompanyId == journalEntry.CompanyId && j.Id != journalEntry.Id && j.Posted == true);
+                            if (otherPostedCount == 0)
+                            {
+                                var duration = (DateTime.UtcNow - guard.Settings.InitializedAtUtc.Value).TotalSeconds;
+                                if (duration >= 0)
+                                {
+                                    Core.Authorization.WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                                        duration,
+                                        new KeyValuePair<string, object?>("action", Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost));
+                                }
+                            }
+                        }
                     });
                 }
                 else

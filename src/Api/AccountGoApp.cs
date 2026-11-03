@@ -563,20 +563,66 @@ public static class AccountGoApp
         app.MapControllers();
         app.MapMcp("/mcp").RequireAuthorization();
 
-        // Health endpoint exposes registered module names
-        app.MapGet("/health", () => Results.Ok(new
+        // Health endpoint exposes registered module names, release identity, and dependency readiness
+        app.MapGet("/health", async (IServiceProvider sp) =>
         {
-            status = "healthy",
-            modules = modules.Select(m => m.Name).ToArray(),
-            // What the runtime actually got (container CPU/GC settings); no secrets or host details.
-            runtime = new
+            var sha = Api.Service.BuildMetadata.GetBuildSha();
+            bool dbReady = false;
+            string? dbError = null;
+
+            try
             {
-                processors = Environment.ProcessorCount,
-                serverGc = System.Runtime.GCSettings.IsServerGC,
-                gcHeapLimitMb = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (1024 * 1024),
-                tieredPgo = Environment.GetEnvironmentVariable("DOTNET_TieredPGO") ?? "default",
+                using var scope = sp.CreateScope();
+                var db = scope.ServiceProvider.GetService<ApiDbContext>();
+                if (db != null)
+                {
+                    dbReady = await db.Database.CanConnectAsync();
+                }
             }
-        })).AllowAnonymous();
+            catch (Exception ex)
+            {
+                dbError = ex.Message;
+            }
+
+            if (!dbReady)
+            {
+                return Results.Json(new
+                {
+                    status = "unhealthy",
+                    ready = false,
+                    reason = dbError ?? "Database connectivity check failed",
+                    version = sha,
+                    modules = modules.Select(m => m.Name).ToArray()
+                }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            return Results.Ok(new
+            {
+                status = "healthy",
+                ready = true,
+                version = sha,
+                modules = modules.Select(m => m.Name).ToArray(),
+                // What the runtime actually got (container CPU/GC settings); no secrets or host details.
+                runtime = new
+                {
+                    processors = Environment.ProcessorCount,
+                    serverGc = System.Runtime.GCSettings.IsServerGC,
+                    gcHeapLimitMb = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (1024 * 1024),
+                    tieredPgo = Environment.GetEnvironmentVariable("DOTNET_TieredPGO") ?? "default",
+                }
+            });
+        }).AllowAnonymous();
+
+        app.MapGet("/healthz", () => Results.Ok(new { status = "alive", version = Api.Service.BuildMetadata.GetBuildSha() })).AllowAnonymous();
+        app.MapGet("/readyz", async (IServiceProvider sp) =>
+        {
+            using var scope = sp.CreateScope();
+            var db = scope.ServiceProvider.GetService<ApiDbContext>();
+            var canConnect = db != null && await db.Database.CanConnectAsync();
+            return canConnect
+                ? Results.Ok(new { status = "ready", version = Api.Service.BuildMetadata.GetBuildSha() })
+                : Results.Json(new { status = "not_ready", version = Api.Service.BuildMetadata.GetBuildSha() }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }).AllowAnonymous();
 
         // Module-specific endpoints
         foreach (var module in modules)

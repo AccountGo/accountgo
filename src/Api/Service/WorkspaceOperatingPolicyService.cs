@@ -125,6 +125,9 @@ namespace Api.Service
 
         public SoloSetupEligibility EvaluateLegacySoloEligibility(int companyId, string callerUserId)
         {
+            WorkspaceOperatingPolicyMetrics.OnboardingStarts.Add(1,
+                new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.LegacySolo));
+
             if (!_experience.SoloSetupEnabled)
             {
                 return new SoloSetupEligibility(
@@ -243,6 +246,12 @@ namespace Api.Service
                 var settings = guard.Settings;
                 if (settings.PolicyRevision != expectedRevision)
                 {
+                    WorkspaceOperatingPolicyMetrics.Conflicts.Add(1,
+                        new KeyValuePair<string, object?>("conflict_type", WorkspaceOperatingPolicyMetrics.ConflictLabels.StaleRevision));
+                    WorkspaceOperatingPolicyMetrics.OnboardingCompletions.Add(1,
+                        new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.LegacySolo),
+                        new KeyValuePair<string, object?>("status", WorkspaceOperatingPolicyMetrics.StatusLabels.Conflict));
+
                     return new WorkspacePolicyMutationResult(
                         false,
                         WorkspacePolicyReasonCodes.StalePolicyRevision,
@@ -254,6 +263,10 @@ namespace Api.Service
                 var eligibility = EvaluateLegacySoloEligibility(guard, callerUserId);
                 if (eligibility.Status == SoloSetupEligibilityStatus.RecoveryRequired)
                 {
+                    WorkspaceOperatingPolicyMetrics.OnboardingCompletions.Add(1,
+                        new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.LegacySolo),
+                        new KeyValuePair<string, object?>("status", WorkspaceOperatingPolicyMetrics.StatusLabels.Ineligible));
+
                     return new WorkspacePolicyMutationResult(
                         false,
                         _experience.ControlledRecoveryEnabled
@@ -268,6 +281,10 @@ namespace Api.Service
 
                 if (eligibility.Status != SoloSetupEligibilityStatus.Eligible)
                 {
+                    WorkspaceOperatingPolicyMetrics.OnboardingCompletions.Add(1,
+                        new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.LegacySolo),
+                        new KeyValuePair<string, object?>("status", WorkspaceOperatingPolicyMetrics.StatusLabels.Ineligible));
+
                     return new WorkspacePolicyMutationResult(
                         false,
                         eligibility.ReasonCode,
@@ -318,6 +335,11 @@ namespace Api.Service
                 });
 
                 guard.AdvanceRevision();
+
+                WorkspaceOperatingPolicyMetrics.OnboardingCompletions.Add(1,
+                    new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.LegacySolo),
+                    new KeyValuePair<string, object?>("status", WorkspaceOperatingPolicyMetrics.StatusLabels.Success));
+
                 return new WorkspacePolicyMutationResult(
                     true,
                     null,

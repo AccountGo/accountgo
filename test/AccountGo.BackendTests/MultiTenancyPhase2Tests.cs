@@ -617,6 +617,7 @@ namespace AccountGo.BackendTests
                 "WorkspacePolicyTransaction.cs",
                 "WorkspaceApprovalPolicyResolver.cs",
                 "WorkspaceInitializationApplicator.cs",
+                "TenantResolutionMiddleware.cs",
                 // Evidence reads explicitly filter by companyId, including before tenant resolution.
                 "ContractAVerifier.cs",
                 "WorkspaceOriginEvidence.cs",
