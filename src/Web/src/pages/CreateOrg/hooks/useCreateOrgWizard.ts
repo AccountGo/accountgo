@@ -51,7 +51,39 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
     personalPurposeEnabled: boolean;
     controlledRecoveryEnabled: boolean;
   } | null>(null);
+  // In continuation mode, the workspace already exists: load its STORED settings so the review shows the
+  // real persisted name/plan/currency/books (read-only facts), never the local draft values, which the
+  // continuation does not save.
+  const [existingSettings, setExistingSettings] = useState<{
+    name?: string;
+    slug?: string;
+    plan?: string;
+    currency?: string;
+    fiscalYearEnd?: string;
+  } | null>(null);
   const redirectTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!pendingSlug) return;
+    let active = true;
+    authFetch('/api/organizations/current', { headers: { 'X-AccountGo-Org': pendingSlug } })
+      .then(async (res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data) {
+          setExistingSettings({
+            name: data.name,
+            slug: data.slug,
+            plan: data.plan,
+            currency: data.currency,
+            fiscalYearEnd: data.fiscalYearEnd,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [authFetch, pendingSlug]);
 
   useEffect(() => {
     let active = true;
@@ -131,10 +163,9 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
             collaborationIntent: payload.collaborationIntent,
             ownerAccessPreset: payload.ownerAccessPreset,
             initialJournalWorkflow: payload.initialJournalWorkflow,
-            // Permitted continuation choice. Accounting-policy fields (currency, books start, framework,
-            // tax, inventory) are intentionally omitted: the books were provisioned at signup and the
-            // continuation endpoint does not rewrite them.
-            plan: payload.plan,
+            // The continuation initializes on the workspace's existing (free/default) plan. Plan upgrades —
+            // and all accounting-policy fields — go through their own billing/settings flows, never here,
+            // so there is no silent books rewrite and no billing bypass.
           }),
         });
         const data = await response.json().catch(() => null);
@@ -217,5 +248,5 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
     }
   }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession]);
 
-  return { state, update, step, stepIndex, stepCount: STEPS.length, errors, status, submitError, next, back, submit, capabilities, isContinuation: Boolean(pendingSlug) };
+  return { state, update, step, stepIndex, stepCount: STEPS.length, errors, status, submitError, next, back, submit, capabilities, isContinuation: Boolean(pendingSlug), existingSettings };
 };

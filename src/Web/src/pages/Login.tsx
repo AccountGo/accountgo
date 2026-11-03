@@ -93,17 +93,40 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
         navigate(`/invite/${encodeURIComponent(invitationToken)}`, { replace: true });
         return;
       }
-      const fromPath = (location.state as any)?.from?.pathname;
-      const lastSlug = getPersistedOrgSlug();
-      if (fromPath && fromPath !== '/login' && fromPath !== '/signup') {
-        navigate(fromPath, { replace: true });
-      } else if (lastSlug) {
-        navigate(`/org/${lastSlug}/dashboard`, { replace: true });
-      } else {
-        navigate('/select-org', { replace: true, state: { fromSignIn: true } });
-      }
+      // Resolve from trusted server state through the SAME resolver as post-verification, so an
+      // already-authenticated visit (reload / session restore) with an uninitialized signup workspace is
+      // routed into guided continuation rather than straight to an unusable dashboard.
+      let cancelled = false;
+      void (async () => {
+        const decision = await resolvePostAuthDestination(authFetch, {
+          targetOrgSlug: null,
+          persistedSlug: getPersistedOrgSlug(),
+          fromPath: (location.state as any)?.from?.pathname,
+        });
+        if (cancelled) return;
+        switch (decision.kind) {
+          case 'continue':
+            setPersistedOrgSlug(decision.slug);
+            navigate(`/create-org?continue=${encodeURIComponent(decision.slug)}`, { replace: true });
+            return;
+          case 'dashboard':
+            setPersistedOrgSlug(decision.slug);
+            navigate(`/org/${decision.slug}/dashboard`, { replace: true });
+            return;
+          case 'path':
+            navigate(decision.path, { replace: true });
+            return;
+          case 'select-org':
+          default:
+            navigate('/select-org', { replace: true, state: { fromSignIn: true } });
+            return;
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [isAuthenticated, isAuthLoading, navigate, location.pathname, location.search, location.state, queryInviteToken, invitationToken, isVerifying]);
+  }, [isAuthenticated, isAuthLoading, navigate, authFetch, location.pathname, location.search, location.state, queryInviteToken, invitationToken, isVerifying]);
 
   // Handle countdowns for resend cooldown and code expiry
   useEffect(() => {
