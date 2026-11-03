@@ -31,10 +31,25 @@ namespace Api.Service
         // the queue after its commit. Scoped per DbContext/instance, matching the request scope.
         private readonly HashSet<int> _pendingCommittedVerification = new();
 
+        // Side effects (e.g. telemetry emission) that must run ONLY after the owning transaction commits
+        // durably, never on rollback. Enqueued by guarded work; drained by whoever owns the commit.
+        private readonly List<Action> _pendingPostCommitActions = new();
+
         public WorkspacePolicyTransaction(ApiDbContext db, ITenantContext tenant)
         {
             _db = db;
             _tenant = tenant ?? throw new ArgumentNullException(nameof(tenant));
+        }
+
+        /// <summary>
+        /// Registers an action to run only after the owning transaction commits durably (and never on
+        /// rollback). Use for post-commit side effects such as telemetry. If the current context owns no
+        /// transaction right now, the caller is the owner and the action runs on this call's commit.
+        /// </summary>
+        public void EnqueuePostCommit(Action action)
+        {
+            if (action != null)
+                _pendingPostCommitActions.Add(action);
         }
 
         public void Execute(int companyId, Action<WorkspacePolicyGuard> action) =>
@@ -97,8 +112,9 @@ namespace Api.Service
                     if (ownsTransaction)
                     {
                         tx?.Rollback();
-                        // Nothing committed: discard any deferred verifications from nested calls.
+                        // Nothing committed: discard any deferred verifications and post-commit actions.
                         _pendingCommittedVerification.Clear();
+                        _pendingPostCommitActions.Clear();
                     }
                     return result;
                 }
@@ -108,10 +124,9 @@ namespace Api.Service
 
                 if (!ownsTransaction)
                 {
-                    // Nested in a caller-owned transaction: committed state is not established yet.
-                    // Defer verification to the owner, which drains this set after it commits. Verifying
-                    // now would read uncommitted state and could both miss the final state and mislabel
-                    // rolled-back state as committed.
+                    // Nested in a caller-owned transaction: committed state is not established yet. Defer
+                    // verification and post-commit side effects to the owner, which drains after it commits
+                    // (see VerifyPendingAfterExternalCommit). Verifying now would read uncommitted state.
                     foreach (var guard in guards)
                         _pendingCommittedVerification.Add(guard.CompanyId);
                     return result;
@@ -119,14 +134,15 @@ namespace Api.Service
 
                 tx!.Commit();
 
-                // Verify only after a real commit. Include any companies deferred by nested calls in the
-                // same owning transaction. Failures here must never fail the already-committed request.
+                // This call owns the transaction and it is now committed. Drain here — AFTER commit and
+                // outside any commit callback — so verification safely opens its own serializable
+                // transaction and post-commit side effects (telemetry) fire only on durable success.
                 var toVerify = new HashSet<int>(_pendingCommittedVerification);
                 foreach (var guard in guards)
                     toVerify.Add(guard.CompanyId);
                 _pendingCommittedVerification.Clear();
-
                 RunCommittedVerification(toVerify);
+                RunPostCommitActions();
 
                 return result;
             }
@@ -136,6 +152,7 @@ namespace Api.Service
                 {
                     tx?.Rollback();
                     _pendingCommittedVerification.Clear();
+                    _pendingPostCommitActions.Clear();
                 }
                 throw;
             }
@@ -148,16 +165,48 @@ namespace Api.Service
             }
         }
 
+        /// <summary>
+        /// Atomically removes and returns the queued committed-state verifications and post-commit actions.
+        /// </summary>
+        internal (IReadOnlyList<int> CompanyIds, IReadOnlyList<Action> PostCommitActions) TakePending()
+        {
+            var companies = _pendingCommittedVerification.ToList();
+            var actions = _pendingPostCommitActions.ToList();
+            _pendingCommittedVerification.Clear();
+            _pendingPostCommitActions.Clear();
+            return (companies, actions);
+        }
+
         /// <inheritdoc />
         public void VerifyPendingAfterExternalCommit()
         {
             var toVerify = new HashSet<int>(_pendingCommittedVerification);
             _pendingCommittedVerification.Clear();
             RunCommittedVerification(toVerify);
+            RunPostCommitActions();
         }
 
         /// <inheritdoc />
-        public void DiscardPendingVerifications() => _pendingCommittedVerification.Clear();
+        public void DiscardPendingVerifications()
+        {
+            _pendingCommittedVerification.Clear();
+            _pendingPostCommitActions.Clear();
+        }
+
+        /// <summary>Runs and clears queued post-commit side effects; a failure in one never affects others
+        /// or the already-committed request.</summary>
+        private void RunPostCommitActions()
+        {
+            if (_pendingPostCommitActions.Count == 0)
+                return;
+            var actions = _pendingPostCommitActions.ToList();
+            _pendingPostCommitActions.Clear();
+            foreach (var action in actions)
+            {
+                try { action(); }
+                catch { WorkspaceOperatingPolicyMetrics.PostCommitDetectorExceptions.Add(1); }
+            }
+        }
 
         /// <summary>
         /// Runs committed-state verification for the given companies. Each company is verified under its

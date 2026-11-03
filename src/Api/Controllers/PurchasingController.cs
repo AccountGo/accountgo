@@ -29,6 +29,7 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly IPurchasingService _purchasingService;
         private readonly IFinancialService _financialService;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
         private readonly IInventoryService _inventoryService;
         private readonly IBankAccountService _bankAccounts;
         private readonly IDocumentLineAccountCatalog _lineAccounts;
@@ -48,7 +49,8 @@ namespace Api.Controllers
             Core.Tenancy.ITenantContext tenantContext,
             Api.Data.ApiDbContext db,
             ILogger<PurchasingController> logger,
-            Services.Financial.IBooksLockGuard booksLockGuard)
+            Services.Financial.IBooksLockGuard booksLockGuard,
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
         {
             _adminService = adminService;
             _purchasingService = purchasingService;
@@ -61,6 +63,7 @@ namespace Api.Controllers
             _db = db;
             _logger = logger;
             _booksLockGuard = booksLockGuard;
+            _policyTransaction = policyTransaction;
         }
 
         private IActionResult? RefuseIfBooksLocked(DateTime date)
@@ -1089,6 +1092,9 @@ namespace Api.Controllers
                     action();
                     tx.Commit();
                 }
+                // Transaction committed and disposed; run deferred post-commit work (first-useful-action
+                // telemetry enqueued during bill approval). Never throws into the response.
+                _policyTransaction?.VerifyPendingAfterExternalCommit();
                 return Ok(ToBill(BillsQuery().Single(b => b.Id == id), _adminService.GetPaymentTerms().ToList()));
             }
             catch (Services.Banking.ReconciledPeriodConfirmationRequiredException)

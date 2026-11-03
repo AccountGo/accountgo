@@ -12,6 +12,7 @@ using Api.Service;
 using Api.Tenancy;
 using Core.Authorization;
 using Core.Domain;
+using Core.Tenancy;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,7 @@ namespace AccountGo.BackendTests.Observability
         private readonly TenantContext _tenant = new();
         private readonly MeterListener _listener;
         private readonly List<(string Name, long Value)> _counters = new();
+        private readonly List<(string Name, double Value)> _histograms = new();
 
         public WorkspaceInvariantAndMeasurementTests()
         {
@@ -55,6 +57,10 @@ namespace AccountGo.BackendTests.Observability
             {
                 lock (_counters) _counters.Add((instrument.Name, measurement));
             });
+            _listener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
+            {
+                lock (_histograms) _histograms.Add((instrument.Name, measurement));
+            });
             _listener.Start();
         }
 
@@ -69,6 +75,12 @@ namespace AccountGo.BackendTests.Observability
         {
             lock (_counters)
                 return _counters.Where(c => c.Name == instrumentName).Sum(c => c.Value);
+        }
+
+        private int HistogramCount(string instrumentName)
+        {
+            lock (_histograms)
+                return _histograms.Count(h => h.Name == instrumentName);
         }
 
         private Company SeedCompany(string slug, string ownerUserId, out CompanyMember owner)
@@ -298,6 +310,88 @@ namespace AccountGo.BackendTests.Observability
 
             _listener.RecordObservableInstruments();
             Assert.Equal(0, CounterTotal("workspace.unauthorized_elevations.committed"));
+        }
+
+        // ---- Emission timing on commit vs rollback (findings 1 & 2) -------------------------------
+
+        [Fact]
+        public void FirstActionTelemetry_EmitsOnlyAfterCommit_NotOnRollback()
+        {
+            var company = SeedCompany("tele-rb", "owner-t", out var owner);
+            SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, owner.Id, initialized: true);
+            SeedSingleActorRule(company.Id);
+
+            var policyTx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            // Controller-owned transaction that enqueues a first-action emission, then ROLLS BACK. The
+            // owner discards pending work on rollback, so the emission never fires.
+            using (var outer = _db.Database.BeginTransaction())
+            {
+                policyTx.Execute(company.Id, _ =>
+                    policyTx.EnqueuePostCommit(() =>
+                        WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                            1.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost))));
+                outer.Rollback();
+            }
+            policyTx.DiscardPendingVerifications();
+            Assert.Equal(0, HistogramCount("workspace.first_useful_action.duration"));
+
+            // The rolled-back transaction left stale tracked entities in this shared test context; a real
+            // request uses a fresh context per call. Clear the tracker to mirror that.
+            _db.ChangeTracker.Clear();
+
+            // Committed external transaction: the owner drains after commit and the emission fires once.
+            using (var outer = _db.Database.BeginTransaction())
+            {
+                policyTx.Execute(company.Id, _ =>
+                    policyTx.EnqueuePostCommit(() =>
+                        WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                            1.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost))));
+                outer.Commit();
+            }
+            policyTx.VerifyPendingAfterExternalCommit();
+            Assert.Equal(1, HistogramCount("workspace.first_useful_action.duration"));
+        }
+
+        [Fact]
+        public void OwnedExecute_EmitsPostCommitAction_AfterCommit()
+        {
+            // When Execute OWNS the transaction (no ambient tx, e.g. the journal post path), it drains
+            // inline after its own commit: the enqueued emission fires exactly once.
+            var company = SeedCompany("tele-owned", "owner-o", out var owner);
+            SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, owner.Id, initialized: true);
+            SeedSingleActorRule(company.Id);
+
+            var policyTx = new WorkspacePolicyTransaction(_db, _tenant);
+            policyTx.Execute(company.Id, _ =>
+                policyTx.EnqueuePostCommit(() =>
+                    WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                        2.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost))));
+
+            Assert.Equal(1, HistogramCount("workspace.first_useful_action.duration"));
+        }
+
+        [Fact]
+        public void ActiveIncidentGauge_Counts_PersistentCurrentState()
+        {
+            // Two workspaces with active incidents, one resolved.
+            var c1 = SeedCompany("gauge-1", "g1", out _);
+            SeedSettings(c1.Id, WorkspaceCollaborationState.SoloActive, confirmedOwnerMemberId: null, initialized: true);
+            WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, c1.Id);
+
+            var c2 = SeedCompany("gauge-2", "g2", out _);
+            SeedSettings(c2.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSingleActorRule(c2.Id);
+            WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, c2.Id);
+
+            var c3 = SeedCompany("gauge-3", "g3", out var owner3);
+            var s3 = SeedSettings(c3.Id, WorkspaceCollaborationState.SoloActive, confirmedOwnerMemberId: null, initialized: true);
+            WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, c3.Id); // active
+            s3.ConfirmedOwnerMemberId = owner3.Id;
+            _db.SaveChanges();
+            WorkspacePolicyTransaction.VerifyCommittedCompanyUnderLock(_db, _tenant, c3.Id); // resolved
+
+            Assert.Equal(2, WorkspaceInvariantIncidentLog.CountWorkspacesWithActiveIncident(_db));
         }
 
         // ---- Recovery sweep -----------------------------------------------------------------------

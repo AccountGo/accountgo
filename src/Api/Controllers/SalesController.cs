@@ -34,6 +34,7 @@ namespace Api.Controllers
         private readonly Api.Service.SalesInvoicePresentation _invoicePresentation;
         private readonly IConfiguration _configuration;
         private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
@@ -49,7 +50,8 @@ namespace Api.Controllers
             Api.Data.ApiDbContext db,
             Api.Service.SalesInvoicePresentation invoicePresentation,
             IConfiguration configuration,
-            Services.Financial.IBooksLockGuard booksLockGuard)
+            Services.Financial.IBooksLockGuard booksLockGuard,
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
         {
             _adminService = adminService;
             _salesService = salesService;
@@ -66,6 +68,7 @@ namespace Api.Controllers
             _invoicePresentation = invoicePresentation;
             _configuration = configuration;
             _booksLockGuard = booksLockGuard;
+            _policyTransaction = policyTransaction;
         }
 
         private IActionResult? RefuseIfBooksLocked(DateTime date)
@@ -1690,6 +1693,9 @@ namespace Api.Controllers
                     _salesService.PostSalesInvoice(salesInvoiceDto.Id);
                     tx.Commit();
                 }
+                // After the invoice-post transaction commits and disposes, run deferred post-commit work
+                // (first-useful-action telemetry enqueued during posting). Never throws into the response.
+                _policyTransaction?.VerifyPendingAfterExternalCommit();
 
                 return new ObjectResult(Ok());
             }
