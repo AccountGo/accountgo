@@ -25,6 +25,12 @@ namespace Api.Service
         private readonly ApiDbContext _db;
         private readonly ITenantContext _tenant;
 
+        // Companies whose committed state must be verified once the OWNING transaction commits. When a
+        // nested policy transaction runs inside a caller-owned transaction, it cannot verify committed
+        // state itself (the outer transaction has not committed). It enqueues here; the owning call drains
+        // the queue after its commit. Scoped per DbContext/instance, matching the request scope.
+        private readonly HashSet<int> _pendingCommittedVerification = new();
+
         public WorkspacePolicyTransaction(ApiDbContext db, ITenantContext tenant)
         {
             _db = db;
@@ -89,33 +95,54 @@ namespace Api.Service
                 if (IsFailedResult(result))
                 {
                     if (ownsTransaction)
+                    {
                         tx?.Rollback();
+                        // Nothing committed: discard any deferred verifications from nested calls.
+                        _pendingCommittedVerification.Clear();
+                    }
                     return result;
                 }
 
                 // Always flush guarded mutations; only commit when this call owns the transaction.
                 _db.SaveChanges();
-                if (ownsTransaction)
-                    tx!.Commit();
+
+                if (!ownsTransaction)
+                {
+                    // Nested in a caller-owned transaction: committed state is not established yet.
+                    // Defer verification to the owner, which drains this set after it commits. Verifying
+                    // now would read uncommitted state and could both miss the final state and mislabel
+                    // rolled-back state as committed.
+                    foreach (var guard in guards)
+                        _pendingCommittedVerification.Add(guard.CompanyId);
+                    return result;
+                }
+
+                tx!.Commit();
+
+                // Verify only after a real commit. Include any companies deferred by nested calls in the
+                // same owning transaction. Failures here must never fail the already-committed request.
+                var toVerify = new HashSet<int>(_pendingCommittedVerification);
+                foreach (var guard in guards)
+                    toVerify.Add(guard.CompanyId);
+                _pendingCommittedVerification.Clear();
 
                 try
                 {
                     if (WorkspacePolicyTestGate.PostCommitVerificationFault != null)
                     {
-                        foreach (var guard in guards)
-                        {
-                            WorkspacePolicyTestGate.PostCommitVerificationFault(guard.CompanyId);
-                        }
+                        foreach (var companyId in toVerify)
+                            WorkspacePolicyTestGate.PostCommitVerificationFault(companyId);
                     }
 
-                    VerifyPostCommitInvariants(guards);
+                    VerifyCommittedInvariants(toVerify);
                 }
                 catch (Exception)
                 {
                     // CRITICAL: Database transaction has ALREADY committed durably.
                     // An exception during telemetry or invariant evaluation must NOT bubble up
                     // to fail the caller request, which would falsely report failure for a
-                    // committed financial or policy mutation.
+                    // committed financial or policy mutation. This is a scanner failure, tracked
+                    // separately from current violations and detected events.
                     WorkspaceOperatingPolicyMetrics.PostCommitDetectorExceptions.Add(1);
                 }
 
@@ -124,7 +151,10 @@ namespace Api.Service
             catch
             {
                 if (ownsTransaction)
+                {
                     tx?.Rollback();
+                    _pendingCommittedVerification.Clear();
+                }
                 throw;
             }
             finally
@@ -136,18 +166,34 @@ namespace Api.Service
             }
         }
 
-        private void VerifyPostCommitInvariants(IReadOnlyList<WorkspacePolicyGuard> guards)
+        /// <summary>
+        /// Verifies committed invariants for the given companies, re-reading each from the database so the
+        /// check reflects the committed row (not an in-memory guard snapshot). A newly observed violation
+        /// increments the committed-violation counter exactly once per signature; an already-reported
+        /// signature is not re-counted.
+        /// </summary>
+        private void VerifyCommittedInvariants(IEnumerable<int> companyIds)
         {
-            foreach (var guard in guards)
+            foreach (var companyId in companyIds)
             {
-                CheckCompanyInvariants(_db, guard.CompanyId, guard.Settings);
+                var settings = _db.WorkspaceOperatingSettings
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .FirstOrDefault(s => s.CompanyId == companyId);
+                if (settings == null)
+                    continue;
+
+                ReportCommittedViolation(_db, companyId, settings);
             }
         }
 
-        public static void CheckCompanyInvariants(ApiDbContext db, int companyId, WorkspaceOperatingSettings settings)
+        /// <summary>
+        /// Computes the current committed invariant violation for a workspace, if any, and returns a stable
+        /// signature string identifying it (or null when consistent). Pure read; increments no counters.
+        /// </summary>
+        public static string? ComputeViolationSignature(ApiDbContext db, int companyId, WorkspaceOperatingSettings settings)
         {
-            // 1. Collaboration-state consistency:
-            // A SoloActive workspace must have a confirmed owner, and cannot have multiple active members.
+            // 1. Collaboration-state consistency.
             if (settings.CollaborationState == WorkspaceCollaborationState.SoloActive)
             {
                 var activeMemberCount = db.CompanyMembers
@@ -160,21 +206,13 @@ namespace Api.Service
 
                 bool ownerValid = ownerMember != null && ownerMember.Status == CompanyMemberStatus.Active && ownerMember.Role == CompanyMemberRole.Owner;
 
-                if (!ownerValid || activeMemberCount > 1)
-                {
-                    WorkspaceOperatingPolicyMetrics.InconsistentTransitionsCommitted.Add(1);
-                }
+                if (!ownerValid)
+                    return "inconsistent_transition:solo_active_missing_owner";
+                if (activeMemberCount > 1)
+                    return "inconsistent_transition:solo_active_multiple_members";
             }
 
-            // 2. Unauthorized elevation detection:
-            // A SingleActorAllowed approval rule requires an initialized workspace with a confirmed owner.
-            // If SingleActorAllowed exists in an uninitialized / LegacyUnclassified workspace, or without
-            // a confirmed owner, it is an unearned / unauthorized grant.
-            //
-            // Crucial domain rule: A SingleActorAllowed rule is VALID after invitation acceptance and team
-            // activation. The approved design preserves the explicit journal rule when a second human joins
-            // (e.g. a read-only accountant). Therefore, SingleActorAllowed with TeamActive, historical team
-            // activation, or provenance other than NewWorkspaceConfirmed are NOT violations.
+            // 2. Unauthorized elevation detection.
             var hasSingleActor = db.WorkspaceApprovalRules
                 .IgnoreQueryFilters()
                 .Any(r => r.CompanyId == companyId && r.RuleKind == WorkspaceApprovalRuleKind.SingleActorAllowed);
@@ -185,11 +223,48 @@ namespace Api.Service
                                       || !settings.InitializedAtUtc.HasValue;
                 bool missingOwner = !settings.ConfirmedOwnerMemberId.HasValue;
 
-                if (isUninitialized || missingOwner)
-                {
-                    WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
-                }
+                if (isUninitialized)
+                    return "unauthorized_elevation:single_actor_uninitialized";
+                if (missingOwner)
+                    return "unauthorized_elevation:single_actor_missing_owner";
             }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Reports a currently-committed violation exactly once per signature, incrementing the appropriate
+        /// committed-violation counter only when the signature is newly observed. Distinguishes current
+        /// violation (signature != null) from a newly detected event (counter increment) and from an
+        /// already-reported signature (no increment). Persists the "reported" marker in the same context.
+        /// </summary>
+        public static void ReportCommittedViolation(ApiDbContext db, int companyId, WorkspaceOperatingSettings settings)
+        {
+            var signature = ComputeViolationSignature(db, companyId, settings);
+            if (signature == null)
+                return;
+
+            var newlyReported = WorkspacePolicyDurableEvidence.TryMarkViolationNewlyReported(
+                db, companyId, signature, DateTime.UtcNow);
+            if (!newlyReported)
+                return;
+
+            if (signature.StartsWith("inconsistent_transition:", StringComparison.Ordinal))
+                WorkspaceOperatingPolicyMetrics.InconsistentTransitionsCommitted.Add(1);
+            else if (signature.StartsWith("unauthorized_elevation:", StringComparison.Ordinal))
+                WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
+
+            db.SaveChanges();
+        }
+
+        /// <summary>
+        /// Legacy entry point retained for compatibility. Reports a currently-committed violation exactly
+        /// once per signature (idempotent); callers should prefer <see cref="ReportCommittedViolation"/>.
+        /// Note: this must be called against committed state, not an in-flight guard snapshot.
+        /// </summary>
+        public static void CheckCompanyInvariants(ApiDbContext db, int companyId, WorkspaceOperatingSettings settings)
+        {
+            ReportCommittedViolation(db, companyId, settings);
         }
 
         private static bool IsFailedResult<T>(T result)

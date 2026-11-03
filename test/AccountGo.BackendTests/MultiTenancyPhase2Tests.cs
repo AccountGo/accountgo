@@ -618,6 +618,11 @@ namespace AccountGo.BackendTests
                 "WorkspaceApprovalPolicyResolver.cs",
                 "WorkspaceInitializationApplicator.cs",
                 "TenantResolutionMiddleware.cs",
+                // Durable policy evidence and the committed-invariant recovery sweep read and mark by
+                // explicit companyId across tenants (operator-level committed-state detection), never
+                // serving tenant data to a request.
+                "WorkspacePolicyDurableEvidence.cs",
+                "WorkspaceInvariantRecoveryScanner.cs",
                 // Evidence reads explicitly filter by companyId, including before tenant resolution.
                 "ContractAVerifier.cs",
                 "WorkspaceOriginEvidence.cs",

@@ -197,6 +197,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<IAccountService, AccountService>();
         builder.Services.AddScoped<Api.Service.SalesInvoicePresentation>();
         builder.Services.AddHostedService<Api.Service.StartupWarmup>();
+        builder.Services.AddHostedService<Api.Service.WorkspaceInvariantRecoveryScanner>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
         builder.Services.AddSingleton(Api.Options.EntitlementsConfiguration.FromConfiguration(builder.Configuration));

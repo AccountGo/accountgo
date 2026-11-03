@@ -1,0 +1,275 @@
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Diagnostics.Metrics;
+using System.Linq;
+using System.Threading;
+using Api.Data;
+using Api.Service;
+using Api.Tenancy;
+using Core.Authorization;
+using Core.Domain;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace AccountGo.BackendTests.Observability
+{
+    /// <summary>
+    /// Slices 3 and 4. Verifies commit-accurate, idempotent invariant detection (no double-counting of a
+    /// persisted violation), the recovery sweep for crash-left violations, and the durable, unique
+    /// first-useful-action marker that underpins honest measurement.
+    /// </summary>
+    public sealed class WorkspaceInvariantAndMeasurementTests : IDisposable
+    {
+        private readonly SqliteConnection _connection;
+        private readonly ApiDbContext _db;
+        private readonly TenantContext _tenant = new();
+        private readonly MeterListener _listener;
+        private readonly List<(string Name, long Value)> _counters = new();
+
+        public WorkspaceInvariantAndMeasurementTests()
+        {
+            _connection = new SqliteConnection("DataSource=:memory:");
+            _connection.Open();
+            _db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(_connection).Options, _tenant);
+            _db.Database.EnsureCreated();
+
+            _listener = new MeterListener
+            {
+                InstrumentPublished = (instrument, listener) =>
+                {
+                    if (instrument.Meter.Name == WorkspaceOperatingPolicyMetrics.MeterName)
+                        listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+            {
+                lock (_counters) _counters.Add((instrument.Name, measurement));
+            });
+            _listener.Start();
+        }
+
+        public void Dispose()
+        {
+            _listener.Dispose();
+            _db.Dispose();
+            _connection.Dispose();
+        }
+
+        private long CounterTotal(string instrumentName)
+        {
+            lock (_counters)
+                return _counters.Where(c => c.Name == instrumentName).Sum(c => c.Value);
+        }
+
+        private Company SeedCompany(string slug, string ownerUserId, out CompanyMember owner)
+        {
+            _db.SuppressTenantSecurityCheck = true;
+            var company = new Company { Name = slug, Slug = slug, CreatedByUserId = ownerUserId };
+            _db.Companies.Add(company);
+            _db.SaveChanges();
+
+            owner = new CompanyMember
+            {
+                CompanyId = company.Id,
+                UserId = ownerUserId,
+                Role = CompanyMemberRole.Owner,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            };
+            _db.CompanyMembers.Add(owner);
+            _db.SaveChanges();
+            return company;
+        }
+
+        private WorkspaceOperatingSettings SeedSettings(int companyId, WorkspaceCollaborationState state, int? confirmedOwnerMemberId, bool initialized)
+        {
+            var settings = new WorkspaceOperatingSettings
+            {
+                CompanyId = companyId,
+                Purpose = WorkspacePurpose.Business,
+                CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
+                CollaborationState = state,
+                ConfirmedOwnerMemberId = confirmedOwnerMemberId,
+                InitializedAtUtc = initialized ? DateTime.UtcNow : (DateTime?)null,
+                PolicyRevision = 1,
+                PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+            };
+            _db.WorkspaceOperatingSettings.Add(settings);
+            _db.SaveChanges();
+            return settings;
+        }
+
+        private void SeedSingleActorRule(int companyId)
+        {
+            _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+            {
+                CompanyId = companyId,
+                OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
+                Provenance = WorkspaceApprovalRuleProvenance.NewWorkspaceConfirmed,
+                PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion,
+                ConfiguredAtUtc = DateTime.UtcNow,
+                ConfiguredAtPolicyRevision = 1
+            });
+            _db.SaveChanges();
+        }
+
+        // ---- ComputeViolationSignature -------------------------------------------------------------
+
+        [Fact]
+        public void Consistent_SoloWorkspace_HasNoViolationSignature()
+        {
+            var company = SeedCompany("consistent-solo", "owner-1", out var owner);
+            var settings = SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, owner.Id, initialized: true);
+            SeedSingleActorRule(company.Id);
+
+            var signature = WorkspacePolicyTransaction.ComputeViolationSignature(_db, company.Id, settings);
+            Assert.Null(signature);
+        }
+
+        [Fact]
+        public void SingleActor_OnUninitializedWorkspace_IsUnauthorizedElevation()
+        {
+            var company = SeedCompany("elevation", "owner-2", out _);
+            var settings = SeedSettings(company.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSingleActorRule(company.Id);
+
+            var signature = WorkspacePolicyTransaction.ComputeViolationSignature(_db, company.Id, settings);
+            Assert.NotNull(signature);
+            Assert.StartsWith("unauthorized_elevation:", signature);
+        }
+
+        [Fact]
+        public void SoloActive_MissingConfirmedOwner_IsInconsistentTransition()
+        {
+            var company = SeedCompany("inconsistent", "owner-3", out _);
+            var settings = SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, confirmedOwnerMemberId: null, initialized: true);
+
+            var signature = WorkspacePolicyTransaction.ComputeViolationSignature(_db, company.Id, settings);
+            Assert.NotNull(signature);
+            Assert.StartsWith("inconsistent_transition:", signature);
+        }
+
+        // ---- Idempotent reporting (no double-count) -----------------------------------------------
+
+        [Fact]
+        public void ReportCommittedViolation_CountsOncePerSignature_NotOnRepeatScans()
+        {
+            var company = SeedCompany("idem", "owner-4", out _);
+            var settings = SeedSettings(company.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSingleActorRule(company.Id);
+
+            // First observation reports and counts once.
+            WorkspacePolicyTransaction.ReportCommittedViolation(_db, company.Id, settings);
+            // Repeated scans of the SAME persisted violation must not re-count it.
+            WorkspacePolicyTransaction.ReportCommittedViolation(_db, company.Id, settings);
+            WorkspacePolicyTransaction.ReportCommittedViolation(_db, company.Id, settings);
+
+            _listener.RecordObservableInstruments();
+            Assert.Equal(1, CounterTotal("workspace.unauthorized_elevations.committed"));
+        }
+
+        [Fact]
+        public void ReportCommittedViolation_ConsistentWorkspace_CountsNothing()
+        {
+            var company = SeedCompany("clean", "owner-5", out var owner);
+            var settings = SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, owner.Id, initialized: true);
+            SeedSingleActorRule(company.Id);
+
+            WorkspacePolicyTransaction.ReportCommittedViolation(_db, company.Id, settings);
+
+            _listener.RecordObservableInstruments();
+            Assert.Equal(0, CounterTotal("workspace.unauthorized_elevations.committed"));
+            Assert.Equal(0, CounterTotal("workspace.inconsistent_transitions.committed"));
+        }
+
+        // ---- Recovery sweep -----------------------------------------------------------------------
+
+        [Fact]
+        public void RecoverySweep_DetectsCrashLeftViolation_Once()
+        {
+            // Two violating workspaces plus one clean workspace.
+            var c1 = SeedCompany("sweep-1", "o1", out _);
+            SeedSettings(c1.Id, WorkspaceCollaborationState.LegacyUnclassified, confirmedOwnerMemberId: null, initialized: false);
+            SeedSingleActorRule(c1.Id);
+
+            var c2 = SeedCompany("sweep-2", "o2", out _);
+            SeedSettings(c2.Id, WorkspaceCollaborationState.SoloActive, confirmedOwnerMemberId: null, initialized: true);
+
+            var c3 = SeedCompany("sweep-clean", "o3", out var owner3);
+            SeedSettings(c3.Id, WorkspaceCollaborationState.SoloActive, owner3.Id, initialized: true);
+            SeedSingleActorRule(c3.Id);
+
+            var services = new SingleDbServiceProvider(_db);
+
+            var first = WorkspaceInvariantRecoveryScanner.ScanAsync(services, batchSize: 50, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            Assert.Equal(3, first.Scanned);
+            Assert.Equal(2, first.NewViolations); // c1 + c2 violate; c3 is clean
+            Assert.Equal(0, first.ScannerErrors);
+
+            // A second sweep of the same persisted violations must not re-count them.
+            var second = WorkspaceInvariantRecoveryScanner.ScanAsync(services, batchSize: 50, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            Assert.Equal(3, second.Scanned);
+            Assert.Equal(0, second.NewViolations);
+
+            _listener.RecordObservableInstruments();
+            Assert.Equal(1, CounterTotal("workspace.unauthorized_elevations.committed")); // c1
+            Assert.Equal(1, CounterTotal("workspace.inconsistent_transitions.committed")); // c2
+        }
+
+        // ---- Durable first-useful-action marker ---------------------------------------------------
+
+        [Fact]
+        public void FirstUsefulAction_RecordedOnce_PerWorkspace()
+        {
+            var company = SeedCompany("measure", "owner-6", out _);
+            var repo = new Api.Data.EfRepository<Core.Domain.Auditing.AuditLog>(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Core.Domain.Auditing.AuditLog>.Instance, _db);
+            var init = DateTime.UtcNow.AddMinutes(-5);
+
+            // The marker is written and checked inside the posting transaction, which is tenant-scoped to
+            // the acting company; mirror that so the repository's tenant filter resolves the row.
+            _db.SuppressTenantSecurityCheck = false;
+            using var impersonation = _tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner);
+
+            var first = WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(
+                repo, company.Id, WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost, "owner-6", init, DateTime.UtcNow);
+            _db.SaveChanges();
+            Assert.True(first);
+
+            // A later action (even a different kind) does not re-establish the first marker.
+            var second = WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(
+                repo, company.Id, WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice, "owner-6", init, DateTime.UtcNow);
+            Assert.False(second);
+
+            Assert.True(WorkspacePolicyDurableEvidence.HasFirstUsefulAction(_db, company.Id));
+            var markerCount = _db.AuditLogs.IgnoreQueryFilters()
+                .Count(a => a.CompanyId == company.Id && a.TableName == WorkspaceFirstActionEvidence.FirstUsefulActionTable);
+            Assert.Equal(1, markerCount);
+        }
+
+        /// <summary>Minimal IServiceProvider that hands out the one test DbContext per scope.</summary>
+        private sealed class SingleDbServiceProvider : IServiceProvider, IServiceScopeFactory, Microsoft.Extensions.DependencyInjection.IServiceScope
+        {
+            private readonly ApiDbContext _db;
+            public SingleDbServiceProvider(ApiDbContext db) => _db = db;
+            public IServiceProvider ServiceProvider => this;
+            public Microsoft.Extensions.DependencyInjection.IServiceScope CreateScope() => this;
+            public void Dispose() { }
+            public object? GetService(Type serviceType)
+            {
+                if (serviceType == typeof(ApiDbContext)) return _db;
+                if (serviceType == typeof(IServiceScopeFactory)) return this;
+                return null;
+            }
+        }
+    }
+}
