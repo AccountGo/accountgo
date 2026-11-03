@@ -145,6 +145,8 @@ namespace Api.Data
             // Measurement and invariant-detection depend on these records staying intact.
             "__WorkspaceFirstUsefulAction",
             "__WorkspaceInvariantIncident",
+            // Durable onboarding cohort anchors (start/completion) for conversion analysis.
+            "__WorkspaceOnboardingCohort",
             // Signup-specific pending-continuation marker (slice 2); immutable like the others.
             "__WorkspaceSignupContinuation"
         };

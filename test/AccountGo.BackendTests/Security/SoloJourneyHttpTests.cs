@@ -48,6 +48,13 @@ namespace AccountGo.BackendTests.Security
         private WebApplicationFactory<Program> _factory = null!;
         private HttpClient _client = null!;
 
+        // Process-global meter; the collection is serialized (DisableParallelization), and onboarding
+        // assertions below measure DELTAS around a specific action rather than absolute totals, since the
+        // counter tags carry no company id.
+        private readonly object _meterLock = new();
+        private readonly List<(string Name, string? Flow, string? Status, long Value)> _onboarding = new();
+        private System.Diagnostics.Metrics.MeterListener _meterListener = null!;
+
         public Task InitializeAsync()
         {
             // Trusted canary enrollment comes from environment only. Enroll by email (for the anonymous
@@ -72,6 +79,27 @@ namespace AccountGo.BackendTests.Security
                 });
             });
             _client = _factory.CreateClient();
+
+            _meterListener = new System.Diagnostics.Metrics.MeterListener
+            {
+                InstrumentPublished = (instrument, listener) =>
+                {
+                    if (instrument.Meter.Name == Core.Authorization.WorkspaceOperatingPolicyMetrics.MeterName
+                        && (instrument.Name == "workspace.onboarding.starts" || instrument.Name == "workspace.onboarding.completions"))
+                        listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+            {
+                string? flow = null, status = null;
+                foreach (var t in tags)
+                {
+                    if (t.Key == "flow") flow = t.Value as string;
+                    else if (t.Key == "status") status = t.Value as string;
+                }
+                lock (_meterLock) _onboarding.Add((instrument.Name, flow, status, measurement));
+            });
+            _meterListener.Start();
             return Task.CompletedTask;
         }
 
@@ -80,11 +108,27 @@ namespace AccountGo.BackendTests.Security
             Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", null);
             Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", null);
             Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", null);
+            _meterListener.Dispose();
             _client.Dispose();
             _factory.Dispose();
             foreach (var f in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
                 if (File.Exists(f)) File.Delete(f);
             return Task.CompletedTask;
+        }
+
+        // Onboarding counter deltas for the new-workspace flow, captured around a single action.
+        private long NewWorkspaceStarts()
+        {
+            lock (_meterLock)
+                return _onboarding.Where(m => m.Name == "workspace.onboarding.starts"
+                    && m.Flow == "new_workspace").Sum(m => m.Value);
+        }
+
+        private long NewWorkspaceCompletions(string status)
+        {
+            lock (_meterLock)
+                return _onboarding.Where(m => m.Name == "workspace.onboarding.completions"
+                    && m.Flow == "new_workspace" && m.Status == status).Sum(m => m.Value);
         }
 
         // ---- the real signup -> delivered OTP -> verification -> continuation journey ----------------
@@ -471,9 +515,78 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(WorkspaceApprovalRuleKind.SingleActorAllowed, JournalRuleKind(slug));
         }
 
-        // =========================================================================================
-        // Helpers
-        // =========================================================================================
+        // ---- onboarding measurement for the new-workspace flow -------------------------------------
+
+        [Fact]
+        public async Task Continuation_EmitsOnboardingStart_AndSuccessCompletion_OnDurableCommit()
+        {
+            const string email = "measure-owner@example.com";
+            const string slug = "measure-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Mea", "Measure Books", slug)).StatusCode);
+            EnrollUserIds(await ResolveUserId(email));
+            var (token, _) = await VerifyRealOtp(email);
+
+            var startsBefore = NewWorkspaceStarts();
+            var successBefore = NewWorkspaceCompletions("success");
+
+            Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
+
+            // Exactly one start and one success completion for the committed initialization.
+            Assert.Equal(startsBefore + 1, NewWorkspaceStarts());
+            Assert.Equal(successBefore + 1, NewWorkspaceCompletions("success"));
+
+            // Durable cohort anchors persisted in the same transaction as the initialization.
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingCompletion"));
+        }
+
+        [Fact]
+        public async Task RepeatInitialization_EmitsIneligibleCompletion_NotASecondSuccess()
+        {
+            const string email = "measure-repeat@example.com";
+            const string slug = "measure-repeat-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Rep", "Measure Repeat", slug)).StatusCode);
+            EnrollUserIds(await ResolveUserId(email));
+            var (token, _) = await VerifyRealOtp(email);
+            Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
+
+            var successBefore = NewWorkspaceCompletions("success");
+            var ineligibleBefore = NewWorkspaceCompletions("ineligible");
+
+            // A retry against the already-initialized workspace: starts (an attempt) then an ineligible
+            // completion, never a second success. Retry-safe: no double success, no duplicate cohort rows.
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
+            Assert.Equal(successBefore, NewWorkspaceCompletions("success"));
+            Assert.Equal(ineligibleBefore + 1, NewWorkspaceCompletions("ineligible"));
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingCompletion"));
+        }
+
+        [Fact]
+        public async Task RejectedInitialization_EmitsNoSuccessCompletion_AndNoCohortRow()
+        {
+            // An out-of-scope (team) continuation is rejected before the Execute guard runs: it must not
+            // emit a success completion nor write a durable cohort row (nothing committed).
+            const string email = "measure-reject@example.com";
+            const string slug = "measure-reject-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Rej", "Measure Reject", slug)).StatusCode);
+            EnrollUserIds(await ResolveUserId(email));
+            var (token, _) = await VerifyRealOtp(email);
+
+            var successBefore = NewWorkspaceCompletions("success");
+            var resp = await InitializeCurrent(token, slug, "Business", "WithOthers"); // out of scope
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
+
+            Assert.Equal(successBefore, NewWorkspaceCompletions("success"));
+            Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingStart"));
+            Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingCompletion"));
+            Assert.False(OperatingState(slug)!.Value.Initialized);
+        }
+
+
 
         private void EnrollEmails(params string[] emails) =>
             Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", string.Join(",", emails));
@@ -727,6 +840,16 @@ namespace AccountGo.BackendTests.Security
                 .OrderByDescending(a => a.Id)
                 .Select(a => a.NewValue)
                 .FirstOrDefault();
+        });
+
+        private int OnboardingCohortCount(string slug, string eventKind) => WithDb(db =>
+        {
+            var id = db.Companies.IgnoreQueryFilters().First(c => c.Slug == slug).Id;
+            return db.AuditLogs.IgnoreQueryFilters()
+                .Count(a => a.CompanyId == id
+                    && a.TableName == "__WorkspaceOnboardingCohort"
+                    && a.NewValue != null
+                    && a.NewValue.Contains("\"eventKind\":\"" + eventKind + "\""));
         });
 
         /// <summary>Deterministic email sink: preserves delivered messages so tests can read the real OTP.</summary>

@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Api.Data;
 using Api.Options;
@@ -162,11 +163,21 @@ namespace Api.Service
                 };
             }
 
+            // An admitted, in-scope initialization attempt begins here (enrollment, scope, and answer-shape
+            // checks have all passed). Count the onboarding START for the new-workspace flow. A start is an
+            // attempt, so it is emitted inline regardless of the under-lock eligibility outcome, mirroring the
+            // legacy-confirmation flow.
+            WorkspaceOperatingPolicyMetrics.OnboardingStarts.Add(1,
+                new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace));
+
             return _policyTransaction.Execute(companyId, guard =>
             {
                 var settings = guard.Settings;
                 if (settings.InitializedAtUtc.HasValue)
                 {
+                    WorkspaceOperatingPolicyMetrics.OnboardingCompletions.Add(1,
+                        new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace),
+                        new KeyValuePair<string, object?>("status", WorkspaceOperatingPolicyMetrics.StatusLabels.Ineligible));
                     return new WorkspaceInitializationResult
                     {
                         Applied = false,
@@ -192,6 +203,9 @@ namespace Api.Service
                     : ContractAVerifier.VerifySolePristineOwner(_db, companyId, ownerUserId, "initialization");
                 if (!eligibility.Allowed)
                 {
+                    WorkspaceOperatingPolicyMetrics.OnboardingCompletions.Add(1,
+                        new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace),
+                        new KeyValuePair<string, object?>("status", WorkspaceOperatingPolicyMetrics.StatusLabels.Ineligible));
                     return new WorkspaceInitializationResult
                     {
                         Applied = false,
@@ -264,6 +278,57 @@ namespace Api.Service
                     RecordId = companyId.ToString(),
                     NewValue = auditPayload
                 });
+
+                // Durable onboarding cohort anchor. Unlike the start COUNTER (an attempt tally), this row is
+                // written in the SAME transaction as the initialization, so it exists iff the workspace was
+                // actually initialized — the cross-restart evidence cohort-conversion analysis needs
+                // (eventKind "OnboardingStart" for the new-workspace flow). The matching "OnboardingCompletion"
+                // marker is written next; both persist or neither does.
+                _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                {
+                    CompanyId = companyId,
+                    UserName = ownerUserId,
+                    AuditEventDateUTC = DateTime.UtcNow,
+                    AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                    TableName = "__WorkspaceOnboardingCohort",
+                    RecordId = companyId.ToString(),
+                    NewValue = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        eventKind = "OnboardingStart",
+                        flow = WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace,
+                        companyId,
+                        initializationSource = settings.InitializationSource.ToString(),
+                        policyRevision = settings.PolicyRevision
+                    })
+                });
+                _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                {
+                    CompanyId = companyId,
+                    UserName = ownerUserId,
+                    AuditEventDateUTC = DateTime.UtcNow,
+                    AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                    TableName = "__WorkspaceOnboardingCohort",
+                    RecordId = companyId.ToString(),
+                    NewValue = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        eventKind = "OnboardingCompletion",
+                        flow = WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace,
+                        status = WorkspaceOperatingPolicyMetrics.StatusLabels.Success,
+                        companyId,
+                        collaborationState = settings.CollaborationState.ToString(),
+                        policyRevision = settings.PolicyRevision
+                    })
+                });
+
+                // Emit the SUCCESS completion counter only after the owning transaction durably commits.
+                // Both call paths are covered: the controller-owned external scope (Create) drains on
+                // policyScope.Committed(), and the applicator-owned Execute (current/initialize) drains inline
+                // after its own commit. A later rollback on either path discards this without emitting — so a
+                // rolled-back or retried initialization never over-counts a completion.
+                _policyTransaction.EnqueuePostCommit(() =>
+                    WorkspaceOperatingPolicyMetrics.OnboardingCompletions.Add(1,
+                        new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace),
+                        new KeyValuePair<string, object?>("status", WorkspaceOperatingPolicyMetrics.StatusLabels.Success)));
 
                 var journal = _approvalResolver.Resolve(settings, FindJournalRule(companyId), AccessOperationCatalog.FinancialsJournalPost);
                 return new WorkspaceInitializationResult
