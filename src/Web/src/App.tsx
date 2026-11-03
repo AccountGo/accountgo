@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Link, useParams, useSearchParams } from 'react-router-dom';
 import OrgLayout from './layouts/OrgLayout';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
@@ -122,6 +122,17 @@ const router = createBrowserRouter([
       {
         path: '/select-org',
         element: <SelectOrg />,
+      },
+      {
+        path: '/profile',
+        element: (
+          <div className="min-h-screen bg-[var(--bg-canvas)] p-4 sm:p-8">
+            <div className="max-w-6xl mx-auto">
+              <Link to="/select-org" className="inline-block mb-6 text-sm text-[var(--brand-primary)]">← Back to organizations</Link>
+              <Profile />
+            </div>
+          </div>
+        ),
       },
       {
         path: '/create-org',

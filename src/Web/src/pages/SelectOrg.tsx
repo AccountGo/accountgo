@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   Search,
   Plus,
   ArrowRight,
   ShieldCheck,
-  CheckCircle2,
   Sparkles,
   LogOut,
   Loader2,
@@ -161,20 +160,19 @@ export const SelectOrg: React.FC = () => {
             <span className="font-bold text-base tracking-tight text-[var(--text-main)]">
               Account<span className="text-[var(--brand-primary)]">Go</span>
             </span>
-            <span className="text-[10px] sm:text-[11px] text-[var(--text-muted)] font-mono px-2 py-0.5 rounded-full bg-[var(--bg-subtle)]">
-              Multi-Tenant
-            </span>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <div className="text-xs font-semibold text-[var(--text-main)]">{userName}</div>
-            <div className="text-[11px] text-[var(--text-muted)]">{userEmail}</div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-emerald-800 text-[var(--brand-text)] flex items-center justify-center font-bold text-xs shadow-sm ring-1 ring-[var(--brand-ring)]">
-            {userInitial}
-          </div>
+          <Link to="/profile" aria-label="User profile" className="flex items-center gap-3 rounded-xl focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-semibold text-[var(--text-main)]">{userName}</div>
+              <div className="text-[11px] text-[var(--text-muted)]">{userEmail}</div>
+            </div>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-emerald-800 text-[var(--brand-text)] flex items-center justify-center font-bold text-xs shadow-sm ring-1 ring-[var(--brand-ring)]">
+              {userInitial}
+            </div>
+          </Link>
           <button
             type="button"
             onClick={handleLogout}
@@ -344,16 +342,6 @@ export const SelectOrg: React.FC = () => {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-4 sm:py-6 px-4 sm:px-6 text-center text-xs text-[var(--text-muted)] flex flex-col sm:flex-row items-center justify-between gap-2 safe-bottom">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 text-[var(--brand-primary)]" />
-          <span>Tenant Context Root Routing Engine Active</span>
-        </div>
-        <div className="font-mono text-[11px]">
-          AccountGo Cloud API :8001
-        </div>
-      </footer>
     </div>
   );
 };
