@@ -46,6 +46,7 @@ namespace Api.Controllers
         private readonly AccountDeletionService _accountDeletion;
         private readonly IPlanCatalog _plans;
         private readonly WorkspaceInitializationApplicator _workspaceInit;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -62,7 +63,8 @@ namespace Api.Controllers
             WorkspaceService workspaces,
             AccountDeletionService accountDeletion,
             IPlanCatalog plans,
-            WorkspaceInitializationApplicator workspaceInit = null)
+            WorkspaceInitializationApplicator workspaceInit = null,
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
         {
             _otpService = otpService;
             _authService = authService;
@@ -79,6 +81,7 @@ namespace Api.Controllers
             _accountDeletion = accountDeletion;
             _plans = plans;
             _workspaceInit = workspaceInit;
+            _policyTransaction = policyTransaction;
         }
 
         [AllowAnonymous]
@@ -334,6 +337,7 @@ namespace Api.Controllers
                         });
                         if (!initResult.Applied)
                         {
+                            _policyTransaction?.DiscardPendingVerifications();
                             return UnprocessableEntity(new ProblemDetails
                             {
                                 Title = "Workspace initialization rejected",
@@ -350,6 +354,8 @@ namespace Api.Controllers
                 var result = await _otpService.SendWelcomeOtpAsync(appUser, string.IsNullOrWhiteSpace(request.FirstName) ? "there" : request.FirstName.Trim(), company?.Name, ipAddress);
                 if (!result.Success)
                 {
+                    // Transaction will roll back; drop any queued committed-state verifications.
+                    _policyTransaction?.DiscardPendingVerifications();
                     return BadRequest(new ProblemDetails
                     {
                         Title = "Verification Email Failed",
@@ -358,6 +364,8 @@ namespace Api.Controllers
                     });
                 }
                 await transaction.CommitAsync();
+                // Externally-owned transaction committed; verify deferred committed state. Never throws.
+                _policyTransaction?.VerifyPendingAfterExternalCommit();
                 return Ok(new SignUpResponse(
                     Success: true, Message: result.Message, Email: normalizedEmail, OrgSlug: company?.Slug,
                     ExpiresInSeconds: result.ExpiresInSeconds, DevCode: result.DevCode));

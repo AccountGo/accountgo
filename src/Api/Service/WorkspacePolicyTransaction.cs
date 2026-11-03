@@ -126,25 +126,7 @@ namespace Api.Service
                     toVerify.Add(guard.CompanyId);
                 _pendingCommittedVerification.Clear();
 
-                try
-                {
-                    if (WorkspacePolicyTestGate.PostCommitVerificationFault != null)
-                    {
-                        foreach (var companyId in toVerify)
-                            WorkspacePolicyTestGate.PostCommitVerificationFault(companyId);
-                    }
-
-                    VerifyCommittedInvariants(toVerify);
-                }
-                catch (Exception)
-                {
-                    // CRITICAL: Database transaction has ALREADY committed durably.
-                    // An exception during telemetry or invariant evaluation must NOT bubble up
-                    // to fail the caller request, which would falsely report failure for a
-                    // committed financial or policy mutation. This is a scanner failure, tracked
-                    // separately from current violations and detected events.
-                    WorkspaceOperatingPolicyMetrics.PostCommitDetectorExceptions.Add(1);
-                }
+                RunCommittedVerification(toVerify);
 
                 return result;
             }
@@ -166,24 +148,98 @@ namespace Api.Service
             }
         }
 
+        /// <inheritdoc />
+        public void VerifyPendingAfterExternalCommit()
+        {
+            var toVerify = new HashSet<int>(_pendingCommittedVerification);
+            _pendingCommittedVerification.Clear();
+            RunCommittedVerification(toVerify);
+        }
+
+        /// <inheritdoc />
+        public void DiscardPendingVerifications() => _pendingCommittedVerification.Clear();
+
         /// <summary>
-        /// Verifies committed invariants for the given companies, re-reading each from the database so the
-        /// check reflects the committed row (not an in-memory guard snapshot). A newly observed violation
-        /// increments the committed-violation counter exactly once per signature; an already-reported
-        /// signature is not re-counted.
+        /// Runs committed-state verification for the given companies. Each company is verified under its
+        /// own coordination lock in a fresh serializable transaction so settings, membership and rules are
+        /// read as one consistent snapshot and reporting is serialized against concurrent writers and
+        /// detectors. Any failure is swallowed and counted as a scanner exception — verification must never
+        /// fail an already-committed request.
         /// </summary>
-        private void VerifyCommittedInvariants(IEnumerable<int> companyIds)
+        private void RunCommittedVerification(HashSet<int> companyIds)
         {
             foreach (var companyId in companyIds)
             {
-                var settings = _db.WorkspaceOperatingSettings
+                try
+                {
+                    WorkspacePolicyTestGate.PostCommitVerificationFault?.Invoke(companyId);
+                    VerifyCommittedCompanyUnderLock(_db, _tenant, companyId);
+                }
+                catch (Exception)
+                {
+                    // The caller's transaction is already durably committed; a verification failure is a
+                    // scanner exception, kept distinct from current violations and detected events.
+                    WorkspaceOperatingPolicyMetrics.PostCommitDetectorExceptions.Add(1);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Verifies one company's committed invariants under its coordination lock in a fresh transaction,
+        /// reconciling the current signature against the durable incident log and emitting the counter only
+        /// after the incident row commits. Returns the reconciliation outcome. Shared by the inline owner
+        /// path and the recovery sweep so both get identical locking, snapshot and counter semantics.
+        /// </summary>
+        public static WorkspaceInvariantIncidentLog.ReconcileOutcome VerifyCommittedCompanyUnderLock(
+            ApiDbContext db, ITenantContext? tenant, int companyId)
+        {
+            using var impersonation = tenant != null && tenant.CompanyId != companyId
+                ? tenant.Impersonate(companyId)
+                : null;
+
+            var ownsTx = db.Database.CurrentTransaction == null;
+            IDbContextTransaction? tx = ownsTx ? db.Database.BeginTransaction(IsolationLevel.Serializable) : null;
+            try
+            {
+                // Lock the coordination row so this read-and-report is serialized against any concurrent
+                // policy writer or detector for the same company (prevents duplicate reports and torn
+                // settings/membership snapshots).
+                LockCoordinationRowStatic(db, companyId);
+
+                var settings = db.WorkspaceOperatingSettings
                     .IgnoreQueryFilters()
                     .AsNoTracking()
                     .FirstOrDefault(s => s.CompanyId == companyId);
                 if (settings == null)
-                    continue;
+                {
+                    if (ownsTx) tx!.Commit();
+                    return WorkspaceInvariantIncidentLog.ReconcileOutcome.NoChange;
+                }
 
-                ReportCommittedViolation(_db, companyId, settings);
+                var signature = ComputeViolationSignature(db, companyId, settings);
+                var outcome = WorkspaceInvariantIncidentLog.Reconcile(db, companyId, signature, DateTime.UtcNow);
+
+                if (ownsTx) tx!.Commit();
+
+                // Emit the counter only after the incident marker has committed.
+                if (outcome == WorkspaceInvariantIncidentLog.ReconcileOutcome.NewIncident && signature != null)
+                {
+                    if (signature.StartsWith("inconsistent_transition:", StringComparison.Ordinal))
+                        WorkspaceOperatingPolicyMetrics.InconsistentTransitionsCommitted.Add(1);
+                    else if (signature.StartsWith("unauthorized_elevation:", StringComparison.Ordinal))
+                        WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
+                }
+
+                return outcome;
+            }
+            catch
+            {
+                if (ownsTx) tx?.Rollback();
+                throw;
+            }
+            finally
+            {
+                if (ownsTx) tx?.Dispose();
             }
         }
 
@@ -230,41 +286,6 @@ namespace Api.Service
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Reports a currently-committed violation exactly once per signature, incrementing the appropriate
-        /// committed-violation counter only when the signature is newly observed. Distinguishes current
-        /// violation (signature != null) from a newly detected event (counter increment) and from an
-        /// already-reported signature (no increment). Persists the "reported" marker in the same context.
-        /// </summary>
-        public static void ReportCommittedViolation(ApiDbContext db, int companyId, WorkspaceOperatingSettings settings)
-        {
-            var signature = ComputeViolationSignature(db, companyId, settings);
-            if (signature == null)
-                return;
-
-            var newlyReported = WorkspacePolicyDurableEvidence.TryMarkViolationNewlyReported(
-                db, companyId, signature, DateTime.UtcNow);
-            if (!newlyReported)
-                return;
-
-            if (signature.StartsWith("inconsistent_transition:", StringComparison.Ordinal))
-                WorkspaceOperatingPolicyMetrics.InconsistentTransitionsCommitted.Add(1);
-            else if (signature.StartsWith("unauthorized_elevation:", StringComparison.Ordinal))
-                WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
-
-            db.SaveChanges();
-        }
-
-        /// <summary>
-        /// Legacy entry point retained for compatibility. Reports a currently-committed violation exactly
-        /// once per signature (idempotent); callers should prefer <see cref="ReportCommittedViolation"/>.
-        /// Note: this must be called against committed state, not an in-flight guard snapshot.
-        /// </summary>
-        public static void CheckCompanyInvariants(ApiDbContext db, int companyId, WorkspaceOperatingSettings settings)
-        {
-            ReportCommittedViolation(db, companyId, settings);
         }
 
         private static bool IsFailedResult<T>(T result)
@@ -348,15 +369,28 @@ namespace Api.Service
             _db.SaveChanges();
         }
 
-        private void LockCoordinationRow(int companyId)
+        private void LockCoordinationRow(int companyId) => LockCoordinationRowStatic(_db, companyId);
+
+        internal static void LockCoordinationRowStatic(ApiDbContext db, int companyId)
         {
-            var provider = _db.Database.ProviderName ?? string.Empty;
-            var connection = _db.Database.GetDbConnection();
+            // Ensure a coordination row exists so the lock has a target even for legacy/uninitialized rows.
+            if (!db.WorkspacePolicyCoordinations.IgnoreQueryFilters().Any(c => c.CompanyId == companyId))
+            {
+                db.WorkspacePolicyCoordinations.Add(new WorkspacePolicyCoordination
+                {
+                    CompanyId = companyId,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+                db.SaveChanges();
+            }
+
+            var provider = db.Database.ProviderName ?? string.Empty;
+            var connection = db.Database.GetDbConnection();
             if (connection.State != ConnectionState.Open)
                 connection.Open();
 
             using var command = connection.CreateCommand();
-            command.Transaction = _db.Database.CurrentTransaction?.GetDbTransaction();
+            command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
 
             if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
             {

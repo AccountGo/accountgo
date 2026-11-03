@@ -1246,6 +1246,11 @@ namespace Services.Sales
                 salesInvoice.Status = Core.Domain.SalesInvoiceStatus.Open;
             }
             _salesInvoiceRepo.Update(salesInvoice);
+
+            // First-useful-action measurement for the sales-invoice path (post-commit of the invoice save).
+            _financialService.RecordFirstUsefulActionIfFirst(
+                salesInvoice.CompanyId,
+                Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice);
         }
 
         /// <summary>Restores stock for an invoice after its general-ledger posting has been reversed.</summary>

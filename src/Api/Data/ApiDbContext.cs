@@ -141,7 +141,10 @@ namespace Api.Data
             "__JournalPostingAuthorization",
             "__InvitationTransition",
             "__WorkspaceOrigin",
-            "__WorkspaceCollaborationEvidence"
+            "__WorkspaceCollaborationEvidence",
+            // Measurement and invariant-detection depend on these records staying intact.
+            "__WorkspaceFirstUsefulAction",
+            "__WorkspaceInvariantIncident"
         };
 
         private void EnforceAuditLogImmutability()

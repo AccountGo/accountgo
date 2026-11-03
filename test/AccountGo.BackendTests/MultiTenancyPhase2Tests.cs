@@ -623,6 +623,7 @@ namespace AccountGo.BackendTests
                 // serving tenant data to a request.
                 "WorkspacePolicyDurableEvidence.cs",
                 "WorkspaceInvariantRecoveryScanner.cs",
+                "WorkspaceInvariantIncidentLog.cs",
                 // Evidence reads explicitly filter by companyId, including before tenant resolution.
                 "ContractAVerifier.cs",
                 "WorkspaceOriginEvidence.cs",

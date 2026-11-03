@@ -123,6 +123,19 @@ namespace Core.Authorization
         T ExecuteAcrossCompanies<T>(IEnumerable<int> companyIds, Func<IReadOnlyList<WorkspacePolicyGuard>, T> action);
 
         void ExecuteAcrossCompanies(IEnumerable<int> companyIds, Action<IReadOnlyList<WorkspacePolicyGuard>> action);
+
+        /// <summary>
+        /// Called by the owner of an externally-managed transaction AFTER it commits, so verification of
+        /// companies touched by nested guarded work runs against committed state. Each company is verified
+        /// under its own coordination lock in a fresh transaction. Never throws into the caller.
+        /// </summary>
+        void VerifyPendingAfterExternalCommit();
+
+        /// <summary>
+        /// Called by the owner of an externally-managed transaction when it rolls back, discarding any
+        /// verifications queued by nested guarded work (nothing committed).
+        /// </summary>
+        void DiscardPendingVerifications();
     }
 
     /// <summary>Handle held while the company coordination row is locked.</summary>

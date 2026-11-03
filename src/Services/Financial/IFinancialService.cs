@@ -22,6 +22,7 @@ namespace Services.Financial
         void UpdateGeneralLedgerHeader(GeneralLedgerHeader entry);
         GeneralLedgerLine CreateGeneralLedgerLine(DrOrCrSide DrCr, int accountId, decimal amount);
         GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime Date, string description, int? sourceDocumentId = null, int? reversedGeneralLedgerHeaderId = null);
+        void RecordFirstUsefulActionIfFirst(int companyId, string actionKind);
         IEnumerable<Account> GetAccounts();
         IEnumerable<JournalEntryHeader> GetJournalEntries();
         IEnumerable<JournalEntryLine> GetJournalEntryLines();

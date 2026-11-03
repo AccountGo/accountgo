@@ -476,6 +476,11 @@ namespace Services.Purchasing
             bill.ApprovedAt = approvedAt ?? DateTime.UtcNow;
             bill.CaptureBillFromIfApproved(vendor.Party, vendor.BillToContact);
             _purchaseInvoiceRepo.Update(bill);
+
+            // First-useful-action measurement for the bill path (post-commit of the bill save).
+            _financialService.RecordFirstUsefulActionIfFirst(
+                bill.CompanyId,
+                Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.Bill);
         }
 
         /// <summary>
