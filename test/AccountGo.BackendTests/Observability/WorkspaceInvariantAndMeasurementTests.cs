@@ -624,6 +624,60 @@ namespace AccountGo.BackendTests.Observability
             Assert.Equal(1, HistogramCount("workspace.first_useful_action.duration"));
         }
 
+        [Fact]
+        public void PruneScopes_ReleasesAbandonedScopePendingWork_WithoutEmission()
+        {
+            // Focused regression for the PruneScopes cleanup: removing an abandoned scope's registration
+            // must ALSO release its queued pending work, without emitting it. The release here is driven by
+            // the explicit completion path (Committed() -> DrainScopeCommitted -> PruneScopes) of a DIFFERENT
+            // scope — NOT by EvictOrphanedPending — so it isolates the PruneScopes behavior. Before the fix
+            // PruneScopes trimmed only _scopes, leaving the abandoned callback stranded in _pending forever
+            // (never drained, never emitted, never collected). After the fix the abandoned item is released
+            // on that PruneScopes pass and still never emits, because the abandoned transaction rolled back.
+            var orphan = SeedCompany("prune-orphan", "orphan-owner", out var orphanOwner);
+            SeedSettings(orphan.Id, WorkspaceCollaborationState.SoloActive, orphanOwner.Id, initialized: true);
+            var policy = new WorkspacePolicyTransaction(_db, _tenant);
+
+            // Abandon a scope: enqueue a post-commit callback under a caller-owned transaction, roll it back
+            // and dispose it, and NEVER complete the scope (mirrors a rollback path that only cleared EF
+            // tracking). Execute() enqueues its own deferred committed-state verification plus our explicit
+            // post-commit action, so two items are bound to the abandoned scope.
+            using (var abandoned = _db.Database.BeginTransaction())
+            {
+                policy.BeginExternalScope();
+                policy.Execute(orphan.Id, guard =>
+                    policy.EnqueuePostCommit(() => WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                        9.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice))));
+                abandoned.Rollback();
+                abandoned.Dispose();
+                // deliberately abandoned: neither Committed() nor RolledBack() on its token
+            }
+            _db.ChangeTracker.Clear();
+
+            // The abandoned scope's pending work is still queued: nothing has run that would release it.
+            Assert.Equal(2, policy.PendingItemCount);
+            Assert.Equal(1, policy.ScopeCount);
+
+            // Open and COMMIT an unrelated transaction, then complete ONLY its scope via the token. This
+            // drives DrainScopeCommitted -> PruneScopes directly, with no intervening Execute/EnqueuePostCommit
+            // (so EvictOrphanedPending is not what cleans up). PruneScopes must now also drop the abandoned
+            // scope's two pending items, while the abandoned callback never emits.
+            using (var liveTx = _db.Database.BeginTransaction())
+            {
+                var liveScope = policy.BeginExternalScope();
+                liveTx.Commit();
+                liveTx.Dispose();
+                liveScope.Committed();
+            }
+
+            // Decisive assertions: the abandoned scope registration and BOTH of its stranded pending items
+            // are gone (before the fix PendingItemCount would still be 2), and nothing was emitted — the
+            // abandoned transaction rolled back, so its post-commit side effect must never run.
+            Assert.Equal(0, policy.PendingItemCount);
+            Assert.Equal(0, policy.ScopeCount);
+            Assert.Equal(0, HistogramCount("workspace.first_useful_action.duration"));
+        }
+
         // ---- Finding 2: monitoring must not report a healthy zero on a failed measurement --------
 
         [Fact]
