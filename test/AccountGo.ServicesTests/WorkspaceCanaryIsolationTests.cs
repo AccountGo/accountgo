@@ -104,6 +104,13 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
                 });
             }
             _db.SaveChanges();
+
+            // Durable, server-issued creation evidence exactly as WorkspaceService.Create writes it: the
+            // immutable origin row bound to the creating owner plus the initial MemberAdded event. The
+            // initialization eligibility proof requires this, so the seed must mirror it to be faithful.
+            WorkspaceOriginEvidence.Record(_db, company.Id, ownerUserId);
+            WorkspaceCollaborationEvidence.Record(_db, company.Id, WorkspaceCollaborationEvidence.EventMemberAdded, ownerUserId, ownerUserId, new { role = CompanyMemberRole.Owner.ToString() });
+            _db.SaveChanges();
         }
         return (company, owner);
     }
@@ -205,6 +212,61 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
         Assert.Equal(owner.Id, settings.ConfirmedOwnerMemberId);
         var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
         Assert.Equal(WorkspaceApprovalRuleKind.SingleActorAllowed, rule.RuleKind);
+    }
+
+    [Fact]
+    public void ApplyNewWorkspace_EnrolledOwner_TeamWorkspace_IsRejected_NotPendingSignup()
+    {
+        // An enrolled owner of an uninitialized workspace that has already become a TEAM (a second active
+        // member and a historical team-activation marker) must NOT be initializable through the
+        // continuation path. Being uninitialized is not sufficient; the eligibility proof runs in the
+        // service, not only the controller.
+        const string ownerId = "owner-team-workspace";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            _db.CompanyMembers.Add(new CompanyMember
+            {
+                CompanyId = company.Id,
+                UserId = "second-member",
+                Role = CompanyMemberRole.Member,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            });
+            var seeded = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+            seeded.EverTeamActivatedAtUtc = DateTime.UtcNow;
+            _db.SaveChanges();
+        }
+
+        var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenant, soloSetupEnabled: true, enrolledUserIds: new[] { ownerId });
+
+        var stateBefore = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id).CollaborationState;
+
+        WorkspaceInitializationResult result;
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            result = applicator.ApplyNewWorkspace(company.Id, ownerId, owner.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = WorkspacePurpose.Business,
+                CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
+            });
+        }
+
+        Assert.False(result.Applied);
+        Assert.Equal(WorkspacePolicyReasonCodes.NotPendingSignupWorkspace, result.ReasonCode);
+
+        // Nothing granted; state, initialization, and rule unchanged by the rejected attempt.
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(stateBefore, settings.CollaborationState);
+        Assert.NotEqual(WorkspaceCollaborationState.SoloActive, settings.CollaborationState);
+        Assert.Null(settings.InitializedAtUtc);
+        Assert.Null(settings.ConfirmedOwnerMemberId);
+        var teamRule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
+        Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, teamRule.RuleKind);
+        Assert.Empty(_db.CompanyMemberSecurityRoles.IgnoreQueryFilters().Where(r => r.CompanyMember.CompanyId == company.Id));
     }
 
     [Fact]
