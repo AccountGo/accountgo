@@ -664,6 +664,63 @@ namespace AccountGo.BackendTests.Security
 
 
 
+        [Fact]
+        public async Task PendingSignupContinuation_FlagIsServerDerived_TrueOnlyForUninitializedSignupOwner()
+        {
+            // Finding 1: the SPA must route to continuation on a SERVER-DERIVED capability, not the raw
+            // collaboration state. Prove the GET current endpoint exposes operatingPolicy.pendingSignupContinuation
+            // that is TRUE only for the original owner of an uninitialized signup workspace, and FALSE once
+            // the workspace is initialized — so a legacy/initialized workspace is never steered into a flow
+            // it cannot complete.
+            const string email = "pending-flag@example.com";
+            const string slug = "pending-flag-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Pen", "Pending Flag", slug)).StatusCode);
+            EnrollUserIds(await ResolveUserId(email));
+            var (token, _) = await VerifyRealOtp(email);
+
+            // Before initialization: a genuine pending-signup workspace reports the capability as true.
+            Assert.True(await PendingSignupContinuationFlag(token, slug),
+                "an uninitialized signup workspace reports pendingSignupContinuation=true for its owner");
+
+            Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
+
+            // After initialization: the workspace is SoloActive and the capability flips to false — the same
+            // authoritative predicate the continuation endpoint enforces now rejects a repeat, so the flag
+            // can never disagree with it.
+            Assert.Equal(WorkspaceCollaborationState.SoloActive, OperatingState(slug)!.Value.State);
+            Assert.False(await PendingSignupContinuationFlag(token, slug),
+                "an initialized workspace reports pendingSignupContinuation=false");
+        }
+
+        [Fact]
+        public async Task PendingSignupContinuation_FlagIsFalse_ForPristineNonSignupWorkspace()
+        {
+            // A pristine, uninitialized workspace created OUTSIDE the signup flow (no signup-continuation
+            // marker) also sits at LegacyUnclassified, yet it is NOT a pending signup continuation. The
+            // server-derived flag must be false so routing does not steer the owner into a continuation the
+            // endpoint would reject. This is the exact legacy-vs-signup distinction finding 1 is about.
+            const string email = "legacy-flag@example.com";
+            const string slug = "legacy-flag-books";
+            var (token, userId) = await CreateVerifiedUser(email);
+            EnrollUserIds(userId);
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var workspaces = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
+                var planKey = scope.ServiceProvider.GetRequiredService<Services.Billing.IPlanCatalog>().DefaultPlanKey;
+                // markPendingSignupContinuation defaults false — not the signup flow.
+                workspaces.Create(userId, "Legacy Flag Books", slug, planKey, "USD");
+            }
+
+            // It is uninitialized (LegacyUnclassified) but carries no signup marker, so the capability is false.
+            Assert.False(OperatingState(slug)!.Value.Initialized);
+            Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, OperatingState(slug)!.Value.State);
+            Assert.False(await PendingSignupContinuationFlag(token, slug),
+                "a pristine non-signup workspace reports pendingSignupContinuation=false");
+        }
+
+
+
         private void EnrollEmails(params string[] emails) =>
             Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", string.Join(",", emails));
 
@@ -757,6 +814,18 @@ namespace AccountGo.BackendTests.Security
         private Task<HttpResponseMessage> InitializeCurrent(string token, string slug, string purpose, string intent)
             => SendScoped(HttpMethod.Post, "/api/organizations/current/initialize", token, slug,
                 new { workspacePurpose = purpose, collaborationIntent = intent });
+
+        /// <summary>Reads operatingPolicy.pendingSignupContinuation from the real GET current endpoint.</summary>
+        private async Task<bool> PendingSignupContinuationFlag(string token, string slug)
+        {
+            var resp = await SendScoped(HttpMethod.Get, "/api/organizations/current", token, slug, null);
+            var body = await resp.Content.ReadAsStringAsync();
+            Assert.True(resp.StatusCode == HttpStatusCode.OK, body);
+            using var doc = JsonDocument.Parse(body);
+            var policy = doc.RootElement.GetProperty("operatingPolicy");
+            return policy.ValueKind != JsonValueKind.Null
+                && policy.GetProperty("pendingSignupContinuation").GetBoolean();
+        }
 
         private Task<HttpResponseMessage> SendScoped(HttpMethod method, string path, string token, string slug, object? body)
         {

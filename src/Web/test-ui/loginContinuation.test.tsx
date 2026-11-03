@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { resolvePostAuthDestination } from '../src/pages/loginContinuation';
 
-// A server-state double: workspaces that still need setup report an unclassified operating policy; an
-// initialized workspace reports SoloActive. GET /api/organizations returns the user's org list.
+// A server-state double: the server reports, per workspace, whether it is a pending-signup continuation
+// FOR THIS CALLER via `operatingPolicy.pendingSignupContinuation`. A workspace that is not awaiting the
+// approved continuation — a legacy/unclassified workspace, a non-owner caller, setup disabled, or an
+// already-initialized workspace — reports false even if its collaboration state still looks unclassified.
+// GET /api/organizations returns the user's org list.
 function makeAuthFetch(opts: {
   needsSetup?: Record<string, boolean>;
+  collaborationState?: Record<string, string>;
   orgs?: Array<{ slug: string }>;
 }) {
   const needsSetup = opts.needsSetup ?? {};
+  const collaborationState = opts.collaborationState ?? {};
   const orgs = opts.orgs ?? [];
   const calls: string[] = [];
   const authFetch = vi.fn(async (url: string, init?: RequestInit) => {
@@ -17,9 +22,15 @@ function makeAuthFetch(opts: {
     }
     if (url === '/api/organizations/current') {
       const slug = new Headers(init?.headers).get('X-AccountGo-Org') ?? '';
-      const policy = needsSetup[slug] === false
-        ? { operatingPolicy: { collaborationState: 'SoloActive' } }
-        : { operatingPolicy: { collaborationState: 'LegacyUnclassified' } };
+      const pending = needsSetup[slug] === true;
+      const policy = {
+        operatingPolicy: {
+          // Collaboration state is intentionally independent of the continuation flag so the test can
+          // assert that routing follows the server-derived capability, not the raw state string.
+          collaborationState: collaborationState[slug] ?? (pending ? 'LegacyUnclassified' : 'SoloActive'),
+          pendingSignupContinuation: pending,
+        },
+      };
       return new Response(JSON.stringify(policy), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     return new Response(null, { status: 404 });
@@ -59,6 +70,19 @@ describe('post-auth continuation routing resolves from trusted server state', ()
     const { authFetch } = makeAuthFetch({ needsSetup: { acme: false } });
     const d = await resolvePostAuthDestination(authFetch, { targetOrgSlug: 'acme' });
     expect(d).toEqual({ kind: 'dashboard', slug: 'acme' });
+  });
+
+  it('legacy unclassified workspace that is NOT a pending signup continuation routes to the dashboard', async () => {
+    // Regression: a pre-existing legacy workspace still reports collaborationState=LegacyUnclassified but
+    // the server denies continuation (no signup marker / setup disabled / non-owner), so the flag is false.
+    // Such a workspace cannot complete the signup continuation and must not be steered into it — routing
+    // follows the server capability, not the raw state string.
+    const { authFetch } = makeAuthFetch({
+      needsSetup: { legacy: false },
+      collaborationState: { legacy: 'LegacyUnclassified' },
+    });
+    const d = await resolvePostAuthDestination(authFetch, { targetOrgSlug: 'legacy' });
+    expect(d).toEqual({ kind: 'dashboard', slug: 'legacy' });
   });
 
   it('initialized destination path is followed as-is', async () => {

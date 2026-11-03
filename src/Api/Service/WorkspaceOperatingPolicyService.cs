@@ -40,7 +40,7 @@ namespace Api.Service
         public WorkspaceOperatingSettings EnsureCoordinationAndSettings(int companyId) =>
             _policyTransaction.Execute(companyId, guard => guard.Settings);
 
-        public WorkspaceOperatingSummary GetSummary(int companyId, int? memberId = null)
+        public WorkspaceOperatingSummary GetSummary(int companyId, int? memberId = null, string? callerUserId = null)
         {
             var settings = _db.WorkspaceOperatingSettings
                 .IgnoreQueryFilters()
@@ -112,6 +112,15 @@ namespace Api.Service
                 }
             }
 
+            // Server-derived pending-signup-continuation capability. Computed from the SAME authoritative,
+            // non-mutating predicate the continuation endpoint enforces under the lock, so the flag can
+            // never disagree with what current/initialize will accept. It is meaningful only for the
+            // original owner (the marker is bound to that user id), so it is false whenever the caller is
+            // unknown or is any other member. A legacy/non-signup unclassified workspace lacks the marker,
+            // and an already-initialized workspace fails the structural proof — both yield false.
+            var pendingSignupContinuation = !string.IsNullOrWhiteSpace(callerUserId)
+                && ContractAVerifier.VerifyPendingSignupContinuation(_db, companyId, callerUserId!).Allowed;
+
             return new WorkspaceOperatingSummary(
                 settings.Purpose,
                 settings.CollaborationIntent,
@@ -121,7 +130,8 @@ namespace Api.Service
                 profileKey,
                 profileDisplay,
                 _experience.SoloSetupEnabled,
-                nextActions);
+                nextActions,
+                pendingSignupContinuation);
         }
 
         public SoloSetupEligibility EvaluateLegacySoloEligibility(int companyId, string callerUserId)

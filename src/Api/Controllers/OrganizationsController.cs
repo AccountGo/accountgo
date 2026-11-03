@@ -376,7 +376,7 @@ namespace Api.Controllers
                 .Where(m => m.CompanyId == id && m.UserId == UserId)
                 .Select(m => (int?)m.Id)
                 .FirstOrDefault();
-            var operating = _operatingPolicy?.GetSummary(id, memberId);
+            var operating = _operatingPolicy?.GetSummary(id, memberId, UserId);
             return Ok(new
             {
                 id = company.Id, name = company.Name, slug = company.Slug, shortName = company.ShortName,
@@ -394,7 +394,8 @@ namespace Api.Controllers
                     ownAccessProfileDisplayName = operating.OwnAccessProfileDisplayName,
                     journalWorkflow = operating.NormalJournalWorkflow.Mode.ToString(),
                     soloSetupEnabled = operating.SoloSetupEnabled,
-                    allowedNextActions = operating.AllowedNextActions
+                    allowedNextActions = operating.AllowedNextActions,
+                    pendingSignupContinuation = operating.PendingSignupContinuation
                 }
             });
         }
@@ -408,7 +409,7 @@ namespace Api.Controllers
                 .Where(m => m.CompanyId == id && m.UserId == UserId)
                 .Select(m => (int?)m.Id)
                 .FirstOrDefault();
-            var summary = _operatingPolicy?.GetSummary(id, memberId);
+            var summary = _operatingPolicy?.GetSummary(id, memberId, UserId);
             if (summary == null)
                 return Problem(statusCode: 503, title: "Operating policy unavailable");
             return Ok(new
@@ -421,7 +422,8 @@ namespace Api.Controllers
                 ownAccessProfileDisplayName = summary.OwnAccessProfileDisplayName,
                 journalWorkflow = summary.NormalJournalWorkflow.Mode.ToString(),
                 soloSetupEnabled = summary.SoloSetupEnabled,
-                allowedNextActions = summary.AllowedNextActions
+                allowedNextActions = summary.AllowedNextActions,
+                pendingSignupContinuation = summary.PendingSignupContinuation
             });
         }
 
