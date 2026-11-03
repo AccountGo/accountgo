@@ -232,5 +232,117 @@ namespace AccountGo.BackendTests.Observability
                 Assert.Equal(1, violation.Value);
             }
         }
+
+        [Fact]
+        public void ValidSingleActorPolicy_DoesNotEmitViolations()
+        {
+            var company = CreateTestCompany("Valid Solo Co", "valid-solo-co", "user-valid");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+            var owner = _db.CompanyMembers.First(m => m.CompanyId == company.Id);
+
+            tx.Execute(company.Id, guard =>
+            {
+                guard.Settings.Purpose = WorkspacePurpose.Business;
+                guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.JustMe;
+                guard.Settings.CollaborationState = WorkspaceCollaborationState.SoloActive;
+                guard.Settings.ConfirmedOwnerMemberId = owner.Id;
+                guard.Settings.EverTeamActivatedAtUtc = null;
+
+                _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+                {
+                    CompanyId = company.Id,
+                    OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                    RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
+                    Provenance = WorkspaceApprovalRuleProvenance.NewWorkspaceConfirmed,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                });
+                return true;
+            });
+
+            lock (_counterMeasurements)
+            {
+                var unauth = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.unauthorized_elevations.committed");
+                Assert.Null(unauth.InstrumentName);
+
+                var inconsistent = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.inconsistent_transitions.committed");
+                Assert.Null(inconsistent.InstrumentName);
+            }
+        }
+
+        [Fact]
+        public void ActualViolation_Rollback_DoesNotEmitCommittedViolation()
+        {
+            var company = CreateTestCompany("Rollback Co", "rollback-co", "user-rollback");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+
+            // Attempt an unauthorized elevation but fail/throw before commit
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                tx.Execute<bool>(company.Id, guard =>
+                {
+                    _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+                    {
+                        CompanyId = company.Id,
+                        OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                        RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
+                        PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                    });
+                    throw new InvalidOperationException("Simulated business validation failure triggering rollback");
+                });
+            });
+
+            // Ensure rule was rolled back and violation metric was NOT emitted
+            var ruleExists = _db.WorkspaceApprovalRules.Any(r => r.CompanyId == company.Id);
+            Assert.False(ruleExists);
+
+            lock (_counterMeasurements)
+            {
+                var unauth = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.unauthorized_elevations.committed");
+                Assert.Null(unauth.InstrumentName);
+            }
+        }
+
+        [Fact]
+        public void DetectorFailure_DoesNotFailCommittedTransaction()
+        {
+            var company = CreateTestCompany("Fault Co", "fault-co", "user-fault");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+
+            try
+            {
+                // Inject fault into post-commit verification
+                WorkspacePolicyTestGate.PostCommitVerificationFault = (cid) =>
+                {
+                    throw new InvalidOperationException("Simulated detector fault or transient query timeout");
+                };
+
+                // The financial transaction must succeed and return the result even if post-commit detector throws
+                var result = tx.Execute(company.Id, guard =>
+                {
+                    guard.Settings.Purpose = WorkspacePurpose.Business;
+                    return "FinancialCommitSucceeded";
+                });
+
+                Assert.Equal("FinancialCommitSucceeded", result);
+
+                // Detector exception metric was recorded
+                lock (_counterMeasurements)
+                {
+                    var detectorException = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.policy.detector_exceptions");
+                    Assert.NotNull(detectorException.InstrumentName);
+                    Assert.Equal(1, detectorException.Value);
+                }
+            }
+            finally
+            {
+                WorkspacePolicyTestGate.Reset();
+            }
+        }
     }
 }

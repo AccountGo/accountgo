@@ -100,11 +100,13 @@ namespace Core.Authorization
     {
         public static Action<int>? AfterLockAcquired { get; set; }
         public static Action<int>? AfterAuthorizationRead { get; set; }
+        public static Action<int>? PostCommitVerificationFault { get; set; }
 
         public static void Reset()
         {
             AfterLockAcquired = null;
             AfterAuthorizationRead = null;
+            PostCommitVerificationFault = null;
         }
     }
 
