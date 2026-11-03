@@ -43,6 +43,10 @@ namespace Core.Authorization
             "workspace.inconsistent_transitions.committed",
             description: "CRITICAL: Correctness failure where an inconsistent workspace state transition committed.");
 
+        public static readonly Counter<long> PostCommitDetectorExceptions = s_meter.CreateCounter<long>(
+            "workspace.policy.detector_exceptions",
+            description: "Number of exceptions encountered during post-commit invariant evaluation.");
+
         public static readonly Histogram<double> FirstUsefulActionDuration = s_meter.CreateHistogram<double>(
             "workspace.first_useful_action.duration",
             unit: "s",

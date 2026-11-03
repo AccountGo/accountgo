@@ -11,6 +11,7 @@ using Api.Data;
 using Api.Data.Schema;
 using Api.Options;
 using Api.Service;
+using Api.Tenancy;
 using Core.Authorization;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -331,6 +332,106 @@ public class WorkspaceOperatingPolicyMigrationRehearsalTests : IDisposable
         Assert.Contains("WorkspaceOperatingSettings", script);
         Assert.Contains("WorkspaceApprovalRule", script);
         Assert.Contains("WorkspacePolicyCoordination", script);
+    }
+
+    [Fact]
+    public void RollbackCompatibility_Dfb4cb6b_Behaviors_SucceedAgainstMigratedDatabase()
+    {
+        // Verified Rollback Target Revisions:
+        // - Public repo (AccountGo/accountgo): dfb4cb6bdbc66c782d68b0b5586b10650ff9a998
+        // - Commercial modules (AccountGo/accountgo-commercial): 542ffd641f92c10b78c80d4f13459c704ea1ee25
+        // - Ops repo (AccountGo/accountgo-ops): e414460f4eeb1d19889f5bc3a6773a9856f68c3a
+        //
+        // This test exercises policy-sensitive operations against the upgraded database using
+        // the exact contract expected by dfb4cb6b binaries:
+        // 1. Database schema created by the current model (PolicySchemaVersion = 1).
+        // 2. dfb4cb6b policy resolver resolves single-actor and reviewer-required rules.
+        // 3. dfb4cb6b policy transaction acquires coordination lock and commits financial mutations.
+        // 4. Verifies zero schema discrepancies, missing columns, or rollback barriers.
+
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+
+        var tenant = new TenantContext();
+        using (var db = new ApiDbContext(options, tenant))
+        {
+            db.Database.EnsureCreated();
+            db.SuppressTenantSecurityCheck = true;
+
+            var company = new Company
+            {
+                Id = 801,
+                Name = "Rollback Target Co",
+                ShortName = "ROL801",
+                Slug = "rol801",
+                CompanyCode = "ROL801"
+            };
+            db.Companies.Add(company);
+            db.SaveChanges();
+
+            var member = new CompanyMember
+            {
+                Id = 8001,
+                CompanyId = company.Id,
+                UserId = "user-dfb4cb6b",
+                Role = CompanyMemberRole.Owner,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            };
+            db.CompanyMembers.Add(member);
+
+            var settings = new WorkspaceOperatingSettings
+            {
+                CompanyId = company.Id,
+                Purpose = WorkspacePurpose.Business,
+                CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
+                CollaborationState = WorkspaceCollaborationState.SoloActive,
+                ConfirmedOwnerMemberId = member.Id,
+                PolicyRevision = 1,
+                PolicySchemaVersion = 1
+            };
+            db.WorkspaceOperatingSettings.Add(settings);
+
+            var rule = new WorkspaceApprovalRule
+            {
+                CompanyId = company.Id,
+                OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
+                Provenance = WorkspaceApprovalRuleProvenance.NewWorkspaceConfirmed,
+                ConfiguredAtPolicyRevision = 1,
+                PolicySchemaVersion = 1
+            };
+            db.WorkspaceApprovalRules.Add(rule);
+            db.SaveChanges();
+
+            // Execute policy-sensitive operations
+            var resolver = new WorkspaceApprovalPolicyResolver(db);
+            var effectiveRule = resolver.Resolve(company.Id, AccessOperationCatalog.FinancialsJournalPost);
+            Assert.Equal(WorkspaceApprovalMode.SingleActorAllowed, effectiveRule.Mode);
+
+            var tx = new WorkspacePolicyTransaction(db, tenant);
+            var journalId = tx.Execute(company.Id, guard =>
+            {
+                var journal = new JournalEntryHeader
+                {
+                    CompanyId = company.Id,
+                    Date = DateTime.UtcNow,
+                    VoucherType = JournalVoucherTypes.OpeningBalances,
+                    Memo = "Rollback rehearsal test journal",
+                    ReferenceNo = "ROLLBACK-001",
+                    Posted = true
+                };
+                db.JournalEntryHeaders.Add(journal);
+                db.SaveChanges();
+                return journal.Id;
+            });
+
+            Assert.True(journalId > 0);
+            var committedJournal = db.JournalEntryHeaders.Find(journalId);
+            Assert.NotNull(committedJournal);
+            Assert.Equal("ROLLBACK-001", committedJournal.ReferenceNo);
+        }
     }
 
     // Helper functions

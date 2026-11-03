@@ -98,7 +98,26 @@ namespace Api.Service
                 if (ownsTransaction)
                     tx!.Commit();
 
-                VerifyPostCommitInvariants(guards);
+                try
+                {
+                    if (WorkspacePolicyTestGate.PostCommitVerificationFault != null)
+                    {
+                        foreach (var guard in guards)
+                        {
+                            WorkspacePolicyTestGate.PostCommitVerificationFault(guard.CompanyId);
+                        }
+                    }
+
+                    VerifyPostCommitInvariants(guards);
+                }
+                catch (Exception)
+                {
+                    // CRITICAL: Database transaction has ALREADY committed durably.
+                    // An exception during telemetry or invariant evaluation must NOT bubble up
+                    // to fail the caller request, which would falsely report failure for a
+                    // committed financial or policy mutation.
+                    WorkspaceOperatingPolicyMetrics.PostCommitDetectorExceptions.Add(1);
+                }
 
                 return result;
             }
@@ -121,25 +140,41 @@ namespace Api.Service
         {
             foreach (var guard in guards)
             {
-                var settings = guard.Settings;
-                // 1. Inconsistent transition detection:
-                // SoloActive must have ConfirmedOwnerMemberId
-                if (settings.CollaborationState == WorkspaceCollaborationState.SoloActive && !settings.ConfirmedOwnerMemberId.HasValue)
+                CheckCompanyInvariants(_db, guard.CompanyId, guard.Settings);
+            }
+        }
+
+        public static void CheckCompanyInvariants(ApiDbContext db, int companyId, WorkspaceOperatingSettings settings)
+        {
+            // 1. Inconsistent transition detection:
+            // SoloActive must have ConfirmedOwnerMemberId, cannot have EverTeamActivatedAtUtc,
+            // and cannot have more than 1 active member.
+            if (settings.CollaborationState == WorkspaceCollaborationState.SoloActive)
+            {
+                var activeMemberCount = db.CompanyMembers
+                    .IgnoreQueryFilters()
+                    .Count(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active);
+
+                if (!settings.ConfirmedOwnerMemberId.HasValue || settings.EverTeamActivatedAtUtc.HasValue || activeMemberCount > 1)
                 {
                     WorkspaceOperatingPolicyMetrics.InconsistentTransitionsCommitted.Add(1);
                 }
+            }
 
-                // 2. Unauthorized elevation detection:
-                // SingleActorAllowed rule must never exist without an active confirmed owner or in unclassified/legacy state
-                if (settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)
+            // 2. Unauthorized elevation detection:
+            // SingleActorAllowed rule must never exist if CollaborationState != SoloActive,
+            // or if ConfirmedOwnerMemberId is missing, or if EverTeamActivatedAtUtc is present.
+            var hasSingleActor = db.WorkspaceApprovalRules
+                .IgnoreQueryFilters()
+                .Any(r => r.CompanyId == companyId && r.RuleKind == WorkspaceApprovalRuleKind.SingleActorAllowed);
+
+            if (hasSingleActor)
+            {
+                if (settings.CollaborationState != WorkspaceCollaborationState.SoloActive ||
+                    !settings.ConfirmedOwnerMemberId.HasValue ||
+                    settings.EverTeamActivatedAtUtc.HasValue)
                 {
-                    var hasSingleActor = _db.WorkspaceApprovalRules
-                        .IgnoreQueryFilters()
-                        .Any(r => r.CompanyId == guard.CompanyId && r.RuleKind == WorkspaceApprovalRuleKind.SingleActorAllowed);
-                    if (hasSingleActor)
-                    {
-                        WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
-                    }
+                    WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
                 }
             }
         }
