@@ -252,20 +252,50 @@ namespace Api.Controllers
 
         [Authorize(Roles = PlatformAdminRole)]
         [HttpPost("roles")]
-        public IActionResult SaveRole([FromBody] SaveRoleRequest request)
+        public IActionResult SaveRole(
+            [FromBody] SaveRoleRequest request,
+            [FromServices] ApiDbContext db,
+            [FromServices] Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
             if (string.IsNullOrWhiteSpace(request?.Name))
                 return BadRequest(new ProblemDetails { Title = "Invalid Role", Detail = "Role name is required.", Status = StatusCodes.Status400BadRequest });
 
             var displayName = !string.IsNullOrWhiteSpace(request.DisplayName) ? request.DisplayName.Trim() : request.Name.Trim();
-            _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, request.PermissionIds ?? new List<int>());
+
+            var affectedCompanyIds = request.Id > 0 && db != null
+                ? db.CompanyMemberSecurityRoles
+                    .Where(r => r.SecurityRoleId == request.Id)
+                    .Select(r => r.CompanyMember.CompanyId)
+                    .Distinct()
+                    .OrderBy(id => id)
+                    .ToList()
+                : new List<int>();
+
+            if (affectedCompanyIds.Count > 0 && policyTransaction != null)
+            {
+                policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
+                {
+                    foreach (var guard in guards)
+                    {
+                        guard.AdvanceRevision();
+                    }
+                    _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, request.PermissionIds ?? new List<int>());
+                });
+            }
+            else
+            {
+                _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, request.PermissionIds ?? new List<int>());
+            }
 
             return Ok(new { success = true });
         }
 
         [Authorize(Roles = PlatformAdminRole)]
         [HttpDelete("roles/{id:int}")]
-        public IActionResult DeleteRole(int id)
+        public IActionResult DeleteRole(
+            int id,
+            [FromServices] ApiDbContext db,
+            [FromServices] Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
             var role = _securityService.GetSecurityRole(id);
             if (role == null)
@@ -284,7 +314,31 @@ namespace Api.Controllers
                 });
             }
 
-            _securityService.DeleteRole(id);
+            var affectedCompanyIds = db != null
+                ? db.CompanyMemberSecurityRoles
+                    .Where(r => r.SecurityRoleId == id)
+                    .Select(r => r.CompanyMember.CompanyId)
+                    .Distinct()
+                    .OrderBy(cId => cId)
+                    .ToList()
+                : new List<int>();
+
+            if (affectedCompanyIds.Count > 0 && policyTransaction != null)
+            {
+                policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
+                {
+                    foreach (var guard in guards)
+                    {
+                        guard.AdvanceRevision();
+                    }
+                    _securityService.DeleteRole(id);
+                });
+            }
+            else
+            {
+                _securityService.DeleteRole(id);
+            }
+
             return Ok(new { success = true, message = "Role deleted successfully." });
         }
 

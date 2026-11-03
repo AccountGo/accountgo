@@ -56,6 +56,26 @@ namespace Services.Financial
                 throw new BooksLockedException(lockedThrough.Value);
         }
 
+        public bool IsDateLocked(DateTime date)
+        {
+            if (_bypassDepth > 0)
+                return false;
+
+            if (!_tenant.IsResolved || !_tenant.CompanyId.HasValue)
+                return false;
+
+            var lockedThrough = _settings.Table
+                .Select(s => s.BooksLockedThrough)
+                .FirstOrDefault();
+            if (!lockedThrough.HasValue)
+                return false;
+
+            if (!HasFinancialsModule())
+                return false;
+
+            return date.Date <= lockedThrough.Value.Date;
+        }
+
         private bool HasFinancialsModule()
         {
             var decision = _entitlements.Evaluate(

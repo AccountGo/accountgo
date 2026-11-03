@@ -3,8 +3,10 @@
 
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Api.Service;
 using Core.Domain.Security;
 using Xunit;
 
@@ -23,17 +25,33 @@ public class WorkspaceFullAccessManifestTests
     }
 
     [Fact]
-    public void Manifest_does_not_include_every_SystemPermissions_constant()
+    public void Manifest_partitions_all_system_permissions_exhaustively()
     {
         var all = typeof(SystemPermissions)
             .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
             .Where(fi => fi.IsLiteral && !fi.IsInitOnly && fi.FieldType == typeof(string))
             .Select(fi => (string)fi.GetValue(null)!)
-            .ToList();
+            .ToHashSet(StringComparer.Ordinal);
 
-        Assert.True(all.Count > WorkspaceFullAccessManifest.IncludedPermissions.Count);
-        Assert.All(WorkspaceFullAccessManifest.ExcludedPermissions, excluded =>
-            Assert.DoesNotContain(excluded, WorkspaceFullAccessManifest.IncludedPermissions));
+        var included = WorkspaceFullAccessManifest.IncludedPermissions.ToHashSet(StringComparer.Ordinal);
+        var excluded = WorkspaceFullAccessManifest.ExcludedPermissions.ToHashSet(StringComparer.Ordinal);
+
+        // Every SystemPermissions constant is in exactly one of Included or Excluded
+        foreach (var perm in all)
+        {
+            var inIncluded = included.Contains(perm);
+            var inExcluded = excluded.Contains(perm);
+            Assert.True(inIncluded ^ inExcluded, $"Permission '{perm}' must belong to either Included or Excluded permissions, but not both.");
+            Assert.True(WorkspaceFullAccessManifest.IsClassified(perm), $"Permission '{perm}' must be classified.");
+        }
+
+        // Union of Included and Excluded equals all SystemPermissions constants
+        var union = new HashSet<string>(included, StringComparer.Ordinal);
+        union.UnionWith(excluded);
+        Assert.Equal(all.OrderBy(x => x), union.OrderBy(x => x));
+
+        // Intersection is empty
+        Assert.Empty(included.Intersect(excluded));
     }
 
     [Fact]
@@ -44,6 +62,30 @@ public class WorkspaceFullAccessManifestTests
             Assert.True(WorkspaceFullAccessManifest.IsExcluded(excluded));
             Assert.False(WorkspaceFullAccessManifest.IsIncluded(excluded));
         }
+    }
+
+    private class TestContributor : IWorkspaceAccessProfilePermissionContributor
+    {
+        public string ProfileKey => WorkspaceAccessProfileKeys.FullWorkspaceAccessV1;
+        public IReadOnlyList<string> AdditionalWorkspacePermissions { get; init; } = Array.Empty<string>();
+    }
+
+    [Fact]
+    public void Contributor_cannot_add_excluded_permission()
+    {
+        var contributor = new TestContributor { AdditionalWorkspacePermissions = new[] { SystemPermissions.AdminRolesManage } };
+        var catalog = new WorkspaceAccessProfileCatalog(null!, null!, new[] { contributor });
+        var ex = Assert.Throws<InvalidOperationException>(() => catalog.GetEffectivePermissionNames());
+        Assert.Contains("excluded permission", ex.Message);
+    }
+
+    [Fact]
+    public void Contributor_cannot_add_unclassified_permission()
+    {
+        var contributor = new TestContributor { AdditionalWorkspacePermissions = new[] { "custom.unclassified.perm" } };
+        var catalog = new WorkspaceAccessProfileCatalog(null!, null!, new[] { contributor });
+        var ex = Assert.Throws<InvalidOperationException>(() => catalog.GetEffectivePermissionNames());
+        Assert.Contains("unclassified permission", ex.Message);
     }
 
     [Fact]

@@ -55,6 +55,9 @@ namespace Api.Service
                     if (WorkspaceFullAccessManifest.IsExcluded(permission))
                         throw new InvalidOperationException(
                             $"Workspace access profile contributor attempted to add excluded permission '{permission}'.");
+                    if (!WorkspaceFullAccessManifest.IsClassified(permission))
+                        throw new InvalidOperationException(
+                            $"Workspace access profile contributor attempted to add unclassified permission '{permission}'.");
                     names.Add(permission);
                 }
             }

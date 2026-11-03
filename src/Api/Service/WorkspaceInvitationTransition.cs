@@ -142,10 +142,9 @@ namespace Api.Service
                     "The invitation access selection no longer matches what was confirmed. Ask the workspace owner for a new invitation.");
             }
 
-            // Reject when the invitation captured a journal-mode intent and the workspace policy advanced.
+            // Reject when the workspace policy revision advanced since the invitation was issued.
             if (payload.IssuingPolicyRevision >= 0
-                && currentPolicyRevision > payload.IssuingPolicyRevision
-                && !string.IsNullOrWhiteSpace(payload.IntendedJournalMode))
+                && currentPolicyRevision > payload.IssuingPolicyRevision)
             {
                 return (false, "Workspace setup changed",
                     "Workspace collaboration or approval settings changed after this invitation was sent. Ask the owner to resend it.");
