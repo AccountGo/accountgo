@@ -31,6 +31,18 @@ export interface WizardState {
 export type StepId = 'about' | 'intent' | 'identity' | 'moneyTime' | 'reporting' | 'review';
 export const STEPS: StepId[] = ['about', 'intent', 'identity', 'moneyTime', 'reporting', 'review'];
 
+// Continuation mode initializes an EXISTING signup-created workspace. Its plan, identity, currency, books,
+// framework, tax, industry and inventory are already persisted and the continuation endpoint accepts none
+// of them — it applies only the About answers (purpose/collaboration → access + journal workflow). So the
+// continuation wizard presents ONLY the About step and a read-only Review of the stored workspace; it never
+// asks the user to edit — nor validates — fields it would silently discard. Plan changes happen afterward
+// through the billing flow.
+export const CONTINUATION_STEPS: StepId[] = ['about', 'review'];
+
+/** The ordered step list for the current mode. */
+export const stepsFor = (isContinuation: boolean): StepId[] =>
+  isContinuation ? CONTINUATION_STEPS : STEPS;
+
 export const CURRENCIES = ['USD', 'PHP', 'EUR', 'GBP', 'CAD', 'AUD', 'SGD', 'JPY', 'INR', 'IDR', 'MYR', 'THB', 'VND', 'NZD', 'HKD', 'CNY'];
 
 export const slugify = (value: string): string =>
@@ -91,13 +103,15 @@ export const firstIncompleteStepIndex = (
   state: WizardState,
   today: Date = new Date(),
   capabilities?: SetupCapabilitiesPayloadOptions | null,
+  isContinuation = false,
 ): number => {
-  for (let index = 0; index < STEPS.length; index++) {
-    const step = STEPS[index];
+  const steps = stepsFor(isContinuation);
+  for (let index = 0; index < steps.length; index++) {
+    const step = steps[index];
     if (step === 'review') return index;
     if (Object.keys(validateStep(step, state, today, capabilities)).length > 0) return index;
   }
-  return STEPS.indexOf('review');
+  return steps.indexOf('review');
 };
 
 // Cash basis is its own framework; every other framework is accrual (requirements 4.3).
@@ -169,11 +183,18 @@ export const validateAll = (
   state: WizardState,
   today: Date = new Date(),
   capabilities?: SetupCapabilitiesPayloadOptions | null,
-): StepErrors => ({
-  ...validateStep('about', state, today, capabilities),
-  ...validateStep('identity', state, today, capabilities),
-  ...validateStep('moneyTime', state, today, capabilities),
-});
+  isContinuation = false,
+): StepErrors =>
+  // Continuation validates ONLY the About answers — identity/moneyTime are the existing workspace's stored,
+  // read-only settings, which the continuation neither edits nor sends, so validating them would block the
+  // flow on fields the user cannot change here.
+  isContinuation
+    ? { ...validateStep('about', state, today, capabilities) }
+    : {
+        ...validateStep('about', state, today, capabilities),
+        ...validateStep('identity', state, today, capabilities),
+        ...validateStep('moneyTime', state, today, capabilities),
+      };
 
 export const buildPayload = (state: WizardState, capabilities?: SetupCapabilitiesPayloadOptions | null) => {
   const soloEnabled = capabilities?.soloSetupEnabled !== false;

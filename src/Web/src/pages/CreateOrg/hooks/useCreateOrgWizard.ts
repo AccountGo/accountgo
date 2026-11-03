@@ -9,7 +9,7 @@ import {
   firstIncompleteStepIndex,
   normalizeWizardState,
   slugify,
-  STEPS,
+  stepsFor,
   validateAll,
   validateStep,
   type StepErrors,
@@ -25,11 +25,15 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   // Continuation mode: a signup-created, still-unclassified workspace already exists. We initialize THAT
   // workspace (POST current/initialize) instead of creating a new one, so no duplicate is produced.
   const pendingSlug = prefill.pendingSlug?.trim() || undefined;
+  const isContinuation = Boolean(pendingSlug);
+  // The active step list depends on mode: continuation presents only About + read-only Review (it applies
+  // nothing else), so the wizard never walks the user through — nor validates — discarded settings steps.
+  const steps = stepsFor(isContinuation);
   // Prefill name does not equal About consent; always resume at the first missing required choice.
   // In continuation mode the slug/name prefill is not About consent, so a saved draft (purpose/
   // collaboration, etc.) is still restored across verification/reload. For a brand-new create with a
   // name prefill, resume at the first missing choice without reusing an unrelated draft.
-  const [draft] = useState(() => (prefill.name && !pendingSlug ? null : loadDraft(STEPS.length)));
+  const [draft] = useState(() => (prefill.name && !pendingSlug ? null : loadDraft(steps.length)));
   const [state, setState] = useState<WizardState>(() => {
     const base = defaultState(new Date(), prefill);
     if (draft?.state) {
@@ -41,7 +45,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   });
   const [stepIndex, setStepIndex] = useState(() => {
     const initial = draft ? normalizeWizardState(draft.state) : defaultState(new Date(), prefill);
-    return firstIncompleteStepIndex(initial);
+    return firstIncompleteStepIndex(initial, new Date(), null, isContinuation);
   });
   const [errors, setErrors] = useState<StepErrors>({});
   const [status, setStatus] = useState<SubmitStatus>('idle');
@@ -112,7 +116,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
     if (status === 'idle') saveDraft({ state, stepIndex });
   }, [state, stepIndex, status]);
 
-  const step: StepId = STEPS[stepIndex];
+  const step: StepId = steps[stepIndex];
 
   const update = useCallback((patch: Partial<WizardState>) => {
     setState((previous) => {
@@ -132,8 +136,8 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   const next = useCallback(() => {
     const found = validateStep(step, state, new Date(), capabilities);
     setErrors(found);
-    if (Object.keys(found).length === 0) setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
-  }, [step, state, capabilities]);
+    if (Object.keys(found).length === 0) setStepIndex((index) => Math.min(index + 1, steps.length - 1));
+  }, [step, state, capabilities, steps.length]);
 
   const back = useCallback(() => {
     setErrors({});
@@ -142,10 +146,10 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   }, []);
 
   const submit = useCallback(async () => {
-    const found = validateAll(state, new Date(), capabilities);
+    const found = validateAll(state, new Date(), capabilities, isContinuation);
     if (Object.keys(found).length > 0) {
       setErrors(found);
-      setStepIndex(firstIncompleteStepIndex(state, new Date(), capabilities));
+      setStepIndex(firstIncompleteStepIndex(state, new Date(), capabilities, isContinuation));
       return;
     }
     setStatus('submitting');
@@ -178,7 +182,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
               controlledRecoveryEnabled: prev?.controlledRecoveryEnabled ?? false,
             }));
             setSubmitError('Setup is not enabled for this workspace yet. Please try again later.');
-            setStepIndex(STEPS.indexOf('review'));
+            setStepIndex(steps.indexOf('review'));
           } else if (response.status === 422 && failureReason === 'not_pending_signup_workspace') {
             // This workspace cannot use the signup continuation; send the owner to a fresh create instead.
             setSubmitError('This workspace is already set up or is not eligible for guided setup. Create a new workspace to continue.');
@@ -210,7 +214,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
         const failureReason = data?.reasonCode ?? data?.extensions?.reasonCode;
         if (response.status === 409) {
           setErrors({ slug: 'That URL is already taken. Choose another.' });
-          setStepIndex(STEPS.indexOf('identity'));
+          setStepIndex(steps.indexOf('identity'));
         } else if (response.status === 422 && failureReason === 'solo_setup_disabled') {
           setCapabilities((prev) => ({
             soloSetupEnabled: false,
@@ -227,10 +231,10 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
           setSubmitError(
             'Solo setup is not enabled. Review and confirm the updated access and accounting policy before creating your workspace.',
           );
-          setStepIndex(STEPS.indexOf('review'));
+          setStepIndex(steps.indexOf('review'));
         } else if (response.status === 422 && failureReason === 'personal_purpose_disabled') {
           setSubmitError(data?.detail || 'Personal finances workspaces are not available yet. Choose business or freelance work, or try again later.');
-          setStepIndex(STEPS.indexOf('about'));
+          setStepIndex(steps.indexOf('about'));
         } else {
           setSubmitError(data?.detail || data?.title || data?.message || 'We could not create the workspace. Try again.');
         }
@@ -246,7 +250,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
       setSubmitError('We could not reach the server. Check your connection and try again.');
       setStatus('idle');
     }
-  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession]);
+  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession, isContinuation, steps]);
 
-  return { state, update, step, stepIndex, stepCount: STEPS.length, errors, status, submitError, next, back, submit, capabilities, isContinuation: Boolean(pendingSlug), existingSettings };
+  return { state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, next, back, submit, capabilities, isContinuation, existingSettings };
 };

@@ -76,6 +76,15 @@ async function advanceToReview() {
   await screen.findByRole('progressbar', { name: 'Step 6 of 6' });
 }
 
+// Continuation mode presents ONLY About + Review (2 steps). It never walks the user through plan/identity/
+// money/reporting steps because the continuation endpoint discards those fields.
+async function advanceContinuationToReview() {
+  await screen.findByRole('progressbar', { name: 'Step 1 of 2' });
+  // About -> Review (the only transition).
+  fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+  await screen.findByRole('progressbar', { name: 'Step 2 of 2' });
+}
+
 describe('CreateOrg wizard capability-aware journeys', () => {
   it('known-disabled journey: hides unapplicable choices, clearly states they are not saved, and agrees with persisted payload', async () => {
     const postCalls: any[] = [];
@@ -360,10 +369,19 @@ describe('CreateOrg wizard capability-aware journeys', () => {
 
     render(<CreateOrgPage />);
 
+    // Continuation presents ONLY About + Review — it never opens the plan-choice (Intent) step, nor the
+    // identity/money/reporting steps, because the continuation endpoint discards those fields. Regression
+    // for the finding that continuation still walked users through — and validated — discarded settings.
+    await screen.findByRole('progressbar', { name: 'Step 1 of 2' });
+    expect(screen.queryByText('What do you need?')).toBeNull();
+
     // Choose Business + Just me, then advance to review.
     fireEvent.click(screen.getByDisplayValue('Business'));
     fireEvent.click(screen.getByDisplayValue('JustMe'));
-    await advanceToReview();
+    await advanceContinuationToReview();
+
+    // The plan-choice step was never shown between About and Review.
+    expect(screen.queryByText('What do you need?')).toBeNull();
 
     // The review shows the full-access, single-user outcome.
     expect(screen.getByText('Owner · Full workspace access')).toBeTruthy();
@@ -422,13 +440,19 @@ describe('CreateOrg wizard capability-aware journeys', () => {
           { status: 422, headers: { 'Content-Type': 'application/json' } }
         );
       }
+      if (url === '/api/organizations/current' && (init?.method ?? 'GET') === 'GET') {
+        return new Response(
+          JSON.stringify({ name: 'Acme Books', slug: 'acme', plan: 'community', currency: 'PHP', fiscalYearEnd: '2026-12-31' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
       return new Response(null, { status: 404 });
     });
 
     render(<CreateOrgPage />);
     fireEvent.click(screen.getByDisplayValue('Business'));
     fireEvent.click(screen.getByDisplayValue('JustMe'));
-    await advanceToReview();
+    await advanceContinuationToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
 
     const alert = await screen.findByRole('alert');

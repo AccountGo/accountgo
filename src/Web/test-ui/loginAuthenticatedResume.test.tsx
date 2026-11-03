@@ -63,9 +63,14 @@ function serverWith(needsSetup: Record<string, boolean>, orgs: Array<{ slug: str
     }
     if (url === '/api/organizations/current') {
       const slug = new Headers(init?.headers).get('X-AccountGo-Org') ?? '';
-      const policy = needsSetup[slug] === false
-        ? { operatingPolicy: { collaborationState: 'SoloActive' } }
-        : { operatingPolicy: { collaborationState: 'LegacyUnclassified' } };
+      const pending = needsSetup[slug] === true;
+      // Routing follows the server-derived pendingSignupContinuation capability, not the raw state string.
+      const policy = {
+        operatingPolicy: {
+          collaborationState: pending ? 'LegacyUnclassified' : 'SoloActive',
+          pendingSignupContinuation: pending,
+        },
+      };
       return new Response(JSON.stringify(policy), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     return new Response(null, { status: 404 });

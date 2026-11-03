@@ -31,7 +31,15 @@ export const slugFromPath = (path?: string | null): string | null => {
   return m ? decodeURIComponent(m[1]) : null;
 };
 
-/** True when the workspace exists but has not completed setup (no operating policy / still unclassified). */
+/**
+ * True when the workspace is specifically awaiting the approved signup continuation FOR THIS CALLER, as
+ * determined by the server. We route on the server-derived `operatingPolicy.pendingSignupContinuation`
+ * flag — computed from the same authoritative, non-mutating predicate the continuation endpoint enforces
+ * (signup-specific marker + pristine, uninitialized, sole-owner eligibility) — never on the raw
+ * collaboration state. This is decisive: a legacy or otherwise-unclassified workspace that merely looks
+ * uninitialized, a non-owner member, a workspace with setup disabled, or an already-initialized workspace
+ * all report false, so existing users are never steered into a continuation they cannot complete.
+ */
 export const workspaceNeedsSetup = async (
   authFetch: (url: string, init?: RequestInit) => Promise<Response>,
   slug: string,
@@ -40,10 +48,7 @@ export const workspaceNeedsSetup = async (
     const res = await authFetch('/api/organizations/current', { headers: { 'X-AccountGo-Org': slug } });
     if (!res.ok) return false;
     const data = await res.json().catch(() => null);
-    const policy = data?.operatingPolicy;
-    if (!policy) return true;
-    const state = policy.collaborationState as string | undefined;
-    return state === 'LegacyUnclassified' || state === 'Unclassified';
+    return data?.operatingPolicy?.pendingSignupContinuation === true;
   } catch {
     return false;
   }
