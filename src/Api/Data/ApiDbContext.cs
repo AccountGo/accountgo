@@ -141,7 +141,8 @@ namespace Api.Data
             "__JournalPostingAuthorization",
             "__InvitationTransition",
             "__WorkspaceOrigin",
-            "__WorkspaceCollaborationEvidence"
+            "__WorkspaceCollaborationEvidence",
+            "__WorkspaceSignupContinuation"
         };
 
         private void EnforceAuditLogImmutability()
