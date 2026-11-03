@@ -6,6 +6,7 @@ using System.Security.Claims;
 using Api.Authorization;
 using Api.Data;
 using Api.Filters;
+using Api.Service;
 using Core.Authorization;
 using Core.Domain;
 using Core.Tenancy;
@@ -172,7 +173,12 @@ namespace Api.Controllers
         [HttpPatch("members/{memberId:int}")]
         public IActionResult Update(int memberId, [FromBody] UpdateMemberRequest request)
         {
-            using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
+            var companyId = _tenant.RequireCompanyId();
+            var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+            if (transaction == null)
+                return Problem(statusCode: 503, title: "Policy service unavailable", detail: "Workspace policy coordination is unavailable.");
+
+            return transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var member = FindMember(memberId);
                 if (member == null)
@@ -202,7 +208,7 @@ namespace Api.Controllers
                             AccessOperationCatalog.WorkspaceMembersAssignFunctionalRoles,
                             new AccessResourceContext
                             {
-                                WorkspaceCompanyId = _tenant.RequireCompanyId(),
+                                WorkspaceCompanyId = companyId,
                                 TargetMemberId = member.Id,
                                 TargetUserId = member.UserId,
                                 TargetCurrentWorkspaceRole = member.Role,
@@ -223,13 +229,20 @@ namespace Api.Controllers
                     member.SecurityRoles = request.SecurityRoleIds.Distinct()
                         .Select(id => new CompanyMemberSecurityRole { CompanyMemberId = member.Id, SecurityRoleId = id }).ToList();
                 }
-                _db.SaveChanges();
+
+                guard.AdvanceRevision();
+                WorkspaceCollaborationEvidence.Record(_db, companyId, WorkspaceCollaborationEvidence.EventMemberRoleUpdated, UserId, member.UserId, new
+                {
+                    newRole = member.Role.ToString(),
+                    securityRoleIds = request.SecurityRoleIds
+                });
+
                 if (addedRoleIds != null && addedRoleIds.Count > 0 &&
                     (!string.IsNullOrWhiteSpace(request.ApprovedByUserId) || !string.IsNullOrWhiteSpace(request.ApprovalRequestId)))
                 {
                     AccessAuthorizationService.ConsumeMatchingApprovalAsync(
                         _db,
-                        _tenant.RequireCompanyId(),
+                        companyId,
                         UserId,
                         member.Id,
                         member.UserId,
@@ -238,16 +251,22 @@ namespace Api.Controllers
                         request.ApprovalRequestId,
                         request.ApprovedByUserId).GetAwaiter().GetResult();
                 }
-                tx.Commit();
+
+                _db.SaveChanges();
                 AuthService.InvalidateContextCache();
                 return NoContent();
-            }
+            });
         }
 
         [HttpDelete("members/{memberId:int}")]
         public IActionResult Remove(int memberId)
         {
-            using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
+            var companyId = _tenant.RequireCompanyId();
+            var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+            if (transaction == null)
+                return Problem(statusCode: 503, title: "Policy service unavailable", detail: "Workspace policy coordination is unavailable.");
+
+            return transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var member = FindMember(memberId);
                 if (member == null)
@@ -257,19 +276,20 @@ namespace Api.Controllers
                     return Problem(statusCode: 403, title: "You cannot remove this member");
                 if (member.Role == CompanyMemberRole.Owner && IsLastOwner())
                     return Problem(statusCode: 409, title: "The last Owner cannot leave or be removed");
+
+                guard.Settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
+                if (guard.Settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)
+                    guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+
+                WorkspaceCollaborationEvidence.Record(_db, companyId, WorkspaceCollaborationEvidence.EventMemberRemoved, UserId, member.UserId, new { role = member.Role.ToString() });
+                guard.AdvanceRevision();
+
+                _db.CompanyMemberSecurityRoles.RemoveRange(member.SecurityRoles);
                 _db.CompanyMembers.Remove(member);
-                var settings = _db.WorkspaceOperatingSettings.SingleOrDefault(s => s.CompanyId == member.CompanyId);
-                if (settings != null)
-                {
-                    settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
-                    if (settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)
-                        settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
-                }
                 _db.SaveChanges();
-                tx.Commit();
                 AuthService.InvalidateContextCache();
                 return NoContent();
-            }
+            });
         }
 
         public class TransferRequest
@@ -547,10 +567,15 @@ namespace Api.Controllers
             if (!decision.Allowed)
                 return Problem(statusCode: decision.HttpStatus, title: decision.SafeTitle, detail: decision.SafeMessage);
 
-            using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
+            var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+            if (transaction == null)
+                return Problem(statusCode: 503, title: "Workspace policy coordination is unavailable.");
+
+            CompanyMember? targetMemberRef = null;
+            var result = transaction.Execute<IActionResult>(companyId, guard =>
             {
-                var request = await _db.WorkspaceAccessRequests
-                    .FirstOrDefaultAsync(r => r.CompanyId == companyId && r.RequestId == requestId);
+                var request = _db.WorkspaceAccessRequests
+                    .FirstOrDefault(r => r.CompanyId == companyId && r.RequestId == requestId);
 
                 if (request == null)
                     return NotFound(new { message = "Access request not found." });
@@ -561,8 +586,7 @@ namespace Api.Controllers
                 if (DateTime.UtcNow > request.ExpiresAtUtc)
                 {
                     request.Status = AccessRequestStatus.Expired;
-                    await _db.SaveChangesAsync();
-                    tx.Commit();
+                    _db.SaveChanges();
                     return Problem(statusCode: 400, title: "Request expired", detail: "This access request has expired.");
                 }
 
@@ -573,14 +597,14 @@ namespace Api.Controllers
                 if (string.Equals(callerUserId, request.TargetUserId, StringComparison.Ordinal))
                     return Problem(statusCode: 403, title: "Self-approval denied", detail: "An approver cannot approve their own role elevation.");
 
-                var approverMember = await _db.CompanyMembers
-                    .FirstOrDefaultAsync(m => m.CompanyId == companyId && m.UserId == callerUserId && m.Status == CompanyMemberStatus.Active);
+                var approverMember = _db.CompanyMembers
+                    .FirstOrDefault(m => m.CompanyId == companyId && m.UserId == callerUserId && m.Status == CompanyMemberStatus.Active);
                 if (approverMember == null || (approverMember.Role != CompanyMemberRole.Owner && approverMember.Role != CompanyMemberRole.Admin))
                     return Problem(statusCode: 403, title: "Approver unauthorized", detail: "Approver must be an active Owner or Admin in this workspace.");
 
-                var targetMember = await _db.CompanyMembers
+                var targetMember = _db.CompanyMembers
                     .Include(m => m.SecurityRoles)
-                    .FirstOrDefaultAsync(m => m.CompanyId == companyId && m.Id == request.TargetMemberId);
+                    .FirstOrDefault(m => m.CompanyId == companyId && m.Id == request.TargetMemberId);
 
                 if (targetMember == null || targetMember.Status != CompanyMemberStatus.Active)
                     return Problem(statusCode: 400, title: "Target member not found or inactive.");
@@ -621,6 +645,8 @@ namespace Api.Controllers
                 request.DecidedAtUtc = now;
                 request.AppliedAtUtc = now;
 
+                guard.AdvanceRevision();
+
                 // Record audit log entry for the approved delegation
                 _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
                 {
@@ -645,38 +671,36 @@ namespace Api.Controllers
                     })
                 });
 
-                await _db.SaveChangesAsync();
-                tx.Commit();
+                _db.SaveChanges();
+                targetMemberRef = targetMember;
+                return Ok(new { message = "Access request approved and functional roles applied successfully.", status = "Applied" });
+            });
 
-                AccessAuthorizationService.BumpGlobalSecurityRevision();
-                AuthService.InvalidateContextCache();
+            if (result is not OkObjectResult)
+                return result;
 
-                // Send notification email to requester/target
-                var emailSender = HttpContext?.RequestServices?.GetService<Api.Service.IEmailSender>();
-                if (emailSender != null)
+            AccessAuthorizationService.BumpGlobalSecurityRevision();
+            AuthService.InvalidateContextCache();
+
+            // Send notification email to requester/target outside the lock
+            var emailSender = HttpContext?.RequestServices?.GetService<Api.Service.IEmailSender>();
+            if (emailSender != null && targetMemberRef != null)
+            {
+                var targetUser = await _identity.Users.FirstOrDefaultAsync(u => u.Id == targetMemberRef.UserId);
+                if (targetUser != null && !string.IsNullOrEmpty(targetUser.Email))
                 {
-                    var targetUser = await _identity.Users.FirstOrDefaultAsync(u => u.Id == targetMember.UserId);
-                    if (targetUser != null && !string.IsNullOrEmpty(targetUser.Email))
+                    try
                     {
-                        try
-                        {
-                            await emailSender.SendAsync(
-                                targetUser.Email,
-                                "[AccountGo] Access request approved and applied",
-                                $"<p>Your access request for workspace functional roles has been approved and applied to your account.</p>");
-                        }
-                        catch { }
+                        await emailSender.SendAsync(
+                            targetUser.Email,
+                            "Workspace access request approved",
+                            $"Your workspace access request in has been approved by an administrator.");
                     }
+                    catch { /* Best effort notification */ }
                 }
-
-                return Ok(new
-                {
-                    status = "Applied",
-                    requestId = request.RequestId,
-                    targetMemberId = targetMember.Id,
-                    appliedAt = request.AppliedAtUtc
-                });
             }
+
+            return result;
         }
 
         [HttpPost("access-requests/{requestId}/reject")]
@@ -838,13 +862,11 @@ namespace Api.Controllers
 
             var result = transaction.Execute<IActionResult>(companyId, guard =>
             {
-                var members = _db.CompanyMembers.Include(m => m.SecurityRoles)
-                    .Where(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active).ToList();
-                var owner = members.SingleOrDefault(m => m.UserId == actor && m.Role == CompanyMemberRole.Owner);
-                if (owner == null || members.Count != 1)
-                    return Problem(statusCode: 403, title: "Sole owner required",
-                        detail: "Only the sole active workspace owner can manage their own functional roles this way.");
+                var verification = ContractAVerifier.Verify(_db, companyId, actor, ids);
+                if (!verification.Allowed)
+                    return Problem(statusCode: 403, title: verification.Title, detail: verification.Detail);
 
+                var owner = verification.OwnerMember!;
                 var current = owner.SecurityRoles.Select(r => r.SecurityRoleId).ToHashSet();
                 var additions = ids.Where(id => !current.Contains(id)).ToList();
                 foreach (var id in additions)
@@ -859,6 +881,7 @@ namespace Api.Controllers
                         OriginalValue = System.Text.Json.JsonSerializer.Serialize(current.OrderBy(id => id)),
                         NewValue = System.Text.Json.JsonSerializer.Serialize(current.Union(additions).OrderBy(id => id))
                     });
+                    guard.AdvanceRevision();
                 }
                 return Ok(new { rolesAssigned = additions });
             });
@@ -871,7 +894,7 @@ namespace Api.Controllers
         }
 
         [HttpPost("access-setup")]
-        public async System.Threading.Tasks.Task<IActionResult> AccessSetup([FromBody] SetupWorkspaceAccessModel model = null)
+        public IActionResult AccessSetup([FromBody] SetupWorkspaceAccessModel model = null)
         {
             var companyId = _tenant.RequireCompanyId();
             var callerUserId = UserId;
@@ -882,60 +905,30 @@ namespace Api.Controllers
             if (!decision.Allowed)
                 return Problem(statusCode: decision.HttpStatus, title: decision.SafeTitle, detail: decision.SafeMessage);
 
-            using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
+            var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+            if (transaction == null)
+                return Problem(statusCode: 503, title: "Workspace access setup is unavailable.");
+
+            var roleIdsToAssign = model?.SecurityRoleIds?.Distinct().ToList() ?? new List<int>();
+            if (roleIdsToAssign.Count == 0)
             {
-                var callerMember = await _db.CompanyMembers
-                    .Include(m => m.SecurityRoles)
-                    .FirstOrDefaultAsync(m => m.CompanyId == companyId && m.UserId == callerUserId && m.Status == CompanyMemberStatus.Active);
+                var defaultRole = _db.SecurityRoles.FirstOrDefault(r => r.Name == "Accountant");
+                if (defaultRole != null)
+                    roleIdsToAssign.Add(defaultRole.Id);
+            }
 
-                if (callerMember == null || callerMember.Role != CompanyMemberRole.Owner)
-                    return Problem(statusCode: 403, title: "Forbidden", detail: "Only a workspace Owner can perform initial access setup.");
-
-                var company = await _db.Companies.SingleAsync(c => c.Id == companyId);
-                var initialized = await _db.WorkspaceOperatingSettings
-                    .AnyAsync(s => s.CompanyId == companyId && s.InitializedAtUtc != null);
-                if (initialized)
-                    return Problem(statusCode: 403, title: "Bootstrap unavailable",
-                        detail: "This workspace is already initialized. Use membership and approval workflows instead of initial access setup.");
-
-                if (!company.AccessBootstrapAvailable || company.CreatedByUserId != callerUserId
-                    || await _db.CompanyMemberSecurityRoles.AnyAsync(sr => sr.CompanyMember.CompanyId == companyId))
+            var result = transaction.Execute<IActionResult>(companyId, guard =>
+            {
+                var company = _db.Companies.SingleOrDefault(c => c.Id == companyId);
+                if (company == null || !company.AccessBootstrapAvailable)
                     return Problem(statusCode: 403, title: "Bootstrap unavailable",
                         detail: "Initial access setup is no longer available. Request functional roles through independent approval.");
 
-                // AC7: Permanent boundary check: Has bootstrap ever been completed for this company?
-                var alreadyBootstrapped = await _db.AuditLogs
-                    .AnyAsync(a => a.CompanyId == companyId && a.TableName == "__AccessBootstrap" && a.RecordId == "bootstrap");
-                if (alreadyBootstrapped)
-                {
-                    return Problem(statusCode: 403, title: "Bootstrap unavailable",
-                        detail: "Initial access setup has already been completed for this workspace and cannot be reopened. New functional roles require independent approval.");
-                }
+                var verification = ContractAVerifier.Verify(_db, companyId, callerUserId, roleIdsToAssign);
+                if (!verification.Allowed)
+                    return Problem(statusCode: 403, title: verification.Title, detail: verification.Detail);
 
-                // Check administrator count: If there are multiple active administrators, two-person rule must be used!
-                var adminCount = await _db.CompanyMembers
-                    .CountAsync(m => m.CompanyId == companyId &&
-                                     (m.Role == CompanyMemberRole.Owner || m.Role == CompanyMemberRole.Admin) &&
-                                     m.Status == CompanyMemberStatus.Active);
-
-                if (adminCount > 1)
-                {
-                    return Problem(statusCode: 403, title: "Bootstrap unavailable",
-                        detail: "Workspaces with multiple administrators must use the independent approval request workflow.");
-                }
-
-                var roleIdsToAssign = model?.SecurityRoleIds?.Distinct().ToList() ?? new List<int>();
-                if (roleIdsToAssign.Count == 0)
-                {
-                    // Default to Accountant if none specified
-                    var defaultRole = await _db.SecurityRoles.FirstOrDefaultAsync(r => r.Name == "Accountant");
-                    if (defaultRole != null)
-                        roleIdsToAssign.Add(defaultRole.Id);
-                }
-
-                if (!ValidSecurityRoles(_db, roleIdsToAssign))
-                    return Problem(statusCode: 400, title: "Invalid functional roles.");
-
+                var callerMember = verification.OwnerMember!;
                 foreach (var roleId in roleIdsToAssign)
                 {
                     if (!callerMember.SecurityRoles.Any(sr => sr.SecurityRoleId == roleId))
@@ -951,8 +944,8 @@ namespace Api.Controllers
                 }
 
                 company.AccessBootstrapAvailable = false;
+                guard.AdvanceRevision();
 
-                // Audit log
                 _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
                 {
                     CompanyId = companyId,
@@ -966,18 +959,19 @@ namespace Api.Controllers
                     NewValue = "Completed"
                 });
 
-                await _db.SaveChangesAsync();
-                tx.Commit();
-
-                AccessAuthorizationService.BumpGlobalSecurityRevision();
-                AuthService.InvalidateContextCache();
-
                 return Ok(new
                 {
                     message = "Initial access setup completed successfully.",
                     rolesAssigned = roleIdsToAssign
                 });
+            });
+
+            if (result is OkObjectResult)
+            {
+                AccessAuthorizationService.BumpGlobalSecurityRevision();
+                AuthService.InvalidateContextCache();
             }
+            return result;
         }
 
         [RequireWorkspaceRole(CompanyMemberRole.Owner)]
@@ -985,28 +979,52 @@ namespace Api.Controllers
         [HttpPost("transfer-ownership")]
         public IActionResult Transfer([FromBody] TransferRequest request)
         {
-            using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
+            var companyId = _tenant.RequireCompanyId();
+            var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
+            if (transaction == null)
+                return Problem(statusCode: 503, title: "Workspace policy coordination is unavailable.");
+
+            return transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var target = FindMember(request.MemberId);
                 if (target == null || target.Status != CompanyMemberStatus.Active)
                     return Problem(statusCode: 404, title: "Active member not found");
                 if (target.UserId == UserId)
                     return Problem(statusCode: 400, title: "Choose another member");
-                var companyId = _tenant.RequireCompanyId();
+
                 var caller = _db.CompanyMembers.Single(m => m.CompanyId == companyId && m.UserId == UserId);
                 target.Role = CompanyMemberRole.Owner;
                 caller.Role = CompanyMemberRole.Admin;
+
+                guard.Settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
+                guard.Settings.ConfirmedOwnerMemberId = target.Id;
+                guard.Settings.LastConfirmedAtUtc = DateTime.UtcNow;
+                guard.Settings.LastConfirmedByUserId = UserId;
+                guard.AdvanceRevision();
+
+                WorkspaceCollaborationEvidence.Record(_db, companyId, WorkspaceCollaborationEvidence.EventOwnershipTransferred, UserId, target.UserId, new
+                {
+                    previousOwnerUserId = UserId,
+                    newOwnerMemberId = target.Id
+                });
+
+                _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                {
+                    CompanyId = companyId,
+                    UserName = UserId,
+                    AuditEventDateUTC = DateTime.UtcNow,
+                    AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                    TableName = "__WorkspacePolicyTransition",
+                    RecordId = companyId.ToString(),
+                    FieldName = "ConfirmedOwnerMemberId",
+                    OriginalValue = caller.Id.ToString(),
+                    NewValue = target.Id.ToString()
+                });
+
                 _db.SaveChanges();
-
-                // Update confirmed owner reference without granting Full workspace access automatically.
-                var policy = _operatingPolicy
-                    ?? HttpContext?.RequestServices?.GetService<IWorkspaceOperatingPolicyService>();
-                policy?.UpdateConfirmedOwnerMember(companyId, target.Id, UserId);
-
-                tx.Commit();
                 AuthService.InvalidateContextCache();
                 return NoContent();
-            }
+            });
         }
 
         internal static bool TryAssignableRole(string value, out CompanyMemberRole role)

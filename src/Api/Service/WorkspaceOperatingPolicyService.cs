@@ -134,94 +134,106 @@ namespace Api.Service
                     0);
             }
 
-            return _policyTransaction.Execute(companyId, guard =>
+            return _policyTransaction.Execute(companyId, guard => EvaluateLegacySoloEligibility(guard, callerUserId));
+        }
+
+        public SoloSetupEligibility EvaluateLegacySoloEligibility(WorkspacePolicyGuard guard, string callerUserId)
+        {
+            if (!_experience.SoloSetupEnabled)
             {
-                var settings = guard.Settings;
-                if (settings.InitializedAtUtc.HasValue
-                    || settings.CollaborationState is WorkspaceCollaborationState.SoloActive
-                        or WorkspaceCollaborationState.TeamActive
-                        or WorkspaceCollaborationState.TeamSetupPending)
+                return new SoloSetupEligibility(
+                    SoloSetupEligibilityStatus.Ineligible,
+                    WorkspacePolicyReasonCodes.SoloSetupDisabled,
+                    "Solo workspace setup is not enabled.",
+                    guard.PolicyRevision);
+            }
+
+            var companyId = guard.CompanyId;
+            var settings = guard.Settings;
+            if (settings.InitializedAtUtc.HasValue
+                || settings.CollaborationState is WorkspaceCollaborationState.SoloActive
+                    or WorkspaceCollaborationState.TeamActive
+                    or WorkspaceCollaborationState.TeamSetupPending)
+            {
+                return new SoloSetupEligibility(
+                    SoloSetupEligibilityStatus.Ineligible,
+                    WorkspacePolicyReasonCodes.SoloSetupNotEligible,
+                    "This workspace is already initialized.",
+                    settings.PolicyRevision);
+            }
+
+            if (settings.EverTeamActivatedAtUtc.HasValue)
+            {
+                return new SoloSetupEligibility(
+                    SoloSetupEligibilityStatus.Ineligible,
+                    WorkspacePolicyReasonCodes.SoloSetupNotEligible,
+                    "This workspace has historical collaboration evidence and cannot use automatic solo setup.",
+                    settings.PolicyRevision);
+            }
+
+            var members = _db.CompanyMembers
+                .IgnoreQueryFilters()
+                .Where(m => m.CompanyId == companyId)
+                .ToList();
+
+            var owners = members.Where(m => m.Role == CompanyMemberRole.Owner && m.Status == CompanyMemberStatus.Active).ToList();
+            if (owners.Count != 1 || !string.Equals(owners[0].UserId, callerUserId, StringComparison.Ordinal))
+            {
+                return new SoloSetupEligibility(
+                    SoloSetupEligibilityStatus.Ineligible,
+                    WorkspacePolicyReasonCodes.SoloSetupNotEligible,
+                    "Only the sole active Owner can confirm solo setup.",
+                    settings.PolicyRevision);
+            }
+
+            if (members.Any(m => m.Id != owners[0].Id))
+            {
+                return new SoloSetupEligibility(
+                    SoloSetupEligibilityStatus.Ineligible,
+                    WorkspacePolicyReasonCodes.SoloSetupNotEligible,
+                    "Another membership exists. Member count alone cannot restore solo setup.",
+                    settings.PolicyRevision);
+            }
+
+            var acceptedInvite = _db.CompanyInvitations
+                .IgnoreQueryFilters()
+                .Any(i => i.CompanyId == companyId && i.AcceptedAt != null);
+            if (acceptedInvite)
+            {
+                return new SoloSetupEligibility(
+                    SoloSetupEligibilityStatus.Ineligible,
+                    WorkspacePolicyReasonCodes.SoloSetupNotEligible,
+                    "An accepted invitation is historical collaboration evidence.",
+                    settings.PolicyRevision);
+            }
+
+            var company = _db.Companies.IgnoreQueryFilters().Single(c => c.Id == companyId);
+            if (string.IsNullOrWhiteSpace(company.CreatedByUserId)
+                || !string.Equals(company.CreatedByUserId, callerUserId, StringComparison.Ordinal)
+                || owners[0].InvitedByUserId != null)
+            {
+                // Ambiguous ownership / transfer history — require controlled recovery.
+                if (!_experience.ControlledRecoveryEnabled)
                 {
-                    return new SoloSetupEligibility(
-                        SoloSetupEligibilityStatus.Ineligible,
-                        WorkspacePolicyReasonCodes.SoloSetupNotEligible,
-                        "This workspace is already initialized.",
-                        settings.PolicyRevision);
-                }
-
-                if (settings.EverTeamActivatedAtUtc.HasValue)
-                {
-                    return new SoloSetupEligibility(
-                        SoloSetupEligibilityStatus.Ineligible,
-                        WorkspacePolicyReasonCodes.SoloSetupNotEligible,
-                        "This workspace has historical collaboration evidence and cannot use automatic solo setup.",
-                        settings.PolicyRevision);
-                }
-
-                var members = _db.CompanyMembers
-                    .IgnoreQueryFilters()
-                    .Where(m => m.CompanyId == companyId)
-                    .ToList();
-
-                var owners = members.Where(m => m.Role == CompanyMemberRole.Owner && m.Status == CompanyMemberStatus.Active).ToList();
-                if (owners.Count != 1 || !string.Equals(owners[0].UserId, callerUserId, StringComparison.Ordinal))
-                {
-                    return new SoloSetupEligibility(
-                        SoloSetupEligibilityStatus.Ineligible,
-                        WorkspacePolicyReasonCodes.SoloSetupNotEligible,
-                        "Only the sole active Owner can confirm solo setup.",
-                        settings.PolicyRevision);
-                }
-
-                if (members.Any(m => m.Id != owners[0].Id))
-                {
-                    return new SoloSetupEligibility(
-                        SoloSetupEligibilityStatus.Ineligible,
-                        WorkspacePolicyReasonCodes.SoloSetupNotEligible,
-                        "Another membership exists. Member count alone cannot restore solo setup.",
-                        settings.PolicyRevision);
-                }
-
-                var acceptedInvite = _db.CompanyInvitations
-                    .IgnoreQueryFilters()
-                    .Any(i => i.CompanyId == companyId && i.AcceptedAt != null);
-                if (acceptedInvite)
-                {
-                    return new SoloSetupEligibility(
-                        SoloSetupEligibilityStatus.Ineligible,
-                        WorkspacePolicyReasonCodes.SoloSetupNotEligible,
-                        "An accepted invitation is historical collaboration evidence.",
-                        settings.PolicyRevision);
-                }
-
-                var company = _db.Companies.IgnoreQueryFilters().Single(c => c.Id == companyId);
-                if (string.IsNullOrWhiteSpace(company.CreatedByUserId)
-                    || !string.Equals(company.CreatedByUserId, callerUserId, StringComparison.Ordinal)
-                    || owners[0].InvitedByUserId != null)
-                {
-                    // Ambiguous ownership / transfer history — require controlled recovery.
-                    if (!_experience.ControlledRecoveryEnabled)
-                    {
-                        return new SoloSetupEligibility(
-                            SoloSetupEligibilityStatus.RecoveryRequired,
-                            WorkspacePolicyReasonCodes.RecoveryUnavailable,
-                            "History is ambiguous and controlled recovery is not available yet.",
-                            settings.PolicyRevision);
-                    }
-
                     return new SoloSetupEligibility(
                         SoloSetupEligibilityStatus.RecoveryRequired,
-                        WorkspacePolicyReasonCodes.RecoveryRequired,
-                        "History is ambiguous and requires controlled recovery.",
+                        WorkspacePolicyReasonCodes.RecoveryUnavailable,
+                        "History is ambiguous and controlled recovery is not available yet.",
                         settings.PolicyRevision);
                 }
 
                 return new SoloSetupEligibility(
-                    SoloSetupEligibilityStatus.Eligible,
-                    "eligible",
-                    "This workspace appears to have always been solo.",
+                    SoloSetupEligibilityStatus.RecoveryRequired,
+                    WorkspacePolicyReasonCodes.RecoveryRequired,
+                    "History is ambiguous and requires controlled recovery.",
                     settings.PolicyRevision);
-            });
+            }
+
+            return new SoloSetupEligibility(
+                SoloSetupEligibilityStatus.Eligible,
+                "eligible",
+                "This workspace appears to have always been solo.",
+                settings.PolicyRevision);
         }
 
         public WorkspacePolicyMutationResult ConfirmLegacySoloSetup(int companyId, string callerUserId, long expectedRevision)
@@ -239,7 +251,7 @@ namespace Api.Service
                         settings.CollaborationState);
                 }
 
-                var eligibility = EvaluateLegacySoloEligibility(companyId, callerUserId);
+                var eligibility = EvaluateLegacySoloEligibility(guard, callerUserId);
                 if (eligibility.Status == SoloSetupEligibilityStatus.RecoveryRequired)
                 {
                     return new WorkspacePolicyMutationResult(
