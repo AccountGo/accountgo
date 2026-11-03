@@ -110,7 +110,7 @@ namespace AccountGo.BackendTests.Observability
         public void OnboardingStarts_IsEmitted_WhenEvaluatingEligibility()
         {
             var company = CreateTestCompany("Test Co", "test-co-1", "user-1");
-            var options = Options.Create(new WorkspaceExperienceOptions { SoloSetupEnabled = true });
+            var options = Options.Create(new WorkspaceExperienceOptions { SoloSetupEnabled = true, LegacySoloConfirmationEnabled = true });
             var catalog = new WorkspaceAccessProfileCatalog(_db, Mock.Of<ISecurityService>(), Array.Empty<IWorkspaceAccessProfilePermissionContributor>());
             var resolver = new WorkspaceApprovalPolicyResolver(_db);
             var tx = new WorkspacePolicyTransaction(_db, _tenant);
@@ -136,7 +136,7 @@ namespace AccountGo.BackendTests.Observability
         public void StaleRevision_EmitsConflictMetric_AndDoesNotCorruptState()
         {
             var company = CreateTestCompany("Test Co 2", "test-co-2", "user-2");
-            var options = Options.Create(new WorkspaceExperienceOptions { SoloSetupEnabled = true });
+            var options = Options.Create(new WorkspaceExperienceOptions { SoloSetupEnabled = true, LegacySoloConfirmationEnabled = true });
             var catalog = new WorkspaceAccessProfileCatalog(_db, Mock.Of<ISecurityService>(), Array.Empty<IWorkspaceAccessProfilePermissionContributor>());
             var resolver = new WorkspaceApprovalPolicyResolver(_db);
             var tx = new WorkspacePolicyTransaction(_db, _tenant);

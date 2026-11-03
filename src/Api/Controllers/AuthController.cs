@@ -46,6 +46,7 @@ namespace Api.Controllers
         private readonly AccountDeletionService _accountDeletion;
         private readonly IPlanCatalog _plans;
         private readonly WorkspaceInitializationApplicator _workspaceInit;
+        private readonly IWorkspaceCanaryEnrollment _canary;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -62,7 +63,8 @@ namespace Api.Controllers
             WorkspaceService workspaces,
             AccountDeletionService accountDeletion,
             IPlanCatalog plans,
-            WorkspaceInitializationApplicator workspaceInit = null)
+            WorkspaceInitializationApplicator workspaceInit = null,
+            IWorkspaceCanaryEnrollment canary = null)
         {
             _otpService = otpService;
             _authService = authService;
@@ -79,6 +81,7 @@ namespace Api.Controllers
             _accountDeletion = accountDeletion;
             _plans = plans;
             _workspaceInit = workspaceInit;
+            _canary = canary;
         }
 
         [AllowAnonymous]
@@ -270,6 +273,22 @@ namespace Api.Controllers
                     });
                 }
 
+                // Canary audience gate for anonymous signup. The trusted subject is the normalized email,
+                // which exists before any account or workspace. Enrollment is resolved from server
+                // configuration only; request fields never grant it. Unenrolled signups still create the
+                // account but their workspace stays unclassified (handled below), so we reject the About
+                // answers up front with a clear reason rather than silently initializing.
+                if (_canary != null && !_canary.IsEnrolled(email: normalizedEmail, userId: null))
+                {
+                    return UnprocessableEntity(new ProblemDetails
+                    {
+                        Title = "Workspace initialization unavailable",
+                        Detail = "This account is not part of the current setup audience.",
+                        Status = StatusCodes.Status422UnprocessableEntity,
+                        Extensions = { ["reasonCode"] = Core.Authorization.WorkspacePolicyReasonCodes.CanaryNotEnrolled }
+                    });
+                }
+
                 if (!hasPurpose || !hasCollaboration
                     || !Enum.TryParse<Core.Domain.WorkspacePurpose>(request.WorkspacePurpose, ignoreCase: true, out parsedPurpose)
                     || !Enum.TryParse<Core.Domain.WorkspaceCollaborationIntent>(request.CollaborationIntent, ignoreCase: true, out parsedCollaboration))
@@ -330,7 +349,8 @@ namespace Api.Controllers
                             Purpose = parsedPurpose,
                             CollaborationIntent = parsedCollaboration,
                             OwnerAccessPreset = ownerAccess,
-                            InitialJournalWorkflow = journalWorkflow
+                            InitialJournalWorkflow = journalWorkflow,
+                            OwnerEmail = normalizedEmail
                         });
                         if (!initResult.Applied)
                         {

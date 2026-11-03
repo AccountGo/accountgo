@@ -35,6 +35,7 @@ namespace Api.Controllers
         private readonly WorkspaceInitializationApplicator _workspaceInit;
         private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
         private readonly Api.Options.WorkspaceExperienceOptions _experience;
+        private readonly IWorkspaceCanaryEnrollment _canary;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -46,7 +47,8 @@ namespace Api.Controllers
             Services.Financial.IFinancialService financial,
             WorkspaceInitializationApplicator workspaceInit = null,
             IWorkspaceOperatingPolicyService operatingPolicy = null,
-            Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null)
+            Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null,
+            IWorkspaceCanaryEnrollment canary = null)
         {
             _tenant = tenant;
             _db = db;
@@ -56,6 +58,7 @@ namespace Api.Controllers
             _financial = financial;
             _workspaceInit = workspaceInit;
             _operatingPolicy = operatingPolicy;
+            _canary = canary;
             _experience = experienceOptions?.Value != null
                 ? Api.Options.WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value)
                 : (workspaceInit?.Experience ?? new Api.Options.WorkspaceExperienceOptions());
@@ -169,6 +172,20 @@ namespace Api.Controllers
                     });
                 }
 
+                // Canary audience gate, evaluated before any provisioning. Eligibility is resolved from
+                // trusted server enrollment keyed on the authenticated user id — never from the request.
+                // An unenrolled caller cannot initialize the new experience even with setup enabled.
+                if (_canary != null && !_canary.IsEnrolled(email: null, userId: UserId))
+                {
+                    return UnprocessableEntity(new ProblemDetails
+                    {
+                        Title = "Workspace initialization unavailable",
+                        Detail = "This account is not part of the current setup audience.",
+                        Status = StatusCodes.Status422UnprocessableEntity,
+                        Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryNotEnrolled }
+                    });
+                }
+
                 if (!request.WorkspacePurpose.HasValue || !request.CollaborationIntent.HasValue)
                     return Problem(statusCode: 400, title: "About answers required",
                         detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
@@ -202,6 +219,7 @@ namespace Api.Controllers
 
                         if (!initResult.Applied
                             && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
+                                or WorkspacePolicyReasonCodes.CanaryNotEnrolled
                                 or "about_answers_required")
                         {
                             return UnprocessableEntity(new ProblemDetails
