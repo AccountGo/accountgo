@@ -335,16 +335,20 @@ public class WorkspaceOperatingPolicyMigrationRehearsalTests : IDisposable
     }
 
     [Fact]
-    public void RollbackCompatibility_Dfb4cb6b_Behaviors_SucceedAgainstMigratedDatabase()
+    public void CurrentCodeSchemaCompatibility_Dfb4cb6b_Conventions_SucceedAgainstUpgradedDatabase()
     {
-        // Verified Rollback Target Revisions:
+        // Current-code forward/reverse schema compatibility test:
+        // Pinned Rollback Target Revisions:
         // - Public repo (AccountGo/accountgo): dfb4cb6bdbc66c782d68b0b5586b10650ff9a998
         // - Commercial modules (AccountGo/accountgo-commercial): 542ffd641f92c10b78c80d4f13459c704ea1ee25
         // - Ops repo (AccountGo/accountgo-ops): e414460f4eeb1d19889f5bc3a6773a9856f68c3a
         //
-        // This test exercises policy-sensitive operations against the upgraded database using
-        // the exact contract expected by dfb4cb6b binaries:
-        // 1. Database schema created by the current model (PolicySchemaVersion = 1).
+        // Note: Running current code using dfb4cb6b conventions verifies schema compatibility
+        // (zero missing columns, identical PolicySchemaVersion=1, matching constraints).
+        // Actual binary rollback verification (deploying the compiled dfb4cb6b container image)
+        // remains pending operational environment rehearsal in staging.
+        //
+        // 1. Database schema created by current model (PolicySchemaVersion = 1).
         // 2. dfb4cb6b policy resolver resolves single-actor and reviewer-required rules.
         // 3. dfb4cb6b policy transaction acquires coordination lock and commits financial mutations.
         // 4. Verifies zero schema discrepancies, missing columns, or rollback barriers.

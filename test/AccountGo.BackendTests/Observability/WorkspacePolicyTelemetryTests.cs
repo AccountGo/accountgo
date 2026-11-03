@@ -234,6 +234,45 @@ namespace AccountGo.BackendTests.Observability
         }
 
         [Fact]
+        public void InvariantDetection_DetectsInconsistentTransition_WhenSoloActiveWithMultipleActiveMembers()
+        {
+            var company = CreateTestCompany("Multi Solo Co", "multi-solo-co", "owner-user-ms");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+            var owner = _db.CompanyMembers.First(m => m.CompanyId == company.Id);
+
+            var member2 = new CompanyMember
+            {
+                CompanyId = company.Id,
+                UserId = "second-user-ms",
+                Role = CompanyMemberRole.Member,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            };
+            _db.CompanyMembers.Add(member2);
+            _db.SaveChanges();
+
+            // Introduce illegal state: SoloActive while having 2 active members
+            tx.Execute(company.Id, guard =>
+            {
+                guard.Settings.Purpose = WorkspacePurpose.Business;
+                guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.JustMe;
+                guard.Settings.CollaborationState = WorkspaceCollaborationState.SoloActive;
+                guard.Settings.ConfirmedOwnerMemberId = owner.Id;
+                guard.Settings.InitializedAtUtc = DateTime.UtcNow;
+                return true;
+            });
+
+            lock (_counterMeasurements)
+            {
+                var violation = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.inconsistent_transitions.committed");
+                Assert.NotNull(violation.InstrumentName);
+                Assert.Equal(1, violation.Value);
+            }
+        }
+
+        [Fact]
         public void ValidSingleActorPolicy_DoesNotEmitViolations()
         {
             var company = CreateTestCompany("Valid Solo Co", "valid-solo-co", "user-valid");
@@ -248,6 +287,7 @@ namespace AccountGo.BackendTests.Observability
                 guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.JustMe;
                 guard.Settings.CollaborationState = WorkspaceCollaborationState.SoloActive;
                 guard.Settings.ConfirmedOwnerMemberId = owner.Id;
+                guard.Settings.InitializedAtUtc = DateTime.UtcNow;
                 guard.Settings.EverTeamActivatedAtUtc = null;
 
                 _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
@@ -256,6 +296,272 @@ namespace AccountGo.BackendTests.Observability
                     OperationKey = AccessOperationCatalog.FinancialsJournalPost,
                     RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
                     Provenance = WorkspaceApprovalRuleProvenance.NewWorkspaceConfirmed,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                });
+                return true;
+            });
+
+            lock (_counterMeasurements)
+            {
+                var unauth = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.unauthorized_elevations.committed");
+                Assert.Null(unauth.InstrumentName);
+
+                var inconsistent = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.inconsistent_transitions.committed");
+                Assert.Null(inconsistent.InstrumentName);
+            }
+        }
+
+        [Fact]
+        public void LegitimateState_InvitationAcceptance_PreservesSingleActorRule_WithoutViolationAlerts()
+        {
+            var company = CreateTestCompany("Team Accepted Co", "team-accept-co", "owner-user");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+            var owner = _db.CompanyMembers.First(m => m.CompanyId == company.Id);
+
+            // Step 1: Initialize solo with SingleActorAllowed rule
+            tx.Execute(company.Id, guard =>
+            {
+                guard.Settings.Purpose = WorkspacePurpose.Business;
+                guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.JustMe;
+                guard.Settings.CollaborationState = WorkspaceCollaborationState.SoloActive;
+                guard.Settings.ConfirmedOwnerMemberId = owner.Id;
+                guard.Settings.InitializedAtUtc = DateTime.UtcNow;
+
+                _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+                {
+                    CompanyId = company.Id,
+                    OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                    RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
+                    Provenance = WorkspaceApprovalRuleProvenance.NewWorkspaceConfirmed,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                });
+                return true;
+            });
+
+            // Step 2: Second human accepts invitation -> transitions to TeamActive with historical marker
+            tx.Execute(company.Id, guard =>
+            {
+                var member2 = new CompanyMember
+                {
+                    CompanyId = company.Id,
+                    UserId = "second-user",
+                    Role = CompanyMemberRole.Member,
+                    Status = CompanyMemberStatus.Active,
+                    JoinedAt = DateTime.UtcNow
+                };
+                _db.CompanyMembers.Add(member2);
+
+                guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                guard.Settings.EverTeamActivatedAtUtc = DateTime.UtcNow;
+                return true;
+            });
+
+            // Step 3: Verify SingleActorAllowed rule with TeamActive and historical collaboration is NOT a violation
+            lock (_counterMeasurements)
+            {
+                var unauth = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.unauthorized_elevations.committed");
+                Assert.Null(unauth.InstrumentName);
+
+                var inconsistent = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.inconsistent_transitions.committed");
+                Assert.Null(inconsistent.InstrumentName);
+            }
+        }
+
+        [Fact]
+        public void LegitimateState_ReadOnlySecondMember_PreservesSingleActorRule_WithoutViolationAlerts()
+        {
+            var company = CreateTestCompany("ReadOnly Collab Co", "readonly-collab-co", "owner-user-ro");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+            var owner = _db.CompanyMembers.First(m => m.CompanyId == company.Id);
+
+            tx.Execute(company.Id, guard =>
+            {
+                guard.Settings.Purpose = WorkspacePurpose.Business;
+                guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                guard.Settings.ConfirmedOwnerMemberId = owner.Id;
+                guard.Settings.InitializedAtUtc = DateTime.UtcNow;
+                guard.Settings.EverTeamActivatedAtUtc = DateTime.UtcNow;
+
+                // Add read-only second member
+                var readOnlyAccountant = new CompanyMember
+                {
+                    CompanyId = company.Id,
+                    UserId = "readonly-accountant",
+                    Role = CompanyMemberRole.Member,
+                    Status = CompanyMemberStatus.Active,
+                    JoinedAt = DateTime.UtcNow
+                };
+                _db.CompanyMembers.Add(readOnlyAccountant);
+
+                // Preserve SingleActorAllowed rule for owner's journal posting
+                _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+                {
+                    CompanyId = company.Id,
+                    OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                    RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
+                    Provenance = WorkspaceApprovalRuleProvenance.ExplicitPolicyChange,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                });
+                return true;
+            });
+
+            lock (_counterMeasurements)
+            {
+                var unauth = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.unauthorized_elevations.committed");
+                Assert.Null(unauth.InstrumentName);
+
+                var inconsistent = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.inconsistent_transitions.committed");
+                Assert.Null(inconsistent.InstrumentName);
+            }
+        }
+
+        [Fact]
+        public void LegitimateState_MemberRemoval_PreservesSingleActorRule_WithoutViolationAlerts()
+        {
+            var company = CreateTestCompany("Member Removal Co", "member-remove-co", "owner-user-mr");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+            var owner = _db.CompanyMembers.First(m => m.CompanyId == company.Id);
+
+            var departedMember = new CompanyMember
+            {
+                CompanyId = company.Id,
+                UserId = "departed-user",
+                Role = CompanyMemberRole.Member,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow.AddDays(-30)
+            };
+            _db.CompanyMembers.Add(departedMember);
+            _db.SaveChanges();
+
+            // Setup team with SingleActorAllowed rule
+            tx.Execute(company.Id, guard =>
+            {
+                guard.Settings.Purpose = WorkspacePurpose.Business;
+                guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                guard.Settings.ConfirmedOwnerMemberId = owner.Id;
+                guard.Settings.InitializedAtUtc = DateTime.UtcNow.AddDays(-30);
+                guard.Settings.EverTeamActivatedAtUtc = DateTime.UtcNow.AddDays(-30);
+
+                _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+                {
+                    CompanyId = company.Id,
+                    OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                    RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
+                    Provenance = WorkspaceApprovalRuleProvenance.ExplicitPolicyChange,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                });
+                return true;
+            });
+
+            // Member departs -> removed/suspended
+            tx.Execute(company.Id, guard =>
+            {
+                departedMember.Status = CompanyMemberStatus.Suspended;
+                return true;
+            });
+
+            lock (_counterMeasurements)
+            {
+                var unauth = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.unauthorized_elevations.committed");
+                Assert.Null(unauth.InstrumentName);
+
+                var inconsistent = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.inconsistent_transitions.committed");
+                Assert.Null(inconsistent.InstrumentName);
+            }
+        }
+
+        [Fact]
+        public void LegitimateState_OwnershipTransfer_PreservesSingleActorRule_WithoutViolationAlerts()
+        {
+            var company = CreateTestCompany("Transfer Co", "transfer-co", "original-owner");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+            var originalOwner = _db.CompanyMembers.First(m => m.CompanyId == company.Id);
+
+            var newOwner = new CompanyMember
+            {
+                CompanyId = company.Id,
+                UserId = "new-owner-user",
+                Role = CompanyMemberRole.Member,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            };
+            _db.CompanyMembers.Add(newOwner);
+            _db.SaveChanges();
+
+            // Initialize workspace
+            tx.Execute(company.Id, guard =>
+            {
+                guard.Settings.Purpose = WorkspacePurpose.Business;
+                guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                guard.Settings.ConfirmedOwnerMemberId = originalOwner.Id;
+                guard.Settings.InitializedAtUtc = DateTime.UtcNow;
+                guard.Settings.EverTeamActivatedAtUtc = DateTime.UtcNow;
+
+                _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+                {
+                    CompanyId = company.Id,
+                    OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                    RuleKind = WorkspaceApprovalRuleKind.SingleActorAllowed,
+                    Provenance = WorkspaceApprovalRuleProvenance.ExplicitPolicyChange,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                });
+                return true;
+            });
+
+            // Transfer ownership to new owner
+            tx.Execute(company.Id, guard =>
+            {
+                originalOwner.Role = CompanyMemberRole.Admin;
+                newOwner.Role = CompanyMemberRole.Owner;
+                guard.Settings.ConfirmedOwnerMemberId = newOwner.Id;
+                return true;
+            });
+
+            lock (_counterMeasurements)
+            {
+                var unauth = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.unauthorized_elevations.committed");
+                Assert.Null(unauth.InstrumentName);
+
+                var inconsistent = _counterMeasurements.FirstOrDefault(m => m.InstrumentName == "workspace.inconsistent_transitions.committed");
+                Assert.Null(inconsistent.InstrumentName);
+            }
+        }
+
+        [Fact]
+        public void LegitimateState_ExplicitIndependentReviewPolicy_EmitsNoViolations()
+        {
+            var company = CreateTestCompany("Independent Review Co", "ind-review-co", "owner-user-ir");
+            var tx = new WorkspacePolicyTransaction(_db, _tenant);
+
+            _db.SuppressTenantSecurityCheck = true;
+            var owner = _db.CompanyMembers.First(m => m.CompanyId == company.Id);
+
+            tx.Execute(company.Id, guard =>
+            {
+                guard.Settings.Purpose = WorkspacePurpose.Business;
+                guard.Settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                guard.Settings.ConfirmedOwnerMemberId = owner.Id;
+                guard.Settings.InitializedAtUtc = DateTime.UtcNow;
+
+                _db.WorkspaceApprovalRules.Add(new WorkspaceApprovalRule
+                {
+                    CompanyId = company.Id,
+                    OperationKey = AccessOperationCatalog.FinancialsJournalPost,
+                    RuleKind = WorkspaceApprovalRuleKind.IndependentReviewerRequired,
+                    Provenance = WorkspaceApprovalRuleProvenance.ExplicitPolicyChange,
                     PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
                 });
                 return true;
