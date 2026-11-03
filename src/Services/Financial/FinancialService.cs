@@ -2588,6 +2588,8 @@ namespace Services.Financial
             EnsureOnOrAfterBooksStart(reversalDate.Date);
 
             var reversal = CreateGeneralLedgerHeader(original.DocumentType, reversalDate.Date, description, original.SourceDocumentId, original.Id);
+            // The posting guard validates the tenant before repository insertion stamps new rows.
+            reversal.CompanyId = original.CompanyId;
             foreach (var line in original.GeneralLedgerLines)
                 reversal.GeneralLedgerLines.Add(CreateGeneralLedgerLine(line.DrCr == DrOrCrSide.Dr ? DrOrCrSide.Cr : DrOrCrSide.Dr, line.AccountId, line.Amount));
 
