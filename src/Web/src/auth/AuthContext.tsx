@@ -387,6 +387,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearSession,
     authFetch,
     refreshUser,
+    refreshSession: performRefresh,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

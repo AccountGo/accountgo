@@ -22,9 +22,14 @@ const TITLES: Record<StepId, { title: string; subtitle: string }> = {
 export const CreateOrgPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  // Continuation mode: finish setup of an existing signup-created workspace (?continue=<slug>), reusing
+  // this same onboarding flow rather than a separate wizard. Name/slug are prefilled from the existing
+  // workspace so the identity step validates; the continuation submit sends only the About answers.
+  const continueSlug = searchParams.get('continue') ?? undefined;
   const wizard = useCreateOrgWizard({
-    name: searchParams.get('name') ?? undefined,
-    slug: searchParams.get('slug') ?? undefined,
+    name: searchParams.get('name') ?? continueSlug ?? undefined,
+    slug: searchParams.get('slug') ?? continueSlug ?? undefined,
+    pendingSlug: continueSlug,
   });
   const { state, update, step, stepIndex, stepCount, errors, status, submitError, next, back, submit } = wizard;
   const headingRef = useRef<HTMLHeadingElement>(null);

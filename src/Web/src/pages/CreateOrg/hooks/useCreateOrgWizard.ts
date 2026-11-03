@@ -19,14 +19,25 @@ import {
 
 export type SubmitStatus = 'idle' | 'submitting' | 'success';
 
-export const useCreateOrgWizard = (prefill: { name?: string; slug?: string }) => {
+export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pendingSlug?: string }) => {
   const navigate = useNavigate();
-  const { authFetch } = useAuth();
+  const { authFetch, refreshSession } = useAuth();
+  // Continuation mode: a signup-created, still-unclassified workspace already exists. We initialize THAT
+  // workspace (POST current/initialize) instead of creating a new one, so no duplicate is produced.
+  const pendingSlug = prefill.pendingSlug?.trim() || undefined;
   // Prefill name does not equal About consent; always resume at the first missing required choice.
-  const [draft] = useState(() => (prefill.name ? null : loadDraft(STEPS.length)));
+  // In continuation mode the slug/name prefill is not About consent, so a saved draft (purpose/
+  // collaboration, etc.) is still restored across verification/reload. For a brand-new create with a
+  // name prefill, resume at the first missing choice without reusing an unrelated draft.
+  const [draft] = useState(() => (prefill.name && !pendingSlug ? null : loadDraft(STEPS.length)));
   const [state, setState] = useState<WizardState>(() => {
-    if (draft?.state) return normalizeWizardState(draft.state);
-    return defaultState(new Date(), prefill);
+    const base = defaultState(new Date(), prefill);
+    if (draft?.state) {
+      // Keep the draft's answers but let the prefill (the existing workspace's identity) win for name/slug.
+      const restored = normalizeWizardState(draft.state);
+      return pendingSlug ? { ...restored, name: base.name, slug: base.slug, slugTouched: base.slugTouched } : restored;
+    }
+    return base;
   });
   const [stepIndex, setStepIndex] = useState(() => {
     const initial = draft ? normalizeWizardState(draft.state) : defaultState(new Date(), prefill);
@@ -109,6 +120,51 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string }) =>
     setSubmitError(null);
     try {
       const payload = buildPayload(state, capabilities);
+
+      // Continuation: initialize the existing signup-created workspace in place (no duplicate).
+      if (pendingSlug) {
+        const response = await authFetch('/api/organizations/current/initialize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-AccountGo-Org': pendingSlug },
+          body: JSON.stringify({
+            workspacePurpose: payload.workspacePurpose,
+            collaborationIntent: payload.collaborationIntent,
+            ownerAccessPreset: payload.ownerAccessPreset,
+            initialJournalWorkflow: payload.initialJournalWorkflow,
+          }),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          const failureReason = data?.reasonCode ?? data?.extensions?.reasonCode;
+          if (response.status === 422 && failureReason === 'solo_setup_disabled') {
+            setCapabilities((prev) => ({
+              soloSetupEnabled: false,
+              personalPurposeEnabled: prev?.personalPurposeEnabled ?? false,
+              controlledRecoveryEnabled: prev?.controlledRecoveryEnabled ?? false,
+            }));
+            setSubmitError('Setup is not enabled for this workspace yet. Please try again later.');
+            setStepIndex(STEPS.indexOf('review'));
+          } else if (response.status === 422 && failureReason === 'not_pending_signup_workspace') {
+            // This workspace cannot use the signup continuation; send the owner to a fresh create instead.
+            setSubmitError('This workspace is already set up or is not eligible for guided setup. Create a new workspace to continue.');
+          } else if (response.status === 403) {
+            setSubmitError('Only the workspace owner can finish setup. Sign in as the owner and try again.');
+          } else {
+            setSubmitError(data?.detail || data?.title || data?.message || 'We could not finish setting up your workspace. Try again.');
+          }
+          setStatus('idle');
+          return;
+        }
+        // Refresh the session so the just-granted workspace access is reflected before landing on the
+        // dashboard (the new Full-access grant and single-actor rule take effect on the next token).
+        await Promise.resolve(refreshSession()).catch(() => {});
+        setPersistedOrgSlug(pendingSlug);
+        clearDraft();
+        setStatus('success');
+        redirectTimer.current = window.setTimeout(() => navigate(`/org/${encodeURIComponent(pendingSlug)}/dashboard`, { replace: true }), 900);
+        return;
+      }
+
       const response = await authFetch('/api/organizations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -155,7 +211,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string }) =>
       setSubmitError('We could not reach the server. Check your connection and try again.');
       setStatus('idle');
     }
-  }, [state, capabilities, authFetch, navigate]);
+  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession]);
 
   return { state, update, step, stepIndex, stepCount: STEPS.length, errors, status, submitError, next, back, submit, capabilities };
 };
