@@ -2444,17 +2444,27 @@ namespace Services.Financial
 
                         if (guard.Settings.InitializedAtUtc.HasValue)
                         {
-                            var otherPostedCount = _journalEntryRepo.Table
-                                .Count(j => j.CompanyId == journalEntry.CompanyId && j.Id != journalEntry.Id && j.Posted == true);
-                            if (otherPostedCount == 0)
+                            // Durable, idempotent first-useful-action marker written atomically with the
+                            // posting inside the policy transaction. "First" is established by the marker's
+                            // absence, not by counting posted journals, so it is reliable across retries,
+                            // rollback (the whole transaction rolls back together) and restarts. The
+                            // histogram is emitted only when this call established the marker; telemetry
+                            // delivery is best-effort (post-commit), never claimed exactly-once.
+                            var established = Core.Authorization.WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(
+                                _auditLogRepo,
+                                journalEntry.CompanyId,
+                                Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost,
+                                _auth?.ResolveActorContext()?.UserId,
+                                guard.Settings.InitializedAtUtc.Value,
+                                DateTime.UtcNow);
+
+                            if (established)
                             {
                                 var duration = (DateTime.UtcNow - guard.Settings.InitializedAtUtc.Value).TotalSeconds;
-                                if (duration >= 0)
-                                {
-                                    Core.Authorization.WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
-                                        duration,
-                                        new KeyValuePair<string, object?>("action", Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost));
-                                }
+                                if (duration < 0) duration = 0;
+                                Core.Authorization.WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                                    duration,
+                                    new KeyValuePair<string, object?>("action", Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost));
                             }
                         }
                     });
