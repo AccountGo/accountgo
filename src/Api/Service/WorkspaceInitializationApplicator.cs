@@ -173,6 +173,16 @@ namespace Api.Service
             return _policyTransaction.Execute(companyId, guard =>
             {
                 var settings = guard.Settings;
+
+                // Durable, deduplicated cohort START at the initialize-attempt boundary. For the signup
+                // continuation this is a no-op (signup already recorded the start); for the direct
+                // authenticated create-and-initialize path this is where the cohort member enters. Recording
+                // it BEFORE the eligibility/commit decision — and separately from completion — means an
+                // attempt that is rejected or later abandoned still leaves a start with no completion, so
+                // cohort conversion counts dropouts rather than being pinned to 100%.
+                WorkspaceOnboardingCohort.RecordStart(_db, companyId, ownerUserId,
+                    WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace, boundary: "initialize");
+
                 if (settings.InitializedAtUtc.HasValue)
                 {
                     WorkspaceOperatingPolicyMetrics.OnboardingCompletions.Add(1,
@@ -279,46 +289,14 @@ namespace Api.Service
                     NewValue = auditPayload
                 });
 
-                // Durable onboarding cohort anchor. Unlike the start COUNTER (an attempt tally), this row is
-                // written in the SAME transaction as the initialization, so it exists iff the workspace was
-                // actually initialized — the cross-restart evidence cohort-conversion analysis needs
-                // (eventKind "OnboardingStart" for the new-workspace flow). The matching "OnboardingCompletion"
-                // marker is written next; both persist or neither does.
-                _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
-                {
-                    CompanyId = companyId,
-                    UserName = ownerUserId,
-                    AuditEventDateUTC = DateTime.UtcNow,
-                    AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
-                    TableName = "__WorkspaceOnboardingCohort",
-                    RecordId = companyId.ToString(),
-                    NewValue = System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        eventKind = "OnboardingStart",
-                        flow = WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace,
-                        companyId,
-                        initializationSource = settings.InitializationSource.ToString(),
-                        policyRevision = settings.PolicyRevision
-                    })
-                });
-                _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
-                {
-                    CompanyId = companyId,
-                    UserName = ownerUserId,
-                    AuditEventDateUTC = DateTime.UtcNow,
-                    AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
-                    TableName = "__WorkspaceOnboardingCohort",
-                    RecordId = companyId.ToString(),
-                    NewValue = System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        eventKind = "OnboardingCompletion",
-                        flow = WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace,
-                        status = WorkspaceOperatingPolicyMetrics.StatusLabels.Success,
-                        companyId,
-                        collaborationState = settings.CollaborationState.ToString(),
-                        policyRevision = settings.PolicyRevision
-                    })
-                });
+                // Durable onboarding COMPLETION in the SAME transaction as the initialization, so it exists
+                // iff the workspace was actually initialized. The matching START was recorded independently
+                // (at signup or at the attempt boundary above), so cohort conversion = completions / starts
+                // correctly excludes dropouts. Deduplicated: a repeat initialization cannot add a second
+                // completion.
+                WorkspaceOnboardingCohort.RecordCompletion(_db, companyId, ownerUserId,
+                    WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace,
+                    settings.CollaborationState.ToString(), settings.PolicyRevision);
 
                 // Emit the SUCCESS completion counter only after the owning transaction durably commits.
                 // Both call paths are covered: the controller-owned external scope (Create) drains on

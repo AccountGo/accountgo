@@ -129,6 +129,12 @@ namespace Api.Service
                     // from generic origin evidence, which every created workspace carries — is what the
                     // authenticated current/initialize continuation requires under the coordination lock.
                     WorkspaceSignupContinuationEvidence.Record(_db, company.Id, userId);
+
+                    // Record the durable cohort START at the signup boundary. This is INDEPENDENT of whether
+                    // the owner ever verifies and completes setup, so a signup that is abandoned before
+                    // continuation leaves a start with no completion — the dropout cohort-conversion needs.
+                    WorkspaceOnboardingCohort.RecordStart(_db, company.Id, userId,
+                        Core.Authorization.WorkspaceOperatingPolicyMetrics.FlowLabels.NewWorkspace, boundary: "signup");
                 }
                 _db.SaveChanges();
             }

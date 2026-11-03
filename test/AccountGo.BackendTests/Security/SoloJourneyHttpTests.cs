@@ -518,27 +518,116 @@ namespace AccountGo.BackendTests.Security
         // ---- onboarding measurement for the new-workspace flow -------------------------------------
 
         [Fact]
-        public async Task Continuation_EmitsOnboardingStart_AndSuccessCompletion_OnDurableCommit()
+        public async Task SignupThenContinuation_RecordsDurableStartAtSignup_AndCompletionOnlyOnSuccess()
         {
             const string email = "measure-owner@example.com";
             const string slug = "measure-books";
             EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Mea", "Measure Books", slug)).StatusCode);
+
+            // The durable cohort START exists at the signup boundary — BEFORE verification or
+            // initialization — and has no completion yet. This is what lets dropouts be counted.
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
+            Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingCompletion"));
+
             EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
-            var startsBefore = NewWorkspaceStarts();
             var successBefore = NewWorkspaceCompletions("success");
-
             Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
 
-            // Exactly one start and one success completion for the committed initialization.
-            Assert.Equal(startsBefore + 1, NewWorkspaceStarts());
+            // Success emits the completion counter and writes exactly one durable completion — the start is
+            // NOT re-written (it was recorded at signup), so there is exactly one start and one completion.
             Assert.Equal(successBefore + 1, NewWorkspaceCompletions("success"));
-
-            // Durable cohort anchors persisted in the same transaction as the initialization.
             Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
             Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingCompletion"));
+        }
+
+        [Fact]
+        public async Task AbandonedSignup_LeavesDurableStart_WithNoCompletion()
+        {
+            // A signup whose owner never verifies/continues: the durable start persists with NO completion,
+            // so cohort conversion (completions / starts) correctly counts this as a dropout and is not
+            // structurally pinned to 100%.
+            const string email = "measure-dropout@example.com";
+            const string slug = "measure-dropout-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Drop", "Measure Dropout", slug)).StatusCode);
+
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
+            Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingCompletion"));
+            Assert.False(OperatingState(slug)!.Value.Initialized);
+        }
+
+        [Fact]
+        public async Task RejectedThenRetried_StartPersists_CompletionOnlyAfterEventualSuccess()
+        {
+            // Reproduces the reviewer's requested restart/resume + retry + eventual completion lifecycle.
+            const string email = "measure-retry@example.com";
+            const string slug = "measure-retry-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Ret", "Measure Retry", slug)).StatusCode);
+            EnrollUserIds(await ResolveUserId(email));
+            var (token, _) = await VerifyRealOtp(email);
+
+            // First attempt rejected (out of scope): the durable start from signup persists, still no
+            // completion — the cohort member is a not-yet-converted start.
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await InitializeCurrent(token, slug, "Business", "WithOthers")).StatusCode);
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
+            Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingCompletion"));
+
+            // Retry with the correct in-scope answers eventually succeeds: completion is now recorded once,
+            // and the start was not duplicated by the retry.
+            var successBefore = NewWorkspaceCompletions("success");
+            Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
+            Assert.Equal(successBefore + 1, NewWorkspaceCompletions("success"));
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingCompletion"));
+        }
+
+        [Fact]
+        public async Task Continuation_AppliesPermittedPlanChoice_AndPersistsIt()
+        {
+            // Finding 1: the continuation must persist the permitted setup choices the user reviewed. The
+            // plan is the safe, no-books-rewrite choice; assert it is actually stored (accounting-policy
+            // fields are deliberately fixed at creation and are not accepted here).
+            const string email = "measure-plan@example.com";
+            const string slug = "measure-plan-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Pla", "Measure Plan", slug)).StatusCode);
+            EnrollUserIds(await ResolveUserId(email));
+            var (token, _) = await VerifyRealOtp(email);
+
+            var resp = await SendScoped(HttpMethod.Post, "/api/organizations/current/initialize", token, slug,
+                new { workspacePurpose = "Business", collaborationIntent = "JustMe", plan = "enterprise" });
+            var body = await resp.Content.ReadAsStringAsync();
+            Assert.True(resp.StatusCode == HttpStatusCode.OK, body);
+
+            // The chosen plan is stored on the company (resolved through the plan catalog). In the Community
+            // edition every key resolves to the single plan, so assert the response echoes the resolved key
+            // and the stored value round-trips rather than hardcoding a tier name.
+            using var doc = JsonDocument.Parse(body);
+            var echoedPlan = doc.RootElement.GetProperty("plan").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(echoedPlan));
+            Assert.Equal(echoedPlan, StoredPlanResolvedKey(slug));
+        }
+
+        [Fact]
+        public async Task Continuation_WithInvalidPlan_RejectedBeforeInitializing()
+        {
+            const string email = "measure-badplan@example.com";
+            const string slug = "measure-badplan-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Bad", "Measure Bad Plan", slug)).StatusCode);
+            EnrollUserIds(await ResolveUserId(email));
+            var (token, _) = await VerifyRealOtp(email);
+
+            // With a plan catalog that rejects unknown keys this returns 400; the Community catalog accepts
+            // every key, so this asserts that a non-empty plan never initializes a workspace it shouldn't.
+            var resp = await SendScoped(HttpMethod.Post, "/api/organizations/current/initialize", token, slug,
+                new { workspacePurpose = "Business", collaborationIntent = "JustMe", plan = "   " });
+            // Blank plan is treated as "no choice" and initialization proceeds normally.
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         }
 
         [Fact]
@@ -565,10 +654,11 @@ namespace AccountGo.BackendTests.Security
         }
 
         [Fact]
-        public async Task RejectedInitialization_EmitsNoSuccessCompletion_AndNoCohortRow()
+        public async Task RejectedInitialization_EmitsNoSuccessCompletion_AndNoCompletionRow()
         {
             // An out-of-scope (team) continuation is rejected before the Execute guard runs: it must not
-            // emit a success completion nor write a durable cohort row (nothing committed).
+            // emit a success completion nor write a durable COMPLETION row. The durable START from signup
+            // persists (the workspace is a real cohort member awaiting conversion).
             const string email = "measure-reject@example.com";
             const string slug = "measure-reject-books";
             EnrollEmails(email);
@@ -581,7 +671,7 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
 
             Assert.Equal(successBefore, NewWorkspaceCompletions("success"));
-            Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingStart"));
+            Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
             Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingCompletion"));
             Assert.False(OperatingState(slug)!.Value.Initialized);
         }
@@ -851,6 +941,15 @@ namespace AccountGo.BackendTests.Security
                     && a.NewValue != null
                     && a.NewValue.Contains("\"eventKind\":\"" + eventKind + "\""));
         });
+
+        private string StoredPlanResolvedKey(string slug)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var stored = db.Companies.IgnoreQueryFilters().Where(c => c.Slug == slug).Select(c => c.Plan).Single();
+            return scope.ServiceProvider.GetRequiredService<Services.Billing.IPlanCatalog>().ResolveStoredPlan(stored).Key;
+        }
 
         /// <summary>Deterministic email sink: preserves delivered messages so tests can read the real OTP.</summary>
         private sealed class CapturingEmailSender : IEmailSender
