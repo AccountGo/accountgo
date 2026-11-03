@@ -10,10 +10,14 @@ const INVENTORY_LABEL = { None: 'None', WeightedAverage: 'Weighted average', Fif
 const PURPOSE_LABEL = { Personal: 'Personal finances', Business: 'Business or freelance work' } as const;
 const COLLABORATION_LABEL = { JustMe: 'Just me', WithOthers: 'Me and others' } as const;
 
-export const ReviewStep: React.FC<{ state: WizardState; capabilities?: { soloSetupEnabled: boolean } | null }> = ({ state, capabilities }) => {
+export const ReviewStep: React.FC<{ state: WizardState; capabilities?: { soloSetupEnabled: boolean } | null; isContinuation?: boolean }> = ({ state, capabilities, isContinuation }) => {
   const preview = fiscalYearPreview(state.booksStartDate, state.fiscalYearPattern, state.fiscalYearStartMonth);
   const justMe = state.collaborationIntent === 'JustMe';
   const soloSetupAvailable = capabilities?.soloSetupEnabled !== false;
+  // In continuation mode the books were already provisioned at signup; finishing setup applies only the
+  // About answers, access profile, journal workflow, and plan. The accounting rows below are shown as
+  // "set at creation" so the review never implies currency/framework/dates will be (re)written now.
+  const booksSuffix = isContinuation ? ' · set at creation' : '';
   const rows: [string, string][] = [
     ...(soloSetupAvailable && state.workspacePurpose ? [['Purpose', PURPOSE_LABEL[state.workspacePurpose]] as [string, string]] : []),
     ...(soloSetupAvailable && state.collaborationIntent ? [['Who uses it', COLLABORATION_LABEL[state.collaborationIntent]] as [string, string]] : []),
@@ -38,16 +42,24 @@ export const ReviewStep: React.FC<{ state: WizardState; capabilities?: { soloSet
     ['Workspace', state.name.trim()],
     ['URL', `/org/${state.slug}`],
     ...(state.legalName.trim() ? [['Legal name', state.legalName.trim()] as [string, string]] : []),
-    ['Currency', state.currency.toUpperCase()],
-    ['Books start', state.booksStartDate],
-    ['First fiscal year', preview?.label ?? '—'],
-    ['Framework', `${FRAMEWORK_LABEL[state.reportingFramework]} · ${basisForFramework(state.reportingFramework)} basis`],
-    ['Tax', TAX_LABEL[state.taxRegime]],
-    ['Industry', INDUSTRY_LABEL[state.industryTemplate]],
-    ...(inventoryRelevant(state) ? [['Inventory costing', INVENTORY_LABEL[effectiveInventoryMethod(state)]] as [string, string]] : []),
+    ['Currency', state.currency.toUpperCase() + booksSuffix],
+    ['Books start', state.booksStartDate + booksSuffix],
+    ['First fiscal year', (preview?.label ?? '—') + booksSuffix],
+    ['Framework', `${FRAMEWORK_LABEL[state.reportingFramework]} · ${basisForFramework(state.reportingFramework)} basis${booksSuffix}`],
+    ['Tax', TAX_LABEL[state.taxRegime] + booksSuffix],
+    ['Industry', INDUSTRY_LABEL[state.industryTemplate] + booksSuffix],
+    ...(inventoryRelevant(state) ? [['Inventory costing', INVENTORY_LABEL[effectiveInventoryMethod(state)] + booksSuffix] as [string, string]] : []),
   ];
   return (
     <div>
+      {isContinuation && (
+        <div role="note" className="p-3.5 mb-4 rounded-xl bg-[var(--bg-subtle)] text-[var(--text-secondary)] text-xs font-medium space-y-1">
+          <p className="font-semibold text-[var(--text-main)]">Finishing setup for your workspace</p>
+          <p>
+            Your books currency, start date, and reporting framework were set when this workspace was created and are not changed here. Finishing setup applies your access, journal workflow, and plan.
+          </p>
+        </div>
+      )}
       {!soloSetupAvailable && (
         <div role="note" className="p-3.5 mb-4 rounded-xl bg-[var(--bg-subtle)] text-[var(--text-secondary)] text-xs font-medium space-y-1">
           <p className="font-semibold text-[var(--text-main)]">Standard workspace setup</p>

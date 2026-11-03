@@ -278,6 +278,13 @@ namespace Api.Controllers
             [JsonConverter(typeof(StringEnumConverter))] public WorkspaceCollaborationIntent? CollaborationIntent { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public OwnerAccessPreset? OwnerAccessPreset { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public WorkspaceApprovalRuleKind? InitialJournalWorkflow { get; set; }
+
+            // Permitted continuation choice: the subscription plan (tier) the owner selected during setup.
+            // This does NOT rewrite provisioned books. Accounting-policy choices (currency, books start,
+            // reporting framework, tax, inventory) are deliberately NOT accepted here: the chart of accounts
+            // was already provisioned at signup, and silently rewriting it would violate the accounting
+            // change controls. The client collects those at signup or leaves them at their created values.
+            public string? Plan { get; set; }
         }
 
         /// <summary>
@@ -316,6 +323,16 @@ namespace Api.Controllers
                 });
             }
 
+            // Validate the permitted plan choice BEFORE any mutation, so an invalid plan rejects without
+            // initializing. Accounting-policy fields are not accepted here (see InitializeCurrentRequest).
+            string? resolvedPlanKey = null;
+            if (!string.IsNullOrWhiteSpace(request.Plan))
+            {
+                if (!_plans.TryResolvePlan(request.Plan, out var resolvedPlan))
+                    return Problem(statusCode: 400, title: "Invalid workspace plan");
+                resolvedPlanKey = resolvedPlan.Key;
+            }
+
             var ownerMember = _db.CompanyMembers
                 .Single(m => m.CompanyId == companyId && m.UserId == UserId && m.Role == CompanyMemberRole.Owner);
 
@@ -344,9 +361,24 @@ namespace Api.Controllers
                 });
             }
 
+            // Apply the permitted plan choice only after a SUCCESSFUL initialization. This is a subscription
+            // tier change with no books rewrite; it persists the choice the owner reviewed. It runs after the
+            // init committed, so a rejected init never changes the plan. The request is already tenant-scoped
+            // to this company, so the tenant-filtered query resolves it.
+            if (resolvedPlanKey != null)
+            {
+                var company = _db.Companies.Single(c => c.Id == companyId);
+                if (!string.Equals(company.Plan, resolvedPlanKey, StringComparison.Ordinal))
+                {
+                    company.Plan = resolvedPlanKey;
+                    _db.SaveChanges();
+                }
+            }
+
             return Ok(new
             {
                 initialized = true,
+                plan = _plans.ResolveStoredPlan(_db.Companies.Where(c => c.Id == companyId).Select(c => c.Plan).Single()).Key,
                 collaborationState = WorkspaceCollaborationState.SoloActive.ToString(),
                 journalWorkflow = initResult.JournalMode.ToString(),
                 accessProfileKey = initResult.AccessProfileKey

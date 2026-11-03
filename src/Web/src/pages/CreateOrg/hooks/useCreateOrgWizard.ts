@@ -131,6 +131,10 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
             collaborationIntent: payload.collaborationIntent,
             ownerAccessPreset: payload.ownerAccessPreset,
             initialJournalWorkflow: payload.initialJournalWorkflow,
+            // Permitted continuation choice. Accounting-policy fields (currency, books start, framework,
+            // tax, inventory) are intentionally omitted: the books were provisioned at signup and the
+            // continuation endpoint does not rewrite them.
+            plan: payload.plan,
           }),
         });
         const data = await response.json().catch(() => null);
@@ -213,5 +217,5 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
     }
   }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession]);
 
-  return { state, update, step, stepIndex, stepCount: STEPS.length, errors, status, submitError, next, back, submit, capabilities };
+  return { state, update, step, stepIndex, stepCount: STEPS.length, errors, status, submitError, next, back, submit, capabilities, isContinuation: Boolean(pendingSlug) };
 };
