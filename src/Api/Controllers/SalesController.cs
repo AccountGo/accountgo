@@ -2048,10 +2048,18 @@ namespace Api.Controllers
                     _salesService.PostSalesInvoice(invoiceId);
                     tx.Commit();
                 }
+                // Posting committed and the transaction disposed: drain deferred post-commit work (the
+                // first-useful-action telemetry enqueued during posting) so its measurement is emitted for
+                // this committed action. Never throws into the response.
+                _policyTransaction?.VerifyPendingAfterExternalCommit();
                 return null;
             }
             catch (Exception ex)
             {
+                // The invoice-numbering transaction rolled back. Discard any policy work enqueued during
+                // the failed posting BEFORE clearing EF tracking, so a later committed transaction can
+                // never drain this rolled-back attempt's deferred emission or verification.
+                _policyTransaction?.DiscardPendingVerifications();
                 _db.ChangeTracker.Clear();
                 _logger.LogWarning(ex, "Invoice {InvoiceId} remains unposted: {Error}", invoiceId, ex.Message);
                 return ex.Message;

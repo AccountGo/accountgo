@@ -39,6 +39,7 @@ namespace Services.Recurring
         private readonly IRepository<CompanyMember> _memberRepo;
         private readonly IRepository<SecurityRolePermission> _rolePermissionRepo;
         private readonly ILogger<RecurringInvoiceGenerationService> _logger;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
 
         public RecurringInvoiceGenerationService(
             ITenantContext tenant,
@@ -53,7 +54,8 @@ namespace Services.Recurring
             IRepository<Tax> taxRepo,
             IRepository<CompanyMember> memberRepo,
             IRepository<SecurityRolePermission> rolePermissionRepo,
-            ILogger<RecurringInvoiceGenerationService> logger)
+            ILogger<RecurringInvoiceGenerationService> logger,
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
             _tenant = tenant;
             _unitOfWork = unitOfWork;
@@ -68,6 +70,7 @@ namespace Services.Recurring
             _memberRepo = memberRepo;
             _rolePermissionRepo = rolePermissionRepo;
             _logger = logger;
+            _policyTransaction = policyTransaction;
         }
 
         public int EnsureOccurrence(int scheduleId, DateTime scheduledRunDate, string leaseOwner, DateTime leaseUntil)
@@ -343,6 +346,7 @@ namespace Services.Recurring
                 // Do not post. Roll back the whole attempt (including the draft) and mark the occurrence failed.
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
+                _policyTransaction?.DiscardPendingVerifications();
                 return Fail(occurrence, null, guard.ErrorCode!, guard.Reason!);
             }
 
@@ -355,18 +359,21 @@ namespace Services.Recurring
             {
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
+                _policyTransaction?.DiscardPendingVerifications();
                 return Fail(occurrence, null, RecurringErrorCodes.BooksLocked, ex.Message);
             }
             catch (Core.Domain.BooksStartViolationException ex)
             {
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
+                _policyTransaction?.DiscardPendingVerifications();
                 return Fail(occurrence, null, RecurringErrorCodes.BooksLocked, ex.Message);
             }
             catch (Exception ex)
             {
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
+                _policyTransaction?.DiscardPendingVerifications();
                 return Fail(occurrence, null, RecurringErrorCodes.PostFailed, ex.Message);
             }
 
@@ -377,6 +384,11 @@ namespace Services.Recurring
             // Advance the series atomically with issuing the invoice.
             AdvanceSeriesForOccurrence(schedule, occurrence, attemptSucceeded: true);
             tx.Commit();
+            // The invoice is durably posted: drain the deferred first-useful-action telemetry enqueued by
+            // PostSalesInvoice for this committed action. Dispose first so the drain opens its own
+            // transaction (the service owns this one). Never throws into generation.
+            tx.Dispose();
+            _policyTransaction?.VerifyPendingAfterExternalCommit();
             return RecurringGenerationResult.Issued(occurrenceId, invoice.Id);
         }
 
