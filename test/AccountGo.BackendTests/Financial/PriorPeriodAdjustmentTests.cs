@@ -224,6 +224,11 @@ public class PriorPeriodAdjustmentTests
                 .Returns(new EntitlementDecision(true, null, null));
 
             Guard = new BooksLockGuard(Settings, Entitlements.Object, Tenant.Object);
+            // This harness tests accounting behavior; relational tests prove transaction locking.
+            var policyTransaction = new Mock<IWorkspacePolicyTransaction>();
+            policyTransaction.Setup(p => p.Execute(It.IsAny<int>(), It.IsAny<Action<WorkspacePolicyGuard>>()))
+                .Callback<int, Action<WorkspacePolicyGuard>>((companyId, action) =>
+                    action(new WorkspacePolicyGuard(companyId, new WorkspaceOperatingSettings { CompanyId = companyId })));
             Financial = new FinancialService(
                 Mock.Of<IInventoryService>(),
                 Mock.Of<ITaxService>(),
@@ -243,6 +248,7 @@ public class PriorPeriodAdjustmentTests
                 GlSettings,
                 Settings,
                 booksLockGuard: Guard,
+                policyTransaction: policyTransaction.Object,
                 auth: Mock.Of<IAccessAuthorizationService>(a => a.Authorize(It.IsAny<string>(), It.IsAny<AccessResourceContext>(), It.IsAny<AccessActorContext>()) == AccessDecision.Allow("test", "test", "test")));
 
             YearEnd = new YearEndCloseService(
