@@ -146,33 +146,46 @@ namespace Api.Service
 
         public static void CheckCompanyInvariants(ApiDbContext db, int companyId, WorkspaceOperatingSettings settings)
         {
-            // 1. Inconsistent transition detection:
-            // SoloActive must have ConfirmedOwnerMemberId, cannot have EverTeamActivatedAtUtc,
-            // and cannot have more than 1 active member.
+            // 1. Collaboration-state consistency:
+            // A SoloActive workspace must have a confirmed owner, and cannot have multiple active members.
             if (settings.CollaborationState == WorkspaceCollaborationState.SoloActive)
             {
                 var activeMemberCount = db.CompanyMembers
                     .IgnoreQueryFilters()
                     .Count(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active);
 
-                if (!settings.ConfirmedOwnerMemberId.HasValue || settings.EverTeamActivatedAtUtc.HasValue || activeMemberCount > 1)
+                var ownerMember = settings.ConfirmedOwnerMemberId.HasValue
+                    ? db.CompanyMembers.IgnoreQueryFilters().FirstOrDefault(m => m.Id == settings.ConfirmedOwnerMemberId.Value && m.CompanyId == companyId)
+                    : null;
+
+                bool ownerValid = ownerMember != null && ownerMember.Status == CompanyMemberStatus.Active && ownerMember.Role == CompanyMemberRole.Owner;
+
+                if (!ownerValid || activeMemberCount > 1)
                 {
                     WorkspaceOperatingPolicyMetrics.InconsistentTransitionsCommitted.Add(1);
                 }
             }
 
             // 2. Unauthorized elevation detection:
-            // SingleActorAllowed rule must never exist if CollaborationState != SoloActive,
-            // or if ConfirmedOwnerMemberId is missing, or if EverTeamActivatedAtUtc is present.
+            // A SingleActorAllowed approval rule requires an initialized workspace with a confirmed owner.
+            // If SingleActorAllowed exists in an uninitialized / LegacyUnclassified workspace, or without
+            // a confirmed owner, it is an unearned / unauthorized grant.
+            //
+            // Crucial domain rule: A SingleActorAllowed rule is VALID after invitation acceptance and team
+            // activation. The approved design preserves the explicit journal rule when a second human joins
+            // (e.g. a read-only accountant). Therefore, SingleActorAllowed with TeamActive, historical team
+            // activation, or provenance other than NewWorkspaceConfirmed are NOT violations.
             var hasSingleActor = db.WorkspaceApprovalRules
                 .IgnoreQueryFilters()
                 .Any(r => r.CompanyId == companyId && r.RuleKind == WorkspaceApprovalRuleKind.SingleActorAllowed);
 
             if (hasSingleActor)
             {
-                if (settings.CollaborationState != WorkspaceCollaborationState.SoloActive ||
-                    !settings.ConfirmedOwnerMemberId.HasValue ||
-                    settings.EverTeamActivatedAtUtc.HasValue)
+                bool isUninitialized = settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified
+                                      || !settings.InitializedAtUtc.HasValue;
+                bool missingOwner = !settings.ConfirmedOwnerMemberId.HasValue;
+
+                if (isUninitialized || missingOwner)
                 {
                     WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
                 }
