@@ -22,19 +22,25 @@ namespace Api.Service
         private readonly IWorkspaceAccessProfileCatalog _accessCatalog;
         private readonly IWorkspacePolicyTransaction _policyTransaction;
         private readonly WorkspaceExperienceOptions _experience;
+        private readonly IWorkspaceCanaryEnrollment _canary;
 
         public WorkspaceOperatingPolicyService(
             ApiDbContext db,
             IWorkspaceApprovalPolicyResolver approvalResolver,
             IWorkspaceAccessProfileCatalog accessCatalog,
             IWorkspacePolicyTransaction policyTransaction,
-            IOptions<WorkspaceExperienceOptions> experienceOptions)
+            IOptions<WorkspaceExperienceOptions> experienceOptions,
+            IWorkspaceCanaryEnrollment? canary = null)
         {
             _db = db;
             _approvalResolver = approvalResolver;
             _accessCatalog = accessCatalog;
             _policyTransaction = policyTransaction;
             _experience = WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value);
+            // The canary admission gate must match what new-workspace initialization enforces. Fall back to
+            // one built from the same (environment-resolved) experience options when DI does not supply it,
+            // so the capability always reflects SoloSetupEnabled AND canary enrollment.
+            _canary = canary ?? new WorkspaceCanaryEnrollment(experienceOptions);
         }
 
         public WorkspaceOperatingSettings EnsureCoordinationAndSettings(int companyId) =>
@@ -112,13 +118,19 @@ namespace Api.Service
                 }
             }
 
-            // Server-derived pending-signup-continuation capability. Computed from the SAME authoritative,
-            // non-mutating predicate the continuation endpoint enforces under the lock, so the flag can
-            // never disagree with what current/initialize will accept. It is meaningful only for the
-            // original owner (the marker is bound to that user id), so it is false whenever the caller is
-            // unknown or is any other member. A legacy/non-signup unclassified workspace lacks the marker,
-            // and an already-initialized workspace fails the structural proof — both yield false.
+            // Server-derived pending-signup-continuation capability. It mirrors EXACTLY what
+            // current/initialize requires, so the SPA never routes a caller into a continuation the server
+            // would reject:
+            //   1. The admission gates — SoloSetupEnabled AND canary enrollment for this owner — evaluated
+            //      by the same IsNewBusinessSoloAudienceAdmitted decision the endpoint uses. With setup
+            //      disabled or the owner unenrolled the flow is unavailable, so the flag is false even
+            //      though the workspace is structurally eligible.
+            //   2. The signup marker + pristine/uninitialized/sole-owner structural proof.
+            // It is meaningful only for the original owner (the marker is bound to that user id), so it is
+            // false whenever the caller is unknown or is any other member. The initialization-time checks
+            // are retained as the authoritative gate; this flag is purely advisory for routing.
             var pendingSignupContinuation = !string.IsNullOrWhiteSpace(callerUserId)
+                && _canary.IsNewBusinessSoloAudienceAdmitted(email: null, userId: callerUserId)
                 && ContractAVerifier.VerifyPendingSignupContinuation(_db, companyId, callerUserId!).Allowed;
 
             return new WorkspaceOperatingSummary(

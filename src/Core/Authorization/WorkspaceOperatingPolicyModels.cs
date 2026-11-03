@@ -78,12 +78,14 @@ namespace Core.Authorization
         string? OwnAccessProfileDisplayName,
         bool SoloSetupEnabled,
         IReadOnlyList<string> AllowedNextActions,
-        // Server-derived: true only when the authenticated caller is the original owner of a workspace that
-        // still carries the signup-specific pending-continuation marker AND remains structurally eligible
-        // (uninitialized, pristine, sole-owner) for the approved post-verification continuation — i.e. the
-        // exact condition current/initialize will accept. The SPA routes to the guided continuation on THIS
-        // flag, never on CollaborationState, so a legacy/non-signup unclassified workspace, a non-owner
-        // member, or an already-initialized workspace is never steered into a flow it cannot complete.
+        // Server-derived: true only when the approved solo setup is actually AVAILABLE to the authenticated
+        // caller — the admission gates (SoloSetupEnabled AND canary enrollment for this owner) pass — AND
+        // the workspace still carries the signup-specific pending-continuation marker and remains
+        // structurally eligible (uninitialized, pristine, sole-owner) for the post-verification
+        // continuation — i.e. the exact condition current/initialize will accept. The SPA routes to the
+        // guided continuation on THIS flag, never on CollaborationState, so a legacy/non-signup unclassified
+        // workspace, a non-owner member, an already-initialized workspace, setup being disabled, or an
+        // unenrolled owner each yields false and is never steered into a flow it cannot complete.
         bool PendingSignupContinuation);
 
     public interface IWorkspaceApprovalPolicyResolver
