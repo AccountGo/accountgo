@@ -46,6 +46,15 @@ namespace Api.Service
         private readonly List<(long ScopeId, IDbContextTransaction Transaction)> _scopes = new();
         private long _scopeCounter;
 
+        /// <summary>
+        /// Diagnostic counts of the deferred-work and scope tables. Exposed so tests can assert that
+        /// abandoned scopes and their pending work are released (not merely left un-emitted) and that
+        /// neither list grows without bound. Not part of the policy contract.
+        /// </summary>
+        public int PendingItemCount => _pending.Count;
+
+        public int ScopeCount => _scopes.Count;
+
         public WorkspacePolicyTransaction(ApiDbContext db, ITenantContext tenant)
         {
             _db = db;
@@ -276,13 +285,26 @@ namespace Api.Service
         /// dead/disposed and is not the current one. This runs at the start of Execute and EnqueuePostCommit
         /// — a NEW operation — so stale work is dropped before any new scope can be attributed to it. It is
         /// deliberately NOT run inside the explicit commit/rollback completion paths, which must act on
-        /// their own scope regardless of disposal.
+        /// their own scope regardless of disposal. Delegates to <see cref="PruneScopes"/>, which releases
+        /// both the dead scope registrations and their stranded pending items as a single invariant.
         /// </summary>
-        private void EvictOrphanedPending()
+        private void EvictOrphanedPending() => PruneScopes();
+
+        /// <summary>
+        /// Removes scope registrations whose transaction is dead, and releases any pending work still
+        /// bound to those scopes. An abandoned owner (one that neither committed nor rolled back its
+        /// scope, e.g. a path that rolled back and only cleared EF tracking) would otherwise leave its
+        /// queued post-commit callbacks and deferred verifications stranded in _pending forever: never
+        /// drained, never emitted, and never garbage-collected. Dropping the pending items here keeps
+        /// _pending and _scopes bounded together and guarantees an abandoned scope's callbacks are
+        /// released WITHOUT emission (a dead/rolled-back transaction never committed, so its post-commit
+        /// side effects must not run). The current transaction's scope is always retained.
+        /// </summary>
+        private void PruneScopes()
         {
+            var current = _db.Database.CurrentTransaction;
             if (_scopes.Count == 0)
                 return;
-            var current = _db.Database.CurrentTransaction;
             var deadScopes = _scopes
                 .Where(s => !ReferenceEquals(s.Transaction, current) && IsDeadTransaction(s.Transaction))
                 .Select(s => s.ScopeId)
@@ -291,13 +313,6 @@ namespace Api.Service
                 return;
             _pending.RemoveAll(p => deadScopes.Contains(p.ScopeId));
             _scopes.RemoveAll(s => deadScopes.Contains(s.ScopeId));
-        }
-
-        /// <summary>Removes scope registrations whose transaction is dead; keeps the scope table bounded.</summary>
-        private void PruneScopes()
-        {
-            var current = _db.Database.CurrentTransaction;
-            _scopes.RemoveAll(s => !ReferenceEquals(s.Transaction, current) && IsDeadTransaction(s.Transaction));
         }
 
         /// <summary>
