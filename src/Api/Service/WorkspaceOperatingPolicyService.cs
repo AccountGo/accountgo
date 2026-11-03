@@ -74,14 +74,15 @@ namespace Api.Service
             }
 
             var nextActions = new List<string>();
-            if (settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)
+            if (settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified
+                && _experience.LegacySoloConfirmationEnabled)
                 nextActions.Add("evaluate_solo_setup");
             if (settings.CollaborationState == WorkspaceCollaborationState.SoloActive)
                 nextActions.Add("invite_someone");
             if (settings.CollaborationState == WorkspaceCollaborationState.TeamSetupPending)
                 nextActions.Add("invite_collaborator");
 
-            if (_experience.SoloSetupEnabled && settings.CollaborationState != WorkspaceCollaborationState.SoloActive)
+            if (_experience.LegacySoloConfirmationEnabled && settings.CollaborationState != WorkspaceCollaborationState.SoloActive)
             {
                 bool canReturn = false;
                 if (memberId.HasValue)
@@ -128,7 +129,7 @@ namespace Api.Service
             WorkspaceOperatingPolicyMetrics.OnboardingStarts.Add(1,
                 new KeyValuePair<string, object?>("flow", WorkspaceOperatingPolicyMetrics.FlowLabels.LegacySolo));
 
-            if (!_experience.SoloSetupEnabled)
+            if (!_experience.LegacySoloConfirmationEnabled)
             {
                 return new SoloSetupEligibility(
                     SoloSetupEligibilityStatus.Ineligible,
@@ -142,7 +143,7 @@ namespace Api.Service
 
         public SoloSetupEligibility EvaluateLegacySoloEligibility(WorkspacePolicyGuard guard, string callerUserId)
         {
-            if (!_experience.SoloSetupEnabled)
+            if (!_experience.LegacySoloConfirmationEnabled)
             {
                 return new SoloSetupEligibility(
                     SoloSetupEligibilityStatus.Ineligible,
@@ -355,7 +356,7 @@ namespace Api.Service
             long expectedRevision,
             bool revokeOutstandingInvitations)
         {
-            if (!_experience.SoloSetupEnabled)
+            if (!_experience.LegacySoloConfirmationEnabled)
             {
                 return new WorkspacePolicyMutationResult(
                     false,

@@ -20,6 +20,13 @@ namespace Api.Service
         public WorkspaceCollaborationIntent CollaborationIntent { get; init; }
         public OwnerAccessPreset OwnerAccessPreset { get; init; } = OwnerAccessPreset.FullWorkspaceAccess;
         public WorkspaceApprovalRuleKind? InitialJournalWorkflow { get; init; }
+
+        /// <summary>
+        /// Normalized owner email, supplied so the canary audience can be re-enforced here by the trusted
+        /// subject used at anonymous signup (before the owner user id is known to operators). Optional;
+        /// the authenticated user id is also checked.
+        /// </summary>
+        public string? OwnerEmail { get; init; }
     }
 
     public sealed class WorkspaceInitializationResult
@@ -43,19 +50,22 @@ namespace Api.Service
         private readonly IWorkspaceAccessProfileCatalog _accessCatalog;
         private readonly IWorkspaceApprovalPolicyResolver _approvalResolver;
         private readonly WorkspaceExperienceOptions _experience;
+        private readonly IWorkspaceCanaryEnrollment _canary;
 
         public WorkspaceInitializationApplicator(
             ApiDbContext db,
             IWorkspacePolicyTransaction policyTransaction,
             IWorkspaceAccessProfileCatalog accessCatalog,
             IWorkspaceApprovalPolicyResolver approvalResolver,
-            IOptions<WorkspaceExperienceOptions> experienceOptions)
+            IOptions<WorkspaceExperienceOptions> experienceOptions,
+            IWorkspaceCanaryEnrollment canary)
         {
             _db = db;
             _policyTransaction = policyTransaction;
             _accessCatalog = accessCatalog;
             _approvalResolver = approvalResolver;
             _experience = WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value);
+            _canary = canary;
         }
 
         public WorkspaceExperienceOptions Experience => _experience;
@@ -100,6 +110,21 @@ namespace Api.Service
                     Applied = false,
                     ReasonCode = WorkspacePolicyReasonCodes.SoloSetupDisabled,
                     Message = "Solo/team workspace initialization is not enabled; workspace remains unclassified.",
+                    JournalMode = WorkspaceApprovalMode.CatalogDefault
+                };
+            }
+
+            // Canary audience re-enforcement. Setup being enabled is necessary but not sufficient: the
+            // owner must be in the trusted enrollment. This repeats the controller/signup check so an
+            // unenrolled caller that reaches initialization directly (e.g. bypassing the pre-provision
+            // check) still cannot initialize the feature. Enrollment never comes from the request body.
+            if (!_canary.IsEnrolled(request.OwnerEmail, ownerUserId))
+            {
+                return new WorkspaceInitializationResult
+                {
+                    Applied = false,
+                    ReasonCode = WorkspacePolicyReasonCodes.CanaryNotEnrolled,
+                    Message = "This workspace is not part of the current setup audience; it remains unclassified.",
                     JournalMode = WorkspaceApprovalMode.CatalogDefault
                 };
             }
