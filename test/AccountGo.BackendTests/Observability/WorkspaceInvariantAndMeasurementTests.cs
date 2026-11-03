@@ -57,6 +57,10 @@ namespace AccountGo.BackendTests.Observability
             {
                 lock (_counters) _counters.Add((instrument.Name, measurement));
             });
+            _listener.SetMeasurementEventCallback<int>((instrument, measurement, tags, state) =>
+            {
+                lock (_counters) _counters.Add((instrument.Name, measurement));
+            });
             _listener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
             {
                 lock (_histograms) _histograms.Add((instrument.Name, measurement));
@@ -492,6 +496,128 @@ namespace AccountGo.BackendTests.Observability
                 var ex = Assert.Throws<InvalidOperationException>(() => _db.SaveChanges());
                 Assert.Contains("append-only", ex.Message, StringComparison.OrdinalIgnoreCase);
                 _db.Entry(row).Reload();
+            }
+        }
+
+        // ---- Finding 1: rolled-back post-commit work must never drain on a later commit ----------
+
+        [Fact]
+        public void RolledBackAction_MustNotEmitOnLaterUnrelatedCommit()
+        {
+            var company = SeedCompany("review-stale-queue", "review-owner", out var owner);
+            SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, owner.Id, initialized: true);
+            var policy = new WorkspacePolicyTransaction(_db, _tenant);
+            var repo = new EfRepository<Core.Domain.Auditing.AuditLog>(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Core.Domain.Auditing.AuditLog>.Instance, _db);
+
+            // Enqueue first-action telemetry inside a caller-owned transaction, then roll that transaction
+            // back. The emission is bound to the rolled-back transaction.
+            using (var outer = _db.Database.BeginTransaction())
+            {
+                policy.Execute(company.Id, guard =>
+                {
+                    Assert.True(WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(repo, company.Id,
+                        WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice, "review-owner", DateTime.UtcNow, DateTime.UtcNow));
+                    policy.EnqueuePostCommit(() => WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                        1.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice)));
+                });
+                outer.Rollback();
+            }
+
+            // Exactly the cleanup TryPostSalesInvoice performed BEFORE this fix: clear EF tracking but do
+            // NOT discard the policy queue. The transaction-binding must still prevent the stale emission.
+            _db.ChangeTracker.Clear();
+
+            // A later, unrelated guarded commit owns a fresh transaction. It must drain only its OWN work.
+            policy.Execute(company.Id, guard => { });
+
+            Assert.Equal(0, _db.AuditLogs.IgnoreQueryFilters().Count(a => a.CompanyId == company.Id
+                && a.TableName == WorkspaceFirstActionEvidence.FirstUsefulActionTable));
+            Assert.Equal(0, HistogramCount("workspace.first_useful_action.duration"));
+        }
+
+        [Fact]
+        public void PostCommitWork_FromOneTransaction_IsNotDrainedByAnother()
+        {
+            var a = SeedCompany("tx-a", "owner-a", out var ownerA);
+            SeedSettings(a.Id, WorkspaceCollaborationState.SoloActive, ownerA.Id, initialized: true);
+            var b = SeedCompany("tx-b", "owner-b", out var ownerB);
+            SeedSettings(b.Id, WorkspaceCollaborationState.SoloActive, ownerB.Id, initialized: true);
+            var policy = new WorkspacePolicyTransaction(_db, _tenant);
+
+            // Company A: enqueue under a caller-owned transaction that ROLLS BACK.
+            using (var txA = _db.Database.BeginTransaction())
+            {
+                policy.Execute(a.Id, guard =>
+                    policy.EnqueuePostCommit(() => WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                        1.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice))));
+                txA.Rollback();
+            }
+            _db.ChangeTracker.Clear();
+
+            // Company B: a separate caller-owned transaction that COMMITS and drains its own work. It must
+            // emit exactly once (for B), never picking up A's rolled-back emission.
+            using (var txB = _db.Database.BeginTransaction())
+            {
+                policy.Execute(b.Id, guard =>
+                    policy.EnqueuePostCommit(() => WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                        2.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice))));
+                txB.Commit();
+            }
+            policy.VerifyPendingAfterExternalCommit();
+
+            Assert.Equal(1, HistogramCount("workspace.first_useful_action.duration"));
+        }
+
+        // ---- Finding 2: monitoring must not report a healthy zero on a failed measurement --------
+
+        [Fact]
+        public void ActiveIncidentGauge_ReportsUnavailable_NotZero_OnQueryFailure()
+        {
+            // An observer that fails (as a dropped DB connection would) must publish -1 (unavailable) and
+            // bump the failure counter — never a zero that reads as "no active incidents".
+            WorkspaceOperatingPolicyMetrics.RegisterActiveIncidentObserver(() => throw new InvalidOperationException("db down"));
+
+            var failuresBefore = CounterTotal("workspace.active_invariant_incidents.query_failures");
+            _listener.RecordObservableInstruments();
+
+            var gauge = LastObservedGauge("workspace.active_invariant_incidents");
+            Assert.True(gauge.HasValue, "gauge was observed");
+            Assert.Equal(-1, gauge!.Value);
+            Assert.True(CounterTotal("workspace.active_invariant_incidents.query_failures") > failuresBefore);
+        }
+
+        [Fact]
+        public void ActiveIncidentGauge_HealthyZero_OnlyFromSuccessfulQuery()
+        {
+            // A successful observer returning zero publishes a genuine healthy zero and advances freshness.
+            WorkspaceOperatingPolicyMetrics.RegisterActiveIncidentObserver(() => 0);
+
+            _listener.RecordObservableInstruments();
+            var gauge = LastObservedGauge("workspace.active_invariant_incidents");
+            Assert.True(gauge.HasValue);
+            Assert.Equal(0, gauge!.Value);
+
+            var age = LastObservedGaugeDouble("workspace.active_invariant_incidents.last_success_age_seconds");
+            Assert.True(age.HasValue);
+            Assert.True(age!.Value >= 0, "freshness age is non-negative after a successful observation");
+        }
+
+        private long? LastObservedGauge(string instrumentName)
+        {
+            lock (_counters)
+            {
+                var hits = _counters.Where(c => c.Name == instrumentName).ToList();
+                return hits.Count == 0 ? (long?)null : hits[^1].Value;
+            }
+        }
+
+        private double? LastObservedGaugeDouble(string instrumentName)
+        {
+            lock (_histograms)
+            {
+                var hits = _histograms.Where(h => h.Name == instrumentName).ToList();
+                return hits.Count == 0 ? (double?)null : hits[^1].Value;
             }
         }
 

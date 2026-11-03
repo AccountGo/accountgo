@@ -915,10 +915,21 @@ namespace Api.Controllers
                     _purchasingService.ApproveBill(bill.Id, GetUserNameFromRequestHeader(), DateTime.UtcNow);
                 tx.Commit();
 
+                // Bill approval committed and the transaction will dispose: drain deferred post-commit work
+                // (first-useful-action telemetry enqueued during approval) so its measurement is emitted
+                // for this committed action. Dispose the transaction first so the drain sees no ambient
+                // transaction. Never throws into the response.
+                tx.Dispose();
+                _policyTransaction?.VerifyPendingAfterExternalCommit();
+
                 return Ok(ToBill(BillsQuery().Single(b => b.Id == bill.Id), _adminService.GetPaymentTerms().ToList()));
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
+                // Validation failure before commit: the transaction rolls back on dispose. Discard any
+                // policy work enqueued during a failed approval so a later committed transaction cannot
+                // drain this rolled-back attempt's deferred emission.
+                _policyTransaction?.DiscardPendingVerifications();
                 return BadRequest(new { message = ex.Message });
             }
         }

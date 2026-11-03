@@ -35,6 +35,7 @@ namespace Api.Controllers
         private readonly IEntitlementService _entitlements;
         private readonly IBooksLockGuard _booksLockGuard;
         private readonly ApiDbContext _db;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
 
         public BankingController(
             IBankAccountService banks,
@@ -47,7 +48,8 @@ namespace Api.Controllers
             ITenantContext tenant,
             IEntitlementService entitlements,
             IBooksLockGuard booksLockGuard,
-            ApiDbContext db)
+            ApiDbContext db,
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
         {
             _banks = banks;
             _transactions = transactions;
@@ -60,6 +62,7 @@ namespace Api.Controllers
             _entitlements = entitlements;
             _booksLockGuard = booksLockGuard;
             _db = db;
+            _policyTransaction = policyTransaction;
         }
 
         [HttpGet("Accounts")]
@@ -847,14 +850,20 @@ namespace Api.Controllers
                 var result = _statementExpenses.BulkRecordExpense(request, GetUserNameFromRequestHeader() ?? string.Empty);
                 foreach (var lineId in request.LineIds) AuditStatementDecision(lineId, "record_expense");
                 tx.Commit();
+                // Approved bills committed; drain deferred first-useful-action telemetry. Dispose first so
+                // the drain sees no ambient transaction. Never throws.
+                tx.Dispose();
+                _policyTransaction?.VerifyPendingAfterExternalCommit();
                 return Ok(result);
             }
             catch (TenantEntityNotFoundException)
             {
+                _policyTransaction?.DiscardPendingVerifications();
                 return NotFound(new { message = "Statement line not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
+                _policyTransaction?.DiscardPendingVerifications();
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -881,15 +890,21 @@ namespace Api.Controllers
                 var result = _statementExpenses.RecordExpense(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
                 AuditStatementDecision(id, "record_expense");
                 tx.Commit();
+                // Approved bill committed; drain deferred first-useful-action telemetry. Dispose first so
+                // the drain sees no ambient transaction. Never throws.
+                tx.Dispose();
+                _policyTransaction?.VerifyPendingAfterExternalCommit();
                 return Ok(result);
             }
 
             catch (TenantEntityNotFoundException)
             {
+                _policyTransaction?.DiscardPendingVerifications();
                 return NotFound(new { message = "Statement line not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
+                _policyTransaction?.DiscardPendingVerifications();
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -981,14 +996,20 @@ namespace Api.Controllers
                 var result = _statementIncome.Record(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
                 AuditStatementDecision(id, "record_other_income");
                 tx.Commit();
+                // Posted income committed; drain deferred first-useful-action telemetry for this committed
+                // action. Dispose first so the drain sees no ambient transaction. Never throws.
+                tx.Dispose();
+                _policyTransaction?.VerifyPendingAfterExternalCommit();
                 return Ok(result);
             }
             catch (TenantEntityNotFoundException)
             {
+                _policyTransaction?.DiscardPendingVerifications();
                 return NotFound(new { message = "Statement line not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
+                _policyTransaction?.DiscardPendingVerifications();
                 return BadRequest(new { message = ex.Message });
             }
         }

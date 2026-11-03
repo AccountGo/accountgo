@@ -90,9 +90,12 @@ namespace Api.Service
                     db.SuppressTenantSecurityCheck = true;
                     return WorkspaceInvariantIncidentLog.CountWorkspacesWithActiveIncident(db);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    return 0;
+                    // Signal UNAVAILABLE (-1), never a healthy-looking zero. The metrics layer counts the
+                    // failure and ages the last-success timestamp so monitoring can alert on it.
+                    _logger.LogWarning(ex, "Active invariant-incident count query failed; reporting measurement as unavailable.");
+                    return -1;
                 }
             });
         }

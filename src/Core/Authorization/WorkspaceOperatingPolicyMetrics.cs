@@ -20,14 +20,25 @@ namespace Core.Authorization
         private static readonly Meter s_meter = new(MeterName, MeterVersion);
 
         private static System.Func<int>? s_activeIncidentObserver;
+        private static DateTime? s_activeIncidentLastSuccessUtc;
 
         /// <summary>
-        /// Registers the durable "active invariant incidents" gauge, whose value is produced by
+        /// Registers the durable "active invariant incidents" gauges, whose values are produced by
         /// <paramref name="observer"/> each time the meter is observed. Wired from the Api layer where a
         /// database query can count workspaces currently in a violating state. Idempotent: the first
-        /// registration creates the gauge; later calls just replace the observed value source. Exposing
-        /// current state separately from the new-incident counters lets monitoring see a violation that
-        /// persists across a restart even when no new incident is being recorded.
+        /// registration creates the gauges; later calls just replace the observed value source.
+        ///
+        /// The observer MUST return a non-negative count on a successful query, or a negative value to
+        /// signal that the measurement is unavailable (the query failed). Three series are exposed so
+        /// monitoring can distinguish a genuine healthy zero from an unavailable/stale measurement:
+        ///  - workspace.active_invariant_incidents: the current count, or -1 when unavailable. A healthy
+        ///    zero is ONLY ever published by a successful query; a failure never masquerades as zero.
+        ///  - workspace.active_invariant_incidents.query_failures: monotonically increasing count of failed
+        ///    observations, to alert on.
+        ///  - workspace.active_invariant_incidents.last_success_age_seconds: seconds since the last
+        ///    successful observation (-1 until the first success), to alert on staleness.
+        /// Exposing current state separately from the new-incident counters lets monitoring see a violation
+        /// that persists across a restart even when no new incident is being recorded.
         /// </summary>
         public static void RegisterActiveIncidentObserver(System.Func<int> observer)
         {
@@ -37,8 +48,52 @@ namespace Core.Authorization
             {
                 s_meter.CreateObservableGauge(
                     "workspace.active_invariant_incidents",
-                    () => s_activeIncidentObserver?.Invoke() ?? 0,
-                    description: "Workspaces currently in a committed invariant-violating state (durable current state).");
+                    ObserveActiveIncidentCount,
+                    description: "Workspaces currently in a committed invariant-violating state (durable current state); -1 when the measurement is unavailable.");
+
+                s_meter.CreateObservableGauge(
+                    "workspace.active_invariant_incidents.last_success_age_seconds",
+                    () =>
+                    {
+                        var last = s_activeIncidentLastSuccessUtc;
+                        return last.HasValue ? Math.Max(0, (DateTime.UtcNow - last.Value).TotalSeconds) : -1d;
+                    },
+                    unit: "s",
+                    description: "Seconds since the active-incident count was last measured successfully; -1 before the first success. Alert on staleness.");
+            }
+        }
+
+        /// <summary>
+        /// Monotonic count of failed active-incident observations. A non-zero/increasing value means the
+        /// current-state measurement is unavailable — monitoring must NOT read a zero incident count as
+        /// healthy while this is rising.
+        /// </summary>
+        public static readonly Counter<long> ActiveIncidentQueryFailures = s_meter.CreateCounter<long>(
+            "workspace.active_invariant_incidents.query_failures",
+            description: "Failed attempts to measure the active invariant-incident count. Nonzero means current-state monitoring is unavailable.");
+
+        private static int ObserveActiveIncidentCount()
+        {
+            var observer = s_activeIncidentObserver;
+            if (observer == null)
+                return -1;
+            try
+            {
+                var value = observer();
+                if (value < 0)
+                {
+                    // The Api-side observer itself signalled unavailability.
+                    ActiveIncidentQueryFailures.Add(1);
+                    return -1;
+                }
+                s_activeIncidentLastSuccessUtc = DateTime.UtcNow;
+                return value;
+            }
+            catch
+            {
+                // Never let a failed measurement publish a healthy-looking zero.
+                ActiveIncidentQueryFailures.Add(1);
+                return -1;
             }
         }
 
