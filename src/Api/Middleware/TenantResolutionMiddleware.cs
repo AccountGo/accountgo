@@ -91,6 +91,14 @@ namespace Api.Middleware
                 return;
             }
 
+            var operatingSettings = await db.WorkspaceOperatingSettings.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(s => s.CompanyId == company.Id);
+            if (operatingSettings != null && operatingSettings.PolicySchemaVersion > WorkspaceOperatingPolicySchema.CurrentVersion)
+            {
+                await WriteIncompatibleSchemaAsync(context, WorkspaceOperatingPolicySchema.CurrentVersion, operatingSettings.PolicySchemaVersion);
+                return;
+            }
+
             if (!await TryPopulateTenantMembershipAsync(db, tenantContext, company, userId, slug))
             {
                 await WriteNotFoundAsync(context);
@@ -155,6 +163,14 @@ namespace Api.Middleware
             if (company == null)
             {
                 await WriteNotFoundAsync(context);
+                return;
+            }
+
+            var operatingSettings = await db.WorkspaceOperatingSettings.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(s => s.CompanyId == company.Id);
+            if (operatingSettings != null && operatingSettings.PolicySchemaVersion > WorkspaceOperatingPolicySchema.CurrentVersion)
+            {
+                await WriteIncompatibleSchemaAsync(context, WorkspaceOperatingPolicySchema.CurrentVersion, operatingSettings.PolicySchemaVersion);
                 return;
             }
 
@@ -303,6 +319,20 @@ namespace Api.Middleware
                 Title = "Workspace not found",
                 Status = StatusCodes.Status404NotFound,
                 Detail = "The requested workspace was not found or you are not an active member."
+            };
+            await context.Response.WriteAsJsonAsync(problem);
+        }
+
+        private static async Task WriteIncompatibleSchemaAsync(HttpContext context, int supportedVersion, int requestedVersion)
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            context.Response.ContentType = "application/problem+json";
+            var problem = new ProblemDetails
+            {
+                Title = "Incompatible Policy Schema",
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Detail = $"Workspace policy schema version {requestedVersion} exceeds supported version {supportedVersion}. Service upgrade required.",
+                Extensions = { ["reasonCode"] = Core.Authorization.WorkspacePolicyReasonCodes.IncompatiblePolicySchema }
             };
             await context.Response.WriteAsJsonAsync(problem);
         }

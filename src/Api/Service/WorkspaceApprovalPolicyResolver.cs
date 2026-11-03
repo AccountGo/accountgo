@@ -43,6 +43,10 @@ namespace Api.Service
         {
             if (rule == null)
             {
+                WorkspaceOperatingPolicyMetrics.Authorizations.Add(1,
+                    new System.Collections.Generic.KeyValuePair<string, object?>("operation", operationKey),
+                    new System.Collections.Generic.KeyValuePair<string, object?>("mode", "catalog_default"));
+
                 return new EffectiveApprovalRule(
                     operationKey,
                     WorkspaceApprovalMode.CatalogDefault,
@@ -54,6 +58,10 @@ namespace Api.Service
             if (settings.PolicySchemaVersion != WorkspaceOperatingPolicySchema.CurrentVersion
                 || rule.PolicySchemaVersion != WorkspaceOperatingPolicySchema.CurrentVersion)
             {
+                WorkspaceOperatingPolicyMetrics.Authorizations.Add(1,
+                    new System.Collections.Generic.KeyValuePair<string, object?>("operation", operationKey),
+                    new System.Collections.Generic.KeyValuePair<string, object?>("mode", "independent_reviewer"));
+
                 return new EffectiveApprovalRule(
                     operationKey,
                     WorkspaceApprovalMode.IndependentReviewerRequired,
@@ -67,6 +75,11 @@ namespace Api.Service
                 WorkspaceApprovalRuleKind.SingleActorAllowed => WorkspaceApprovalMode.SingleActorAllowed,
                 _ => WorkspaceApprovalMode.IndependentReviewerRequired
             };
+
+            var modeTag = mode == WorkspaceApprovalMode.SingleActorAllowed ? "single_actor" : "independent_reviewer";
+            WorkspaceOperatingPolicyMetrics.Authorizations.Add(1,
+                new System.Collections.Generic.KeyValuePair<string, object?>("operation", operationKey),
+                new System.Collections.Generic.KeyValuePair<string, object?>("mode", modeTag));
 
             return new EffectiveApprovalRule(
                 operationKey,

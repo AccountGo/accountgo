@@ -98,6 +98,8 @@ namespace Api.Service
                 if (ownsTransaction)
                     tx!.Commit();
 
+                VerifyPostCommitInvariants(guards);
+
                 return result;
             }
             catch
@@ -112,6 +114,33 @@ namespace Api.Service
                     _db.SuppressTenantSecurityCheck = priorSuppress;
                 if (ownsTransaction)
                     tx?.Dispose();
+            }
+        }
+
+        private void VerifyPostCommitInvariants(IReadOnlyList<WorkspacePolicyGuard> guards)
+        {
+            foreach (var guard in guards)
+            {
+                var settings = guard.Settings;
+                // 1. Inconsistent transition detection:
+                // SoloActive must have ConfirmedOwnerMemberId
+                if (settings.CollaborationState == WorkspaceCollaborationState.SoloActive && !settings.ConfirmedOwnerMemberId.HasValue)
+                {
+                    WorkspaceOperatingPolicyMetrics.InconsistentTransitionsCommitted.Add(1);
+                }
+
+                // 2. Unauthorized elevation detection:
+                // SingleActorAllowed rule must never exist without an active confirmed owner or in unclassified/legacy state
+                if (settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)
+                {
+                    var hasSingleActor = _db.WorkspaceApprovalRules
+                        .IgnoreQueryFilters()
+                        .Any(r => r.CompanyId == guard.CompanyId && r.RuleKind == WorkspaceApprovalRuleKind.SingleActorAllowed);
+                    if (hasSingleActor)
+                    {
+                        WorkspaceOperatingPolicyMetrics.UnauthorizedElevationsCommitted.Add(1);
+                    }
+                }
             }
         }
 
@@ -165,6 +194,14 @@ namespace Api.Service
                 };
                 _db.WorkspaceOperatingSettings.Add(settings);
                 _db.SaveChanges();
+            }
+
+            if (settings.PolicySchemaVersion > WorkspaceOperatingPolicySchema.CurrentVersion)
+            {
+                throw new IncompatiblePolicySchemaException(
+                    companyId,
+                    settings.PolicySchemaVersion,
+                    WorkspaceOperatingPolicySchema.CurrentVersion);
             }
 
             var coordination = _db.WorkspacePolicyCoordinations

@@ -19,6 +19,22 @@ namespace Core.Authorization
         public const string RecoveryUnavailable = "recovery_unavailable";
         public const string RecoveryRequired = "recovery_required";
         public const string StalePolicyRevision = "stale_policy_revision";
+        public const string IncompatiblePolicySchema = "incompatible_policy_schema";
+    }
+
+    public class IncompatiblePolicySchemaException : InvalidOperationException
+    {
+        public int CompanyId { get; }
+        public int RequestedSchemaVersion { get; }
+        public int SupportedSchemaVersion { get; }
+
+        public IncompatiblePolicySchemaException(int companyId, int requestedSchemaVersion, int supportedSchemaVersion)
+            : base($"Company {companyId} has policy schema version {requestedSchemaVersion}, which exceeds the supported version {supportedSchemaVersion}. Service upgrade required.")
+        {
+            CompanyId = companyId;
+            RequestedSchemaVersion = requestedSchemaVersion;
+            SupportedSchemaVersion = supportedSchemaVersion;
+        }
     }
 
     public enum WorkspaceApprovalMode
