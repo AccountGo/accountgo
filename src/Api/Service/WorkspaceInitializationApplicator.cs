@@ -67,7 +67,8 @@ namespace Api.Service
             int companyId,
             string ownerUserId,
             int ownerMemberId,
-            WorkspaceInitializationRequest request)
+            WorkspaceInitializationRequest request,
+            bool requireSignupContinuationEvidence = false)
         {
             if (!_experience.SoloSetupEnabled)
             {
@@ -176,14 +177,19 @@ namespace Api.Service
                     };
                 }
 
-                // Durable, server-issued eligibility proof — evaluated under the coordination lock.
-                // Being uninitialized is NOT sufficient: a legacy, current-team, former-team, or
-                // transferred-owner workspace can also be uninitialized. The workspace must carry the
-                // immutable origin evidence bound to this owner that WorkspaceService.Create writes, and
-                // must have no disqualifying membership, invitation, policy-transition, ownership-transfer,
-                // or collaboration history. This rejects the reviewer's reproduced bypass (an uninitialized
-                // TeamActive workspace with additional active members) without touching grants or rules.
-                var eligibility = ContractAVerifier.VerifyPendingSignupContinuation(_db, companyId, ownerUserId);
+                // Durable, server-issued eligibility proof — evaluated under the coordination lock. Being
+                // uninitialized is NOT sufficient: a legacy, current-team, former-team, or transferred-owner
+                // workspace can also be uninitialized. The workspace must be a pristine, sole-original-owner
+                // workspace with no disqualifying membership, invitation, policy-transition,
+                // ownership-transfer, or collaboration history. For the authenticated current/initialize
+                // CONTINUATION, it must additionally carry the signup-specific pending-continuation marker
+                // (generic origin evidence is insufficient — every created workspace has that), so a
+                // pristine-but-non-signup workspace cannot be initialized through that endpoint. The
+                // synchronous create path, which creates and initializes a fresh workspace in one request,
+                // runs the structural proof only.
+                var eligibility = requireSignupContinuationEvidence
+                    ? ContractAVerifier.VerifyPendingSignupContinuation(_db, companyId, ownerUserId)
+                    : ContractAVerifier.VerifySolePristineOwner(_db, companyId, ownerUserId, "initialization");
                 if (!eligibility.Allowed)
                 {
                     return new WorkspaceInitializationResult

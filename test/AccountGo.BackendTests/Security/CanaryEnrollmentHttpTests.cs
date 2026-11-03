@@ -320,6 +320,65 @@ namespace AccountGo.BackendTests.Security
         // ---- Pending-signup eligibility: team/legacy workspaces must not be initializable ---------
 
         [Fact]
+        public async Task InitializeCurrent_PristineNonSignupWorkspace_Rejected_NoGrantsNoRuleChange()
+        {
+            // A pristine, uninitialized, sole-owner workspace created OUTSIDE the signup flow (so it has
+            // generic origin evidence but NOT the signup pending-continuation marker). The enrolled,
+            // verified original owner must still be rejected at the continuation endpoint: generic origin
+            // evidence does not prove the workspace is awaiting the approved signup continuation.
+            const string slug = "pristine-nonsignup";
+            const string ownerId = "pristine-owner-id";
+            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", ownerId);
+            try
+            {
+                string token;
+                using (var scope = _factory.Services.CreateScope())
+                {
+                    var sp = scope.ServiceProvider;
+                    var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
+                    var owner = new ApplicationUser { Id = ownerId, UserName = "pristine@example.com", Email = "pristine@example.com", EmailConfirmed = true };
+                    Assert.True((await userManager.CreateAsync(owner)).Succeeded);
+                    sp.GetRequiredService<Services.Security.ISecurityService>().AddUser("pristine@example.com", "pristine@example.com", "P", "O", new List<int>());
+
+                    // Create WITHOUT the signup continuation marker (the default) — i.e. not the signup flow.
+                    var workspaces = sp.GetRequiredService<Api.Service.WorkspaceService>();
+                    var planKey = sp.GetRequiredService<Services.Billing.IPlanCatalog>().DefaultPlanKey;
+                    workspaces.Create(ownerId, "Pristine Co", slug, planKey, "USD");
+
+                    token = (await sp.GetRequiredService<IAuthenticationService>().CreateToken(owner, true)).AccessToken;
+                }
+
+                // Sanity: the workspace is pristine and uninitialized, just lacking the signup marker.
+                var stateBefore = OperatingState(slug);
+                Assert.NotNull(stateBefore);
+                Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, stateBefore!.Value.State);
+                Assert.False(stateBefore.Value.Initialized);
+                var grantsBefore = FunctionalGrantCount(slug);
+                var ruleBefore = JournalRuleKind(slug);
+
+                using var req = new HttpRequestMessage(HttpMethod.Post, "/api/organizations/current/initialize");
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                req.Headers.Add("X-AccountGo-Org", slug);
+                req.Content = JsonContent.Create(new { workspacePurpose = "Business", collaborationIntent = "JustMe" });
+                var resp = await _client.SendAsync(req);
+                var body = await resp.Content.ReadAsStringAsync();
+
+                Assert.True(resp.StatusCode == HttpStatusCode.UnprocessableEntity, $"initialize => {(int)resp.StatusCode} :: {body}");
+                Assert.Contains(Core.Authorization.WorkspacePolicyReasonCodes.NotPendingSignupWorkspace, body, StringComparison.Ordinal);
+
+                // Grants, journal rule, and initialization state are all preserved.
+                Assert.Equal(grantsBefore, FunctionalGrantCount(slug));
+                Assert.Equal(ruleBefore, JournalRuleKind(slug));
+                Assert.Equal(Core.Domain.WorkspaceApprovalRuleKind.IndependentReviewerRequired, JournalRuleKind(slug));
+                Assert.False(OperatingState(slug)!.Value.Initialized);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", EnrolledUserId);
+            }
+        }
+
+        [Fact]
         public async Task InitializeCurrent_TeamWorkspaceWithMembers_Rejected_NoGrantsNoRuleChange()
         {
             const string slug = "team-not-eligible";

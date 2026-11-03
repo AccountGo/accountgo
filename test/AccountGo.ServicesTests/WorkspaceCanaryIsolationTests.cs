@@ -43,7 +43,7 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
 
     /// <summary>Seeds an uninitialized (LegacyUnclassified) workspace with a single active owner,
     /// mirroring the baseline that WorkspaceService.Create lays down before any initialization.</summary>
-    private (Company company, CompanyMember owner) SeedUninitializedCompany(string ownerUserId)
+    private (Company company, CompanyMember owner) SeedUninitializedCompany(string ownerUserId, bool writeSignupContinuationMarker = true)
     {
         var company = new Company
         {
@@ -110,6 +110,10 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
             // initialization eligibility proof requires this, so the seed must mirror it to be faithful.
             WorkspaceOriginEvidence.Record(_db, company.Id, ownerUserId);
             WorkspaceCollaborationEvidence.Record(_db, company.Id, WorkspaceCollaborationEvidence.EventMemberAdded, ownerUserId, ownerUserId, new { role = CompanyMemberRole.Owner.ToString() });
+            // Signup-specific pending-continuation marker: only the signup flow writes this, and the
+            // continuation eligibility proof requires it. Seed it so this stands in for a signup workspace.
+            if (writeSignupContinuationMarker)
+                WorkspaceSignupContinuationEvidence.Record(_db, company.Id, ownerUserId);
             _db.SaveChanges();
         }
         return (company, owner);
@@ -267,6 +271,68 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
         var teamRule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
         Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, teamRule.RuleKind);
         Assert.Empty(_db.CompanyMemberSecurityRoles.IgnoreQueryFilters().Where(r => r.CompanyMember.CompanyId == company.Id));
+    }
+
+    [Fact]
+    public void ApplyNewWorkspace_Continuation_WithoutSignupMarker_IsRejected()
+    {
+        // A pristine, sole-owner, uninitialized workspace that has generic origin evidence but NOT the
+        // signup pending-continuation marker must be rejected by the CONTINUATION path. Generic creation
+        // evidence does not prove the workspace is awaiting the approved signup continuation.
+        const string ownerId = "owner-no-marker";
+        var (company, owner) = SeedUninitializedCompany(ownerId, writeSignupContinuationMarker: false);
+
+        var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenant, soloSetupEnabled: true, enrolledUserIds: new[] { ownerId });
+
+        WorkspaceInitializationResult result;
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            result = applicator.ApplyNewWorkspace(company.Id, ownerId, owner.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = WorkspacePurpose.Business,
+                CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
+            }, requireSignupContinuationEvidence: true);
+        }
+
+        Assert.False(result.Applied);
+        Assert.Equal(WorkspacePolicyReasonCodes.NotPendingSignupWorkspace, result.ReasonCode);
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, settings.CollaborationState);
+        Assert.Null(settings.InitializedAtUtc);
+        Assert.Empty(_db.CompanyMemberSecurityRoles.IgnoreQueryFilters().Where(r => r.CompanyMember.CompanyId == company.Id));
+    }
+
+    [Fact]
+    public void ApplyNewWorkspace_SynchronousCreate_WithoutSignupMarker_Succeeds()
+    {
+        // The synchronous create path (requireSignupContinuationEvidence: false) creates and initializes a
+        // fresh workspace in one request. It must NOT require the signup marker — only the pre-existing
+        // workspace continuation does. The structural pristine proof still applies.
+        const string ownerId = "owner-sync-create";
+        var (company, owner) = SeedUninitializedCompany(ownerId, writeSignupContinuationMarker: false);
+
+        var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenant, soloSetupEnabled: true, enrolledUserIds: new[] { ownerId });
+
+        WorkspaceInitializationResult result;
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            result = applicator.ApplyNewWorkspace(company.Id, ownerId, owner.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = WorkspacePurpose.Business,
+                CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
+            }); // requireSignupContinuationEvidence defaults to false
+        }
+
+        Assert.True(result.Applied, $"sync create rejected: {result.ReasonCode} :: {result.Message}");
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspaceCollaborationState.SoloActive, settings.CollaborationState);
+        Assert.NotNull(settings.InitializedAtUtc);
+        var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
+        Assert.Equal(WorkspaceApprovalRuleKind.SingleActorAllowed, rule.RuleKind);
     }
 
     [Fact]

@@ -314,7 +314,10 @@ namespace Api.Controllers
                 CollaborationIntent = request.CollaborationIntent.Value,
                 OwnerAccessPreset = request.OwnerAccessPreset ?? OwnerAccessPreset.FullWorkspaceAccess,
                 InitialJournalWorkflow = request.InitialJournalWorkflow
-            });
+            },
+            // This continuation initializes a PRE-EXISTING workspace, so require the signup-specific
+            // pending-continuation marker: a pristine but non-signup workspace must not be initializable here.
+            requireSignupContinuationEvidence: true);
 
             if (!initResult.Applied)
             {

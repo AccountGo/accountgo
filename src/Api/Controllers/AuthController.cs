@@ -311,7 +311,8 @@ namespace Api.Controllers
                     // boundary. The owner completes About and initializes through the authenticated
                     // create/initialization path after verifying and signing in, where enrollment is
                     // re-checked against the verified identity.
-                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, _plans.DefaultPlanKey, currency);
+                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, _plans.DefaultPlanKey, currency,
+                        markPendingSignupContinuation: true);
                 }
 
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
