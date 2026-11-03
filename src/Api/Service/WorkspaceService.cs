@@ -119,6 +119,8 @@ namespace Api.Service
                     ConfiguredAtUtc = DateTime.UtcNow,
                     ConfiguredAtPolicyRevision = 0
                 });
+                WorkspaceOriginEvidence.Record(_db, company.Id, userId);
+                WorkspaceCollaborationEvidence.Record(_db, company.Id, WorkspaceCollaborationEvidence.EventMemberAdded, userId, userId, new { role = CompanyMemberRole.Owner.ToString() });
                 _db.SaveChanges();
             }
 

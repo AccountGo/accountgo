@@ -314,6 +314,9 @@ namespace Api.Controllers
             var aprHeader = HttpContext?.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
             var approverHeader = HttpContext?.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
 
+            var entryDate = existingHeader?.Date ?? journalEntryDto?.JournalDate ?? DateTime.UtcNow;
+            var isLocked = _booksLockGuard?.IsDateLocked(entryDate) == true;
+
             var postResource = new AccessResourceContext
             {
                 WorkspaceCompanyId = companyId,
@@ -321,7 +324,7 @@ namespace Api.Controllers
                 ResourceType = "JournalEntry",
                 ResourceId = journalEntryDto?.Id.ToString(CultureInfo.InvariantCulture),
                 WorkflowState = isPosted ? "Posted" : "Draft",
-                IsPeriodLockedOrClosed = false,
+                IsPeriodLockedOrClosed = isLocked,
                 PreparedByUserId = effectivePreparer,
                 IndependentApproverUserId = approverHeader,
                 ApprovalRequestId = aprHeader
@@ -352,21 +355,6 @@ namespace Api.Controllers
                 _financialService.UpdateJournalEntry(je, true);
                 if (je.Posted != true)
                     return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: "A user who prepared a transaction cannot independently approve or post it without a verified independent approval.");
-
-                if (companyId.HasValue && !string.IsNullOrWhiteSpace(aprHeader))
-                {
-                    AccessAuthorizationService.ConsumeMatchingApprovalAsync(
-                        _db,
-                        companyId.Value,
-                        actorUserId: null,
-                        targetMemberId: null,
-                        targetUserId: null,
-                        targetEmail: null,
-                        requestedRoleIds: null,
-                        approvalRequestId: aprHeader,
-                        approverUserId: approverHeader,
-                        operationKey: AccessOperationCatalog.FinancialsJournalPost).GetAwaiter().GetResult();
-                }
 
                 return new OkObjectResult(Ok());
             }

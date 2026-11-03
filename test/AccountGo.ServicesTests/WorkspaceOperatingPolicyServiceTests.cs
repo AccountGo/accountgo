@@ -258,4 +258,108 @@ public class WorkspaceOperatingPolicyServiceTests : IDisposable
             Assert.Equal("USD", companySetting.Currency);
         }
     }
+
+    [Theory]
+    [InlineData("__WorkspaceOrigin")]
+    [InlineData("__InvitationTransition")]
+    [InlineData("__JournalPostingAuthorization")]
+    [InlineData("__WorkspaceCollaborationEvidence")]
+    public void ImmutableAuditTables_CannotBeModifiedOrDeleted(string tableName)
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var log = new Core.Domain.Auditing.AuditLog
+            {
+                CompanyId = company.Id,
+                UserName = _ownerUserId,
+                AuditEventDateUTC = DateTime.UtcNow,
+                AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                TableName = tableName,
+                RecordId = "1",
+                FieldName = "Test",
+                NewValue = "Original"
+            };
+            _db.AuditLogs.Add(log);
+            _db.SaveChanges();
+
+            // Attempt modify
+            log.NewValue = "Tampered";
+            var exModify = Assert.Throws<InvalidOperationException>(() => _db.SaveChanges());
+            Assert.Contains("append-only evidence", exModify.Message);
+
+            // Revert modification in change tracker
+            _db.Entry(log).State = EntityState.Unchanged;
+
+            // Attempt delete
+            _db.AuditLogs.Remove(log);
+            var exDelete = Assert.Throws<InvalidOperationException>(() => _db.SaveChanges());
+            Assert.Contains("append-only evidence", exDelete.Message);
+        }
+    }
+
+    [Fact]
+    public void ApprovalResolver_MissingRule_DefaultsToCatalogDefault()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var existingRules = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Where(r => r.CompanyId == company.Id).ToList();
+            _db.WorkspaceApprovalRules.RemoveRange(existingRules);
+            _db.SaveChanges();
+
+            var resolver = new WorkspaceApprovalPolicyResolver(_db);
+            var result = resolver.Resolve(company.Id, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+
+            Assert.Equal(Core.Authorization.WorkspaceApprovalMode.CatalogDefault, result.Mode);
+            Assert.Null(result.Provenance);
+        }
+    }
+
+    [Fact]
+    public void ApprovalResolver_SchemaMismatch_FailsClosedToIndependentReviewer()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
+            rule.PolicySchemaVersion = 999;
+            _db.SaveChanges();
+
+            var resolver = new WorkspaceApprovalPolicyResolver(_db);
+            var result = resolver.Resolve(company.Id, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+
+            Assert.Equal(Core.Authorization.WorkspaceApprovalMode.IndependentReviewerRequired, result.Mode);
+        }
+    }
+
+    [Fact]
+    public void ApprovalResolver_SingleActorAllowed_ResolvesCorrectly()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var resolver = new WorkspaceApprovalPolicyResolver(_db);
+            var result = resolver.Resolve(company.Id, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+
+            Assert.Equal(Core.Authorization.WorkspaceApprovalMode.SingleActorAllowed, result.Mode);
+        }
+    }
+
+    [Fact]
+    public void ApprovalResolver_IndependentReviewerRequired_ResolvesCorrectly()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
+            rule.RuleKind = WorkspaceApprovalRuleKind.IndependentReviewerRequired;
+            _db.SaveChanges();
+
+            var resolver = new WorkspaceApprovalPolicyResolver(_db);
+            var result = resolver.Resolve(company.Id, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+
+            Assert.Equal(Core.Authorization.WorkspaceApprovalMode.IndependentReviewerRequired, result.Mode);
+        }
+    }
 }

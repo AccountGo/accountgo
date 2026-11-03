@@ -437,6 +437,24 @@ namespace Services.Financial
             };
 
             var decision = _auth.Authorize(requiredOp);
+            if (entry?.DocumentType == DocumentTypes.JournalEntry)
+            {
+                var isClosingReversal = AllowClosingEntriesDepth.Value > 0
+                    && entry.ReversedGeneralLedgerHeaderId.HasValue
+                    && _generalLedgerRepository.Table.Any(gl => gl.Id == entry.ReversedGeneralLedgerHeaderId.Value && gl.CompanyId == entry.CompanyId)
+                    && _journalEntryRepo.Table.Any(j => j.GeneralLedgerHeaderId == entry.ReversedGeneralLedgerHeaderId.Value
+                        && j.CompanyId == entry.CompanyId && j.VoucherType == JournalVoucherTypes.ClosingEntries && j.Posted == true)
+                    && !_generalLedgerRepository.Table.Any(gl => gl.ReversedGeneralLedgerHeaderId == entry.ReversedGeneralLedgerHeaderId.Value
+                        && gl.Id != entry.Id && gl.CompanyId == entry.CompanyId)
+                    && _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose).Allowed;
+
+                if (!isClosingReversal)
+                {
+                    throw new InvalidOperationException("Ordinary journal entries cannot be directly posted through general ledger save. Use UpdateJournalEntry.");
+                }
+
+                decision = Core.Authorization.AccessDecision.Allow(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, "POL-CLOSE", "1.0");
+            }
             if (!decision.Allowed && entry?.DocumentType == DocumentTypes.BankTransaction)
             {
                 decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.BankingAccountsManage);
@@ -448,14 +466,6 @@ namespace Services.Financial
             if (!decision.Allowed && entry?.DocumentType == DocumentTypes.PurchaseInvoicePayment)
             {
                 decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
-            }
-            if (!decision.Allowed && entry?.DocumentType == DocumentTypes.JournalEntry
-                && AllowClosingEntriesDepth.Value > 0 && entry.ReversedGeneralLedgerHeaderId.HasValue
-                && _journalEntryRepo.Table.Any(j => j.GeneralLedgerHeaderId == entry.ReversedGeneralLedgerHeaderId
-                    && j.VoucherType == JournalVoucherTypes.ClosingEntries && j.Posted == true)
-                && _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose).Allowed)
-            {
-                decision = Core.Authorization.AccessDecision.Allow(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, "POL-CLOSE", "1.0");
             }
             if (!decision.Allowed)
             {
@@ -2303,7 +2313,7 @@ namespace Services.Financial
                         ResourceId = journalEntry.Id > 0 ? journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
                         ResourceFingerprint = entryFingerprint,
                         WorkflowState = "Draft",
-                        IsPeriodLockedOrClosed = false,
+                        IsPeriodLockedOrClosed = _booksLockGuard?.IsDateLocked(journalEntry.Date) == true,
                         PreparedByUserId = effectivePreparer,
                         IndependentApproverUserId = approverHeader,
                         ApprovalRequestId = aprHeader
@@ -2322,6 +2332,8 @@ namespace Services.Financial
                         var liveDecision = isClosingEntry
                             ? _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, guardedPostResource)
                             : _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, guardedPostResource);
+
+                        Core.Authorization.WorkspacePolicyTestGate.AfterAuthorizationRead?.Invoke(journalEntry.CompanyId);
 
                         if (!liveDecision.Allowed)
                         {
@@ -2421,8 +2433,11 @@ namespace Services.Financial
                     _journalEntryRepo.Update(journalEntry);
                 };
 
-                if (_policyTransaction != null && journalEntry.CompanyId > 0)
+                if (journalEntry.CompanyId > 0)
                 {
+                    if (_policyTransaction == null)
+                        throw new InvalidOperationException("Workspace policy transaction service is required to post journal entries.");
+
                     _policyTransaction.Execute(journalEntry.CompanyId, guard =>
                     {
                         executePosting();
@@ -2478,13 +2493,18 @@ namespace Services.Financial
 
             var payload = System.Text.Json.JsonSerializer.Serialize(new
             {
+                operationKey = Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
+                policySchemaVersion = Core.Domain.WorkspaceOperatingPolicySchema.CurrentVersion,
                 journalEntryId = journalEntry.Id,
                 fingerprint = entryFingerprint,
+                journalFingerprint = entryFingerprint,
                 preparerUserId = effectivePreparer,
                 posterUserId,
+                actualReviewMode = mode.ToString(),
                 approvalMode = mode.ToString(),
                 policyRevision = rule?.PolicyRevision,
                 provenance = rule?.Provenance?.ToString(),
+                approvalRequestId = independentReviewUsed ? independentApprovalRequestId : null,
                 independentApprovalRequestId = independentApprovalRequestId,
                 independentReviewUsed,
                 rendering

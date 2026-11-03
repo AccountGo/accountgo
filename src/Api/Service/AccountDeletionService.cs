@@ -22,11 +22,16 @@ namespace Api.Service
 
         private readonly ApiDbContext _apiDb;
         private readonly ApplicationIdentityDbContext _identity;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
 
-        public AccountDeletionService(ApiDbContext apiDb, ApplicationIdentityDbContext identity)
+        public AccountDeletionService(
+            ApiDbContext apiDb,
+            ApplicationIdentityDbContext identity,
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
             _apiDb = apiDb ?? throw new ArgumentNullException(nameof(apiDb));
             _identity = identity ?? throw new ArgumentNullException(nameof(identity));
+            _policyTransaction = policyTransaction;
         }
 
         public async Task<AccountDeletionPreview> PreviewAsync(string userId)
@@ -66,9 +71,35 @@ namespace Api.Service
             _identity.RemoveRange(otpTokens);
 
             var members = await _apiDb.CompanyMembers.Include(m => m.SecurityRoles).Where(m => m.UserId == user.Id).ToListAsync();
-            foreach (var member in members)
-                _apiDb.CompanyMemberSecurityRoles.RemoveRange(member.SecurityRoles);
-            _apiDb.CompanyMembers.RemoveRange(members);
+            var companyIds = members.Select(m => m.CompanyId).Distinct().OrderBy(id => id).ToList();
+
+            Action performDeletion = () =>
+            {
+                foreach (var member in members)
+                {
+                    var settings = _apiDb.WorkspaceOperatingSettings.IgnoreQueryFilters().SingleOrDefault(s => s.CompanyId == member.CompanyId);
+                    if (settings != null)
+                    {
+                        settings.EverTeamActivatedAtUtc ??= now;
+                        settings.PolicyRevision++;
+                    }
+                    WorkspaceCollaborationEvidence.Record(_apiDb, member.CompanyId, WorkspaceCollaborationEvidence.EventAccountDeleted, user.Id, user.Id);
+                    _apiDb.CompanyMemberSecurityRoles.RemoveRange(member.SecurityRoles);
+                }
+                _apiDb.CompanyMembers.RemoveRange(members);
+            };
+
+            if (_policyTransaction != null && companyIds.Count > 0)
+            {
+                _policyTransaction.ExecuteAcrossCompanies(companyIds, guards =>
+                {
+                    performDeletion();
+                });
+            }
+            else
+            {
+                performDeletion();
+            }
 
             var email = expected.ToLowerInvariant();
             var inbound = await _apiDb.CompanyInvitations

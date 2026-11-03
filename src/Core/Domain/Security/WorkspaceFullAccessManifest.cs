@@ -79,6 +79,9 @@ namespace Core.Domain.Security
 
         public static bool IsExcluded(string permissionName) =>
             ExcludedPermissions.Contains(permissionName, StringComparer.Ordinal);
+
+        public static bool IsClassified(string permissionName) =>
+            IsIncluded(permissionName) || IsExcluded(permissionName);
     }
 
     /// <summary>

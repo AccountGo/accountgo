@@ -3,8 +3,10 @@
 
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using Api.Data;
 using Core.Authorization;
 using Core.Domain;
@@ -41,6 +43,32 @@ namespace Api.Service
             if (companyId <= 0)
                 throw new ArgumentOutOfRangeException(nameof(companyId));
 
+            return ExecuteAcrossCompanies(new[] { companyId }, guards => action(guards[0]));
+        }
+
+        public void ExecuteAcrossCompanies(IEnumerable<int> companyIds, Action<IReadOnlyList<WorkspacePolicyGuard>> action) =>
+            ExecuteAcrossCompanies(companyIds, guards =>
+            {
+                action(guards);
+                return true;
+            });
+
+        public T ExecuteAcrossCompanies<T>(IEnumerable<int> companyIds, Func<IReadOnlyList<WorkspacePolicyGuard>, T> action)
+        {
+            var sortedCompanyIds = (companyIds ?? Array.Empty<int>())
+                .Where(id => id > 0)
+                .Distinct()
+                .OrderBy(id => id)
+                .ToList();
+
+            using var impersonation = sortedCompanyIds.Count == 1 && _tenant != null && _tenant.CompanyId != sortedCompanyIds[0]
+                ? _tenant.Impersonate(sortedCompanyIds[0])
+                : null;
+
+            var priorSuppress = _db.SuppressTenantSecurityCheck;
+            if (sortedCompanyIds.Count > 1)
+                _db.SuppressTenantSecurityCheck = true;
+
             var ownsTransaction = _db.Database.CurrentTransaction == null;
             IDbContextTransaction? tx = null;
             try
@@ -48,30 +76,29 @@ namespace Api.Service
                 if (ownsTransaction)
                     tx = _db.Database.BeginTransaction(IsolationLevel.Serializable);
 
-                // Policy writes are ICompanyOwned; only push impersonation when tenant is not resolved for this company.
-                IDisposable? impersonation = null;
-                if (!_tenant.IsResolved || _tenant.CompanyId != companyId)
+                var guards = new List<WorkspacePolicyGuard>();
+                foreach (var cid in sortedCompanyIds)
                 {
-                    impersonation = _tenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
+                    var settings = AcquireCoordination(cid);
+                    guards.Add(new WorkspacePolicyGuard(cid, settings));
+                    WorkspacePolicyTestGate.AfterLockAcquired?.Invoke(cid);
                 }
 
-                try
+                var result = action(guards);
+
+                if (IsFailedResult(result))
                 {
-                    var settings = AcquireCoordination(companyId);
-                    var guard = new WorkspacePolicyGuard(companyId, settings);
-                    var result = action(guard);
-
-                    // Always flush guarded mutations; only commit when this call owns the transaction.
-                    _db.SaveChanges();
                     if (ownsTransaction)
-                        tx!.Commit();
-
+                        tx?.Rollback();
                     return result;
                 }
-                finally
-                {
-                    impersonation?.Dispose();
-                }
+
+                // Always flush guarded mutations; only commit when this call owns the transaction.
+                _db.SaveChanges();
+                if (ownsTransaction)
+                    tx!.Commit();
+
+                return result;
             }
             catch
             {
@@ -81,8 +108,38 @@ namespace Api.Service
             }
             finally
             {
-                tx?.Dispose();
+                if (sortedCompanyIds.Count > 1)
+                    _db.SuppressTenantSecurityCheck = priorSuppress;
+                if (ownsTransaction)
+                    tx?.Dispose();
             }
+        }
+
+        private static bool IsFailedResult<T>(T result)
+        {
+            if (result is null) return false;
+
+            if (result is Microsoft.AspNetCore.Mvc.IActionResult actionResult)
+            {
+                if (actionResult is Microsoft.AspNetCore.Mvc.ObjectResult obj && obj.StatusCode >= 400) return true;
+                if (actionResult is Microsoft.AspNetCore.Mvc.StatusCodeResult sc && sc.StatusCode >= 400) return true;
+                if (actionResult is Microsoft.AspNetCore.Mvc.ForbidResult or Microsoft.AspNetCore.Mvc.UnauthorizedResult
+                    or Microsoft.AspNetCore.Mvc.BadRequestResult or Microsoft.AspNetCore.Mvc.NotFoundResult
+                    or Microsoft.AspNetCore.Mvc.ConflictResult) return true;
+            }
+
+            if (result is WorkspacePolicyMutationResult mut && !mut.Applied) return true;
+
+            var propApplied = typeof(T).GetProperty("Applied");
+            if (propApplied != null && propApplied.PropertyType == typeof(bool) && !(bool)propApplied.GetValue(result)!) return true;
+
+            var propSuccess = typeof(T).GetProperty("Success");
+            if (propSuccess != null && propSuccess.PropertyType == typeof(bool) && !(bool)propSuccess.GetValue(result)!) return true;
+
+            var propAllowed = typeof(T).GetProperty("Allowed");
+            if (propAllowed != null && propAllowed.PropertyType == typeof(bool) && !(bool)propAllowed.GetValue(result)!) return true;
+
+            return false;
         }
 
         private WorkspaceOperatingSettings AcquireCoordination(int companyId)
@@ -153,16 +210,16 @@ namespace Api.Service
             }
             else
             {
-                // SQLite: Serializable/IMMEDIATE already holds the write lock; a plain read is enough.
+                // SQLite: execute an update to acquire write lock immediately and serialize concurrent transactions.
                 command.CommandText =
-                    @"SELECT ""Id"" FROM ""WorkspacePolicyCoordination"" WHERE ""CompanyId"" = @companyId";
+                    @"UPDATE ""WorkspacePolicyCoordination"" SET ""LastAcquiredAtUtc"" = CURRENT_TIMESTAMP WHERE ""CompanyId"" = @companyId";
             }
 
             var parameter = command.CreateParameter();
             parameter.ParameterName = "@companyId";
             parameter.Value = companyId;
             command.Parameters.Add(parameter);
-            _ = command.ExecuteScalar();
+            command.ExecuteNonQuery();
         }
     }
 }
