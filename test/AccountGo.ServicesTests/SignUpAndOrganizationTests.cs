@@ -236,7 +236,9 @@ public class SignUpAndOrganizationTests : IDisposable
             new Services.Billing.CommunityPlanCatalog(),
             Mock.Of<Services.Financial.IFinancialService>(),
             CreateEnabledInitializer(),
-            WorkspaceOperatingPolicyTestSupport.CreateOperatingPolicy(_db, soloSetupEnabled: true, tenant: _tenantContext));
+            WorkspaceOperatingPolicyTestSupport.CreateOperatingPolicy(_db, soloSetupEnabled: true, tenant: _tenantContext),
+            experienceOptions: Microsoft.Extensions.Options.Options.Create(new Api.Options.WorkspaceExperienceOptions { SoloSetupEnabled = true }),
+            canary: WorkspaceOperatingPolicyTestSupport.CreateEnrollment(soloSetupEnabled: true, enrolledUserIds: new[] { CallerId }));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -264,13 +266,7 @@ public class SignUpAndOrganizationTests : IDisposable
 
     private WorkspaceInitializationApplicator CreateEnabledInitializer()
     {
-        var options = Microsoft.Extensions.Options.Options.Create(new Api.Options.WorkspaceExperienceOptions { SoloSetupEnabled = true });
-        var policyTx = new WorkspacePolicyTransaction(_db, _tenantContext);
-        var catalog = new WorkspaceAccessProfileCatalog(
-            _db,
-            Mock.Of<Services.Security.ISecurityService>(),
-            Array.Empty<Core.Domain.Security.IWorkspaceAccessProfilePermissionContributor>());
-        // Seed managed profile permissions via real security seed path would be heavy; insert role stub.
+        // Seed managed profile role so AssignFullAccess can find it.
         if (!_db.SecurityRoles.Any(r => r.Name == Core.Domain.Security.WorkspaceAccessProfileKeys.FullWorkspaceAccessV1))
         {
             _db.SecurityRoles.Add(new Core.Domain.Security.SecurityRole
@@ -282,8 +278,8 @@ public class SignUpAndOrganizationTests : IDisposable
             });
             _db.SaveChanges();
         }
-        var resolver = new WorkspaceApprovalPolicyResolver(_db);
-        return new WorkspaceInitializationApplicator(_db, policyTx, catalog, resolver, options);
+        return WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenantContext, soloSetupEnabled: true, enrolledUserIds: new[] { CallerId });
     }
 
     [Fact]

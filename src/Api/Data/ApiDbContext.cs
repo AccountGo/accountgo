@@ -144,7 +144,9 @@ namespace Api.Data
             "__WorkspaceCollaborationEvidence",
             // Measurement and invariant-detection depend on these records staying intact.
             "__WorkspaceFirstUsefulAction",
-            "__WorkspaceInvariantIncident"
+            "__WorkspaceInvariantIncident",
+            // Signup-specific pending-continuation marker (slice 2); immutable like the others.
+            "__WorkspaceSignupContinuation"
         };
 
         private void EnforceAuditLogImmutability()

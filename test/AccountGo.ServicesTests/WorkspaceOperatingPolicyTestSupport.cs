@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #nullable enable
+using System.Collections.Generic;
 using Api.Data;
 using Api.Options;
 using Api.Service;
@@ -16,20 +17,62 @@ namespace AccountGo.ServicesTests;
 
 internal static class WorkspaceOperatingPolicyTestSupport
 {
-    public static WorkspaceInitializationApplicator CreateInitializer(ApiDbContext db, ITenantContext? tenant = null)
+    /// <summary>
+    /// Builds a canary enrollment that admits the given subjects. A null/empty argument yields an
+    /// enrollment that admits nobody (the production default). The <paramref name="soloSetupEnabled"/>
+    /// flag mirrors the global rollout switch; admission still requires an enrolled subject.
+    /// </summary>
+    public static IWorkspaceCanaryEnrollment CreateEnrollment(
+        bool soloSetupEnabled,
+        IEnumerable<string>? enrolledUserIds = null,
+        IEnumerable<string>? enrolledEmails = null)
     {
-        tenant ??= new TenantContext();
-        var options = Options.Create(new WorkspaceExperienceOptions { SoloSetupEnabled = false });
-        var policyTx = new WorkspacePolicyTransaction(db, tenant);
-        var catalog = new WorkspaceAccessProfileCatalog(db, Mock.Of<ISecurityService>(), System.Array.Empty<Core.Domain.Security.IWorkspaceAccessProfilePermissionContributor>());
-        var resolver = new WorkspaceApprovalPolicyResolver(db);
-        return new WorkspaceInitializationApplicator(db, policyTx, catalog, resolver, options);
+        var options = Options.Create(new WorkspaceExperienceOptions
+        {
+            SoloSetupEnabled = soloSetupEnabled,
+            Canary = new WorkspaceCanaryEnrollmentOptions
+            {
+                UserIds = enrolledUserIds is null ? System.Array.Empty<string>() : new List<string>(enrolledUserIds),
+                Emails = enrolledEmails is null ? System.Array.Empty<string>() : new List<string>(enrolledEmails)
+            }
+        });
+        return new WorkspaceCanaryEnrollment(options);
     }
 
-    public static IWorkspaceOperatingPolicyService CreateOperatingPolicy(ApiDbContext db, bool soloSetupEnabled = false, ITenantContext? tenant = null)
+    public static WorkspaceInitializationApplicator CreateInitializer(
+        ApiDbContext db,
+        ITenantContext? tenant = null,
+        bool soloSetupEnabled = false,
+        IEnumerable<string>? enrolledUserIds = null,
+        IEnumerable<string>? enrolledEmails = null)
     {
         tenant ??= new TenantContext();
         var options = Options.Create(new WorkspaceExperienceOptions { SoloSetupEnabled = soloSetupEnabled });
+        var policyTx = new WorkspacePolicyTransaction(db, tenant);
+        var catalog = new WorkspaceAccessProfileCatalog(db, Mock.Of<ISecurityService>(), System.Array.Empty<Core.Domain.Security.IWorkspaceAccessProfilePermissionContributor>());
+        var resolver = new WorkspaceApprovalPolicyResolver(db);
+        var canary = CreateEnrollment(soloSetupEnabled, enrolledUserIds, enrolledEmails);
+        return new WorkspaceInitializationApplicator(db, policyTx, catalog, resolver, options, canary);
+    }
+
+    /// <summary>
+    /// Creates the operating policy service. The legacy confirmation / return-to-solo flows are gated
+    /// by LegacySoloConfirmationEnabled, which this helper ties to <paramref name="soloSetupEnabled"/>
+    /// so existing legacy-flow tests keep exercising those paths; pass
+    /// <paramref name="legacySoloConfirmationEnabled"/> explicitly to decouple them.
+    /// </summary>
+    public static IWorkspaceOperatingPolicyService CreateOperatingPolicy(
+        ApiDbContext db,
+        bool soloSetupEnabled = false,
+        ITenantContext? tenant = null,
+        bool? legacySoloConfirmationEnabled = null)
+    {
+        tenant ??= new TenantContext();
+        var options = Options.Create(new WorkspaceExperienceOptions
+        {
+            SoloSetupEnabled = soloSetupEnabled,
+            LegacySoloConfirmationEnabled = legacySoloConfirmationEnabled ?? soloSetupEnabled
+        });
         var policyTx = new WorkspacePolicyTransaction(db, tenant);
         var catalog = new WorkspaceAccessProfileCatalog(db, Mock.Of<ISecurityService>(), System.Array.Empty<Core.Domain.Security.IWorkspaceAccessProfilePermissionContributor>());
         var resolver = new WorkspaceApprovalPolicyResolver(db);

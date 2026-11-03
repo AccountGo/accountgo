@@ -51,7 +51,8 @@ namespace Api.Service
 
         /// <summary>Creates company, ownership and defaults inside the caller's transaction.</summary>
         public Company Create(string userId, string name, string slug, string plan, string currency, string shortName = null,
-            CompanyProvisionOptions options = null, System.Collections.Generic.IEnumerable<int> initialSecurityRoleIds = null)
+            CompanyProvisionOptions options = null, System.Collections.Generic.IEnumerable<int> initialSecurityRoleIds = null,
+            bool markPendingSignupContinuation = false)
         {
             options = options ?? new CompanyProvisionOptions();
             _entitlements?.EnsureSelfServicePlan(plan);
@@ -121,6 +122,14 @@ namespace Api.Service
                 });
                 WorkspaceOriginEvidence.Record(_db, company.Id, userId);
                 WorkspaceCollaborationEvidence.Record(_db, company.Id, WorkspaceCollaborationEvidence.EventMemberAdded, userId, userId, new { role = CompanyMemberRole.Owner.ToString() });
+                if (markPendingSignupContinuation)
+                {
+                    // Only the signup flow sets this: it creates the workspace unclassified and defers
+                    // initialization until the owner verifies their email. This immutable marker — distinct
+                    // from generic origin evidence, which every created workspace carries — is what the
+                    // authenticated current/initialize continuation requires under the coordination lock.
+                    WorkspaceSignupContinuationEvidence.Record(_db, company.Id, userId);
+                }
                 _db.SaveChanges();
             }
 
