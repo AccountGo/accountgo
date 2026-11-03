@@ -219,8 +219,10 @@ public class ReconciledPeriodGuardTests
             financial.ValidateGeneralLedgerEntry(Entry(bank.AccountId!.Value, expense.Id, D(2026, 9, 12))));
         Assert.Equal("Checking", blocked.BankName);
 
+        var bankEntry = Entry(bank.AccountId!.Value, expense.Id, D(2026, 9, 12));
+        bankEntry.DocumentType = DocumentTypes.BankTransaction;
         Assert.Throws<ReconciledPeriodConfirmationRequiredException>(() =>
-            financial.SaveGeneralLedgerEntry(Entry(bank.AccountId!.Value, expense.Id, D(2026, 9, 12))));
+            financial.SaveGeneralLedgerEntry(bankEntry));
 
         Assert.True(financial.ValidateGeneralLedgerEntry(Entry(bank.AccountId!.Value, expense.Id, D(2026, 10, 2))));
 

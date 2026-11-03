@@ -617,6 +617,11 @@ namespace AccountGo.BackendTests
                 "WorkspacePolicyTransaction.cs",
                 "WorkspaceApprovalPolicyResolver.cs",
                 "WorkspaceInitializationApplicator.cs",
+                // Evidence reads explicitly filter by companyId, including before tenant resolution.
+                "ContractAVerifier.cs",
+                "WorkspaceOriginEvidence.cs",
+                // Account deletion coordinates each authenticated user's affected company explicitly.
+                "AccountDeletionService.cs",
                 "InvitationsController.cs"
             };
 
