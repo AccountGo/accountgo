@@ -189,6 +189,22 @@ namespace Api.Controllers
                 if (!request.WorkspacePurpose.HasValue || !request.CollaborationIntent.HasValue)
                     return Problem(statusCode: 400, title: "About answers required",
                         detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
+
+                // Approved-journey scope gate at the request boundary: this canary releases only the
+                // Business + Just-me solo journey. Personal purpose and team setup are out of scope and are
+                // rejected here (and again at initialization) so an enrolled caller cannot reach them.
+                if (request.WorkspacePurpose != WorkspacePurpose.Business
+                    || request.CollaborationIntent != WorkspaceCollaborationIntent.JustMe)
+                {
+                    return UnprocessableEntity(new ProblemDetails
+                    {
+                        Title = "Workspace setup not available",
+                        Detail = "The current setup audience supports business or freelance work for just you.",
+                        Status = StatusCodes.Status422UnprocessableEntity,
+                        Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed }
+                    });
+                }
+
                 // Server selects the managed profile for Just me; arbitrary role IDs cannot replace initialization.
                 if (request.CollaborationIntent == WorkspaceCollaborationIntent.JustMe)
                     request.SecurityRoleIds = null;
@@ -220,6 +236,7 @@ namespace Api.Controllers
                         if (!initResult.Applied
                             && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
                                 or WorkspacePolicyReasonCodes.CanaryNotEnrolled
+                                or WorkspacePolicyReasonCodes.CanaryScopeNotAllowed
                                 or "about_answers_required")
                         {
                             return UnprocessableEntity(new ProblemDetails
