@@ -815,9 +815,11 @@ namespace Api.Controllers
             if (paymentTermId.HasValue)
                 _tenantGuard.EnsureOwned<PaymentTerm>(paymentTermId.Value, nameof(billDto.PaymentTermId));
 
+            Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
                 using var tx = BeginNumberingTransaction();
+                scope = _policyTransaction?.BeginExternalScope();
 
                 PurchaseInvoiceHeader bill;
                 if (billDto.Id == 0)
@@ -915,21 +917,20 @@ namespace Api.Controllers
                     _purchasingService.ApproveBill(bill.Id, GetUserNameFromRequestHeader(), DateTime.UtcNow);
                 tx.Commit();
 
-                // Bill approval committed and the transaction will dispose: drain deferred post-commit work
-                // (first-useful-action telemetry enqueued during approval) so its measurement is emitted
-                // for this committed action. Dispose the transaction first so the drain sees no ambient
-                // transaction. Never throws into the response.
+                // Bill approval committed and the transaction will dispose: drain ONLY this scope's deferred
+                // post-commit work (first-useful-action telemetry enqueued during approval). Dispose the
+                // transaction first so the drain sees no ambient transaction. Never throws into the response.
                 tx.Dispose();
-                _policyTransaction?.VerifyPendingAfterExternalCommit();
+                scope?.Committed();
 
                 return Ok(ToBill(BillsQuery().Single(b => b.Id == bill.Id), _adminService.GetPaymentTerms().ToList()));
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
-                // Validation failure before commit: the transaction rolls back on dispose. Discard any
-                // policy work enqueued during a failed approval so a later committed transaction cannot
-                // drain this rolled-back attempt's deferred emission.
-                _policyTransaction?.DiscardPendingVerifications();
+                // Validation failure before commit: the transaction rolls back on dispose. Discard this
+                // scope's policy work so a later committed transaction cannot drain this rolled-back
+                // attempt's deferred emission.
+                scope?.RolledBack();
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -1096,25 +1097,29 @@ namespace Api.Controllers
         /// <summary>Runs a change to one bill in a transaction and returns the bill, or the reason it was refused.</summary>
         private IActionResult BillAction(int id, Action action, string verb)
         {
+            Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
                 using (var tx = BeginNumberingTransaction())
                 {
+                    scope = _policyTransaction?.BeginExternalScope();
                     action();
                     tx.Commit();
                 }
-                // Transaction committed and disposed; run deferred post-commit work (first-useful-action
-                // telemetry enqueued during bill approval). Never throws into the response.
-                _policyTransaction?.VerifyPendingAfterExternalCommit();
+                // Transaction committed and disposed; drain ONLY this scope's deferred post-commit work
+                // (first-useful-action telemetry enqueued during bill approval). Never throws.
+                scope?.Committed();
                 return Ok(ToBill(BillsQuery().Single(b => b.Id == id), _adminService.GetPaymentTerms().ToList()));
             }
             catch (Services.Banking.ReconciledPeriodConfirmationRequiredException)
             {
                 // Handled globally as 409 RECONCILED_PERIOD_CONFIRM_REQUIRED so the client can ask and resend.
+                scope?.RolledBack();
                 throw;
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
+                scope?.RolledBack();
                 _logger.LogInformation("Could not {Verb} bill {BillId}: {Reason}", verb, id, ex.Message);
                 return BadRequest(new { message = ex.Message });
             }

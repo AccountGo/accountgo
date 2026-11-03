@@ -125,23 +125,37 @@ namespace Core.Authorization
         void ExecuteAcrossCompanies(IEnumerable<int> companyIds, Action<IReadOnlyList<WorkspacePolicyGuard>> action);
 
         /// <summary>
-        /// Called by the owner of an externally-managed transaction AFTER it commits, so verification of
-        /// companies touched by nested guarded work runs against committed state. Each company is verified
-        /// under its own coordination lock in a fresh transaction. Never throws into the caller.
+        /// Opens a completion scope for an externally-owned transaction. Call immediately AFTER the owner
+        /// begins its transaction; any guarded work or post-commit side effects enqueued while the scope is
+        /// open are bound to it. The returned token MUST be completed exactly once — <see
+        /// cref="IWorkspacePolicyCompletionToken.Committed"/> after the owner's transaction commits, or
+        /// <see cref="IWorkspacePolicyCompletionToken.RolledBack"/> if it does not — so this service drains
+        /// or discards ONLY that scope's items. This is explicit: commit versus rollback is never inferred
+        /// from transaction disposal, so a later commit can never drain an earlier rolled-back scope's work.
         /// </summary>
-        void VerifyPendingAfterExternalCommit();
-
-        /// <summary>
-        /// Called by the owner of an externally-managed transaction when it rolls back, discarding any
-        /// verifications queued by nested guarded work (nothing committed).
-        /// </summary>
-        void DiscardPendingVerifications();
+        IWorkspacePolicyCompletionToken BeginExternalScope();
 
         /// <summary>
         /// Registers a side effect (e.g. telemetry) to run only after the owning transaction commits
         /// durably, never on rollback.
         /// </summary>
         void EnqueuePostCommit(Action action);
+    }
+
+    /// <summary>
+    /// A one-shot completion handle for an externally-owned transaction scope. Exactly one of
+    /// <see cref="Committed"/> or <see cref="RolledBack"/> must be called; both are idempotent no-ops after
+    /// the first call. The token identifies the originating transaction explicitly, so the policy service
+    /// drains (on commit) or discards (on rollback) only that transaction's deferred work — never another
+    /// transaction's.
+    /// </summary>
+    public interface IWorkspacePolicyCompletionToken
+    {
+        /// <summary>The owner's transaction committed durably: drain this scope's verifications and side effects.</summary>
+        void Committed();
+
+        /// <summary>The owner's transaction did not commit: discard this scope's deferred work.</summary>
+        void RolledBack();
     }
 
     /// <summary>Handle held while the company coordination row is locked.</summary>

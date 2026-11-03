@@ -269,9 +269,11 @@ namespace AccountGo.BackendTests.Observability
 
             var policyTx = new WorkspacePolicyTransaction(_db, _tenant);
 
-            // The "controller" owns the transaction.
+            // The "controller" owns the transaction and opens a completion scope.
+            IWorkspacePolicyCompletionToken scope;
             using (var outer = _db.Database.BeginTransaction())
             {
+                scope = policyTx.BeginExternalScope();
                 // Nested guarded work observes CurrentTransaction != null and defers verification.
                 policyTx.Execute(company.Id, _ => { /* mutation already seeded; no-op guarded body */ });
                 outer.Commit();
@@ -280,15 +282,15 @@ namespace AccountGo.BackendTests.Observability
             // Before draining, nothing has been reported.
             Assert.False(WorkspaceInvariantIncidentLog.GetCurrentState(_db, company.Id).HasActiveIncident);
 
-            // The owner drains after its external commit — this is the connection the review found missing.
-            policyTx.VerifyPendingAfterExternalCommit();
+            // The owner completes its scope as committed — this is the connection the review found missing.
+            scope.Committed();
 
             Assert.True(WorkspaceInvariantIncidentLog.GetCurrentState(_db, company.Id).HasActiveIncident);
             _listener.RecordObservableInstruments();
             Assert.Equal(1, CounterTotal("workspace.unauthorized_elevations.committed"));
 
-            // A second drain has nothing queued and does not double-count.
-            policyTx.VerifyPendingAfterExternalCommit();
+            // Completing the same token again is an idempotent no-op and does not double-count.
+            scope.Committed();
             _listener.RecordObservableInstruments();
             Assert.Equal(1, CounterTotal("workspace.unauthorized_elevations.committed"));
         }
@@ -302,15 +304,16 @@ namespace AccountGo.BackendTests.Observability
 
             var policyTx = new WorkspacePolicyTransaction(_db, _tenant);
 
+            IWorkspacePolicyCompletionToken scope;
             using (var outer = _db.Database.BeginTransaction())
             {
+                scope = policyTx.BeginExternalScope();
                 policyTx.Execute(company.Id, _ => { });
                 outer.Rollback();
             }
 
-            // Owner rolled back: discard queued verifications, nothing is reported.
-            policyTx.DiscardPendingVerifications();
-            policyTx.VerifyPendingAfterExternalCommit();
+            // Owner completes its scope as rolled back: nothing is reported.
+            scope.RolledBack();
 
             _listener.RecordObservableInstruments();
             Assert.Equal(0, CounterTotal("workspace.unauthorized_elevations.committed"));
@@ -328,32 +331,36 @@ namespace AccountGo.BackendTests.Observability
             var policyTx = new WorkspacePolicyTransaction(_db, _tenant);
 
             // Controller-owned transaction that enqueues a first-action emission, then ROLLS BACK. The
-            // owner discards pending work on rollback, so the emission never fires.
+            // owner completes its scope as rolled back, so the emission never fires.
+            IWorkspacePolicyCompletionToken rbScope;
             using (var outer = _db.Database.BeginTransaction())
             {
+                rbScope = policyTx.BeginExternalScope();
                 policyTx.Execute(company.Id, _ =>
                     policyTx.EnqueuePostCommit(() =>
                         WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
                             1.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost))));
                 outer.Rollback();
             }
-            policyTx.DiscardPendingVerifications();
+            rbScope.RolledBack();
             Assert.Equal(0, HistogramCount("workspace.first_useful_action.duration"));
 
             // The rolled-back transaction left stale tracked entities in this shared test context; a real
             // request uses a fresh context per call. Clear the tracker to mirror that.
             _db.ChangeTracker.Clear();
 
-            // Committed external transaction: the owner drains after commit and the emission fires once.
+            // Committed external transaction: the owner completes its scope as committed and it fires once.
+            IWorkspacePolicyCompletionToken cScope;
             using (var outer = _db.Database.BeginTransaction())
             {
+                cScope = policyTx.BeginExternalScope();
                 policyTx.Execute(company.Id, _ =>
                     policyTx.EnqueuePostCommit(() =>
                         WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
                             1.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost))));
                 outer.Commit();
             }
-            policyTx.VerifyPendingAfterExternalCommit();
+            cScope.Committed();
             Assert.Equal(1, HistogramCount("workspace.first_useful_action.duration"));
         }
 
@@ -537,6 +544,50 @@ namespace AccountGo.BackendTests.Observability
         }
 
         [Fact]
+        public void RolledBackAction_MustNotEmitOnLaterExternalCommit()
+        {
+            // The reviewer's reproduction: a rolled-back scope A's work must NOT emit when an UNRELATED
+            // external transaction B later commits and its owner completes B's scope. Completion is keyed to
+            // the specific scope, so B's commit drains only B.
+            var company = SeedCompany("review-stale-ext", "review-owner", out var owner);
+            SeedSettings(company.Id, WorkspaceCollaborationState.SoloActive, owner.Id, initialized: true);
+            var policy = new WorkspacePolicyTransaction(_db, _tenant);
+            var repo = new EfRepository<Core.Domain.Auditing.AuditLog>(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Core.Domain.Auditing.AuditLog>.Instance, _db);
+
+            // 1-2. Enqueue under transaction A, roll A back and dispose it, clear tracking — WITHOUT
+            //      completing A's scope (mirrors a rollback path that only cleared EF tracking).
+            using (var outer = _db.Database.BeginTransaction())
+            {
+                var scopeA = policy.BeginExternalScope();
+                policy.Execute(company.Id, guard =>
+                {
+                    Assert.True(WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(repo, company.Id,
+                        WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice, "review-owner", DateTime.UtcNow, DateTime.UtcNow));
+                    policy.EnqueuePostCommit(() => WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
+                        1.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice)));
+                });
+                outer.Rollback();
+                _ = scopeA; // deliberately not completed: A was abandoned
+            }
+            _db.ChangeTracker.Clear();
+
+            // 3-4. An UNRELATED external transaction B commits; its owner completes B's scope. Because
+            //      completion is per-scope, A's work is never drained by B's commit.
+            using (var b = _db.Database.BeginTransaction())
+            {
+                var scopeB = policy.BeginExternalScope();
+                b.Commit();
+                b.Dispose();
+                scopeB.Committed();
+            }
+
+            Assert.Equal(0, _db.AuditLogs.IgnoreQueryFilters().Count(a => a.CompanyId == company.Id
+                && a.TableName == WorkspaceFirstActionEvidence.FirstUsefulActionTable));
+            Assert.Equal(0, HistogramCount("workspace.first_useful_action.duration"));
+        }
+
+        [Fact]
         public void PostCommitWork_FromOneTransaction_IsNotDrainedByAnother()
         {
             var a = SeedCompany("tx-a", "owner-a", out var ownerA);
@@ -545,26 +596,30 @@ namespace AccountGo.BackendTests.Observability
             SeedSettings(b.Id, WorkspaceCollaborationState.SoloActive, ownerB.Id, initialized: true);
             var policy = new WorkspacePolicyTransaction(_db, _tenant);
 
-            // Company A: enqueue under a caller-owned transaction that ROLLS BACK.
+            // Company A: enqueue under a caller-owned transaction that ROLLS BACK; scope A is not completed.
             using (var txA = _db.Database.BeginTransaction())
             {
+                var scopeA = policy.BeginExternalScope();
                 policy.Execute(a.Id, guard =>
                     policy.EnqueuePostCommit(() => WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
                         1.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice))));
                 txA.Rollback();
+                _ = scopeA;
             }
             _db.ChangeTracker.Clear();
 
-            // Company B: a separate caller-owned transaction that COMMITS and drains its own work. It must
+            // Company B: a separate caller-owned transaction that COMMITS and completes ITS scope. It must
             // emit exactly once (for B), never picking up A's rolled-back emission.
             using (var txB = _db.Database.BeginTransaction())
             {
+                var scopeB = policy.BeginExternalScope();
                 policy.Execute(b.Id, guard =>
                     policy.EnqueuePostCommit(() => WorkspaceOperatingPolicyMetrics.FirstUsefulActionDuration.Record(
                         2.0, new KeyValuePair<string, object?>("action", WorkspaceOperatingPolicyMetrics.ActionLabels.SalesInvoice))));
                 txB.Commit();
+                txB.Dispose();
+                scopeB.Committed();
             }
-            policy.VerifyPendingAfterExternalCommit();
 
             Assert.Equal(1, HistogramCount("workspace.first_useful_action.duration"));
         }

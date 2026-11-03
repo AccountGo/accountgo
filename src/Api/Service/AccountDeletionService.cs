@@ -58,6 +58,10 @@ namespace Api.Service
             if (preview.Blocked)
                 return new AccountDeletionOutcome { Status = AccountDeletionStatus.Blocked, Preview = preview };
 
+            // All validation passed; open the policy completion scope now (after the early returns) so no
+            // empty scope lingers on a refused request.
+            var policyScope = _policyTransaction?.BeginExternalScope();
+
             var now = DateTime.UtcNow;
             user.DeletedAt = now;
             user.RefreshToken = null;
@@ -111,9 +115,9 @@ namespace Api.Service
             await _apiDb.SaveChangesAsync();
             await _identity.SaveChangesAsync();
             await tx.CommitAsync();
-            // Externally-owned transaction committed; run deferred committed-state verification for the
-            // affected workspaces (e.g. a workspace left in an inconsistent state by member removal).
-            _policyTransaction?.VerifyPendingAfterExternalCommit();
+            // Externally-owned transaction committed; drain ONLY this scope's deferred committed-state
+            // verification for the affected workspaces (e.g. a workspace left inconsistent by member removal).
+            policyScope?.Committed();
             return new AccountDeletionOutcome { Status = AccountDeletionStatus.Deleted, Preview = preview };
         }
 

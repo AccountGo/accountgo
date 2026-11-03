@@ -287,8 +287,12 @@ namespace Api.Controllers
             {
                 _identityContext.Database.SetDbConnection(_apiDb.Database.GetDbConnection());
                 await _identityContext.Database.UseTransactionAsync(transaction.GetDbTransaction());
+                var policyScope = _policyTransaction?.BeginExternalScope();
                 if (cleanSlug != null && _workspaces.SlugExists(cleanSlug))
+                {
+                    policyScope?.RolledBack();
                     return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
+                }
 
                 var appUser = new ApplicationUser
                 {
@@ -337,7 +341,7 @@ namespace Api.Controllers
                         });
                         if (!initResult.Applied)
                         {
-                            _policyTransaction?.DiscardPendingVerifications();
+                            policyScope?.RolledBack();
                             return UnprocessableEntity(new ProblemDetails
                             {
                                 Title = "Workspace initialization rejected",
@@ -354,8 +358,8 @@ namespace Api.Controllers
                 var result = await _otpService.SendWelcomeOtpAsync(appUser, string.IsNullOrWhiteSpace(request.FirstName) ? "there" : request.FirstName.Trim(), company?.Name, ipAddress);
                 if (!result.Success)
                 {
-                    // Transaction will roll back; drop any queued committed-state verifications.
-                    _policyTransaction?.DiscardPendingVerifications();
+                    // Transaction will roll back; discard this scope's queued work.
+                    policyScope?.RolledBack();
                     return BadRequest(new ProblemDetails
                     {
                         Title = "Verification Email Failed",
@@ -364,8 +368,9 @@ namespace Api.Controllers
                     });
                 }
                 await transaction.CommitAsync();
-                // Externally-owned transaction committed; verify deferred committed state. Never throws.
-                _policyTransaction?.VerifyPendingAfterExternalCommit();
+                // Externally-owned transaction committed; drain ONLY this scope's deferred committed-state
+                // verification. Never throws.
+                policyScope?.Committed();
                 return Ok(new SignUpResponse(
                     Success: true, Message: result.Message, Email: normalizedEmail, OrgSlug: company?.Slug,
                     ExpiresInSeconds: result.ExpiresInSeconds, DevCode: result.DevCode));
