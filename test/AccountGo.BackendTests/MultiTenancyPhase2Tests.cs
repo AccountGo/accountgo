@@ -628,6 +628,8 @@ namespace AccountGo.BackendTests
                 "ContractAVerifier.cs",
                 "WorkspaceOriginEvidence.cs",
                 "WorkspaceSignupContinuationEvidence.cs",
+                // Durable onboarding cohort evidence dedups and reads by explicit companyId across tenants.
+                "WorkspaceOnboardingCohort.cs",
                 // Account deletion coordinates each authenticated user's affected company explicitly.
                 "AccountDeletionService.cs",
                 "InvitationsController.cs"
