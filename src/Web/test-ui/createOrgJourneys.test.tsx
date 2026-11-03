@@ -344,7 +344,14 @@ describe('CreateOrg wizard capability-aware journeys', () => {
         const headers = new Headers(init.headers);
         initCalls.push({ body: JSON.parse(String(init.body)), org: headers.get('X-AccountGo-Org') });
         return new Response(
-          JSON.stringify({ initialized: true, collaborationState: 'SoloActive', journalWorkflow: 'SingleActorAllowed', accessProfileKey: 'full' }),
+          JSON.stringify({ initialized: true, plan: 'community', collaborationState: 'SoloActive', journalWorkflow: 'SingleActorAllowed', accessProfileKey: 'full' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url === '/api/organizations/current' && (init?.method ?? 'GET') === 'GET') {
+        // The existing workspace's STORED settings, shown read-only on the review.
+        return new Response(
+          JSON.stringify({ name: 'Acme Books', slug: 'acme', plan: 'community', currency: 'PHP', fiscalYearEnd: '2026-12-31' }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
@@ -361,6 +368,12 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     // The review shows the full-access, single-user outcome.
     expect(screen.getByText('Owner · Full workspace access')).toBeTruthy();
     expect(screen.getByText('You can prepare and post your own journals under the single-user workflow.')).toBeTruthy();
+    // It shows the workspace's STORED facts (read-only), not local draft values. The stored currency PHP
+    // appears plainly (no misleading "set at creation" on an unsaved draft value), and no "Books start"
+    // draft row is presented as if it will be saved.
+    expect(screen.getByText('PHP')).toBeTruthy();
+    expect(screen.getByText('Acme Books')).toBeTruthy();
+    expect(screen.queryByText('Books start')).toBeNull();
 
     // Finish setup.
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
@@ -374,6 +387,8 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     expect(initCalls[0].body.collaborationIntent).toBe('JustMe');
     expect(initCalls[0].body.ownerAccessPreset).toBe('FullWorkspaceAccess');
     expect(initCalls[0].body.initialJournalWorkflow).toBe('SingleActorAllowed');
+    // The continuation never sends a plan — plan changes are billing-gated and handled separately.
+    expect(initCalls[0].body.plan).toBeUndefined();
 
     // Access was refreshed so the just-granted workspace access is live before the dashboard.
     expect(refreshSession).toHaveBeenCalledTimes(1);

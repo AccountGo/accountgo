@@ -10,15 +10,19 @@ const INVENTORY_LABEL = { None: 'None', WeightedAverage: 'Weighted average', Fif
 const PURPOSE_LABEL = { Personal: 'Personal finances', Business: 'Business or freelance work' } as const;
 const COLLABORATION_LABEL = { JustMe: 'Just me', WithOthers: 'Me and others' } as const;
 
-export const ReviewStep: React.FC<{ state: WizardState; capabilities?: { soloSetupEnabled: boolean } | null; isContinuation?: boolean }> = ({ state, capabilities, isContinuation }) => {
+export const ReviewStep: React.FC<{
+  state: WizardState;
+  capabilities?: { soloSetupEnabled: boolean } | null;
+  isContinuation?: boolean;
+  existingSettings?: { name?: string; slug?: string; plan?: string; currency?: string; fiscalYearEnd?: string } | null;
+}> = ({ state, capabilities, isContinuation, existingSettings }) => {
   const preview = fiscalYearPreview(state.booksStartDate, state.fiscalYearPattern, state.fiscalYearStartMonth);
   const justMe = state.collaborationIntent === 'JustMe';
   const soloSetupAvailable = capabilities?.soloSetupEnabled !== false;
-  // In continuation mode the books were already provisioned at signup; finishing setup applies only the
-  // About answers, access profile, journal workflow, and plan. The accounting rows below are shown as
-  // "set at creation" so the review never implies currency/framework/dates will be (re)written now.
-  const booksSuffix = isContinuation ? ' · set at creation' : '';
-  const rows: [string, string][] = [
+
+  // The About answers (purpose, collaboration, access, journal workflow) are the ONLY things finishing
+  // setup applies — show them as "will be saved".
+  const aboutRows: [string, string][] = [
     ...(soloSetupAvailable && state.workspacePurpose ? [['Purpose', PURPOSE_LABEL[state.workspacePurpose]] as [string, string]] : []),
     ...(soloSetupAvailable && state.collaborationIntent ? [['Who uses it', COLLABORATION_LABEL[state.collaborationIntent]] as [string, string]] : []),
     [
@@ -28,35 +32,44 @@ export const ReviewStep: React.FC<{ state: WizardState; capabilities?: { soloSet
         : 'Owner · Standard access setup required',
     ],
     ...(soloSetupAvailable && justMe
-      ? [[
-          'Journal posting',
-          'You can prepare and post your own journals under the single-user workflow.',
-        ] as [string, string]]
+      ? [['Journal posting', 'You can prepare and post your own journals under the single-user workflow.'] as [string, string]]
       : !soloSetupAvailable
-        ? [[
-            'Journal posting',
-            'Standard accounting controls apply until solo workflow is activated.',
-          ] as [string, string]]
+        ? [['Journal posting', 'Standard accounting controls apply until solo workflow is activated.'] as [string, string]]
         : []),
-    ['Plan', PLAN_LABEL[state.plan]],
-    ['Workspace', state.name.trim()],
-    ['URL', `/org/${state.slug}`],
-    ...(state.legalName.trim() ? [['Legal name', state.legalName.trim()] as [string, string]] : []),
-    ['Currency', state.currency.toUpperCase() + booksSuffix],
-    ['Books start', state.booksStartDate + booksSuffix],
-    ['First fiscal year', (preview?.label ?? '—') + booksSuffix],
-    ['Framework', `${FRAMEWORK_LABEL[state.reportingFramework]} · ${basisForFramework(state.reportingFramework)} basis${booksSuffix}`],
-    ['Tax', TAX_LABEL[state.taxRegime] + booksSuffix],
-    ['Industry', INDUSTRY_LABEL[state.industryTemplate] + booksSuffix],
-    ...(inventoryRelevant(state) ? [['Inventory costing', INVENTORY_LABEL[effectiveInventoryMethod(state)] + booksSuffix] as [string, string]] : []),
   ];
+
+  // In continuation mode, the workspace already exists: show its STORED facts (read-only), never the local
+  // draft values, which this flow does not save. In create mode, show the values that WILL be saved.
+  const workspaceRows: [string, string][] = isContinuation
+    ? [
+        ...(existingSettings?.plan ? [['Plan', existingSettings.plan] as [string, string]] : []),
+        ...(existingSettings?.name ? [['Workspace', existingSettings.name] as [string, string]] : []),
+        ...(existingSettings?.slug ? [['URL', `/org/${existingSettings.slug}`] as [string, string]] : []),
+        ...(existingSettings?.currency ? [['Currency', existingSettings.currency.toUpperCase()] as [string, string]] : []),
+        ...(existingSettings?.fiscalYearEnd ? [['Fiscal year end', existingSettings.fiscalYearEnd] as [string, string]] : []),
+      ]
+    : [
+        ['Plan', PLAN_LABEL[state.plan]],
+        ['Workspace', state.name.trim()],
+        ['URL', `/org/${state.slug}`],
+        ...(state.legalName.trim() ? [['Legal name', state.legalName.trim()] as [string, string]] : []),
+        ['Currency', state.currency.toUpperCase()],
+        ['Books start', state.booksStartDate],
+        ['First fiscal year', preview?.label ?? '—'],
+        ['Framework', `${FRAMEWORK_LABEL[state.reportingFramework]} · ${basisForFramework(state.reportingFramework)} basis`],
+        ['Tax', TAX_LABEL[state.taxRegime]],
+        ['Industry', INDUSTRY_LABEL[state.industryTemplate]],
+        ...(inventoryRelevant(state) ? [['Inventory costing', INVENTORY_LABEL[effectiveInventoryMethod(state)]] as [string, string]] : []),
+      ];
+
+  const rows: [string, string][] = [...aboutRows, ...workspaceRows];
   return (
     <div>
       {isContinuation && (
         <div role="note" className="p-3.5 mb-4 rounded-xl bg-[var(--bg-subtle)] text-[var(--text-secondary)] text-xs font-medium space-y-1">
           <p className="font-semibold text-[var(--text-main)]">Finishing setup for your workspace</p>
           <p>
-            Your books currency, start date, and reporting framework were set when this workspace was created and are not changed here. Finishing setup applies your access, journal workflow, and plan.
+            The details below were set when this workspace was created and are shown for reference — finishing setup does not change them. Finishing setup applies your access and journal workflow. You can change your plan or other settings anytime afterward.
           </p>
         </div>
       )}

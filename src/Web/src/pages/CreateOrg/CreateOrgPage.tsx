@@ -110,7 +110,7 @@ export const CreateOrgPage: React.FC = () => {
               {step === 'identity' && <IdentityStep state={state} errors={errors} update={update} />}
               {step === 'moneyTime' && <MoneyTimeStep state={state} errors={errors} update={update} />}
               {step === 'reporting' && <ReportingStep state={state} update={update} />}
-              {step === 'review' && <ReviewStep state={state} capabilities={wizard.capabilities} isContinuation={wizard.isContinuation} />}
+              {step === 'review' && <ReviewStep state={state} capabilities={wizard.capabilities} isContinuation={wizard.isContinuation} existingSettings={wizard.existingSettings} />}
 
               <div className="pt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                 <button

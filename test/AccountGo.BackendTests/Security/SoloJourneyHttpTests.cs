@@ -586,11 +586,12 @@ namespace AccountGo.BackendTests.Security
         }
 
         [Fact]
-        public async Task Continuation_AppliesPermittedPlanChoice_AndPersistsIt()
+        public async Task Continuation_DoesNotChangeThePlan_PaidUpgradeGoesThroughBillingNotHere()
         {
-            // Finding 1: the continuation must persist the permitted setup choices the user reviewed. The
-            // plan is the safe, no-books-rewrite choice; assert it is actually stored (accounting-policy
-            // fields are deliberately fixed at creation and are not accepted here).
+            // Findings 1 & 4: the continuation must NOT change the plan. Plan upgrades (especially paid
+            // tiers) go through the billing-gated subscription-change flow, which leaves the plan untouched
+            // until payment is confirmed. The workspace is initialized on its existing (free/default) plan,
+            // and no plan field sent to the endpoint has any effect.
             const string email = "measure-plan@example.com";
             const string slug = "measure-plan-books";
             EnrollEmails(email);
@@ -598,36 +599,21 @@ namespace AccountGo.BackendTests.Security
             EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
+            var planBefore = StoredPlan(slug);
+
+            // Even if a client sends a plan (e.g. a paid tier), the endpoint ignores it: InitializeCurrentRequest
+            // has no Plan field, so it binds to nothing and the stored plan is unchanged.
             var resp = await SendScoped(HttpMethod.Post, "/api/organizations/current/initialize", token, slug,
                 new { workspacePurpose = "Business", collaborationIntent = "JustMe", plan = "enterprise" });
             var body = await resp.Content.ReadAsStringAsync();
             Assert.True(resp.StatusCode == HttpStatusCode.OK, body);
 
-            // The chosen plan is stored on the company (resolved through the plan catalog). In the Community
-            // edition every key resolves to the single plan, so assert the response echoes the resolved key
-            // and the stored value round-trips rather than hardcoding a tier name.
+            // The workspace is initialized (SoloActive) but the plan is exactly what it was before — the
+            // free/default tier the workspace was created on. The response echoes that same stored plan.
+            Assert.Equal(WorkspaceCollaborationState.SoloActive, OperatingState(slug)!.Value.State);
+            Assert.Equal(planBefore, StoredPlan(slug));
             using var doc = JsonDocument.Parse(body);
-            var echoedPlan = doc.RootElement.GetProperty("plan").GetString();
-            Assert.False(string.IsNullOrWhiteSpace(echoedPlan));
-            Assert.Equal(echoedPlan, StoredPlanResolvedKey(slug));
-        }
-
-        [Fact]
-        public async Task Continuation_WithInvalidPlan_RejectedBeforeInitializing()
-        {
-            const string email = "measure-badplan@example.com";
-            const string slug = "measure-badplan-books";
-            EnrollEmails(email);
-            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Bad", "Measure Bad Plan", slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
-            var (token, _) = await VerifyRealOtp(email);
-
-            // With a plan catalog that rejects unknown keys this returns 400; the Community catalog accepts
-            // every key, so this asserts that a non-empty plan never initializes a workspace it shouldn't.
-            var resp = await SendScoped(HttpMethod.Post, "/api/organizations/current/initialize", token, slug,
-                new { workspacePurpose = "Business", collaborationIntent = "JustMe", plan = "   " });
-            // Blank plan is treated as "no choice" and initialization proceeds normally.
-            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+            Assert.Equal(StoredPlanResolvedKey(slug), doc.RootElement.GetProperty("plan").GetString());
         }
 
         [Fact]
@@ -950,6 +936,9 @@ namespace AccountGo.BackendTests.Security
             var stored = db.Companies.IgnoreQueryFilters().Where(c => c.Slug == slug).Select(c => c.Plan).Single();
             return scope.ServiceProvider.GetRequiredService<Services.Billing.IPlanCatalog>().ResolveStoredPlan(stored).Key;
         }
+
+        private string? StoredPlan(string slug) => WithDb(db =>
+            db.Companies.IgnoreQueryFilters().Where(c => c.Slug == slug).Select(c => c.Plan).Single());
 
         /// <summary>Deterministic email sink: preserves delivered messages so tests can read the real OTP.</summary>
         private sealed class CapturingEmailSender : IEmailSender
