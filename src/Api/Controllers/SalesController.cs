@@ -1665,6 +1665,7 @@ namespace Api.Controllers
 
             _logger.LogInformation("PostSalesInvoice");
 
+            Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
                 if (!ModelState.IsValid)
@@ -1690,17 +1691,19 @@ namespace Api.Controllers
 
                 using (var tx = BeginInvoiceNumberingTransaction())
                 {
+                    scope = _policyTransaction?.BeginExternalScope();
                     _salesService.PostSalesInvoice(salesInvoiceDto.Id);
                     tx.Commit();
                 }
-                // After the invoice-post transaction commits and disposes, run deferred post-commit work
-                // (first-useful-action telemetry enqueued during posting). Never throws into the response.
-                _policyTransaction?.VerifyPendingAfterExternalCommit();
+                // After the invoice-post transaction commits and disposes, drain ONLY this scope's deferred
+                // post-commit work (first-useful-action telemetry enqueued during posting). Never throws.
+                scope?.Committed();
 
                 return new ObjectResult(Ok());
             }
             catch (Exception ex)
             {
+                scope?.RolledBack();
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 if (InvoiceNumberProblem(ex) is { } numberProblem)
                     return StatusCode(numberProblem.Status, new[] { numberProblem.Message });
@@ -2041,25 +2044,27 @@ namespace Api.Controllers
         // changes before a later receipt or allocation can accidentally persist part of that failed attempt.
         private string? TryPostSalesInvoice(int invoiceId)
         {
+            Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
                 using (var tx = BeginInvoiceNumberingTransaction())
                 {
+                    scope = _policyTransaction?.BeginExternalScope();
                     _salesService.PostSalesInvoice(invoiceId);
                     tx.Commit();
                 }
-                // Posting committed and the transaction disposed: drain deferred post-commit work (the
-                // first-useful-action telemetry enqueued during posting) so its measurement is emitted for
-                // this committed action. Never throws into the response.
-                _policyTransaction?.VerifyPendingAfterExternalCommit();
+                // Posting committed and the transaction disposed: drain ONLY this scope's deferred
+                // post-commit work (the first-useful-action telemetry enqueued during posting) so its
+                // measurement is emitted for this committed action. Never throws into the response.
+                scope?.Committed();
                 return null;
             }
             catch (Exception ex)
             {
-                // The invoice-numbering transaction rolled back. Discard any policy work enqueued during
-                // the failed posting BEFORE clearing EF tracking, so a later committed transaction can
-                // never drain this rolled-back attempt's deferred emission or verification.
-                _policyTransaction?.DiscardPendingVerifications();
+                // The invoice-numbering transaction rolled back. Discard THIS scope's policy work before
+                // clearing EF tracking, so a later committed transaction can never drain this rolled-back
+                // attempt's deferred emission or verification.
+                scope?.RolledBack();
                 _db.ChangeTracker.Clear();
                 _logger.LogWarning(ex, "Invoice {InvoiceId} remains unposted: {Error}", invoiceId, ex.Message);
                 return ex.Message;

@@ -25,22 +25,26 @@ namespace Api.Service
         private readonly ApiDbContext _db;
         private readonly ITenantContext _tenant;
 
-        // Deferred work bound to the EF transaction that was active when it was enqueued. Binding to the
-        // originating transaction instance is what makes rollback honest: work enqueued under transaction
-        // T may only be drained when T itself commits, and is discarded the moment T goes away without
-        // this service draining it (rollback, ChangeTracker.Clear + dispose, or any abandon). A LATER
-        // transaction can never drain an EARLIER transaction's work. Scoped per DbContext/request.
+        // Deferred work bound to the SCOPE (a specific owning transaction) that was active when it was
+        // enqueued. A scope id is minted for each owning transaction — one this service creates in Execute,
+        // or one an external owner registers via BeginExternalScope — and every item carries that id.
+        // Completion is explicit per scope: the owner says "scope N committed" (drain scope N) or "scope N
+        // rolled back" (discard scope N). We NEVER infer commit from disposal, so a later committed scope
+        // can never drain an earlier rolled-back scope's work. Scoped per DbContext/request.
         private sealed class PendingItem
         {
-            // The transaction instance in scope at enqueue time. Null means "no ambient transaction existed"
-            // — the enqueuing Execute owned a transaction it created; such items are keyed by that owned
-            // transaction below before this call returns, so a null here is only transient within a call.
-            public IDbContextTransaction? Transaction;
+            public long ScopeId;
             public int? CompanyToVerify;
             public Action? PostCommit;
         }
 
         private readonly List<PendingItem> _pending = new();
+
+        // Live scopes, keyed by their owning EF transaction instance, with the scope id assigned to each.
+        // An entry exists only while its transaction is open; it is removed on completion (commit/rollback)
+        // or evicted when the transaction is found dead without having been completed (safety net).
+        private readonly List<(long ScopeId, IDbContextTransaction Transaction)> _scopes = new();
+        private long _scopeCounter;
 
         public WorkspacePolicyTransaction(ApiDbContext db, ITenantContext tenant)
         {
@@ -49,11 +53,30 @@ namespace Api.Service
         }
 
         /// <summary>
+        /// Returns the scope id for the DbContext's current ambient transaction, registering one on first
+        /// use. Work enqueued while that transaction is ambient binds to this scope. When there is no
+        /// ambient transaction, returns 0 (the "no owning transaction" sentinel), which an owning Execute
+        /// re-keys to the transaction it is about to create.
+        /// </summary>
+        private long CurrentScopeId()
+        {
+            var current = _db.Database.CurrentTransaction;
+            if (current == null)
+                return 0;
+            var existing = _scopes.FirstOrDefault(s => ReferenceEquals(s.Transaction, current));
+            if (existing.Transaction != null)
+                return existing.ScopeId;
+            var id = ++_scopeCounter;
+            _scopes.Add((id, current));
+            return id;
+        }
+
+        /// <summary>
         /// Registers an action to run only after the owning transaction commits durably (and never on
-        /// rollback). Use for post-commit side effects such as telemetry. The action is bound to the EF
-        /// transaction active right now; it runs only if THAT transaction commits and is discarded if it
-        /// rolls back or is abandoned. If no transaction is active, the caller is the owner and the action
-        /// runs on this call's commit.
+        /// rollback). Use for post-commit side effects such as telemetry. The action is bound to the scope
+        /// of the EF transaction active right now; it runs only when THAT scope is completed as committed
+        /// and is discarded if it rolls back or is abandoned. If no transaction is active, the caller is
+        /// the owner and the action runs on this call's commit.
         /// </summary>
         public void EnqueuePostCommit(Action action)
         {
@@ -62,9 +85,23 @@ namespace Api.Service
             EvictOrphanedPending();
             _pending.Add(new PendingItem
             {
-                Transaction = _db.Database.CurrentTransaction,
+                ScopeId = CurrentScopeId(),
                 PostCommit = action
             });
+        }
+
+        /// <inheritdoc />
+        public IWorkspacePolicyCompletionToken BeginExternalScope()
+        {
+            // The owner has just begun its transaction; capture it and mint a dedicated scope id so all
+            // work enqueued until the owner completes the token binds to exactly this transaction.
+            var current = _db.Database.CurrentTransaction
+                ?? throw new InvalidOperationException("BeginExternalScope requires an active transaction owned by the caller.");
+            var existing = _scopes.FirstOrDefault(s => ReferenceEquals(s.Transaction, current));
+            var scopeId = existing.Transaction != null ? existing.ScopeId : ++_scopeCounter;
+            if (existing.Transaction == null)
+                _scopes.Add((scopeId, current));
+            return new CompletionToken(this, scopeId);
         }
 
         public void Execute(int companyId, Action<WorkspacePolicyGuard> action) =>
@@ -105,10 +142,10 @@ namespace Api.Service
             if (sortedCompanyIds.Count > 1)
                 _db.SuppressTenantSecurityCheck = true;
 
-            // Drop any work left bound to a transaction that has since gone away without this service
-            // draining it (an earlier rollback path that only cleared EF tracking). This runs before we
-            // observe the current transaction, so such stale work can never be attributed to — or drained
-            // by — the transaction this call is about to own or join.
+            // Drop any work left bound to a scope whose transaction has since gone away without being
+            // completed by its owner (an earlier rollback path that only cleared EF tracking). This runs
+            // before we observe or create the current transaction, so such stale work can never be
+            // attributed to — or drained by — the scope this call is about to own or join.
             EvictOrphanedPending();
 
             var ownsTransaction = _db.Database.CurrentTransaction == null;
@@ -118,9 +155,18 @@ namespace Api.Service
                 if (ownsTransaction)
                     tx = _db.Database.BeginTransaction(IsolationLevel.Serializable);
 
-                // The transaction that items enqueued during this call must be bound to: the one we just
-                // created, or the caller-owned ambient one we are joining.
-                var activeTx = tx ?? _db.Database.CurrentTransaction;
+                // The scope that items enqueued during this call bind to: a fresh scope for a transaction
+                // we just created, or the scope of the caller-owned ambient transaction we are joining.
+                long scopeId;
+                if (ownsTransaction)
+                {
+                    scopeId = ++_scopeCounter;
+                    _scopes.Add((scopeId, tx!));
+                }
+                else
+                {
+                    scopeId = CurrentScopeId();
+                }
 
                 var guards = new List<WorkspacePolicyGuard>();
                 foreach (var cid in sortedCompanyIds)
@@ -137,9 +183,9 @@ namespace Api.Service
                     if (ownsTransaction)
                     {
                         tx?.Rollback();
-                        // Nothing committed: discard every item bound to this rolled-back transaction,
+                        // Nothing committed: discard every item bound to this rolled-back scope,
                         // including any nested enqueues made during the action above.
-                        DiscardPendingForTransaction(activeTx);
+                        DiscardScope(scopeId);
                     }
                     return result;
                 }
@@ -147,35 +193,28 @@ namespace Api.Service
                 // Always flush guarded mutations; only commit when this call owns the transaction.
                 _db.SaveChanges();
 
-                // Bind this call's own verification obligations to the active transaction, so they share
-                // the same commit/rollback fate as any post-commit side effects enqueued by the action.
+                // Bind this call's own verification obligations to the active scope, so they share the same
+                // commit/rollback fate as any post-commit side effects enqueued by the action.
                 foreach (var guard in guards)
-                    _pending.Add(new PendingItem { Transaction = activeTx, CompanyToVerify = guard.CompanyId });
+                    _pending.Add(new PendingItem { ScopeId = scopeId, CompanyToVerify = guard.CompanyId });
 
                 if (!ownsTransaction)
                 {
                     // Nested in a caller-owned transaction: committed state is not established yet. The
-                    // owner drains items bound to that transaction after it commits (see
-                    // VerifyPendingAfterExternalCommit) or discards them on rollback. Verifying now would
-                    // read uncommitted state.
+                    // owner completes its scope after it commits (drain) or rolls back (discard). Verifying
+                    // now would read uncommitted state.
                     return result;
                 }
 
                 tx!.Commit();
 
-                // Collect this transaction's own work, then DISPOSE the transaction before draining so the
-                // DbContext has no current transaction. Verification opens its OWN serializable transaction
-                // and must see CurrentTransaction == null; a committed-but-undisposed transaction would
-                // otherwise be mistaken for an ambient one. Side effects (telemetry) fire only on durable
-                // success. Items bound to other (caller-owned) transactions are left for their owners.
-                var mine = _pending.Where(p => ReferenceEquals(p.Transaction, activeTx)).ToList();
-                _pending.RemoveAll(p => mine.Contains(p));
+                // This call owns the transaction and it committed. DISPOSE it before draining so the
+                // DbContext has no current transaction — verification opens its OWN serializable
+                // transaction and must see CurrentTransaction == null. Drain ONLY this scope's work; side
+                // effects (telemetry) fire only on durable success. Other scopes' work is left untouched.
                 tx.Dispose();
                 tx = null;
-
-                var toVerify = new HashSet<int>(mine.Where(p => p.CompanyToVerify.HasValue).Select(p => p.CompanyToVerify!.Value));
-                RunCommittedVerification(toVerify);
-                RunPostCommitActions(mine.Where(p => p.PostCommit != null).Select(p => p.PostCommit!).ToList());
+                DrainScopeCommitted(scopeId);
 
                 return result;
             }
@@ -184,7 +223,9 @@ namespace Api.Service
                 if (ownsTransaction)
                 {
                     tx?.Rollback();
-                    DiscardPendingForTransaction(tx);
+                    // An exception rolled this scope back; discard its work. The scope id is the latest we
+                    // minted for the transaction we own, if we reached that point.
+                    DiscardScopeForTransaction(tx);
                 }
                 throw;
             }
@@ -197,63 +238,66 @@ namespace Api.Service
             }
         }
 
-        /// <inheritdoc />
-        public void VerifyPendingAfterExternalCommit()
-        {
-            // The external owner has committed its transaction and is telling us so. Drain the work bound to
-            // that transaction. "That transaction" is whatever is NOT a different, still-live open
-            // transaction: it may be the current transaction (committed but not yet disposed) or a disposed
-            // one (committed then the `using` block disposed it). We must NOT evict-then-skip here — unlike
-            // the safety-net eviction in Execute, this is the owner's explicit drain signal, so a disposed
-            // transaction means "committed and gone", which drains, not "abandoned", which would discard.
-            var ready = _pending.Where(p => !IsDifferentLiveTransaction(p.Transaction)).ToList();
-            _pending.RemoveAll(p => ready.Contains(p));
+        // ----- scope completion primitives -------------------------------------------------------
 
-            var toVerify = new HashSet<int>(ready.Where(p => p.CompanyToVerify.HasValue).Select(p => p.CompanyToVerify!.Value));
+        /// <summary>Drains, for one committed scope, its verifications and post-commit side effects.</summary>
+        private void DrainScopeCommitted(long scopeId)
+        {
+            var mine = _pending.Where(p => p.ScopeId == scopeId).ToList();
+            _pending.RemoveAll(p => p.ScopeId == scopeId);
+            _scopes.RemoveAll(s => s.ScopeId == scopeId);
+            PruneScopes();
+
+            var toVerify = new HashSet<int>(mine.Where(p => p.CompanyToVerify.HasValue).Select(p => p.CompanyToVerify!.Value));
             RunCommittedVerification(toVerify);
-            RunPostCommitActions(ready.Where(p => p.PostCommit != null).Select(p => p.PostCommit!).ToList());
+            RunPostCommitActions(mine.Where(p => p.PostCommit != null).Select(p => p.PostCommit!).ToList());
         }
 
-        /// <inheritdoc />
-        public void DiscardPendingVerifications()
+        /// <summary>Discards, for one rolled-back/abandoned scope, all its pending work.</summary>
+        private void DiscardScope(long scopeId)
         {
-            // The external owner is rolling back and is telling us so. Discard the work bound to that
-            // transaction (current-or-already-disposed), leaving work bound to a different, still-live
-            // transaction alone.
-            _pending.RemoveAll(p => !IsDifferentLiveTransaction(p.Transaction));
+            _pending.RemoveAll(p => p.ScopeId == scopeId);
+            _scopes.RemoveAll(s => s.ScopeId == scopeId);
+            PruneScopes();
         }
 
-        /// <summary>
-        /// True when the item's transaction is a live, open transaction OTHER than the DbContext's current
-        /// one — i.e. work that belongs to some other in-flight transaction and must be left for its owner.
-        /// A null, dead/disposed, or current transaction is NOT "a different live transaction".
-        /// </summary>
-        private bool IsDifferentLiveTransaction(IDbContextTransaction? transaction)
+        private void DiscardScopeForTransaction(IDbContextTransaction? transaction)
         {
             if (transaction == null)
-                return false;
-            if (ReferenceEquals(transaction, _db.Database.CurrentTransaction))
-                return false;
-            return !IsDeadTransaction(transaction);
+                return;
+            var scope = _scopes.FirstOrDefault(s => ReferenceEquals(s.Transaction, transaction));
+            if (scope.Transaction != null)
+                DiscardScope(scope.ScopeId);
         }
 
         /// <summary>
-        /// Drops pending work whose originating transaction is no longer usable: it has been disposed or
-        /// otherwise detached from the DbContext. Because the owning-commit path always drains its own work
-        /// synchronously right after commit, any surviving item bound to a transaction that is neither the
-        /// current open transaction nor a live transaction must belong to a transaction that rolled back or
-        /// was abandoned (e.g. a controller that cleared EF tracking without calling discard). Such work
-        /// never committed and must never run.
+        /// Safety net for an owner that completed NEITHER commit nor rollback on its scope (e.g. a path that
+        /// rolled back and only cleared EF tracking). Discards pending work whose scope's transaction is
+        /// dead/disposed and is not the current one. This runs at the start of Execute and EnqueuePostCommit
+        /// — a NEW operation — so stale work is dropped before any new scope can be attributed to it. It is
+        /// deliberately NOT run inside the explicit commit/rollback completion paths, which must act on
+        /// their own scope regardless of disposal.
         /// </summary>
         private void EvictOrphanedPending()
         {
-            if (_pending.Count == 0)
+            if (_scopes.Count == 0)
                 return;
             var current = _db.Database.CurrentTransaction;
-            _pending.RemoveAll(p =>
-                p.Transaction != null
-                && !ReferenceEquals(p.Transaction, current)
-                && IsDeadTransaction(p.Transaction));
+            var deadScopes = _scopes
+                .Where(s => !ReferenceEquals(s.Transaction, current) && IsDeadTransaction(s.Transaction))
+                .Select(s => s.ScopeId)
+                .ToHashSet();
+            if (deadScopes.Count == 0)
+                return;
+            _pending.RemoveAll(p => deadScopes.Contains(p.ScopeId));
+            _scopes.RemoveAll(s => deadScopes.Contains(s.ScopeId));
+        }
+
+        /// <summary>Removes scope registrations whose transaction is dead; keeps the scope table bounded.</summary>
+        private void PruneScopes()
+        {
+            var current = _db.Database.CurrentTransaction;
+            _scopes.RemoveAll(s => !ReferenceEquals(s.Transaction, current) && IsDeadTransaction(s.Transaction));
         }
 
         /// <summary>
@@ -277,10 +321,35 @@ namespace Api.Service
             }
         }
 
-        /// <summary>Discards, for the given rolled-back transaction only, all its pending work.</summary>
-        private void DiscardPendingForTransaction(IDbContextTransaction? rolledBackTx)
+        /// <summary>
+        /// One-shot completion handle bound to a specific scope id. Explicit commit/rollback means the
+        /// policy service acts on exactly this scope's work, independent of transaction disposal.
+        /// </summary>
+        private sealed class CompletionToken : IWorkspacePolicyCompletionToken
         {
-            _pending.RemoveAll(p => ReferenceEquals(p.Transaction, rolledBackTx));
+            private readonly WorkspacePolicyTransaction _owner;
+            private readonly long _scopeId;
+            private bool _completed;
+
+            public CompletionToken(WorkspacePolicyTransaction owner, long scopeId)
+            {
+                _owner = owner;
+                _scopeId = scopeId;
+            }
+
+            public void Committed()
+            {
+                if (_completed) return;
+                _completed = true;
+                _owner.DrainScopeCommitted(_scopeId);
+            }
+
+            public void RolledBack()
+            {
+                if (_completed) return;
+                _completed = true;
+                _owner.DiscardScope(_scopeId);
+            }
         }
 
         /// <summary>Runs queued post-commit side effects; a failure in one never affects others or the

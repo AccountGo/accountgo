@@ -167,6 +167,7 @@ namespace Services.Recurring
         {
             _tenant.RequireCompanyId();
             using var tx = _unitOfWork.BeginSerializableTransaction();
+            var policyScope = _policyTransaction?.BeginExternalScope();
             // Claiming and controller lookups may have tracked older versions. Read authoritative state only
             // after acquiring the transaction; a tracking query alone would reuse those stale property values.
             _unitOfWork.DiscardPendingChanges();
@@ -346,7 +347,7 @@ namespace Services.Recurring
                 // Do not post. Roll back the whole attempt (including the draft) and mark the occurrence failed.
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
-                _policyTransaction?.DiscardPendingVerifications();
+                policyScope?.RolledBack();
                 return Fail(occurrence, null, guard.ErrorCode!, guard.Reason!);
             }
 
@@ -359,21 +360,21 @@ namespace Services.Recurring
             {
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
-                _policyTransaction?.DiscardPendingVerifications();
+                policyScope?.RolledBack();
                 return Fail(occurrence, null, RecurringErrorCodes.BooksLocked, ex.Message);
             }
             catch (Core.Domain.BooksStartViolationException ex)
             {
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
-                _policyTransaction?.DiscardPendingVerifications();
+                policyScope?.RolledBack();
                 return Fail(occurrence, null, RecurringErrorCodes.BooksLocked, ex.Message);
             }
             catch (Exception ex)
             {
                 tx.Dispose();
                 _unitOfWork.DiscardPendingChanges();
-                _policyTransaction?.DiscardPendingVerifications();
+                policyScope?.RolledBack();
                 return Fail(occurrence, null, RecurringErrorCodes.PostFailed, ex.Message);
             }
 
@@ -388,7 +389,7 @@ namespace Services.Recurring
             // PostSalesInvoice for this committed action. Dispose first so the drain opens its own
             // transaction (the service owns this one). Never throws into generation.
             tx.Dispose();
-            _policyTransaction?.VerifyPendingAfterExternalCommit();
+            policyScope?.Committed();
             return RecurringGenerationResult.Issued(occurrenceId, invoice.Id);
         }
 

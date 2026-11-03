@@ -187,6 +187,7 @@ namespace Api.Controllers
             {
                 if (_workspaces.SlugExists(slug))
                     return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
+                var policyScope = _policyTransaction?.BeginExternalScope();
                 try
                 {
                     var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options, request.SecurityRoleIds);
@@ -207,8 +208,8 @@ namespace Api.Controllers
                             && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
                                 or "about_answers_required")
                         {
-                            // Early return rolls back the transaction on dispose; drop queued verifications.
-                            _policyTransaction?.DiscardPendingVerifications();
+                            // Early return rolls back the transaction on dispose; discard this scope's work.
+                            policyScope?.RolledBack();
                             return UnprocessableEntity(new ProblemDetails
                             {
                                 Title = "Workspace initialization rejected",
@@ -220,14 +221,15 @@ namespace Api.Controllers
                     }
 
                     tx.Commit();
-                    // The externally-owned transaction has committed; run deferred committed-state
-                    // verification for companies touched by the nested policy work. Never throws.
-                    _policyTransaction?.VerifyPendingAfterExternalCommit();
+                    // The externally-owned transaction committed; drain ONLY this scope's deferred
+                    // committed-state verification for companies touched by the nested policy work. Never throws.
+                    tx.Dispose();
+                    policyScope?.Committed();
                     return StatusCode(201, Summary(company, CompanyMemberRole.Owner, initResult));
                 }
                 catch (InvalidAccountingPolicyException ex)
                 {
-                    _policyTransaction?.DiscardPendingVerifications();
+                    policyScope?.RolledBack();
                     return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", ex.Errors));
                 }
             }

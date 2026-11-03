@@ -844,26 +844,28 @@ namespace Api.Controllers
                 return refused;
             if (RefuseIfBooksLocked(request?.LineIds?.ToArray() ?? Array.Empty<int>()) is { } locked)
                 return locked;
+            Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
                 using var tx = BeginWriteTransaction();
+                scope = _policyTransaction?.BeginExternalScope();
                 var result = _statementExpenses.BulkRecordExpense(request, GetUserNameFromRequestHeader() ?? string.Empty);
                 foreach (var lineId in request.LineIds) AuditStatementDecision(lineId, "record_expense");
                 tx.Commit();
-                // Approved bills committed; drain deferred first-useful-action telemetry. Dispose first so
-                // the drain sees no ambient transaction. Never throws.
+                // Approved bills committed; dispose first so the drain sees no ambient transaction, then
+                // drain ONLY this scope's deferred telemetry. Never throws.
                 tx.Dispose();
-                _policyTransaction?.VerifyPendingAfterExternalCommit();
+                scope?.Committed();
                 return Ok(result);
             }
             catch (TenantEntityNotFoundException)
             {
-                _policyTransaction?.DiscardPendingVerifications();
+                scope?.RolledBack();
                 return NotFound(new { message = "Statement line not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
-                _policyTransaction?.DiscardPendingVerifications();
+                scope?.RolledBack();
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -884,27 +886,29 @@ namespace Api.Controllers
                 return refused;
             if (RefuseIfBooksLocked(id) is { } locked)
                 return locked;
+            Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
                 using var tx = BeginWriteTransaction();
+                scope = _policyTransaction?.BeginExternalScope();
                 var result = _statementExpenses.RecordExpense(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
                 AuditStatementDecision(id, "record_expense");
                 tx.Commit();
-                // Approved bill committed; drain deferred first-useful-action telemetry. Dispose first so
-                // the drain sees no ambient transaction. Never throws.
+                // Approved bill committed; dispose first so the drain sees no ambient transaction, then
+                // drain ONLY this scope's deferred telemetry. Never throws.
                 tx.Dispose();
-                _policyTransaction?.VerifyPendingAfterExternalCommit();
+                scope?.Committed();
                 return Ok(result);
             }
 
             catch (TenantEntityNotFoundException)
             {
-                _policyTransaction?.DiscardPendingVerifications();
+                scope?.RolledBack();
                 return NotFound(new { message = "Statement line not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
-                _policyTransaction?.DiscardPendingVerifications();
+                scope?.RolledBack();
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -990,26 +994,28 @@ namespace Api.Controllers
                 return refused;
             if (RefuseIfBooksLocked(id) is { } locked)
                 return locked;
+            Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
                 using var tx = BeginWriteTransaction();
+                scope = _policyTransaction?.BeginExternalScope();
                 var result = _statementIncome.Record(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
                 AuditStatementDecision(id, "record_other_income");
                 tx.Commit();
-                // Posted income committed; drain deferred first-useful-action telemetry for this committed
-                // action. Dispose first so the drain sees no ambient transaction. Never throws.
+                // Posted income committed; dispose first so the drain sees no ambient transaction, then
+                // drain ONLY this scope's deferred telemetry. Never throws.
                 tx.Dispose();
-                _policyTransaction?.VerifyPendingAfterExternalCommit();
+                scope?.Committed();
                 return Ok(result);
             }
             catch (TenantEntityNotFoundException)
             {
-                _policyTransaction?.DiscardPendingVerifications();
+                scope?.RolledBack();
                 return NotFound(new { message = "Statement line not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
-                _policyTransaction?.DiscardPendingVerifications();
+                scope?.RolledBack();
                 return BadRequest(new { message = ex.Message });
             }
         }
