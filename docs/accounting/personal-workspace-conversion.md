@@ -1,8 +1,10 @@
 # Personal workspace conversion (retained workspace `personal`)
 
-**Status: PREPARED, NOT EXECUTED.** Production access was not available while this was prepared, so nothing here
-describes the real `personal` workspace. No production inspection result is recorded or implied. All results below
-come from a disposable PostgreSQL database holding an invented, representative workspace.
+**Status: EXECUTED on production `personal` (2026-11-04).** Equity-profile conversion verified
+(`VERIFY_RESULT pass`). Operating-policy follow-on (Purpose=Personal, CollaborationIntent=WithOthers,
+CollaborationState=TeamActive, plan left as `invoicing_pro`) applied via
+`accountgo-ops` workflow `personal-workspace-backfill` / `scripts/personal-workspace-operating-backfill.sql`.
+Earlier sections still document the disposable rehearsal that prepared the tooling.
 
 This is a one-time, reviewed, narrowly scoped conversion of a single existing workspace to the Individual accounting
 profile. It is not a migration engine and must not be generalised to other workspaces.
