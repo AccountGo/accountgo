@@ -537,11 +537,25 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
     [Fact]
     public void PersonalScope_requires_both_rollout_switch_and_finance_approval()
     {
-        Assert.False(EntityEquityMapping.IsIndividualMappingApproved);
-        Assert.False(Api.Options.WorkspaceExperienceOptions.FromEnvironment(
+        Assert.True(EntityEquityMapping.IsIndividualMappingApproved);
+        Assert.True(Api.Options.WorkspaceExperienceOptions.FromEnvironment(
             new Api.Options.WorkspaceExperienceOptions { PersonalPurposeEnabled = true }).PersonalPurposeEnabled);
-        Assert.False(WorkspaceInitializationScope.IsPersonalReleased(
+        Assert.True(WorkspaceInitializationScope.IsPersonalReleased(
             new Api.Options.WorkspaceExperienceOptions { PersonalPurposeEnabled = true }));
+        Assert.False(WorkspaceInitializationScope.IsPersonalReleased(
+            new Api.Options.WorkspaceExperienceOptions { PersonalPurposeEnabled = false }));
+
+        var previous = EntityEquityMapping.TestApprovalOverride;
+        try
+        {
+            EntityEquityMapping.TestApprovalOverride = false;
+            Assert.False(Api.Options.WorkspaceExperienceOptions.FromEnvironment(
+                new Api.Options.WorkspaceExperienceOptions { PersonalPurposeEnabled = true }).PersonalPurposeEnabled);
+        }
+        finally
+        {
+            EntityEquityMapping.TestApprovalOverride = previous;
+        }
 
         Assert.False(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Personal, WorkspaceCollaborationIntent.JustMe));
         Assert.False(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Personal, WorkspaceCollaborationIntent.WithOthers));

@@ -89,14 +89,13 @@ public class WorkspaceFullAccessManifestTests
     }
 
     [Fact]
-    public void Individual_equity_mapping_exists_but_activation_remains_gated()
+    public void Individual_equity_mapping_is_finance_approved_for_personal_bookkeeping()
     {
-        Assert.Throws<InvalidOperationException>(() => Core.Domain.EntityEquityMapping.GetProfile(Core.Domain.EntityType.Individual));
-        var profile = Core.Domain.EntityEquityMapping.GetProfile(Core.Domain.EntityType.Individual, allowUnapproved: true);
+        Assert.True(Core.Domain.EntityEquityMapping.IsIndividualMappingApproved);
+        var profile = Core.Domain.EntityEquityMapping.GetProfile(Core.Domain.EntityType.Individual);
         Assert.Equal("30100", profile.CloseTargetAccountCode);
         Assert.Null(profile.DistributionAccountCode);
         Assert.Equal("Accumulated net worth", profile.DisplayNames["30100"]);
         Assert.False(profile.DisplayNames.ContainsKey("30800"));
-        Assert.False(Core.Domain.EntityEquityMapping.IsIndividualMappingApproved);
     }
 }
