@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import {
   TrendingUp,
@@ -107,18 +107,29 @@ export const Dashboard: React.FC = () => {
   const moneyInBankAvailable = Boolean(caps?.moneyInBank);
   const receivablesAvailable = Boolean(caps?.receivables);
   const payablesAvailable = Boolean(caps?.payables);
+  const workspaceSlugRef = useRef(currentOrg.slug);
+  workspaceSlugRef.current = currentOrg.slug;
 
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
+    const requestedSlug = currentOrg.slug;
+    // Drop the prior workspace immediately so a late body cannot paint over the next one.
+    setSummary(null);
     setLoading(true);
     setLoadError(null);
+
+    const stillForThisWorkspace = () =>
+      !cancelled && workspaceSlugRef.current === requestedSlug;
 
     const fetchSummary = async () => {
       try {
         const res = await authFetch('/api/Dashboard/Summary');
-        if (!mounted) return;
+        if (!stillForThisWorkspace()) return;
         if (res.ok) {
-          setSummary(await res.json());
+          const body = (await res.json()) as DashboardSummary;
+          // Re-check after parse — res.json() can resolve after a workspace switch.
+          if (!stillForThisWorkspace()) return;
+          setSummary(body);
           setLoadError(null);
         } else {
           setSummary(null);
@@ -126,18 +137,18 @@ export const Dashboard: React.FC = () => {
         }
       } catch (err) {
         console.error('Failed to load dashboard summary:', err);
-        if (mounted) {
+        if (stillForThisWorkspace()) {
           setSummary(null);
           setLoadError(err instanceof Error ? err.message : 'Could not load dashboard.');
         }
       } finally {
-        if (mounted) setLoading(false);
+        if (stillForThisWorkspace()) setLoading(false);
       }
     };
 
     void fetchSummary();
     return () => {
-      mounted = false;
+      cancelled = true;
     };
   }, [authFetch, currentOrg.slug, reloadToken]);
 
@@ -517,12 +528,30 @@ export const Dashboard: React.FC = () => {
               <FileSpreadsheet className="w-4 h-4 text-[var(--brand-primary)]" />
               <span>{invoicingSurface ? 'Recent invoices & bills' : 'Recent Activity & Entries'}</span>
             </h2>
-            <Link
-              to={invoicingSurface ? `/org/${currentOrg.slug}/sales` : `/org/${currentOrg.slug}/financials`}
-              className="text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition-opacity"
-            >
-              {invoicingSurface ? 'View sales →' : 'View Full Accounts →'}
-            </Link>
+            {invoicingSurface ? (
+              canShowSales ? (
+                <Link
+                  to={`/org/${currentOrg.slug}/sales`}
+                  className="text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition-opacity"
+                >
+                  View sales →
+                </Link>
+              ) : canShowPurchases ? (
+                <Link
+                  to={`/org/${currentOrg.slug}/purchases`}
+                  className="text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition-opacity"
+                >
+                  View purchases →
+                </Link>
+              ) : null
+            ) : canShowFinancials ? (
+              <Link
+                to={`/org/${currentOrg.slug}/financials`}
+                className="text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition-opacity"
+              >
+                View Full Accounts →
+              </Link>
+            ) : null}
           </div>
 
           <div className="rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md overflow-hidden">
