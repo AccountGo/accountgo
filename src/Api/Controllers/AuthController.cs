@@ -716,7 +716,10 @@ namespace Api.Controllers
                 s.ExpiresAt,
                 s.CreatedByIp,
                 s.UserAgent,
-                s.TokenHash == currentHash
+                s.TokenHash == currentHash,
+                s.Channel ?? "web",
+                s.DeviceLabel,
+                s.ClientId
             )).ToList();
 
             return Ok(sessionDtos);

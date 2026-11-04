@@ -18,6 +18,7 @@ namespace Api.Service
             IEnumerable<string>? amr = null,
             bool? mfa = null,
             DateTimeOffset? mfaTimestamp = null,
-            IEnumerable<Claim>? extraClaims = null);
+            IEnumerable<Claim>? extraClaims = null,
+            string? audience = null);
     }
 }

@@ -256,6 +256,12 @@ namespace Api.Data.Schema
                     // D1 0031_refresh_token_family.sql
                     new[] { "RefreshTokens", "FamilyId", "TEXT NOT NULL DEFAULT ''" },
                     new[] { "RefreshTokens", "GraceReuseCount", "INTEGER NOT NULL DEFAULT 0" },
+                    // CLI OAuth channel columns
+                    new[] { "RefreshTokens", "Channel", "TEXT NOT NULL DEFAULT 'web'" },
+                    new[] { "RefreshTokens", "ClientId", "TEXT NULL" },
+                    new[] { "RefreshTokens", "DeviceLabel", "TEXT NULL" },
+                    new[] { "RefreshTokens", "Scope", "TEXT NULL" },
+                    new[] { "RefreshTokens", "AbsoluteExpiresAt", "TEXT NULL" },
                     // D1 0032_bank_accounts.sql (#413 Phase 1A)
                     new[] { "Bank", "RoutingNumber", "TEXT NULL" },
                     new[] { "Bank", "Iban", "TEXT NULL" },
@@ -305,6 +311,18 @@ namespace Api.Data.Schema
                 if (added.Contains("RefreshTokens.FamilyId"))
                 {
                     BackfillRefreshTokenFamilyIds(connection, tx);
+                }
+
+                EnsureOAuthAuthorizationRequestsTable(connection, tx);
+                if (added.Contains("RefreshTokens.Channel") || ColumnExists(connection, "RefreshTokens", "Channel", tx))
+                {
+                    using (var cmd = connection.CreateCommand())
+                    {
+                        cmd.Transaction = tx;
+                        cmd.CommandText =
+                            @"CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_Channel"" ON ""RefreshTokens"" (""Channel"");";
+                        cmd.ExecuteNonQuery();
+                    }
                 }
 
                 if (added.Contains("PurchaseInvoiceHeader.PayableAccountId"))
@@ -414,6 +432,38 @@ namespace Api.Data.Schema
                 cmd.CommandText = sql;
                 cmd.ExecuteNonQuery();
             }
+        }
+
+        /// <summary>
+        private static void EnsureOAuthAuthorizationRequestsTable(DbConnection connection, DbTransaction? tx)
+        {
+            if (TableExists(connection, "OAuthAuthorizationRequests", tx))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS ""OAuthAuthorizationRequests"" (
+                    ""Id"" TEXT NOT NULL CONSTRAINT ""PK_OAuthAuthorizationRequests"" PRIMARY KEY,
+                    ""ClientId"" TEXT NOT NULL,
+                    ""RedirectUri"" TEXT NOT NULL,
+                    ""CodeChallenge"" TEXT NOT NULL,
+                    ""Scope"" TEXT NOT NULL,
+                    ""State"" TEXT NOT NULL,
+                    ""UserId"" TEXT NULL,
+                    ""DeviceLabel"" TEXT NULL,
+                    ""CodeHash"" TEXT NULL,
+                    ""IssuedRefreshFamilyId"" TEXT NULL,
+                    ""ExpiresAt"" TEXT NOT NULL,
+                    ""CreatedAt"" TEXT NOT NULL,
+                    ""ConsumedAt"" TEXT NULL,
+                    ""DeniedAt"" TEXT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ""IX_OAuthAuthorizationRequests_CodeHash"" ON ""OAuthAuthorizationRequests"" (""CodeHash"");
+                CREATE INDEX IF NOT EXISTS ""IX_OAuthAuthorizationRequests_ExpiresAt"" ON ""OAuthAuthorizationRequests"" (""ExpiresAt"");
+                CREATE INDEX IF NOT EXISTS ""IX_OAuthAuthorizationRequests_ClientId"" ON ""OAuthAuthorizationRequests"" (""ClientId"");
+            ";
+            cmd.ExecuteNonQuery();
         }
 
         /// <summary>
@@ -922,11 +972,37 @@ WHERE NOT EXISTS (
                 ""GraceReuseCount"" INTEGER NOT NULL DEFAULT 0,
                 ""MfaMethod"" TEXT NULL,
                 ""Amr"" TEXT NULL,
-                ""TrustedDeviceId"" INTEGER NULL
+                ""TrustedDeviceId"" INTEGER NULL,
+                ""Channel"" TEXT NOT NULL DEFAULT 'web',
+                ""ClientId"" TEXT NULL,
+                ""DeviceLabel"" TEXT NULL,
+                ""Scope"" TEXT NULL,
+                ""AbsoluteExpiresAt"" TEXT NULL
             );
             CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_TokenHash"" ON ""RefreshTokens"" (""TokenHash"");
             CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_UserId"" ON ""RefreshTokens"" (""UserId"");
             CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_FamilyId"" ON ""RefreshTokens"" (""FamilyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_Channel"" ON ""RefreshTokens"" (""Channel"");
+
+            CREATE TABLE IF NOT EXISTS ""OAuthAuthorizationRequests"" (
+                ""Id"" TEXT NOT NULL CONSTRAINT ""PK_OAuthAuthorizationRequests"" PRIMARY KEY,
+                ""ClientId"" TEXT NOT NULL,
+                ""RedirectUri"" TEXT NOT NULL,
+                ""CodeChallenge"" TEXT NOT NULL,
+                ""Scope"" TEXT NOT NULL,
+                ""State"" TEXT NOT NULL,
+                ""UserId"" TEXT NULL,
+                ""DeviceLabel"" TEXT NULL,
+                ""CodeHash"" TEXT NULL,
+                ""IssuedRefreshFamilyId"" TEXT NULL,
+                ""ExpiresAt"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""ConsumedAt"" TEXT NULL,
+                ""DeniedAt"" TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_OAuthAuthorizationRequests_CodeHash"" ON ""OAuthAuthorizationRequests"" (""CodeHash"");
+            CREATE INDEX IF NOT EXISTS ""IX_OAuthAuthorizationRequests_ExpiresAt"" ON ""OAuthAuthorizationRequests"" (""ExpiresAt"");
+            CREATE INDEX IF NOT EXISTS ""IX_OAuthAuthorizationRequests_ClientId"" ON ""OAuthAuthorizationRequests"" (""ClientId"");
 
             CREATE TABLE IF NOT EXISTS ""DataProtectionKeys"" (
                 ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_DataProtectionKeys"" PRIMARY KEY AUTOINCREMENT,

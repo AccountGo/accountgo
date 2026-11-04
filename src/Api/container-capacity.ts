@@ -148,6 +148,7 @@ const PUBLIC_AUTH_PATHS = new Set([
     "/api/auth/mfa/webauthn/assertion/options", "/api/auth/mfa/webauthn/assertion/complete",
     "/api/auth/mfa/totp/enroll/begin", "/api/auth/mfa/totp/enroll/complete",
     "/api/auth/mfa/webauthn/register/options", "/api/auth/mfa/webauthn/register/complete",
+    "/api/auth/oauth/authorize", "/api/auth/oauth/token", "/api/auth/oauth/revoke",
 ]);
 
 export function isPublicAuthRequest(path: string): boolean {

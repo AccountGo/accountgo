@@ -188,6 +188,9 @@ public static class AccountGoApp
 
         builder.Services.AddScoped<ISessionService, SessionService>();
         builder.Services.AddScoped<ISecurityAuditService, SecurityAuditService>();
+        builder.Services.Configure<Api.Service.CliOAuthOptions>(
+            builder.Configuration.GetSection(Api.Service.CliOAuthOptions.SectionName));
+        builder.Services.AddScoped<ICliOAuthService, CliOAuthService>();
         builder.Services.AddScoped<IMfaGate, CommunityMfaGate>();
         builder.Services.AddScoped<ISecurityCapabilities, CommunitySecurityCapabilities>();
 
@@ -406,6 +409,21 @@ public static class AccountGoApp
                 });
             });
 
+            // CLI OAuth: partition by IP; authenticated code/request paths also key on user id when present.
+            options.AddPolicy("cli-oauth", httpContext =>
+            {
+                var userId = httpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var key = !string.IsNullOrEmpty(userId) ? $"cli_oauth_user_{userId}" : $"cli_oauth_ip_{ip}";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = builder.Environment.IsDevelopment() ? 300 : 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                });
+            });
+
             // AccountGo Assistant: per-user budget on the shared Anter project key.
             options.AddPolicy("ai-chat", httpContext =>
             {
@@ -527,6 +545,7 @@ public static class AccountGoApp
         app.UseMiddleware<Api.Middleware.TenantResolutionMiddleware>();
         app.UseMiddleware<Api.Middleware.EntitlementsVersionMiddleware>();
         app.UseAuthorization();
+        app.UseMiddleware<Api.Middleware.CliAudienceRestrictionMiddleware>();
 
         // Pending-token blocking middleware (covers controllers and /mcp)
         app.Use(async (context, next) =>
