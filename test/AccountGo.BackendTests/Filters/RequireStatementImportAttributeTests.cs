@@ -39,7 +39,7 @@ public class RequireStatementImportAttributeTests
             });
         entitlements.Setup(e => e.Get(1)).Returns(new EntitlementSnapshot(
             Enabled: true, Plan: "invoicing_free", Tier: "free", Limited: true,
-            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_team" },
+            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_pro" },
             Usage: System.Array.Empty<ResourceUsage>(), SupportEmail: "s@x.test",
             Features: System.Collections.Immutable.ImmutableHashSet<string>.Empty,
             EffectivePlan: "invoicing_free"));
