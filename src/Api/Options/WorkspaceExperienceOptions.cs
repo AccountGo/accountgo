@@ -48,29 +48,21 @@ namespace Api.Options
         public static WorkspaceExperienceOptions FromEnvironment(WorkspaceExperienceOptions? configured = null)
         {
             var options = configured ?? new WorkspaceExperienceOptions();
-            options.SoloSetupEnabled = ReadBool("WorkspaceExperience__SoloSetupEnabled",
-                "WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", options.SoloSetupEnabled);
-            options.PersonalPurposeEnabled = ReadBool("WorkspaceExperience__PersonalPurposeEnabled",
-                "WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED", options.PersonalPurposeEnabled)
+            options.SoloSetupEnabled = ReadBool("WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", options.SoloSetupEnabled);
+            options.PersonalPurposeEnabled = ReadBool("WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED", options.PersonalPurposeEnabled)
                 && Core.Domain.EntityEquityMapping.IsIndividualMappingApproved;
-            options.ControlledRecoveryEnabled = ReadBool("WorkspaceExperience__ControlledRecoveryEnabled",
-                "WORKSPACE_EXPERIENCE_CONTROLLED_RECOVERY_ENABLED", options.ControlledRecoveryEnabled);
-            options.LegacySoloConfirmationEnabled = ReadBool("WorkspaceExperience__LegacySoloConfirmationEnabled",
-                "WORKSPACE_EXPERIENCE_LEGACY_SOLO_CONFIRMATION_ENABLED", options.LegacySoloConfirmationEnabled);
+            options.ControlledRecoveryEnabled = ReadBool("WORKSPACE_EXPERIENCE_CONTROLLED_RECOVERY_ENABLED", options.ControlledRecoveryEnabled);
+            options.LegacySoloConfirmationEnabled = ReadBool("WORKSPACE_EXPERIENCE_LEGACY_SOLO_CONFIRMATION_ENABLED", options.LegacySoloConfirmationEnabled);
             options.Canary ??= new WorkspaceCanaryEnrollmentOptions();
             options.Canary = WorkspaceCanaryEnrollmentOptions.FromEnvironment(options.Canary);
             return options;
         }
 
-        private static bool ReadBool(string nestedKey, string flatKey, bool fallback)
+        private static bool ReadBool(string key, bool fallback)
         {
-            var nested = Environment.GetEnvironmentVariable(nestedKey);
-            if (!string.IsNullOrWhiteSpace(nested) && bool.TryParse(nested, out var nestedValue))
-                return nestedValue;
-
-            var flat = Environment.GetEnvironmentVariable(flatKey);
-            if (!string.IsNullOrWhiteSpace(flat) && bool.TryParse(flat, out var flatValue))
-                return flatValue;
+            var raw = Environment.GetEnvironmentVariable(key);
+            if (!string.IsNullOrWhiteSpace(raw) && bool.TryParse(raw, out var value))
+                return value;
 
             return fallback;
         }
@@ -95,26 +87,20 @@ namespace Api.Options
         {
             var options = configured ?? new WorkspaceCanaryEnrollmentOptions();
 
-            var envEmails = ReadList(
-                "WorkspaceExperience__Canary__Emails",
-                "WORKSPACE_EXPERIENCE_CANARY_EMAILS");
+            var envEmails = ReadList("WORKSPACE_EXPERIENCE_CANARY_EMAILS");
             if (envEmails != null)
                 options.Emails = envEmails;
 
-            var envUserIds = ReadList(
-                "WorkspaceExperience__Canary__UserIds",
-                "WORKSPACE_EXPERIENCE_CANARY_USER_IDS");
+            var envUserIds = ReadList("WORKSPACE_EXPERIENCE_CANARY_USER_IDS");
             if (envUserIds != null)
                 options.UserIds = envUserIds;
 
             return options;
         }
 
-        private static IReadOnlyList<string>? ReadList(string nestedKey, string flatKey)
+        private static IReadOnlyList<string>? ReadList(string key)
         {
-            var raw = Environment.GetEnvironmentVariable(nestedKey);
-            if (string.IsNullOrWhiteSpace(raw))
-                raw = Environment.GetEnvironmentVariable(flatKey);
+            var raw = Environment.GetEnvironmentVariable(key);
             if (string.IsNullOrWhiteSpace(raw))
                 return null;
 
