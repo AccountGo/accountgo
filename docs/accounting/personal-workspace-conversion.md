@@ -25,6 +25,13 @@ It never touches posted journals, general ledger rows, account ids or codes, mem
 workspace purpose or collaboration state, or other workspaces. Custom account names are kept and reported.
 Every write is guarded by the snapshot and reconciled in the same transaction (see below).
 
+**Still open after accounting-profile conversion:** this script deliberately changes only the accounting profile.
+After production inspection, the final conversion plan must also address `WorkspaceOperatingSettings.Purpose`,
+initialization/`InitializedAtUtc`, collaboration state and any related grants/approval assumptions so the
+retained `personal` workspace is a coherent current-model personal workspace — not merely an Individual equity
+label on an unclassified or business-shaped operating policy. That follow-on step is out of scope for the
+script until inspection results are reviewed.
+
 ## Preconditions
 
 All must hold before the apply step. The script enforces the database-side ones; the rest are operator checks.

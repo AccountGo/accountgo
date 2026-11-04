@@ -92,9 +92,22 @@ test('payload carries the full hard-gate DTO the API expects', () => {
     name: 'Acme Studio', slug: 'acme-studio', plan: 'accounting', currency: 'PHP', legalName: 'Acme Studio LLC',
     reportingFramework: 'CashBasis', accountingBasis: 'Cash', fiscalYearPattern: 'Custom', fiscalYearStartMonth: 10,
     booksStartDate: '2026-10-24', taxRegime: 'VatGst', industryTemplate: 'ProductRetail', inventoryCostingMethod: 'WeightedAverage',
-    workspacePurpose: 'Business', collaborationIntent: 'JustMe', ownerAccessPreset: 'FullWorkspaceAccess',
+    workspacePurpose: 'Business', collaborationIntent: 'JustMe', entityType: undefined,
+    ownerAccessPreset: 'FullWorkspaceAccess',
     initialJournalWorkflow: 'SingleActorAllowed',
   });
+});
+
+test('personal purpose payload sends Individual entityType so provisioning matches initialization', () => {
+  const payload = buildPayload({
+    ...defaultState(today, { name: 'Household Books' }),
+    workspacePurpose: 'Personal',
+    collaborationIntent: 'JustMe',
+  }, { soloSetupEnabled: true, personalPurposeEnabled: true });
+  assert.equal(payload.workspacePurpose, 'Personal');
+  assert.equal(payload.entityType, 'Individual');
+  assert.equal(payload.ownerAccessPreset, 'FullWorkspaceAccess');
+  assert.equal(payload.initialJournalWorkflow, 'SingleActorAllowed');
 });
 
 test('buildPayload omits About fields when solo setup is disabled to offer a legacy submission path', () => {

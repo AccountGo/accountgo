@@ -255,12 +255,14 @@ namespace Api.Controllers
         public IActionResult SaveRole(
             [FromBody] SaveRoleRequest request,
             [FromServices] ApiDbContext db,
-            [FromServices] Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
+            [FromServices] Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
+            [FromServices] Core.Authorization.IWorkspaceReviewerEligibility? reviewerEligibility = null)
         {
             if (string.IsNullOrWhiteSpace(request?.Name))
                 return BadRequest(new ProblemDetails { Title = "Invalid Role", Detail = "Role name is required.", Status = StatusCodes.Status400BadRequest });
 
             var displayName = !string.IsNullOrWhiteSpace(request.DisplayName) ? request.DisplayName.Trim() : request.Name.Trim();
+            var permissionIds = request.PermissionIds ?? new List<int>();
 
             var affectedCompanyIds = request.Id > 0 && db != null
                 ? db.CompanyMemberSecurityRoles
@@ -271,6 +273,32 @@ namespace Api.Controllers
                     .ToList()
                 : new List<int>();
 
+            if (affectedCompanyIds.Count > 0 && reviewerEligibility != null && db != null)
+            {
+                var permissionNames = db.Set<Core.Domain.Security.SecurityPermission>()
+                    .Where(p => permissionIds.Contains(p.Id))
+                    .Select(p => p.Name)
+                    .ToList();
+                foreach (var companyId in affectedCompanyIds)
+                {
+                    var verdict = reviewerEligibility.EvaluateRolePermissionChange(companyId, request.Id, permissionNames);
+                    if (verdict.Blocked)
+                    {
+                        return StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
+                        {
+                            Title = "Role change blocked",
+                            Detail = verdict.Message,
+                            Status = StatusCodes.Status409Conflict,
+                            Extensions =
+                            {
+                                ["reasonCode"] = verdict.ReasonCode,
+                                ["companyId"] = companyId
+                            }
+                        });
+                    }
+                }
+            }
+
             if (affectedCompanyIds.Count > 0 && policyTransaction != null)
             {
                 policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
@@ -279,12 +307,12 @@ namespace Api.Controllers
                     {
                         guard.AdvanceRevision();
                     }
-                    _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, request.PermissionIds ?? new List<int>());
+                    _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, permissionIds);
                 });
             }
             else
             {
-                _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, request.PermissionIds ?? new List<int>());
+                _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, permissionIds);
             }
 
             return Ok(new { success = true });
@@ -295,7 +323,8 @@ namespace Api.Controllers
         public IActionResult DeleteRole(
             int id,
             [FromServices] ApiDbContext db,
-            [FromServices] Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
+            [FromServices] Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
+            [FromServices] Core.Authorization.IWorkspaceReviewerEligibility? reviewerEligibility = null)
         {
             var role = _securityService.GetSecurityRole(id);
             if (role == null)
@@ -322,6 +351,30 @@ namespace Api.Controllers
                     .OrderBy(cId => cId)
                     .ToList()
                 : new List<int>();
+
+            if (affectedCompanyIds.Count > 0 && reviewerEligibility != null)
+            {
+                foreach (var companyId in affectedCompanyIds)
+                {
+                    // Deleting the role removes all of its permissions from every assignee.
+                    var verdict = reviewerEligibility.EvaluateRolePermissionChange(
+                        companyId, id, Array.Empty<string>());
+                    if (verdict.Blocked)
+                    {
+                        return StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
+                        {
+                            Title = "Role change blocked",
+                            Detail = verdict.Message,
+                            Status = StatusCodes.Status409Conflict,
+                            Extensions =
+                            {
+                                ["reasonCode"] = verdict.ReasonCode,
+                                ["companyId"] = companyId
+                            }
+                        });
+                    }
+                }
+            }
 
             if (affectedCompanyIds.Count > 0 && policyTransaction != null)
             {

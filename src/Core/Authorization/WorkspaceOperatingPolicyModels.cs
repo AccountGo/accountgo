@@ -4,6 +4,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Core.Domain;
 
 namespace Core.Authorization
@@ -38,6 +39,12 @@ namespace Core.Authorization
 
         /// <summary>The requested approval rule kind is not a recognised journal approval rule.</summary>
         public const string InvalidApprovalRule = "invalid_approval_rule";
+
+        /// <summary>
+        /// Single-actor journal posting may only be selected on an initialized workspace with a confirmed owner.
+        /// Selecting it on an unclassified/uninitialized workspace would commit an unauthorized elevation.
+        /// </summary>
+        public const string WorkspaceNotInitialized = "workspace_not_initialized";
 
         /// <summary>The journal approval policy changed since an invitation was issued; resending needs explicit reconfirmation.</summary>
         public const string PolicyAssumptionsChanged = "policy_assumptions_changed";
@@ -228,14 +235,21 @@ namespace Core.Authorization
         IReadOnlyCollection<int>? NewSecurityRoleIds = null);
 
     /// <summary>
-    /// Reviewer capacity for independent journal review: at least one eligible reviewer AND at least two
-    /// active human members, so that someone other than a reviewer can prepare an entry for review.
+    /// Reviewer capacity for independent journal review. Usable only when every permitted preparer has at
+    /// least one eligible reviewer who is not themselves — counting "any reviewer + any second human" is
+    /// insufficient when the remaining reviewer cannot review their own journals.
     /// </summary>
     public sealed record IndependentReviewCapacity(
         int ActiveHumanCount,
-        IReadOnlyList<EligibleJournalReviewer> EligibleReviewers)
+        IReadOnlyList<EligibleJournalReviewer> EligibleReviewers,
+        IReadOnlyList<EligibleJournalReviewer> EligiblePreparers)
     {
-        public bool IsUsable => EligibleReviewers.Count > 0 && ActiveHumanCount >= 2;
+        public bool IsUsable =>
+            EligibleReviewers.Count > 0
+            && EligiblePreparers.Count > 0
+            && EligiblePreparers.All(preparer =>
+                EligibleReviewers.Any(reviewer =>
+                    !string.Equals(reviewer.UserId, preparer.UserId, StringComparison.Ordinal)));
     }
 
     public sealed record ReviewerGuardResult(bool Blocked, string? ReasonCode, string? Message)
@@ -261,6 +275,16 @@ namespace Core.Authorization
         /// review is usable today, and the change would make it unusable. Never relaxes approval.
         /// </summary>
         ReviewerGuardResult EvaluateMemberChange(int companyId, MemberReviewerChange change);
+
+        /// <summary>
+        /// Blocks a functional-role template permission change when any affected workspace that currently has
+        /// usable independent review would lose independence for a permitted preparer. Pass the permission
+        /// names the role would hold after the edit (empty when deleting the role's posting rights).
+        /// </summary>
+        ReviewerGuardResult EvaluateRolePermissionChange(
+            int companyId,
+            int securityRoleId,
+            IReadOnlyCollection<string> newPermissionNamesForRole);
     }
 
     public interface IWorkspaceOperatingPolicyService

@@ -257,11 +257,21 @@ namespace Api.Service
                 }
 
                 // Personal/business isolation: the accounting profile must match the declared purpose. Personal
-                // workspaces use the Individual equity mapping; business workspaces never do.
-                var provisionedEntityType = _db.CompanySettings.IgnoreQueryFilters()
-                    .Where(s => s.CompanyId == companyId)
-                    .Select(s => (EntityType?)s.EntityType)
-                    .FirstOrDefault();
+                // workspaces use the Individual equity mapping; business workspaces never do. When personal is
+                // released, an authorized initialization may upgrade a default Sole Proprietor provisioning to
+                // Individual so signup-continuation (create then initialize) completes without a separate
+                // accounting-policy round trip.
+                var companySetting = _db.CompanySettings.IgnoreQueryFilters()
+                    .SingleOrDefault(s => s.CompanyId == companyId);
+                if (request.Purpose == WorkspacePurpose.Personal
+                    && WorkspaceInitializationScope.IsPersonalReleased(_experience)
+                    && companySetting != null
+                    && companySetting.EntityType != EntityType.Individual)
+                {
+                    companySetting.EntityType = EntityType.Individual;
+                }
+
+                var provisionedEntityType = companySetting?.EntityType;
                 var entityMatchesPurpose = request.Purpose == WorkspacePurpose.Personal
                     ? provisionedEntityType == EntityType.Individual
                     : provisionedEntityType != EntityType.Individual;

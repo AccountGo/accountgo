@@ -243,7 +243,7 @@ it('shows the reviewer conflict without a policy-change offer to an Admin', asyn
 });
 
 const ROLE_ROWS = [
-  { id: 1, name: 'FullWorkspaceAccessV1', displayName: 'Full workspace access', permissions: ['financials.journal.post', 'sales.invoices.post'] },
+  { id: 1, name: 'WorkspaceFullAccess.v1', displayName: 'Full workspace access', permissions: ['financials.journal.post', 'sales.invoices.post'] },
   { id: 2, name: 'Accountant', displayName: 'Accountant', permissions: ['financials.journal.post', 'sales.invoices.post', 'purchases.bills.post', 'reports.view'] },
   { id: 3, name: 'Sales Representative', displayName: 'Sales Representative', permissions: ['sales.invoices.create', 'sales.invoices.view'] },
   { id: 4, name: 'Purchasing Agent', displayName: 'Purchasing Agent', permissions: ['purchases.bills.create'] },

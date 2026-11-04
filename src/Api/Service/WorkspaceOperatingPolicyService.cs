@@ -605,6 +605,25 @@ namespace Api.Service
                     settings.CollaborationState);
             }
 
+            // Single-actor posting is an elevation that is only lawful after explicit initialization has
+            // confirmed an owner. Persisting it on LegacyUnclassified / uninitialized workspaces trips the
+            // unauthorized_elevation:single_actor_uninitialized invariant on commit.
+            if (newRuleKind == WorkspaceApprovalRuleKind.SingleActorAllowed)
+            {
+                var uninitialized = settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified
+                    || !settings.InitializedAtUtc.HasValue
+                    || !settings.ConfirmedOwnerMemberId.HasValue;
+                if (uninitialized)
+                {
+                    return new WorkspacePolicyMutationResult(
+                        false,
+                        WorkspacePolicyReasonCodes.WorkspaceNotInitialized,
+                        "Single-actor journal posting can only be selected after this workspace has been set up with a confirmed owner. Finish setup first, or keep independent review.",
+                        settings.PolicyRevision,
+                        settings.CollaborationState);
+                }
+            }
+
             var eligibleOtherReviewers = _reviewerEligibility.GetEligibleReviewers(companyId, excludeUserId: callerUserId);
             if (newRuleKind == WorkspaceApprovalRuleKind.IndependentReviewerRequired && eligibleOtherReviewers.Count == 0)
             {
