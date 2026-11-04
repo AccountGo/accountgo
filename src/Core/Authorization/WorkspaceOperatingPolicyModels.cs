@@ -19,6 +19,9 @@ namespace Core.Authorization
         public const string CanaryScopeNotAllowed = "canary_scope_not_allowed";
         public const string NotPendingSignupWorkspace = "not_pending_signup_workspace";
         public const string PersonalPurposeDisabled = "personal_purpose_disabled";
+
+        /// <summary>Personal purpose requires the Individual accounting profile, and business purpose must not use it.</summary>
+        public const string EntityPurposeMismatch = "entity_purpose_mismatch";
         public const string RecoveryUnavailable = "recovery_unavailable";
         public const string RecoveryRequired = "recovery_required";
         public const string StalePolicyRevision = "stale_policy_revision";

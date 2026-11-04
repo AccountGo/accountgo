@@ -105,6 +105,31 @@ dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj --filter "
   `WorkspaceInitializationApplicator`) exist so disposable fixtures can exercise the behaviour. Dependency
   injection never supplies them.
 
+## Personal solo and household: how they stay gated and reuse team controls
+
+Personal purpose is a separate answer from collaboration (Just me / With others). Both personal journeys share the
+business journeys' server controls; nothing personal-specific re-implements them.
+
+- **Gate.** `WorkspaceInitializationScope.IsSupported(purpose, intent, personalReleased)` admits Personal (solo and
+  household) only when `PersonalPurposeEnabled && IsIndividualMappingApproved`. `WorkspaceExperienceOptions` also forces
+  `PersonalPurposeEnabled` to false while the mapping is unapproved. The request boundary (create, current/initialize)
+  and the applicator all use the same check, so enrollment, scope and answer checks still run first.
+- **Solo.** Personal + Just me takes the same path as Business + Just me: full workspace access for the owner,
+  single-actor journal rule, durable onboarding start and completion.
+- **Household.** Personal + With others takes the same path as Business + With others: team setup pending,
+  independent-reviewer journal rule by default, owner access preset, and the invitation, reviewer-loss and
+  return-to-solo controls from the member and approval-policy work. No separate household logic exists.
+- **Accounting profile must match purpose.** After the eligibility proof, initialization rejects with
+  `entity_purpose_mismatch` when a Personal workspace is not on the Individual profile or a Business workspace is.
+  Creating a Personal workspace with no entity type chosen defaults it to Individual (only reachable once released).
+  A signup-created workspace is provisioned before its purpose is known, so a personal continuation needs the
+  profile converted first; that is an open dependency, not silently done.
+- **Isolation and freezes.** Personal and business remain separate workspaces with no shared ledger. Books locks,
+  closed-year controls, balance and repeat-post protections are unchanged because they sit below the journey code.
+- **Tests.** `WorkspaceCanaryIsolationTests` covers: closed gate (including `PersonalPurposeEnabled=true` with the
+  mapping unapproved), solo and household initialisation behind the released gate on a disposable fixture, and both
+  mismatch rejections. The existing HTTP tests that reject Personal while the gate is closed are unchanged and pass.
+
 ## Questions that need finance or jurisdiction input
 
 These are genuine open points; the proposal does not guess at them.

@@ -501,4 +501,144 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
         Assert.NotEqual(WorkspacePolicyReasonCodes.SoloSetupDisabled, eligibility.ReasonCode);
         Assert.Equal(SoloSetupEligibilityStatus.Eligible, eligibility.Status);
     }
+
+    // ---- Personal purpose: PROPOSED and gated. The fixture seam stands in for "approved"; production stays closed.
+
+    private void SeedCompanySetting(Company company, EntityType entityType)
+    {
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            _db.CompanySettings.Add(new CompanySetting { CompanyId = company.Id, EntityType = entityType });
+            _db.SaveChanges();
+        }
+    }
+
+    private WorkspaceInitializationResult ApplyPersonal(
+        string ownerId,
+        Company company,
+        CompanyMember owner,
+        WorkspaceCollaborationIntent intent,
+        bool personalReleasedForDisposableFixtures)
+    {
+        var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenant, soloSetupEnabled: true, enrolledUserIds: new[] { ownerId },
+            personalReleasedForDisposableFixtures: personalReleasedForDisposableFixtures);
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            return applicator.ApplyNewWorkspace(company.Id, ownerId, owner.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = WorkspacePurpose.Personal,
+                CollaborationIntent = intent,
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
+            });
+        }
+    }
+
+    [Fact]
+    public void PersonalScope_requires_both_rollout_switch_and_finance_approval()
+    {
+        Assert.False(EntityEquityMapping.IsIndividualMappingApproved);
+        Assert.False(Api.Options.WorkspaceExperienceOptions.FromEnvironment(
+            new Api.Options.WorkspaceExperienceOptions { PersonalPurposeEnabled = true }).PersonalPurposeEnabled);
+        Assert.False(WorkspaceInitializationScope.IsPersonalReleased(
+            new Api.Options.WorkspaceExperienceOptions { PersonalPurposeEnabled = true }));
+
+        Assert.False(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Personal, WorkspaceCollaborationIntent.JustMe));
+        Assert.False(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Personal, WorkspaceCollaborationIntent.WithOthers));
+        Assert.False(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Personal, WorkspaceCollaborationIntent.JustMe, personalReleased: false));
+        Assert.True(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Personal, WorkspaceCollaborationIntent.JustMe, personalReleased: true));
+        Assert.True(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Personal, WorkspaceCollaborationIntent.WithOthers, personalReleased: true));
+        Assert.False(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Unspecified, WorkspaceCollaborationIntent.JustMe, personalReleased: true));
+        Assert.True(WorkspaceInitializationScope.IsSupported(WorkspacePurpose.Business, WorkspaceCollaborationIntent.JustMe));
+    }
+
+    [Fact]
+    public void Personal_solo_initializes_behind_the_released_gate_with_single_actor_journal_rule()
+    {
+        const string ownerId = "owner-personal-solo-released";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+        SeedCompanySetting(company, EntityType.Individual);
+
+        var result = ApplyPersonal(ownerId, company, owner, WorkspaceCollaborationIntent.JustMe, personalReleasedForDisposableFixtures: true);
+
+        Assert.True(result.Applied, result.Message);
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspacePurpose.Personal, settings.Purpose);
+        Assert.Equal(WorkspaceCollaborationState.SoloActive, settings.CollaborationState);
+        var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
+        Assert.Equal(WorkspaceApprovalRuleKind.SingleActorAllowed, rule.RuleKind);
+    }
+
+    [Fact]
+    public void Personal_household_reuses_team_controls_when_the_gate_is_released()
+    {
+        const string ownerId = "owner-personal-household-released";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+        SeedCompanySetting(company, EntityType.Individual);
+
+        var result = ApplyPersonal(ownerId, company, owner, WorkspaceCollaborationIntent.WithOthers, personalReleasedForDisposableFixtures: true);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(WorkspaceApprovalMode.IndependentReviewerRequired, result.JournalMode);
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspacePurpose.Personal, settings.Purpose);
+        Assert.Equal(WorkspaceCollaborationIntent.WithOthers, settings.CollaborationIntent);
+        Assert.Equal(WorkspaceCollaborationState.TeamSetupPending, settings.CollaborationState);
+        var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
+        Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, rule.RuleKind);
+    }
+
+    [Fact]
+    public void Personal_purpose_is_rejected_when_the_accounting_profile_is_not_individual()
+    {
+        const string ownerId = "owner-personal-entity-mismatch";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+        SeedCompanySetting(company, EntityType.SoleProprietor);
+
+        var result = ApplyPersonal(ownerId, company, owner, WorkspaceCollaborationIntent.JustMe, personalReleasedForDisposableFixtures: true);
+
+        Assert.False(result.Applied);
+        Assert.Equal(WorkspacePolicyReasonCodes.EntityPurposeMismatch, result.ReasonCode);
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, settings.CollaborationState);
+        Assert.Equal(WorkspacePurpose.Unspecified, settings.Purpose);
+    }
+
+    [Fact]
+    public void Business_purpose_is_rejected_when_the_accounting_profile_is_individual()
+    {
+        const string ownerId = "owner-business-individual-profile";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+        SeedCompanySetting(company, EntityType.Individual);
+
+        var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenant, soloSetupEnabled: true, enrolledUserIds: new[] { ownerId });
+        WorkspaceInitializationResult result;
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            result = applicator.ApplyNewWorkspace(company.Id, ownerId, owner.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = WorkspacePurpose.Business,
+                CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
+            });
+        }
+
+        Assert.False(result.Applied);
+        Assert.Equal(WorkspacePolicyReasonCodes.EntityPurposeMismatch, result.ReasonCode);
+    }
+
+    [Fact]
+    public void Personal_purpose_stays_closed_without_the_fixture_seam_even_with_individual_profile()
+    {
+        const string ownerId = "owner-personal-closed";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+        SeedCompanySetting(company, EntityType.Individual);
+
+        var result = ApplyPersonal(ownerId, company, owner, WorkspaceCollaborationIntent.JustMe, personalReleasedForDisposableFixtures: false);
+
+        Assert.False(result.Applied);
+        Assert.Equal(WorkspacePolicyReasonCodes.CanaryScopeNotAllowed, result.ReasonCode);
+    }
 }
+

@@ -23,6 +23,20 @@ This document is requirements and UX only. Implementation sequencing lives in [c
 
 Do not introduce a separate Tenant / Organization schema entity.
 
+### 1.2 Terminology: purpose, collaboration, and accounting capability
+
+These are independent answers; none of them implies another.
+
+| Concept | Meaning | What it must not imply |
+|---|---|---|
+| Purpose | Personal finances, or business or freelance work | A reporting framework, registered-company status, or tax treatment |
+| Collaboration | Just me, or me and others | That accounting needs a team. One person can need full double-entry accounting |
+| Accounting capability | The modules, journals, reports and controls the workspace can use | That more people unlock accounting, or that fewer people remove it |
+| Access and approval policy | Who may do what, and whether journal posting needs an independent reviewer | A relaxed or tightened rule when the number of members changes |
+
+Adding or removing a collaborator never changes the accounting basis, framework, entity treatment, historical books or
+the established journal approval policy. Personal and business books stay separate workspaces.
+
 ---
 
 ## 2. Goals and non-goals
