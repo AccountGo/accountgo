@@ -24,12 +24,17 @@ import { OnboardingChecklist } from '../components/OnboardingChecklist';
 import { BankCloseStatusCard } from '../components/BankCloseStatusCard';
 import { MoneyInBankBreakdown } from '../components/MoneyInBankBreakdown';
 import { PersonalFinanceHealthCard } from '../components/PersonalFinanceHealthCard';
-import { isInvoicingDashboard, isPersonalWorkspace } from '../lib/dashboardProduct';
+import {
+  isPersonalWorkspace,
+  resolveDashboardSurface,
+  type DashboardCapabilities,
+} from '../lib/dashboardProduct';
 import type { DashboardBankBalance } from '../lib/moneyInBank';
 import type { BankCloseStatus } from '../types/banking';
 
 interface DashboardSummary {
   surface?: 'Accounting' | 'Invoicing' | string;
+  capabilities?: DashboardCapabilities;
   kpis: {
     moneyInBank: number;
     bankBalances?: DashboardBankBalance[] | null;
@@ -84,43 +89,60 @@ export const Dashboard: React.FC = () => {
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [yearEndReminder, setYearEndReminder] = useState<YearEndYearRow | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
-  const hasFinancials = hasModule('financials');
-  const invoicingSurface = isInvoicingDashboard(hasFinancials);
+  const hasFinancialsModule = hasModule('financials');
   const personal = isPersonalWorkspace(currentOrg);
+  const caps = summary?.capabilities;
+  const surface = resolveDashboardSurface(summary?.surface, hasFinancialsModule);
+  const invoicingSurface = surface === 'Invoicing';
+  const accountingSurface = surface === 'Accounting';
+  // Prefer server-authorized capabilities once loaded; until then avoid claiming accounting cards.
+  const canShowFinancials = caps ? Boolean(caps.financials) : false;
+  const canShowSales = caps ? Boolean(caps.sales) : hasModule('sales');
+  const canShowPurchases = caps ? Boolean(caps.purchases) : hasModule('purchases');
+  const moneyInBankAvailable = Boolean(caps?.moneyInBank);
+  const receivablesAvailable = Boolean(caps?.receivables);
+  const payablesAvailable = Boolean(caps?.payables);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    setLoadError(null);
 
     const fetchSummary = async () => {
       try {
         const res = await authFetch('/api/Dashboard/Summary');
+        if (!mounted) return;
         if (res.ok) {
-          const data: DashboardSummary = await res.json();
-          if (mounted) {
-            setSummary(data);
-          }
+          setSummary(await res.json());
+          setLoadError(null);
+        } else {
+          setSummary(null);
+          setLoadError(`Could not load dashboard (${res.status}).`);
         }
       } catch (err) {
         console.error('Failed to load dashboard summary:', err);
-      } finally {
         if (mounted) {
-          setLoading(false);
+          setSummary(null);
+          setLoadError(err instanceof Error ? err.message : 'Could not load dashboard.');
         }
+      } finally {
+        if (mounted) setLoading(false);
       }
     };
 
-    fetchSummary();
+    void fetchSummary();
     return () => {
       mounted = false;
     };
-  }, [authFetch, currentOrg.slug]);
+  }, [authFetch, currentOrg.slug, reloadToken]);
 
   useEffect(() => {
-    if (!hasFinancials || !hasPermission('financials.periods.close')) {
+    if (!canShowFinancials || !hasPermission('financials.periods.close')) {
       setYearEndReminder(null);
       return;
     }
@@ -141,7 +163,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [authFetch, currentOrg.slug, hasFinancials, hasPermission]);
+  }, [authFetch, currentOrg.slug, canShowFinancials, hasPermission]);
 
   const kpis = summary?.kpis;
   const recentActivity = summary?.recentActivity || [];
@@ -156,14 +178,19 @@ export const Dashboard: React.FC = () => {
     });
   };
 
-  const formatCurrency = (val: number | undefined) => {
-    if (val === undefined || isNaN(val)) return `${currencySymbol}0.00`;
-    const num = Number(val);
-    const formatted = Math.abs(num).toLocaleString(undefined, {
+  const formatCurrencyValue = (val: number) => {
+    const formatted = Math.abs(val).toLocaleString(undefined, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-    return num < 0 ? `-${currencySymbol}${formatted}` : `${currencySymbol}${formatted}`;
+    return val < 0 ? `-${currencySymbol}${formatted}` : `${currencySymbol}${formatted}`;
+  };
+
+  /** Loaded authorized amounts only — never paint restricted/missing data as a healthy zero. */
+  const formatMetric = (val: number | null | undefined, available: boolean) => {
+    if (!available) return 'Unavailable';
+    if (val === null || val === undefined || Number.isNaN(val)) return 'Unavailable';
+    return formatCurrencyValue(val);
   };
 
   const formatDate = (isoStr: string) => {
@@ -181,10 +208,10 @@ export const Dashboard: React.FC = () => {
 
   const welcomeLine = personal
     ? invoicingSurface
-      ? 'Here is your personal invoicing and cash picture.'
+      ? 'Here is your personal billing and collections overview.'
       : 'Here is your personal finance overview from the books.'
     : invoicingSurface
-      ? 'Here is your invoicing overview — sales, collections, and bills.'
+      ? 'Here is your invoicing overview — billing, collections, and bills.'
       : "Here is an overview of your organization's financials.";
 
   return (
@@ -223,23 +250,46 @@ export const Dashboard: React.FC = () => {
 
       <OnboardingChecklist
         orgSlug={currentOrg.slug}
-        hasFinancialsModule={hasFinancials}
+        hasFinancialsModule={hasFinancialsModule}
         canManage={currentOrg.role === 'Owner' || currentOrg.role === 'Admin'}
       />
 
-      {personal && (
+      {loadError && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-rose-500/10 text-rose-400 text-xs font-semibold flex flex-wrap items-center justify-between gap-3"
+          data-testid="dashboard-load-error"
+        >
+          <span>{loadError}</span>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] text-[var(--text-main)] font-semibold"
+            onClick={() => setReloadToken((n) => n + 1)}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {personal && !loadError && (
         <PersonalFinanceHealthCard
           loading={loading}
-          hasFinancials={hasFinancials}
-          currencyFormat={formatCurrency}
+          hasFinancials={canShowFinancials}
+          currencyFormat={formatMetric}
           moneyInBank={kpis?.moneyInBank}
+          moneyInBankAvailable={moneyInBankAvailable}
           outstandingReceivables={kpis?.outstandingReceivables}
+          receivablesAvailable={receivablesAvailable}
           totalPayables={kpis?.totalPayables}
+          payablesAvailable={payablesAvailable}
           netWorth={summary?.balanceSnapshot?.totalEquity}
+          netWorthAvailable={canShowFinancials}
         />
       )}
 
-      {!invoicingSurface && <BankCloseStatusCard status={summary?.bankCloseStatus} orgSlug={currentOrg.slug} />}
+      {accountingSurface && canShowFinancials && (
+        <BankCloseStatusCard status={summary?.bankCloseStatus} orgSlug={currentOrg.slug} />
+      )}
 
       {yearEndReminder && (
         <p className="text-sm text-amber-700 bg-amber-500/10 px-4 py-3 rounded-2xl">
@@ -268,16 +318,22 @@ export const Dashboard: React.FC = () => {
             {loading ? (
               <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
             ) : (
-              formatCurrency(kpis?.totalSalesYtd)
+              formatMetric(
+                kpis?.totalSalesYtd,
+                invoicingSurface ? canShowSales : canShowFinancials,
+              )
             )}
           </div>
           {invoicingSurface ? (
             <div className="text-xs text-[var(--text-muted)] mt-2">
-              {(kpis?.openInvoiceCount ?? 0) === 1
-                ? '1 open invoice'
-                : `${kpis?.openInvoiceCount ?? 0} open invoices`}
+              Issued invoice totals incl. tax and shipping; excludes drafts and voids. Not cash collected or profit.
+              {canShowSales
+                ? (kpis?.openInvoiceCount ?? 0) === 1
+                  ? ' · 1 open invoice'
+                  : ` · ${kpis?.openInvoiceCount ?? 0} open invoices`
+                : ''}
             </div>
-          ) : (
+          ) : canShowFinancials ? (
             <div
               className={`flex items-center gap-1.5 text-xs mt-2 font-semibold ${
                 (kpis?.netProfitYtd ?? 0) >= 0 ? 'text-[var(--brand-primary)]' : 'text-rose-500'
@@ -290,9 +346,11 @@ export const Dashboard: React.FC = () => {
               )}
               <span>
                 {(kpis?.netProfitYtd ?? 0) >= 0 ? 'Net profit: ' : 'Net loss: '}
-                {formatCurrency(Math.abs(kpis?.netProfitYtd ?? 0))}
+                {formatCurrencyValue(Math.abs(kpis?.netProfitYtd ?? 0))}
               </span>
             </div>
+          ) : (
+            <div className="text-xs text-[var(--text-muted)] mt-2">Ledger figures require financials access.</div>
           )}
         </div>
 
@@ -309,13 +367,15 @@ export const Dashboard: React.FC = () => {
             {loading ? (
               <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
             ) : (
-              formatCurrency(kpis?.outstandingReceivables)
+              formatMetric(kpis?.outstandingReceivables, receivablesAvailable)
             )}
           </div>
           <div className="text-xs text-[var(--text-muted)] mt-2">
-            {(kpis?.outstandingReceivables ?? 0) > 0
-              ? 'Awaiting customer payment'
-              : 'No outstanding balances'}
+            {!receivablesAvailable
+              ? 'Requires sales access'
+              : (kpis?.outstandingReceivables ?? 0) > 0
+                ? 'Open invoices incl. tax, shipping, and discounts'
+                : 'No outstanding balances'}
           </div>
         </div>
 
@@ -331,13 +391,15 @@ export const Dashboard: React.FC = () => {
               {loading ? (
                 <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
               ) : (
-                formatCurrency(kpis?.overdueReceivables)
+                formatMetric(kpis?.overdueReceivables, receivablesAvailable)
               )}
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-2">
-              {(kpis?.overdueInvoiceCount ?? 0) === 0
-                ? 'Nothing past due'
-                : `${kpis?.overdueInvoiceCount} past due`}
+              {!receivablesAvailable
+                ? 'Requires sales access'
+                : (kpis?.overdueInvoiceCount ?? 0) === 0
+                  ? 'Nothing past due'
+                  : `${kpis?.overdueInvoiceCount} past due`}
             </div>
           </div>
         ) : (
@@ -352,13 +414,15 @@ export const Dashboard: React.FC = () => {
               {loading ? (
                 <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
               ) : (
-                formatCurrency(kpis?.moneyInBank)
+                formatMetric(kpis?.moneyInBank, moneyInBankAvailable)
               )}
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-2">
-              Available across cash and bank accounts
+              {moneyInBankAvailable
+                ? 'Available across cash and bank accounts'
+                : 'Requires banking or financials access'}
             </div>
-            {!loading && (
+            {!loading && moneyInBankAvailable && (
               <MoneyInBankBreakdown
                 kpis={kpis}
                 orgSlug={currentOrg.slug}
@@ -383,11 +447,15 @@ export const Dashboard: React.FC = () => {
               {loading ? (
                 <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
               ) : (
-                formatCurrency(kpis?.totalPayables)
+                formatMetric(kpis?.totalPayables, payablesAvailable)
               )}
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-2">
-              {(kpis?.totalPayables ?? 0) > 0 ? 'Open purchase bills' : 'No open bills'}
+              {!payablesAvailable
+                ? 'Requires purchases access'
+                : (kpis?.totalPayables ?? 0) > 0
+                  ? 'Open purchase bills'
+                  : 'No open bills'}
             </div>
           </div>
         ) : (
@@ -404,28 +472,32 @@ export const Dashboard: React.FC = () => {
               {loading ? (
                 <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
               ) : personal ? (
-                formatCurrency(summary?.balanceSnapshot?.totalEquity)
+                formatMetric(summary?.balanceSnapshot?.totalEquity, canShowFinancials)
               ) : (
-                formatCurrency(kpis?.totalAssets)
+                formatMetric(kpis?.totalAssets, canShowFinancials)
               )}
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-2">
-              {personal
-                ? `Assets ${formatCurrency(summary?.balanceSnapshot?.totalAssets)} · Liabilities ${formatCurrency(summary?.balanceSnapshot?.totalLiabilities)}`
-                : `Total liabilities: ${formatCurrency(summary?.balanceSnapshot?.totalLiabilities)}`}
+              {!canShowFinancials
+                ? 'Requires financials access'
+                : personal
+                  ? `Assets ${formatMetric(summary?.balanceSnapshot?.totalAssets, true)} · Liabilities ${formatMetric(summary?.balanceSnapshot?.totalLiabilities, true)}`
+                  : `Total liabilities: ${formatMetric(summary?.balanceSnapshot?.totalLiabilities, true)}`}
             </div>
           </div>
         )}
       </div>
 
-      {invoicingSurface && (kpis?.bankBalances != null || (kpis?.moneyInBank ?? 0) !== 0) && (
+      {invoicingSurface && moneyInBankAvailable && !loadError && (
         <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] shadow-md">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
               <Wallet className="w-4 h-4 text-amber-400" />
               Cash &amp; bank
             </h2>
-            <span className="text-sm font-bold text-[var(--text-main)]">{formatCurrency(kpis?.moneyInBank)}</span>
+            <span className="text-sm font-bold text-[var(--text-main)]">
+              {formatMetric(kpis?.moneyInBank, moneyInBankAvailable)}
+            </span>
           </div>
           {!loading && (
             <MoneyInBankBreakdown
@@ -529,7 +601,7 @@ export const Dashboard: React.FC = () => {
                       <div className="text-[10px] text-[var(--text-muted)]">Customer #{cust.customerId}</div>
                     </div>
                     <div className="font-mono font-bold text-[var(--brand-primary)]">
-                      {formatCurrency(cust.balance)}
+                      {formatMetric(cust.balance, receivablesAvailable)}
                     </div>
                   </div>
                 ))}
@@ -545,7 +617,7 @@ export const Dashboard: React.FC = () => {
           </h2>
 
           <div className="p-3 sm:p-4 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-2">
-            {hasModule('sales') && (
+            {hasModule('sales') && canShowSales && (
               <Link
                 to={`/org/${currentOrg.slug}/sales`}
                 className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
@@ -558,7 +630,7 @@ export const Dashboard: React.FC = () => {
               </Link>
             )}
 
-            {hasModule('purchases') && (
+            {hasModule('purchases') && canShowPurchases && (
               <Link
                 to={`/org/${currentOrg.slug}/purchases`}
                 className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
@@ -571,7 +643,7 @@ export const Dashboard: React.FC = () => {
               </Link>
             )}
 
-            {hasModule('sales') && (
+            {hasModule('sales') && canShowSales && (
               <Link
                 to={`/org/${currentOrg.slug}/items`}
                 className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
@@ -584,7 +656,7 @@ export const Dashboard: React.FC = () => {
               </Link>
             )}
 
-            {hasFinancials && (
+            {hasFinancialsModule && canShowFinancials && (
               <Link
                 to={`/org/${currentOrg.slug}/financials`}
                 className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
@@ -617,7 +689,7 @@ export const Dashboard: React.FC = () => {
                   <span>{personal ? 'Bills coming due' : 'Upcoming Payables (A/P)'}</span>
                 </h3>
                 <span className="text-xs font-mono font-semibold text-amber-400">
-                  Total: {formatCurrency(kpis?.totalPayables)}
+                  Total: {formatMetric(kpis?.totalPayables, payablesAvailable)}
                 </span>
               </div>
               <div className="space-y-2">
@@ -632,7 +704,7 @@ export const Dashboard: React.FC = () => {
                       <div className="text-[10px] text-[var(--text-muted)]">Bill #{item.invoiceNo}</div>
                     </div>
                     <div className="font-mono font-bold text-amber-400">
-                      {formatCurrency(item.remainingAmount)}
+                      {formatMetric(item.remainingAmount, payablesAvailable)}
                     </div>
                   </Link>
                 ))}
