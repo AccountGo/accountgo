@@ -15,15 +15,24 @@ namespace Dto.Dashboard
 
         /// <summary>Balance of cash accounts that no bank record is attached to.</summary>
         public decimal UnassignedCash { get; set; }
+        /// <summary>
+        /// Gross open receivables: sum of issued invoice <c>BalanceDue()</c> (lines after discount + tax + shipping − allocations).
+        /// Same basis as <see cref="OverdueReceivables"/>. Zero when sales is not visible.
+        /// </summary>
         public decimal OutstandingReceivables { get; set; }
         public decimal TotalPayables { get; set; }
         public decimal TotalAssets { get; set; }
+
+        /// <summary>
+        /// On the invoicing surface: issued invoice grand totals (tax + shipping, excluding drafts/voids) in range — not cash collected or profit.
+        /// On accounting: income-statement revenue for the range.
+        /// </summary>
         public decimal TotalSalesYtd { get; set; }
         public decimal TotalExpensesYtd { get; set; }
         public decimal NetProfitYtd { get; set; }
         public decimal CashFlowYtd { get; set; }
 
-        /// <summary>Open sales invoices past due (invoicing and accounting). Zero when sales is not visible.</summary>
+        /// <summary>Open sales invoices past due, using the same <c>BalanceDue()</c> basis as outstanding receivables.</summary>
         public decimal OverdueReceivables { get; set; }
 
         /// <summary>Count of open sales invoices still owed (excludes drafts and voids).</summary>

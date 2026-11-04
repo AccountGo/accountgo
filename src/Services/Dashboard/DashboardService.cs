@@ -54,7 +54,9 @@ namespace Services.Dashboard
             var (canViewFinancials, canViewSales, canViewPurchases) = ResolveAuthorizedDomains();
             var canViewBanks = CanViewBankAccounts();
 
-            var accounts = (canViewFinancials || canViewBanks)
+            // Ledger accounts only when financials is authorized — never use GetAccounts() to price banks
+            // for an invoicing caller who only has banking (that call returns an empty set under auth).
+            var accounts = canViewFinancials
                 ? (_financialService.GetAccounts()?.ToList() ?? new List<Account>())
                 : new List<Account>();
             var ledger = canViewFinancials
@@ -64,14 +66,14 @@ namespace Services.Dashboard
                 ? (_financialService.BalanceSheet()?.ToList() ?? new List<BalanceSheet>())
                 : new List<BalanceSheet>();
             var customers = canViewSales
-                ? (_salesService.GetCustomers()?.ToList() ?? new List<Core.Domain.Sales.Customer>())
-                : new List<Core.Domain.Sales.Customer>();
+                ? (_salesService.GetCustomers()?.ToList() ?? new List<Customer>())
+                : new List<Customer>();
             var salesInvoices = canViewSales
-                ? (_salesService.GetSalesInvoices()?.ToList() ?? new List<Core.Domain.Sales.SalesInvoiceHeader>())
-                : new List<Core.Domain.Sales.SalesInvoiceHeader>();
+                ? (_salesService.GetSalesInvoices()?.ToList() ?? new List<SalesInvoiceHeader>())
+                : new List<SalesInvoiceHeader>();
             var salesReceipts = canViewSales
-                ? (_salesService.GetSalesReceipts()?.ToList() ?? new List<Core.Domain.Sales.SalesReceiptHeader>())
-                : new List<Core.Domain.Sales.SalesReceiptHeader>();
+                ? (_salesService.GetSalesReceipts()?.ToList() ?? new List<SalesReceiptHeader>())
+                : new List<SalesReceiptHeader>();
             var purchaseInvoices = canViewPurchases
                 ? (_purchasingService.GetPurchaseInvoices()?.ToList() ?? new List<Core.Domain.Purchases.PurchaseInvoiceHeader>())
                 : new List<Core.Domain.Purchases.PurchaseInvoiceHeader>();
@@ -97,10 +99,14 @@ namespace Services.Dashboard
                     .ToHashSet()
                 : new HashSet<int>();
 
-            // Bank balances are useful on invoicing workspaces that have banking permission even without a GL.
-            var moneyInBank = (canViewFinancials || canViewBanks)
-                ? BuildMoneyInBank(accounts)
-                : (Total: 0m, BankBalances: (List<DashboardBankBalanceDto>?)null, UnassignedCash: 0m);
+            // Prefer the banking service (authorized book balances) whenever banking is allowed.
+            // Fall back to GetAccounts()-based totals only for financials viewers without banking.
+            var moneyInBankAvailable = canViewBanks || canViewFinancials;
+            var moneyInBank = canViewBanks
+                ? BuildMoneyInBankFromBankingService()
+                : canViewFinancials
+                    ? BuildMoneyInBankFromAccounts(accounts)
+                    : (Total: 0m, BankBalances: (List<DashboardBankBalanceDto>?)null, UnassignedCash: 0m);
 
             // IncomeStatement excludes ClosingEntries so YTD is unchanged after year-end close.
             // Invoicing workspaces without financials use issued invoices for sales YTD instead.
@@ -114,10 +120,15 @@ namespace Services.Dashboard
                 totalSalesYtd = RoundMoney(incomeItems.Where(i => !i.IsExpense).Sum(i => i.Amount));
                 totalExpensesYtd = RoundMoney(incomeItems.Where(i => i.IsExpense).Sum(i => i.Amount));
             }
-            else
+            else if (canViewSales)
             {
                 totalSalesYtd = RoundMoney(IssuedSalesInRange(salesInvoices, rangeStart, rangeEnd)
-                    .Sum(i => i.ComputeTotalAmount() + i.ComputeTotalTax() + i.ShippingHandlingCharge));
+                    .Sum(i => i.GrandTotal()));
+                totalExpensesYtd = 0m;
+            }
+            else
+            {
+                totalSalesYtd = 0m;
                 totalExpensesYtd = 0m;
             }
 
@@ -128,21 +139,56 @@ namespace Services.Dashboard
             var today = DateTime.Today;
             var openSales = canViewSales
                 ? salesInvoices.Where(IsOpenSalesInvoice).ToList()
-                : new List<Core.Domain.Sales.SalesInvoiceHeader>();
+                : new List<SalesInvoiceHeader>();
             var overdueSales = openSales
                 .Where(i => i.ResolveDueDate(null).Date < today)
+                .ToList();
+
+            // Gross open A/R uses the same BalanceDue() basis as overdue (tax, shipping, discount, allocations).
+            var outstandingReceivables = RoundMoney(openSales.Sum(i => i.BalanceDue()));
+            var overdueReceivables = RoundMoney(overdueSales.Sum(i => i.BalanceDue()));
+            var totalPayables = canViewPurchases
+                ? RoundMoney(purchaseInvoices.Where(i => i.IsPayable).Sum(i => i.BalanceDue()))
+                : 0m;
+
+            var customersById = customers.ToDictionary(c => c.Id);
+            var topReceivableRows = openSales
+                .GroupBy(i => i.CustomerId)
+                .Select(group =>
+                {
+                    customersById.TryGetValue(group.Key, out var customer);
+                    return new DashboardReceivableItemDto
+                    {
+                        CustomerId = group.Key,
+                        CustomerName = customer?.Party?.Name ?? customer?.No ?? $"Customer {group.Key}",
+                        Balance = RoundMoney(group.Sum(i => i.BalanceDue()))
+                    };
+                })
+                .Where(row => row.Balance > 0)
+                .OrderByDescending(row => row.Balance)
+                .Take(topReceivables)
                 .ToList();
 
             var summary = new DashboardSummaryDto
             {
                 Surface = canViewFinancials ? "Accounting" : "Invoicing",
+                Capabilities = new DashboardCapabilitiesDto
+                {
+                    Financials = canViewFinancials,
+                    Sales = canViewSales,
+                    Purchases = canViewPurchases,
+                    Banking = canViewBanks,
+                    MoneyInBank = moneyInBankAvailable,
+                    Receivables = canViewSales,
+                    Payables = canViewPurchases
+                },
                 Kpis = new DashboardKpiDto
                 {
                     MoneyInBank = moneyInBank.Total,
                     BankBalances = moneyInBank.BankBalances,
                     UnassignedCash = moneyInBank.UnassignedCash,
-                    OutstandingReceivables = customers.Sum(c => c.Balance),
-                    TotalPayables = purchaseInvoices.Where(i => i.IsPayable).Sum(i => i.BalanceDue()),
+                    OutstandingReceivables = outstandingReceivables,
+                    TotalPayables = totalPayables,
                     TotalAssets = balanceSheet
                         .Where(item => item.AccountClassId == (int)AccountClasses.Assets)
                         .Sum(item => item.Amount),
@@ -150,7 +196,7 @@ namespace Services.Dashboard
                     TotalExpensesYtd = totalExpensesYtd,
                     NetProfitYtd = canViewFinancials ? totalSalesYtd - totalExpensesYtd : 0m,
                     CashFlowYtd = cashFlowYtd,
-                    OverdueReceivables = RoundMoney(overdueSales.Sum(i => i.BalanceDue())),
+                    OverdueReceivables = overdueReceivables,
                     OpenInvoiceCount = openSales.Count,
                     OverdueInvoiceCount = overdueSales.Count
                 },
@@ -173,7 +219,9 @@ namespace Services.Dashboard
                         ledger,
                         revenueAccountIds,
                         normalBalanceIsDebit: false)
-                    : BuildMonthlySalesFromInvoices(rangeStart, rangeEnd, salesInvoices),
+                    : canViewSales
+                        ? BuildMonthlySalesFromInvoices(rangeStart, rangeEnd, salesInvoices)
+                        : new List<DashboardTrendPointDto>(),
                 MonthlyExpenses = canViewFinancials
                     ? BuildMonthlyTrend(
                         rangeStart,
@@ -182,17 +230,7 @@ namespace Services.Dashboard
                         expenseAccountIds,
                         normalBalanceIsDebit: true)
                     : new List<DashboardTrendPointDto>(),
-                TopReceivables = customers
-                    .Where(c => c.Balance > 0)
-                    .OrderByDescending(c => c.Balance)
-                    .Take(topReceivables)
-                    .Select(c => new DashboardReceivableItemDto
-                    {
-                        CustomerId = c.Id,
-                        CustomerName = c.Party?.Name ?? c.No ?? $"Customer {c.Id}",
-                        Balance = c.Balance
-                    })
-                    .ToList(),
+                TopReceivables = topReceivableRows,
                 // Approved bills still owed, soonest due first.
                 UpcomingPayables = purchaseInvoices
                     .Where(invoice => invoice.IsPayable && invoice.BalanceDue() > 0)
@@ -240,8 +278,7 @@ namespace Services.Dashboard
                 .GroupBy(invoice => new { invoice.Date.Year, invoice.Date.Month })
                 .ToDictionary(
                     group => new DateTime(group.Key.Year, group.Key.Month, 1),
-                    group => RoundMoney(group.Sum(i =>
-                        i.ComputeTotalAmount() + i.ComputeTotalTax() + i.ShippingHandlingCharge)));
+                    group => RoundMoney(group.Sum(i => i.GrandTotal())));
 
             var trend = new List<DashboardTrendPointDto>();
             var cursor = new DateTime(rangeStart.Year, rangeStart.Month, 1);
@@ -286,10 +323,39 @@ namespace Services.Dashboard
         }
 
         /// <summary>
-        /// Money in bank split per bank account plus cash accounts no bank record covers. An archived bank is listed (and
-        /// counted) only while its account still holds a balance, so archiving a bank never hides money from the total.
+        /// Banking-authorized money-in-bank: book balances from <see cref="IBankAccountService.List"/>,
+        /// which does not require financials/report access to read bank account balances.
         /// </summary>
-        private (decimal Total, List<DashboardBankBalanceDto>? BankBalances, decimal UnassignedCash) BuildMoneyInBank(
+        private (decimal Total, List<DashboardBankBalanceDto>? BankBalances, decimal UnassignedCash) BuildMoneyInBankFromBankingService()
+        {
+            var list = _bankAccountService.List(
+                includeArchived: true,
+                includeFullNumbers: false,
+                includeCashHistoryCodes: false);
+
+            var balances = list.Accounts
+                .Select(b => new DashboardBankBalanceDto
+                {
+                    BankId = b.Id,
+                    Name = b.Name,
+                    IsArchived = b.ArchivedAt != null,
+                    Balance = RoundMoney(b.BookBalance)
+                })
+                .Where(b => !b.IsArchived || b.Balance != 0m)
+                .OrderBy(b => b.IsArchived)
+                .ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var unassignedCash = RoundMoney(list.UnassignedCash.Sum(u => u.Balance));
+            var total = balances.Sum(b => b.Balance) + unassignedCash;
+            return (total, balances, unassignedCash);
+        }
+
+        /// <summary>
+        /// Financials-authorized money-in-bank from chart accounts (callers without the banking domain).
+        /// An archived bank is listed only while its account still holds a balance.
+        /// </summary>
+        private (decimal Total, List<DashboardBankBalanceDto>? BankBalances, decimal UnassignedCash) BuildMoneyInBankFromAccounts(
             IReadOnlyCollection<Account> accounts)
         {
             var allBanks = _financialService.GetCashAndBanks().ToList();
@@ -309,7 +375,6 @@ namespace Services.Dashboard
                 .ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            // Workspaces without bank records still hold cash in the postable cash accounts (e.g. 10111).
             var accountsWithBankRecord = allBanks
                 .Where(b => b.AccountId.HasValue)
                 .Select(b => b.AccountId!.Value)
@@ -320,6 +385,7 @@ namespace Services.Dashboard
                 .Sum(a => a.Balance));
 
             var total = balances.Sum(b => b.Balance) + unassignedCash;
+            // BankBalances detail is only returned when the banking domain is authorized.
             return (total, CanViewBankAccounts() ? balances : null, unassignedCash);
         }
 

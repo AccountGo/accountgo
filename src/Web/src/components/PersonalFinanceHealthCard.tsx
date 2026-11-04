@@ -1,59 +1,80 @@
 import React from 'react';
 import { HeartPulse } from 'lucide-react';
-import { nearTermCashPosition } from '../lib/dashboardProduct';
+import { recordedCashReceivablesMinusBills } from '../lib/dashboardProduct';
 
 interface Props {
   loading: boolean;
   hasFinancials: boolean;
-  currencyFormat: (val: number | undefined) => string;
-  moneyInBank?: number;
-  outstandingReceivables?: number;
-  totalPayables?: number;
+  /** Formats a loaded amount; pass null/undefined through as Unavailable. */
+  currencyFormat: (val: number | null | undefined, available: boolean) => string;
+  moneyInBank?: number | null;
+  moneyInBankAvailable: boolean;
+  outstandingReceivables?: number | null;
+  receivablesAvailable: boolean;
+  totalPayables?: number | null;
+  payablesAvailable: boolean;
   /** Equity / accumulated net worth when the ledger is available. */
-  netWorth?: number;
+  netWorth?: number | null;
+  netWorthAvailable: boolean;
 }
 
 /**
- * Personal-purpose workspaces: a compact health strip for household cash and
- * (when accounting is on) net worth — not a formal personal financial statement.
+ * Personal-purpose workspaces: household money overview from authorized metrics.
+ * Not a formal personal financial statement or a near-term cash forecast.
  */
 export const PersonalFinanceHealthCard: React.FC<Props> = ({
   loading,
   hasFinancials,
   currencyFormat,
   moneyInBank,
+  moneyInBankAvailable,
   outstandingReceivables,
+  receivablesAvailable,
   totalPayables,
+  payablesAvailable,
   netWorth,
+  netWorthAvailable,
 }) => {
-  const nearTerm = nearTermCashPosition({ moneyInBank, outstandingReceivables, totalPayables });
+  const recordedPosition = recordedCashReceivablesMinusBills({
+    moneyInBank,
+    outstandingReceivables,
+    totalPayables,
+    moneyInBankAvailable,
+    receivablesAvailable,
+    payablesAvailable,
+  });
 
-  const cells: { label: string; value: number | undefined; hint: string }[] = [
+  const cells: { label: string; value: number | null | undefined; available: boolean; hint: string }[] = [
     {
       label: 'Available cash',
       value: moneyInBank,
+      available: moneyInBankAvailable,
       hint: 'Bank and cash balances',
     },
     {
       label: 'Owed to you',
       value: outstandingReceivables,
-      hint: 'Open invoices',
+      available: receivablesAvailable,
+      hint: 'Open invoices (incl. tax)',
     },
     {
       label: 'You owe',
       value: totalPayables,
+      available: payablesAvailable,
       hint: 'Open bills',
     },
     hasFinancials
       ? {
           label: 'Net worth',
           value: netWorth,
+          available: netWorthAvailable,
           hint: 'Assets minus liabilities (books)',
         }
       : {
-          label: 'Near-term position',
-          value: nearTerm,
-          hint: 'Cash + owed to you − you owe',
+          label: 'Recorded cash + receivables − bills',
+          value: recordedPosition,
+          available: recordedPosition != null,
+          hint: 'Not a cash forecast — no due-date horizon',
         },
   ];
 
@@ -67,12 +88,12 @@ export const PersonalFinanceHealthCard: React.FC<Props> = ({
         <HeartPulse className="w-4 h-4 text-[var(--brand-primary)]" />
         <div>
           <h2 id="personal-finance-health-heading" className="text-sm font-bold text-[var(--text-main)]">
-            Personal finance health
+            Personal money overview
           </h2>
           <p className="text-[11px] text-[var(--text-muted)]">
             {hasFinancials
               ? 'Household picture from your books. Not a formal personal financial statement.'
-              : 'Near-term money picture from invoices and cash. Upgrade to Full accounting for net worth.'}
+              : 'Recorded invoice and cash totals only. Upgrade to Full accounting for net worth.'}
           </p>
         </div>
       </div>
@@ -87,7 +108,7 @@ export const PersonalFinanceHealthCard: React.FC<Props> = ({
               {loading ? (
                 <span className="inline-block w-20 h-5 bg-[var(--bg-surface)] rounded animate-pulse" />
               ) : (
-                currencyFormat(cell.value)
+                currencyFormat(cell.value, cell.available)
               )}
             </div>
             <div className="text-[10px] text-[var(--text-muted)] mt-1">{cell.hint}</div>

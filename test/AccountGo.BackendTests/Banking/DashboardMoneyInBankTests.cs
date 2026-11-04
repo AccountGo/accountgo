@@ -21,7 +21,6 @@ namespace AccountGo.BackendTests.Banking;
 /// <summary>Phase 3H: dashboard money-in-bank split per bank account.</summary>
 public class DashboardMoneyInBankTests
 {
-    private const int UnassignedCashAccountId = 10;
     private static readonly DateTime PostingDate = BankingTestHarness.Utc(2026, 3, 1);
 
     private static BankingTestHarness NewHarness()
@@ -76,7 +75,10 @@ public class DashboardMoneyInBankTests
         var savings = harness.CreateBank("Savings");
         PostBalance(harness, checking.AccountId!.Value, 1250.50m);
         PostBalance(harness, savings.AccountId!.Value, 300m);
-        PostBalance(harness, UnassignedCashAccountId, 49.50m);
+        // Prefer a leaf cash account that neither bank adopted.
+        var unassignedId = new[] { 11, 12 }
+            .First(id => id != checking.AccountId && id != savings.AccountId);
+        PostBalance(harness, unassignedId, 49.50m);
 
         var kpis = BuildKpis(harness);
 
@@ -163,7 +165,8 @@ public class DashboardMoneyInBankTests
     public void NoBanks_AllCashIsUnassigned()
     {
         using var harness = NewHarness();
-        PostBalance(harness, UnassignedCashAccountId, 75m);
+        // Leaf cash (10111) — parent Cash (10110) is excluded from banking postable cash.
+        PostBalance(harness, accountId: 11, 75m);
 
         var kpis = BuildKpis(harness);
 

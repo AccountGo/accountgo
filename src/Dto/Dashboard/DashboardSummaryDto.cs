@@ -11,6 +11,9 @@ namespace Dto.Dashboard
         /// </summary>
         public string Surface { get; set; } = "Invoicing";
 
+        /// <summary>Authorized domains and which KPI groups were actually computed.</summary>
+        public DashboardCapabilitiesDto Capabilities { get; set; } = new();
+
         public DashboardKpiDto Kpis { get; set; } = new();
         public DashboardBalanceSnapshotDto BalanceSnapshot { get; set; } = new();
         public List<DashboardTrendPointDto> MonthlySales { get; set; } = new();
