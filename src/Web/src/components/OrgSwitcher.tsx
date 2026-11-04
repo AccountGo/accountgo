@@ -49,15 +49,26 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
     navigate(targetPath);
   };
 
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
+  const getDisplayName = (org: OrgDetails) => {
+    return org.shortName?.trim() || org.name;
+  };
+
+  const getInitials = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return '';
+    if (!trimmed.includes(' ') && trimmed.length <= 3) {
+      return trimmed.toUpperCase();
+    }
+    return trimmed
+      .split(/\s+/)
       .map((part) => part[0])
       .filter(Boolean)
       .slice(0, 2)
       .join('')
       .toUpperCase();
   };
+
+  const currentDisplayName = getDisplayName(currentOrg);
 
   return (
     <div className="relative w-full" ref={containerRef}>
@@ -69,8 +80,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
             ? 'bg-[var(--bg-surface-hover)] shadow-lg'
             : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)]'
         } ${collapsed ? 'justify-center p-2' : ''}`}
-        title={collapsed ? currentOrg.name : undefined}
-        aria-label={collapsed ? `Current workspace: ${currentOrg.name}` : undefined}
+        title={collapsed ? currentDisplayName : undefined}
+        aria-label={collapsed ? `Current workspace: ${currentDisplayName}` : undefined}
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
@@ -80,7 +91,7 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
             currentOrg.avatarBg || 'bg-gradient-to-br from-indigo-500 to-blue-600'
           }`}
         >
-          {getInitials(currentOrg.name)}
+          {getInitials(currentDisplayName)}
         </div>
 
         {!collapsed && (
@@ -88,7 +99,7 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-sm text-[var(--text-main)] truncate">
-                  {currentOrg.name}
+                  {currentDisplayName}
                 </span>
               </div>
               <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] font-mono">
@@ -126,6 +137,7 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
           <div className="space-y-0.5 max-h-60 overflow-y-auto smooth-scroll">
             {availableOrgs.map((org) => {
               const isSelected = org.slug === currentOrg.slug;
+              const displayName = getDisplayName(org);
               return (
                 <button
                   key={org.id}
@@ -143,12 +155,12 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
                       org.avatarBg || 'bg-slate-700'
                     }`}
                   >
-                    {getInitials(org.name)}
+                    {getInitials(displayName)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold truncate flex items-center justify-between">
                       <span className={isSelected ? 'text-[var(--brand-primary)] font-bold' : 'text-[var(--text-main)]'}>
-                        {org.name}
+                        {displayName}
                       </span>
                     </div>
                     <div className="text-[11px] text-[var(--text-muted)] font-mono truncate">
