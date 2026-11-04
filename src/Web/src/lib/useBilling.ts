@@ -66,10 +66,11 @@ export function useBilling() {
   }, [authFetch]);
 
   const upgradePlan = useCallback(async (planKey: string, billingInterval: 'month' | 'year' = 'month') => {
+    const returnUrl = window.location.href;
     const response = await authFetch('/api/Subscription/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: planKey, billingInterval }),
+      body: JSON.stringify({ plan: planKey, billingInterval, returnUrl }),
     });
     if (!response.ok) {
       let message = `Unable to start upgrade (HTTP ${response.status}).`;
