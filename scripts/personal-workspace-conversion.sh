@@ -8,8 +8,9 @@
 # What it changes (and nothing else):
 #   CompanySetting.EntityType                  -> Individual (6)
 #   GeneralLedgerSetting.PermanentAccountId    -> the workspace's 30100 account
-#   Account 30100 / 30800 display names        -> "Personal Capital" / "Personal Drawings", only when the
-#                                                 current name is a seeded template name
+#   Account 30100 display name                 -> "Accumulated net worth", only when the current name is a
+#                                                 seeded template capital name (30800 is not renamed; drawings
+#                                                 are excluded from the initial Individual personal workflow)
 # It never touches posted journals, general ledger rows, account ids, grants, approval rules, members,
 # workspace purpose/collaboration state, or any other workspace.
 #
@@ -130,11 +131,9 @@ BEGIN
 END $f$;
 
 CREATE FUNCTION pg_temp.conv_is_capital_name(n text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $f$
-  SELECT lower(n) IN ('member capital', 'owner''s capital', 'partners'' capital', 'share capital', 'personal capital')
-$f$;
-
-CREATE FUNCTION pg_temp.conv_is_drawings_name(n text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $f$
-  SELECT lower(n) IN ('owner''s drawings', 'partners'' drawings', 'personal drawings')
+  SELECT lower(n) IN (
+    'member capital', 'owner''s capital', 'partners'' capital', 'share capital',
+    'personal capital', 'accumulated net worth')
 $f$;
 
 CREATE FUNCTION pg_temp.conv_acct(cid integer, code text) RETURNS jsonb LANGUAGE sql AS $f$
@@ -233,19 +232,16 @@ BEGIN
   IF cap_id IS NOT NULL AND (st ->> 'permanentAccountId') IS DISTINCT FROM cap_id::text THEN
     changes := changes || jsonb_build_object('field', 'GeneralLedgerSetting.PermanentAccountId', 'before', st -> 'permanentAccountId', 'after', cap_id);
   END IF;
-  IF cap <> 'null'::jsonb AND (cap ->> 'name') <> 'Personal Capital' THEN
+  IF cap <> 'null'::jsonb AND (cap ->> 'name') <> 'Accumulated net worth' THEN
     IF pg_temp.conv_is_capital_name(cap ->> 'name') THEN
-      changes := changes || jsonb_build_object('field', 'Account.30100.AccountName', 'before', cap -> 'name', 'after', 'Personal Capital');
+      changes := changes || jsonb_build_object('field', 'Account.30100.AccountName', 'before', cap -> 'name', 'after', 'Accumulated net worth');
     ELSE
       warnings := warnings || to_jsonb('account 30100 has a custom name that is kept'::text);
     END IF;
   END IF;
-  IF drw <> 'null'::jsonb AND (drw ->> 'name') <> 'Personal Drawings' THEN
-    IF pg_temp.conv_is_drawings_name(drw ->> 'name') THEN
-      changes := changes || jsonb_build_object('field', 'Account.30800.AccountName', 'before', drw -> 'name', 'after', 'Personal Drawings');
-    ELSE
-      warnings := warnings || to_jsonb('account 30800 has a custom name that is kept'::text);
-    END IF;
+  -- 30800 stays as-is: Individual close does not treat drawings as a distribution account.
+  IF drw <> 'null'::jsonb THEN
+    warnings := warnings || to_jsonb('account 30800 is left unchanged; ordinary personal spending must post as expenses, not drawings'::text);
   END IF;
 
   IF pg_temp.conv_net(cid, '30300') <> 0 THEN
@@ -388,15 +384,12 @@ BEGIN
   END IF;
 
   cap_id := (before_state -> 'a30100' ->> 'id')::int;
-  drw_id := (before_state -> 'a30800' ->> 'id')::int;
 
   UPDATE public."CompanySetting" SET "EntityType" = 6 WHERE "CompanyId" = cid AND "EntityType" <> 6;
   UPDATE public."GeneralLedgerSetting" SET "PermanentAccountId" = cap_id
    WHERE "CompanyId" = cid AND "PermanentAccountId" IS DISTINCT FROM cap_id;
-  UPDATE public."Account" SET "AccountName" = 'Personal Capital'
-   WHERE "Id" = cap_id AND "AccountName" <> 'Personal Capital' AND pg_temp.conv_is_capital_name("AccountName");
-  UPDATE public."Account" SET "AccountName" = 'Personal Drawings'
-   WHERE "Id" = drw_id AND "AccountName" <> 'Personal Drawings' AND pg_temp.conv_is_drawings_name("AccountName");
+  UPDATE public."Account" SET "AccountName" = 'Accumulated net worth'
+   WHERE "Id" = cap_id AND "AccountName" <> 'Accumulated net worth' AND pg_temp.conv_is_capital_name("AccountName");
 
   -- Reconciliation inside the same transaction: any difference aborts and rolls everything back.
   IF pg_temp.conv_fingerprint(cid) <> snap -> 'fingerprint' THEN
@@ -437,10 +430,10 @@ WITH ctx AS (
   SELECT 'entity type is Individual' AS name, (st ->> 'entityType') = '6' AS ok FROM cur
   UNION ALL SELECT 'permanent account is 30100',
     (st ->> 'permanentAccountId') IS NOT DISTINCT FROM (st -> 'a30100' ->> 'id') FROM cur
-  UNION ALL SELECT 'account 30100 label is Personal Capital or an untouched custom name',
-    (st -> 'a30100' ->> 'name') = 'Personal Capital' OR (st -> 'a30100' ->> 'name') = (snap -> 'state' -> 'a30100' ->> 'name') FROM cur
-  UNION ALL SELECT 'account 30800 label is Personal Drawings or an untouched custom name',
-    (st -> 'a30800' ->> 'name') = 'Personal Drawings' OR (st -> 'a30800' ->> 'name') = (snap -> 'state' -> 'a30800' ->> 'name') FROM cur
+  UNION ALL SELECT 'account 30100 label is Accumulated net worth or an untouched custom name',
+    (st -> 'a30100' ->> 'name') = 'Accumulated net worth' OR (st -> 'a30100' ->> 'name') = (snap -> 'state' -> 'a30100' ->> 'name') FROM cur
+  UNION ALL SELECT 'account 30800 label is unchanged (drawings excluded from Individual workflow)',
+    (st -> 'a30800' ->> 'name') IS NOT DISTINCT FROM (snap -> 'state' -> 'a30800' ->> 'name') FROM cur
   UNION ALL SELECT 'ledger fingerprint equals snapshot (rows, per-account totals, account ids)',
     fp = snap -> 'fingerprint' FROM cur
   UNION ALL SELECT 'trial balance debits equal credits', (fp ->> 'debit') = (fp ->> 'credit') FROM cur
@@ -475,7 +468,6 @@ DECLARE
   old_entity integer := (snap -> 'state' ->> 'entityType')::int;
   old_permanent integer := (snap -> 'state' ->> 'permanentAccountId')::int;
   cap_id integer := (snap -> 'state' -> 'a30100' ->> 'id')::int;
-  drw_id integer := (snap -> 'state' -> 'a30800' ->> 'id')::int;
 BEGIN
   PERFORM 1 FROM public."Company" WHERE "Id" = cid FOR UPDATE;
   PERFORM 1 FROM public."CompanySetting" WHERE "CompanyId" = cid FOR UPDATE;
@@ -498,9 +490,7 @@ BEGIN
    WHERE "CompanyId" = cid AND "PermanentAccountId" IS DISTINCT FROM old_permanent;
   -- Names are restored only where the conversion wrote them, so later user edits are never clobbered.
   UPDATE public."Account" SET "AccountName" = old_state -> 'a30100' ->> 'name'
-   WHERE "Id" = cap_id AND "AccountName" = 'Personal Capital' AND "AccountName" <> old_state -> 'a30100' ->> 'name';
-  UPDATE public."Account" SET "AccountName" = old_state -> 'a30800' ->> 'name'
-   WHERE "Id" = drw_id AND "AccountName" = 'Personal Drawings' AND "AccountName" <> old_state -> 'a30800' ->> 'name';
+   WHERE "Id" = cap_id AND "AccountName" = 'Accumulated net worth' AND "AccountName" <> old_state -> 'a30100' ->> 'name';
 
   after_state := pg_temp.conv_state(cid);
   IF after_state -> 'accessDigest' <> cur_state -> 'accessDigest'

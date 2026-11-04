@@ -18,8 +18,8 @@ Only these fields, only for the workspace with the given slug:
 |---|---|
 | `CompanySetting.EntityType` | `Individual` (6) |
 | `GeneralLedgerSetting.PermanentAccountId` | the workspace's `30100` account |
-| `Account` `30100` display name | "Personal Capital", only if the current name is a seeded template name |
-| `Account` `30800` display name | "Personal Drawings", only if the current name is a seeded template name |
+| `Account` `30100` display name | "Accumulated net worth", only if the current name is a seeded template capital name |
+| `Account` `30800` | **Not renamed.** Ordinary personal spending posts as expenses; drawings are excluded from the initial Individual workflow |
 
 It never touches posted journals, general ledger rows, account ids or codes, members, grants, approval rules,
 workspace purpose or collaboration state, or other workspaces. Custom account names are kept and reported.
@@ -85,8 +85,8 @@ disposable rehearsal:
 
 ```text
 CHANGE CompanySetting.EntityType: 1 -> 6
-CHANGE Account.30100.AccountName: Owner's Capital -> Personal Capital
-CHANGE Account.30800.AccountName: Owner's Drawings -> Personal Drawings
+CHANGE Account.30100.AccountName: Owner's Capital -> Accumulated net worth
+WARNING account 30800 is left unchanged; ordinary personal spending must post as expenses, not drawings
 WARNING workspace purpose is not Personal and is deliberately not changed by this conversion
 DRYRUN_RESULT needs-accept-warnings
 ```
@@ -124,8 +124,8 @@ it with a stale snapshot is refused.
 2. Sign in as the owner and confirm access to `personal` is unchanged.
 3. Capture Trial Balance, Balance Sheet and Income Statement for each fiscal year before and after; totals must be
    identical (only the two account labels differ).
-4. Open the year-end close **preview** for the latest ended year (read-only). Closing lines must target `30100`, drawings
-   (`30800`) must close to `30100`, and the preview journal must balance.
+4. Open the year-end close **preview** for the latest ended year (read-only). Closing lines must target `30100`
+   (Accumulated net worth), must not close `30800` as drawings, and the preview journal must balance.
 5. Do not run a real close or reopen on production as a test. That behaviour is verified on a disposable restored copy
    (below) and by the fixture tests in the decision package.
 
