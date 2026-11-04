@@ -159,6 +159,10 @@ export interface WorkspaceInvitation {
   role: Exclude<WorkspaceRole, 'Owner'>;
   securityRoleIds: number[];
   expiresAt: string;
+  /** True once the link has expired; the invitation can still be resent (renewed) or revoked. */
+  expired?: boolean;
+  /** True when the journal approval policy changed since the invitation was issued. */
+  policyChanged?: boolean;
 }
 
 export interface WorkspaceAccessRequestItem {
@@ -198,7 +202,19 @@ export interface PendingInvitation {
   expiresAt: string;
 }
 
+export interface InvitationAccessArea {
+  area: string;
+  label: string;
+  level: string;
+}
+
+export interface InvitationAccessSummary {
+  roles: string[];
+  areas: InvitationAccessArea[];
+}
+
 export interface InvitationPreview {
+  access?: InvitationAccessSummary;
   workspaceName: string;
   inviterName: string;
   role: Exclude<WorkspaceRole, 'Owner'>;

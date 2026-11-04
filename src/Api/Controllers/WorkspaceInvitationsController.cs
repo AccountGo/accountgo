@@ -60,14 +60,55 @@ namespace Api.Controllers
             _approvalResolver = approvalResolver;
         }
 
+        /// <summary>How long an expired, unaccepted invitation stays visible so it can be resent or revoked.</summary>
+        public const int ExpiredInvitationVisibilityDays = 30;
+
+        private IActionResult ReasonProblem(int status, string title, string detail, string reasonCode, long? policyRevision = null)
+        {
+            var problem = new ProblemDetails { Title = title, Detail = detail, Status = status };
+            problem.Extensions["reasonCode"] = reasonCode;
+            if (policyRevision.HasValue)
+                problem.Extensions["policyRevision"] = policyRevision.Value;
+            return StatusCode(status, problem);
+        }
+
         [HttpGet]
         public IActionResult List()
         {
             var companyId = _tenant.RequireCompanyId();
             var now = DateTime.UtcNow;
-            return Ok(_db.CompanyInvitations.Where(i => i.CompanyId == companyId && i.AcceptedAt == null && i.RevokedAt == null && i.ExpiresAt > now)
-                .ToList().Select(i => new { id = i.Id, email = i.Email, role = i.Role.ToString(), expiresAt = i.ExpiresAt,
-                    securityRoleIds = JsonSerializer.Deserialize<List<int>>(i.SecurityRoleIdsJson) }));
+            var oldestVisibleExpiry = now.AddDays(-ExpiredInvitationVisibilityDays);
+            var currentSettings = _db.WorkspaceOperatingSettings.AsNoTracking().SingleOrDefault(s => s.CompanyId == companyId);
+            var journalRule = _db.WorkspaceApprovalRules.AsNoTracking()
+                .SingleOrDefault(r => r.CompanyId == companyId && r.OperationKey == AccessOperationCatalog.FinancialsJournalPost);
+            var currentJournalMode = _approvalResolver?.Resolve(
+                currentSettings ?? new WorkspaceOperatingSettings { CompanyId = companyId },
+                journalRule,
+                AccessOperationCatalog.FinancialsJournalPost).Mode.ToString();
+
+            return Ok(_db.CompanyInvitations
+                .Where(i => i.CompanyId == companyId && i.AcceptedAt == null && i.RevokedAt == null && i.ExpiresAt > oldestVisibleExpiry)
+                .OrderBy(i => i.ExpiresAt)
+                .ToList()
+                .Select(i =>
+                {
+                    var issued = WorkspaceInvitationTransition.GetLatest(_db, companyId, i.Id);
+                    // Stale: the journal approval policy the invitee was told about has since changed.
+                    var policyChanged = currentJournalMode != null
+                        && issued != null
+                        && !string.IsNullOrWhiteSpace(issued.IntendedJournalMode)
+                        && !string.Equals(issued.IntendedJournalMode, currentJournalMode, StringComparison.Ordinal);
+                    return new
+                    {
+                        id = i.Id,
+                        email = i.Email,
+                        role = i.Role.ToString(),
+                        expiresAt = i.ExpiresAt,
+                        expired = i.ExpiresAt <= now,
+                        policyChanged,
+                        securityRoleIds = JsonSerializer.Deserialize<List<int>>(i.SecurityRoleIdsJson)
+                    };
+                }));
         }
 
         public class InviteRequest
@@ -231,10 +272,12 @@ namespace Api.Controllers
                 var currentRevision = currentSettings?.PolicyRevision ?? 0;
                 if (request?.ExpectedPolicyRevision.HasValue == true && request.ExpectedPolicyRevision.Value != currentRevision)
                 {
-                    return Problem(
-                        statusCode: StatusCodes.Status409Conflict,
-                        title: "Workspace policy revision mismatch",
-                        detail: $"The provided expected policy revision {request.ExpectedPolicyRevision.Value} does not match the current revision {currentRevision}.");
+                    return ReasonProblem(
+                        StatusCodes.Status409Conflict,
+                        "Workspace policy revision mismatch",
+                        $"The provided expected policy revision {request.ExpectedPolicyRevision.Value} does not match the current revision {currentRevision}.",
+                        WorkspacePolicyReasonCodes.StalePolicyRevision,
+                        currentRevision);
                 }
 
                 var latestTransition = WorkspaceInvitationTransition.GetLatest(_db, companyId, invitation.Id);
@@ -245,18 +288,22 @@ namespace Api.Controllers
                     {
                         if (request?.ConfirmChangedPolicy != true)
                         {
-                            return Problem(
-                                statusCode: StatusCodes.Status409Conflict,
-                                title: "Workspace policy assumptions changed",
-                                detail: $"Workspace journal approval policy changed from {latestTransition.IntendedJournalMode} to {currentJournalMode} since this invitation was issued. Explicit reconfirmation is required to resend.");
+                            return ReasonProblem(
+                                StatusCodes.Status409Conflict,
+                                "Workspace policy assumptions changed",
+                                $"Workspace journal approval policy changed from {latestTransition.IntendedJournalMode} to {currentJournalMode} since this invitation was issued. Explicit reconfirmation is required to resend.",
+                                WorkspacePolicyReasonCodes.PolicyAssumptionsChanged,
+                                currentRevision);
                         }
 
                         if (!request.ExpectedPolicyRevision.HasValue || request.ExpectedPolicyRevision.Value != currentRevision)
                         {
-                            return Problem(
-                                statusCode: StatusCodes.Status409Conflict,
-                                title: "Workspace policy revision mismatch",
-                                detail: $"The expected policy revision must be specified and match current revision {currentRevision} to confirm changed policy.");
+                            return ReasonProblem(
+                                StatusCodes.Status409Conflict,
+                                "Workspace policy revision mismatch",
+                                $"The expected policy revision must be specified and match current revision {currentRevision} to confirm changed policy.",
+                                WorkspacePolicyReasonCodes.StalePolicyRevision,
+                                currentRevision);
                         }
                     }
                 }

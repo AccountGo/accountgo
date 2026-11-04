@@ -169,6 +169,23 @@ export const Invitation: React.FC = () => {
             <p className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
               <Mail className="w-4 h-4" aria-hidden="true" />Invitation sent to {preview.emailMasked}
             </p>
+            <section aria-labelledby="invitation-access-heading" className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-2">
+              <h2 id="invitation-access-heading" className="text-sm font-semibold">What you will be able to do</h2>
+              {preview.access && preview.access.areas.length > 0 ? (
+                <>
+                  {preview.access.roles.length > 0 && (
+                    <p className="text-sm text-[var(--text-muted)]">Access: {preview.access.roles.join(', ')}</p>
+                  )}
+                  <ul className="list-disc pl-5 text-sm text-[var(--text-muted)]">
+                    {preview.access.areas.map(area => <li key={area.area}>{area.label}: {area.level}</li>)}
+                  </ul>
+                </>
+              ) : (
+                <p className="text-sm text-[var(--text-muted)]">
+                  You will join as a {preview.role} with no functional access yet. The workspace owner can grant it after you join.
+                </p>
+              )}
+            </section>
             {message && <div role="alert" className="p-3 rounded-xl bg-rose-500/10 text-rose-400">{message}</div>}
             {!isAuthenticated ? (
               <div className="flex flex-wrap gap-3">

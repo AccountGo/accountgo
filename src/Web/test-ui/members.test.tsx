@@ -2,17 +2,18 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Members } from '../src/pages/Members';
 
-const { authFetch, currentOrg, caller } = vi.hoisted(() => ({
+const { authFetch, currentOrg, caller, hasModule } = vi.hoisted(() => ({
   authFetch: vi.fn(),
   currentOrg: { id: '1', name: 'Test workspace', slug: 'test' },
   caller: { role: 'Owner' },
+  hasModule: vi.fn((_module: string) => true),
 }));
 
 vi.mock('../src/auth/AuthContext', () => ({
   useAuth: () => ({ authFetch, user: { id: 'owner', email: 'owner@example.com' } }),
 }));
 vi.mock('react-router-dom', () => ({
-  useOutletContext: () => ({ currentOrg }),
+  useOutletContext: () => ({ currentOrg, hasModule }),
   useNavigate: () => vi.fn(),
 }));
 vi.mock('../src/lib/entitlements', () => ({
@@ -21,6 +22,7 @@ vi.mock('../src/lib/entitlements', () => ({
 
 beforeEach(() => {
   caller.role = 'Owner';
+  hasModule.mockImplementation((_module: string) => true);
   authFetch.mockImplementation(async (url: string, options?: RequestInit) => {
     if (options?.method === 'POST') return new Response(null, { status: 201 });
     const value = url === '/api/organizations/current' ? { role: caller.role }
@@ -238,4 +240,137 @@ it('shows the reviewer conflict without a policy-change offer to an Admin', asyn
 
   await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('usable independent reviewer'));
   expect(screen.queryByText('Change journal approval to single-user posting?')).toBeNull();
+});
+
+const ROLE_ROWS = [
+  { id: 1, name: 'FullWorkspaceAccessV1', displayName: 'Full workspace access', permissions: ['financials.journal.post', 'sales.invoices.post'] },
+  { id: 2, name: 'Accountant', displayName: 'Accountant', permissions: ['financials.journal.post', 'sales.invoices.post', 'purchases.bills.post', 'reports.view'] },
+  { id: 3, name: 'Sales Representative', displayName: 'Sales Representative', permissions: ['sales.invoices.create', 'sales.invoices.view'] },
+  { id: 4, name: 'Purchasing Agent', displayName: 'Purchasing Agent', permissions: ['purchases.bills.create'] },
+  { id: 5, name: 'Auditor / Viewer', displayName: 'Auditor / Viewer', permissions: ['reports.view', 'financials.journal.view', 'audit.logs.view'] },
+];
+
+function mockWorkspace(handlers: { invitations?: object[]; onPost?: (url: string, options: RequestInit) => Response | undefined } = {}) {
+  authFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (options?.method === 'POST' || options?.method === 'DELETE') {
+      const custom = handlers.onPost?.(url, options);
+      return custom ?? new Response(null, { status: 201 });
+    }
+    if (url === '/api/organizations/current') return new Response(JSON.stringify({ role: caller.role }), { status: 200 });
+    if (url.endsWith('/security-roles')) return new Response(JSON.stringify(ROLE_ROWS), { status: 200 });
+    if (url.endsWith('/invitations')) return new Response(JSON.stringify(handlers.invitations ?? []), { status: 200 });
+    if (url.endsWith('/operating-settings')) return new Response(JSON.stringify({ policyRevision: 21, collaborationState: 'TeamActive' }), { status: 200 });
+    if (url.endsWith('/access-setup/status')) return new Response(JSON.stringify({ isEligibleForBootstrap: false }), { status: 200 });
+    return new Response(JSON.stringify([]), { status: 200 });
+  });
+}
+
+async function openInviteForm() {
+  const invite = await screen.findByRole('button', { name: 'Invite member' });
+  await waitFor(() => expect(invite.hasAttribute('disabled')).toBe(false));
+  fireEvent.click(invite);
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.com' } });
+}
+
+it('maps the Read-only accountant preset to the Auditor / Viewer role and previews the grant', async () => {
+  mockWorkspace();
+  render(<Members />);
+  await openInviteForm();
+
+  expect(screen.getByText(/Your own access will stay the same/)).toBeDefined();
+  expect(screen.getByText(/does not change this approval policy/)).toBeDefined();
+  expect(screen.getByText(/No functional access/)).toBeDefined();
+
+  fireEvent.click(screen.getByLabelText(/Read-only accountant/));
+  expect(screen.getByText('Reports: View only')).toBeDefined();
+  expect(screen.getByText('Accounting: View only')).toBeDefined();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+  await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/invitations',
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: 'new@example.com', role: 'Member', securityRoleIds: [5] }) })));
+});
+
+it('maps the Bookkeeper preset to the post and AR/AP oriented seeded roles', async () => {
+  mockWorkspace();
+  render(<Members />);
+  await openInviteForm();
+
+  fireEvent.click(screen.getByLabelText(/Bookkeeper/));
+  expect(screen.getByText('Accounting: Manage and post')).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+
+  await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/invitations',
+    expect.objectContaining({ body: JSON.stringify({ email: 'new@example.com', role: 'Member', securityRoleIds: [2, 3, 4] }) })));
+});
+
+it('marks a preset as plan-limited when the workspace lacks some of its modules, and keeps the custom list', async () => {
+  hasModule.mockImplementation((module: string) => module !== 'purchases');
+  mockWorkspace();
+  render(<Members />);
+  await openInviteForm();
+
+  expect(screen.getByText(/Some areas are not included in this workspace plan/)).toBeDefined();
+  fireEvent.click(screen.getByLabelText('Purchasing Agent'));
+  expect(screen.getByText(/Custom selection/)).toBeDefined();
+});
+
+it('shows the server detail and reason code when an invitation is refused', async () => {
+  mockWorkspace({
+    onPost: () => new Response(JSON.stringify({
+      title: 'Independent approval required',
+      detail: 'Granting this access needs approval from another Owner.',
+      reasonCode: 'reviewer_required',
+    }), { status: 403 }),
+  });
+  render(<Members />);
+  await openInviteForm();
+  fireEvent.click(screen.getByRole('radio', { name: /Full workspace access/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toContain('needs approval from another Owner');
+  expect(alert.getAttribute('data-reason-code')).toBe('reviewer_required');
+});
+
+const staleInvitation = {
+  id: 31, email: 'late@example.com', role: 'Member', securityRoleIds: [5],
+  expiresAt: '2026-01-01T00:00:00Z', expired: true, policyChanged: true,
+};
+
+it('lists expired and policy-changed invitations and resends only after explicit confirmation at the current revision', async () => {
+  mockWorkspace({ invitations: [staleInvitation] });
+  render(<Members />);
+
+  expect(await screen.findByText('Expired')).toBeDefined();
+  expect(screen.getByText('Approval policy changed')).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Renew and resend' }));
+
+  const dialog = await screen.findByRole('alertdialog');
+  expect(within(dialog).getByText(/Journal approval policy changed since this invitation was sent/)).toBeDefined();
+  expect(authFetch).not.toHaveBeenCalledWith(expect.stringContaining('/resend'), expect.anything());
+
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm and resend' }));
+  await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/invitations/31/resend',
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ confirmChangedPolicy: true, expectedPolicyRevision: 21 }) })));
+});
+
+it('offers reconfirmation when a plain resend is refused because the policy changed', async () => {
+  mockWorkspace({
+    invitations: [{ ...staleInvitation, id: 32, expired: false, policyChanged: false }],
+    onPost: (url, options) => url.endsWith('/32/resend') && !options.body
+      ? new Response(JSON.stringify({
+        detail: 'Workspace journal approval policy changed since this invitation was issued.',
+        reasonCode: 'policy_assumptions_changed',
+      }), { status: 409 })
+      : undefined,
+  });
+  render(<Members />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Resend' }));
+  const dialog = await screen.findByRole('alertdialog');
+  expect(screen.getByRole('alert').getAttribute('data-reason-code')).toBe('policy_assumptions_changed');
+
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm and resend' }));
+  await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/invitations/32/resend',
+    expect.objectContaining({ body: JSON.stringify({ confirmChangedPolicy: true, expectedPolicyRevision: 21 }) })));
 });
