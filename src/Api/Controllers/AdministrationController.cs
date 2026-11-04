@@ -273,48 +273,50 @@ namespace Api.Controllers
                     .ToList()
                 : new List<int>();
 
-            if (affectedCompanyIds.Count > 0 && reviewerEligibility != null && db != null)
-            {
-                var permissionNames = db.Set<Core.Domain.Security.SecurityPermission>()
+            var permissionNames = affectedCompanyIds.Count > 0 && reviewerEligibility != null && db != null
+                ? db.Set<Core.Domain.Security.SecurityPermission>()
                     .Where(p => permissionIds.Contains(p.Id))
                     .Select(p => p.Name)
-                    .ToList();
-                foreach (var companyId in affectedCompanyIds)
-                {
-                    var verdict = reviewerEligibility.EvaluateRolePermissionChange(companyId, request.Id, permissionNames);
-                    if (verdict.Blocked)
-                    {
-                        return StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
-                        {
-                            Title = "Role change blocked",
-                            Detail = verdict.Message,
-                            Status = StatusCodes.Status409Conflict,
-                            Extensions =
-                            {
-                                ["reasonCode"] = verdict.ReasonCode,
-                                ["companyId"] = companyId
-                            }
-                        });
-                    }
-                }
-            }
+                    .ToList()
+                : null;
 
             if (affectedCompanyIds.Count > 0 && policyTransaction != null)
             {
-                policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
+                // Eligibility must re-check under the coordination lock so a concurrent member removal
+                // cannot race past a pre-lock validation and leave independent review unusable.
+                return policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
                 {
-                    foreach (var guard in guards)
+                    if (reviewerEligibility != null && permissionNames != null)
                     {
-                        guard.AdvanceRevision();
+                        foreach (var companyId in affectedCompanyIds)
+                        {
+                            var verdict = reviewerEligibility.EvaluateRolePermissionChange(
+                                companyId, request.Id, permissionNames);
+                            if (verdict.Blocked)
+                            {
+                                return StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
+                                {
+                                    Title = "Role change blocked",
+                                    Detail = verdict.Message,
+                                    Status = StatusCodes.Status409Conflict,
+                                    Extensions =
+                                    {
+                                        ["reasonCode"] = verdict.ReasonCode,
+                                        ["companyId"] = companyId
+                                    }
+                                });
+                            }
+                        }
                     }
+
+                    foreach (var guard in guards)
+                        guard.AdvanceRevision();
                     _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, permissionIds);
+                    return Ok(new { success = true });
                 });
             }
-            else
-            {
-                _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, permissionIds);
-            }
 
+            _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, permissionIds);
             return Ok(new { success = true });
         }
 
@@ -352,46 +354,42 @@ namespace Api.Controllers
                     .ToList()
                 : new List<int>();
 
-            if (affectedCompanyIds.Count > 0 && reviewerEligibility != null)
-            {
-                foreach (var companyId in affectedCompanyIds)
-                {
-                    // Deleting the role removes all of its permissions from every assignee.
-                    var verdict = reviewerEligibility.EvaluateRolePermissionChange(
-                        companyId, id, Array.Empty<string>());
-                    if (verdict.Blocked)
-                    {
-                        return StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
-                        {
-                            Title = "Role change blocked",
-                            Detail = verdict.Message,
-                            Status = StatusCodes.Status409Conflict,
-                            Extensions =
-                            {
-                                ["reasonCode"] = verdict.ReasonCode,
-                                ["companyId"] = companyId
-                            }
-                        });
-                    }
-                }
-            }
-
             if (affectedCompanyIds.Count > 0 && policyTransaction != null)
             {
-                policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
+                return policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
                 {
-                    foreach (var guard in guards)
+                    if (reviewerEligibility != null)
                     {
-                        guard.AdvanceRevision();
+                        foreach (var companyId in affectedCompanyIds)
+                        {
+                            // Deleting the role removes all of its permissions from every assignee.
+                            var verdict = reviewerEligibility.EvaluateRolePermissionChange(
+                                companyId, id, Array.Empty<string>());
+                            if (verdict.Blocked)
+                            {
+                                return StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
+                                {
+                                    Title = "Role change blocked",
+                                    Detail = verdict.Message,
+                                    Status = StatusCodes.Status409Conflict,
+                                    Extensions =
+                                    {
+                                        ["reasonCode"] = verdict.ReasonCode,
+                                        ["companyId"] = companyId
+                                    }
+                                });
+                            }
+                        }
                     }
+
+                    foreach (var guard in guards)
+                        guard.AdvanceRevision();
                     _securityService.DeleteRole(id);
+                    return Ok(new { success = true, message = "Role deleted successfully." });
                 });
             }
-            else
-            {
-                _securityService.DeleteRole(id);
-            }
 
+            _securityService.DeleteRole(id);
             return Ok(new { success = true, message = "Role deleted successfully." });
         }
 

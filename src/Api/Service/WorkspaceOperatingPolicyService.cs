@@ -624,16 +624,22 @@ namespace Api.Service
                 }
             }
 
-            var eligibleOtherReviewers = _reviewerEligibility.GetEligibleReviewers(companyId, excludeUserId: callerUserId);
-            if (newRuleKind == WorkspaceApprovalRuleKind.IndependentReviewerRequired && eligibleOtherReviewers.Count == 0)
+            IndependentReviewCapacity? enabledCapacity = null;
+            if (newRuleKind == WorkspaceApprovalRuleKind.IndependentReviewerRequired)
             {
-                // Moving AWAY from independent review is always allowed; moving TO it needs someone who can review.
-                return new WorkspacePolicyMutationResult(
-                    false,
-                    WorkspacePolicyReasonCodes.ReviewerRequired,
-                    "Independent review needs at least one other active Owner or Admin who can post journals and whose workspace plan allows it. Add a reviewer first.",
-                    settings.PolicyRevision,
-                    settings.CollaborationState);
+                // Every permitted preparer must have a different eligible reviewer. Checking only
+                // "someone other than the caller" allows an Owner without posting rights to enable
+                // independent review when the sole reviewer is also the sole preparer.
+                enabledCapacity = _reviewerEligibility.EvaluateCapacity(companyId);
+                if (!enabledCapacity.IsUsable)
+                {
+                    return new WorkspacePolicyMutationResult(
+                        false,
+                        WorkspacePolicyReasonCodes.ReviewerRequired,
+                        "Independent review needs every journal preparer to have a different active Owner or Admin who can post journals and whose workspace plan allows it. Add a reviewer first, or keep single-actor posting.",
+                        settings.PolicyRevision,
+                        settings.CollaborationState);
+                }
             }
 
             var rule = FindJournalRule(companyId);
@@ -695,7 +701,8 @@ namespace Api.Service
                     previousProvenance,
                     newRuleKind = newRuleKind.ToString(),
                     newProvenance = WorkspaceApprovalRuleProvenance.ExplicitPolicyChange.ToString(),
-                    eligibleOtherReviewerCount = eligibleOtherReviewers.Count,
+                    eligibleReviewerCount = enabledCapacity?.EligibleReviewers.Count,
+                    eligiblePreparerCount = enabledCapacity?.EligiblePreparers.Count,
                     previousPolicyRevision = previousRevision,
                     policyRevision = settings.PolicyRevision
                 })
