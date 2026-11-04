@@ -34,7 +34,7 @@ public sealed class SubscriptionControllerPlanChangeTests
 
         var controller = Create(admin.Object, billing.Object);
         var result = await controller.UpdateSubscription(
-            new UpdateSubscriptionDto { Plan = "plan_b" }, CancellationToken.None);
+            new UpdateSubscriptionDto { Plan = "plan_b", ReturnUrl = "https://app.example/settings" }, CancellationToken.None);
 
         var bad = Assert.IsType<BadRequestObjectResult>(result);
         Assert.Contains("cannot change", bad.Value!.ToString(), System.StringComparison.Ordinal);
@@ -45,7 +45,7 @@ public sealed class SubscriptionControllerPlanChangeTests
     {
         var billing = new Mock<IBillingProvider>();
         billing.SetupGet(b => b.RequiresProviderCheckout).Returns(true);
-        billing.Setup(b => b.RequestPlanChangeAsync(1, "plan_b", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        billing.Setup(b => b.RequestPlanChangeAsync(1, "plan_b", "https://app.example/settings", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PlanChangeResult(false, "https://billing.example/checkout", null));
 
         var admin = new Mock<IAdministrationService>();
@@ -53,7 +53,7 @@ public sealed class SubscriptionControllerPlanChangeTests
 
         var controller = Create(admin.Object, billing.Object);
         var result = await controller.UpdateSubscription(
-            new UpdateSubscriptionDto { Plan = "plan_b" }, CancellationToken.None);
+            new UpdateSubscriptionDto { Plan = "plan_b", ReturnUrl = "https://app.example/settings" }, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result);
         Assert.Contains("https://billing.example/checkout", ok.Value!.ToString(), System.StringComparison.Ordinal);
@@ -74,10 +74,31 @@ public sealed class SubscriptionControllerPlanChangeTests
 
         var controller = Create(admin.Object, billing.Object);
         var result = await controller.UpdateSubscription(
-            new UpdateSubscriptionDto { Plan = "plan_b" }, CancellationToken.None);
+            new UpdateSubscriptionDto { Plan = "plan_b", ReturnUrl = "https://app.example/settings" }, CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result);
         admin.Verify(a => a.UpdateSubscription(It.IsAny<UpdateSubscriptionDto>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateSubscription_MissingAbsoluteReturnUrl_ReturnsBadRequest()
+    {
+        var billing = new Mock<IBillingProvider>();
+        billing.SetupGet(b => b.RequiresProviderCheckout).Returns(true);
+
+        var admin = new Mock<IAdministrationService>();
+        admin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto { Plan = "plan_a", CompanyId = 1 });
+
+        var controller = Create(admin.Object, billing.Object);
+        controller.ControllerContext.HttpContext.Request.Headers.Referer = "";
+        var result = await controller.UpdateSubscription(
+            new UpdateSubscriptionDto { Plan = "plan_b" }, CancellationToken.None);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("return URL", bad.Value!.ToString(), System.StringComparison.OrdinalIgnoreCase);
+        billing.Verify(
+            b => b.RequestPlanChangeAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     private static SubscriptionController Create(IAdministrationService admin, IBillingProvider billing)

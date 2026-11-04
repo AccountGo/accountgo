@@ -59,7 +59,7 @@ public class EvaluateStatementImportTests
             });
         entitlements.Setup(e => e.Get(1)).Returns(new EntitlementSnapshot(
             Enabled: true, Plan: "invoicing_free", Tier: "free", Limited: true,
-            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_pro" },
+            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_team" },
             Usage: System.Array.Empty<ResourceUsage>(), SupportEmail: null,
             Features: ImmutableHashSet<string>.Empty, EffectivePlan: "invoicing_free"));
 
@@ -79,17 +79,17 @@ public class EvaluateStatementImportTests
             .Returns((int _, EntitlementAction action) => action switch
             {
                 EntitlementAction.Module => new EntitlementDecision(false, "MODULE_NOT_SUBSCRIBED", "no financials",
-                    RequiredModule: "financials", EffectivePlan: "invoicing_pro"),
+                    RequiredModule: "financials", EffectivePlan: "invoicing_team"),
                 EntitlementAction.Feature => new EntitlementDecision(true, null, null,
-                    RequiredFeature: FeatureKeys.BankingStatementImport, EffectivePlan: "invoicing_pro"),
+                    RequiredFeature: FeatureKeys.BankingStatementImport, EffectivePlan: "invoicing_team"),
                 _ => new EntitlementDecision(false, "DENIED", "unexpected")
             });
         entitlements.Setup(e => e.Get(1)).Returns(new EntitlementSnapshot(
-            Enabled: true, Plan: "invoicing_pro", Tier: "pro", Limited: true,
-            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_pro" },
+            Enabled: true, Plan: "invoicing_team", Tier: "pro", Limited: true,
+            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_team" },
             Usage: System.Array.Empty<ResourceUsage>(), SupportEmail: null,
             Features: ImmutableHashSet.Create(FeatureKeys.BankingStatementImport),
-            EffectivePlan: "invoicing_pro"));
+            EffectivePlan: "invoicing_team"));
 
         Assert.True(StatementImportAccess.Evaluate(entitlements.Object, 1).Allowed);
     }

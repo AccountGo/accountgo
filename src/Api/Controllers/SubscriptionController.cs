@@ -64,9 +64,7 @@ namespace Api.Controllers
                     var targetPlan = dto.Plan.Trim().ToLowerInvariant();
                     if (!string.Equals(current.Plan, targetPlan, StringComparison.OrdinalIgnoreCase))
                     {
-                        var returnUrl = Request.Headers["Referer"].ToString();
-                        if (string.IsNullOrWhiteSpace(returnUrl))
-                            returnUrl = "/";
+                        var returnUrl = ResolveCheckoutReturnUrl(dto.ReturnUrl, Request.Headers["Referer"].ToString());
                         if (!string.IsNullOrWhiteSpace(dto.BillingInterval)
                             && !returnUrl.Contains("interval=", StringComparison.OrdinalIgnoreCase))
                         {
@@ -111,5 +109,24 @@ namespace Api.Controllers
             var modules = _adminService.GetModuleDefinitions();
             return Ok(modules);
         }
+
+        /// <summary>
+        /// Stripe Checkout requires absolute https success/cancel URLs. Prefer the client-supplied
+        /// return URL; fall back to Referer only when it is already an absolute http(s) URL.
+        /// </summary>
+        internal static string ResolveCheckoutReturnUrl(string? dtoReturnUrl, string? referer)
+        {
+            if (IsAbsoluteHttpUrl(dtoReturnUrl))
+                return dtoReturnUrl!.Trim();
+            if (IsAbsoluteHttpUrl(referer))
+                return referer!.Trim();
+            throw new ArgumentException(
+                "A full return URL is required to start checkout. Refresh the page and try again.");
+        }
+
+        private static bool IsAbsoluteHttpUrl(string? value) =>
+            !string.IsNullOrWhiteSpace(value)
+            && Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
     }
 }

@@ -22,6 +22,11 @@ namespace Dto.Subscription
         public List<string>? ActiveModules { get; set; }
         /// <summary>Billing interval when requesting a paid plan change: "month" or "year". Ignored when billing is off.</summary>
         public string? BillingInterval { get; set; }
+        /// <summary>
+        /// Absolute browser return URL for Stripe Checkout / Customer Portal.
+        /// Preferred over the Referer header (cross-origin calls often omit or strip path).
+        /// </summary>
+        public string? ReturnUrl { get; set; }
     }
 
     public class PlanDefinitionDto

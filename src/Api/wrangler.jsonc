@@ -12,23 +12,37 @@
   "containers": [
     {
       "class_name": "AccountGoApiContainer",
-      "image": "./Dockerfile",
+      "image": "./Dockerfile.cloud",
       "image_build_context": "../..",
       "max_instances": 5,
+      // Pin new instances to US regions (existing DO names keep their original region until CONTAINER_NAME bumps).
       "constraints": {
-        "regions": ["ENAM", "WNAM"]
+        "regions": [
+          "ENAM",
+          "WNAM"
+        ]
       }
     },
+    // Phase 0: side-by-side V2 with durable_object policy. Do not change V1 scheduling_policy.
+    // See docs/tiered-container-capacity.md. Flag false = zero traffic change.
     {
       "name": "accountgo-api-v2",
       "class_name": "AccountGoApiContainerV2",
       "scheduling_policy": "durable_object",
       "images": {
         "base": {
-          "dockerfile": "./Dockerfile",
+          "dockerfile": "./Dockerfile.cloud",
           "build_context": "../.."
         }
       }
+    }
+  ],
+  // Runtime switches the Worker reads without a deploy (runbooks/tiered-capacity.md):
+  //   tiered_capacity = "true" | "false" overrides TIERED_CAPACITY_ENABLED below.
+  "kv_namespaces": [
+    {
+      "binding": "FLAGS",
+      "id": "e61810ae4c6140fc88c018adb21559bf"
     }
   ],
   "durable_objects": {
@@ -58,28 +72,68 @@
     }
   ],
   "vars": {
-    "ENVIRONMENT": "Development",
+    "ENVIRONMENT": "Production",
+    // P0-3 code is deployed with activation closed pending the release acceptance gates.
+    // Existing initialized workspaces retain their stored grants and journal policies.
+    "WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED": "false",
+    "WORKSPACE_EXPERIENCE_LEGACY_SOLO_CONFIRMATION_ENABLED": "false",
+    "WORKSPACE_EXPERIENCE_CANARY_EMAILS": "",
+    "WORKSPACE_EXPERIENCE_CANARY_USER_IDS": "",
+    "WORKSPACE_INVARIANT_SCAN_ON_START": "false",
+    "WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED": "true",
+    "WORKSPACE_EXPERIENCE_CONTROLLED_RECOVERY_ENABLED": "false",
+    // Off again since 2026-10-30 22:55 UTC: with pools on, the free pool (lite) degraded within minutes (API requests
+    // 30-50 s, then timing out; /health fine; Postgres idle) and sessions were lost. Worker rolled back to daf1261e.
+    // Cause under investigation (runbooks/tiered-capacity.md). Earlier: V2 rolled back 2026-10-28 (requests hung ~90 s).
     "TIERED_CAPACITY_ENABLED": "false",
+    // Paid pool size (V2). durable_object containers accept lite | standard-1..4 (no "basic"). Free workspaces stay on
+    // V1: V2 lite gets 256 MiB (.NET heap 154 MB) and the app needs ~320-420 MiB (runbooks/tiered-capacity.md).
     "CONTAINER_INSTANCE_TYPE_PAID": "standard-1",
-    "CONTAINER_INSTANCE_TYPE_FREE": "lite",
+    // Postgres (Supabase, us-east-1, session pooler) since the 2026-10-30 cutover. Connection string = Worker secret
+    // ConnectionStrings__PostgresConnection. The Worker refuses any other provider (container disk is not kept).
+    // D1 accountgo-db-us is no longer bound; it stays as a frozen copy as of 2026-10-30 15:27 UTC (runbooks/rollback.md).
     "DatabaseProvider": "Postgres",
-    "EMAIL_PROVIDER": "Console",
-    "PUBLIC_WEB_URL": "http://localhost:3000",
-    "PUBLIC_API_URL": "http://localhost:8001",
-    "RESEND_EMAIL_FROM": "billing@example.com",
-    "RESEND_FROM_NAME": "AccountGo",
-    "AUTH_EMAIL_FROM": "auth@example.com",
-    "SECURITY_EMAIL_FROM": "security@example.com",
-    "INVITES_EMAIL_FROM": "invites@example.com",
-    "SUPPORT_EMAIL": "support@example.com",
+    "EMAIL_PROVIDER": "Resend",
+    "PUBLIC_WEB_URL": "https://app.accountgo.dev",
+    "PUBLIC_API_URL": "https://api.accountgo.dev",
+    "RESEND_EMAIL_FROM": "billing@accountgo.dev",
+    "RESEND_FROM_NAME": "AccountGo Billing",
+    "AUTH_EMAIL_FROM": "auth@accountgo.dev",
+    "SECURITY_EMAIL_FROM": "security@accountgo.dev",
+    "INVITES_EMAIL_FROM": "invites@accountgo.dev",
+    "SUPPORT_EMAIL": "support@accountgo.dev",
+    "REQUIRED_MODULES": "billing,security,integrations",
+    // Staff Console allowlist (comma-separated operator emails). When unset/empty, all staff routes return 404.
+    "STAFF_CONSOLE_ALLOWED_EMAILS": "platform-owner@example.invalid",
+    "AUTH__MFA__ENABLED": "true",
+    "WEBAUTHN__SERVERDOMAIN": "accountgo.dev",
+    "WEBAUTHN__SERVERNAME": "AccountGo",
+    "WEBAUTHN__ORIGINS__0": "https://app.accountgo.dev",
+    "WEBAUTHN__ORIGINS__1": "https://accountgo.dev",
     "JwtSettings__validIssuer": "AccountGo API",
-    "JwtSettings__validAudience": "http://localhost:8001",
-    "Cors__AllowedOrigins__0": "http://localhost:3000",
-    "Cors__AllowedOrigins__1": "http://localhost:5173",
+    "JwtSettings__validAudience": "https://api.accountgo.dev",
+    "Cors__AllowedOrigins__0": "https://app.accountgo.dev",
+    "Cors__AllowedOrigins__1": "https://accountgo-web.anter.workers.dev",
     "ANTER_BASE_URL": "https://agents.anter.ai",
+    "ANTER_PROJECT_ID": "abproj_1hAA2dKHr1L32cGDNgZQy",
     "ANTER_AGENT_SLUG": "accountgo-assistant",
     "TURNSTILE_HOSTNAMES": "localhost, 127.0.0.1, accountgo.dev, app.accountgo.dev",
-    "WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED": "true"
+    // Entitlement switches read by the Billing module (quotas come from its plan catalog). Strings only: worker forwards string bindings.
+    "ENTITLEMENTS_ENABLED": "true",
+    "ENTITLEMENTS_SELF_SERVICE_PLANS": "invoicing_free,invoicing_solo,invoicing_team,accounting_free",
+    // Billing (AccountGo.Billing). Secrets STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET via wrangler secret — see runbooks/billing.md.
+    // Live USD price IDs. Deploy with the matching billing catalog.
+    "BILLING_PROVIDER": "stripe",
+    // Kill switch for self-serve Checkout / Upgrade UI. "false" hides upgrades; portal + webhooks still work when Stripe is configured.
+    "BILLING_SUBSCRIPTIONS_ENABLED": "true",
+    "STRIPE_PORTAL_CONFIGURATION": "bpc_1UXOhMIP0fnnGYSe1MEdJsBz",
+    "Billing__Stripe__DefaultInterval": "month",
+    "STRIPE_PRICE_INVOICING_SOLO_MONTHLY": "price_1UXOP0IP0fnnGYSen3JglanO",
+    "STRIPE_PRICE_INVOICING_SOLO_ANNUAL": "price_1UXOP0IP0fnnGYSesqKKtYQs",
+    "STRIPE_PRICE_INVOICING_TEAM_MONTHLY": "price_1UVNhHIP0fnnGYSeVZAbmJsD",
+    "STRIPE_PRICE_INVOICING_TEAM_ANNUAL": "price_1UVNhHIP0fnnGYSeZexrM00h",
+    "STRIPE_PRICE_ACCOUNTING_PRO_MONTHLY": "price_1UVNhCIP0fnnGYSeyAmw2Fwy",
+    "STRIPE_PRICE_ACCOUNTING_PRO_ANNUAL": "price_1UVNhCIP0fnnGYSeod3eMxGM"
   },
   "observability": {
     "enabled": true,
@@ -93,6 +147,8 @@
       "invocation_logs": true,
       "persist": true
     },
+    // Persist dashboard "Issues" across deploys (Wrangler >= 4.134). Without this, the next
+    // wrangler deploy turns Issues off even if enabled in the Cloudflare UI.
     "issues": {
       "enabled": true
     }
