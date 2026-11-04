@@ -528,7 +528,7 @@ WHERE ""DisabledModulesJson"" IS NULL
   AND ""ActiveModulesJson"" IS NOT NULL
   AND json_valid(""ActiveModulesJson"")
   AND json_array_length(""ActiveModulesJson"") > 0
-  AND lower(COALESCE(""Plan"", '')) IN ('invoicing', 'invoicing_free', 'invoicing_pro', 'invoicing_team');",
+  AND lower(COALESCE(""Plan"", '')) IN ('invoicing', 'invoicing_free', 'invoicing_pro', 'invoicing_team', 'invoicing_team');",
             @"UPDATE ""Company""
 SET ""DisabledModulesJson"" = (
   SELECT COALESCE(json_group_array(m.value), '[]')
