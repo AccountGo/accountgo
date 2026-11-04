@@ -235,9 +235,9 @@ namespace Core.Authorization
         IReadOnlyCollection<int>? NewSecurityRoleIds = null);
 
     /// <summary>
-    /// Reviewer capacity for independent journal review. Usable only when every permitted preparer has at
-    /// least one eligible reviewer who is not themselves — counting "any reviewer + any second human" is
-    /// insufficient when the remaining reviewer cannot review their own journals.
+    /// Reviewer capacity for independent journal review. Preparers are members who can create journals;
+    /// reviewers are Owner/Admin members who can post. Usable only when every preparer has at least one
+    /// eligible reviewer who is not themselves — create-only and post-only roles may be held by different people.
     /// </summary>
     public sealed record IndependentReviewCapacity(
         int ActiveHumanCount,

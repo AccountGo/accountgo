@@ -139,15 +139,22 @@ namespace Api.Service
                         ? change.NewSecurityRoleIds
                         : member.SecurityRoles.Select(r => r.SecurityRoleId).ToList();
 
-                    var canPost = roleIds.Any(id =>
-                        permissionsByRoleId.TryGetValue(id, out var permissions)
-                        && permissions.Contains(SystemPermissions.FinancialsJournalPost));
-                    if (!canPost)
+                    bool HasPermission(string permissionName) =>
+                        roleIds.Any(id =>
+                            permissionsByRoleId.TryGetValue(id, out var permissions)
+                            && permissions.Contains(permissionName));
+
+                    // Preparers draft journals (create). Reviewers approve/post and must hold Owner/Admin
+                    // governance. Split create-only / post-only assignments are a valid independent-review shape.
+                    var canCreate = HasPermission(SystemPermissions.FinancialsJournalCreate);
+                    var canPost = HasPermission(SystemPermissions.FinancialsJournalPost);
+                    if (!canCreate && !canPost)
                         continue;
 
                     var entry = new EligibleJournalReviewer(member.Id, member.UserId, effectiveRole);
-                    preparers.Add(entry);
-                    if (effectiveRole is CompanyMemberRole.Owner or CompanyMemberRole.Admin)
+                    if (canCreate)
+                        preparers.Add(entry);
+                    if (canPost && effectiveRole is CompanyMemberRole.Owner or CompanyMemberRole.Admin)
                         reviewers.Add(entry);
                 }
             }

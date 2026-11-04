@@ -238,6 +238,41 @@ namespace AccountGo.BackendTests.Security
                 $"Expected at least one conflict; strip={stripResponse.StatusCode}, remove={removeResponse.StatusCode}");
         }
 
+        [Fact]
+        public async Task Review_SeparateCreateOnlyAndPostOnlyRoles_HaveUsableIndependentReview()
+        {
+            var team = await CreateTeam();
+            Assert.Equal(HttpStatusCode.OK, (await SetPolicy(team, "SingleActorAllowed")).StatusCode);
+            var creatorRole = "creator-only-" + team.Slug;
+            var reviewerRole = "reviewer-only-" + team.Slug;
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                foreach (var pair in new[]
+                {
+                    (Name: creatorRole, Permission: Core.Domain.Security.SystemPermissions.FinancialsJournalCreate),
+                    (Name: reviewerRole, Permission: Core.Domain.Security.SystemPermissions.FinancialsJournalPost)
+                })
+                {
+                    var role = new Core.Domain.Security.SecurityRole { Name = pair.Name, DisplayName = pair.Name };
+                    db.Add(role);
+                    db.SaveChanges();
+                    var permission = db.Set<Core.Domain.Security.SecurityPermission>().Single(p => p.Name == pair.Permission);
+                    db.Add(new Core.Domain.Security.SecurityRolePermission
+                    {
+                        SecurityRoleId = role.Id,
+                        SecurityPermissionId = permission.Id
+                    });
+                    db.SaveChanges();
+                }
+            }
+
+            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Owner.Id, new[] { creatorRole });
+            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Reviewer.Id, new[] { reviewerRole });
+            var response = await SetPolicy(team, "IndependentReviewerRequired");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
         // ---- ChangeJournalApprovalPolicy ----------------------------------------------------------------
 
         [Fact]
