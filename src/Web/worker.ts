@@ -77,7 +77,38 @@ export default {
       });
     }
 
+    // Marketing/search indexing lives on accountgo.dev. Keep the app shell out of SERPs
+    // so brand queries are not split between the marketing site and the SPA.
+    if (url.pathname === "/robots.txt") {
+      return new Response(
+        [
+          "# AccountGo web app (app.accountgo.dev)",
+          "# Marketing and search indexing live on https://accountgo.dev.",
+          "# The app shell is intentionally not indexed so brand SERPs are not split.",
+          "User-agent: *",
+          "Disallow: /",
+          "",
+        ].join("\n"),
+        {
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "X-Robots-Tag": "noindex",
+            "Cache-Control": "public, max-age=3600",
+          },
+        },
+      );
+    }
+
     // Fall back to static assets (SPA router fallback handles client routes)
-    return env.ASSETS.fetch(request);
+    const assetResponse = await env.ASSETS.fetch(request);
+    const headers = new Headers(assetResponse.headers);
+    if (!headers.has("X-Robots-Tag")) {
+      headers.set("X-Robots-Tag", "noindex, nofollow");
+    }
+    return new Response(assetResponse.body, {
+      status: assetResponse.status,
+      statusText: assetResponse.statusText,
+      headers,
+    });
   },
 };

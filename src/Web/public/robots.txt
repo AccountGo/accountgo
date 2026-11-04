@@ -1,0 +1,5 @@
+# AccountGo web app (app.accountgo.dev)
+# Marketing and search indexing live on https://accountgo.dev.
+# The app shell is intentionally not indexed so brand SERPs are not split.
+User-agent: *
+Disallow: /
