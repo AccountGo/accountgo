@@ -235,13 +235,37 @@ public class YearEndCloseTests
             ExpenseId = 50;
 
             Accounts.Insert(new Account { Id = CashId, CompanyId = 1, AccountCode = "10111", AccountName = "Cash", AccountClassId = 1, DrOrCrSide = DrOrCrSide.Dr });
-            Accounts.Insert(new Account { Id = OwnerCapitalId, CompanyId = 1, AccountCode = "30100", AccountName = entityType == EntityType.Individual ? "Personal Capital" : "Owner's Capital", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Cr });
+            Accounts.Insert(new Account
+            {
+                Id = OwnerCapitalId,
+                CompanyId = 1,
+                AccountCode = "30100",
+                AccountName = entityType == EntityType.Individual ? "Accumulated net worth" : "Owner's Capital",
+                AccountClassId = 3,
+                DrOrCrSide = DrOrCrSide.Cr
+            });
             Accounts.Insert(new Account { Id = RetainedId, CompanyId = 1, AccountCode = "30300", AccountName = "Retained Earnings", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Cr });
-            Accounts.Insert(new Account { Id = DrawingsId, CompanyId = 1, AccountCode = "30800", AccountName = entityType == EntityType.Individual ? "Personal Drawings" : "Owner's Drawings", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Dr });
+            Accounts.Insert(new Account { Id = DrawingsId, CompanyId = 1, AccountCode = "30800", AccountName = "Owner's Drawings", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Dr });
             Accounts.Insert(new Account { Id = DividendsId, CompanyId = 1, AccountCode = "30810", AccountName = "Dividends Declared", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Dr });
             Accounts.Insert(new Account { Id = ObeId, CompanyId = 1, AccountCode = "30700", AccountName = "Opening Balance Equity", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Cr });
-            Accounts.Insert(new Account { Id = RevenueId, CompanyId = 1, AccountCode = "40100", AccountName = "Sales", AccountClassId = 4, DrOrCrSide = DrOrCrSide.Cr });
-            Accounts.Insert(new Account { Id = ExpenseId, CompanyId = 1, AccountCode = "50100", AccountName = "Expense", AccountClassId = 5, DrOrCrSide = DrOrCrSide.Dr });
+            Accounts.Insert(new Account
+            {
+                Id = RevenueId,
+                CompanyId = 1,
+                AccountCode = "40100",
+                AccountName = entityType == EntityType.Individual ? "Salary" : "Sales",
+                AccountClassId = 4,
+                DrOrCrSide = DrOrCrSide.Cr
+            });
+            Accounts.Insert(new Account
+            {
+                Id = ExpenseId,
+                CompanyId = 1,
+                AccountCode = "50100",
+                AccountName = entityType == EntityType.Individual ? "Groceries" : "Expense",
+                AccountClassId = 5,
+                DrOrCrSide = DrOrCrSide.Dr
+            });
 
             var permanentId = permanentCode == "30300" ? RetainedId : OwnerCapitalId;
             GlSettings.Insert(new GeneralLedgerSetting { CompanyId = 1, PermanentAccountId = permanentId });
@@ -631,21 +655,20 @@ public class YearEndCloseTests
         Assert.Equal(profit2026 - drawings2026 + profit2027 - drawings2027, capitalCredit);
     }
 
-    // ---- Individual (personal) equity mapping: PROPOSED, gated. These run on disposable in-memory fixtures with the
-    // service-level allowUnapproved seam; production DI never supplies it and IsIndividualMappingApproved stays false.
+    // ---- Individual (personal) equity mapping: finance-approved model, production activation still gated.
+    // Disposable fixtures use the allowUnapproved seam; IsIndividualMappingApproved stays false.
 
     private static decimal NetDrOf(IEnumerable<TrialBalance> rows, string accountCode) =>
         rows.Where(r => r.AccountCode == accountCode).Select(NetDr).DefaultIfEmpty(0m).Sum();
 
     private static void PostPersonalYear(Harness harness)
     {
-        // Opening balance: bank/cash against Opening Balance Equity, then reclassified to Personal Capital.
+        // Opening assets against Opening Balance Equity, then reclassified into Accumulated net worth.
         harness.Post(D(2025, 1, 1), harness.CashId, harness.ObeId, 5000m);
         harness.Post(D(2025, 1, 2), harness.ObeId, harness.OwnerCapitalId, 5000m);
-        harness.Post(D(2025, 3, 1), harness.CashId, harness.OwnerCapitalId, 1000m); // personal contribution
-        harness.Post(D(2025, 6, 15), harness.CashId, harness.RevenueId, 2000m);
-        harness.Post(D(2025, 7, 1), harness.ExpenseId, harness.CashId, 700m);
-        harness.Post(D(2025, 8, 1), harness.DrawingsId, harness.CashId, 300m); // personal drawing
+        harness.Post(D(2025, 3, 1), harness.CashId, harness.OwnerCapitalId, 1000m); // contribution / equity top-up
+        harness.Post(D(2025, 6, 15), harness.CashId, harness.RevenueId, 2000m); // salary → income
+        harness.Post(D(2025, 7, 1), harness.ExpenseId, harness.CashId, 700m); // groceries → expense
     }
 
     [Fact]
@@ -665,13 +688,13 @@ public class YearEndCloseTests
     }
 
     [Fact]
-    public void Individual_close_posts_balanced_closing_journal_to_personal_capital_and_reconciles_reports()
+    public void Individual_close_posts_balanced_closing_journal_to_accumulated_net_worth_and_reconciles_reports()
     {
         using var harness = new Harness(EntityType.Individual, allowUnapprovedIndividualMapping: true);
         PostPersonalYear(harness);
 
         var before = harness.BalanceSheetTotals(harness.Fy2025End);
-        Assert.Equal(7000m, before.Assets);
+        Assert.Equal(7300m, before.Assets);
         Assert.Equal(0m, before.Liabilities);
         Assert.Equal(before.Assets, before.Liabilities + before.Equity);
         var incomeBefore = harness.Financial.IncomeStatement(harness.Fy2025Start, harness.Fy2025End).ToList();
@@ -679,12 +702,11 @@ public class YearEndCloseTests
         var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
         var revenueLine = Assert.Single(preview.ClosingLines, l => l.AccountCode == "40100");
         var expenseLine = Assert.Single(preview.ClosingLines, l => l.AccountCode == "50100");
-        var drawingsLine = Assert.Single(preview.ClosingLines, l => l.AccountCode == "30800");
-        var capitalLine = Assert.Single(preview.ClosingLines, l => l.AccountCode == "30100");
+        var netWorthLine = Assert.Single(preview.ClosingLines, l => l.AccountCode == "30100");
         Assert.Equal(("Dr", 2000m), (revenueLine.DrCr, revenueLine.Amount));
         Assert.Equal(("Cr", 700m), (expenseLine.DrCr, expenseLine.Amount));
-        Assert.Equal(("Cr", 300m), (drawingsLine.DrCr, drawingsLine.Amount));
-        Assert.Equal(("Cr", 1000m), (capitalLine.DrCr, capitalLine.Amount));
+        Assert.Equal(("Cr", 1300m), (netWorthLine.DrCr, netWorthLine.Amount));
+        Assert.DoesNotContain(preview.ClosingLines, l => l.AccountCode == "30800");
         Assert.DoesNotContain(preview.ClosingLines, l => l.AccountCode == "30300");
         Assert.Equal(
             preview.ClosingLines.Where(l => l.DrCr == "Dr").Sum(l => l.Amount),
@@ -705,7 +727,7 @@ public class YearEndCloseTests
         Assert.Equal(0m, NetDrOf(tb, "30800"));
         Assert.Equal(0m, NetDrOf(tb, "30700"));
         Assert.Equal(0m, NetDrOf(tb, "30300"));
-        Assert.Equal(7000m, -NetDrOf(tb, "30100"));
+        Assert.Equal(7300m, -NetDrOf(tb, "30100"));
         Assert.Equal(tb.Sum(r => r.Debit), tb.Sum(r => r.Credit));
 
         var after = harness.BalanceSheetTotals(harness.Fy2025End);
@@ -729,7 +751,7 @@ public class YearEndCloseTests
         harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "personal");
         var closingId = harness.FiscalYears.Table.Single(f => f.FiscalYearCode == Harness.Fy2025Code).ClosingGeneralLedgerHeaderId;
 
-        var reopened = harness.YearEnd.Reopen(Harness.Fy2025Code, "Correct a drawing", "personal");
+        var reopened = harness.YearEnd.Reopen(Harness.Fy2025Code, "Correct a grocery posting", "personal");
         Assert.Equal(FiscalYearCloseStatus.Ended, reopened.Status);
 
         var reversal = Assert.Single(harness.GlHeaders.Table.Where(h => h.ReversedGeneralLedgerHeaderId == closingId));
@@ -740,7 +762,7 @@ public class YearEndCloseTests
         var tb = harness.Financial.TrialBalance(null, harness.Fy2025End).ToList();
         Assert.Equal(2000m, -NetDrOf(tb, "40100"));
         Assert.Equal(700m, NetDrOf(tb, "50100"));
-        Assert.Equal(300m, NetDrOf(tb, "30800"));
+        Assert.Equal(0m, NetDrOf(tb, "30800"));
         Assert.Equal(6000m, -NetDrOf(tb, "30100"));
         Assert.Equal(tb.Sum(r => r.Debit), tb.Sum(r => r.Credit));
 
@@ -750,7 +772,7 @@ public class YearEndCloseTests
 
         var reclosed = harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "personal");
         Assert.Equal(FiscalYearCloseStatus.Closed, reclosed.Status);
-        Assert.Equal(7000m, -NetDrOf(harness.Financial.TrialBalance(null, harness.Fy2025End).ToList(), "30100"));
+        Assert.Equal(7300m, -NetDrOf(harness.Financial.TrialBalance(null, harness.Fy2025End).ToList(), "30100"));
     }
 
     [Fact]

@@ -203,8 +203,9 @@ public sealed class PersonalWorkspaceConversionScriptTests
         var dryRun = RunScript(fixture.DatabaseUri, "dry-run", "--slug", fixture.Slug);
         Assert.Equal(0, dryRun.ExitCode);
         Assert.Contains("CHANGE CompanySetting.EntityType: 1 -> 6", dryRun.Output);
-        Assert.Contains("CHANGE Account.30100.AccountName: Owner's Capital -> Personal Capital", dryRun.Output);
-        Assert.Contains("CHANGE Account.30800.AccountName: Owner's Drawings -> Personal Drawings", dryRun.Output);
+        Assert.Contains("CHANGE Account.30100.AccountName: Owner's Capital -> Accumulated net worth", dryRun.Output);
+        Assert.DoesNotContain("CHANGE Account.30800", dryRun.Output);
+        Assert.Contains("WARNING account 30800 is left unchanged", dryRun.Output);
         Assert.Contains("WARNING workspace purpose is not Personal", dryRun.Output);
         Assert.Contains("DRYRUN_RESULT needs-accept-warnings", dryRun.Output);
         Assert.Equal(before, fixture.Read());
@@ -231,8 +232,8 @@ public sealed class PersonalWorkspaceConversionScriptTests
         Assert.Contains("APPLY_RESULT converted", applied.Output);
         var converted = fixture.Read();
         Assert.Equal(EntityType.Individual, converted.EntityType);
-        Assert.Equal("Personal Capital", converted.CapitalName);
-        Assert.Equal("Personal Drawings", converted.DrawingsName);
+        Assert.Equal("Accumulated net worth", converted.CapitalName);
+        Assert.Equal(before.DrawingsName, converted.DrawingsName);
         Assert.Equal(before.LedgerLines, converted.LedgerLines);
         Assert.Equal(before.PermanentAccountId, converted.PermanentAccountId);
         Assert.Equal(before.PolicyRows + 1, converted.PolicyRows);

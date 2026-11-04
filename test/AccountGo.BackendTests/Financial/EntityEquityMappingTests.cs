@@ -20,8 +20,7 @@ public class EntityEquityMappingTests
         { EntityType.Cooperative, "30300", null, "30100", "Member Capital" },
         { EntityType.Cooperative, "30300", null, "30300", "Retained Surplus" },
         { EntityType.NonProfit, "30300", null, "30300", "Net Assets" },
-        { EntityType.Individual, "30100", "30800", "30100", "Personal Capital" },
-        { EntityType.Individual, "30100", "30800", "30800", "Personal Drawings" },
+        { EntityType.Individual, "30100", null, "30100", "Accumulated net worth" },
     };
 
     [Theory]
@@ -49,6 +48,7 @@ public class EntityEquityMappingTests
     [InlineData("30800", "Owner's Drawings", true)]
     [InlineData("30800", "Personal Drawings", true)]
     [InlineData("30100", "Personal Capital", true)]
+    [InlineData("30100", "Accumulated net worth", true)]
     [InlineData("30800", "Drawings", false)]
     [InlineData("99999", "Anything", false)]
     public void IsRenameable_only_allows_template_display_names(string code, string currentName, bool expected)
@@ -62,6 +62,8 @@ public class EntityEquityMappingTests
         var individual = EntityEquityMapping.GetProfile(EntityType.Individual, allowUnapproved: true);
         var corporation = EntityEquityMapping.GetProfile(EntityType.Corporation);
         Assert.NotEqual(corporation.CloseTargetAccountCode, individual.CloseTargetAccountCode);
+        Assert.Null(individual.DistributionAccountCode);
+        Assert.False(individual.DisplayNames.ContainsKey("30800"));
         Assert.False(EntityEquityMapping.IsIndividualMappingApproved);
         Assert.Throws<InvalidOperationException>(() => EntityEquityMapping.GetProfile(EntityType.Individual));
     }

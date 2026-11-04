@@ -20,7 +20,8 @@ namespace Core.Domain
             "Owner's Capital",
             "Partners' Capital",
             "Share Capital",
-            "Personal Capital"
+            "Personal Capital",
+            "Accumulated net worth"
         };
 
         private static readonly HashSet<string> RenameableRetainedSurplusNames = new(StringComparer.OrdinalIgnoreCase)
@@ -83,15 +84,16 @@ namespace Core.Domain
                     ["30300"] = "Net Assets"
                 }),
 
-            // Proposed personal mapping: capital + drawings (not corporate retained earnings).
-            // Personal purpose initialization stays gated until finance review signs this profile.
+            // Finance-approved personal/household bookkeeping model (not sole-proprietor capital/drawings).
+            // 30100 is the permanent close target (accumulated net worth). Ordinary spending stays in expenses;
+            // 30800 is not part of the initial Individual close/workflow. Corporate RE/dividends are not used.
+            // IsIndividualMappingApproved stays false until a separate production-activation change.
             [EntityType.Individual] = new EntityEquityProfile(
                 "30100",
-                "30800",
+                null,
                 new Dictionary<string, string>
                 {
-                    ["30100"] = "Personal Capital",
-                    ["30800"] = "Personal Drawings"
+                    ["30100"] = "Accumulated net worth"
                 })
         };
 
@@ -108,13 +110,15 @@ namespace Core.Domain
 
         /// <summary>
         /// Test-only override for gated personal journeys. Production and ordinary tests leave this null so
-        /// the approval gate stays closed until finance records approval in source.
+        /// production activation stays closed until a separate, reviewed enablement change.
         /// </summary>
         public static bool? TestApprovalOverride { get; set; }
 
         /// <summary>
-        /// True when the Individual equity/year-close mapping has been finance-approved for activation.
-        /// Keep false until the reviewed mapping is recorded; personal purpose init stays disabled.
+        /// Production activation gate for personal purpose and Individual close/provisioning.
+        /// The accounting model is finance-approved for internal personal/household bookkeeping; this flag
+        /// remains false until a separate change authorizes production activation (and conversion remains
+        /// unauthorized until inspected separately).
         /// </summary>
         public static bool IsIndividualMappingApproved => TestApprovalOverride ?? false;
 

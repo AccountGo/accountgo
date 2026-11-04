@@ -94,8 +94,9 @@ public class WorkspaceFullAccessManifestTests
         Assert.Throws<InvalidOperationException>(() => Core.Domain.EntityEquityMapping.GetProfile(Core.Domain.EntityType.Individual));
         var profile = Core.Domain.EntityEquityMapping.GetProfile(Core.Domain.EntityType.Individual, allowUnapproved: true);
         Assert.Equal("30100", profile.CloseTargetAccountCode);
-        Assert.Equal("30800", profile.DistributionAccountCode);
-        Assert.Equal("Personal Capital", profile.DisplayNames["30100"]);
+        Assert.Null(profile.DistributionAccountCode);
+        Assert.Equal("Accumulated net worth", profile.DisplayNames["30100"]);
+        Assert.False(profile.DisplayNames.ContainsKey("30800"));
         Assert.False(Core.Domain.EntityEquityMapping.IsIndividualMappingApproved);
     }
 }
