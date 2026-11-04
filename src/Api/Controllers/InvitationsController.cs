@@ -87,8 +87,22 @@ namespace Api.Controllers
             var profile = _db.Users.FirstOrDefault(u => u.EmailAddress == inviterEmail);
             var at = invitation.Email.IndexOf('@');
             var masked = invitation.Email.Substring(0, 1) + "***" + invitation.Email.Substring(at);
+            var securityRoleIds = string.IsNullOrWhiteSpace(invitation.SecurityRoleIdsJson)
+                ? new List<int>()
+                : JsonSerializer.Deserialize<List<int>>(invitation.SecurityRoleIdsJson) ?? new List<int>();
+            var grantedRoles = _db.SecurityRoles
+                .Where(r => securityRoleIds.Contains(r.Id) && !r.SysAdmin)
+                .Select(r => new { r.DisplayName, r.Name, Permissions = r.Permissions.Select(p => p.SecurityPermission.Name).ToList() })
+                .ToList();
+            var access = new
+            {
+                roles = grantedRoles.Select(r => string.IsNullOrWhiteSpace(r.DisplayName) ? r.Name : r.DisplayName).OrderBy(n => n).ToList(),
+                areas = AccessSummaryBuilder.Describe(grantedRoles.SelectMany(r => r.Permissions).Distinct())
+                    .Select(a => new { area = a.Area, label = a.Label, level = a.Level }).ToList()
+            };
             return Ok(new
             {
+                access,
                 workspaceName = company.Name, inviterName = profile == null ? "A workspace administrator" : (profile.Firstname + " " + profile.Lastname).Trim(),
                 role = invitation.Role.ToString(), emailMasked = masked, expired = invitation.ExpiresAt <= DateTime.UtcNow,
                 accepted = invitation.AcceptedAt.HasValue

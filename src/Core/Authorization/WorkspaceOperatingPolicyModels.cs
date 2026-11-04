@@ -35,6 +35,9 @@ namespace Core.Authorization
 
         /// <summary>The requested approval rule kind is not a recognised journal approval rule.</summary>
         public const string InvalidApprovalRule = "invalid_approval_rule";
+
+        /// <summary>The journal approval policy changed since an invitation was issued; resending needs explicit reconfirmation.</summary>
+        public const string PolicyAssumptionsChanged = "policy_assumptions_changed";
     }
 
     public class IncompatiblePolicySchemaException : InvalidOperationException

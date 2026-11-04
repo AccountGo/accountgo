@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RefreshCw, UserPlus, ShieldCheck, ShieldAlert, RotateCcw } from 'lucide-react';
 import {
@@ -11,11 +11,19 @@ import {
   WorkspaceMember,
   WorkspaceOperatingPolicySummary,
   WorkspaceRole,
+  ModuleKey,
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { useCapabilities } from '../lib/entitlements';
+import {
+  CUSTOM_PRESET_KEY,
+  buildAccessPresets,
+  describePermissions,
+  matchPresetKey,
+  permissionsForRoles,
+} from '../lib/accessPresets';
 
 interface PendingConfirm {
   title: string;
@@ -30,6 +38,18 @@ const button = 'px-3 py-2 rounded-lg border border-[var(--border-subtle)] hover:
 const input = 'w-full p-2 rounded-lg bg-[var(--bg-base)] border border-[var(--border-subtle)]';
 
 const LAST_REVIEWER_REASON_CODE = 'last_reviewer_unavailable';
+const POLICY_ASSUMPTIONS_CHANGED_REASON_CODE = 'policy_assumptions_changed';
+
+/** A conflict the user can resolve by explicitly confirming a policy-affecting action at the current revision. */
+interface PolicyConflictHandler {
+  reasonCode: string;
+  ownerOnly: boolean;
+  title: string;
+  confirmLabel: string;
+  destructive: boolean;
+  describe: (detail: string) => string;
+  retry: (expectedPolicyRevision: number) => Promise<void>;
+}
 
 /** A failed API call carrying the problem detail and machine-readable reason code. */
 export class ApiProblemError extends Error {
@@ -60,7 +80,7 @@ async function requireSuccess(response: Response): Promise<void> {
   } catch {
     // Non-JSON proxy responses are displayed as text.
   }
-  if (response.status === 409 && reasonCode !== LAST_REVIEWER_REASON_CODE) {
+  if (response.status === 409 && reasonCode !== LAST_REVIEWER_REASON_CODE && reasonCode !== POLICY_ASSUMPTIONS_CHANGED_REASON_CODE) {
     throw new ApiProblemError(`${message} Review the latest workspace setup and try again.`, response.status, reasonCode, policyRevision);
   }
   throw new ApiProblemError(message, response.status, reasonCode, policyRevision);
@@ -78,7 +98,7 @@ function journalWorkflowLabel(mode?: string): string {
 }
 
 export const Members: React.FC = () => {
-  const { currentOrg, updateCurrentOrg } = useOutletContext<TenantContextType>();
+  const { currentOrg, updateCurrentOrg, hasModule } = useOutletContext<TenantContextType>();
   const { authFetch, user } = useAuth();
   const navigate = useNavigate();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -99,6 +119,15 @@ export const Members: React.FC = () => {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'Admin' | 'Member'>('Member');
   const [roleIds, setRoleIds] = useState<number[]>([]);
+  const accessPresets = useMemo(
+    () => buildAccessPresets(roles, (module: ModuleKey) => (hasModule ? hasModule(module) : true)),
+    [roles, hasModule],
+  );
+  const selectedPresetKey = matchPresetKey(accessPresets, roleIds);
+  const inviteeAccessAreas = useMemo(
+    () => describePermissions(permissionsForRoles(roles, roleIds)),
+    [roles, roleIds],
+  );
   const [requestTargetMemberId, setRequestTargetMemberId] = useState<number | null>(null);
   const [requestReason, setRequestReason] = useState('');
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
@@ -220,7 +249,7 @@ export const Members: React.FC = () => {
     body: object | undefined,
     success: string,
     leaving = false,
-    retryWithPolicyChange?: (expectedPolicyRevision: number) => Promise<void>,
+    conflictHandler?: PolicyConflictHandler,
   ) => {
     setBusy(true);
     setError('');
@@ -252,34 +281,60 @@ export const Members: React.FC = () => {
       }
       if (
         err instanceof ApiProblemError
-        && err.reasonCode === LAST_REVIEWER_REASON_CODE
-        && isOwner
-        && retryWithPolicyChange
+        && conflictHandler
+        && err.reasonCode === conflictHandler.reasonCode
+        && (isOwner || !conflictHandler.ownerOnly)
       ) {
-        offerSingleActorPolicyChange(message, retryWithPolicyChange);
+        offerPolicyConfirmation(message, conflictHandler);
       }
     } finally {
       setBusy(false);
     }
   };
 
-  const offerSingleActorPolicyChange = (detail: string, retry: (expectedPolicyRevision: number) => Promise<void>) => {
+  const offerPolicyConfirmation = (detail: string, handler: PolicyConflictHandler) => {
     setPendingConfirm({
-      title: 'Change journal approval to single-user posting?',
-      message:
-        `${detail} As the Owner you can continue by also switching journal posting to single-user. `
-        + 'This removes the second-person check, is recorded in the audit trail, and applies in the same step. '
-        + 'To keep independent review, cancel and add another Owner or Admin who can post journals first.',
-      confirmLabel: 'Change policy and continue',
-      destructive: true,
+      title: handler.title,
+      message: handler.describe(detail),
+      confirmLabel: handler.confirmLabel,
+      destructive: handler.destructive,
       action: async () => {
+        // Always confirm against the revision as it is now, never a cached one.
         const latest = await authFetch(`${base}/operating-settings`);
         const settings = latest.ok ? await latest.json() : null;
         const revision = typeof settings?.policyRevision === 'number' ? settings.policyRevision : 0;
-        await retry(revision);
+        await handler.retry(revision);
       },
     });
   };
+
+  const singleActorPolicyHandler = (retry: (expectedPolicyRevision: number) => Promise<void>): PolicyConflictHandler => ({
+    reasonCode: LAST_REVIEWER_REASON_CODE,
+    ownerOnly: true,
+    title: 'Change journal approval to single-user posting?',
+    confirmLabel: 'Change policy and continue',
+    destructive: true,
+    describe: detail =>
+      `${detail} As the Owner you can continue by also switching journal posting to single-user. `
+      + 'This removes the second-person check, is recorded in the audit trail, and applies in the same step. '
+      + 'To keep independent review, cancel and add another Owner or Admin who can post journals first.',
+    retry,
+  });
+
+  const resendConfirmationHandler = (invitationId: number): PolicyConflictHandler => ({
+    reasonCode: POLICY_ASSUMPTIONS_CHANGED_REASON_CODE,
+    ownerOnly: false,
+    title: 'Journal approval policy changed since this invitation was sent',
+    confirmLabel: 'Confirm and resend',
+    destructive: false,
+    describe: detail => `${detail} Resending confirms the invitee will join under the current approval policy.`,
+    retry: revision => mutate(
+      `invitations/${invitationId}/resend`,
+      'POST',
+      { confirmChangedPolicy: true, expectedPolicyRevision: revision },
+      'Invitation email resent under the current approval policy.',
+    ),
+  });
 
   const openForm = (target: 'invite' | 'request' | 'setup' | WorkspaceMember) => {
     setForm(target);
@@ -322,11 +377,11 @@ export const Members: React.FC = () => {
         securityRoleIds: roleIds,
       };
       void mutate(`members/${form.memberId}`, 'PATCH', memberUpdate, 'Workspace membership updated.', false,
-        revision => mutate(`members/${form.memberId}`, 'PATCH', {
+        singleActorPolicyHandler(revision => mutate(`members/${form.memberId}`, 'PATCH', {
           ...memberUpdate,
           confirmPolicyChangeToSingleActor: true,
           expectedPolicyRevision: revision,
-        }, 'Workspace membership updated and journal approval changed to single-user posting.'));
+        }, 'Workspace membership updated and journal approval changed to single-user posting.')));
     }
   };
 
@@ -527,14 +582,15 @@ export const Members: React.FC = () => {
               <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-sm space-y-1.5">
                 <p className="font-medium text-[var(--text-main)]">Sharing this workspace</p>
                 <p className="text-[var(--text-muted)]">
-                  Your access stays as assigned
+                  Your own access will stay the same
                   {currentOrg.operatingPolicy?.ownAccessProfileDisplayName
                     ? ` (${currentOrg.operatingPolicy.ownAccessProfileDisplayName})`
                     : ''}
-                  . The invitee receives only the functional roles you select below.
+                  . The invitee receives only the access you choose below.
                 </p>
                 <p className="text-[var(--text-muted)]">
                   {journalWorkflowLabel(currentOrg.operatingPolicy?.journalWorkflow)}
+                  {' '}Inviting someone does not change this approval policy.
                   {currentOrg.operatingPolicy?.collaborationState === 'SoloActive'
                     ? ' Accepting this invitation activates team collaboration; it does not remove your access.'
                     : ''}
@@ -573,8 +629,37 @@ export const Members: React.FC = () => {
             )
           )}
 
+          {form === 'invite' && accessPresets.length > 0 && (
+            <fieldset className="space-y-2">
+              <legend className="font-medium mb-2">Access preset</legend>
+              {accessPresets.map(preset => (
+                <label key={preset.key} className="flex items-start gap-2">
+                  <input
+                    type="radio"
+                    name="access-preset"
+                    className="mt-1"
+                    checked={selectedPresetKey === preset.key}
+                    disabled={preset.unavailable}
+                    onChange={() => setRoleIds(preset.roleIds)}
+                  />
+                  <span>
+                    <span className="font-medium">{preset.label}</span>
+                    <span className="block text-sm text-[var(--text-muted)]">
+                      {preset.description}
+                      {preset.unavailable ? ' Not included in this workspace plan.' : ''}
+                      {preset.limitedByPlan ? ' Some areas are not included in this workspace plan.' : ''}
+                    </span>
+                  </span>
+                </label>
+              ))}
+              {selectedPresetKey === CUSTOM_PRESET_KEY && (
+                <p className="text-sm text-[var(--text-muted)]">Custom selection: the roles below do not match a preset.</p>
+              )}
+            </fieldset>
+          )}
+
           <fieldset className="space-y-2">
-            <legend className="font-medium mb-2">Functional roles</legend>
+            <legend className="font-medium mb-2">{form === 'invite' ? 'Advanced: functional roles' : 'Functional roles'}</legend>
             <p className="text-sm text-[var(--text-muted)]">
               Functional roles grant access to accounting, sales, purchasing, banking, and reporting operations. Workspace roles (Owner, Admin, Member) govern workspace administration only.
             </p>
@@ -590,6 +675,19 @@ export const Members: React.FC = () => {
               </label>
             ))}
           </fieldset>
+
+          {form === 'invite' && (
+            <div className="rounded-lg border border-[var(--border-subtle)] p-3 text-sm space-y-1" aria-live="polite">
+              <p className="font-medium">What the invitee will be able to do</p>
+              {inviteeAccessAreas.length === 0 ? (
+                <p className="text-[var(--text-muted)]">No functional access. They can join the workspace but cannot work with its books until you grant roles.</p>
+              ) : (
+                <ul className="list-disc pl-5 text-[var(--text-muted)]">
+                  {inviteeAccessAreas.map(area => <li key={area.area}>{area.label}: {area.level}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
 
           {form === 'request' && (
             <label className="block">Reason / Business justification
@@ -659,10 +757,10 @@ export const Members: React.FC = () => {
                     confirmLabel: self ? 'Leave workspace' : 'Remove member',
                     destructive: true,
                     action: () => mutate(`members/${member.memberId}`, 'DELETE', undefined, 'Member removed.', self,
-                      revision => mutate(
+                      singleActorPolicyHandler(revision => mutate(
                         `members/${member.memberId}?confirmPolicyChangeToSingleActor=true&expectedPolicyRevision=${revision}`,
                         'DELETE', undefined,
-                        'Member removed and journal approval changed to single-user posting.', self)),
+                        'Member removed and journal approval changed to single-user posting.', self))),
                   })}>{self ? 'Leave' : 'Remove'}</button>}
                   {isOwner && !self && member.status === 'Active' && <button type="button" className={button} disabled={busy} onClick={() => setPendingConfirm({
                     title: 'Transfer ownership?',
@@ -775,14 +873,34 @@ export const Members: React.FC = () => {
 
       {canManage && <section className="p-5 rounded-xl bg-[var(--bg-surface)] space-y-3">
         <h2 className="text-lg font-semibold">Pending invitations</h2>
+        <p className="text-sm text-[var(--text-muted)]">
+          Resending issues a new link and a new 7-day expiry. Revoking stops the link from working.
+        </p>
         {invitations.length === 0 && <p className="text-[var(--text-muted)]">No pending invitations.</p>}
         {invitations.map(invite => <div key={invite.id} className="flex flex-wrap justify-between items-center gap-3 border-t border-[var(--border-subtle)] pt-3">
-          <div><p>{invite.email} · {invite.role}</p>
-            <p className="text-sm text-[var(--text-muted)]">Expires {new Date(invite.expiresAt).toLocaleString()}</p></div>
+          <div>
+            <p>
+              {invite.email} · {invite.role}
+              {invite.expired && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-400">Expired</span>}
+              {invite.policyChanged && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">Approval policy changed</span>}
+            </p>
+            <p className="text-sm text-[var(--text-muted)]">
+              {invite.expired ? 'Expired' : 'Expires'} {new Date(invite.expiresAt).toLocaleString()}
+              {invite.policyChanged ? ' · Resending needs your confirmation of the current approval policy.' : ''}
+            </p>
+          </div>
           {(isOwner || invite.role === 'Member') && <div className="flex gap-2">
-            <button type="button" className={button} disabled={busy} onClick={() =>
-              void mutate(`invitations/${invite.id}/resend`, 'POST', undefined, 'Invitation email resent.')
-            }>Resend</button>
+            <button type="button" className={button} disabled={busy} onClick={() => {
+              if (invite.policyChanged) {
+                offerPolicyConfirmation(
+                  'The journal approval policy changed since this invitation was sent.',
+                  resendConfirmationHandler(invite.id),
+                );
+                return;
+              }
+              void mutate(`invitations/${invite.id}/resend`, 'POST', undefined, 'Invitation email resent.', false,
+                resendConfirmationHandler(invite.id));
+            }}>{invite.expired ? 'Renew and resend' : 'Resend'}</button>
             <button type="button" className={button} disabled={busy} onClick={() => setPendingConfirm({
               title: 'Revoke invitation?',
               message: `The invitation link sent to ${invite.email} will stop working.`,
