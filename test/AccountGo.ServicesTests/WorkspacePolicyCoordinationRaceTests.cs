@@ -11,216 +11,140 @@ using Api.Service;
 using Api.Tenancy;
 using Core.Domain;
 using Core.Domain.Financials;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace AccountGo.ServicesTests;
 
 /// <summary>
-/// SQLite Serializable coordination smoke: two writers advance PolicyRevision without losing updates.
-/// Cross-provider FOR UPDATE / UPDLOCK suites remain for dedicated integration hosts.
+/// Coordination-row race tests for <see cref="WorkspacePolicyTransaction"/>: concurrent writers advance PolicyRevision
+/// without losing updates, and policy-sensitive work stays serialized per workspace.
+/// Each test is a Theory over <see cref="PolicyRaceDatabase.ConfiguredProviders"/>. SQLite (shared-cache in-memory) always
+/// runs; when ACCOUNTGO_TEST_POSTGRES is set the same scenarios also run on a disposable PostgreSQL database, with the
+/// production write-lock interceptor and again with only the FOR UPDATE row lock plus SERIALIZABLE isolation.
+/// Every concurrent writer opens its own connection and retries the provider's transient errors
+/// (SQLite lock errors; PostgreSQL 40001 / 40P01 / 55P03, including when wrapped in a DbUpdateException).
 /// </summary>
 public class WorkspacePolicyCoordinationRaceTests
 {
-    private const string SharedMemoryConnectionString =
-        "DataSource=file:workspace-policy-race?mode=memory&cache=shared";
+    private static readonly TimeSpan BarrierTimeout = TimeSpan.FromSeconds(5);
+    private const int ConcurrentWriterCount = 2;
+    private const int PolicyAdvanceRetryDelayMilliseconds = 15;
+    private const int InvitationRetryDelayMilliseconds = 20;
+    private const int HoldLockMilliseconds = 10;
 
-    [Fact]
-    public async Task ConcurrentPolicyAdvances_DoNotLoseRevisions_OnSqlite()
+    public static System.Collections.Generic.IEnumerable<object[]> Providers() => PolicyRaceDatabase.ConfiguredProviders();
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task ConcurrentPolicyAdvances_DoNotLoseRevisions_OnConfiguredProvider(string provider)
     {
-        // Keep one connection open so the shared in-memory database stays alive.
-        await using var keepAlive = new SqliteConnection(SharedMemoryConnectionString);
-        await keepAlive.OpenAsync();
-
-        int companyId;
-        var bootstrapTenant = new TenantContext();
-        using (var bootstrapConn = OpenConnection())
-        using (var bootstrap = CreateDb(bootstrapConn, bootstrapTenant))
+        using var database = PolicyRaceDatabase.Create(provider);
+        var companyId = SeedWorkspace(database, "Race Co", "race-co", policyRevision: 0, customizeSettings: settings =>
         {
-            bootstrap.Database.EnsureCreated();
-            var company = new Company { Name = "Race Co", Slug = "race-co" };
-            bootstrap.Companies.Add(company);
-            bootstrap.SaveChanges();
-            using (bootstrapTenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
-            {
-                bootstrap.WorkspacePolicyCoordinations.Add(new WorkspacePolicyCoordination
-                {
-                    CompanyId = company.Id,
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-                bootstrap.WorkspaceOperatingSettings.Add(new WorkspaceOperatingSettings
-                {
-                    CompanyId = company.Id,
-                    Purpose = WorkspacePurpose.Business,
-                    CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
-                    CollaborationState = WorkspaceCollaborationState.SoloActive,
-                    InitializationSource = WorkspaceInitializationSource.NewWorkspace,
-                    InitializedAtUtc = DateTime.UtcNow,
-                    PolicyRevision = 0,
-                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
-                });
-                bootstrap.SaveChanges();
-            }
+            settings.InitializationSource = WorkspaceInitializationSource.NewWorkspace;
+            settings.InitializedAtUtc = DateTime.UtcNow;
+        });
 
-            companyId = company.Id;
-        }
-
-        var barrier = new Barrier(2);
-        Exception? fault = null;
+        var barrier = new Barrier(ConcurrentWriterCount);
 
         Task Advance() => Task.Run(() =>
         {
-            try
+            barrier.SignalAndWait(BarrierTimeout);
+            RunWithRetry(database, PolicyAdvanceRetryDelayMilliseconds, () =>
             {
-                barrier.SignalAndWait(TimeSpan.FromSeconds(5));
-                for (var attempt = 0; attempt < 10; attempt++)
+                var localTenant = new TenantContext();
+                using var impersonation = localTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
+                using var context = database.CreateContext(localTenant);
+                new WorkspacePolicyTransaction(context.Db, localTenant).Execute(companyId, guard =>
                 {
-                    try
-                    {
-                        var localTenant = new TenantContext();
-                        using var impersonation = localTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
-                        using var conn = OpenConnection();
-                        using var db = CreateDb(conn, localTenant);
-                        new WorkspacePolicyTransaction(db, localTenant).Execute(companyId, guard =>
-                        {
-                            Thread.Sleep(10);
-                            guard.AdvanceRevision();
-                        });
-                        return;
-                    }
-                    catch (SqliteException) when (attempt < 9)
-                    {
-                        Thread.Sleep(15 * (attempt + 1));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Interlocked.CompareExchange(ref fault, ex, null);
-            }
+                    Thread.Sleep(HoldLockMilliseconds);
+                    guard.AdvanceRevision();
+                });
+            });
         });
 
         await Task.WhenAll(Advance(), Advance());
-        if (fault != null)
-            throw new Xunit.Sdk.XunitException("Concurrent policy writer failed: " + fault);
 
-        using var verifyConn = OpenConnection();
-        using var verify = CreateDb(verifyConn, new TenantContext());
-        var revision = verify.WorkspaceOperatingSettings.IgnoreQueryFilters()
+        using var verify = database.CreateContext(new TenantContext());
+        var revision = verify.Db.WorkspaceOperatingSettings.IgnoreQueryFilters()
             .Single(s => s.CompanyId == companyId).PolicyRevision;
-        Assert.Equal(2, revision);
+        Assert.Equal(ConcurrentWriterCount, revision);
     }
 
-    [Fact]
-    public async Task DuplicateInvitationAcceptance_Serializes_OnlyOneSucceeds()
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task DuplicateInvitationAcceptance_Serializes_OnlyOneSucceeds_OnConfiguredProvider(string provider)
     {
-        var connStr = "DataSource=file:dup-invite-race-" + Guid.NewGuid().ToString("N") + "?mode=memory&cache=shared";
-        await using var keepAlive = new SqliteConnection(connStr);
-        await keepAlive.OpenAsync();
+        using var database = PolicyRaceDatabase.Create(provider);
 
-        int companyId;
-        int inviteId;
-        string tokenHash = "hash-" + Guid.NewGuid().ToString("N");
-        var bootstrapTenant = new TenantContext();
-        using (var bootstrapConn = new SqliteConnection(connStr))
+        var inviteId = 0;
+        var tokenHash = "hash-" + Guid.NewGuid().ToString("N");
+        var companyId = SeedWorkspace(database, "Invite Race Co", "invite-race-co", policyRevision: 1, seedMore: (bootstrap, seededCompanyId) =>
         {
-            bootstrapConn.Open();
-            using var bootstrap = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(bootstrapConn).Options, bootstrapTenant);
-            bootstrap.Database.EnsureCreated();
-            var company = new Company { Name = "Invite Race Co", Slug = "invite-race-co" };
-            bootstrap.Companies.Add(company);
-            bootstrap.SaveChanges();
-            companyId = company.Id;
-
-            using (bootstrapTenant.Impersonate(companyId, company.Slug, CompanyMemberRole.Owner))
+            var invite = new CompanyInvitation
             {
-                bootstrap.WorkspacePolicyCoordinations.Add(new WorkspacePolicyCoordination
-                {
-                    CompanyId = companyId,
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-                bootstrap.WorkspaceOperatingSettings.Add(new WorkspaceOperatingSettings
-                {
-                    CompanyId = companyId,
-                    Purpose = WorkspacePurpose.Business,
-                    CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
-                    CollaborationState = WorkspaceCollaborationState.SoloActive,
-                    PolicyRevision = 1,
-                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
-                });
-                var invite = new CompanyInvitation
-                {
-                    CompanyId = companyId,
-                    Email = "invitee@example.com",
-                    Role = CompanyMemberRole.Member,
-                    TokenHash = tokenHash,
-                    CreatedAt = DateTime.UtcNow,
-                    ExpiresAt = DateTime.UtcNow.AddDays(7),
-                    SecurityRoleIdsJson = "[]"
-                };
-                bootstrap.CompanyInvitations.Add(invite);
-                bootstrap.SaveChanges();
-                inviteId = invite.Id;
-            }
-        }
+                CompanyId = seededCompanyId,
+                Email = "invitee@example.com",
+                Role = CompanyMemberRole.Member,
+                TokenHash = tokenHash,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                SecurityRoleIdsJson = "[]"
+            };
+            bootstrap.CompanyInvitations.Add(invite);
+            bootstrap.SaveChanges();
+            inviteId = invite.Id;
+        });
+        Assert.True(inviteId > 0);
 
-        var barrier = new Barrier(2);
-        int successCount = 0;
-        int conflictCount = 0;
+        var barrier = new Barrier(ConcurrentWriterCount);
+        var successCount = 0;
+        var conflictCount = 0;
 
         Task TryAccept(string userId) => Task.Run(() =>
         {
-            barrier.SignalAndWait(TimeSpan.FromSeconds(5));
-            for (var attempt = 0; attempt < 10; attempt++)
+            barrier.SignalAndWait(BarrierTimeout);
+            RunWithRetry(database, InvitationRetryDelayMilliseconds, () =>
             {
-                try
-                {
-                    var localTenant = new TenantContext();
-                    using var impersonation = localTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
-                    using var conn = new SqliteConnection(connStr);
-                    conn.Open();
-                    using var db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(conn).Options, localTenant);
-                    var transaction = new WorkspacePolicyTransaction(db, localTenant);
+                var localTenant = new TenantContext();
+                using var impersonation = localTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
+                using var context = database.CreateContext(localTenant);
+                var db = context.Db;
+                var transaction = new WorkspacePolicyTransaction(db, localTenant);
 
-                    var res = transaction.Execute<bool>(companyId, guard =>
+                var accepted = transaction.Execute<bool>(companyId, guard =>
+                {
+                    var invitation = db.CompanyInvitations.IgnoreQueryFilters().Single(i => i.Id == inviteId);
+                    if (invitation.AcceptedAt.HasValue)
+                        return false;
+
+                    var transition = WorkspaceInvitationTransition.ValidateOnAccept(db, invitation, Array.Empty<int>(), guard.Settings.PolicyRevision);
+                    if (!transition.Ok)
+                        return false;
+
+                    invitation.AcceptedAt = DateTime.UtcNow;
+                    invitation.AcceptedByUserId = userId;
+                    db.CompanyMembers.Add(new CompanyMember
                     {
-                        var invitation = db.CompanyInvitations.IgnoreQueryFilters().Single(i => i.Id == inviteId);
-                        if (invitation.AcceptedAt.HasValue)
-                            return false;
-
-                        var transition = WorkspaceInvitationTransition.ValidateOnAccept(db, invitation, Array.Empty<int>(), guard.Settings.PolicyRevision);
-                        if (!transition.Ok)
-                            return false;
-
-                        invitation.AcceptedAt = DateTime.UtcNow;
-                        invitation.AcceptedByUserId = userId;
-                        db.CompanyMembers.Add(new CompanyMember
-                        {
-                            CompanyId = companyId,
-                            UserId = userId,
-                            Role = invitation.Role,
-                            Status = CompanyMemberStatus.Active,
-                            JoinedAt = DateTime.UtcNow
-                        });
-                        guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
-                        guard.Settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
-                        guard.AdvanceRevision();
-                        db.SaveChanges();
-                        return true;
+                        CompanyId = companyId,
+                        UserId = userId,
+                        Role = invitation.Role,
+                        Status = CompanyMemberStatus.Active,
+                        JoinedAt = DateTime.UtcNow
                     });
+                    guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                    guard.Settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
+                    guard.AdvanceRevision();
+                    db.SaveChanges();
+                    return true;
+                });
 
-                    if (res)
-                        Interlocked.Increment(ref successCount);
-                    else
-                        Interlocked.Increment(ref conflictCount);
-                    return;
-                }
-                catch (SqliteException) when (attempt < 9)
-                {
-                    Thread.Sleep(20 * (attempt + 1));
-                }
-            }
+                if (accepted)
+                    Interlocked.Increment(ref successCount);
+                else
+                    Interlocked.Increment(ref conflictCount);
+            });
         });
 
         await Task.WhenAll(TryAccept("user-A"), TryAccept("user-B"));
@@ -228,206 +152,125 @@ public class WorkspacePolicyCoordinationRaceTests
         Assert.Equal(1, successCount);
         Assert.Equal(1, conflictCount);
 
-        using var verifyConn = new SqliteConnection(connStr);
-        verifyConn.Open();
-        using var verify = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(verifyConn).Options, new TenantContext());
-        var members = verify.CompanyMembers.IgnoreQueryFilters().Where(m => m.CompanyId == companyId).ToList();
+        using var verify = database.CreateContext(new TenantContext());
+        var members = verify.Db.CompanyMembers.IgnoreQueryFilters().Where(m => m.CompanyId == companyId).ToList();
         Assert.Single(members);
-        var settings = verify.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId);
+        var settings = verify.Db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId);
         Assert.Equal(WorkspaceCollaborationState.TeamActive, settings.CollaborationState);
     }
 
-    [Fact]
-    public async Task ConcurrentInvitationAccept_AndJournalPost_NeverLeavesSoloWithTwoActiveHumans()
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task ConcurrentInvitationAccept_AndJournalPost_NeverLeavesSoloWithTwoActiveHumans_OnConfiguredProvider(string provider)
     {
-        var connStr = "DataSource=file:inv-post-race-" + Guid.NewGuid().ToString("N") + "?mode=memory&cache=shared";
-        await using var keepAlive = new SqliteConnection(connStr);
-        await keepAlive.OpenAsync();
+        using var database = PolicyRaceDatabase.Create(provider);
 
-        int companyId;
-        int inviteId;
-        var bootstrapTenant = new TenantContext();
-        using (var bootstrapConn = new SqliteConnection(connStr))
+        var inviteId = 0;
+        var companyId = SeedWorkspace(database, "Race Co 2", "race-co-2", policyRevision: 1, seedMore: (bootstrap, seededCompanyId) =>
         {
-            bootstrapConn.Open();
-            using var bootstrap = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(bootstrapConn).Options, bootstrapTenant);
-            bootstrap.Database.EnsureCreated();
-            var company = new Company { Name = "Race Co 2", Slug = "race-co-2" };
-            bootstrap.Companies.Add(company);
-            bootstrap.SaveChanges();
-            companyId = company.Id;
-
-            using (bootstrapTenant.Impersonate(companyId, company.Slug, CompanyMemberRole.Owner))
+            bootstrap.CompanyMembers.Add(new CompanyMember
             {
-                bootstrap.WorkspacePolicyCoordinations.Add(new WorkspacePolicyCoordination
-                {
-                    CompanyId = companyId,
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-                bootstrap.WorkspaceOperatingSettings.Add(new WorkspaceOperatingSettings
-                {
-                    CompanyId = companyId,
-                    Purpose = WorkspacePurpose.Business,
-                    CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
-                    CollaborationState = WorkspaceCollaborationState.SoloActive,
-                    PolicyRevision = 1,
-                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
-                });
-                bootstrap.CompanyMembers.Add(new CompanyMember
-                {
-                    CompanyId = companyId,
-                    UserId = "owner-user",
-                    Role = CompanyMemberRole.Owner,
-                    Status = CompanyMemberStatus.Active,
-                    JoinedAt = DateTime.UtcNow
-                });
-                var invite = new CompanyInvitation
-                {
-                    CompanyId = companyId,
-                    Email = "newmember@example.com",
-                    Role = CompanyMemberRole.Member,
-                    TokenHash = "racehash-" + Guid.NewGuid().ToString("N"),
-                    CreatedAt = DateTime.UtcNow,
-                    ExpiresAt = DateTime.UtcNow.AddDays(7),
-                    SecurityRoleIdsJson = "[]"
-                };
-                bootstrap.CompanyInvitations.Add(invite);
-                bootstrap.SaveChanges();
-                inviteId = invite.Id;
-            }
-        }
+                CompanyId = seededCompanyId,
+                UserId = "owner-user",
+                Role = CompanyMemberRole.Owner,
+                Status = CompanyMemberStatus.Active,
+                JoinedAt = DateTime.UtcNow
+            });
+            var invite = new CompanyInvitation
+            {
+                CompanyId = seededCompanyId,
+                Email = "newmember@example.com",
+                Role = CompanyMemberRole.Member,
+                TokenHash = "racehash-" + Guid.NewGuid().ToString("N"),
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                SecurityRoleIdsJson = "[]"
+            };
+            bootstrap.CompanyInvitations.Add(invite);
+            bootstrap.SaveChanges();
+            inviteId = invite.Id;
+        });
+        Assert.True(inviteId > 0);
 
-        var barrier = new Barrier(2);
+        var barrier = new Barrier(ConcurrentWriterCount);
 
         Task AcceptInvite() => Task.Run(() =>
         {
-            barrier.SignalAndWait(TimeSpan.FromSeconds(5));
-            for (var attempt = 0; attempt < 10; attempt++)
+            barrier.SignalAndWait(BarrierTimeout);
+            RunWithRetry(database, InvitationRetryDelayMilliseconds, () =>
             {
-                try
+                var localTenant = new TenantContext();
+                using var impersonation = localTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
+                using var context = database.CreateContext(localTenant);
+                var db = context.Db;
+                new WorkspacePolicyTransaction(db, localTenant).Execute(companyId, guard =>
                 {
-                    var localTenant = new TenantContext();
-                    using var impersonation = localTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
-                    using var conn = new SqliteConnection(connStr);
-                    conn.Open();
-                    using var db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(conn).Options, localTenant);
-                    var tx = new WorkspacePolicyTransaction(db, localTenant);
-                    tx.Execute(companyId, guard =>
+                    var invitation = db.CompanyInvitations.IgnoreQueryFilters().Single(i => i.Id == inviteId);
+                    invitation.AcceptedAt = DateTime.UtcNow;
+                    invitation.AcceptedByUserId = "member-user";
+                    db.CompanyMembers.Add(new CompanyMember
                     {
-                        var invitation = db.CompanyInvitations.IgnoreQueryFilters().Single(i => i.Id == inviteId);
-                        invitation.AcceptedAt = DateTime.UtcNow;
-                        invitation.AcceptedByUserId = "member-user";
-                        db.CompanyMembers.Add(new CompanyMember
-                        {
-                            CompanyId = companyId,
-                            UserId = "member-user",
-                            Role = invitation.Role,
-                            Status = CompanyMemberStatus.Active,
-                            JoinedAt = DateTime.UtcNow
-                        });
-                        db.SaveChanges();
-                        var activeHumans = db.CompanyMembers.IgnoreQueryFilters().Count(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active);
-                        if (activeHumans >= 2)
-                        {
-                            guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
-                            guard.Settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
-                        }
-                        guard.AdvanceRevision();
-                        db.SaveChanges();
+                        CompanyId = companyId,
+                        UserId = "member-user",
+                        Role = invitation.Role,
+                        Status = CompanyMemberStatus.Active,
+                        JoinedAt = DateTime.UtcNow
                     });
-                    return;
-                }
-                catch (SqliteException) when (attempt < 9)
-                {
-                    Thread.Sleep(20 * (attempt + 1));
-                }
-            }
+                    db.SaveChanges();
+                    var activeHumans = db.CompanyMembers.IgnoreQueryFilters()
+                        .Count(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active);
+                    if (activeHumans >= 2)
+                    {
+                        guard.Settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                        guard.Settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
+                    }
+                    guard.AdvanceRevision();
+                    db.SaveChanges();
+                });
+            });
         });
 
         Task PostJournal() => Task.Run(() =>
         {
-            barrier.SignalAndWait(TimeSpan.FromSeconds(5));
-            for (var attempt = 0; attempt < 10; attempt++)
+            barrier.SignalAndWait(BarrierTimeout);
+            RunWithRetry(database, InvitationRetryDelayMilliseconds, () =>
             {
-                try
+                var localTenant = new TenantContext();
+                using var impersonation = localTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
+                using var context = database.CreateContext(localTenant);
+                var db = context.Db;
+                new WorkspacePolicyTransaction(db, localTenant).Execute(companyId, guard =>
                 {
-                    var localTenant = new TenantContext();
-                    using var impersonation = localTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
-                    using var conn = new SqliteConnection(connStr);
-                    conn.Open();
-                    using var db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(conn).Options, localTenant);
-                    var tx = new WorkspacePolicyTransaction(db, localTenant);
-                    tx.Execute(companyId, guard =>
-                    {
-                        Thread.Sleep(10);
-                        guard.AdvanceRevision();
-                        db.SaveChanges();
-                    });
-                    return;
-                }
-                catch (SqliteException) when (attempt < 9)
-                {
-                    Thread.Sleep(20 * (attempt + 1));
-                }
-            }
+                    Thread.Sleep(HoldLockMilliseconds);
+                    guard.AdvanceRevision();
+                    db.SaveChanges();
+                });
+            });
         });
 
         await Task.WhenAll(AcceptInvite(), PostJournal());
 
-        using var verifyConn = new SqliteConnection(connStr);
-        verifyConn.Open();
-        using var verify = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(verifyConn).Options, new TenantContext());
-        var activeMembers = verify.CompanyMembers.IgnoreQueryFilters().Where(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active).Count();
-        var finalSettings = verify.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId);
-        
+        using var verify = database.CreateContext(new TenantContext());
+        var activeMembers = verify.Db.CompanyMembers.IgnoreQueryFilters()
+            .Count(m => m.CompanyId == companyId && m.Status == CompanyMemberStatus.Active);
+        var finalSettings = verify.Db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId);
+
         Assert.Equal(2, activeMembers);
         Assert.Equal(WorkspaceCollaborationState.TeamActive, finalSettings.CollaborationState);
         Assert.NotNull(finalSettings.EverTeamActivatedAtUtc);
     }
 
-    [Fact]
-    public void WorkspacePolicyTestGate_CoordinatesRoleRevocation_RollsBackJournalPost()
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void WorkspacePolicyTestGate_CoordinatesRoleRevocation_RollsBackJournalPost_OnConfiguredProvider(string provider)
     {
-        var connStr = "DataSource=file:gate-race-" + Guid.NewGuid().ToString("N") + "?mode=memory&cache=shared";
-        using var keepAlive = new SqliteConnection(connStr);
-        keepAlive.Open();
+        using var database = PolicyRaceDatabase.Create(provider);
+        var companyId = SeedWorkspace(database, "Gate Co", "gate-co", policyRevision: 1);
 
-        int companyId;
-        var bootstrapTenant = new TenantContext();
-        using (var bootstrapConn = new SqliteConnection(connStr))
-        {
-            bootstrapConn.Open();
-            using var bootstrap = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(bootstrapConn).Options, bootstrapTenant);
-            bootstrap.Database.EnsureCreated();
-            var company = new Company { Name = "Gate Co", Slug = "gate-co" };
-            bootstrap.Companies.Add(company);
-            bootstrap.SaveChanges();
-            companyId = company.Id;
-
-            using (bootstrapTenant.Impersonate(companyId, company.Slug, CompanyMemberRole.Owner))
-            {
-                bootstrap.WorkspacePolicyCoordinations.Add(new WorkspacePolicyCoordination
-                {
-                    CompanyId = companyId,
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-                bootstrap.WorkspaceOperatingSettings.Add(new WorkspaceOperatingSettings
-                {
-                    CompanyId = companyId,
-                    Purpose = WorkspacePurpose.Business,
-                    CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
-                    CollaborationState = WorkspaceCollaborationState.SoloActive,
-                    PolicyRevision = 1,
-                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
-                });
-                bootstrap.SaveChanges();
-            }
-        }
-
-        bool gateTriggered = false;
+        var gateTriggered = false;
         try
         {
-            Core.Authorization.WorkspacePolicyTestGate.AfterAuthorizationRead = (cid) =>
+            Core.Authorization.WorkspacePolicyTestGate.AfterAuthorizationRead = _ =>
             {
                 gateTriggered = true;
                 throw new InvalidOperationException("Role revoked concurrently.");
@@ -435,9 +278,8 @@ public class WorkspacePolicyCoordinationRaceTests
 
             var postTenant = new TenantContext();
             using var impersonationPost = postTenant.Impersonate(companyId, role: CompanyMemberRole.Owner);
-            using var postConn = new SqliteConnection(connStr);
-            postConn.Open();
-            using var postDb = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(postConn).Options, postTenant);
+            using var postContext = database.CreateContext(postTenant);
+            var postDb = postContext.Db;
             var tx = new WorkspacePolicyTransaction(postDb, postTenant);
 
             var ex = Assert.Throws<InvalidOperationException>(() =>
@@ -462,13 +304,11 @@ public class WorkspacePolicyCoordinationRaceTests
             Assert.True(gateTriggered);
             Assert.Contains("Role revoked", ex.Message);
 
-            using var verifyConn = new SqliteConnection(connStr);
-            verifyConn.Open();
-            using var verifyDb = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(verifyConn).Options, new TenantContext());
-            var glHeaders = verifyDb.GeneralLedgerHeaders.IgnoreQueryFilters().Where(h => h.CompanyId == companyId).ToList();
+            using var verify = database.CreateContext(new TenantContext());
+            var glHeaders = verify.Db.GeneralLedgerHeaders.IgnoreQueryFilters().Where(h => h.CompanyId == companyId).ToList();
             Assert.Empty(glHeaders);
 
-            var settings = verifyDb.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId);
+            var settings = verify.Db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId);
             Assert.Equal(1, settings.PolicyRevision);
         }
         finally
@@ -477,13 +317,69 @@ public class WorkspacePolicyCoordinationRaceTests
         }
     }
 
-    private static SqliteConnection OpenConnection()
+    /// <summary>
+    /// Creates a company with its coordination row and operating settings. <paramref name="customizeSettings"/> adjusts the
+    /// settings row before it is saved; <paramref name="seedMore"/> runs under the company's tenant scope and must save.
+    /// </summary>
+    private static int SeedWorkspace(
+        PolicyRaceDatabase database,
+        string name,
+        string slug,
+        long policyRevision,
+        Action<WorkspaceOperatingSettings>? customizeSettings = null,
+        Action<ApiDbContext, int>? seedMore = null)
     {
-        var connection = new SqliteConnection(SharedMemoryConnectionString);
-        connection.Open();
-        return connection;
+        var bootstrapTenant = new TenantContext();
+        using var context = database.CreateContext(bootstrapTenant);
+        var bootstrap = context.Db;
+
+        var company = new Company { Name = name, Slug = slug };
+        bootstrap.Companies.Add(company);
+        bootstrap.SaveChanges();
+        var companyId = company.Id;
+
+        using (bootstrapTenant.Impersonate(companyId, company.Slug, CompanyMemberRole.Owner))
+        {
+            bootstrap.WorkspacePolicyCoordinations.Add(new WorkspacePolicyCoordination
+            {
+                CompanyId = companyId,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            var settings = new WorkspaceOperatingSettings
+            {
+                CompanyId = companyId,
+                Purpose = WorkspacePurpose.Business,
+                CollaborationIntent = WorkspaceCollaborationIntent.JustMe,
+                CollaborationState = WorkspaceCollaborationState.SoloActive,
+                PolicyRevision = policyRevision,
+                PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+            };
+            customizeSettings?.Invoke(settings);
+            bootstrap.WorkspaceOperatingSettings.Add(settings);
+            bootstrap.SaveChanges();
+            seedMore?.Invoke(bootstrap, companyId);
+        }
+
+        return companyId;
     }
 
-    private static ApiDbContext CreateDb(SqliteConnection connection, TenantContext tenant) =>
-        new(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection).Options, tenant);
+    /// <summary>
+    /// Runs <paramref name="writer"/> and retries the provider's transient errors with a linear back-off. The last attempt
+    /// lets any exception propagate so a persistent failure fails the test.
+    /// </summary>
+    private static void RunWithRetry(PolicyRaceDatabase database, int retryDelayMilliseconds, Action writer)
+    {
+        for (var attempt = 0; attempt < PolicyRaceDatabase.MaxWriterAttempts; attempt++)
+        {
+            try
+            {
+                writer();
+                return;
+            }
+            catch (Exception ex) when (attempt < PolicyRaceDatabase.MaxWriterAttempts - 1 && database.IsTransient(ex))
+            {
+                Thread.Sleep(retryDelayMilliseconds * (attempt + 1));
+            }
+        }
+    }
 }
