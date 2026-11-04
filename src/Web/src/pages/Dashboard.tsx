@@ -13,6 +13,9 @@ import {
   Coins,
   Clock,
   Loader2,
+  AlertTriangle,
+  ShoppingCart,
+  Package,
 } from 'lucide-react';
 import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
@@ -20,10 +23,13 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
 import { BankCloseStatusCard } from '../components/BankCloseStatusCard';
 import { MoneyInBankBreakdown } from '../components/MoneyInBankBreakdown';
+import { PersonalFinanceHealthCard } from '../components/PersonalFinanceHealthCard';
+import { isInvoicingDashboard, isPersonalWorkspace } from '../lib/dashboardProduct';
 import type { DashboardBankBalance } from '../lib/moneyInBank';
 import type { BankCloseStatus } from '../types/banking';
 
 interface DashboardSummary {
+  surface?: 'Accounting' | 'Invoicing' | string;
   kpis: {
     moneyInBank: number;
     bankBalances?: DashboardBankBalance[] | null;
@@ -35,6 +41,9 @@ interface DashboardSummary {
     totalExpensesYtd: number;
     netProfitYtd: number;
     cashFlowYtd: number;
+    overdueReceivables?: number;
+    openInvoiceCount?: number;
+    overdueInvoiceCount?: number;
   };
   balanceSnapshot: {
     totalAssets: number;
@@ -78,6 +87,9 @@ export const Dashboard: React.FC = () => {
   const [yearEndReminder, setYearEndReminder] = useState<YearEndYearRow | null>(null);
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
+  const hasFinancials = hasModule('financials');
+  const invoicingSurface = isInvoicingDashboard(hasFinancials);
+  const personal = isPersonalWorkspace(currentOrg);
 
   useEffect(() => {
     let mounted = true;
@@ -108,7 +120,7 @@ export const Dashboard: React.FC = () => {
   }, [authFetch, currentOrg.slug]);
 
   useEffect(() => {
-    if (!hasModule('financials') || !hasPermission('financials.periods.close')) {
+    if (!hasFinancials || !hasPermission('financials.periods.close')) {
       setYearEndReminder(null);
       return;
     }
@@ -129,7 +141,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [authFetch, currentOrg.slug, hasModule, hasPermission]);
+  }, [authFetch, currentOrg.slug, hasFinancials, hasPermission]);
 
   const kpis = summary?.kpis;
   const recentActivity = summary?.recentActivity || [];
@@ -167,26 +179,33 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const welcomeLine = personal
+    ? invoicingSurface
+      ? 'Here is your personal invoicing and cash picture.'
+      : 'Here is your personal finance overview from the books.'
+    : invoicingSurface
+      ? 'Here is your invoicing overview — sales, collections, and bills.'
+      : "Here is an overview of your organization's financials.";
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200 text-[var(--text-main)]">
-      {/* Workspace Context Top Bar (Border-Less) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[var(--bg-surface)] via-[var(--bg-surface)] to-[var(--brand-subtle)] shadow-xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[var(--brand-primary)]" />
             <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[var(--brand-primary)]">
-              Active Workspace
+              {invoicingSurface ? 'Invoicing workspace' : 'Accounting workspace'}
+              {personal ? ' · Personal' : ''}
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
             {currentOrg.whitelabel?.brandName ? `${currentOrg.name} (${currentOrg.whitelabel.brandName})` : currentOrg.name}
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            Welcome back, <span className="text-[var(--text-main)] font-medium">{user.name}</span>. Here is an overview of your organization's financials.
+            Welcome back, <span className="text-[var(--text-main)] font-medium">{user.name}</span>. {welcomeLine}
           </p>
         </div>
 
-        {/* Tenant Meta Pill Badges */}
         <div className="flex flex-wrap items-center gap-2 sm:self-center">
           <div className="px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] shadow-sm text-xs">
             <span className="text-[var(--text-muted)]">Org ID: </span>
@@ -204,11 +223,23 @@ export const Dashboard: React.FC = () => {
 
       <OnboardingChecklist
         orgSlug={currentOrg.slug}
-        hasFinancialsModule={hasModule('financials')}
+        hasFinancialsModule={hasFinancials}
         canManage={currentOrg.role === 'Owner' || currentOrg.role === 'Admin'}
       />
 
-      <BankCloseStatusCard status={summary?.bankCloseStatus} orgSlug={currentOrg.slug} />
+      {personal && (
+        <PersonalFinanceHealthCard
+          loading={loading}
+          hasFinancials={hasFinancials}
+          currencyFormat={formatCurrency}
+          moneyInBank={kpis?.moneyInBank}
+          outstandingReceivables={kpis?.outstandingReceivables}
+          totalPayables={kpis?.totalPayables}
+          netWorth={summary?.balanceSnapshot?.totalEquity}
+        />
+      )}
+
+      {!invoicingSurface && <BankCloseStatusCard status={summary?.bankCloseStatus} orgSlug={currentOrg.slug} />}
 
       {yearEndReminder && (
         <p className="text-sm text-amber-700 bg-amber-500/10 px-4 py-3 rounded-2xl">
@@ -222,12 +253,13 @@ export const Dashboard: React.FC = () => {
         </p>
       )}
 
-      {/* Financial Metric Cards Grid (Border-Less with Ambient Elevation) */}
+      {/* KPI grid — product-shaped */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Metric 1: Operating Revenue (Sales YTD) */}
         <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-muted)]">Operating Sales (YTD)</span>
+            <span className="text-xs font-semibold text-[var(--text-muted)]">
+              {invoicingSurface ? 'Invoiced (YTD)' : 'Operating Sales (YTD)'}
+            </span>
             <div className="w-8 h-8 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] flex items-center justify-center shadow-sm">
               <TrendingUp className="w-4 h-4" />
             </div>
@@ -239,27 +271,36 @@ export const Dashboard: React.FC = () => {
               formatCurrency(kpis?.totalSalesYtd)
             )}
           </div>
-          <div
-            className={`flex items-center gap-1.5 text-xs mt-2 font-semibold ${
-              (kpis?.netProfitYtd ?? 0) >= 0 ? 'text-[var(--brand-primary)]' : 'text-rose-500'
-            }`}
-          >
-            {(kpis?.netProfitYtd ?? 0) >= 0 ? (
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            ) : (
-              <ArrowDownRight className="w-3.5 h-3.5" />
-            )}
-            <span>
-              {(kpis?.netProfitYtd ?? 0) >= 0 ? 'Net profit: ' : 'Net loss: '}
-              {formatCurrency(Math.abs(kpis?.netProfitYtd ?? 0))}
-            </span>
-          </div>
+          {invoicingSurface ? (
+            <div className="text-xs text-[var(--text-muted)] mt-2">
+              {(kpis?.openInvoiceCount ?? 0) === 1
+                ? '1 open invoice'
+                : `${kpis?.openInvoiceCount ?? 0} open invoices`}
+            </div>
+          ) : (
+            <div
+              className={`flex items-center gap-1.5 text-xs mt-2 font-semibold ${
+                (kpis?.netProfitYtd ?? 0) >= 0 ? 'text-[var(--brand-primary)]' : 'text-rose-500'
+              }`}
+            >
+              {(kpis?.netProfitYtd ?? 0) >= 0 ? (
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              ) : (
+                <ArrowDownRight className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {(kpis?.netProfitYtd ?? 0) >= 0 ? 'Net profit: ' : 'Net loss: '}
+                {formatCurrency(Math.abs(kpis?.netProfitYtd ?? 0))}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Metric 2: Receivables (A/R) */}
         <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-muted)]">Receivables (A/R)</span>
+            <span className="text-xs font-semibold text-[var(--text-muted)]">
+              {personal ? 'Owed to you' : 'Receivables (A/R)'}
+            </span>
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shadow-sm">
               <Receipt className="w-4 h-4" />
             </div>
@@ -278,23 +319,113 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric 3: Cash in Bank */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-muted)]">Cash & Bank Balances</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shadow-sm">
-              <Wallet className="w-4 h-4" />
+        {invoicingSurface ? (
+          <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-[var(--text-muted)]">Overdue to collect</span>
+              <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center shadow-sm">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
+              {loading ? (
+                <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
+              ) : (
+                formatCurrency(kpis?.overdueReceivables)
+              )}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-2">
+              {(kpis?.overdueInvoiceCount ?? 0) === 0
+                ? 'Nothing past due'
+                : `${kpis?.overdueInvoiceCount} past due`}
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
-            {loading ? (
-              <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
-            ) : (
-              formatCurrency(kpis?.moneyInBank)
+        ) : (
+          <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-[var(--text-muted)]">Cash & Bank Balances</span>
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shadow-sm">
+                <Wallet className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
+              {loading ? (
+                <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
+              ) : (
+                formatCurrency(kpis?.moneyInBank)
+              )}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-2">
+              Available across cash and bank accounts
+            </div>
+            {!loading && (
+              <MoneyInBankBreakdown
+                kpis={kpis}
+                orgSlug={currentOrg.slug}
+                currencySymbol={currencySymbol}
+                formatAmount={formatAmount}
+              />
             )}
           </div>
-          <div className="text-xs text-[var(--text-muted)] mt-2">
-            Available across cash and bank accounts
+        )}
+
+        {invoicingSurface ? (
+          <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-[var(--text-muted)]">
+                {personal ? 'You owe' : 'Bills to pay (A/P)'}
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shadow-sm">
+                <ShoppingCart className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
+              {loading ? (
+                <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
+              ) : (
+                formatCurrency(kpis?.totalPayables)
+              )}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-2">
+              {(kpis?.totalPayables ?? 0) > 0 ? 'Open purchase bills' : 'No open bills'}
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-[var(--text-muted)]">
+                {personal ? 'Net worth' : 'Total Assets'}
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shadow-sm">
+                <BookOpen className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
+              {loading ? (
+                <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
+              ) : personal ? (
+                formatCurrency(summary?.balanceSnapshot?.totalEquity)
+              ) : (
+                formatCurrency(kpis?.totalAssets)
+              )}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-2">
+              {personal
+                ? `Assets ${formatCurrency(summary?.balanceSnapshot?.totalAssets)} · Liabilities ${formatCurrency(summary?.balanceSnapshot?.totalLiabilities)}`
+                : `Total liabilities: ${formatCurrency(summary?.balanceSnapshot?.totalLiabilities)}`}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {invoicingSurface && (kpis?.bankBalances != null || (kpis?.moneyInBank ?? 0) !== 0) && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] shadow-md">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-amber-400" />
+              Cash &amp; bank
+            </h2>
+            <span className="text-sm font-bold text-[var(--text-main)]">{formatCurrency(kpis?.moneyInBank)}</span>
           </div>
           {!loading && (
             <MoneyInBankBreakdown
@@ -305,42 +436,20 @@ export const Dashboard: React.FC = () => {
             />
           )}
         </div>
+      )}
 
-        {/* Metric 4: Total Ledger Assets */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-muted)]">Total Assets</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shadow-sm">
-              <BookOpen className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
-            {loading ? (
-              <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
-            ) : (
-              formatCurrency(kpis?.totalAssets)
-            )}
-          </div>
-          <div className="text-xs text-[var(--text-muted)] mt-2">
-            Total liabilities: {formatCurrency(summary?.balanceSnapshot?.totalLiabilities)}
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Activity Feed */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)] flex items-center gap-2">
               <FileSpreadsheet className="w-4 h-4 text-[var(--brand-primary)]" />
-              <span>Recent Activity & Entries</span>
+              <span>{invoicingSurface ? 'Recent invoices & bills' : 'Recent Activity & Entries'}</span>
             </h2>
             <Link
-              to={`/org/${currentOrg.slug}/financials`}
+              to={invoicingSurface ? `/org/${currentOrg.slug}/sales` : `/org/${currentOrg.slug}/financials`}
               className="text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition-opacity"
             >
-              View Full Accounts →
+              {invoicingSurface ? 'View sales →' : 'View Full Accounts →'}
             </Link>
           </div>
 
@@ -348,7 +457,7 @@ export const Dashboard: React.FC = () => {
             <div className="overflow-x-auto smooth-scroll">
               <table
                 className="w-full min-w-[540px] text-left text-xs"
-                aria-label="Recent entries and journal transactions"
+                aria-label={invoicingSurface ? 'Recent invoices and bills' : 'Recent entries and journal transactions'}
               >
                 <thead className="bg-[var(--bg-subtle)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] font-semibold">
                   <tr>
@@ -368,7 +477,9 @@ export const Dashboard: React.FC = () => {
                   ) : recentActivity.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="p-8 text-center text-[var(--text-muted)] font-sans">
-                        No recent activity recorded for this period.
+                        {invoicingSurface
+                          ? 'No invoices or bills yet. Create your first sales invoice to get started.'
+                          : 'No recent activity recorded for this period.'}
                       </td>
                     </tr>
                   ) : (
@@ -401,12 +512,11 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Top Receivables Strip */}
           {topReceivables.length > 0 && (
             <div className="p-4 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-3">
               <h3 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
                 <Receipt className="w-3.5 h-3.5 text-[var(--brand-primary)]" />
-                <span>Top Customer Balances (A/R)</span>
+                <span>{personal ? 'Who owes you' : 'Top Customer Balances (A/R)'}</span>
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {topReceivables.map((cust) => (
@@ -428,7 +538,6 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Right 1 Col: Quick Actions & Payables */}
         <div className="space-y-4">
           <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)] flex items-center gap-2">
             <Plus className="w-4 h-4 text-[var(--brand-primary)]" />
@@ -436,27 +545,57 @@ export const Dashboard: React.FC = () => {
           </h2>
 
           <div className="p-3 sm:p-4 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-2">
-            <Link
-              to={`/org/${currentOrg.slug}/sales`}
-              className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
-            >
-              <span className="flex items-center gap-2.5">
-                <Receipt className="w-4 h-4 text-[var(--brand-primary)] shrink-0" />
-                <span>Sales Invoices</span>
-              </span>
-              <span className="text-[10px] text-[var(--text-muted)] font-mono">→</span>
-            </Link>
+            {hasModule('sales') && (
+              <Link
+                to={`/org/${currentOrg.slug}/sales`}
+                className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Receipt className="w-4 h-4 text-[var(--brand-primary)] shrink-0" />
+                  <span>Sales Invoices</span>
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">→</span>
+              </Link>
+            )}
 
-            <Link
-              to={`/org/${currentOrg.slug}/financials`}
-              className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
-            >
-              <span className="flex items-center gap-2.5">
-                <Coins className="w-4 h-4 text-blue-400 shrink-0" />
-                <span>General Ledger Accounts</span>
-              </span>
-              <span className="text-[10px] text-[var(--text-muted)] font-mono">→</span>
-            </Link>
+            {hasModule('purchases') && (
+              <Link
+                to={`/org/${currentOrg.slug}/purchases`}
+                className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <ShoppingCart className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Bills &amp; Purchases</span>
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">→</span>
+              </Link>
+            )}
+
+            {hasModule('sales') && (
+              <Link
+                to={`/org/${currentOrg.slug}/items`}
+                className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Package className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span>Products &amp; services</span>
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">→</span>
+              </Link>
+            )}
+
+            {hasFinancials && (
+              <Link
+                to={`/org/${currentOrg.slug}/financials`}
+                className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-left text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Coins className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span>General Ledger Accounts</span>
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">→</span>
+              </Link>
+            )}
 
             <Link
               to={`/org/${currentOrg.slug}/settings`}
@@ -470,13 +609,12 @@ export const Dashboard: React.FC = () => {
             </Link>
           </div>
 
-          {/* Upcoming Payables / Bills Due */}
           {upcomingPayables.length > 0 && (
             <div className="p-4 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Upcoming Payables (A/P)</span>
+                  <span>{personal ? 'Bills coming due' : 'Upcoming Payables (A/P)'}</span>
                 </h3>
                 <span className="text-xs font-mono font-semibold text-amber-400">
                   Total: {formatCurrency(kpis?.totalPayables)}

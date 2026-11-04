@@ -82,10 +82,12 @@ const WorkspaceSettings: React.FC = () => {
     : <PermissionDeniedCard permission="Owner or Admin" />;
 };
 
-// The dashboard summarises the books, so it needs the accounting module; an invoicing-only workspace opens on its invoices.
+// Accounting and invoicing each get a product-shaped dashboard. Workspaces with neither module open on sales.
 const WorkspaceHome: React.FC = () => {
   const { hasModule } = useTenantContext();
-  return hasModule('financials') ? <Dashboard /> : <Navigate to="../sales" replace />;
+  if (hasModule('financials') || hasModule('sales') || hasModule('purchases'))
+    return <Dashboard />;
+  return <Navigate to="../sales" replace />;
 };
 
 // Inventory moved under Products & services; old links and bookmarks keep working.
