@@ -121,6 +121,76 @@ namespace Api.Data.Migrations.Postgres.IdentityDb
                     b.ToTable("DataProtectionKeys", (string)null);
                 });
 
+            modelBuilder.Entity("Api.Data.OAuthAuthorizationRequest", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CodeChallenge")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("CodeHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeniedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DeviceLabel")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("IssuedRefreshFamilyId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("CodeHash");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("OAuthAuthorizationRequests", (string)null);
+                });
+
             modelBuilder.Entity("Api.Data.RefreshTokenSession", b =>
                 {
                     b.Property<int>("Id")
@@ -129,14 +199,32 @@ namespace Api.Data.Migrations.Postgres.IdentityDb
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("AbsoluteExpiresAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("Amr")
                         .HasColumnType("text");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("web");
+
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedByIp")
                         .HasColumnType("text");
+
+                    b.Property<string>("DeviceLabel")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp without time zone");
@@ -157,6 +245,9 @@ namespace Api.Data.Migrations.Postgres.IdentityDb
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<string>("Scope")
+                        .HasColumnType("text");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -172,6 +263,8 @@ namespace Api.Data.Migrations.Postgres.IdentityDb
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Channel");
 
                     b.HasIndex("FamilyId");
 

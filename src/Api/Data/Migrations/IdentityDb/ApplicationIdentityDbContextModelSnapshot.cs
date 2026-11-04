@@ -122,6 +122,76 @@ namespace Api.Data.Migrations.IdentityDb
                     b.ToTable("DataProtectionKeys", (string)null);
                 });
 
+            modelBuilder.Entity("Api.Data.OAuthAuthorizationRequest", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("CodeChallenge")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("CodeHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeniedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceLabel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IssuedRefreshFamilyId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("CodeHash");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("OAuthAuthorizationRequests", (string)null);
+                });
+
             modelBuilder.Entity("Api.Data.RefreshTokenSession", b =>
                 {
                     b.Property<int>("Id")
@@ -130,14 +200,32 @@ namespace Api.Data.Migrations.IdentityDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("AbsoluteExpiresAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Amr")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("web");
+
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedByIp")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DeviceLabel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("datetime2");
@@ -158,6 +246,9 @@ namespace Api.Data.Migrations.IdentityDb
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Scope")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -173,6 +264,8 @@ namespace Api.Data.Migrations.IdentityDb
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Channel");
 
                     b.HasIndex("FamilyId");
 
