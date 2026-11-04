@@ -114,9 +114,24 @@ jobs:
           --filter "FullyQualifiedName~MultiTenancyPhase3Tests|FullyQualifiedName~PostgresConnectionString|FullyQualifiedName~Architecture|FullyQualifiedName~WorkspaceOperatingPolicyMigrationRehearsal"
           -- xUnit.MaxParallelThreads=4
 
-      # pg_dump refuses a server newer than itself; match the postgres:17 service for the backup rehearsal.
+      # pg_dump refuses a server newer than itself. Ubuntu's default repository may not carry 17;
+      # use PostgreSQL's signed repository and select the matching binaries explicitly.
       - name: Install PostgreSQL 17 client tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client-17
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --show-error --silent --location \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/17/bin/psql --version
+          /usr/lib/postgresql/17/bin/pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_restore --version
 
       # Dedicated multi-connection policy races and the personal-workspace conversion rehearsal, on PostgreSQL.
       # The rehearsal drives scripts/personal-workspace-conversion.sh with psql, pg_dump and pg_restore.
