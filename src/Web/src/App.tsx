@@ -8,6 +8,7 @@ import Profile from './pages/Profile';
 import SelectOrg from './pages/SelectOrg';
 import CreateOrgPage from './pages/CreateOrg/CreateOrgPage';
 import Login from './pages/Login';
+import CliAuthorize from './pages/CliAuthorize';
 import Invitation from './pages/Invitation';
 import { Invoices } from './pages/Invoices';
 import { InvoiceEdit } from './pages/InvoiceEdit';
@@ -106,6 +107,10 @@ const router = createBrowserRouter([
   {
     path: '/signup',
     element: <Login initialMode="signup" />,
+  },
+  {
+    path: '/cli/authorize',
+    element: <CliAuthorize />,
   },
   {
     path: '/invite',

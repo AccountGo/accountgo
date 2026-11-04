@@ -101,7 +101,11 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
         const decision = await resolvePostAuthDestination(authFetch, {
           targetOrgSlug: null,
           persistedSlug: getPersistedOrgSlug(),
-          fromPath: (location.state as any)?.from?.pathname,
+          fromPath: (() => {
+            const from = (location.state as any)?.from;
+            if (!from?.pathname) return undefined;
+            return `${from.pathname}${from.search || ''}`;
+          })(),
         });
         if (cancelled) return;
         switch (decision.kind) {
@@ -300,7 +304,10 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     // returning user with an uninitialized signup workspace is routed into guided continuation across
     // every entry path (explicit slug, persisted slug, original destination, or sole workspace), not just
     // when the in-memory signup slug survives.
-    const fromPath = (location.state as any)?.from?.pathname;
+    const fromLoc = (location.state as any)?.from;
+    const fromPath = fromLoc?.pathname
+      ? `${fromLoc.pathname}${fromLoc.search || ''}`
+      : undefined;
     const decision = await resolvePostAuthDestination(authFetch, {
       targetSlugOverride,
       targetOrgSlug,

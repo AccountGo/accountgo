@@ -42,12 +42,13 @@ namespace Api.Service
             IEnumerable<string>? amr = null,
             bool? mfa = null,
             DateTimeOffset? mfaTimestamp = null,
-            IEnumerable<Claim>? extraClaims = null)
+            IEnumerable<Claim>? extraClaims = null,
+            string? audience = null)
         {
             var signingCredentials = GetSigningCredentials();
             var claims = await BuildClaimsAsync(user, purpose, amr, mfa, mfaTimestamp, extraClaims);
             var expiry = ResolveExpiry(purpose, lifetime);
-            var tokenOptions = GenerateTokenOptions(signingCredentials, claims, expiry);
+            var tokenOptions = GenerateTokenOptions(signingCredentials, claims, expiry, audience);
             var accessToken = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
 
             return new Token(accessToken, string.Empty);
@@ -160,10 +161,16 @@ namespace Api.Service
             return DateTime.UtcNow.AddMinutes(Convert.ToDouble(expires));
         }
 
-        private JwtSecurityToken GenerateTokenOptions(SigningCredentials signingCredentials, List<Claim> claims, DateTime expires)
+        private JwtSecurityToken GenerateTokenOptions(
+            SigningCredentials signingCredentials,
+            List<Claim> claims,
+            DateTime expires,
+            string? audience = null)
         {
             var validIssuer = _configuration["JwtSettings:validIssuer"];
-            var validAudience = _configuration["JwtSettings:validAudience"];
+            var validAudience = string.IsNullOrWhiteSpace(audience)
+                ? _configuration["JwtSettings:validAudience"]
+                : audience;
 
             var tokenOptions = new JwtSecurityToken
             (

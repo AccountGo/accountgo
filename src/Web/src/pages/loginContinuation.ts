@@ -80,6 +80,11 @@ export const resolvePostAuthDestination = async (
 ): Promise<PostAuthDestination> => {
   const { targetSlugOverride, targetOrgSlug, persistedSlug, fromPath } = inputs;
 
+  // CLI consent must win over workspace-setup continuation — do not divert an in-flight OAuth approve.
+  if (fromPath && fromPath.startsWith('/cli/authorize')) {
+    return { kind: 'path', path: fromPath };
+  }
+
   const candidateSlug =
     targetSlugOverride ||
     targetOrgSlug ||

@@ -67,7 +67,10 @@ namespace Dto.Security
         System.DateTime ExpiresAt,
         string? IpAddress,
         string? UserAgent,
-        bool IsCurrent
+        bool IsCurrent,
+        string Channel = "web",
+        string? DeviceLabel = null,
+        string? ClientId = null
     );
 
     public record AddNewUserRequest(

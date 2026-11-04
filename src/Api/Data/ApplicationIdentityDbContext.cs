@@ -20,6 +20,7 @@ namespace Api.Data
         }
 
         public DbSet<RefreshTokenSession> RefreshTokens { get; set; } = null!;
+        public DbSet<OAuthAuthorizationRequest> OAuthAuthorizationRequests { get; set; } = null!;
         public DbSet<DataProtectionKeyEntity> DataProtectionKeys { get; set; } = null!;
         public DbSet<SecurityAuditEvent> SecurityAuditEvents { get; set; } = null!;
         public DbSet<UserRecoveryCode> UserRecoveryCodes { get; set; } = null!;
@@ -37,9 +38,32 @@ namespace Api.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.FamilyId).IsRequired();
                 entity.Property(e => e.GraceReuseCount).IsRequired();
+                entity.Property(e => e.Channel).IsRequired().HasMaxLength(32).HasDefaultValue(RefreshTokenChannels.Web);
+                entity.Property(e => e.ClientId).HasMaxLength(64);
+                entity.Property(e => e.DeviceLabel).HasMaxLength(200);
                 entity.HasIndex(e => e.TokenHash);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.FamilyId);
+                entity.HasIndex(e => e.Channel);
+            });
+
+            builder.Entity<OAuthAuthorizationRequest>(entity =>
+            {
+                entity.ToTable("OAuthAuthorizationRequests");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasMaxLength(64);
+                entity.Property(e => e.ClientId).IsRequired().HasMaxLength(64);
+                entity.Property(e => e.RedirectUri).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.CodeChallenge).IsRequired().HasMaxLength(128);
+                entity.Property(e => e.Scope).IsRequired().HasMaxLength(256);
+                entity.Property(e => e.State).IsRequired().HasMaxLength(256);
+                entity.Property(e => e.UserId).HasMaxLength(450);
+                entity.Property(e => e.DeviceLabel).HasMaxLength(200);
+                entity.Property(e => e.CodeHash).HasMaxLength(128);
+                entity.Property(e => e.IssuedRefreshFamilyId).HasMaxLength(64);
+                entity.HasIndex(e => e.CodeHash);
+                entity.HasIndex(e => e.ExpiresAt);
+                entity.HasIndex(e => e.ClientId);
             });
 
             builder.Entity<DataProtectionKeyEntity>(entity =>

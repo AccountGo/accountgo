@@ -105,6 +105,7 @@ namespace Api.Extensions
             }
             audiences.Add("https://api.accountgo.dev");
             audiences.Add("https://accountgo-api.anter.workers.dev");
+            audiences.Add(Api.Service.CliOAuthService.AudienceCli);
 
             services.AddAuthentication(opt =>
             {
