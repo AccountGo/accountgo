@@ -803,6 +803,7 @@ namespace Api.Controllers
             return Ok(new
             {
                 workspaces = preview.Workspaces.Select(w => new { name = w.Name, slug = w.Slug }),
+                reviewerConflicts = preview.ReviewerConflicts.Select(c => new { name = c.Name, slug = c.Slug, reasonCode = c.ReasonCode, message = c.Message }),
                 platformAdministrator = preview.PlatformAdministrator
             });
         }
@@ -832,7 +833,9 @@ namespace Api.Controllers
             {
                 var title = outcome.Preview.PlatformAdministrator
                     ? AccountDeletionService.PlatformAdminBlockTitle
-                    : AccountDeletionService.WorkspaceBlockTitle;
+                    : outcome.Preview.Workspaces.Count == 0 && outcome.Preview.ReviewerConflicts.Count > 0
+                        ? AccountDeletionService.ReviewerConflictTitle
+                        : AccountDeletionService.WorkspaceBlockTitle;
                 return Problem(statusCode: 409, title: title, extensions: BlockerExtensions(outcome.Preview));
             }
 
@@ -849,6 +852,16 @@ namespace Api.Controllers
                     ["name"] = w.Name,
                     ["slug"] = w.Slug
                 }).ToList(),
+                ["reviewerConflicts"] = preview.ReviewerConflicts.Select(c => new Dictionary<string, string>
+                {
+                    ["name"] = c.Name,
+                    ["slug"] = c.Slug,
+                    ["reasonCode"] = c.ReasonCode,
+                    ["message"] = c.Message
+                }).ToList(),
+                ["reasonCode"] = preview.ReviewerConflicts.Count > 0
+                    ? Core.Authorization.WorkspacePolicyReasonCodes.LastReviewerUnavailable
+                    : null,
                 ["platformAdministrator"] = preview.PlatformAdministrator
             };
         }

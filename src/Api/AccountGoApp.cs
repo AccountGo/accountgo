@@ -159,6 +159,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Core.Authorization.IWorkspaceApprovalPolicyResolver, Api.Service.WorkspaceApprovalPolicyResolver>();
         builder.Services.AddScoped<Core.Authorization.IWorkspaceAccessProfileCatalog, Api.Service.WorkspaceAccessProfileCatalog>();
         builder.Services.AddScoped<Core.Authorization.IWorkspacePolicyTransaction, Api.Service.WorkspacePolicyTransaction>();
+        builder.Services.AddScoped<Core.Authorization.IWorkspaceReviewerEligibility, Api.Service.WorkspaceReviewerEligibility>();
         builder.Services.AddScoped<Core.Authorization.IWorkspaceOperatingPolicyService, Api.Service.WorkspaceOperatingPolicyService>();
         builder.Services.AddScoped<Api.Service.WorkspaceInitializationApplicator>();
         builder.Services.AddScoped<Api.Service.IWorkspaceCanaryEnrollment, Api.Service.WorkspaceCanaryEnrollment>();

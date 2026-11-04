@@ -44,7 +44,17 @@ export interface WhitelabelConfig {
   primaryColor?: string;
 }
 
+export type JournalApprovalMode = 'IndependentReviewerRequired' | 'SingleActorAllowed' | 'CatalogDefault';
+
+export interface JournalApprovalSummary {
+  mode: JournalApprovalMode | string;
+  provenance?: string | null;
+  eligibleOtherReviewerCount: number;
+  canChange: boolean;
+}
+
 export interface WorkspaceOperatingPolicySummary {
+  journalApproval?: JournalApprovalSummary | null;
   purpose?: string;
   collaborationIntent?: string;
   collaborationState?: string;

@@ -19,19 +19,23 @@ namespace Api.Service
         public const string PlatformAdminBlockTitle = "The last platform administrator cannot delete their account";
         public const string ConfirmationTitle = "Email confirmation does not match";
         public const string ClosedEmailTitle = "This email belongs to a closed account";
+        public const string ReviewerConflictTitle = "Resolve the journal reviewer conflict first";
 
         private readonly ApiDbContext _apiDb;
         private readonly ApplicationIdentityDbContext _identity;
         private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
+        private readonly Core.Authorization.IWorkspaceReviewerEligibility _reviewerEligibility;
 
         public AccountDeletionService(
             ApiDbContext apiDb,
             ApplicationIdentityDbContext identity,
-            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
+            Core.Authorization.IWorkspaceReviewerEligibility? reviewerEligibility = null)
         {
             _apiDb = apiDb ?? throw new ArgumentNullException(nameof(apiDb));
             _identity = identity ?? throw new ArgumentNullException(nameof(identity));
             _policyTransaction = policyTransaction;
+            _reviewerEligibility = reviewerEligibility ?? new WorkspaceReviewerEligibility(apiDb);
         }
 
         public async Task<AccountDeletionPreview> PreviewAsync(string userId)
@@ -135,10 +139,11 @@ namespace Api.Service
             var liveIds = liveCompanies.Select(c => c.Id).ToList();
             var liveMembers = await _apiDb.CompanyMembers
                 .Where(m => liveIds.Contains(m.CompanyId) && m.Status == CompanyMemberStatus.Active)
-                .Select(m => new { m.CompanyId, m.UserId, m.Role })
+                .Select(m => new { m.Id, m.CompanyId, m.UserId, m.Role })
                 .ToListAsync();
 
             var workspaces = new List<AccountDeletionWorkspace>();
+            var reviewerConflicts = new List<AccountDeletionReviewerConflict>();
             foreach (var company in liveCompanies)
             {
                 var members = liveMembers.Where(m => m.CompanyId == company.Id).ToList();
@@ -148,12 +153,34 @@ namespace Api.Service
                 var soleOwner = mine.Role == CompanyMemberRole.Owner && members.Count(m => m.Role == CompanyMemberRole.Owner) <= 1;
                 var onlyMember = members.Count <= 1;
                 if (soleOwner || onlyMember)
+                {
                     workspaces.Add(new AccountDeletionWorkspace { Name = company.Name, Slug = company.Slug ?? "" });
+                    continue;
+                }
+
+                // Leaving must not silently disable approval: if this person is the workspace's last usable
+                // independent reviewer, name the conflict so a replacement reviewer or an explicit Owner policy
+                // change can resolve it first.
+                var verdict = _reviewerEligibility.EvaluateMemberChange(
+                    company.Id,
+                    new Core.Authorization.MemberReviewerChange(mine.Id, Removed: true));
+                if (verdict.Blocked)
+                {
+                    reviewerConflicts.Add(new AccountDeletionReviewerConflict
+                    {
+                        Name = company.Name,
+                        Slug = company.Slug ?? "",
+                        ReasonCode = verdict.ReasonCode ?? Core.Authorization.WorkspacePolicyReasonCodes.LastReviewerUnavailable,
+                        Message = $"Deleting your account would remove the last usable independent journal reviewer in {company.Name}. "
+                            + "Ask a workspace Owner to add another reviewer or explicitly change the journal approval policy, then try again."
+                    });
+                }
             }
 
             return new AccountDeletionPreview
             {
                 Workspaces = workspaces,
+                ReviewerConflicts = reviewerConflicts,
                 PlatformAdministrator = await IsLastPlatformAdministratorAsync(user)
             };
         }
@@ -210,8 +237,17 @@ namespace Api.Service
     public sealed class AccountDeletionPreview
     {
         public List<AccountDeletionWorkspace> Workspaces { get; init; } = new List<AccountDeletionWorkspace>();
+        public List<AccountDeletionReviewerConflict> ReviewerConflicts { get; init; } = new List<AccountDeletionReviewerConflict>();
         public bool PlatformAdministrator { get; init; }
-        public bool Blocked => PlatformAdministrator || Workspaces.Count > 0;
+        public bool Blocked => PlatformAdministrator || Workspaces.Count > 0 || ReviewerConflicts.Count > 0;
+    }
+
+    public sealed class AccountDeletionReviewerConflict
+    {
+        public string Name { get; init; } = "";
+        public string Slug { get; init; } = "";
+        public string ReasonCode { get; init; } = "";
+        public string Message { get; init; } = "";
     }
 
     public sealed class AccountDeletionWorkspace

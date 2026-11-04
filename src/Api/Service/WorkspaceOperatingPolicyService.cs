@@ -23,6 +23,7 @@ namespace Api.Service
         private readonly IWorkspacePolicyTransaction _policyTransaction;
         private readonly WorkspaceExperienceOptions _experience;
         private readonly IWorkspaceCanaryEnrollment _canary;
+        private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
 
         public WorkspaceOperatingPolicyService(
             ApiDbContext db,
@@ -30,7 +31,8 @@ namespace Api.Service
             IWorkspaceAccessProfileCatalog accessCatalog,
             IWorkspacePolicyTransaction policyTransaction,
             IOptions<WorkspaceExperienceOptions> experienceOptions,
-            IWorkspaceCanaryEnrollment? canary = null)
+            IWorkspaceCanaryEnrollment? canary = null,
+            IWorkspaceReviewerEligibility? reviewerEligibility = null)
         {
             _db = db;
             _approvalResolver = approvalResolver;
@@ -41,6 +43,7 @@ namespace Api.Service
             // one built from the same (environment-resolved) experience options when DI does not supply it,
             // so the capability always reflects SoloSetupEnabled AND canary enrollment.
             _canary = canary ?? new WorkspaceCanaryEnrollment(experienceOptions);
+            _reviewerEligibility = reviewerEligibility ?? new WorkspaceReviewerEligibility(db);
         }
 
         public WorkspaceOperatingSettings EnsureCoordinationAndSettings(int companyId) =>
@@ -88,7 +91,8 @@ namespace Api.Service
             if (settings.CollaborationState == WorkspaceCollaborationState.TeamSetupPending)
                 nextActions.Add("invite_collaborator");
 
-            if (_experience.LegacySoloConfirmationEnabled && settings.CollaborationState != WorkspaceCollaborationState.SoloActive)
+            if (settings.CollaborationState != WorkspaceCollaborationState.SoloActive
+                && IsReturnToSoloAdmitted(settings))
             {
                 bool canReturn = false;
                 if (memberId.HasValue)
@@ -378,19 +382,22 @@ namespace Api.Service
             long expectedRevision,
             bool revokeOutstandingInvitations)
         {
-            if (!_experience.LegacySoloConfirmationEnabled)
-            {
-                return new WorkspacePolicyMutationResult(
-                    false,
-                    WorkspacePolicyReasonCodes.SoloSetupDisabled,
-                    "Solo workspace setup is not enabled.",
-                    0,
-                    WorkspaceCollaborationState.LegacyUnclassified);
-            }
-
             return _policyTransaction.Execute(companyId, guard =>
             {
                 var settings = guard.Settings;
+
+                // Return-to-solo is a current-model transition: it is admitted by SoloSetupEnabled (or for a
+                // workspace already initialized under the current model), never by the legacy confirmation flag.
+                if (!IsReturnToSoloAdmitted(settings))
+                {
+                    return new WorkspacePolicyMutationResult(
+                        false,
+                        WorkspacePolicyReasonCodes.SoloSetupDisabled,
+                        "Solo workspace setup is not enabled.",
+                        settings.PolicyRevision,
+                        settings.CollaborationState);
+                }
+
                 if (settings.PolicyRevision != expectedRevision)
                 {
                     return new WorkspacePolicyMutationResult(
@@ -484,10 +491,16 @@ namespace Api.Service
                     })
                 });
 
+                // Approval policy is never relaxed by returning to solo; make that explicit to the caller.
+                var preservedRule = FindJournalRule(companyId);
+                var independentStillRequired = preservedRule != null
+                    && preservedRule.RuleKind == WorkspaceApprovalRuleKind.IndependentReviewerRequired;
                 return new WorkspacePolicyMutationResult(
                     true,
                     null,
-                    "Workspace is set up for just you. Existing access and approval rules were preserved.",
+                    independentStillRequired
+                        ? "Workspace is set up for just you. Existing access and approval rules were preserved, so journal posting still requires an independent reviewer until you explicitly change the journal approval policy."
+                        : "Workspace is set up for just you. Existing access and approval rules were preserved.",
                     settings.PolicyRevision,
                     settings.CollaborationState);
             });
@@ -534,6 +547,176 @@ namespace Api.Service
                 });
             });
         }
+
+        public WorkspacePolicyMutationResult ChangeJournalApprovalPolicy(
+            int companyId,
+            string callerUserId,
+            long expectedRevision,
+            WorkspaceApprovalRuleKind newRuleKind) =>
+            _policyTransaction.Execute(companyId, guard =>
+                ChangeJournalApprovalPolicy(guard, callerUserId, expectedRevision, newRuleKind));
+
+        public WorkspacePolicyMutationResult ChangeJournalApprovalPolicy(
+            WorkspacePolicyGuard guard,
+            string callerUserId,
+            long expectedRevision,
+            WorkspaceApprovalRuleKind newRuleKind)
+        {
+            ArgumentNullException.ThrowIfNull(guard);
+            var companyId = guard.CompanyId;
+            var settings = guard.Settings;
+
+            if (!Enum.IsDefined(newRuleKind))
+            {
+                return new WorkspacePolicyMutationResult(
+                    false,
+                    WorkspacePolicyReasonCodes.InvalidApprovalRule,
+                    "Choose independent review or single-actor posting.",
+                    settings.PolicyRevision,
+                    settings.CollaborationState);
+            }
+
+            var owner = string.IsNullOrWhiteSpace(callerUserId)
+                ? null
+                : _db.CompanyMembers.IgnoreQueryFilters()
+                    .FirstOrDefault(m => m.CompanyId == companyId
+                                         && m.UserId == callerUserId
+                                         && m.Role == CompanyMemberRole.Owner
+                                         && m.Status == CompanyMemberStatus.Active);
+            if (owner == null)
+            {
+                return new WorkspacePolicyMutationResult(
+                    false,
+                    WorkspacePolicyReasonCodes.OwnerAuthorizationRequired,
+                    "Only an active workspace Owner can change the journal approval policy.",
+                    settings.PolicyRevision,
+                    settings.CollaborationState);
+            }
+
+            if (settings.PolicyRevision != expectedRevision)
+            {
+                WorkspaceOperatingPolicyMetrics.Conflicts.Add(1,
+                    new KeyValuePair<string, object?>("conflict_type", WorkspaceOperatingPolicyMetrics.ConflictLabels.StaleRevision));
+                return new WorkspacePolicyMutationResult(
+                    false,
+                    WorkspacePolicyReasonCodes.StalePolicyRevision,
+                    "The workspace setup changed. Review the current state and confirm again.",
+                    settings.PolicyRevision,
+                    settings.CollaborationState);
+            }
+
+            var eligibleOtherReviewers = _reviewerEligibility.GetEligibleReviewers(companyId, excludeUserId: callerUserId);
+            if (newRuleKind == WorkspaceApprovalRuleKind.IndependentReviewerRequired && eligibleOtherReviewers.Count == 0)
+            {
+                // Moving AWAY from independent review is always allowed; moving TO it needs someone who can review.
+                return new WorkspacePolicyMutationResult(
+                    false,
+                    WorkspacePolicyReasonCodes.ReviewerRequired,
+                    "Independent review needs at least one other active Owner or Admin who can post journals and whose workspace plan allows it. Add a reviewer first.",
+                    settings.PolicyRevision,
+                    settings.CollaborationState);
+            }
+
+            var rule = FindJournalRule(companyId);
+            if (rule != null
+                && rule.RuleKind == newRuleKind
+                && rule.Provenance == WorkspaceApprovalRuleProvenance.ExplicitPolicyChange
+                && rule.PolicySchemaVersion == WorkspaceOperatingPolicySchema.CurrentVersion)
+            {
+                return new WorkspacePolicyMutationResult(
+                    true,
+                    null,
+                    "The journal approval policy is already set to this choice.",
+                    settings.PolicyRevision,
+                    settings.CollaborationState);
+            }
+
+            var previousKind = rule?.RuleKind.ToString() ?? "CatalogDefault";
+            var previousProvenance = rule?.Provenance.ToString();
+            var previousRevision = settings.PolicyRevision;
+
+            if (rule == null)
+            {
+                rule = new WorkspaceApprovalRule
+                {
+                    CompanyId = companyId,
+                    OperationKey = AccessOperationCatalog.FinancialsJournalPost
+                };
+                _db.WorkspaceApprovalRules.Add(rule);
+            }
+
+            rule.RuleKind = newRuleKind;
+            rule.Provenance = WorkspaceApprovalRuleProvenance.ExplicitPolicyChange;
+            rule.ConfiguredAtUtc = DateTime.UtcNow;
+            rule.ConfiguredByUserId = callerUserId;
+            rule.ConfiguredAtPolicyRevision = previousRevision;
+            rule.PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion;
+
+            settings.LastConfirmedAtUtc = DateTime.UtcNow;
+            settings.LastConfirmedByUserId = callerUserId;
+            guard.AdvanceRevision();
+
+            _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+            {
+                CompanyId = companyId,
+                UserName = callerUserId,
+                AuditEventDateUTC = DateTime.UtcNow,
+                AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Modified,
+                TableName = "__WorkspacePolicyTransition",
+                RecordId = companyId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                FieldName = "JournalApprovalRule",
+                OriginalValue = previousKind,
+                NewValue = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    eventKind = "JournalApprovalPolicyChanged",
+                    companyId,
+                    operationKey = AccessOperationCatalog.FinancialsJournalPost,
+                    actorUserId = callerUserId,
+                    previousRuleKind = previousKind,
+                    previousProvenance,
+                    newRuleKind = newRuleKind.ToString(),
+                    newProvenance = WorkspaceApprovalRuleProvenance.ExplicitPolicyChange.ToString(),
+                    eligibleOtherReviewerCount = eligibleOtherReviewers.Count,
+                    previousPolicyRevision = previousRevision,
+                    policyRevision = settings.PolicyRevision
+                })
+            });
+
+            return new WorkspacePolicyMutationResult(
+                true,
+                null,
+                newRuleKind == WorkspaceApprovalRuleKind.IndependentReviewerRequired
+                    ? "Journal posting now requires independent review."
+                    : "Journal posting now allows a single actor to prepare and post.",
+                settings.PolicyRevision,
+                settings.CollaborationState);
+        }
+
+        /// <summary>
+        /// Return-to-solo is a current-model transition. Team states are admitted by SoloSetupEnabled, or
+        /// unconditionally for a workspace that was initialized under the current model (so switching the
+        /// rollout flag off never strands it). Legacy-origin workspaces keep their legacy flag. A legacy
+        /// unclassified workspace is only ever admitted by the legacy flag.
+        /// </summary>
+        private bool IsReturnToSoloAdmitted(WorkspaceOperatingSettings settings)
+        {
+            var currentModel = settings.InitializationSource == WorkspaceInitializationSource.NewWorkspace;
+            return settings.CollaborationState switch
+            {
+                WorkspaceCollaborationState.TeamActive or WorkspaceCollaborationState.TeamSetupPending =>
+                    _experience.SoloSetupEnabled
+                    || currentModel
+                    || _experience.LegacySoloConfirmationEnabled,
+                WorkspaceCollaborationState.SoloActive =>
+                    _experience.SoloSetupEnabled || _experience.LegacySoloConfirmationEnabled,
+                _ => _experience.LegacySoloConfirmationEnabled
+            };
+        }
+
+        private WorkspaceApprovalRule? FindJournalRule(int companyId) =>
+            _db.WorkspaceApprovalRules.IgnoreQueryFilters()
+                .SingleOrDefault(r => r.CompanyId == companyId
+                                      && r.OperationKey == AccessOperationCatalog.FinancialsJournalPost);
 
         private void AssignFullAccessIfMissing(int memberId, string grantedByUserId)
         {

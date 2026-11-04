@@ -40,6 +40,28 @@ export function canPostJournal(entry: JournalEntry) {
   return !entry.posted && entry.journalEntryLines.length >= 2 && totals.debit > 0 && totals.debit === totals.credit
     && entry.journalEntryLines.every(line => line.accountId > 0 && Number.isFinite(line.amount) && line.amount > 0 && [1, 2].includes(line.drCr));
 }
+const JOURNAL_POST_OPERATION_KEY = 'financials.journal.post';
+const APPROVAL_REQUEST_HEADER = 'X-Approval-Request-Id';
+const APPROVER_USER_HEADER = 'X-Approved-By-User-Id';
+const ACCESS_APPROVALS_PATH = '/api/organizations/current/members/access-approvals';
+
+/** Headers that carry an independent reviewer's recorded approval when posting a journal. */
+export function journalApprovalHeaders(approvalRequestId: string, approverUserId: string): Record<string, string> {
+  const requestId = approvalRequestId.trim();
+  const approverId = approverUserId.trim();
+  return requestId && approverId ? { [APPROVAL_REQUEST_HEADER]: requestId, [APPROVER_USER_HEADER]: approverId } : {};
+}
+
+async function problemText(response: Response): Promise<string> {
+  const text = await response.text();
+  try {
+    const problem: { detail?: string; title?: string } = JSON.parse(text);
+    return problem.detail || problem.title || text;
+  } catch {
+    return text;
+  }
+}
+
 async function read<T>(fetcher: Fetcher, path: string, init?: RequestInit): Promise<T> {
   const response = await fetcher(path, init);
   if (!response.ok) throw new Error(`Journal request failed (HTTP ${response.status}): ${await response.text()}`);
@@ -50,15 +72,19 @@ const inputClass = 'w-full rounded-lg border border-[var(--border-subtle)] bg-[v
 const PPA_HELP =
   'For a material error in a closed year whose statements were already filed. Post the correction against account 30820 and the balance-sheet accounts. Immaterial corrections go through this year\'s accounts as a normal entry. Unfiled closed years can be reopened under Year-end instead.';
 
-export function JournalEditor({ initial, accounts, closedYears, canCreate, canPost, fetcher, onSaved, currency }: {
+export function JournalEditor({ initial, accounts, closedYears, canCreate, canPost, fetcher, onSaved, currency, independentReview = false, canReview = false }: {
   initial: JournalEntry; accounts: JournalAccount[]; closedYears: ClosedFiscalYear[];
   canCreate: boolean; canPost: boolean;
   fetcher: Fetcher; onSaved: (id: number) => void; currency: string | undefined;
+  independentReview?: boolean; canReview?: boolean;
 }) {
   const [entry, setEntry] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
+  const [approvalRequestId, setApprovalRequestId] = useState('');
+  const [approverUserId, setApproverUserId] = useState('');
+  const [reviewNotice, setReviewNotice] = useState('');
   const editable = canCreate && !entry.posted && !busy;
   const totals = journalTotals(entry);
   const isPpa = entry.voucherType === PRIOR_PERIOD_ADJUSTMENT;
@@ -81,14 +107,15 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
         ...entry,
         adjustsFiscalYearId: isPpa ? entry.adjustsFiscalYearId : null,
       };
+      const approvalHeaders = post && independentReview ? journalApprovalHeaders(approvalRequestId, approverUserId) : {};
       const response = await fetcher(path, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...approvalHeaders }, body: JSON.stringify(payload),
       });
       if (post && await periodConfirm.handleConflict(response, () => void submit(true, true))) {
         setBusy(false);
         return;
       }
-      if (!response.ok) throw new Error(`Journal request failed (HTTP ${response.status}): ${await response.text()}`);
+      if (!response.ok) throw new Error(`Journal request failed (HTTP ${response.status}): ${await problemText(response)}`);
       const result: { id: number } = await response.json();
       onSaved(post ? entry.id : result.id);
     } catch (error) {
@@ -96,6 +123,23 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
       setBusy(false);
     }
   };
+  const recordReview = async () => {
+    setBusy(true); setError(''); setReviewNotice('');
+    try {
+      const response = await fetcher(ACCESS_APPROVALS_PATH, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operationKey: JOURNAL_POST_OPERATION_KEY, resourceId: String(entry.id) }),
+      });
+      if (!response.ok) throw new Error(await problemText(response));
+      const approval: { approvalRequestId: string; approverUserId: string } = await response.json();
+      setReviewNotice(`Approval recorded. Give the preparer approval request ID ${approval.approvalRequestId} and approver user ID ${approval.approverUserId}. It is valid for a limited time.`);
+    } catch (reviewError) {
+      setError(reviewError instanceof Error ? reviewError.message : 'Unable to record the review.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const showReviewPanel = independentReview && !entry.posted && !!entry.id && !dirty && (canPost || canReview);
   const money = (cents: number) => `${currencySymbol(currency)}${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return <>
   <section aria-label="Journal entry" className="space-y-4 rounded-2xl bg-[var(--bg-surface)] p-5">
@@ -164,6 +208,22 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
         {canPost && <HeaderButton label="Post journal" disabled={busy || !entry.id || dirty || !canPostJournal(entry)} onClick={() => void submit(true)} />}
       </div>}
       {!entry.posted && canPost && (!entry.id || dirty) && <p className="text-sm text-[var(--text-secondary)]">Save the draft before posting.</p>}
+      {showReviewPanel && <fieldset className="space-y-3 rounded-lg border border-[var(--border-subtle)] p-4">
+        <legend className="px-1 text-sm font-semibold">Independent review required</legend>
+        <p className="text-sm text-[var(--text-secondary)]">A different Owner or Admin who can post journals must approve this entry before it can be posted. You cannot approve a journal you prepared.</p>
+        {canReview && <div className="space-y-2">
+          <HeaderButton label="Record my review approval" disabled={busy} onClick={() => void recordReview()} />
+          {reviewNotice && <p role="status" className="text-sm text-emerald-600">{reviewNotice}</p>}
+        </div>}
+        {canPost && <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">Approval request ID
+            <input className="mt-1 w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] p-2" value={approvalRequestId} onChange={e => setApprovalRequestId(e.target.value)} />
+          </label>
+          <label className="text-sm">Approver user ID
+            <input className="mt-1 w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] p-2" value={approverUserId} onChange={e => setApproverUserId(e.target.value)} />
+          </label>
+        </div>}
+      </fieldset>}
     </form>
   </section>
   {periodConfirm.dialog}
@@ -224,6 +284,8 @@ export default function JournalEntries() {
         {isNew && !canCreate ? <PermissionDeniedCard permission="financials.journal.create" />
           : initial ? <JournalEditor key={`${key}-${isNew ? 'new' : initial.id}`} initial={initial} accounts={flatten(data.accounts)}
             closedYears={data.closedYears} canCreate={canCreate} canPost={canPost}
+            independentReview={currentOrg.operatingPolicy?.journalWorkflow !== 'SingleActorAllowed'}
+            canReview={canPost && (currentOrg.role === 'Owner' || currentOrg.role === 'Admin')}
             fetcher={authFetch} currency={currentOrg.currency} onSaved={id => { setParams({ id: String(id) }); setRevision(r => r + 1); }} />
             : params.has('id') && <p role="alert">Journal entry not found in this workspace.</p>}
         <nav aria-label="Manual journal status" className="flex gap-3">{['draft', 'posted'].map(value =>

@@ -32,6 +32,7 @@ import { createPasskeyCredential, getPasskeyAssertion, isWebAuthnSupported } fro
 type DeletionBlockers = {
   workspaces: { name: string; slug: string }[];
   platformAdministrator: boolean;
+  reviewerConflicts?: { name: string; slug: string; reasonCode: string; message: string }[];
 };
 
 export const Profile: React.FC = () => {
@@ -607,7 +608,8 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const accountDeletionBlocked = blockers.platformAdministrator || blockers.workspaces.length > 0;
+  const reviewerConflicts = blockers.reviewerConflicts ?? [];
+  const accountDeletionBlocked = blockers.platformAdministrator || blockers.workspaces.length > 0 || reviewerConflicts.length > 0;
 
   useEffect(() => {
     if (deleteDialogOpen && !loadingBlockers && !accountDeletionBlocked) {
@@ -1523,6 +1525,16 @@ export const Profile: React.FC = () => {
               <div className="space-y-2 text-sm text-rose-300">
                 {blockers.platformAdministrator && (
                   <p>The last platform administrator cannot delete their account.</p>
+                )}
+                {reviewerConflicts.length > 0 && (
+                  <div data-reason-code={reviewerConflicts[0].reasonCode}>
+                    <p>You are the last journal reviewer in these workspaces. Ask an Owner to add a replacement reviewer or explicitly change the approval policy first:</p>
+                    <ul className="mt-1 list-disc pl-5">
+                      {reviewerConflicts.map((conflict) => (
+                        <li key={conflict.slug}>{conflict.name} ({conflict.slug}): {conflict.message}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
                 {blockers.workspaces.length > 0 && (
                   <div>

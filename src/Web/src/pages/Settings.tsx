@@ -32,6 +32,7 @@ import { useAuth } from '../auth/AuthContext';
 import { clearPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
 import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
+import { JournalApprovalPolicyCard } from '../components/JournalApprovalPolicyCard';
 import { BusinessDetailsCard } from '../components/BusinessDetailsCard';
 import { InvoiceSettingsTab } from '../components/InvoiceSettingsTab';
 import { EmailSettingsTab } from '../components/EmailSettingsTab';
@@ -68,10 +69,11 @@ export const Settings: React.FC = () => {
   const hasSalesOrPurchases = hasModule('sales') || hasModule('purchases');
   const { authFetch } = useAuth();
   const navigate = useNavigate();
+  const isWorkspaceAdminRole = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
   const [searchParams, setSearchParams] = useSearchParams();
   const integrations = useIntegrations();
 
-  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles' | 'integrations';
+  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles' | 'approvals' | 'integrations';
 
   const handleTabChange = (tab: TabKey) => {
     setSearchParams(tab === 'general' ? {} : { tab });
@@ -101,6 +103,7 @@ export const Settings: React.FC = () => {
       label: 'Access & Billing',
       items: [
         { key: 'roles', label: 'Roles & Permissions', icon: Shield },
+        ...(hasFinancials && isWorkspaceAdminRole ? [{ key: 'approvals' as const, label: 'Journal Approval', icon: Shield }] : []),
         { key: 'subscription', label: 'Subscription & Modules', icon: Sparkles },
       ],
     },
@@ -1103,6 +1106,18 @@ export const Settings: React.FC = () => {
           {/* ========================================================================= */}
           {/* TAB 5: ROLES & PERMISSIONS (Live Database SecurityRole Table)             */}
           {/* ========================================================================= */}
+          {currentTab === 'approvals' && (
+            <div
+              role="tabpanel"
+              id="panel-approvals"
+              aria-labelledby="tab-approvals"
+              tabIndex={0}
+              className="focus:outline-none"
+            >
+              <JournalApprovalPolicyCard isOwner={currentOrg.role === 'Owner'} />
+            </div>
+          )}
+
           {currentTab === 'roles' && (
             <div
               role="tabpanel"

@@ -15,6 +15,7 @@ using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Services.Billing;
@@ -37,6 +38,7 @@ namespace Api.Controllers
         private readonly Api.Options.WorkspaceExperienceOptions _experience;
         private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
         private readonly IWorkspaceCanaryEnrollment _canary;
+        private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -50,7 +52,8 @@ namespace Api.Controllers
             IWorkspaceOperatingPolicyService operatingPolicy = null,
             Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null,
             Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
-            IWorkspaceCanaryEnrollment canary = null)
+            IWorkspaceCanaryEnrollment canary = null,
+            IWorkspaceReviewerEligibility reviewerEligibility = null)
         {
             _tenant = tenant;
             _db = db;
@@ -62,6 +65,7 @@ namespace Api.Controllers
             _operatingPolicy = operatingPolicy;
             _policyTransaction = policyTransaction;
             _canary = canary;
+            _reviewerEligibility = reviewerEligibility;
             _experience = experienceOptions?.Value != null
                 ? Api.Options.WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value)
                 : (workspaceInit?.Experience ?? new Api.Options.WorkspaceExperienceOptions());
@@ -412,8 +416,27 @@ namespace Api.Controllers
             var summary = _operatingPolicy?.GetSummary(id, memberId, UserId);
             if (summary == null)
                 return Problem(statusCode: 503, title: "Operating policy unavailable");
+
+            // Reviewer capacity is governance information: only Owners/Admins see it.
+            object journalApproval = null;
+            if (_tenant.Role is CompanyMemberRole.Owner or CompanyMemberRole.Admin)
+            {
+                var eligibility = _reviewerEligibility
+                    ?? HttpContext?.RequestServices?.GetService<IWorkspaceReviewerEligibility>()
+                    ?? new WorkspaceReviewerEligibility(_db, HttpContext?.RequestServices?.GetService<Core.Entitlements.IEntitlementService>());
+                var otherReviewers = eligibility.GetEligibleReviewers(id, excludeUserId: UserId);
+                journalApproval = new
+                {
+                    mode = summary.NormalJournalWorkflow.Mode.ToString(),
+                    provenance = summary.NormalJournalWorkflow.Provenance?.ToString(),
+                    eligibleOtherReviewerCount = otherReviewers.Count,
+                    canChange = _tenant.Role == CompanyMemberRole.Owner
+                };
+            }
+
             return Ok(new
             {
+                journalApproval,
                 purpose = summary.Purpose.ToString(),
                 collaborationIntent = summary.CollaborationIntent.ToString(),
                 collaborationState = summary.CollaborationState.ToString(),
@@ -528,6 +551,60 @@ namespace Api.Controllers
                 message = result.Message,
                 policyRevision = result.PolicyRevision,
                 collaborationState = result.CollaborationState.ToString()
+            });
+        }
+
+        public class ChangeJournalApprovalPolicyRequest
+        {
+            public long ExpectedPolicyRevision { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public WorkspaceApprovalRuleKind? JournalWorkflow { get; set; }
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Owner)]
+        [HttpPost("current/operating-settings/journal-approval-policy")]
+        public IActionResult ChangeJournalApprovalPolicy([FromBody] ChangeJournalApprovalPolicyRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(UserId))
+                return Unauthorized();
+            if (request?.JournalWorkflow == null)
+                return Problem(statusCode: 400, title: "Journal workflow required",
+                    detail: "Choose IndependentReviewerRequired or SingleActorAllowed.");
+            var id = _tenant.RequireCompanyId();
+            var result = _operatingPolicy?.ChangeJournalApprovalPolicy(
+                id,
+                UserId,
+                request.ExpectedPolicyRevision,
+                request.JournalWorkflow.Value);
+            if (result == null)
+                return Problem(statusCode: 503, title: "Operating policy unavailable");
+            if (!result.Applied)
+            {
+                var status = result.ReasonCode switch
+                {
+                    WorkspacePolicyReasonCodes.StalePolicyRevision => StatusCodes.Status409Conflict,
+                    WorkspacePolicyReasonCodes.OwnerAuthorizationRequired => StatusCodes.Status403Forbidden,
+                    WorkspacePolicyReasonCodes.InvalidApprovalRule => StatusCodes.Status400BadRequest,
+                    _ => StatusCodes.Status422UnprocessableEntity
+                };
+                return StatusCode(status, new ProblemDetails
+                {
+                    Title = "Journal approval policy not changed",
+                    Detail = result.Message,
+                    Status = status,
+                    Extensions = { ["reasonCode"] = result.ReasonCode, ["policyRevision"] = result.PolicyRevision }
+                });
+            }
+            return Ok(new
+            {
+                applied = result.Applied,
+                reasonCode = result.ReasonCode,
+                message = result.Message,
+                policyRevision = result.PolicyRevision,
+                collaborationState = result.CollaborationState.ToString(),
+                journalWorkflow = request.JournalWorkflow.Value == WorkspaceApprovalRuleKind.SingleActorAllowed
+                    ? WorkspaceApprovalMode.SingleActorAllowed.ToString()
+                    : WorkspaceApprovalMode.IndependentReviewerRequired.ToString()
             });
         }
 

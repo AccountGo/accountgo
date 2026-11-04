@@ -187,3 +187,55 @@ it('offers return to solo and executes return-to-solo endpoint with policy revis
     )
   );
 });
+
+const reviewerMember = {
+  memberId: 11, userId: 'reviewer', email: 'reviewer@example.com', firstName: 'Rae', lastName: 'Viewer',
+  role: 'Admin', status: 'Active', joinedAt: '2026-01-01T00:00:00Z', securityRoles: [],
+};
+
+function mockLastReviewerConflict(targetRole = 'Admin') {
+  authFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (options?.method === 'DELETE' && url.includes('confirmPolicyChangeToSingleActor')) return new Response(null, { status: 204 });
+    if (options?.method === 'DELETE') {
+      return new Response(JSON.stringify({
+        detail: 'This change would leave the workspace without a usable independent reviewer for journal posting.',
+        reasonCode: 'last_reviewer_unavailable',
+      }), { status: 409 });
+    }
+    if (url === '/api/organizations/current') return new Response(JSON.stringify({ role: caller.role }), { status: 200 });
+    if (url.endsWith('/operating-settings')) return new Response(JSON.stringify({ policyRevision: 12, collaborationState: 'TeamActive' }), { status: 200 });
+    if (url.endsWith('/members')) return new Response(JSON.stringify([{ ...reviewerMember, role: targetRole }]), { status: 200 });
+    return new Response(JSON.stringify([]), { status: 200 });
+  });
+}
+
+it('offers an Owner an explicit single-actor policy change with the current revision when removing the last reviewer', async () => {
+  mockLastReviewerConflict();
+  render(<Members />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+  fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove member' }));
+
+  const policyDialog = await screen.findByText('Change journal approval to single-user posting?');
+  expect(policyDialog).toBeDefined();
+  expect(screen.getByRole('alert').getAttribute('data-reason-code')).toBe('last_reviewer_unavailable');
+  expect(screen.getByRole('alert').textContent).toContain('usable independent reviewer');
+
+  fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Change policy and continue' }));
+  await waitFor(() => expect(authFetch).toHaveBeenCalledWith(
+    '/api/organizations/current/members/11?confirmPolicyChangeToSingleActor=true&expectedPolicyRevision=12',
+    expect.objectContaining({ method: 'DELETE' }),
+  ));
+});
+
+it('shows the reviewer conflict without a policy-change offer to an Admin', async () => {
+  caller.role = 'Admin';
+  mockLastReviewerConflict('Member');
+  render(<Members />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+  fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove member' }));
+
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('usable independent reviewer'));
+  expect(screen.queryByText('Change journal approval to single-user posting?')).toBeNull();
+});
