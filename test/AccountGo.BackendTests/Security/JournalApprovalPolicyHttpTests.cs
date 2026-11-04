@@ -181,6 +181,63 @@ namespace AccountGo.BackendTests.Security
             await AssertReason(response, HttpStatusCode.Conflict, WorkspacePolicyReasonCodes.LastReviewerUnavailable);
         }
 
+        [Fact]
+        public async Task Review_EnablingIndependentReview_MustValidateEveryPreparer()
+        {
+            var team = await CreateTeam();
+            Assert.Equal(HttpStatusCode.OK, (await SetPolicy(team, "SingleActorAllowed")).StatusCode);
+            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Owner.Id, Array.Empty<string>());
+            var response = await SetPolicy(team, "IndependentReviewerRequired");
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Review_TemplateEdit_MustRevalidateAfterCompetingMemberRemoval()
+        {
+            var team = await CreateTeam();
+            Assert.Equal(HttpStatusCode.OK, (await SetPolicy(team, "IndependentReviewerRequired")).StatusCode);
+            var extra = await _fixture.CreateUser($"extra-{team.Slug}@example.com");
+            await _fixture.AddMemberDirectAsync(team.CompanyId, extra.Id, CompanyMemberRole.Admin, new[] { "Accountant" });
+            var extraId = await MemberId(team, extra.Id);
+            var roleName = "race-role-" + team.Slug;
+            int roleId;
+            using (var seed = _fixture.Factory.Services.CreateScope())
+            {
+                var db = seed.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var role = new Core.Domain.Security.SecurityRole { Name = roleName, DisplayName = roleName };
+                db.Add(role);
+                db.SaveChanges();
+                roleId = role.Id;
+                var post = db.Set<Core.Domain.Security.SecurityPermission>()
+                    .Single(p => p.Name == Core.Domain.Security.SystemPermissions.FinancialsJournalPost);
+                db.Add(new Core.Domain.Security.SecurityRolePermission { SecurityRoleId = roleId, SecurityPermissionId = post.Id });
+                db.SaveChanges();
+            }
+
+            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Reviewer.Id, new[] { roleName });
+            var platform = await _fixture.CreateUser($"platform-race-{team.Slug}@example.com", isSystemAdministrator: true);
+            await _fixture.AddMemberDirectAsync(team.CompanyId, platform.Id, CompanyMemberRole.Admin, Array.Empty<string>());
+
+            // Concurrent role-template strip and last-extra-reviewer removal: coordination must keep
+            // independent review usable (at least one of the requests is rejected).
+            var stripTask = _fixture.Send(HttpMethod.Post, "/api/Administration/roles",
+                new { id = roleId, name = roleName, displayName = roleName, permissionIds = Array.Empty<int>() },
+                token: platform.Token, org: team.Slug);
+            var removeTask = _fixture.Send(HttpMethod.Delete, $"{Current}/members/{extraId}",
+                token: team.Owner.Token, org: team.Slug);
+            var stripResponse = await stripTask;
+            var removeResponse = await removeTask;
+
+            using var afterScope = _fixture.Factory.Services.CreateScope();
+            var capacity = afterScope.ServiceProvider.GetRequiredService<IWorkspaceReviewerEligibility>()
+                .EvaluateCapacity(team.CompanyId);
+            Assert.True(capacity.IsUsable, "The committed role edit and member removal left independent review unusable.");
+            Assert.True(
+                stripResponse.StatusCode == HttpStatusCode.Conflict
+                || removeResponse.StatusCode == HttpStatusCode.Conflict,
+                $"Expected at least one conflict; strip={stripResponse.StatusCode}, remove={removeResponse.StatusCode}");
+        }
+
         // ---- ChangeJournalApprovalPolicy ----------------------------------------------------------------
 
         [Fact]

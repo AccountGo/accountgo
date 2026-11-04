@@ -145,6 +145,41 @@ namespace AccountGo.BackendTests.Security
                 .FirstOrDefault();
         }
 
+        [Fact]
+        public async Task Review_PersonalInitialization_MustNotKeepCorporateCloseTarget()
+        {
+            var previous = Environment.GetEnvironmentVariable("WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED");
+            var previousApproval = EntityEquityMapping.TestApprovalOverride;
+            try
+            {
+                EntityEquityMapping.TestApprovalOverride = true;
+                Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED", "true");
+                var (token, _) = await CreateUserAsync("personal-approved@example.com", forcedUserId: EnrolledUserId);
+                var response = await CreateOrg(token, new
+                {
+                    name = "Personal fixture",
+                    slug = "personal-profile-review",
+                    plan = "accounting",
+                    workspacePurpose = "Personal",
+                    collaborationIntent = "JustMe",
+                    entityType = "Corporation"
+                });
+                Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+                using var scope = _factory.Services.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var company = db.Companies.IgnoreQueryFilters().Single(c => c.Slug == "personal-profile-review");
+                Assert.Equal(EntityType.Individual, db.CompanySettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id).EntityType);
+                var closeId = db.GeneralLedgerSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id).PermanentAccountId;
+                var closeCode = db.Accounts.IgnoreQueryFilters().Single(a => a.Id == closeId).AccountCode;
+                Assert.Equal("30100", closeCode);
+            }
+            finally
+            {
+                EntityEquityMapping.TestApprovalOverride = previousApproval;
+                Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED", previous);
+            }
+        }
+
         // ---- Authenticated create boundary --------------------------------------------------------
 
         [Fact]

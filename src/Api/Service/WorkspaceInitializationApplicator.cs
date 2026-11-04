@@ -65,6 +65,7 @@ namespace Api.Service
         private readonly IWorkspacePolicyTransaction _policyTransaction;
         private readonly IWorkspaceAccessProfileCatalog _accessCatalog;
         private readonly IWorkspaceApprovalPolicyResolver _approvalResolver;
+        private readonly CompanyAccountingPolicyService _accountingPolicy;
         private readonly WorkspaceExperienceOptions _experience;
         private readonly IWorkspaceCanaryEnrollment _canary;
         private readonly bool _personalReleasedForDisposableFixtures;
@@ -80,13 +81,15 @@ namespace Api.Service
             IWorkspaceApprovalPolicyResolver approvalResolver,
             IOptions<WorkspaceExperienceOptions> experienceOptions,
             IWorkspaceCanaryEnrollment canary,
-            bool personalReleasedForDisposableFixtures = false)
+            bool personalReleasedForDisposableFixtures = false,
+            CompanyAccountingPolicyService? accountingPolicy = null)
         {
             _personalReleasedForDisposableFixtures = personalReleasedForDisposableFixtures;
             _db = db;
             _policyTransaction = policyTransaction;
             _accessCatalog = accessCatalog;
             _approvalResolver = approvalResolver;
+            _accountingPolicy = accountingPolicy ?? new CompanyAccountingPolicyService(db);
             _experience = WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value);
             _canary = canary;
         }
@@ -258,9 +261,9 @@ namespace Api.Service
 
                 // Personal/business isolation: the accounting profile must match the declared purpose. Personal
                 // workspaces use the Individual equity mapping; business workspaces never do. When personal is
-                // released, an authorized initialization may upgrade a default Sole Proprietor provisioning to
-                // Individual so signup-continuation (create then initialize) completes without a separate
-                // accounting-policy round trip.
+                // finance-released, an authorized initialization may convert a provisioned non-Individual
+                // profile to Individual — but only through the accounting-policy path so PermanentAccountId,
+                // display names, and closed-year freezes stay consistent. Never mutate EntityType alone.
                 var companySetting = _db.CompanySettings.IgnoreQueryFilters()
                     .SingleOrDefault(s => s.CompanyId == companyId);
                 if (request.Purpose == WorkspacePurpose.Personal
@@ -268,7 +271,25 @@ namespace Api.Service
                     && companySetting != null
                     && companySetting.EntityType != EntityType.Individual)
                 {
-                    companySetting.EntityType = EntityType.Individual;
+                    var conversion = _accountingPolicy.Apply(
+                        companySetting,
+                        new AccountingPolicyChange { EntityType = EntityType.Individual },
+                        DateTime.UtcNow);
+                    if (!conversion.Ok)
+                    {
+                        return new WorkspaceInitializationResult
+                        {
+                            Applied = false,
+                            ReasonCode = WorkspacePolicyReasonCodes.EntityPurposeMismatch,
+                            Message = conversion.ClosedYearsConflict
+                                ? "The accounting profile cannot change after a fiscal year has been closed."
+                                : conversion.Errors.Count > 0
+                                    ? string.Join(" ", conversion.Errors)
+                                    : "Personal workspaces use the Individual accounting profile, and business workspaces do not.",
+                            PolicyRevision = settings.PolicyRevision,
+                            JournalMode = _approvalResolver.Resolve(settings, FindJournalRule(companyId), AccessOperationCatalog.FinancialsJournalPost).Mode
+                        };
+                    }
                 }
 
                 var provisionedEntityType = companySetting?.EntityType;
