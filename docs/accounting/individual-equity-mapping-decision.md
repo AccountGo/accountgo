@@ -115,9 +115,9 @@ Close/reopen tests:
 - Individual does **not** close `30800` drawings.
 - Behind the production gate, an initialised workspace must match its purpose: Personal purpose requires the Individual
   accounting profile, and Business purpose rejects it (`entity_purpose_mismatch`).
-- The production gate remains enforced while `IsIndividualMappingApproved` is false:
-  `CompanyAccountingPolicyRules.Validate`, `EntityEquityMapping.GetProfile`, and `WorkspaceInitializationScope`.
-- Test-only seams (`allowUnapproved` / `TestApprovalOverride`) exist so disposable fixtures can exercise the behaviour.
+- With mapping approved, `GetProfile(Individual)` succeeds; personal purpose still needs the env switch.
+  `TestApprovalOverride=false` remains available so disposable fixtures can exercise the closed gate.
+- Test-only seams (`allowUnapproved` / `TestApprovalOverride`) exist so disposable fixtures can exercise closed-gate behaviour.
   Dependency injection never supplies them.
 
 ## Personal solo and household (still gated for production)
