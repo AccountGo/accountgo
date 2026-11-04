@@ -1,6 +1,7 @@
 import type { ModuleKey, RoleItem } from '../types';
 
-export const FULL_WORKSPACE_ACCESS_ROLE_NAME = 'FullWorkspaceAccessV1';
+/** Seeded managed profile name — must match WorkspaceAccessProfileKeys.FullWorkspaceAccessV1. */
+export const FULL_WORKSPACE_ACCESS_ROLE_NAME = 'WorkspaceFullAccess.v1';
 export const CUSTOM_PRESET_KEY = 'custom';
 
 export type AccessPresetKey = 'full' | 'bookkeeper' | 'readOnlyAccountant';

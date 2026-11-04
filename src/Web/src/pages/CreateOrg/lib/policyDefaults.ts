@@ -214,6 +214,10 @@ export const buildPayload = (state: WizardState, capabilities?: SetupCapabilitie
     inventoryCostingMethod: effectiveInventoryMethod(state),
     workspacePurpose: soloEnabled ? (state.workspacePurpose || undefined) : undefined,
     collaborationIntent: soloEnabled ? (state.collaborationIntent || undefined) : undefined,
+    // Personal purpose always uses the Individual accounting profile. Sending it here keeps Create and
+    // signup-continuation provisioning aligned with initialization; the server also defaults when personal
+    // is released, but the wizard must not rely on Sole Proprietor as a silent fallback.
+    entityType: soloEnabled && state.workspacePurpose === 'Personal' ? 'Individual' : undefined,
     ownerAccessPreset: soloEnabled && (state.collaborationIntent === 'JustMe' || state.collaborationIntent === 'WithOthers')
       ? 'FullWorkspaceAccess'
       : undefined,

@@ -35,7 +35,7 @@ namespace AccountGo.BackendTests.Security
 
         private sealed record Team(string Slug, int CompanyId, Fixture.UserSession Owner, Fixture.UserSession Reviewer);
 
-        private async Task<Team> CreateTeam(bool reviewerCanPost = true)
+        private async Task<Team> CreateTeam(bool reviewerCanPost = true, bool initialize = true)
         {
             var slug = "jap-" + Guid.NewGuid().ToString("N")[..8];
             var owner = await _fixture.CreateUser($"owner-{slug}@example.com");
@@ -45,6 +45,31 @@ namespace AccountGo.BackendTests.Security
             await _fixture.AddMemberDirectAsync(
                 companyId, reviewer.Id, CompanyMemberRole.Admin,
                 reviewerCanPost ? new[] { "Accountant" } : Array.Empty<string>());
+
+            if (initialize)
+            {
+                // Single-actor policy changes are only lawful after initialization confirms an owner.
+                using var scope = _fixture.Factory.Services.CreateScope();
+                var tenant = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+                using var impersonation = tenant.Impersonate(companyId, slug, CompanyMemberRole.Owner);
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var ownerMember = db.CompanyMembers.IgnoreQueryFilters()
+                    .Single(m => m.CompanyId == companyId && m.UserId == owner.Id);
+                var settings = db.WorkspaceOperatingSettings.IgnoreQueryFilters()
+                    .Single(s => s.CompanyId == companyId);
+                settings.Purpose = WorkspacePurpose.Business;
+                settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+                settings.ConfirmedOwnerMemberId = ownerMember.Id;
+                settings.InitializedAtUtc = DateTime.UtcNow;
+                settings.InitializedByUserId = owner.Id;
+                settings.InitializationSource = WorkspaceInitializationSource.NewWorkspace;
+                settings.LastConfirmedAtUtc = settings.InitializedAtUtc;
+                settings.LastConfirmedByUserId = owner.Id;
+                settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
+                db.SaveChanges();
+            }
+
             return new Team(slug, companyId, owner, reviewer);
         }
 
@@ -90,6 +115,70 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(status, response.StatusCode);
             var problem = await Fixture.Json(response);
             Assert.Equal(reasonCode, problem.GetProperty("reasonCode").GetString());
+        }
+
+        [Fact]
+        public async Task Review_RemovingOtherReviewersRole_MustNotStrandOwnerPreparedJournals()
+        {
+            var team = await CreateTeam();
+            Assert.Equal(HttpStatusCode.OK, (await SetPolicy(team, "IndependentReviewerRequired")).StatusCode);
+            var reviewerId = await MemberId(team, team.Reviewer.Id);
+            var response = await _fixture.Send(HttpMethod.Patch, $"{Current}/members/{reviewerId}",
+                new { securityRoleIds = Array.Empty<int>() }, token: team.Owner.Token, org: team.Slug);
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            await AssertReason(response, HttpStatusCode.Conflict, WorkspacePolicyReasonCodes.LastReviewerUnavailable);
+        }
+
+        [Fact]
+        public async Task Review_PolicyChange_MustNotCommitAnUnauthorizedInvariant()
+        {
+            var team = await CreateTeam(initialize: false);
+            var response = await SetPolicy(team, "SingleActorAllowed");
+            await AssertReason(response, HttpStatusCode.UnprocessableEntity, WorkspacePolicyReasonCodes.WorkspaceNotInitialized);
+
+            using var scope = _fixture.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var settings = db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == team.CompanyId);
+            Assert.Null(WorkspacePolicyTransaction.ComputeViolationSignature(db, team.CompanyId, settings));
+            Assert.Equal(WorkspaceApprovalRuleProvenance.LegacyEnforced, Rule(team.CompanyId).Provenance);
+        }
+
+        [Fact]
+        public async Task Review_RoleTemplateEdit_MustNotRemoveLastReviewer()
+        {
+            var team = await CreateTeam();
+            // Owner keeps Accountant so independence is usable before the template edit; the Admin's only
+            // posting grant is the custom role under edit.
+            int roleId;
+            var roleName = "Reviewer-" + team.Slug;
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var tenant = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+                using var impersonation = tenant.Impersonate(team.CompanyId, team.Slug, CompanyMemberRole.Owner);
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var role = new Core.Domain.Security.SecurityRole { Name = roleName, DisplayName = roleName };
+                db.Add(role);
+                db.SaveChanges();
+                roleId = role.Id;
+                var post = db.Set<Core.Domain.Security.SecurityPermission>()
+                    .Single(p => p.Name == Core.Domain.Security.SystemPermissions.FinancialsJournalPost);
+                db.Add(new Core.Domain.Security.SecurityRolePermission
+                {
+                    SecurityRoleId = roleId,
+                    SecurityPermissionId = post.Id
+                });
+                db.SaveChanges();
+            }
+
+            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Reviewer.Id, new[] { roleName });
+            Assert.Equal(HttpStatusCode.OK, (await SetPolicy(team, "IndependentReviewerRequired")).StatusCode);
+            var platform = await _fixture.CreateUser($"platform-{team.Slug}@example.com", isSystemAdministrator: true);
+            await _fixture.AddMemberDirectAsync(team.CompanyId, platform.Id, CompanyMemberRole.Admin, Array.Empty<string>());
+            var response = await _fixture.Send(HttpMethod.Post, "/api/Administration/roles",
+                new { id = roleId, name = roleName, displayName = roleName, permissionIds = Array.Empty<int>() },
+                token: platform.Token, org: team.Slug);
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            await AssertReason(response, HttpStatusCode.Conflict, WorkspacePolicyReasonCodes.LastReviewerUnavailable);
         }
 
         // ---- ChangeJournalApprovalPolicy ----------------------------------------------------------------
@@ -261,33 +350,12 @@ namespace AccountGo.BackendTests.Security
         }
 
         [Fact]
-        public async Task Remove_NonReviewer_ThatWouldLeaveOnlyOneHuman_IsRejected()
-        {
-            var team = await CreateTeam();
-            // Owner is the only eligible reviewer; the second human is a Member without posting rights.
-            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Reviewer.Id, Array.Empty<string>());
-            using (var scope = _fixture.Factory.Services.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                var reviewer = db.CompanyMembers.IgnoreQueryFilters()
-                    .Single(m => m.CompanyId == team.CompanyId && m.UserId == team.Reviewer.Id);
-                reviewer.Role = CompanyMemberRole.Member;
-                db.SaveChanges();
-            }
-
-            var memberId = await MemberId(team, team.Reviewer.Id);
-            var response = await _fixture.Send(HttpMethod.Delete, $"{Current}/members/{memberId}", token: team.Owner.Token, org: team.Slug);
-
-            await AssertReason(response, HttpStatusCode.Conflict, WorkspacePolicyReasonCodes.LastReviewerUnavailable);
-            Assert.True(MemberExists(team.CompanyId, team.Reviewer.Id));
-            Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, Rule(team.CompanyId).RuleKind);
-        }
-
-        [Fact]
         public async Task Update_RemovingLastReviewersPostingRole_IsRejected_ThenAllowedWithConfirmedPolicyChange()
         {
             var team = await CreateTeam();
-            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Owner.Id, Array.Empty<string>());
+            Assert.Equal(HttpStatusCode.OK, (await SetPolicy(team, "IndependentReviewerRequired")).StatusCode);
+            // Both Owner and Admin can post initially, so independence is usable. Stripping the Admin's
+            // posting roles leaves the Owner as the only preparer — and they cannot review themselves.
             var reviewerMemberId = await MemberId(team, team.Reviewer.Id);
 
             var rejected = await _fixture.Send(HttpMethod.Patch, $"{Current}/members/{reviewerMemberId}",
@@ -312,9 +380,11 @@ namespace AccountGo.BackendTests.Security
         public async Task Update_DemotingLastReviewerAdmin_ToMember_IsRejected()
         {
             var team = await CreateTeam();
-            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Owner.Id, Array.Empty<string>());
+            Assert.Equal(HttpStatusCode.OK, (await SetPolicy(team, "IndependentReviewerRequired")).StatusCode);
             var reviewerMemberId = await MemberId(team, team.Reviewer.Id);
 
+            // Demotion keeps the Admin's Accountant posting grant but removes reviewer eligibility, so the
+            // Owner would become a preparer without an independent reviewer.
             var response = await _fixture.Send(HttpMethod.Patch, $"{Current}/members/{reviewerMemberId}",
                 new { role = "Member" }, token: team.Owner.Token, org: team.Slug);
 
@@ -325,11 +395,12 @@ namespace AccountGo.BackendTests.Security
         public async Task Leave_ConfirmedPolicyChange_RequiresOwner_AdminCannotAuthorizeIt()
         {
             var team = await CreateTeam();
-            // The Owner holds no posting role, so the Admin is the only usable reviewer.
-            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Owner.Id, Array.Empty<string>());
+            Assert.Equal(HttpStatusCode.OK, (await SetPolicy(team, "IndependentReviewerRequired")).StatusCode);
             var reviewerMemberId = await MemberId(team, team.Reviewer.Id);
             var revision = await Revision(team);
 
+            // Admin is an independent reviewer for the Owner (and vice versa). Leaving needs an Owner-authorized
+            // policy change; an Admin cannot authorize that confirmation.
             var response = await _fixture.Send(HttpMethod.Delete,
                 $"{Current}/members/{reviewerMemberId}?confirmPolicyChangeToSingleActor=true&expectedPolicyRevision={revision}",
                 token: team.Reviewer.Token, org: team.Slug);

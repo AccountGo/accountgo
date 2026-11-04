@@ -12,12 +12,17 @@ function role(id: number, name: string, permissions: string[]): RoleItem {
 }
 
 const roles: RoleItem[] = [
-  role(1, 'FullWorkspaceAccessV1', ['financials.journal.post']),
+  role(1, 'WorkspaceFullAccess.v1', ['financials.journal.post']),
   role(2, 'Accountant', ['financials.journal.post', 'reports.view']),
   role(3, 'Sales Representative', ['sales.invoices.create']),
   role(4, 'Purchasing Agent', ['purchases.bills.create']),
   role(5, 'Auditor / Viewer', ['reports.view', 'audit.logs.view']),
 ];
+
+it('keeps the Full workspace access preset when the seeded managed profile name is used', () => {
+  const presets = buildAccessPresets(roles, () => true);
+  expect(presets.find(preset => preset.key === 'full')?.roleIds).toEqual([1]);
+});
 
 it('summarises the strongest level per area', () => {
   expect(describePermissions(['sales.invoices.view', 'sales.invoices.create', 'financials.journal.post', 'reports.view']))

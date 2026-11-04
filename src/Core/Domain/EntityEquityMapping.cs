@@ -107,10 +107,16 @@ namespace Core.Domain
         }
 
         /// <summary>
+        /// Test-only override for gated personal journeys. Production and ordinary tests leave this null so
+        /// the approval gate stays closed until finance records approval in source.
+        /// </summary>
+        public static bool? TestApprovalOverride { get; set; }
+
+        /// <summary>
         /// True when the Individual equity/year-close mapping has been finance-approved for activation.
         /// Keep false until the reviewed mapping is recorded; personal purpose init stays disabled.
         /// </summary>
-        public static bool IsIndividualMappingApproved => false;
+        public static bool IsIndividualMappingApproved => TestApprovalOverride ?? false;
 
         public static bool IsRenameable(string accountCode, string currentAccountName)
         {
