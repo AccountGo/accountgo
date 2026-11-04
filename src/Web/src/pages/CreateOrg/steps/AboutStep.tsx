@@ -92,6 +92,11 @@ export const AboutStep: React.FC<{
         {errors.collaborationIntent && (
           <p role="alert" className="text-[11px] text-rose-400 mt-1.5">{errors.collaborationIntent}</p>
         )}
+        {state.collaborationIntent === 'WithOthers' && (
+          <p className="text-[11px] text-[var(--text-muted)] mt-2">
+            You’ll keep full access as the owner. Journals will need independent review: another Owner or Admin who can post journals approves each one before it is posted.
+          </p>
+        )}
         {state.collaborationIntent === 'JustMe' && (
           <p className="text-[11px] text-[var(--text-muted)] mt-2">
             You’ll have full access to the tools included in your plan. You can invite someone later.

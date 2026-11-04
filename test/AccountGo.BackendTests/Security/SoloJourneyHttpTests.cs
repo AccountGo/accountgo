@@ -269,21 +269,190 @@ namespace AccountGo.BackendTests.Security
         }
 
         [Fact]
-        public async Task Create_EnrolledUser_TeamIntent_Rejected_OutOfScope()
+        public async Task Create_EnrolledUser_BusinessWithOthers_InitializesTeamSetup_WithOwnerFullAccessAndIndependentReview()
         {
-            var (token, userId) = await CreateVerifiedUser("scope-journey@example.com");
+            var (token, userId) = await CreateVerifiedUser("team-journey@example.com");
             EnrollUserIds(userId);
+
             var resp = await CreateOrg(token, new
             {
-                name = "Scope Journey",
-                slug = "scope-journey",
+                name = "Team Journey",
+                slug = "team-journey",
                 workspacePurpose = "Business",
                 collaborationIntent = "WithOthers"
             });
-            Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
-            Assert.Contains(Core.Authorization.WorkspacePolicyReasonCodes.CanaryScopeNotAllowed,
-                await resp.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-            Assert.Equal(0, CompanyCount("scope-journey"));
+
+            Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
+            var state = OperatingState("team-journey")!.Value;
+            Assert.Equal(WorkspaceCollaborationState.TeamSetupPending, state.State);
+            Assert.True(state.Initialized);
+            // Owner keeps the managed Full workspace access profile, so there is no self-approval dead end for
+            // access; journals still need an independent reviewer once teammates join.
+            Assert.True(OwnerFunctionalGrantCount("team-journey", userId) >= 1);
+            Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, JournalRuleKind("team-journey"));
+        }
+
+        [Fact]
+        public async Task Create_EnrolledUser_Personal_StaysRejected_ForSoloAndTeam()
+        {
+            var (token, userId) = await CreateVerifiedUser("personal-journey@example.com");
+            EnrollUserIds(userId);
+
+            foreach (var intent in new[] { "JustMe", "WithOthers" })
+            {
+                var slug = "personal-journey-" + intent.ToLowerInvariant();
+                var resp = await CreateOrg(token, new
+                {
+                    name = "Personal Journey",
+                    slug,
+                    workspacePurpose = "Personal",
+                    collaborationIntent = intent
+                });
+                Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
+                Assert.Contains(Core.Authorization.WorkspacePolicyReasonCodes.CanaryScopeNotAllowed,
+                    await resp.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+                Assert.Equal(0, CompanyCount(slug));
+            }
+        }
+
+        [Fact]
+        public async Task Continuation_BusinessWithOthers_InitializesTheExistingWorkspaceAsTeamSetup()
+        {
+            const string email = "team-continuation@example.com";
+            const string slug = "team-continuation-books";
+            EnrollEmails(email);
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Tess", "Team Continuation", slug)).StatusCode);
+            var userId = await ResolveUserId(email);
+            EnrollUserIds(userId);
+            var (token, _) = await VerifyRealOtp(email);
+
+            Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "WithOthers")).StatusCode);
+
+            Assert.Equal(1, CompanyCount(slug));
+            Assert.Equal(WorkspaceCollaborationState.TeamSetupPending, OperatingState(slug)!.Value.State);
+            Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, JournalRuleKind(slug));
+            Assert.True(OwnerFunctionalGrantCount(slug, userId) >= 1);
+        }
+
+        private async Task<(string Token, string UserId, string Slug)> CreateTeamWorkspace(string email, string slug, string? ownerAccessPreset = null)
+        {
+            var (token, userId) = await CreateVerifiedUser(email);
+            EnrollUserIds(userId);
+            var resp = await CreateOrg(token, new
+            {
+                name = slug,
+                slug,
+                workspacePurpose = "Business",
+                collaborationIntent = "WithOthers",
+                ownerAccessPreset
+            });
+            Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
+            return (token, userId, slug);
+        }
+
+        private async Task<JsonElement> OperatingSettings(string token, string slug) =>
+            await Json(await SendScoped(HttpMethod.Get, "/api/organizations/current/operating-settings", token, slug, null));
+
+        [Fact]
+        public async Task ReturnToSolo_UnderSoloSetupEnabled_WithoutLegacyFlag_PreservesGrantsAndJournalPolicy()
+        {
+            var (token, userId, slug) = await CreateTeamWorkspace("rts-owner@example.com", "rts-books");
+            var grantsBefore = OwnerFunctionalGrantCount(slug, userId);
+            var settings = await OperatingSettings(token, slug);
+            Assert.Contains("return_to_solo", settings.GetProperty("allowedNextActions").EnumerateArray().Select(a => a.GetString()));
+            var revision = settings.GetProperty("policyRevision").GetInt64();
+
+            var response = await SendScoped(HttpMethod.Post, "/api/organizations/current/operating-settings/return-to-solo", token, slug,
+                new { expectedPolicyRevision = revision, revokeOutstandingInvitations = false });
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await Json(response);
+            Assert.Equal("SoloActive", body.GetProperty("collaborationState").GetString());
+            Assert.True(body.GetProperty("policyRevision").GetInt64() > revision);
+            Assert.Equal(WorkspaceCollaborationState.SoloActive, OperatingState(slug)!.Value.State);
+            Assert.Equal(grantsBefore, OwnerFunctionalGrantCount(slug, userId));
+            // The independent-review rule is preserved, never relaxed by returning to solo.
+            Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, JournalRuleKind(slug));
+            Assert.Contains("independent reviewer", body.GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task ReturnToSolo_RejectsAStaleRevision_AndLeavesTheWorkspaceInTeamSetup()
+        {
+            var (token, _, slug) = await CreateTeamWorkspace("rts-stale@example.com", "rts-stale-books");
+            var revision = (await OperatingSettings(token, slug)).GetProperty("policyRevision").GetInt64();
+
+            var response = await SendScoped(HttpMethod.Post, "/api/organizations/current/operating-settings/return-to-solo", token, slug,
+                new { expectedPolicyRevision = revision + 4, revokeOutstandingInvitations = false });
+
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal(WorkspaceCollaborationState.TeamSetupPending, OperatingState(slug)!.Value.State);
+        }
+
+        [Fact]
+        public async Task ReturnToSolo_WithOutstandingInvitation_RequiresRevokeFlag()
+        {
+            var (token, _, slug) = await CreateTeamWorkspace("rts-invite@example.com", "rts-invite-books");
+            Assert.Equal(HttpStatusCode.Created, (await SendScoped(HttpMethod.Post, "/api/organizations/current/invitations", token, slug,
+                new { email = "later@example.com", role = "Member", securityRoleIds = Array.Empty<int>() })).StatusCode);
+            var revision = (await OperatingSettings(token, slug)).GetProperty("policyRevision").GetInt64();
+
+            var refused = await SendScoped(HttpMethod.Post, "/api/organizations/current/operating-settings/return-to-solo", token, slug,
+                new { expectedPolicyRevision = revision, revokeOutstandingInvitations = false });
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+            Assert.Equal(Core.Authorization.WorkspacePolicyReasonCodes.ApprovalPolicyChangeRequired,
+                (await Json(refused)).GetProperty("reasonCode").GetString());
+            Assert.Equal(WorkspaceCollaborationState.TeamSetupPending, OperatingState(slug)!.Value.State);
+
+            var accepted = await SendScoped(HttpMethod.Post, "/api/organizations/current/operating-settings/return-to-solo", token, slug,
+                new { expectedPolicyRevision = revision, revokeOutstandingInvitations = true });
+            Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+            var invitations = await Json(await SendScoped(HttpMethod.Get, "/api/organizations/current/invitations", token, slug, null));
+            Assert.Empty(invitations.EnumerateArray());
+        }
+
+        [Fact]
+        public async Task ReturnToSolo_WithAnotherActiveMember_IsRefused_AndNeverInfersAGrantFromMemberCount()
+        {
+            var (token, userId, slug) = await CreateTeamWorkspace("rts-team@example.com", "rts-team-books");
+            var other = await CreateVerifiedUser("rts-mate@example.com");
+            var companyId = CompanyId(slug);
+            WithDb<object?>(db =>
+            {
+                db.CompanyMembers.Add(new Core.Domain.CompanyMember
+                {
+                    CompanyId = companyId, UserId = other.UserId, Role = CompanyMemberRole.Member,
+                    Status = Core.Domain.CompanyMemberStatus.Active, JoinedAt = DateTime.UtcNow
+                });
+                db.SaveChanges();
+                return null;
+            });
+            var grantsBefore = FunctionalGrantCount(slug);
+            var revision = (await OperatingSettings(token, slug)).GetProperty("policyRevision").GetInt64();
+
+            var response = await SendScoped(HttpMethod.Post, "/api/organizations/current/operating-settings/return-to-solo", token, slug,
+                new { expectedPolicyRevision = revision, revokeOutstandingInvitations = true });
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            Assert.Equal(grantsBefore, FunctionalGrantCount(slug));
+            Assert.True(OwnerFunctionalGrantCount(slug, userId) >= 1);
+            Assert.Equal(WorkspaceCollaborationState.TeamSetupPending, OperatingState(slug)!.Value.State);
+        }
+
+        [Fact]
+        public async Task ReturnToSolo_ForNarrowerOwner_DoesNotElevateTheSoleMember()
+        {
+            var (token, userId, slug) = await CreateTeamWorkspace("rts-narrow@example.com", "rts-narrow-books", "Narrower");
+            Assert.Equal(0, OwnerFunctionalGrantCount(slug, userId));
+            var revision = (await OperatingSettings(token, slug)).GetProperty("policyRevision").GetInt64();
+
+            var response = await SendScoped(HttpMethod.Post, "/api/organizations/current/operating-settings/return-to-solo", token, slug,
+                new { expectedPolicyRevision = revision, revokeOutstandingInvitations = false });
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            // Sole membership never implies a functional grant or a relaxed approval rule.
+            Assert.Equal(0, OwnerFunctionalGrantCount(slug, userId));
+            Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, JournalRuleKind(slug));
         }
 
         // ---- first useful task: the accounting-entitled solo owner posts a balanced journal -----------
@@ -572,7 +741,7 @@ namespace AccountGo.BackendTests.Security
 
             // First attempt rejected (out of scope): the durable start from signup persists, still no
             // completion — the cohort member is a not-yet-converted start.
-            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await InitializeCurrent(token, slug, "Business", "WithOthers")).StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await InitializeCurrent(token, slug, "Personal", "JustMe")).StatusCode);
             Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
             Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingCompletion"));
 
@@ -642,7 +811,7 @@ namespace AccountGo.BackendTests.Security
         [Fact]
         public async Task RejectedInitialization_EmitsNoSuccessCompletion_AndNoCompletionRow()
         {
-            // An out-of-scope (team) continuation is rejected before the Execute guard runs: it must not
+            // An out-of-scope (Personal) continuation is rejected before the Execute guard runs: it must not
             // emit a success completion nor write a durable COMPLETION row. The durable START from signup
             // persists (the workspace is a real cohort member awaiting conversion).
             const string email = "measure-reject@example.com";
@@ -653,7 +822,7 @@ namespace AccountGo.BackendTests.Security
             var (token, _) = await VerifyRealOtp(email);
 
             var successBefore = NewWorkspaceCompletions("success");
-            var resp = await InitializeCurrent(token, slug, "Business", "WithOthers"); // out of scope
+            var resp = await InitializeCurrent(token, slug, "Personal", "JustMe"); // out of scope
             Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
 
             Assert.Equal(successBefore, NewWorkspaceCompletions("success"));

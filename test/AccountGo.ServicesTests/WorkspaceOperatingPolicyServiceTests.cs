@@ -136,6 +136,56 @@ public class WorkspaceOperatingPolicyServiceTests : IDisposable
     }
 
     [Fact]
+    public void ReturnToSolo_UnderSoloSetupEnabled_DoesNotNeedTheLegacyConfirmationFlag()
+    {
+        var (company, owner) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+            settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+            settings.PolicyRevision = 6;
+            _db.SaveChanges();
+
+            var policy = WorkspaceOperatingPolicyTestSupport.CreateOperatingPolicy(
+                _db, soloSetupEnabled: true, tenant: _tenant, legacySoloConfirmationEnabled: false);
+
+            Assert.Contains("return_to_solo", policy.GetSummary(company.Id, owner.Id).AllowedNextActions);
+            var result = policy.ReturnToSolo(company.Id, _ownerUserId, expectedRevision: 6, revokeOutstandingInvitations: false);
+
+            Assert.True(result.Applied, result.Message);
+            Assert.Equal(WorkspaceCollaborationState.SoloActive, result.CollaborationState);
+        }
+    }
+
+    [Fact]
+    public void ReturnToSolo_IsAdmittedForCurrentModelWorkspace_WhenSetupFlagIsOff_ButNotForLegacyOnes()
+    {
+        var (company, owner) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+            settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+            settings.InitializationSource = WorkspaceInitializationSource.NewWorkspace;
+            settings.PolicyRevision = 8;
+            _db.SaveChanges();
+
+            var policy = WorkspaceOperatingPolicyTestSupport.CreateOperatingPolicy(
+                _db, soloSetupEnabled: false, tenant: _tenant, legacySoloConfirmationEnabled: false);
+            Assert.True(policy.ReturnToSolo(company.Id, _ownerUserId, expectedRevision: 8, revokeOutstandingInvitations: false).Applied);
+
+            settings.CollaborationState = WorkspaceCollaborationState.TeamActive;
+            settings.InitializationSource = WorkspaceInitializationSource.VerifiedLegacySetup;
+            settings.PolicyRevision = 9;
+            _db.SaveChanges();
+
+            var legacy = policy.ReturnToSolo(company.Id, _ownerUserId, expectedRevision: 9, revokeOutstandingInvitations: false);
+            Assert.False(legacy.Applied);
+            Assert.Equal(Core.Authorization.WorkspacePolicyReasonCodes.SoloSetupDisabled, legacy.ReasonCode);
+            Assert.DoesNotContain("return_to_solo", policy.GetSummary(company.Id, owner.Id).AllowedNextActions);
+        }
+    }
+
+    [Fact]
     public void ReturnToSolo_RejectsWhenOutstandingInvitesNotRevoked()
     {
         var (company, _) = SeedSoloInitializedCompany();

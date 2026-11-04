@@ -143,7 +143,7 @@ export const Members: React.FC = () => {
   const canReturnToSolo = Boolean(
     isOwner &&
     !isSoloActive &&
-    operatingSettings?.soloSetupEnabled &&
+    // The server decides eligibility (sole active owner, current-model workspace); the UI never infers it.
     operatingSettings?.allowedNextActions?.includes('return_to_solo')
   );
 
@@ -417,7 +417,7 @@ export const Members: React.FC = () => {
     setPendingConfirm({
       title: 'Return workspace to just me?',
       message:
-        'This will return the workspace to a solo operating state and revoke outstanding invitations. Existing access grants and approval rules are preserved.',
+        'This returns the workspace to a solo operating state and revokes outstanding invitations. Your access and the journal approval policy stay exactly as they are; if independent review is required, you can change that deliberately in Settings under Journal Approval.',
       confirmLabel: 'Return to just me',
       destructive: false,
       action: () =>

@@ -374,3 +374,43 @@ it('offers reconfirmation when a plain resend is refused because the policy chan
   await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/invitations/32/resend',
     expect.objectContaining({ body: JSON.stringify({ confirmChangedPolicy: true, expectedPolicyRevision: 21 }) })));
 });
+
+it('offers return to just me from the server action list even when the setup flag is not reported', async () => {
+  authFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (options?.method === 'POST') return new Response('{}', { status: 200 });
+    if (url === '/api/organizations/current') return new Response(JSON.stringify({ role: 'Owner' }), { status: 200 });
+    if (url.endsWith('/operating-settings')) {
+      return new Response(JSON.stringify({
+        collaborationState: 'TeamSetupPending',
+        allowedNextActions: ['return_to_solo'],
+        policyRevision: 4,
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify([]), { status: 200 });
+  });
+
+  render(<Members />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Return to just me' }));
+  const dialog = await screen.findByRole('alertdialog');
+  expect(within(dialog).getByText(/journal approval policy stay exactly as they are/)).toBeDefined();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Return to just me' }));
+
+  await waitFor(() => expect(authFetch).toHaveBeenCalledWith(
+    '/api/organizations/current/operating-settings/return-to-solo',
+    expect.objectContaining({ body: JSON.stringify({ expectedPolicyRevision: 4, revokeOutstandingInvitations: true }) }),
+  ));
+});
+
+it('hides return to just me when the server does not list it', async () => {
+  authFetch.mockImplementation(async (url: string) => {
+    if (url === '/api/organizations/current') return new Response(JSON.stringify({ role: 'Owner' }), { status: 200 });
+    if (url.endsWith('/operating-settings')) {
+      return new Response(JSON.stringify({ collaborationState: 'TeamActive', allowedNextActions: [], policyRevision: 4, soloSetupEnabled: true }), { status: 200 });
+    }
+    return new Response(JSON.stringify([]), { status: 200 });
+  });
+
+  render(<Members />);
+  await screen.findByRole('button', { name: 'Invite member' });
+  expect(screen.queryByRole('button', { name: 'Return to just me' })).toBeNull();
+});

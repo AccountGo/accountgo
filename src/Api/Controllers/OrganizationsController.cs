@@ -197,24 +197,23 @@ namespace Api.Controllers
                     return Problem(statusCode: 400, title: "About answers required",
                         detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
 
-                // Approved-journey scope gate at the request boundary: this canary releases only the
-                // Business + Just-me solo journey. Personal purpose and team setup are out of scope and are
-                // rejected here (and again at initialization) so an enrolled caller cannot reach them.
-                if (request.WorkspacePurpose != WorkspacePurpose.Business
-                    || request.CollaborationIntent != WorkspaceCollaborationIntent.JustMe)
+                // Approved-journey scope gate at the request boundary: this canary releases the Business solo
+                // (Just me) and team (With others) journeys. Personal purpose is out of scope and is rejected
+                // here (and again at initialization) so an enrolled caller cannot reach it.
+                if (!WorkspaceInitializationScope.IsSupported(request.WorkspacePurpose.Value, request.CollaborationIntent.Value))
                 {
                     return UnprocessableEntity(new ProblemDetails
                     {
                         Title = "Workspace setup not available",
-                        Detail = "The current setup audience supports business or freelance work for just you.",
+                        Detail = WorkspaceInitializationScope.UnsupportedScopeMessage,
                         Status = StatusCodes.Status422UnprocessableEntity,
                         Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed }
                     });
                 }
 
-                // Server selects the managed profile for Just me; arbitrary role IDs cannot replace initialization.
-                if (request.CollaborationIntent == WorkspaceCollaborationIntent.JustMe)
-                    request.SecurityRoleIds = null;
+                // The server selects the owner's managed access profile for both journeys (Just me, and With others
+                // via the owner access preset); arbitrary role IDs cannot replace initialization.
+                request.SecurityRoleIds = null;
             }
 
             if (request.SecurityRoleIds != null && !WorkspaceMembersController.ValidSecurityRoles(_db, request.SecurityRoleIds))
@@ -316,13 +315,12 @@ namespace Api.Controllers
                     detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
 
             // Approved-journey scope at the request boundary (re-enforced in the applicator).
-            if (request.WorkspacePurpose != WorkspacePurpose.Business
-                || request.CollaborationIntent != WorkspaceCollaborationIntent.JustMe)
+            if (!WorkspaceInitializationScope.IsSupported(request.WorkspacePurpose.Value, request.CollaborationIntent.Value))
             {
                 return UnprocessableEntity(new ProblemDetails
                 {
                     Title = "Workspace setup not available",
-                    Detail = "The current setup audience supports business or freelance work for just you.",
+                    Detail = WorkspaceInitializationScope.UnsupportedScopeMessage,
                     Status = StatusCodes.Status422UnprocessableEntity,
                     Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed }
                 });

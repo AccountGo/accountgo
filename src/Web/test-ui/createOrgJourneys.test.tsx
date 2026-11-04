@@ -167,6 +167,45 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     expect(postCalls[0].slug).toBe('acme');
   });
 
+  it('team journey: explains independent review, keeps owner Full access, and posts Business + WithOthers without a single-actor workflow', async () => {
+    const postCalls: any[] = [];
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/organizations/setup-capabilities') {
+        return new Response(
+          JSON.stringify({ soloSetupEnabled: true, personalPurposeEnabled: false, controlledRecoveryEnabled: false }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url === '/api/organizations' && init?.method === 'POST') {
+        postCalls.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ slug: 'acme' }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    render(<CreateOrgPage />);
+
+    fireEvent.click(await screen.findByRole('radio', { name: /Business or freelance work/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /Me and others/ }));
+    expect(screen.getByText(/Journals will need independent review/)).toBeTruthy();
+
+    await advanceToReview();
+
+    expect(screen.getByText('Me and others')).toBeTruthy();
+    expect(screen.getByText('Owner · Full workspace access (you can narrow later)')).toBeTruthy();
+    expect(screen.getByText(/Independent review: another Owner or Admin who can post journals approves each journal/)).toBeTruthy();
+    expect(screen.getByText(/You keep full access as the owner/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+    await screen.findByText('Your workspace is ready');
+
+    expect(postCalls).toHaveLength(1);
+    expect(postCalls[0].workspacePurpose).toBe('Business');
+    expect(postCalls[0].collaborationIntent).toBe('WithOthers');
+    expect(postCalls[0].ownerAccessPreset).toBe('FullWorkspaceAccess');
+    expect(postCalls[0].initialJournalWorkflow).toBeUndefined();
+  });
+
   it('stale-capability journey: on 422 solo_setup_disabled, removes discarded choices from review, clearly states they are not saved, and agrees with persisted payload', async () => {
     let postCount = 0;
     const postCalls: any[] = [];

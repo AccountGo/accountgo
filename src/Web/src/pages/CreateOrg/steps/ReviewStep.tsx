@@ -18,6 +18,7 @@ export const ReviewStep: React.FC<{
 }> = ({ state, capabilities, isContinuation, existingSettings }) => {
   const preview = fiscalYearPreview(state.booksStartDate, state.fiscalYearPattern, state.fiscalYearStartMonth);
   const justMe = state.collaborationIntent === 'JustMe';
+  const withOthers = state.collaborationIntent === 'WithOthers';
   const soloSetupAvailable = capabilities?.soloSetupEnabled !== false;
 
   // The About answers (purpose, collaboration, access, journal workflow) are the ONLY things finishing
@@ -33,6 +34,8 @@ export const ReviewStep: React.FC<{
     ],
     ...(soloSetupAvailable && justMe
       ? [['Journal posting', 'You can prepare and post your own journals under the single-user workflow.'] as [string, string]]
+      : soloSetupAvailable && withOthers
+        ? [['Journal posting', 'Independent review: another Owner or Admin who can post journals approves each journal before it is posted.'] as [string, string]]
       : !soloSetupAvailable
         ? [['Journal posting', 'Standard accounting controls apply until solo workflow is activated.'] as [string, string]]
         : []),
@@ -92,6 +95,13 @@ export const ReviewStep: React.FC<{
       {justMe && soloSetupAvailable && (
         <p className="text-[11px] text-[var(--text-muted)] mt-3">
           You’ll have full access to the tools included in your plan. You can invite someone later.
+        </p>
+      )}
+      {withOthers && soloSetupAvailable && (
+        <p className="text-[11px] text-[var(--text-muted)] mt-3">
+          You keep full access as the owner. Journals need a second person to approve them before posting, so invite an accountant or partner
+          from Team &amp; Members once the workspace is ready. If you prefer to post your own journals, you can change the journal approval
+          policy yourself later in Settings.
         </p>
       )}
       {!soloSetupAvailable && (
