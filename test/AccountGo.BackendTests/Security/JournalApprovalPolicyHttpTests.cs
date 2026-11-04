@@ -261,6 +261,29 @@ namespace AccountGo.BackendTests.Security
         }
 
         [Fact]
+        public async Task Remove_NonReviewer_ThatWouldLeaveOnlyOneHuman_IsRejected()
+        {
+            var team = await CreateTeam();
+            // Owner is the only eligible reviewer; the second human is a Member without posting rights.
+            await _fixture.AssignFunctionalRolesDirectAsync(team.CompanyId, team.Reviewer.Id, Array.Empty<string>());
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var reviewer = db.CompanyMembers.IgnoreQueryFilters()
+                    .Single(m => m.CompanyId == team.CompanyId && m.UserId == team.Reviewer.Id);
+                reviewer.Role = CompanyMemberRole.Member;
+                db.SaveChanges();
+            }
+
+            var memberId = await MemberId(team, team.Reviewer.Id);
+            var response = await _fixture.Send(HttpMethod.Delete, $"{Current}/members/{memberId}", token: team.Owner.Token, org: team.Slug);
+
+            await AssertReason(response, HttpStatusCode.Conflict, WorkspacePolicyReasonCodes.LastReviewerUnavailable);
+            Assert.True(MemberExists(team.CompanyId, team.Reviewer.Id));
+            Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, Rule(team.CompanyId).RuleKind);
+        }
+
+        [Fact]
         public async Task Update_RemovingLastReviewersPostingRole_IsRejected_ThenAllowedWithConfirmedPolicyChange()
         {
             var team = await CreateTeam();

@@ -103,12 +103,9 @@ namespace Api.Service
             if (!before.IsUsable)
                 return ReviewerGuardResult.Allowed;
 
-            // Only a change that takes an eligible reviewer out of the pool can be a last-reviewer conflict;
-            // removing or editing a non-reviewer never reduces review capacity.
-            var memberWasReviewer = before.EligibleReviewers.Any(r => r.MemberId == change.MemberId);
-            if (!memberWasReviewer)
-                return ReviewerGuardResult.Allowed;
-
+            // Independent review needs both an eligible reviewer and a second active human so approval
+            // can be independent of the preparer. Removing a non-reviewer that leaves only one human
+            // (or stripping the last reviewer's capability) is therefore also a conflict.
             var after = EvaluateCapacity(companyId, change);
             if (after.IsUsable)
                 return ReviewerGuardResult.Allowed;
