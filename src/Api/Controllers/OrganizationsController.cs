@@ -161,6 +161,11 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Invalid workspace settings");
 
             var options = ToOptions(request);
+            // Personal purpose defaults to the Individual accounting profile; reachable only once personal is released.
+            if (request.WorkspacePurpose == WorkspacePurpose.Personal
+                && !request.EntityType.HasValue
+                && WorkspaceInitializationScope.IsPersonalReleased(Api.Options.WorkspaceExperienceOptions.FromEnvironment(_experience)))
+                options.EntityType = EntityType.Individual;
             var policyErrors = CompanyAccountingPolicyRules.Validate(options, DateTime.UtcNow);
             if (policyErrors.Count > 0)
                 return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", policyErrors));
@@ -200,7 +205,7 @@ namespace Api.Controllers
                 // Approved-journey scope gate at the request boundary: this canary releases the Business solo
                 // (Just me) and team (With others) journeys. Personal purpose is out of scope and is rejected
                 // here (and again at initialization) so an enrolled caller cannot reach it.
-                if (!WorkspaceInitializationScope.IsSupported(request.WorkspacePurpose.Value, request.CollaborationIntent.Value))
+                if (!WorkspaceInitializationScope.IsSupported(request.WorkspacePurpose.Value, request.CollaborationIntent.Value, WorkspaceInitializationScope.IsPersonalReleased(experience)))
                 {
                     return UnprocessableEntity(new ProblemDetails
                     {
@@ -244,6 +249,7 @@ namespace Api.Controllers
                             && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
                                 or WorkspacePolicyReasonCodes.CanaryNotEnrolled
                                 or WorkspacePolicyReasonCodes.CanaryScopeNotAllowed
+                                or WorkspacePolicyReasonCodes.EntityPurposeMismatch
                                 or WorkspacePolicyReasonCodes.NotPendingSignupWorkspace
                                 or WorkspacePolicyReasonCodes.SoloSetupNotEligible
                                 or "about_answers_required")
@@ -315,7 +321,8 @@ namespace Api.Controllers
                     detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
 
             // Approved-journey scope at the request boundary (re-enforced in the applicator).
-            if (!WorkspaceInitializationScope.IsSupported(request.WorkspacePurpose.Value, request.CollaborationIntent.Value))
+            if (!WorkspaceInitializationScope.IsSupported(request.WorkspacePurpose.Value, request.CollaborationIntent.Value,
+                WorkspaceInitializationScope.IsPersonalReleased(Api.Options.WorkspaceExperienceOptions.FromEnvironment(_experience))))
             {
                 return UnprocessableEntity(new ProblemDetails
                 {

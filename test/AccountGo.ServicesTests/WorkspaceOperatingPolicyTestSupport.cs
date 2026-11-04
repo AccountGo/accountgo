@@ -44,7 +44,8 @@ internal static class WorkspaceOperatingPolicyTestSupport
         ITenantContext? tenant = null,
         bool soloSetupEnabled = false,
         IEnumerable<string>? enrolledUserIds = null,
-        IEnumerable<string>? enrolledEmails = null)
+        IEnumerable<string>? enrolledEmails = null,
+        bool personalReleasedForDisposableFixtures = false)
     {
         tenant ??= new TenantContext();
         var options = Options.Create(new WorkspaceExperienceOptions { SoloSetupEnabled = soloSetupEnabled });
@@ -52,7 +53,7 @@ internal static class WorkspaceOperatingPolicyTestSupport
         var catalog = new WorkspaceAccessProfileCatalog(db, Mock.Of<ISecurityService>(), System.Array.Empty<Core.Domain.Security.IWorkspaceAccessProfilePermissionContributor>());
         var resolver = new WorkspaceApprovalPolicyResolver(db);
         var canary = CreateEnrollment(soloSetupEnabled, enrolledUserIds, enrolledEmails);
-        return new WorkspaceInitializationApplicator(db, policyTx, catalog, resolver, options, canary);
+        return new WorkspaceInitializationApplicator(db, policyTx, catalog, resolver, options, canary, personalReleasedForDisposableFixtures);
     }
 
     /// <summary>

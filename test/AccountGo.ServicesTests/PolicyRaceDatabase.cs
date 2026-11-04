@@ -78,6 +78,9 @@ public sealed class PolicyRaceDatabase : IDisposable
 
     public bool IsPostgres => _postgres != null;
 
+    /// <summary>Npgsql connection string of the disposable PostgreSQL database; null on SQLite.</summary>
+    public string? PostgresConnectionString => _postgres?.ConnectionString;
+
     /// <summary>Creates the database and the schema (EnsureCreated on SQLite, the Postgres migrations on PostgreSQL).</summary>
     public static PolicyRaceDatabase Create(string provider)
     {

@@ -25,7 +25,8 @@ namespace Api.Service
 
     /// <summary>
     /// The journeys released to the setup audience: Business or freelance work, on your own or with others.
-    /// Personal purpose stays out of scope until it is explicitly released.
+    /// Personal purpose (solo, or household with others) stays out of scope until it is explicitly released:
+    /// <see cref="WorkspaceExperienceOptions.PersonalPurposeEnabled"/> AND a finance-approved Individual equity mapping.
     /// </summary>
     public static class WorkspaceInitializationScope
     {
@@ -33,8 +34,15 @@ namespace Api.Service
             "The current setup audience supports business or freelance work, on your own or with other people.";
 
         public static bool IsSupported(WorkspacePurpose purpose, WorkspaceCollaborationIntent intent) =>
-            purpose == WorkspacePurpose.Business
-            && intent is WorkspaceCollaborationIntent.JustMe or WorkspaceCollaborationIntent.WithOthers;
+            IsSupported(purpose, intent, personalReleased: false);
+
+        public static bool IsSupported(WorkspacePurpose purpose, WorkspaceCollaborationIntent intent, bool personalReleased) =>
+            intent is WorkspaceCollaborationIntent.JustMe or WorkspaceCollaborationIntent.WithOthers
+            && (purpose == WorkspacePurpose.Business || (purpose == WorkspacePurpose.Personal && personalReleased));
+
+        /// <summary>Personal purpose opens only when both the rollout switch and the finance approval are true.</summary>
+        public static bool IsPersonalReleased(WorkspaceExperienceOptions options) =>
+            options.PersonalPurposeEnabled && EntityEquityMapping.IsIndividualMappingApproved;
     }
 
     public sealed class WorkspaceInitializationResult
@@ -59,15 +67,22 @@ namespace Api.Service
         private readonly IWorkspaceApprovalPolicyResolver _approvalResolver;
         private readonly WorkspaceExperienceOptions _experience;
         private readonly IWorkspaceCanaryEnrollment _canary;
+        private readonly bool _personalReleasedForDisposableFixtures;
 
+        /// <param name="personalReleasedForDisposableFixtures">
+        /// Disposable-fixture seam only; dependency injection never supplies it. Production keeps Personal purpose closed
+        /// until <see cref="WorkspaceInitializationScope.IsPersonalReleased"/> is true.
+        /// </param>
         public WorkspaceInitializationApplicator(
             ApiDbContext db,
             IWorkspacePolicyTransaction policyTransaction,
             IWorkspaceAccessProfileCatalog accessCatalog,
             IWorkspaceApprovalPolicyResolver approvalResolver,
             IOptions<WorkspaceExperienceOptions> experienceOptions,
-            IWorkspaceCanaryEnrollment canary)
+            IWorkspaceCanaryEnrollment canary,
+            bool personalReleasedForDisposableFixtures = false)
         {
+            _personalReleasedForDisposableFixtures = personalReleasedForDisposableFixtures;
             _db = db;
             _policyTransaction = policyTransaction;
             _accessCatalog = accessCatalog;
@@ -142,7 +157,9 @@ namespace Api.Service
             // Approved-journey scope. This canary releases the Business solo (Just me) and team (With others)
             // journeys. Personal purpose is out of scope until it is released and must not be reachable
             // through the enrolled path, regardless of supplied answers or journal workflow.
-            if (!WorkspaceInitializationScope.IsSupported(request.Purpose, request.CollaborationIntent))
+            var personalReleased = _personalReleasedForDisposableFixtures
+                || WorkspaceInitializationScope.IsPersonalReleased(_experience);
+            if (!WorkspaceInitializationScope.IsSupported(request.Purpose, request.CollaborationIntent, personalReleased))
             {
                 return new WorkspaceInitializationResult
                 {
@@ -165,7 +182,7 @@ namespace Api.Service
                 };
             }
 
-            if (request.Purpose == WorkspacePurpose.Personal && !_experience.PersonalPurposeEnabled)
+            if (request.Purpose == WorkspacePurpose.Personal && !personalReleased)
             {
                 return new WorkspaceInitializationResult
                 {
@@ -234,6 +251,27 @@ namespace Api.Service
                         Applied = false,
                         ReasonCode = WorkspacePolicyReasonCodes.NotPendingSignupWorkspace,
                         Message = eligibility.Detail,
+                        PolicyRevision = settings.PolicyRevision,
+                        JournalMode = _approvalResolver.Resolve(settings, FindJournalRule(companyId), AccessOperationCatalog.FinancialsJournalPost).Mode
+                    };
+                }
+
+                // Personal/business isolation: the accounting profile must match the declared purpose. Personal
+                // workspaces use the Individual equity mapping; business workspaces never do.
+                var provisionedEntityType = _db.CompanySettings.IgnoreQueryFilters()
+                    .Where(s => s.CompanyId == companyId)
+                    .Select(s => (EntityType?)s.EntityType)
+                    .FirstOrDefault();
+                var entityMatchesPurpose = request.Purpose == WorkspacePurpose.Personal
+                    ? provisionedEntityType == EntityType.Individual
+                    : provisionedEntityType != EntityType.Individual;
+                if (!entityMatchesPurpose)
+                {
+                    return new WorkspaceInitializationResult
+                    {
+                        Applied = false,
+                        ReasonCode = WorkspacePolicyReasonCodes.EntityPurposeMismatch,
+                        Message = "Personal workspaces use the Individual accounting profile, and business workspaces do not.",
                         PolicyRevision = settings.PolicyRevision,
                         JournalMode = _approvalResolver.Resolve(settings, FindJournalRule(companyId), AccessOperationCatalog.FinancialsJournalPost).Mode
                     };
