@@ -14,8 +14,62 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect Changed Paths
+    runs-on: ubuntu-latest
+    outputs:
+      ci: ${{ steps.filter.outputs.ci }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      worker: ${{ steps.filter.outputs.worker }}
+      backend: ${{ steps.filter.outputs.backend }}
+      database: ${{ steps.filter.outputs.database }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ci:
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'src/Web/**'
+            worker:
+              - 'src/Api/*.ts'
+              - 'src/Api/test/**'
+              - 'src/Api/package.json'
+              - 'src/Api/wrangler.jsonc'
+            backend:
+              - 'src/Core/**'
+              - 'src/Dto/**'
+              - 'src/Services/**'
+              - 'src/ServiceDefaults/**'
+              - 'src/MigrationService/**'
+              - 'src/src.AppHost/**'
+              - 'src/Api/**/*.cs'
+              - 'src/Api/**/*.csproj'
+              - 'src/Api/appsettings*.json'
+              - 'test/AccountGo.BackendTests/**'
+              - 'test/AccountGo.ServicesTests/**'
+              - 'accountgo.sln'
+              - 'Directory.Build.props'
+              - 'Directory.Build.targets'
+            database:
+              - 'src/Api/Data/**'
+              - 'src/Core/Domain/**'
+              - 'scripts/**'
+              - 'db/**'
+              - 'test/AccountGo.BackendTests/PostgresTestDatabase.cs'
+              - 'test/AccountGo.BackendTests/MultiTenancy/**'
+              - 'test/AccountGo.BackendTests/MultiTenancyPhase3Tests.cs'
+              - 'test/AccountGo.BackendTests/PostgresConnectionStringTests.cs'
+              - 'test/AccountGo.BackendTests/Architecture/**'
+              - 'test/AccountGo.ServicesTests/WorkspacePolicyCoordinationRaceTests.cs'
+              - 'test/AccountGo.ServicesTests/PersonalWorkspaceConversionScriptTests.cs'
+
   api:
     name: Build API
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.database == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +87,8 @@ jobs:
 
   web:
     name: Build Web
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +117,8 @@ jobs:
 
   api-tests:
     name: API tests (SQLite)
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.database == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +136,8 @@ jobs:
 
   api-tests-postgres:
     name: API tests (Postgres)
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.database == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -143,6 +203,8 @@ jobs:
 
   worker-tests:
     name: Worker tests
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.worker == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -155,3 +217,32 @@ jobs:
       - name: Test
         working-directory: src/Api
         run: npm test
+
+  ci-status:
+    name: CI Status
+    needs: [changes, api, web, api-tests, api-tests-postgres, worker-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate overall CI result
+        run: |
+          echo "Changes detection: ${{ needs.changes.result }}"
+          echo "Build API: ${{ needs.api.result }}"
+          echo "Build Web: ${{ needs.web.result }}"
+          echo "API tests (SQLite): ${{ needs.api-tests.result }}"
+          echo "API tests (Postgres): ${{ needs.api-tests-postgres.result }}"
+          echo "Worker tests: ${{ needs.worker-tests.result }}"
+
+          if [ "${{ needs.changes.result }}" = "failure" ] || [ "${{ needs.changes.result }}" = "cancelled" ]; then
+            echo "::error::Path detection job failed or was cancelled."
+            exit 1
+          fi
+
+          FAILED="${{ contains(needs.*.result, 'failure') }}"
+          CANCELLED="${{ contains(needs.*.result, 'cancelled') }}"
+          if [ "$FAILED" = "true" ] || [ "$CANCELLED" = "true" ]; then
+            echo "::error::One or more executed CI jobs failed or were cancelled."
+            exit 1
+          fi
+
+          echo "All required checks passed successfully."
