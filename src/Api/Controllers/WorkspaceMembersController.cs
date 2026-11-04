@@ -30,6 +30,7 @@ namespace Api.Controllers
         private readonly IAccessAuthorizationService _authorizationService;
         private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
         private readonly IWorkspacePolicyTransaction _policyTransaction;
+        private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         private bool IsOwner => _tenant.Role == CompanyMemberRole.Owner;
 
@@ -49,7 +50,8 @@ namespace Api.Controllers
             ITenantContext tenant,
             IAccessAuthorizationService authorizationService = null,
             IWorkspaceOperatingPolicyService operatingPolicy = null,
-            IWorkspacePolicyTransaction policyTransaction = null)
+            IWorkspacePolicyTransaction policyTransaction = null,
+            IWorkspaceReviewerEligibility reviewerEligibility = null)
         {
             _db = db;
             _identity = identity;
@@ -57,6 +59,66 @@ namespace Api.Controllers
             _authorizationService = authorizationService;
             _operatingPolicy = operatingPolicy;
             _policyTransaction = policyTransaction;
+            _reviewerEligibility = reviewerEligibility;
+        }
+
+        private IWorkspaceReviewerEligibility ReviewerEligibility =>
+            _reviewerEligibility
+            ?? HttpContext?.RequestServices?.GetService<IWorkspaceReviewerEligibility>()
+            ?? new WorkspaceReviewerEligibility(_db, HttpContext?.RequestServices?.GetService<Core.Entitlements.IEntitlementService>());
+
+        private IWorkspaceOperatingPolicyService OperatingPolicy =>
+            _operatingPolicy ?? HttpContext?.RequestServices?.GetService<IWorkspaceOperatingPolicyService>();
+
+        private IActionResult ReasonProblem(int status, string title, string detail, string reasonCode, long? policyRevision = null)
+        {
+            var problem = new ProblemDetails { Title = title, Detail = detail, Status = status };
+            problem.Extensions["reasonCode"] = reasonCode;
+            if (policyRevision.HasValue)
+                problem.Extensions["policyRevision"] = policyRevision.Value;
+            return StatusCode(status, problem);
+        }
+
+        /// <summary>
+        /// Rejects an ordinary member change that would leave independent journal review without a usable
+        /// reviewer. The only way through in the same request is an Owner-authorized, revision-checked change
+        /// to single-actor posting; approval is never relaxed implicitly. Returns null when the change may proceed.
+        /// </summary>
+        private IActionResult GuardIndependentReviewer(
+            WorkspacePolicyGuard guard,
+            MemberReviewerChange change,
+            bool confirmPolicyChangeToSingleActor,
+            long? expectedPolicyRevision)
+        {
+            var companyId = _tenant.RequireCompanyId();
+            var verdict = ReviewerEligibility.EvaluateMemberChange(companyId, change);
+            if (!verdict.Blocked)
+                return null;
+
+            if (!confirmPolicyChangeToSingleActor)
+                return ReasonProblem(409, "Independent reviewer required", verdict.Message, verdict.ReasonCode, guard.PolicyRevision);
+
+            if (!IsOwner)
+                return ReasonProblem(403, "Only an Owner can change the journal approval policy",
+                    "This change needs a policy change to single-actor posting, which only an Owner can authorize.",
+                    WorkspacePolicyReasonCodes.OwnerAuthorizationRequired, guard.PolicyRevision);
+
+            if (!expectedPolicyRevision.HasValue)
+                return ReasonProblem(409, "Expected policy revision required",
+                    "Confirming a policy change requires the current expected policy revision.",
+                    WorkspacePolicyReasonCodes.StalePolicyRevision, guard.PolicyRevision);
+
+            var operatingPolicy = OperatingPolicy;
+            if (operatingPolicy == null)
+                return Problem(statusCode: 503, title: "Operating policy unavailable");
+
+            var result = operatingPolicy.ChangeJournalApprovalPolicy(
+                guard, UserId, expectedPolicyRevision.Value, WorkspaceApprovalRuleKind.SingleActorAllowed);
+            if (result.Applied)
+                return null;
+
+            var status = result.ReasonCode == WorkspacePolicyReasonCodes.StalePolicyRevision ? 409 : 403;
+            return ReasonProblem(status, "Approval policy change not applied", result.Message, result.ReasonCode, result.PolicyRevision);
         }
 
         [HttpGet("members")]
@@ -105,6 +167,10 @@ namespace Api.Controllers
             public List<int>? SecurityRoleIds { get; set; }
             public string? ApprovedByUserId { get; set; }
             public string? ApprovalRequestId { get; set; }
+
+            /// <summary>Owner-only: authorize a same-request change to single-actor journal posting.</summary>
+            public bool ConfirmPolicyChangeToSingleActor { get; set; }
+            public long? ExpectedPolicyRevision { get; set; }
         }
 
         public class CreateAccessApprovalRequest
@@ -132,6 +198,13 @@ namespace Api.Controllers
                 ? AccessOperationCatalog.WorkspaceMembersAssignFunctionalRoles
                 : request.OperationKey;
 
+            if (string.Equals(opKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal))
+            {
+                var journalProblem = ValidateJournalReviewApproval(companyId, request.ResourceId);
+                if (journalProblem != null)
+                    return journalProblem;
+            }
+
             try
             {
                 var (requestId, expiresAt) = await AccessAuthorizationService.RecordAuthenticatedApprovalAsync(
@@ -156,6 +229,39 @@ namespace Api.Controllers
             {
                 return Problem(statusCode: 403, title: "Approval denied", detail: ex.Message);
             }
+        }
+
+        /// <summary>
+        /// A journal-post review approval must name an existing unposted draft, come from a reviewer who can
+        /// actually post journals (permission + entitlement aware), and never from the entry's own preparer.
+        /// </summary>
+        private IActionResult ValidateJournalReviewApproval(int companyId, string resourceId)
+        {
+            if (!int.TryParse(resourceId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var journalId))
+                return Problem(statusCode: 400, title: "Journal entry required", detail: "A journal review approval must reference the journal entry id.");
+
+            var header = _db.JournalEntryHeaders.AsNoTracking()
+                .FirstOrDefault(h => h.CompanyId == companyId && h.Id == journalId);
+            if (header == null || header.Posted == true || header.GeneralLedgerHeaderId.HasValue)
+                return Problem(statusCode: 400, title: "Unposted journal draft required", detail: "Only an existing, unposted journal draft in this workspace can be approved for posting.");
+
+            var isEligibleReviewer = ReviewerEligibility.GetEligibleReviewers(companyId)
+                .Any(r => string.Equals(r.UserId, UserId, StringComparison.Ordinal));
+            if (!isEligibleReviewer)
+                return ReasonProblem(403, "Reviewer not eligible",
+                    "Only an active Owner or Admin who can post journals in this workspace can review a journal entry.",
+                    WorkspacePolicyReasonCodes.ReviewerRequired);
+
+            var journalKey = journalId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var preparer = _db.AuditLogs.AsNoTracking()
+                .Where(a => a.CompanyId == companyId && a.TableName == "__JournalEntryPreparer" && a.RecordId == journalKey)
+                .OrderByDescending(a => a.Id)
+                .Select(a => a.NewValue)
+                .FirstOrDefault();
+            if (string.Equals(preparer, UserId, StringComparison.Ordinal))
+                return Problem(statusCode: 403, title: "Approval denied", detail: "The person who prepared a journal entry cannot review it.");
+
+            return null;
         }
 
         [RequireWorkspaceRole(CompanyMemberRole.Admin)]
@@ -222,6 +328,22 @@ namespace Api.Controllers
                     }
                 }
 
+                var changesReviewerCapacity = role != member.Role || request.SecurityRoleIds != null;
+                if (changesReviewerCapacity)
+                {
+                    var blocked = GuardIndependentReviewer(
+                        guard,
+                        new MemberReviewerChange(
+                            member.Id,
+                            Removed: false,
+                            NewRole: role,
+                            NewSecurityRoleIds: request.SecurityRoleIds?.Distinct().ToList()),
+                        request.ConfirmPolicyChangeToSingleActor,
+                        request.ExpectedPolicyRevision);
+                    if (blocked != null)
+                        return blocked;
+                }
+
                 member.Role = role;
                 if (request.SecurityRoleIds != null)
                 {
@@ -259,7 +381,10 @@ namespace Api.Controllers
         }
 
         [HttpDelete("members/{memberId:int}")]
-        public IActionResult Remove(int memberId)
+        public IActionResult Remove(
+            int memberId,
+            [FromQuery] bool confirmPolicyChangeToSingleActor = false,
+            [FromQuery] long? expectedPolicyRevision = null)
         {
             var companyId = _tenant.RequireCompanyId();
             var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
@@ -276,6 +401,14 @@ namespace Api.Controllers
                     return Problem(statusCode: 403, title: "You cannot remove this member");
                 if (member.Role == CompanyMemberRole.Owner && IsLastOwner())
                     return Problem(statusCode: 409, title: "The last Owner cannot leave or be removed");
+
+                var blocked = GuardIndependentReviewer(
+                    guard,
+                    new MemberReviewerChange(member.Id, Removed: true),
+                    confirmPolicyChangeToSingleActor,
+                    expectedPolicyRevision);
+                if (blocked != null)
+                    return blocked;
 
                 guard.Settings.EverTeamActivatedAtUtc ??= DateTime.UtcNow;
                 if (guard.Settings.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified)

@@ -23,6 +23,18 @@ namespace Core.Authorization
         public const string RecoveryRequired = "recovery_required";
         public const string StalePolicyRevision = "stale_policy_revision";
         public const string IncompatiblePolicySchema = "incompatible_policy_schema";
+
+        /// <summary>
+        /// A member removal, suspension, departure or permission change (or account deletion) would leave a
+        /// workspace that requires independent journal review without a usable reviewer.
+        /// </summary>
+        public const string LastReviewerUnavailable = "last_reviewer_unavailable";
+
+        /// <summary>The caller is not an active workspace Owner and cannot authorize an approval-policy change.</summary>
+        public const string OwnerAuthorizationRequired = "owner_authorization_required";
+
+        /// <summary>The requested approval rule kind is not a recognised journal approval rule.</summary>
+        public const string InvalidApprovalRule = "invalid_approval_rule";
     }
 
     public class IncompatiblePolicySchemaException : InvalidOperationException
@@ -196,9 +208,68 @@ namespace Core.Authorization
         long PolicyRevision,
         WorkspaceCollaborationState CollaborationState);
 
+    /// <summary>An active human member who can currently review (approve) journal postings.</summary>
+    public sealed record EligibleJournalReviewer(int MemberId, string UserId, CompanyMemberRole Role);
+
+    /// <summary>
+    /// A hypothetical change to one member used to evaluate reviewer capacity BEFORE it is applied.
+    /// <see cref="NewRole"/> / <see cref="NewSecurityRoleIds"/> are null when that aspect is unchanged.
+    /// </summary>
+    public sealed record MemberReviewerChange(
+        int MemberId,
+        bool Removed,
+        CompanyMemberRole? NewRole = null,
+        IReadOnlyCollection<int>? NewSecurityRoleIds = null);
+
+    /// <summary>
+    /// Reviewer capacity for independent journal review: at least one eligible reviewer AND at least two
+    /// active human members, so that someone other than a reviewer can prepare an entry for review.
+    /// </summary>
+    public sealed record IndependentReviewCapacity(
+        int ActiveHumanCount,
+        IReadOnlyList<EligibleJournalReviewer> EligibleReviewers)
+    {
+        public bool IsUsable => EligibleReviewers.Count > 0 && ActiveHumanCount >= 2;
+    }
+
+    public sealed record ReviewerGuardResult(bool Blocked, string? ReasonCode, string? Message)
+    {
+        public static ReviewerGuardResult Allowed { get; } = new(false, null, null);
+    }
+
+    /// <summary>
+    /// Single source of truth for "who can review a journal posting". Permission-aware (functional role
+    /// grants <c>financials.journal.post</c>), governance-aware (approval records may only be recorded by an
+    /// active Owner/Admin), and entitlement-aware (the financials module must be writable).
+    /// </summary>
+    public interface IWorkspaceReviewerEligibility
+    {
+        /// <summary>Eligible active human reviewers, optionally excluding one user (e.g. the acting Owner).</summary>
+        IReadOnlyList<EligibleJournalReviewer> GetEligibleReviewers(int companyId, string? excludeUserId = null);
+
+        /// <summary>Reviewer capacity as it would be after applying <paramref name="change"/> (or as-is when null).</summary>
+        IndependentReviewCapacity EvaluateCapacity(int companyId, MemberReviewerChange? change = null);
+
+        /// <summary>
+        /// Blocks a member change only when the workspace explicitly requires independent journal review,
+        /// review is usable today, and the change would make it unusable. Never relaxes approval.
+        /// </summary>
+        ReviewerGuardResult EvaluateMemberChange(int companyId, MemberReviewerChange change);
+    }
+
     public interface IWorkspaceOperatingPolicyService
     {
         WorkspaceOperatingSummary GetSummary(int companyId, int? memberId = null, string? callerUserId = null);
+
+        /// <summary>
+        /// Owner-authorized explicit change of the journal approval rule. Records
+        /// <see cref="WorkspaceApprovalRuleProvenance.ExplicitPolicyChange"/> and immutable audit evidence.
+        /// Selecting independent review requires an eligible reviewer other than the caller.
+        /// </summary>
+        WorkspacePolicyMutationResult ChangeJournalApprovalPolicy(int companyId, string callerUserId, long expectedRevision, WorkspaceApprovalRuleKind newRuleKind);
+
+        /// <summary>Same as above, inside an already-held coordination guard (e.g. a member change request).</summary>
+        WorkspacePolicyMutationResult ChangeJournalApprovalPolicy(WorkspacePolicyGuard guard, string callerUserId, long expectedRevision, WorkspaceApprovalRuleKind newRuleKind);
         SoloSetupEligibility EvaluateLegacySoloEligibility(int companyId, string callerUserId);
         WorkspaceOperatingSettings EnsureCoordinationAndSettings(int companyId);
         WorkspacePolicyMutationResult ConfirmLegacySoloSetup(int companyId, string callerUserId, long expectedRevision);

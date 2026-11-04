@@ -29,20 +29,41 @@ const base = '/api/organizations/current';
 const button = 'px-3 py-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-subtle)] disabled:opacity-50 disabled:cursor-not-allowed';
 const input = 'w-full p-2 rounded-lg bg-[var(--bg-base)] border border-[var(--border-subtle)]';
 
+const LAST_REVIEWER_REASON_CODE = 'last_reviewer_unavailable';
+
+/** A failed API call carrying the problem detail and machine-readable reason code. */
+export class ApiProblemError extends Error {
+  readonly status: number;
+  readonly reasonCode?: string;
+  readonly policyRevision?: number;
+
+  constructor(message: string, status: number, reasonCode?: string, policyRevision?: number) {
+    super(message);
+    this.name = 'ApiProblemError';
+    this.status = status;
+    this.reasonCode = reasonCode;
+    this.policyRevision = policyRevision;
+  }
+}
+
 async function requireSuccess(response: Response): Promise<void> {
   if (response.ok) return;
   const text = await response.text();
   let message = text || `Request failed (${response.status})`;
+  let reasonCode: string | undefined;
+  let policyRevision: number | undefined;
   try {
-    const problem: { detail?: string; title?: string } = JSON.parse(text);
-    message = problem.detail || problem.title || message;
+    const problem: { detail?: string; title?: string; message?: string; reasonCode?: string; policyRevision?: number } = JSON.parse(text);
+    message = problem.detail || problem.message || problem.title || message;
+    reasonCode = problem.reasonCode;
+    policyRevision = problem.policyRevision;
   } catch {
     // Non-JSON proxy responses are displayed as text.
   }
-  if (response.status === 409) {
-    throw new Error(`${message} Review the latest workspace setup and try again.`);
+  if (response.status === 409 && reasonCode !== LAST_REVIEWER_REASON_CODE) {
+    throw new ApiProblemError(`${message} Review the latest workspace setup and try again.`, response.status, reasonCode, policyRevision);
   }
-  throw new Error(message);
+  throw new ApiProblemError(message, response.status, reasonCode, policyRevision);
 }
 
 function journalWorkflowLabel(mode?: string): string {
@@ -64,6 +85,7 @@ export const Members: React.FC = () => {
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [accessRequests, setAccessRequests] = useState<WorkspaceAccessRequestItem[]>([]);
   const [setupStatus, setSetupStatus] = useState<AccessSetupStatus | null>(null);
+  const [errorReasonCode, setErrorReasonCode] = useState('');
   const [operatingSettings, setOperatingSettings] = useState<WorkspaceOperatingPolicySummary | null>(null);
   const [soloEligibility, setSoloEligibility] = useState<SoloSetupEligibility | null>(null);
   const [roles, setRoles] = useState<RoleItem[]>([]);
@@ -192,9 +214,17 @@ export const Members: React.FC = () => {
     return () => controller.abort();
   }, [load]);
 
-  const mutate = async (path: string, method: string, body: object | undefined, success: string, leaving = false) => {
+  const mutate = async (
+    path: string,
+    method: string,
+    body: object | undefined,
+    success: string,
+    leaving = false,
+    retryWithPolicyChange?: (expectedPolicyRevision: number) => Promise<void>,
+  ) => {
     setBusy(true);
     setError('');
+    setErrorReasonCode('');
     setNotice('');
     try {
       const response = await authFetch(`${base}/${path}`, {
@@ -216,12 +246,39 @@ export const Members: React.FC = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Workspace change failed.';
       setError(message);
+      setErrorReasonCode(err instanceof ApiProblemError ? err.reasonCode ?? '' : '');
       if (message.includes('Review the latest workspace setup')) {
         void load();
+      }
+      if (
+        err instanceof ApiProblemError
+        && err.reasonCode === LAST_REVIEWER_REASON_CODE
+        && isOwner
+        && retryWithPolicyChange
+      ) {
+        offerSingleActorPolicyChange(message, retryWithPolicyChange);
       }
     } finally {
       setBusy(false);
     }
+  };
+
+  const offerSingleActorPolicyChange = (detail: string, retry: (expectedPolicyRevision: number) => Promise<void>) => {
+    setPendingConfirm({
+      title: 'Change journal approval to single-user posting?',
+      message:
+        `${detail} As the Owner you can continue by also switching journal posting to single-user. `
+        + 'This removes the second-person check, is recorded in the audit trail, and applies in the same step. '
+        + 'To keep independent review, cancel and add another Owner or Admin who can post journals first.',
+      confirmLabel: 'Change policy and continue',
+      destructive: true,
+      action: async () => {
+        const latest = await authFetch(`${base}/operating-settings`);
+        const settings = latest.ok ? await latest.json() : null;
+        const revision = typeof settings?.policyRevision === 'number' ? settings.policyRevision : 0;
+        await retry(revision);
+      },
+    });
   };
 
   const openForm = (target: 'invite' | 'request' | 'setup' | WorkspaceMember) => {
@@ -260,10 +317,16 @@ export const Members: React.FC = () => {
         securityRoleIds: roleIds,
       }, 'Your functional roles have been updated.');
     } else {
-      void mutate(`members/${form.memberId}`, 'PATCH', {
+      const memberUpdate = {
         ...(form.role !== 'Owner' ? { role } : {}),
         securityRoleIds: roleIds,
-      }, 'Workspace membership updated.');
+      };
+      void mutate(`members/${form.memberId}`, 'PATCH', memberUpdate, 'Workspace membership updated.', false,
+        revision => mutate(`members/${form.memberId}`, 'PATCH', {
+          ...memberUpdate,
+          confirmPolicyChangeToSingleActor: true,
+          expectedPolicyRevision: revision,
+        }, 'Workspace membership updated and journal approval changed to single-user posting.'));
     }
   };
 
@@ -366,7 +429,7 @@ export const Members: React.FC = () => {
           </>
         }
       />
-      {error && <div role="alert" className="p-4 rounded-xl bg-red-500/10 text-red-400">{error}</div>}
+      {error && <div role="alert" data-reason-code={errorReasonCode || undefined} className="p-4 rounded-xl bg-red-500/10 text-red-400">{error}</div>}
       {notice && <div role="status" className="p-4 rounded-xl bg-emerald-500/10 text-emerald-400">{notice}</div>}
 
       {/* Your access summary */}
@@ -595,7 +658,11 @@ export const Members: React.FC = () => {
                       : `${member.email} will lose access to ${currentOrg.name}.`,
                     confirmLabel: self ? 'Leave workspace' : 'Remove member',
                     destructive: true,
-                    action: () => mutate(`members/${member.memberId}`, 'DELETE', undefined, 'Member removed.', self),
+                    action: () => mutate(`members/${member.memberId}`, 'DELETE', undefined, 'Member removed.', self,
+                      revision => mutate(
+                        `members/${member.memberId}?confirmPolicyChangeToSingleActor=true&expectedPolicyRevision=${revision}`,
+                        'DELETE', undefined,
+                        'Member removed and journal approval changed to single-user posting.', self)),
                   })}>{self ? 'Leave' : 'Remove'}</button>}
                   {isOwner && !self && member.status === 'Active' && <button type="button" className={button} disabled={busy} onClick={() => setPendingConfirm({
                     title: 'Transfer ownership?',
@@ -736,8 +803,9 @@ export const Members: React.FC = () => {
           busy={busy}
           onCancel={() => setPendingConfirm(null)}
           onConfirm={() => {
-            const { action } = pendingConfirm;
-            void action().finally(() => setPendingConfirm(null));
+            const confirmed = pendingConfirm;
+            // A follow-up confirmation raised by this action (for example a policy-change prompt) must survive.
+            void confirmed.action().finally(() => setPendingConfirm(current => (current === confirmed ? null : current)));
           }}
         />
       )}
