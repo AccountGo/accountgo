@@ -46,8 +46,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     name: string;
     path: string;
     icon: React.ComponentType<{ className?: string }>;
-    /** With several modules, any one of them shows the link. */
-    module: ModuleKey | ModuleKey[];
+    /** With several modules, any one of them shows the link. If omitted, link is always shown. */
+    module?: ModuleKey | ModuleKey[];
     permission?: string;
     badge?: string;
   }> = [
@@ -55,7 +55,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       name: 'Dashboard',
       path: `/org/${currentOrg.slug}/dashboard`,
       icon: LayoutDashboard,
-      module: 'financials',
     },
     {
       name: 'Invoices & Sales',
@@ -103,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const visibleMainLinks = mainLinks.filter((link) => {
-    if (hasModule && !(Array.isArray(link.module) ? link.module : [link.module]).some(hasModule)) return false;
+    if (link.module && hasModule && !(Array.isArray(link.module) ? link.module : [link.module]).some(hasModule)) return false;
     if (hasPermission && link.permission && !hasPermission(link.permission)) return false;
     return true;
   });

@@ -43,8 +43,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       name: 'Dashboard',
       path: `/org/${currentOrg.slug}/dashboard`,
       icon: LayoutDashboard,
-      module: 'financials',
-      permission: 'sales.invoices.view',
     },
     {
       name: 'Sales',
