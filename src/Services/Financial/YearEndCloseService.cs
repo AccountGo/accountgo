@@ -31,7 +31,12 @@ namespace Services.Financial
         private readonly IRepository<BankReconciliation> _reconciliations;
         private readonly IRepository<BankStatementLine> _statementLines;
         private readonly IRepository<BooksLockChange> _lockChanges;
+        private readonly bool _allowUnapprovedIndividualMapping;
 
+        /// <param name="allowUnapprovedIndividualMapping">
+        /// Disposable-fixture seam only. Dependency injection never supplies it, so production close and reopen for an
+        /// Individual workspace keep failing closed until <see cref="EntityEquityMapping.IsIndividualMappingApproved"/> is true.
+        /// </param>
         public YearEndCloseService(
             IFinancialService financial,
             IBooksLockGuard booksLockGuard,
@@ -47,8 +52,10 @@ namespace Services.Financial
             IRepository<Bank> banks,
             IRepository<BankReconciliation> reconciliations,
             IRepository<BankStatementLine> statementLines,
-            IRepository<BooksLockChange> lockChanges)
+            IRepository<BooksLockChange> lockChanges,
+            bool allowUnapprovedIndividualMapping = false)
         {
+            _allowUnapprovedIndividualMapping = allowUnapprovedIndividualMapping;
             _financial = financial;
             _booksLockGuard = booksLockGuard;
             _tenant = tenant;
@@ -441,7 +448,7 @@ namespace Services.Financial
 
             var setting = _settings.Table.FirstOrDefault();
             var entityType = setting?.EntityType ?? EntityType.Corporation;
-            var profile = EntityEquityMapping.GetProfile(entityType);
+            var profile = EntityEquityMapping.GetProfile(entityType, _allowUnapprovedIndividualMapping);
 
             var fyTb = TrialBalanceExcludingClosing(year.StartDate.Date, InclusiveEnd(year.EndDate));
             var incomeExpense = _accounts.Table
