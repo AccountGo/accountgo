@@ -33,6 +33,7 @@ import { clearPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
 import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
 import { JournalApprovalPolicyCard } from '../components/JournalApprovalPolicyCard';
+import { WorkspaceSetupCard } from '../components/WorkspaceSetupCard';
 import { BusinessDetailsCard } from '../components/BusinessDetailsCard';
 import { InvoiceSettingsTab } from '../components/InvoiceSettingsTab';
 import { EmailSettingsTab } from '../components/EmailSettingsTab';
@@ -406,6 +407,8 @@ export const Settings: React.FC = () => {
               tabIndex={0}
               className="space-y-6 focus:outline-none"
             >
+              <WorkspaceSetupCard />
+
               <form onSubmit={handleSaveCompany} className="space-y-6">
                 {/* Feedback Notifications */}
                 {companySaveSuccess && (

@@ -2,7 +2,7 @@
 
 **Status: EXECUTED on production `personal` (2026-11-04).** Equity-profile conversion verified
 (`VERIFY_RESULT pass`). Operating-policy follow-on (Purpose=Personal, CollaborationIntent=WithOthers,
-CollaborationState=TeamActive, plan left as `invoicing_pro`) applied via
+CollaborationState=TeamActive; existing hosted invoicing plan preserved) applied via
 `accountgo-ops` workflow `personal-workspace-backfill` / `scripts/personal-workspace-operating-backfill.sql`.
 Earlier sections still document the disposable rehearsal that prepared the tooling.
 
