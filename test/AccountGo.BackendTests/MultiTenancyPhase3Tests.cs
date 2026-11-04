@@ -1223,20 +1223,19 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice, _otherToken)).StatusCode);
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, Current + "/members", token: _otherToken)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, Current + "/invitations", token: _otherToken)).StatusCode);
-            // Independent review is the fail-closed default for new workspaces. Removing the only other
-            // human would leave that rule without a usable second participant, so the ordinary delete
-            // is rejected until the owner confirms an explicit single-actor policy change.
-            Assert.Equal(HttpStatusCode.Conflict, (await Send(HttpMethod.Delete, Current + "/members/" + MemberId(_otherId))).StatusCode);
-            long revision;
+            // The other member has no journal review permission, so removing them does not remove a
+            // usable reviewer. Preserve the independent rule instead of inferring a single-actor grant.
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete,
+                Current + "/members/" + MemberId(_otherId))).StatusCode);
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                revision = db.WorkspaceOperatingSettings.IgnoreQueryFilters()
-                    .Single(s => s.CompanyId == _companyId).PolicyRevision;
+                var rule = db.WorkspaceApprovalRules.IgnoreQueryFilters()
+                    .Single(r => r.CompanyId == _companyId
+                        && r.OperationKey == Core.Authorization.AccessOperationCatalog.FinancialsJournalPost);
+                Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, rule.RuleKind);
+                Assert.Equal(WorkspaceApprovalRuleProvenance.LegacyEnforced, rule.Provenance);
             }
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete,
-                Current + "/members/" + MemberId(_otherId)
-                + "?confirmPolicyChangeToSingleActor=true&expectedPolicyRevision=" + revision)).StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, Current, token: _otherToken)).StatusCode);
         }
 

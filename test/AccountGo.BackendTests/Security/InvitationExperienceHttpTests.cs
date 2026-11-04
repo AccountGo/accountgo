@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Api.Data;
 using Core.Authorization;
+using Core.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -168,6 +169,26 @@ namespace AccountGo.BackendTests.Security
         public async Task PolicyChange_MarksInvitationStale_AndResendRequiresExplicitReconfirmation()
         {
             var workspace = await CreateWorkspace();
+            // This policy-transition scenario starts from an initialized current-model workspace.
+            // Unclassified workspaces cannot acquire single-actor posting through the settings endpoint.
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var tenant = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+                using var workspaceScope = tenant.Impersonate(workspace.CompanyId, workspace.Slug, CompanyMemberRole.Owner);
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var owner = db.CompanyMembers.IgnoreQueryFilters()
+                    .Single(m => m.CompanyId == workspace.CompanyId && m.UserId == workspace.Owner.Id);
+                var settings = db.WorkspaceOperatingSettings.IgnoreQueryFilters()
+                    .Single(s => s.CompanyId == workspace.CompanyId);
+                settings.Purpose = WorkspacePurpose.Business;
+                settings.CollaborationIntent = WorkspaceCollaborationIntent.WithOthers;
+                settings.CollaborationState = WorkspaceCollaborationState.TeamSetupPending;
+                settings.ConfirmedOwnerMemberId = owner.Id;
+                settings.InitializedAtUtc = DateTime.UtcNow;
+                settings.InitializedByUserId = workspace.Owner.Id;
+                settings.InitializationSource = WorkspaceInitializationSource.NewWorkspace;
+                db.SaveChanges();
+            }
             var invitationId = await Invite(workspace);
             await ChangeToSingleActor(workspace);
             Assert.True((await ListInvitation(workspace, invitationId)).GetProperty("policyChanged").GetBoolean());
