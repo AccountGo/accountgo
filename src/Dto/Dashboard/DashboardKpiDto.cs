@@ -22,6 +22,15 @@ namespace Dto.Dashboard
         public decimal TotalExpensesYtd { get; set; }
         public decimal NetProfitYtd { get; set; }
         public decimal CashFlowYtd { get; set; }
+
+        /// <summary>Open sales invoices past due (invoicing and accounting). Zero when sales is not visible.</summary>
+        public decimal OverdueReceivables { get; set; }
+
+        /// <summary>Count of open sales invoices still owed (excludes drafts and voids).</summary>
+        public int OpenInvoiceCount { get; set; }
+
+        /// <summary>Count of open sales invoices past their due date.</summary>
+        public int OverdueInvoiceCount { get; set; }
     }
 
     public class DashboardBankBalanceDto

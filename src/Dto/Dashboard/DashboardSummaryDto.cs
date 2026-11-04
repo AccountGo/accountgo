@@ -5,6 +5,12 @@ namespace Dto.Dashboard
 {
     public class DashboardSummaryDto
     {
+        /// <summary>
+        /// <c>Accounting</c> when the caller can see the ledger; otherwise <c>Invoicing</c>
+        /// (sales/purchases surface without P&amp;L / balance sheet).
+        /// </summary>
+        public string Surface { get; set; } = "Invoicing";
+
         public DashboardKpiDto Kpis { get; set; } = new();
         public DashboardBalanceSnapshotDto BalanceSnapshot { get; set; } = new();
         public List<DashboardTrendPointDto> MonthlySales { get; set; } = new();
@@ -13,7 +19,7 @@ namespace Dto.Dashboard
         public List<DashboardPayableItemDto> UpcomingPayables { get; set; } = new();
         public List<DashboardActivityItemDto> RecentActivity { get; set; } = new();
 
-        /// <summary>Null unless the Financials module is on and the caller can view bank accounts.</summary>
+        /// <summary>Null unless bank accounts are visible to the caller.</summary>
         public BankCloseStatusDto? BankCloseStatus { get; set; }
     }
 }

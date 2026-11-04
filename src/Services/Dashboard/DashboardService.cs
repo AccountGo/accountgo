@@ -8,6 +8,7 @@ using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Tenancy;
 using Dto.Dashboard;
+using Core.Domain.Sales;
 using Services.Banking;
 using Services.Financial;
 using Services.Purchasing;
@@ -96,22 +97,45 @@ namespace Services.Dashboard
                     .ToHashSet()
                 : new HashSet<int>();
 
-            var moneyInBank = canViewFinancials
+            // Bank balances are useful on invoicing workspaces that have banking permission even without a GL.
+            var moneyInBank = (canViewFinancials || canViewBanks)
                 ? BuildMoneyInBank(accounts)
-                : (Total: 0m, BankBalances: CanViewBankAccounts() ? new List<DashboardBankBalanceDto>() : null, UnassignedCash: 0m);
+                : (Total: 0m, BankBalances: (List<DashboardBankBalanceDto>?)null, UnassignedCash: 0m);
 
             // IncomeStatement excludes ClosingEntries so YTD is unchanged after year-end close.
+            // Invoicing workspaces without financials use issued invoices for sales YTD instead.
             var incomeItems = canViewFinancials
                 ? (_financialService.IncomeStatement(rangeStart, rangeEnd) ?? Enumerable.Empty<IncomeStatement>()).ToList()
                 : new List<IncomeStatement>();
-            var totalSalesYtd = RoundMoney(incomeItems.Where(i => !i.IsExpense).Sum(i => i.Amount));
-            var totalExpensesYtd = RoundMoney(incomeItems.Where(i => i.IsExpense).Sum(i => i.Amount));
+            decimal totalSalesYtd;
+            decimal totalExpensesYtd;
+            if (canViewFinancials)
+            {
+                totalSalesYtd = RoundMoney(incomeItems.Where(i => !i.IsExpense).Sum(i => i.Amount));
+                totalExpensesYtd = RoundMoney(incomeItems.Where(i => i.IsExpense).Sum(i => i.Amount));
+            }
+            else
+            {
+                totalSalesYtd = RoundMoney(IssuedSalesInRange(salesInvoices, rangeStart, rangeEnd)
+                    .Sum(i => i.ComputeTotalAmount() + i.ComputeTotalTax() + i.ShippingHandlingCharge));
+                totalExpensesYtd = 0m;
+            }
+
             var cashFlowYtd = canViewFinancials
                 ? ComputeNetAmount(ledger, bankAccountIds, normalBalanceIsDebit: true)
                 : 0m;
 
+            var today = DateTime.Today;
+            var openSales = canViewSales
+                ? salesInvoices.Where(IsOpenSalesInvoice).ToList()
+                : new List<Core.Domain.Sales.SalesInvoiceHeader>();
+            var overdueSales = openSales
+                .Where(i => i.ResolveDueDate(null).Date < today)
+                .ToList();
+
             var summary = new DashboardSummaryDto
             {
+                Surface = canViewFinancials ? "Accounting" : "Invoicing",
                 Kpis = new DashboardKpiDto
                 {
                     MoneyInBank = moneyInBank.Total,
@@ -124,8 +148,11 @@ namespace Services.Dashboard
                         .Sum(item => item.Amount),
                     TotalSalesYtd = totalSalesYtd,
                     TotalExpensesYtd = totalExpensesYtd,
-                    NetProfitYtd = totalSalesYtd - totalExpensesYtd,
-                    CashFlowYtd = cashFlowYtd
+                    NetProfitYtd = canViewFinancials ? totalSalesYtd - totalExpensesYtd : 0m,
+                    CashFlowYtd = cashFlowYtd,
+                    OverdueReceivables = RoundMoney(overdueSales.Sum(i => i.BalanceDue())),
+                    OpenInvoiceCount = openSales.Count,
+                    OverdueInvoiceCount = overdueSales.Count
                 },
                 BalanceSnapshot = new DashboardBalanceSnapshotDto
                 {
@@ -139,18 +166,22 @@ namespace Services.Dashboard
                         .Where(item => item.AccountClassId == (int)AccountClasses.Equity)
                         .Sum(item => item.Amount)
                 },
-                MonthlySales = BuildMonthlyTrend(
-                    rangeStart,
-                    rangeEnd,
-                    ledger,
-                    revenueAccountIds,
-                    normalBalanceIsDebit: false),
-                MonthlyExpenses = BuildMonthlyTrend(
-                    rangeStart,
-                    rangeEnd,
-                    ledger,
-                    expenseAccountIds,
-                    normalBalanceIsDebit: true),
+                MonthlySales = canViewFinancials
+                    ? BuildMonthlyTrend(
+                        rangeStart,
+                        rangeEnd,
+                        ledger,
+                        revenueAccountIds,
+                        normalBalanceIsDebit: false)
+                    : BuildMonthlySalesFromInvoices(rangeStart, rangeEnd, salesInvoices),
+                MonthlyExpenses = canViewFinancials
+                    ? BuildMonthlyTrend(
+                        rangeStart,
+                        rangeEnd,
+                        ledger,
+                        expenseAccountIds,
+                        normalBalanceIsDebit: true)
+                    : new List<DashboardTrendPointDto>(),
                 TopReceivables = customers
                     .Where(c => c.Balance > 0)
                     .OrderByDescending(c => c.Balance)
@@ -185,6 +216,49 @@ namespace Services.Dashboard
             };
 
             return summary;
+        }
+
+        private static bool IsOpenSalesInvoice(Core.Domain.Sales.SalesInvoiceHeader invoice) =>
+            invoice.Status is not (SalesInvoiceStatus.Draft or SalesInvoiceStatus.Void)
+            && invoice.BalanceDue() > 0.005m;
+
+        private static IEnumerable<Core.Domain.Sales.SalesInvoiceHeader> IssuedSalesInRange(
+            IEnumerable<Core.Domain.Sales.SalesInvoiceHeader> invoices,
+            DateTime rangeStart,
+            DateTime rangeEnd) =>
+            invoices.Where(invoice =>
+                invoice.Status is not (SalesInvoiceStatus.Draft or SalesInvoiceStatus.Void)
+                && invoice.Date.Date >= rangeStart.Date
+                && invoice.Date.Date <= rangeEnd.Date);
+
+        private List<DashboardTrendPointDto> BuildMonthlySalesFromInvoices(
+            DateTime rangeStart,
+            DateTime rangeEnd,
+            IEnumerable<Core.Domain.Sales.SalesInvoiceHeader> invoices)
+        {
+            var monthlyAmounts = IssuedSalesInRange(invoices, rangeStart, rangeEnd)
+                .GroupBy(invoice => new { invoice.Date.Year, invoice.Date.Month })
+                .ToDictionary(
+                    group => new DateTime(group.Key.Year, group.Key.Month, 1),
+                    group => RoundMoney(group.Sum(i =>
+                        i.ComputeTotalAmount() + i.ComputeTotalTax() + i.ShippingHandlingCharge)));
+
+            var trend = new List<DashboardTrendPointDto>();
+            var cursor = new DateTime(rangeStart.Year, rangeStart.Month, 1);
+            var endMonth = new DateTime(rangeEnd.Year, rangeEnd.Month, 1);
+
+            while (cursor <= endMonth)
+            {
+                monthlyAmounts.TryGetValue(cursor, out var amount);
+                trend.Add(new DashboardTrendPointDto
+                {
+                    Label = cursor.ToString("MMM", CultureInfo.InvariantCulture),
+                    Amount = amount
+                });
+                cursor = cursor.AddMonths(1);
+            }
+
+            return trend;
         }
 
         private (bool CanViewFinancials, bool CanViewSales, bool CanViewPurchases) ResolveAuthorizedDomains()
