@@ -365,9 +365,10 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
     }
 
     [Fact]
-    public void ApplyNewWorkspace_EnrolledOwner_TeamIntent_IsRejected_OutOfScope()
+    public void ApplyNewWorkspace_EnrolledOwner_TeamIntent_IsAdmitted_AsTeamSetupPending()
     {
-        // Enrolled, but requesting team (With-others) setup: out of the approved canary scope.
+        // Enrolled Business + With-others: admitted as the team journey. Independent review is the default
+        // and the owner keeps the managed Full access profile.
         const string ownerId = "owner-team";
         var (company, owner) = SeedUninitializedCompany(ownerId);
 
@@ -381,8 +382,37 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
             {
                 Purpose = WorkspacePurpose.Business,
                 CollaborationIntent = WorkspaceCollaborationIntent.WithOthers,
-                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess,
-                InitialJournalWorkflow = WorkspaceApprovalRuleKind.SingleActorAllowed
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
+            });
+        }
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(WorkspaceApprovalMode.IndependentReviewerRequired, result.JournalMode);
+        var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
+        Assert.Equal(WorkspaceCollaborationState.TeamSetupPending, settings.CollaborationState);
+        Assert.Equal(WorkspaceCollaborationIntent.WithOthers, settings.CollaborationIntent);
+        var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
+        Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, rule.RuleKind);
+        Assert.NotNull(result.AccessProfileKey);
+    }
+
+    [Fact]
+    public void ApplyNewWorkspace_EnrolledOwner_PersonalTeam_IsRejected_OutOfScope()
+    {
+        const string ownerId = "owner-personal-team";
+        var (company, owner) = SeedUninitializedCompany(ownerId);
+
+        var applicator = WorkspaceOperatingPolicyTestSupport.CreateInitializer(
+            _db, _tenant, soloSetupEnabled: true, enrolledUserIds: new[] { ownerId });
+
+        WorkspaceInitializationResult result;
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            result = applicator.ApplyNewWorkspace(company.Id, ownerId, owner.Id, new WorkspaceInitializationRequest
+            {
+                Purpose = WorkspacePurpose.Personal,
+                CollaborationIntent = WorkspaceCollaborationIntent.WithOthers,
+                OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess
             });
         }
 
@@ -391,7 +421,6 @@ public sealed class WorkspaceCanaryIsolationTests : IDisposable
         var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
         Assert.Equal(WorkspaceCollaborationState.LegacyUnclassified, settings.CollaborationState);
         var rule = _db.WorkspaceApprovalRules.IgnoreQueryFilters().Single(r => r.CompanyId == company.Id);
-        // The seeded independent-review rule is untouched; no single-actor grant leaked in.
         Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, rule.RuleKind);
     }
 

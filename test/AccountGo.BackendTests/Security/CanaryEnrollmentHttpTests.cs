@@ -187,7 +187,7 @@ namespace AccountGo.BackendTests.Security
         }
 
         [Fact]
-        public async Task Create_EnrolledUser_TeamIntent_Rejected_OutOfScope_AndNotInitialized()
+        public async Task Create_EnrolledUser_TeamIntent_Admitted_AndInitializedAsTeamSetup()
         {
             var (token, _) = await CreateUserAsync("enrolled2@example.com", forcedUserId: EnrolledUserId);
             var resp = await CreateOrg(token, new
@@ -198,11 +198,31 @@ namespace AccountGo.BackendTests.Security
                 collaborationIntent = "WithOthers"
             });
 
+            Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
+            var state = OperatingState("enrolled-team-co");
+            Assert.NotNull(state);
+            Assert.Equal(WorkspaceCollaborationState.TeamSetupPending, state!.Value.State);
+            Assert.True(state.Value.Initialized);
+            Assert.Equal(Core.Domain.WorkspaceApprovalRuleKind.IndependentReviewerRequired, JournalRuleKind("enrolled-team-co"));
+        }
+
+        [Fact]
+        public async Task Create_EnrolledUser_PersonalPurpose_Rejected_OutOfScope_AndNotInitialized()
+        {
+            var (token, _) = await CreateUserAsync("enrolled3@example.com", forcedUserId: EnrolledUserId);
+            var resp = await CreateOrg(token, new
+            {
+                name = "Enrolled Personal Co",
+                slug = "enrolled-personal-co",
+                workspacePurpose = "Personal",
+                collaborationIntent = "WithOthers"
+            });
+
             Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
             var body = await resp.Content.ReadAsStringAsync();
             Assert.Contains(Core.Authorization.WorkspacePolicyReasonCodes.CanaryScopeNotAllowed, body, StringComparison.Ordinal);
             // Scope rejection happens before provisioning.
-            Assert.Equal(0, CompanyCount("enrolled-team-co"));
+            Assert.Equal(0, CompanyCount("enrolled-personal-co"));
         }
 
         // ---- Anonymous signup boundary ------------------------------------------------------------

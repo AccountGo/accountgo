@@ -23,6 +23,20 @@ namespace Api.Service
         public WorkspaceApprovalRuleKind? InitialJournalWorkflow { get; init; }
     }
 
+    /// <summary>
+    /// The journeys released to the setup audience: Business or freelance work, on your own or with others.
+    /// Personal purpose stays out of scope until it is explicitly released.
+    /// </summary>
+    public static class WorkspaceInitializationScope
+    {
+        public const string UnsupportedScopeMessage =
+            "The current setup audience supports business or freelance work, on your own or with other people.";
+
+        public static bool IsSupported(WorkspacePurpose purpose, WorkspaceCollaborationIntent intent) =>
+            purpose == WorkspacePurpose.Business
+            && intent is WorkspaceCollaborationIntent.JustMe or WorkspaceCollaborationIntent.WithOthers;
+    }
+
     public sealed class WorkspaceInitializationResult
     {
         public bool Applied { get; init; }
@@ -125,17 +139,16 @@ namespace Api.Service
                 };
             }
 
-            // Approved-journey scope. This canary releases exactly the Business + Just-me solo journey.
-            // Personal purpose and team (With-others) initialization are out of scope and must not be
-            // reachable through the enrolled path, regardless of supplied answers or journal workflow.
-            if (request.Purpose != WorkspacePurpose.Business
-                || request.CollaborationIntent != WorkspaceCollaborationIntent.JustMe)
+            // Approved-journey scope. This canary releases the Business solo (Just me) and team (With others)
+            // journeys. Personal purpose is out of scope until it is released and must not be reachable
+            // through the enrolled path, regardless of supplied answers or journal workflow.
+            if (!WorkspaceInitializationScope.IsSupported(request.Purpose, request.CollaborationIntent))
             {
                 return new WorkspaceInitializationResult
                 {
                     Applied = false,
                     ReasonCode = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed,
-                    Message = "The current setup audience supports business or freelance work for just you.",
+                    Message = WorkspaceInitializationScope.UnsupportedScopeMessage,
                     JournalMode = WorkspaceApprovalMode.CatalogDefault
                 };
             }
