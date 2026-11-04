@@ -1,10 +1,11 @@
 # Individual (personal) equity mapping: decision package
 
-**Status: APPROVED (revised model) — production activation not authorized.**
+**Status: APPROVED and activated for personal purpose (revised model).**
 
 Finance approved a revised Individual mapping for internal personal/household bookkeeping.
-`EntityEquityMapping.IsIndividualMappingApproved` remains `false`. This decision does **not** authorize
-production activation or conversion of the existing personal workspace.
+`EntityEquityMapping.IsIndividualMappingApproved` is `true`. Personal purpose also requires
+`WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED=true`. Conversion of any existing personal workspace
+remains unauthorized until inspected separately.
 
 Reports for this release describe personal bookkeeping using recorded balances. They do **not** claim formal
 personal-financial-statement compliance merely from this mapping (formal personal reporting can involve
@@ -125,7 +126,7 @@ Personal purpose is a separate answer from collaboration (Just me / With others)
 business journeys' server controls once production activation is separately authorized.
 
 - **Gate.** `WorkspaceInitializationScope.IsSupported` admits Personal only when
-  `PersonalPurposeEnabled && IsIndividualMappingApproved`. Both remain off for production under this decision.
+  `PersonalPurposeEnabled && IsIndividualMappingApproved` (mapping approved; env switch must be on).
 - **Household.** One shared Accumulated net worth perimeter; member access does not create separate ownership balances.
 - **Isolation.** Personal and business remain separate workspaces with no shared ledger.
 
@@ -142,11 +143,11 @@ business journeys' server controls once production activation is separately auth
 | Field | Value |
 |---|---|
 | Reviewer | Finance (product counsel direction) |
-| Decision | **Approve revised Individual model** for internal personal/household bookkeeping, subject to reconciled posting, reporting and close/reopen tests. Remove routine personal-drawings treatment. **Does not** authorize production activation or conversion of the existing personal workspace. |
+| Decision | **Approve revised Individual model** for internal personal/household bookkeeping, subject to reconciled posting, reporting and close/reopen tests. Remove routine personal-drawings treatment. Personal purpose may be enabled via `WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED`. **Does not** authorize conversion of the existing personal workspace without inspection. |
 | Date | 2026-11-04 |
 | Changes requested | Revise away from sole-proprietor capital/drawings; `30100` = Accumulated net worth; exclude `30800` from initial personal workflow; keep OBE close blocker; no corporate RE/dividends; one household perimeter; preserve history; required posting examples above; no formal PFS compliance claim. |
 
-Production activation still requires a **separate** change: setting `IsIndividualMappingApproved` to `true`, enabling
-`WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED`, and enrolling the audience through existing operator controls.
-Conversion of any existing personal workspace remains unauthorized until inspected under
+Activation checklist: `IsIndividualMappingApproved=true` (source), `WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED=true`
+(live Worker vars), and the usual solo-setup/canary enrollment for create journeys. Conversion of any existing
+personal workspace remains unauthorized until inspected under
 `docs/accounting/personal-workspace-conversion.md` (purpose and initialization still open after accounting-profile work).
