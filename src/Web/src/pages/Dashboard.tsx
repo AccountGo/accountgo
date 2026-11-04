@@ -6,9 +6,8 @@ import {
   Wallet,
   BookOpen,
   ArrowUpRight,
+  ArrowDownRight,
   Plus,
-  ShieldCheck,
-  CheckCircle2,
   FileSpreadsheet,
   Users,
   Coins,
@@ -94,7 +93,7 @@ export const Dashboard: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error('Failed to load live dashboard summary:', err);
+        console.error('Failed to load dashboard summary:', err);
       } finally {
         if (mounted) {
           setLoading(false);
@@ -145,6 +144,16 @@ export const Dashboard: React.FC = () => {
     });
   };
 
+  const formatCurrency = (val: number | undefined) => {
+    if (val === undefined || isNaN(val)) return `${currencySymbol}0.00`;
+    const num = Number(val);
+    const formatted = Math.abs(num).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return num < 0 ? `-${currencySymbol}${formatted}` : `${currencySymbol}${formatted}`;
+  };
+
   const formatDate = (isoStr: string) => {
     try {
       const d = new Date(isoStr);
@@ -164,16 +173,16 @@ export const Dashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[var(--bg-surface)] via-[var(--bg-surface)] to-[var(--brand-subtle)] shadow-xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[var(--brand-primary)] animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-[var(--brand-primary)]" />
             <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[var(--brand-primary)]">
-              Active Tenant Workspace (Live Database)
+              Active Workspace
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
             {currentOrg.whitelabel?.brandName ? `${currentOrg.name} (${currentOrg.whitelabel.brandName})` : currentOrg.name}
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            Welcome back, <span className="text-[var(--text-main)] font-medium">{user.name}</span>. Live figures from your books.
+            Welcome back, <span className="text-[var(--text-main)] font-medium">{user.name}</span>. Here is an overview of your organization's financials.
           </p>
         </div>
 
@@ -227,12 +236,23 @@ export const Dashboard: React.FC = () => {
             {loading ? (
               <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
             ) : (
-              `${currencySymbol}${formatAmount(kpis?.totalSalesYtd)}`
+              formatCurrency(kpis?.totalSalesYtd)
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-[var(--brand-primary)] mt-2 font-semibold">
-            <ArrowUpRight className="w-3.5 h-3.5" />
-            <span>Net profit: {currencySymbol}{formatAmount(kpis?.netProfitYtd)}</span>
+          <div
+            className={`flex items-center gap-1.5 text-xs mt-2 font-semibold ${
+              (kpis?.netProfitYtd ?? 0) >= 0 ? 'text-[var(--brand-primary)]' : 'text-rose-500'
+            }`}
+          >
+            {(kpis?.netProfitYtd ?? 0) >= 0 ? (
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            ) : (
+              <ArrowDownRight className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {(kpis?.netProfitYtd ?? 0) >= 0 ? 'Net profit: ' : 'Net loss: '}
+              {formatCurrency(Math.abs(kpis?.netProfitYtd ?? 0))}
+            </span>
           </div>
         </div>
 
@@ -248,11 +268,13 @@ export const Dashboard: React.FC = () => {
             {loading ? (
               <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
             ) : (
-              `${currencySymbol}${formatAmount(kpis?.outstandingReceivables)}`
+              formatCurrency(kpis?.outstandingReceivables)
             )}
           </div>
           <div className="text-xs text-[var(--text-muted)] mt-2">
-            {topReceivables.length} accounts with balance due
+            {(kpis?.outstandingReceivables ?? 0) > 0
+              ? 'Awaiting customer payment'
+              : 'No outstanding balances'}
           </div>
         </div>
 
@@ -268,11 +290,11 @@ export const Dashboard: React.FC = () => {
             {loading ? (
               <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
             ) : (
-              `${currencySymbol}${formatAmount(kpis?.moneyInBank)}`
+              formatCurrency(kpis?.moneyInBank)
             )}
           </div>
           <div className="text-xs text-[var(--text-muted)] mt-2">
-            Operating liquidity in ledger
+            Available across cash and bank accounts
           </div>
           {!loading && (
             <MoneyInBankBreakdown
@@ -287,7 +309,7 @@ export const Dashboard: React.FC = () => {
         {/* Metric 4: Total Ledger Assets */}
         <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-muted)]">Total Ledger Assets</span>
+            <span className="text-xs font-semibold text-[var(--text-muted)]">Total Assets</span>
             <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shadow-sm">
               <BookOpen className="w-4 h-4" />
             </div>
@@ -296,36 +318,23 @@ export const Dashboard: React.FC = () => {
             {loading ? (
               <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
             ) : (
-              `${currencySymbol}${formatAmount(kpis?.totalAssets)}`
+              formatCurrency(kpis?.totalAssets)
             )}
           </div>
           <div className="text-xs text-[var(--text-muted)] mt-2">
-            Liabilities: {currencySymbol}{formatAmount(kpis?.totalPayables)}
+            Total liabilities: {formatCurrency(summary?.balanceSnapshot?.totalLiabilities)}
           </div>
         </div>
       </div>
 
-      {/* Multi-Tenant Deep Linking & Live Database Guarantee */}
-      <div className="p-4 rounded-xl bg-[var(--bg-subtle)] shadow-inner flex items-start gap-3 text-xs text-[var(--text-muted)]">
-        <ShieldCheck className="w-4 h-4 text-[var(--brand-primary)] flex-shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <div className="font-semibold text-[var(--text-main)]">
-            Live Database Architecture: Multi-Tenant Scoping
-          </div>
-          <p className="leading-relaxed">
-            All accounting journals, sales receipts, customer ledgers, and subscriptions are pulled directly from the live database. No mockups are used.
-          </p>
-        </div>
-      </div>
-
-      {/* Quick Actions & Recent Activity From Database */}
+      {/* Quick Actions & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Activity Feed */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)] flex items-center gap-2">
               <FileSpreadsheet className="w-4 h-4 text-[var(--brand-primary)]" />
-              <span>Live Database Activity & Entries</span>
+              <span>Recent Activity & Entries</span>
             </h2>
             <Link
               to={`/org/${currentOrg.slug}/financials`}
@@ -339,7 +348,7 @@ export const Dashboard: React.FC = () => {
             <div className="overflow-x-auto smooth-scroll">
               <table
                 className="w-full min-w-[540px] text-left text-xs"
-                aria-label="Live database entries and journal transactions"
+                aria-label="Recent entries and journal transactions"
               >
                 <thead className="bg-[var(--bg-subtle)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] font-semibold">
                   <tr>
@@ -353,13 +362,13 @@ export const Dashboard: React.FC = () => {
                     <tr>
                       <td colSpan={3} className="p-8 text-center text-[var(--text-muted)]">
                         <Loader2 className="w-5 h-5 mx-auto animate-spin mb-2" />
-                        Fetching live entries from database...
+                        Loading recent activity...
                       </td>
                     </tr>
                   ) : recentActivity.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="p-8 text-center text-[var(--text-muted)] font-sans">
-                        No activity recorded in the database for this period.
+                        No recent activity recorded for this period.
                       </td>
                     </tr>
                   ) : (
@@ -410,7 +419,7 @@ export const Dashboard: React.FC = () => {
                       <div className="text-[10px] text-[var(--text-muted)]">Customer #{cust.customerId}</div>
                     </div>
                     <div className="font-mono font-bold text-[var(--brand-primary)]">
-                      {currencySymbol}{formatAmount(cust.balance)}
+                      {formatCurrency(cust.balance)}
                     </div>
                   </div>
                 ))}
@@ -419,7 +428,7 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Right 1 Col: Quick Actions & Live Payables */}
+        {/* Right 1 Col: Quick Actions & Payables */}
         <div className="space-y-4">
           <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)] flex items-center gap-2">
             <Plus className="w-4 h-4 text-[var(--brand-primary)]" />
@@ -464,10 +473,15 @@ export const Dashboard: React.FC = () => {
           {/* Upcoming Payables / Bills Due */}
           {upcomingPayables.length > 0 && (
             <div className="p-4 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-3">
-              <h3 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-amber-400" />
-                <span>Upcoming Payables (A/P)</span>
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Upcoming Payables (A/P)</span>
+                </h3>
+                <span className="text-xs font-mono font-semibold text-amber-400">
+                  Total: {formatCurrency(kpis?.totalPayables)}
+                </span>
+              </div>
               <div className="space-y-2">
                 {upcomingPayables.map((item) => (
                   <Link
@@ -480,24 +494,13 @@ export const Dashboard: React.FC = () => {
                       <div className="text-[10px] text-[var(--text-muted)]">Bill #{item.invoiceNo}</div>
                     </div>
                     <div className="font-mono font-bold text-amber-400">
-                      {currencySymbol}{formatAmount(item.remainingAmount)}
+                      {formatCurrency(item.remainingAmount)}
                     </div>
                   </Link>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Quick Tenant Info Box */}
-          <div className="p-4 rounded-2xl bg-[var(--brand-subtle)] shadow-md text-xs space-y-2">
-            <div className="flex items-center gap-2 text-[var(--brand-primary)] font-bold">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Live Database Connected</span>
-            </div>
-            <p className="text-[var(--text-muted)] text-[11px] leading-relaxed">
-              All financial figures, KPIs, ledger records, and customer accounts reflect your live data.
-            </p>
-          </div>
         </div>
       </div>
     </div>
