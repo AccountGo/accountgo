@@ -87,7 +87,6 @@ namespace Core.Domain
             // Finance-approved personal/household bookkeeping model (not sole-proprietor capital/drawings).
             // 30100 is the permanent close target (accumulated net worth). Ordinary spending stays in expenses;
             // 30800 is not part of the initial Individual close/workflow. Corporate RE/dividends are not used.
-            // IsIndividualMappingApproved stays false until a separate production-activation change.
             [EntityType.Individual] = new EntityEquityProfile(
                 "30100",
                 null,
@@ -109,18 +108,17 @@ namespace Core.Domain
         }
 
         /// <summary>
-        /// Test-only override for gated personal journeys. Production and ordinary tests leave this null so
-        /// production activation stays closed until a separate, reviewed enablement change.
+        /// Test-only override. Null uses the finance-approved default; set false in a disposable fixture to
+        /// exercise the closed gate without changing production source.
         /// </summary>
         public static bool? TestApprovalOverride { get; set; }
 
         /// <summary>
-        /// Production activation gate for personal purpose and Individual close/provisioning.
-        /// The accounting model is finance-approved for internal personal/household bookkeeping; this flag
-        /// remains false until a separate change authorizes production activation (and conversion remains
-        /// unauthorized until inspected separately).
+        /// Finance-approved Individual equity mapping for internal personal/household bookkeeping.
+        /// Personal purpose still requires <c>WORKSPACE_EXPERIENCE_PERSONAL_PURPOSE_ENABLED=true</c>.
+        /// Conversion of any existing personal workspace remains a separate, inspected operation.
         /// </summary>
-        public static bool IsIndividualMappingApproved => TestApprovalOverride ?? false;
+        public static bool IsIndividualMappingApproved => TestApprovalOverride ?? true;
 
         public static bool IsRenameable(string accountCode, string currentAccountName)
         {

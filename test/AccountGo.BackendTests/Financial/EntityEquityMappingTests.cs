@@ -59,12 +59,22 @@ public class EntityEquityMappingTests
     [Fact]
     public void Individual_mapping_does_not_fall_through_to_corporation_retained_earnings()
     {
-        var individual = EntityEquityMapping.GetProfile(EntityType.Individual, allowUnapproved: true);
+        Assert.True(EntityEquityMapping.IsIndividualMappingApproved);
+        var individual = EntityEquityMapping.GetProfile(EntityType.Individual);
         var corporation = EntityEquityMapping.GetProfile(EntityType.Corporation);
         Assert.NotEqual(corporation.CloseTargetAccountCode, individual.CloseTargetAccountCode);
         Assert.Null(individual.DistributionAccountCode);
         Assert.False(individual.DisplayNames.ContainsKey("30800"));
-        Assert.False(EntityEquityMapping.IsIndividualMappingApproved);
-        Assert.Throws<InvalidOperationException>(() => EntityEquityMapping.GetProfile(EntityType.Individual));
+
+        var previous = EntityEquityMapping.TestApprovalOverride;
+        try
+        {
+            EntityEquityMapping.TestApprovalOverride = false;
+            Assert.Throws<InvalidOperationException>(() => EntityEquityMapping.GetProfile(EntityType.Individual));
+        }
+        finally
+        {
+            EntityEquityMapping.TestApprovalOverride = previous;
+        }
     }
 }

@@ -655,8 +655,7 @@ public class YearEndCloseTests
         Assert.Equal(profit2026 - drawings2026 + profit2027 - drawings2027, capitalCredit);
     }
 
-    // ---- Individual (personal) equity mapping: finance-approved model, production activation still gated.
-    // Disposable fixtures use the allowUnapproved seam; IsIndividualMappingApproved stays false.
+    // ---- Individual (personal) equity mapping: finance-approved; personal purpose still needs the env switch.
 
     private static decimal NetDrOf(IEnumerable<TrialBalance> rows, string accountCode) =>
         rows.Where(r => r.AccountCode == accountCode).Select(NetDr).DefaultIfEmpty(0m).Sum();
@@ -672,19 +671,36 @@ public class YearEndCloseTests
     }
 
     [Fact]
-    public void Individual_close_and_reopen_stay_closed_without_the_fixture_seam()
+    public void Individual_close_works_when_mapping_is_finance_approved_without_fixture_seam()
     {
+        Assert.True(EntityEquityMapping.IsIndividualMappingApproved);
         using var harness = new Harness(EntityType.Individual);
         PostPersonalYear(harness);
 
-        Assert.False(EntityEquityMapping.IsIndividualMappingApproved);
-        Assert.Throws<InvalidOperationException>(() => harness.YearEnd.Preview(Harness.Fy2025Code));
-        Assert.Throws<InvalidOperationException>(() =>
-            harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "personal"));
+        var closed = harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "personal");
+        Assert.Equal(FiscalYearCloseStatus.Closed, closed.Status);
+        Assert.NotNull(harness.FiscalYears.Table.Single(f => f.FiscalYearCode == Harness.Fy2025Code).ClosedAt);
+    }
 
-        Assert.Null(harness.FiscalYears.Table.Single(f => f.FiscalYearCode == Harness.Fy2025Code).ClosedAt);
-        Assert.Null(harness.Settings.Table.Single().BooksLockedThrough);
-        Assert.Empty(harness.LockChanges.Table);
+    [Fact]
+    public void Individual_close_stays_closed_when_approval_override_is_false()
+    {
+        var previous = EntityEquityMapping.TestApprovalOverride;
+        try
+        {
+            EntityEquityMapping.TestApprovalOverride = false;
+            using var harness = new Harness(EntityType.Individual);
+            PostPersonalYear(harness);
+
+            Assert.Throws<InvalidOperationException>(() => harness.YearEnd.Preview(Harness.Fy2025Code));
+            Assert.Throws<InvalidOperationException>(() =>
+                harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "personal"));
+            Assert.Null(harness.FiscalYears.Table.Single(f => f.FiscalYearCode == Harness.Fy2025Code).ClosedAt);
+        }
+        finally
+        {
+            EntityEquityMapping.TestApprovalOverride = previous;
+        }
     }
 
     [Fact]
