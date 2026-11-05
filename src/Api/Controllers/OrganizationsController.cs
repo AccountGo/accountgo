@@ -100,7 +100,8 @@ namespace Api.Controllers
                         where m.UserId == UserId && m.Status == CompanyMemberStatus.Active
                         orderby c.Name
                         select new { Company = c, m.Role }).ToList();
-            return Ok(rows.Select(r => Summary(r.Company, r.Role)));
+            var canAddPersonalBooks = CanAddPersonalBooks();
+            return Ok(rows.Select(r => Summary(r.Company, r.Role, canAddPersonalBooks: canAddPersonalBooks)));
         }
 
         public class CreateOrganizationRequest
@@ -1094,7 +1095,7 @@ namespace Api.Controllers
         };
 
         private object Summary(Company company, CompanyMemberRole role, WorkspaceInitializationResult initResult = null,
-            string checkoutUrl = null, string checkoutError = null)
+            string checkoutUrl = null, string checkoutError = null, bool? canAddPersonalBooks = null)
         {
             return new
             {
@@ -1103,7 +1104,7 @@ namespace Api.Controllers
                     .Select(l => (int?)l.PersonalCompanyId).FirstOrDefault(),
                 linkedWorkCompanyIds = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId && l.PersonalCompanyId == company.Id)
                     .Select(l => l.WorkCompanyId).ToList(),
-                canAddPersonalBooks = CanAddPersonalBooks(),
+                canAddPersonalBooks = canAddPersonalBooks ?? CanAddPersonalBooks(),
                 includedModules = _plans.ResolveStoredPlan(company.Plan).IncludedModules,
                 requiredModules = _plans.ResolveStoredPlan(company.Plan).RequiredModules,
                 currency = _db.CompanySettings.IgnoreQueryFilters().Where(s => s.CompanyId == company.Id).Select(s => s.Currency).FirstOrDefault(),

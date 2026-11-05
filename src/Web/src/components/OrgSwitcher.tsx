@@ -84,7 +84,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
     } else { groupedOrgs.push(org); added.add(org.id); }
   }
   const workspaceLabel = (org: OrgDetails) => org.isPersonalBooks
-    ? `${org.name} · Personal` : org.linkedPersonalCompanyId ? `${org.name} · Work` : getDisplayName(org);
+    ? /personal/i.test(org.name) ? org.name : `${org.name} · Personal`
+    : org.linkedPersonalCompanyId ? `${org.name} · Work` : getDisplayName(org);
 
   const currentDisplayName = workspaceLabel(currentOrg);
 
