@@ -3,11 +3,15 @@ using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
 using Api.Data;
 using Api.Filters;
 using Api.Service;
 using Core.Authorization;
+using Core.Billing;
 using Core.Domain;
+using Core.Entitlements;
 using Microsoft.AspNetCore.Http;
 using Core.Domain.Financials;
 using Core.Domain.Security;
@@ -39,6 +43,8 @@ namespace Api.Controllers
         private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
         private readonly IWorkspaceCanaryEnrollment _canary;
         private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
+        private readonly IEntitlementService _entitlements;
+        private readonly IBillingProvider _billing;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -53,7 +59,9 @@ namespace Api.Controllers
             Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null,
             Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
             IWorkspaceCanaryEnrollment canary = null,
-            IWorkspaceReviewerEligibility reviewerEligibility = null)
+            IWorkspaceReviewerEligibility reviewerEligibility = null,
+            IEntitlementService entitlements = null,
+            IBillingProvider billing = null)
         {
             _tenant = tenant;
             _db = db;
@@ -66,6 +74,8 @@ namespace Api.Controllers
             _policyTransaction = policyTransaction;
             _canary = canary;
             _reviewerEligibility = reviewerEligibility;
+            _entitlements = entitlements;
+            _billing = billing;
             _experience = experienceOptions?.Value != null
                 ? Api.Options.WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value)
                 : (workspaceInit?.Experience ?? new Api.Options.WorkspaceExperienceOptions());
@@ -103,6 +113,8 @@ namespace Api.Controllers
             public string Slug { get; set; }
             public string Plan { get; set; }
             public string Currency { get; set; } = "USD";
+            /// <summary>Absolute return URL for billing-provider checkout when creating a paid workspace.</summary>
+            public string ReturnUrl { get; set; }
             public string LegalName { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public ReportingFramework? ReportingFramework { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public AccountingBasis? AccountingBasis { get; set; }
@@ -145,7 +157,7 @@ namespace Api.Controllers
 
         [TenantFree]
         [HttpPost]
-        public IActionResult Create([FromBody] CreateOrganizationRequest request)
+        public async Task<IActionResult> Create([FromBody] CreateOrganizationRequest request, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(UserId))
                 return Unauthorized();
@@ -159,6 +171,23 @@ namespace Api.Controllers
             var plan = resolvedPlan.Key;
             if (slug.Length == 0 || slug.Length > 100 || !System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$"))
                 return Problem(statusCode: 400, title: "Invalid workspace settings");
+
+            EntitlementDecision createDecision = null;
+            if (_entitlements != null)
+            {
+                createDecision = _entitlements.EvaluateForUser(UserId, new UserAction.CreateWorkspace(plan));
+                if (!createDecision.Allowed)
+                    throw EntitlementDecisions.ToException(createDecision);
+            }
+
+            var storePlan = plan;
+            var pendingCheckout = createDecision?.RequiresCheckout == true;
+            if (pendingCheckout)
+            {
+                if (!TryResolveFreeSelfServicePlan(resolvedPlan, out storePlan))
+                    return Problem(statusCode: 400, title: "Invalid workspace settings",
+                        detail: "No free self-service plan is available for this product.");
+            }
 
             var options = ToOptions(request);
             // Personal purpose defaults to the Individual accounting profile; reachable only once personal is released.
@@ -231,7 +260,9 @@ namespace Api.Controllers
                 var policyScope = _policyTransaction?.BeginExternalScope();
                 try
                 {
-                    var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options, request.SecurityRoleIds);
+                    var company = _workspaces.Create(
+                        UserId, request.Name, slug, storePlan, currency, request.ShortName, options, request.SecurityRoleIds,
+                        requestedPlanKey: plan, pendingCheckout: pendingCheckout);
                     var ownerMember = _db.CompanyMembers.Single(m => m.CompanyId == company.Id && m.UserId == UserId);
 
                     WorkspaceInitializationResult initResult = null;
@@ -271,7 +302,26 @@ namespace Api.Controllers
                     // committed-state verification for companies touched by the nested policy work. Never throws.
                     tx.Dispose();
                     policyScope?.Committed();
-                    return StatusCode(201, Summary(company, CompanyMemberRole.Owner, initResult));
+
+                    string checkoutUrl = null;
+                    string checkoutError = null;
+                    if (pendingCheckout && _billing != null)
+                    {
+                        try
+                        {
+                            var returnUrl = SubscriptionController.ResolveCheckoutReturnUrl(
+                                request.ReturnUrl, Request.Headers["Referer"].ToString());
+                            var checkout = await _billing.RequestPlanChangeAsync(company.Id, plan, returnUrl, ct);
+                            checkoutUrl = checkout.RedirectUrl;
+                            checkoutError = checkout.ErrorReason;
+                        }
+                        catch (ArgumentException ex)
+                        {
+                            checkoutError = ex.Message;
+                        }
+                    }
+
+                    return StatusCode(201, Summary(company, CompanyMemberRole.Owner, initResult, checkoutUrl, checkoutError));
                 }
                 catch (InvalidAccountingPolicyException ex)
                 {
@@ -279,6 +329,19 @@ namespace Api.Controllers
                     return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", ex.Errors));
                 }
             }
+        }
+
+        private bool TryResolveFreeSelfServicePlan(Dto.Subscription.PlanDefinitionDto requested, out string freePlanKey)
+        {
+            freePlanKey = null;
+            var match = _plans.GetPlans().FirstOrDefault(p =>
+                p.SelfService
+                && p.MonthlyPrice == 0
+                && string.Equals(p.Product, requested.Product, StringComparison.OrdinalIgnoreCase));
+            if (match == null)
+                return false;
+            freePlanKey = match.Key;
+            return true;
         }
 
         public sealed class InitializeCurrentRequest
@@ -1046,13 +1109,19 @@ namespace Api.Controllers
             PaymentBankId = settings.PaymentBankId,
         };
 
-        private object Summary(Company company, CompanyMemberRole role, WorkspaceInitializationResult initResult = null)
+        private object Summary(Company company, CompanyMemberRole role, WorkspaceInitializationResult initResult = null,
+            string checkoutUrl = null, string checkoutError = null)
         {
             return new
             {
                 id = company.Id.ToString(), name = company.Name, shortName = company.ShortName, slug = company.Slug,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, subscriptionStatus = company.SubscriptionStatus,
+                activationState = string.IsNullOrWhiteSpace(company.ActivationState)
+                    ? CompanyActivationStates.Active
+                    : company.ActivationState,
                 activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), role = role.ToString(),
+                checkoutUrl,
+                checkoutError,
                 operatingPolicy = initResult == null ? null : new
                 {
                     initialized = initResult.Applied,

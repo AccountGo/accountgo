@@ -415,6 +415,10 @@ namespace Api.Data
             builder.Entity<Company>().HasQueryFilter(c => c.DeletedAt == null);
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<Company>().Property(c => c.AccessBootstrapAvailable).HasDefaultValue(false);
+            builder.Entity<Company>().Property(c => c.ActivationState)
+                .IsRequired()
+                .HasMaxLength(32)
+                .HasDefaultValue(CompanyActivationStates.Active);
             builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
             builder.Entity<CompanySetting>().Property(s => s.AccountingBasis).HasDefaultValue(AccountingBasis.Accrual);
             builder.Entity<CompanySetting>().Property(s => s.ReportingFramework).HasDefaultValue(ReportingFramework.IfrsForSmes);

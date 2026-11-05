@@ -25,7 +25,9 @@ namespace Api.Controllers
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
 
-        public EntitlementsController(IEntitlementService entitlements, ITenantContext tenant)
+        public EntitlementsController(
+            IEntitlementService entitlements,
+            ITenantContext tenant)
         {
             _entitlements = entitlements;
             _tenant = tenant;

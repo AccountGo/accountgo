@@ -169,6 +169,20 @@ namespace Core.Entitlements
         /// <summary>May the user own another workspace under free owned-workspace quota?</summary>
         public sealed record OwnAnotherWorkspace : UserAction;
 
+        /// <summary>May the user create a workspace on the given plan key (free slot and/or checkout).</summary>
+        public sealed record CreateWorkspace : UserAction
+        {
+            public string PlanKey { get; }
+            public CreateWorkspace(string planKey) => PlanKey = planKey ?? string.Empty;
+        }
+
+        /// <summary>May the user receive ownership of the given workspace (free-slot check on transfer).</summary>
+        public sealed record ReceiveWorkspace : UserAction
+        {
+            public int CompanyId { get; }
+            public ReceiveWorkspace(int companyId) => CompanyId = companyId;
+        }
+
         /// <summary>True if any active membership's snapshot has the feature key (e.g. <c>mfa</c> / <c>mfa_policy</c>).</summary>
         public sealed record FeatureAmongMemberships : UserAction
         {
@@ -190,7 +204,8 @@ namespace Core.Entitlements
         string? Period = null,
         bool UpgradeAvailable = false,
         string? SubscriptionStatus = null,
-        string? EffectivePlan = null);
+        string? EffectivePlan = null,
+        bool RequiresCheckout = false);
 
     /// <summary>Central entitlement gate: what a workspace may use and how much of it.</summary>
     public interface IEntitlementService
@@ -372,6 +387,56 @@ namespace Core.Entitlements
             : base($"The {plan} plan is not available to choose here.")
         {
             Plan = plan;
+        }
+    }
+
+    /// <summary>Maps an <see cref="EntitlementDecision"/> to the typed exception used by ProblemDetails.</summary>
+    public static class EntitlementDecisions
+    {
+        public static EntitlementException ToException(EntitlementDecision decision)
+        {
+            ArgumentNullException.ThrowIfNull(decision);
+            if (decision.Code == "QUOTA_EXCEEDED" && decision.Resource is { } resource
+                && decision.Limit is { } limit && decision.Used is { } used)
+            {
+                return new QuotaExceededException(resource, limit, used, decision.Detail ?? "Quota exceeded")
+                {
+                    EffectivePlan = decision.EffectivePlan,
+                    UpgradeAvailable = decision.UpgradeAvailable,
+                    SubscriptionStatus = decision.SubscriptionStatus
+                };
+            }
+
+            if (decision.Code == "FEATURE_NOT_ENTITLED")
+            {
+                return new FeatureNotEntitledException(
+                    decision.RequiredFeature ?? "",
+                    decision.Detail ?? "Feature not entitled")
+                {
+                    EffectivePlan = decision.EffectivePlan,
+                    UpgradeAvailable = decision.UpgradeAvailable,
+                    SubscriptionStatus = decision.SubscriptionStatus
+                };
+            }
+
+            if (decision.Code == "PLAN_NOT_AVAILABLE")
+            {
+                return new PlanNotAvailableException(decision.EffectivePlan ?? "unknown")
+                {
+                    UpgradeAvailable = decision.UpgradeAvailable,
+                    SubscriptionStatus = decision.SubscriptionStatus
+                };
+            }
+
+            return new ModuleNotSubscribedException(
+                decision.Code ?? "MODULE_NOT_SUBSCRIBED",
+                decision.Detail ?? "Not entitled",
+                decision.RequiredModule)
+            {
+                EffectivePlan = decision.EffectivePlan,
+                UpgradeAvailable = decision.UpgradeAvailable,
+                SubscriptionStatus = decision.SubscriptionStatus
+            };
         }
     }
 }
