@@ -6,6 +6,7 @@ import { useBilling } from '../lib/useBilling';
 import {
   type AnnouncementItem,
   filterVisibleAnnouncements,
+  mergeAnnouncementItems,
   mobileCollapse,
   readDismissedIds,
   writeDismissal,
@@ -113,11 +114,10 @@ export const AnnouncementBar: React.FC = () => {
     };
   }, [authFetch, userId, orgSlug]);
 
-  const combined = useMemo(() => {
-    const items = [...remote];
-    if (pastDue) items.push(pastDue);
-    return filterVisibleAnnouncements(items, dismissed);
-  }, [remote, pastDue, dismissed]);
+  const combined = useMemo(
+    () => filterVisibleAnnouncements(mergeAnnouncementItems(remote, pastDue), dismissed),
+    [remote, pastDue, dismissed],
+  );
 
   const onDismiss = useCallback(
     (id: string) => {

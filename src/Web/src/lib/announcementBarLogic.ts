@@ -78,3 +78,24 @@ export function writeDismissal(storage: Storage | null | undefined, userId: stri
     /* ignore */
   }
 }
+
+/** True when the server already sent a billing notice (id prefix `billing:`). */
+export function hasServerBillingAnnouncement(items: readonly AnnouncementItem[]): boolean {
+  return items.some((item) => typeof item.id === 'string' && item.id.startsWith('billing:'));
+}
+
+/**
+ * Merge remote announcements with an optional client past-due item.
+ * When any remote id starts with `billing:`, skip the client past-due item so the
+ * server notice (with the exact date) is the only one shown.
+ */
+export function mergeAnnouncementItems(
+  remote: readonly AnnouncementItem[],
+  clientPastDue: AnnouncementItem | null,
+): AnnouncementItem[] {
+  const items = [...remote];
+  if (clientPastDue && !hasServerBillingAnnouncement(remote)) {
+    items.push(clientPastDue);
+  }
+  return items;
+}
