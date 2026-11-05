@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { CreditCard, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { clearPersistedOrgSlug } from '../lib/storage';
 import { ModalShell } from './ModalShell';
+import { StepUpPrompt } from './StepUpPrompt';
+import { useDeleteCurrentWorkspace } from '../lib/useDeleteCurrentWorkspace';
 
 export const PendingCheckoutScreen: React.FC<{
   name: string;
@@ -11,7 +12,6 @@ export const PendingCheckoutScreen: React.FC<{
   onActivated: () => void;
 }> = ({ name, slug, onActivated }) => {
   const { authFetch } = useAuth();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const checkoutSuccess = searchParams.get('checkout') === 'success';
   const checkoutError = searchParams.get('checkoutError');
@@ -19,8 +19,8 @@ export const PendingCheckoutScreen: React.FC<{
   const [timedOut, setTimedOut] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteSlug, setDeleteSlug] = useState('');
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+  const workspaceDelete = useDeleteCurrentWorkspace();
+  const { deleting, error: deleteError, needsStepUp } = workspaceDelete;
   const ticks = useRef(0);
 
   useEffect(() => {
@@ -58,29 +58,10 @@ export const PendingCheckoutScreen: React.FC<{
     };
   }, [authFetch, checkoutSuccess, onActivated]);
 
-  const handleDelete = async (event: React.FormEvent) => {
+  const handleDelete = (event: React.FormEvent) => {
     event.preventDefault();
-    if (deleteSlug !== slug || deleting) return;
-    setDeleting(true);
-    setDeleteError('');
-    try {
-      const response = await authFetch('/api/organizations/current', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmSlug: deleteSlug }),
-      });
-      if (!response.ok) {
-        const problem = await response.json().catch(() => null) as { detail?: string; title?: string } | null;
-        setDeleteError(problem?.detail || problem?.title || 'Workspace could not be deleted.');
-        return;
-      }
-      clearPersistedOrgSlug();
-      navigate('/select-org', { replace: true, state: { notice: 'Workspace deleted.' } });
-    } catch {
-      setDeleteError('Workspace could not be deleted. Please try again.');
-    } finally {
-      setDeleting(false);
-    }
+    if (deleteSlug !== slug || deleting || needsStepUp) return;
+    void workspaceDelete.remove(deleteSlug);
   };
 
   return (
@@ -113,7 +94,7 @@ export const PendingCheckoutScreen: React.FC<{
           </Link>
           <button
             type="button"
-            onClick={() => { setDeleteSlug(''); setDeleteError(''); setDeleteOpen(true); }}
+            onClick={() => { setDeleteSlug(''); workspaceDelete.reset(); setDeleteOpen(true); }}
             className="h-11 px-4 rounded-xl text-sm font-semibold text-rose-400 border border-rose-500/30 hover:bg-rose-500/10 flex-1 inline-flex items-center justify-center gap-2"
           >
             <Trash2 className="w-4 h-4" aria-hidden="true" /> Discard workspace
@@ -156,13 +137,14 @@ export const PendingCheckoutScreen: React.FC<{
             aria-label="Confirm workspace slug"
           />
           {deleteError && <p role="alert" className="text-sm text-rose-400">{deleteError}</p>}
+          {needsStepUp && <StepUpPrompt actionLabel="discarding this workspace" onVerified={workspaceDelete.retry} />}
           <div className="flex justify-end gap-2">
             <button type="button" disabled={deleting} onClick={() => setDeleteOpen(false)} className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)]">
               Cancel
             </button>
             <button
               type="submit"
-              disabled={deleteSlug !== slug || deleting}
+              disabled={deleteSlug !== slug || deleting || needsStepUp}
               className="h-10 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold disabled:opacity-50"
             >
               {deleting ? 'Deleting…' : 'Discard workspace'}

@@ -29,7 +29,9 @@ import { DEFAULT_CURRENCY } from '../lib/currency';
 import { THEMES, SCHEMES, ThemeId, SchemeId } from '../themes';
 import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
-import { clearPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
+import { setPersistedOrgSlug } from '../lib/storage';
+import { useDeleteCurrentWorkspace } from '../lib/useDeleteCurrentWorkspace';
+import { StepUpPrompt } from '../components/StepUpPrompt';
 import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
 import { JournalApprovalPolicyCard } from '../components/JournalApprovalPolicyCard';
@@ -133,8 +135,8 @@ export const Settings: React.FC = () => {
   const [companySaveError, setCompanySaveError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteSlug, setDeleteSlug] = useState('');
-  const [deleteError, setDeleteError] = useState('');
-  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const workspaceDelete = useDeleteCurrentWorkspace();
+  const { deleting: deletingWorkspace, error: deleteError, needsStepUp: deleteNeedsStepUp } = workspaceDelete;
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const deleteConfirmRef = useRef<HTMLInputElement>(null);
 
@@ -286,29 +288,10 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const handleDeleteWorkspace = async (event: React.FormEvent) => {
+  const handleDeleteWorkspace = (event: React.FormEvent) => {
     event.preventDefault();
-    if (deleteSlug !== currentOrg.slug || deletingWorkspace) return;
-    setDeletingWorkspace(true);
-    setDeleteError('');
-    try {
-      const response = await authFetch('/api/organizations/current', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmSlug: deleteSlug }),
-      });
-      if (!response.ok) {
-        const problem = await response.json().catch(() => null) as { detail?: string; title?: string } | null;
-        setDeleteError(problem?.detail || problem?.title || 'Workspace could not be deleted.');
-        return;
-      }
-      clearPersistedOrgSlug();
-      navigate('/select-org', { replace: true, state: { notice: 'Workspace deleted.' } });
-    } catch {
-      setDeleteError('Workspace could not be deleted. Please try again.');
-    } finally {
-      setDeletingWorkspace(false);
-    }
+    if (deleteSlug !== currentOrg.slug || deletingWorkspace || deleteNeedsStepUp) return;
+    void workspaceDelete.remove(deleteSlug);
   };
 
   // Save Whitelabel Config
@@ -689,7 +672,7 @@ export const Settings: React.FC = () => {
                     ref={deleteTriggerRef}
                     onClick={() => {
                       setDeleteSlug('');
-                      setDeleteError('');
+                      workspaceDelete.reset();
                       setDeleteDialogOpen(true);
                     }}
                     className="h-10 px-4 rounded-xl border border-rose-500/40 text-rose-400 text-xs font-semibold hover:bg-rose-500/10"
@@ -737,6 +720,7 @@ export const Settings: React.FC = () => {
                   className="w-full h-11 px-3 rounded-xl bg-[var(--bg-subtle)] text-sm font-mono text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
                 {deleteError && <p role="alert" className="text-sm text-rose-400">{deleteError}</p>}
+                {deleteNeedsStepUp && <StepUpPrompt actionLabel="deleting this workspace" onVerified={workspaceDelete.retry} />}
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
@@ -748,7 +732,7 @@ export const Settings: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={deleteSlug !== currentOrg.slug || deletingWorkspace}
+                    disabled={deleteSlug !== currentOrg.slug || deletingWorkspace || deleteNeedsStepUp}
                     className="h-10 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold disabled:opacity-50"
                   >
                     {deletingWorkspace ? 'Deleting…' : 'Delete workspace'}
