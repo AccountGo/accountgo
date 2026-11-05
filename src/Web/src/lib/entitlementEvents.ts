@@ -28,6 +28,18 @@ export interface EntitlementProblem {
 
 export const ENTITLEMENT_DENIED_EVENT = 'accountgo:entitlement-denied';
 
+let suppressDenialDepth = 0;
+
+/** Temporarily skip the shared plan-limit dialog (wizard / transfer show their own copy). */
+export async function withSuppressedEntitlementDenial<T>(fn: () => Promise<T>): Promise<T> {
+  suppressDenialDepth += 1;
+  try {
+    return await fn();
+  } finally {
+    suppressDenialDepth -= 1;
+  }
+}
+
 export function isEntitlementProblem(body: unknown): body is EntitlementProblem {
   const code = (body as { code?: unknown } | null)?.code;
   return typeof code === 'string' && (ENTITLEMENT_CODES as readonly string[]).includes(code);
@@ -38,6 +50,7 @@ export function isEntitlementProblem(body: unknown): body is EntitlementProblem 
  * the request came from. Pages still show their own inline errors.
  */
 export async function announceEntitlementDenial(response: Response): Promise<void> {
+  if (suppressDenialDepth > 0) return;
   if (response.status !== 403 || typeof window === 'undefined') return;
   const type = response.headers.get('content-type') || '';
   if (!type.includes('json')) return;

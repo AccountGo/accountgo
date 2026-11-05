@@ -7,6 +7,8 @@ interface ConfirmDialogProps {
   confirmLabel: string;
   destructive?: boolean;
   busy?: boolean;
+  /** Inline error (e.g. transfer ownership quota denial). Keeps the dialog open. */
+  error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -18,6 +20,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   confirmLabel,
   destructive = false,
   busy = false,
+  error = null,
   onConfirm,
   onCancel,
 }) => {
@@ -47,6 +50,11 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <p id="confirm-dialog-message" className="text-sm text-[var(--text-secondary)]">
         {message}
       </p>
+      {error ? (
+        <p role="alert" className="text-sm text-red-400">
+          {error}
+        </p>
+      ) : null}
       <div className="flex justify-end gap-2">
         <button
           type="button"

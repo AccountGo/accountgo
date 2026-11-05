@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Outlet, useNavigate, Link } from 'react-router-dom';
+import { useParams, Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { Building2, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo, Organization } from '../types';
 import { setPersistedOrgSlug, clearPersistedOrgSlug } from '../lib/storage';
@@ -9,7 +9,8 @@ import { MobileBottomNav } from '../components/MobileBottomNav';
 import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { AssistantMount, AssistantProvider } from '../assistant';
-import { PastDueBanner } from '../components/PastDueBanner';
+import { AnnouncementBar } from '../components/AnnouncementBar';
+import { PendingCheckoutScreen } from '../components/PendingCheckoutScreen';
 import { CapabilitiesProvider, useCapabilities } from '../lib/entitlements';
 import { IntegrationsProvider } from '../lib/integrations';
 
@@ -27,6 +28,7 @@ export function evaluateHasPermission(
 export const OrgLayout: React.FC = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { setTenantWhitelabel } = useTheme();
   const { user: authUser, authFetch } = useAuth();
 
@@ -85,6 +87,7 @@ export const OrgLayout: React.FC = () => {
           shortName: organization.shortName,
           role: organization.role,
           plan: organization.plan,
+          activationState: organization.activationState || 'active',
           avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
           whitelabel: {
             themeId: 'accountgo',
@@ -133,6 +136,7 @@ export const OrgLayout: React.FC = () => {
           currency: string;
           fiscalYearEnd?: string;
           operatingPolicy?: OrgDetails['operatingPolicy'];
+          activationState?: string;
         };
         if (mounted) {
           const resolvedOrg: OrgDetails = {
@@ -147,6 +151,7 @@ export const OrgLayout: React.FC = () => {
             fiscalYearEnd: current.fiscalYearEnd,
             permissions: current.permissions,
             operatingPolicy: current.operatingPolicy ?? null,
+            activationState: current.activationState || match.activationState || 'active',
             subscription: {
               planId: current.plan,
               planName: current.plan.charAt(0).toUpperCase() + current.plan.slice(1),
@@ -331,6 +336,21 @@ export const OrgLayout: React.FC = () => {
     );
   }
 
+  // Pending checkout: show only the payment card unless the user is on Settings (Resume payment).
+  const onSettingsRoute = /\/org\/[^/]+\/settings(?:\/|$|\?)/.test(location.pathname);
+  if (currentOrg.activationState === 'pending_checkout' && !onSettingsRoute) {
+    return (
+      <PendingCheckoutScreen
+        name={currentOrg.name}
+        slug={currentOrg.slug}
+        onActivated={() => {
+          updateCurrentOrg({ activationState: 'active' });
+          navigate(`/org/${encodeURIComponent(currentOrg.slug)}/dashboard`, { replace: true });
+        }}
+      />
+    );
+  }
+
   // 3. Render Scoped Workspace Shell — capabilities own modules after the first /api/entitlements response.
   return (
     <CapabilitiesProvider
@@ -433,62 +453,66 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
       companyId={currentOrg.id} canView={hasPermission('banking.accounts.view')}
       canManage={hasPermission('banking.accounts.manage')}>
     <AssistantProvider sidebarMode={sidebarMode} setSidebarMode={setSidebarMode}>
-      <div className="app-shell flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
+      <div className="app-shell flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200 flex-col">
         {/* Skip to Main Content Link for Keyboard Users (WCAG 2.4.1) */}
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
 
-        {/* Sidebar with active tenant navigation — outside ChatSidepanelLayout */}
-        <Sidebar
-          currentOrg={currentOrg}
-          availableOrgs={availableOrgs}
-          user={userProfile}
-          sidebarMode={sidebarMode}
-          isMobileOpen={isMobileOpen}
-          onMobileClose={() => setIsMobileOpen(false)}
-          subscription={subscription}
-          hasModule={hasModule}
-          hasPermission={hasPermission}
-        />
+        {/* Full-width announcements above sidebar and main content */}
+        <AnnouncementBar />
 
-        <AssistantMount
-          organizationId={currentOrg.id}
-          companySlug={currentOrg.slug}
-          companyId={currentOrg.id}
-        >
-          <div className="app-shell-column flex flex-1 flex-col overflow-hidden min-w-0 h-full transition-all duration-300 ease-in-out relative z-10">
-            {/* Top Header with Breadcrumbs & Tenant Quick-Actions */}
-            <Header
-              currentOrg={currentOrg}
-              sidebarMode={sidebarMode}
-              onToggleSidebar={toggleSidebarCollapse}
-              onMobileToggle={() => setIsMobileOpen(!isMobileOpen)}
-            />
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* Sidebar with active tenant navigation — outside ChatSidepanelLayout */}
+          <Sidebar
+            currentOrg={currentOrg}
+            availableOrgs={availableOrgs}
+            user={userProfile}
+            sidebarMode={sidebarMode}
+            isMobileOpen={isMobileOpen}
+            onMobileClose={() => setIsMobileOpen(false)}
+            subscription={subscription}
+            hasModule={hasModule}
+            hasPermission={hasPermission}
+          />
 
-            {/* Dynamic Page Content with context injection & mobile bottom clearance */}
-            <main
-              id="main-content"
-              tabIndex={-1}
-              className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-20 md:pb-8 bg-[var(--bg-canvas)] smooth-scroll transition-all duration-300 ease-in-out focus:outline-none ${
-                sidebarMode === 'collapsed' ? 'md:pr-20' : sidebarMode === 'closed' ? 'pr-0' : ''
-              }`}
-            >
-              <div className="max-w-7xl mx-auto w-full transition-all duration-300 ease-in-out">
-                <PastDueBanner />
-                <Outlet context={contextValue} />
-              </div>
-            </main>
+          <AssistantMount
+            organizationId={currentOrg.id}
+            companySlug={currentOrg.slug}
+            companyId={currentOrg.id}
+          >
+            <div className="app-shell-column flex flex-1 flex-col overflow-hidden min-w-0 h-full transition-all duration-300 ease-in-out relative z-10">
+              {/* Top Header with Breadcrumbs & Tenant Quick-Actions */}
+              <Header
+                currentOrg={currentOrg}
+                sidebarMode={sidebarMode}
+                onToggleSidebar={toggleSidebarCollapse}
+                onMobileToggle={() => setIsMobileOpen(!isMobileOpen)}
+              />
 
-            {/* Mobile Bottom Navigation Bar */}
-            <MobileBottomNav
-              currentOrg={currentOrg}
-              onOpenMenu={() => setIsMobileOpen(true)}
-              hasPermission={hasPermission}
-              hasModule={hasModule}
-            />
-          </div>
-        </AssistantMount>
+              {/* Dynamic Page Content with context injection & mobile bottom clearance */}
+              <main
+                id="main-content"
+                tabIndex={-1}
+                className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-20 md:pb-8 bg-[var(--bg-canvas)] smooth-scroll transition-all duration-300 ease-in-out focus:outline-none ${
+                  sidebarMode === 'collapsed' ? 'md:pr-20' : sidebarMode === 'closed' ? 'pr-0' : ''
+                }`}
+              >
+                <div className="max-w-7xl mx-auto w-full transition-all duration-300 ease-in-out">
+                  <Outlet context={contextValue} />
+                </div>
+              </main>
+
+              {/* Mobile Bottom Navigation Bar */}
+              <MobileBottomNav
+                currentOrg={currentOrg}
+                onOpenMenu={() => setIsMobileOpen(true)}
+                hasPermission={hasPermission}
+                hasModule={hasModule}
+              />
+            </div>
+          </AssistantMount>
+        </div>
       </div>
     </AssistantProvider>
     </IntegrationsProvider>

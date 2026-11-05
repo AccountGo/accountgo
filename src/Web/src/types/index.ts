@@ -99,6 +99,7 @@ export interface OrgDetails {
   whitelabel?: WhitelabelConfig;
   subscription?: SubscriptionInfo;
   operatingPolicy?: WorkspaceOperatingPolicySummary | null;
+  activationState?: string;
 }
 
 export interface Organization {
@@ -112,6 +113,7 @@ export interface Organization {
   role: WorkspaceRole;
   currency?: string;
   permissions?: string[];
+  activationState?: string;
 }
 
 export interface UserProfile {
