@@ -113,6 +113,7 @@ namespace Api.Data
         // Every SaveChanges/SaveChangesAsync overload funnels into these two.
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
+            CleanupDeletedPersonalBooks();
             EnforceAccessBootstrapLifecycle();
             EnforceAuditLogImmutability();
             EnforceBankAccountIdRequired();
@@ -124,6 +125,7 @@ namespace Api.Data
 
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
+            CleanupDeletedPersonalBooks();
             EnforceAccessBootstrapLifecycle();
             EnforceAuditLogImmutability();
             EnforceBankAccountIdRequired();
@@ -131,6 +133,17 @@ namespace Api.Data
             EnforceTenantSecurity();
             EnforceRecurringScheduleConsistency();
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        private void CleanupDeletedPersonalBooks()
+        {
+            var ids = ChangeTracker.Entries<Company>()
+                .Where(e => e.State == EntityState.Deleted
+                    || (e.State == EntityState.Modified && e.Entity.DeletedAt != null))
+                .Select(e => e.Entity.Id).ToList();
+            if (ids.Count == 0) return;
+            WorkspaceLinks.RemoveRange(WorkspaceLinks.Where(l => ids.Contains(l.WorkCompanyId) || ids.Contains(l.PersonalCompanyId)));
+            PersonalWorkspaces.RemoveRange(PersonalWorkspaces.Where(p => ids.Contains(p.CompanyId)));
         }
 
         private static readonly HashSet<string> ImmutableAuditTables = new(StringComparer.OrdinalIgnoreCase)
@@ -412,6 +425,24 @@ namespace Api.Data
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+            builder.Entity<PersonalWorkspace>(entity =>
+            {
+                entity.ToTable("PersonalWorkspaces");
+                entity.Property(p => p.OwnerUserId).IsRequired().HasMaxLength(450);
+                entity.HasIndex(p => p.OwnerUserId).IsUnique();
+                entity.HasIndex(p => p.CompanyId).IsUnique();
+                entity.HasOne<Company>().WithMany().HasForeignKey(p => p.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            });
+            builder.Entity<WorkspaceLink>(entity =>
+            {
+                entity.ToTable("WorkspaceLinks");
+                entity.Property(l => l.OwnerUserId).IsRequired().HasMaxLength(450);
+                entity.HasIndex(l => l.OwnerUserId);
+                entity.HasIndex(l => l.WorkCompanyId).IsUnique();
+                entity.HasIndex(l => l.PersonalCompanyId);
+                entity.HasOne<Company>().WithMany().HasForeignKey(l => l.WorkCompanyId).OnDelete(DeleteBehavior.NoAction);
+                entity.HasOne<Company>().WithMany().HasForeignKey(l => l.PersonalCompanyId).OnDelete(DeleteBehavior.NoAction);
+            });
             builder.Entity<Company>().HasQueryFilter(c => c.DeletedAt == null);
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<Company>().Property(c => c.AccessBootstrapAvailable).HasDefaultValue(false);
@@ -1174,6 +1205,8 @@ namespace Api.Data
         public virtual DbSet<BankStatementDescriptionRule> BankStatementDescriptionRules { get; set; }
         public virtual DbSet<BankStatementColumnMapping> BankStatementColumnMappings { get; set; }
         public virtual DbSet<BooksLockChange> BooksLockChanges { get; set; }
+        public DbSet<PersonalWorkspace> PersonalWorkspaces { get; set; }
+        public DbSet<WorkspaceLink> WorkspaceLinks { get; set; }
         public virtual DbSet<Company> Companies { get; set; }
         public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }

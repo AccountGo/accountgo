@@ -2076,6 +2076,36 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("PaymentTerm");
                 });
 
+            modelBuilder.Entity("Core.Domain.PersonalWorkspace", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerUserId")
+                        .IsUnique();
+
+                    b.ToTable("PersonalWorkspaces", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseInvoiceHeader", b =>
                 {
                     b.Property<int>("Id")
@@ -3964,6 +3994,40 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("WorkspaceApprovalRule", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.WorkspaceLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("PersonalCompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WorkCompanyId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.HasIndex("PersonalCompanyId");
+
+                    b.HasIndex("WorkCompanyId")
+                        .IsUnique();
+
+                    b.ToTable("WorkspaceLinks", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.WorkspaceOperatingSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -4677,6 +4741,15 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Measurement");
 
                     b.Navigation("SalesAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.PersonalWorkspace", b =>
+                {
+                    b.HasOne("Core.Domain.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseInvoiceHeader", b =>
@@ -5512,6 +5585,21 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Company");
 
                     b.Navigation("ReviewerSecurityRole");
+                });
+
+            modelBuilder.Entity("Core.Domain.WorkspaceLink", b =>
+                {
+                    b.HasOne("Core.Domain.Company", null)
+                        .WithMany()
+                        .HasForeignKey("PersonalCompanyId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Company", null)
+                        .WithMany()
+                        .HasForeignKey("WorkCompanyId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Core.Domain.WorkspaceOperatingSettings", b =>

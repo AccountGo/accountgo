@@ -145,10 +145,13 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         : entitlements.tier === 'free' ? 'Free' : entitlements.tier;
   // Only self-service plans can be picked; an operator-assigned current plan stays visible.
   const visiblePlans = (catalog.plans || []).filter((plan) => plan.selfService || plan.key === currentPlan);
-  const planModules = catalog.includedModules(currentPlan);
+  const personalBooks = Boolean(tenantContext.currentOrg?.isPersonalBooks);
+  const planModules = tenantContext.currentOrg?.includedModules ?? catalog.includedModules(currentPlan);
+  const isIncluded = (module: ModuleKey) => planModules.includes(module);
+  const isRequired = (module: ModuleKey) => tenantContext.currentOrg?.requiredModules?.includes(module) ?? catalog.isRequired(currentPlan, module);
   // Plan-required cores always show as on; the server enforces the same rule.
   const activeModules = planModules.filter(
-    (m) => catalog.isRequired(currentPlan, m) || (subscription?.activeModules || []).includes(m),
+    (m) => isRequired(m) || (subscription?.activeModules || []).includes(m),
   );
 
   const [saving, setSaving] = useState(false);
@@ -192,8 +195,8 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   }, [checkoutProcessing, entitlementsVersion, entitlements?.effectivePlan, entitlements?.plan, billing.plan, billing]);
 
   const handleToggleModule = async (moduleKey: ModuleKey) => {
-    if (catalog.isRequired(currentPlan, moduleKey)) return;
-    if (!catalog.isIncluded(currentPlan, moduleKey)) return;
+    if (isRequired(moduleKey)) return;
+    if (!isIncluded(moduleKey)) return;
     if (!updateSubscription) return;
 
     setSaving(true);
@@ -281,7 +284,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-[var(--text-main)]">
-                  {subscription?.planName || 'Accounting'} Plan
+                  {personalBooks ? 'Personal books' : `${subscription?.planName || 'Accounting'} Plan`}
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
                   {tierBadge}
@@ -306,10 +309,10 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         {(entitlements?.limited || (billing.billingEnabled && effectiveTier === 'free')) && entitlements && (
           <div className="pt-2 space-y-2" aria-label="Plan usage">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Plan usage</h3>
-            {(['salesDocuments', 'bills', 'seats', 'bankAccounts'] as const).map((resource) => (
+            {(['salesDocuments', 'bills', 'seats', 'bankAccounts'] as const).filter(resource => resource !== 'salesDocuments' || isIncluded('sales')).map((resource) => (
               <UsageHint key={resource} entitlements={entitlements} resource={resource} />
             ))}
-            {!billing.billingEnabled && (
+            {!billing.billingEnabled && !personalBooks && (
               <p className="text-xs text-[var(--text-muted)]">
                 Paid plans are coming soon.
                 {entitlements.upgrade.contact && (
@@ -320,7 +323,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
           </div>
         )}
 
-        {(billing.billingEnabled || billing.portalAvailable || periodEndLabel) && (
+        {!personalBooks && (billing.billingEnabled || billing.portalAvailable || periodEndLabel) && (
           <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[var(--text-secondary)]">
             {periodEndLabel && (
               <span>
@@ -362,7 +365,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         )}
       </div>
 
-      {billing.billingEnabled && (() => {
+      {billing.billingEnabled && !personalBooks && (() => {
         const allPlans = catalog.plans || [];
         const grouped = allPlans.some(plan => plan.product === 'invoicing') && allPlans.some(plan => plan.product === 'accounting');
         const product = selectedProduct ?? allPlans.find(plan => plan.key === currentPlan)?.product ?? 'invoicing';
@@ -483,17 +486,16 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         <div>
           <h3 className="text-base font-bold text-[var(--text-main)]">Subscribed Modules &amp; Add-ons</h3>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Modules are listed by plan tier. Only modules included in your current plan can be toggled;
-            others stay locked until you upgrade.
+            {personalBooks ? 'Choose which areas to use in your personal books.' : 'Modules are listed by plan tier. Only modules included in your current plan can be toggled; others stay locked until you upgrade.'}
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-          {MODULES_CATALOG.map((mod) => {
+          {MODULES_CATALOG.filter(mod => !personalBooks || isIncluded(mod.key)).map((mod) => {
             const Icon = mod.icon;
-            const inPlan = catalog.isIncluded(currentPlan, mod.key);
+            const inPlan = isIncluded(mod.key);
             const locked = !inPlan;
-            const required = catalog.isRequired(currentPlan, mod.key);
+            const required = isRequired(mod.key);
             const isEnabled = inPlan && (activeModules.includes(mod.key) || required);
             const toggleDisabled = locked || mod.isCore || required || saving;
 
@@ -581,7 +583,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         </div>
       </div>
 
-      {!billing.billingEnabled && (
+      {!billing.billingEnabled && !personalBooks && (
         <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
           <div>
             <h3 className="text-base font-bold text-[var(--text-main)]">Compare Plans</h3>
