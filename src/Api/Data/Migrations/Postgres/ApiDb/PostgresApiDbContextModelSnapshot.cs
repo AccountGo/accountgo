@@ -1944,6 +1944,94 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("Measurement");
                 });
 
+            modelBuilder.Entity("Core.Domain.LinkedEntryPair", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasColumnType("decimal(18, 8)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<decimal>("MirrorAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("MirrorCompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MirrorCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<int?>("MirrorJournalId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<decimal>("SourceAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("SourceCompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<int?>("SourceJournalId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("StatementLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WorkBankAccountId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StatementLineId")
+                        .IsUnique()
+                        .HasFilter("\"StatementLineId\" IS NOT NULL");
+
+                    b.HasIndex("MirrorCompanyId", "MirrorJournalId")
+                        .IsUnique()
+                        .HasFilter("\"MirrorJournalId\" IS NOT NULL");
+
+                    b.HasIndex("SourceCompanyId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
+                    b.HasIndex("SourceCompanyId", "SourceJournalId")
+                        .IsUnique()
+                        .HasFilter("\"SourceJournalId\" IS NOT NULL");
+
+                    b.ToTable("LinkedEntryPairs", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Log", b =>
                 {
                     b.Property<int>("Id")

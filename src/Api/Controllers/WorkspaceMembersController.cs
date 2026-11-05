@@ -33,6 +33,7 @@ namespace Api.Controllers
         private readonly IWorkspacePolicyTransaction _policyTransaction;
         private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
         private readonly IEntitlementService _entitlements;
+        private readonly LinkedEntryService _linkedEntries;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         private bool IsOwner => _tenant.Role == CompanyMemberRole.Owner;
 
@@ -54,7 +55,8 @@ namespace Api.Controllers
             IWorkspaceOperatingPolicyService operatingPolicy = null,
             IWorkspacePolicyTransaction policyTransaction = null,
             IWorkspaceReviewerEligibility reviewerEligibility = null,
-            IEntitlementService entitlements = null)
+            IEntitlementService entitlements = null,
+            LinkedEntryService linkedEntries = null)
         {
             _db = db;
             _identity = identity;
@@ -64,6 +66,7 @@ namespace Api.Controllers
             _policyTransaction = policyTransaction;
             _reviewerEligibility = reviewerEligibility;
             _entitlements = entitlements;
+            _linkedEntries = linkedEntries;
         }
 
         private IWorkspaceReviewerEligibility ReviewerEligibility =>
@@ -273,9 +276,19 @@ namespace Api.Controllers
         public async System.Threading.Tasks.Task<IActionResult> RevokeAccessApproval(string requestId)
         {
             var companyId = _tenant.RequireCompanyId();
+            var approvalJson = _db.AuditLogs.AsNoTracking()
+                .Where(a => a.CompanyId == companyId && a.TableName == "__AccessDelegationApproval" && a.RecordId == requestId)
+                .Select(a => a.NewValue).FirstOrDefault();
             var revoked = await AccessAuthorizationService.RevokeAuthenticatedApprovalAsync(_db, companyId, requestId);
             if (!revoked)
                 return NotFound();
+            if (_linkedEntries != null && !string.IsNullOrWhiteSpace(approvalJson))
+            {
+                var approval = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(approvalJson);
+                if (approval?.OperationKey == AccessOperationCatalog.FinancialsJournalPost &&
+                    int.TryParse(approval.ResourceId, out var journalId))
+                    _linkedEntries.CancelPendingSource(companyId, journalId);
+            }
             return NoContent();
         }
 

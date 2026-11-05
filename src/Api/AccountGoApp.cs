@@ -159,6 +159,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Core.Authorization.IWorkspaceApprovalPolicyResolver, Api.Service.WorkspaceApprovalPolicyResolver>();
         builder.Services.AddScoped<Core.Authorization.IWorkspaceAccessProfileCatalog, Api.Service.WorkspaceAccessProfileCatalog>();
         builder.Services.AddScoped<Core.Authorization.IWorkspacePolicyTransaction, Api.Service.WorkspacePolicyTransaction>();
+        builder.Services.AddScoped<Api.Service.LinkedEntryService>();
         builder.Services.AddScoped<Core.Authorization.IWorkspaceReviewerEligibility, Api.Service.WorkspaceReviewerEligibility>();
         builder.Services.AddScoped<Core.Authorization.IWorkspaceOperatingPolicyService, Api.Service.WorkspaceOperatingPolicyService>();
         builder.Services.AddScoped<Api.Service.WorkspaceInitializationApplicator>();
@@ -202,6 +203,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Api.Service.SalesInvoicePresentation>();
         builder.Services.AddHostedService<Api.Service.StartupWarmup>();
         builder.Services.AddHostedService<Api.Service.WorkspaceInvariantRecoveryScanner>();
+        builder.Services.AddHostedService<Api.Service.LinkedEntryIntegrityScanner>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
         builder.Services.AddSingleton(Api.Options.EntitlementsConfiguration.FromConfiguration(builder.Configuration));

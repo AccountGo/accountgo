@@ -443,6 +443,23 @@ namespace Api.Data
                 entity.HasOne<Company>().WithMany().HasForeignKey(l => l.WorkCompanyId).OnDelete(DeleteBehavior.NoAction);
                 entity.HasOne<Company>().WithMany().HasForeignKey(l => l.PersonalCompanyId).OnDelete(DeleteBehavior.NoAction);
             });
+            builder.Entity<LinkedEntryPair>(entity =>
+            {
+                entity.ToTable("LinkedEntryPairs");
+                entity.Property(p => p.OwnerUserId).IsRequired().HasMaxLength(450);
+                entity.Property(p => p.Kind).IsRequired().HasMaxLength(32);
+                entity.Property(p => p.SourceCurrency).IsRequired().HasMaxLength(3);
+                entity.Property(p => p.MirrorCurrency).IsRequired().HasMaxLength(3);
+                entity.Property(p => p.State).IsRequired().HasMaxLength(32);
+                entity.Property(p => p.IdempotencyKey).HasMaxLength(100);
+                entity.Property(p => p.SourceAmount).HasColumnType("decimal(18, 2)");
+                entity.Property(p => p.MirrorAmount).HasColumnType("decimal(18, 2)");
+                entity.Property(p => p.ExchangeRate).HasColumnType("decimal(18, 8)");
+                entity.HasIndex(p => new { p.SourceCompanyId, p.SourceJournalId }).IsUnique().HasFilter("[SourceJournalId] IS NOT NULL");
+                entity.HasIndex(p => new { p.MirrorCompanyId, p.MirrorJournalId }).IsUnique().HasFilter("[MirrorJournalId] IS NOT NULL");
+                entity.HasIndex(p => new { p.SourceCompanyId, p.IdempotencyKey }).IsUnique().HasFilter("[IdempotencyKey] IS NOT NULL");
+                entity.HasIndex(p => p.StatementLineId).IsUnique().HasFilter("[StatementLineId] IS NOT NULL");
+            });
             builder.Entity<Company>().HasQueryFilter(c => c.DeletedAt == null);
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<Company>().Property(c => c.AccessBootstrapAvailable).HasDefaultValue(false);
@@ -1207,6 +1224,7 @@ namespace Api.Data
         public virtual DbSet<BooksLockChange> BooksLockChanges { get; set; }
         public DbSet<PersonalWorkspace> PersonalWorkspaces { get; set; }
         public DbSet<WorkspaceLink> WorkspaceLinks { get; set; }
+        public DbSet<LinkedEntryPair> LinkedEntryPairs { get; set; }
         public virtual DbSet<Company> Companies { get; set; }
         public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
         public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }

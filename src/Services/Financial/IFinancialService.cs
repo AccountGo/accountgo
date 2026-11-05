@@ -32,6 +32,9 @@ namespace Services.Financial
         /// (used by year-end close/reopen). Outside this scope the voucher type is rejected.
         /// </summary>
         IDisposable AllowClosingEntries();
+        IDisposable AllowLinkedEntryReversal();
+        IDisposable AllowLinkedEntryMirrorPosting();
+        IDisposable AllowLinkedEntrySourcePosting();
         ICollection<TrialBalance> TrialBalance(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<BalanceSheet> BalanceSheet(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<IncomeStatement> IncomeStatement(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);

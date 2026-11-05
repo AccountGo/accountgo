@@ -441,6 +441,7 @@ namespace Api.Controllers
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), subscriptionStatus = company.SubscriptionStatus,
                 role = _tenant.Role.ToString(), permissions = _tenant.Permissions,
                 currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault() ?? "USD",
+                entityType = _db.CompanySettings.Select(s => s.EntityType.ToString()).FirstOrDefault(),
                 fiscalYearEnd = fiscalYear?.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 operatingPolicy = operating == null ? null : new
                 {

@@ -49,6 +49,7 @@ namespace Api.Controllers
         private readonly IYearEndCloseService _yearEndCloseService;
         private readonly IAccessAuthorizationService? _authorizationService;
         private readonly Core.Entitlements.IEntitlementService? _entitlements;
+        private readonly Api.Service.LinkedEntryService? _linkedEntries;
 
         public FinancialsController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -60,7 +61,8 @@ namespace Api.Controllers
             Services.Financial.IBooksLockGuard booksLockGuard,
             IYearEndCloseService yearEndCloseService,
             IAccessAuthorizationService? authorizationService = null,
-            Core.Entitlements.IEntitlementService? entitlements = null)
+            Core.Entitlements.IEntitlementService? entitlements = null,
+            Api.Service.LinkedEntryService? linkedEntries = null)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -73,6 +75,7 @@ namespace Api.Controllers
             _yearEndCloseService = yearEndCloseService;
             _authorizationService = authorizationService;
             _entitlements = entitlements;
+            _linkedEntries = linkedEntries;
         }
 
         private IAccessAuthorizationService AuthService =>
@@ -286,6 +289,11 @@ namespace Api.Controllers
         public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             var companyId = _tenantContext.CompanyId;
+            var linkedEntries = _linkedEntries ?? HttpContext?.RequestServices.GetService<Api.Service.LinkedEntryService>();
+            if (companyId.HasValue && journalEntryDto?.Id > 0 && linkedEntries?.IsMirrorJournal(companyId.Value, journalEntryDto.Id) == true)
+                return Conflict(new { code = "linked_entry_use_pair_reversal", message = "A linked mirror journal can only be posted through the linked entry service." });
+            if (companyId.HasValue && journalEntryDto?.Id > 0 && linkedEntries?.GetSourcePairState(companyId.Value, journalEntryDto.Id) is { } pairState && pairState != "PendingSource")
+                return Conflict(new { code = "linked_entry_not_pending", message = "The linked entry is no longer pending source posting." });
             Core.Domain.Financials.JournalEntryHeader? existingHeader = null;
             if (journalEntryDto != null && journalEntryDto.Id > 0)
             {
@@ -352,7 +360,11 @@ namespace Api.Controllers
                 if (je == null)
                     return NotFound(new { message = "Journal entry not found." });
 
-                _financialService.UpdateJournalEntry(je, true);
+                var linkedPosted = linkedEntries?.PostSource(companyId!.Value, je.Id, currentActorId ?? "",
+                    _tenantContext.Role ?? Core.Domain.CompanyMemberRole.Member,
+                    () => _financialService.UpdateJournalEntry(je, true)) == true;
+                if (!linkedPosted)
+                    _financialService.UpdateJournalEntry(je, true);
                 if (je.Posted != true)
                     return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: "A user who prepared a transaction cannot independently approve or post it without a verified independent approval.");
 
@@ -360,6 +372,8 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Services.Financial.LinkedEntryOperationException linkedFailure)
+                    return Conflict(new { code = linkedFailure.Code, message = linkedFailure.Message });
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
@@ -435,6 +449,12 @@ namespace Api.Controllers
                     journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id);
                     if (journalEntry == null)
                         return NotFound(new { message = "Journal entry not found." });
+                    if (_db.LinkedEntryPairs.Any(p =>
+                        (p.SourceCompanyId == journalEntry.CompanyId && p.SourceJournalId == journalEntry.Id)
+                        || (p.MirrorCompanyId == journalEntry.CompanyId && p.MirrorJournalId == journalEntry.Id)))
+                        return Problem(statusCode: StatusCodes.Status409Conflict, title: "linked_entry_use_pair_reversal",
+                            detail: "Linked journals must be corrected through the linked entry pair.",
+                            extensions: new Dictionary<string, object?> { ["code"] = "linked_entry_use_pair_reversal" });
                     if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
                         return BadRequest(new { message = "Posted journal entries cannot be edited." });
 

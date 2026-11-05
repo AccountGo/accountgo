@@ -55,6 +55,7 @@ namespace Services.Financial
         private readonly IRepository<BankTransaction> _bankTransactionRepo;
         private readonly IRepository<BankReconciliation> _bankReconciliationRepo;
         private readonly IRepository<BankStatementLine> _bankStatementLineRepo;
+        private readonly IRepository<LinkedEntryPair> _linkedEntryPairRepo;
         private readonly Services.Banking.IReconciledPeriodGuard _reconciledPeriodGuard;
         private readonly IBooksLockGuard _booksLockGuard;
         private readonly Core.Authorization.IAccessAuthorizationService _auth;
@@ -66,6 +67,9 @@ namespace Services.Financial
         public const string JournalPostingAuthorizationAuditTable = "__JournalPostingAuthorization";
 
         private static readonly System.Threading.AsyncLocal<int> AllowClosingEntriesDepth = new();
+        private static readonly System.Threading.AsyncLocal<int> AllowLinkedEntryReversalDepth = new();
+        private static readonly System.Threading.AsyncLocal<int> AllowLinkedEntryMirrorPostingDepth = new();
+        private static readonly System.Threading.AsyncLocal<int> AllowLinkedEntrySourcePostingDepth = new();
 
         public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
@@ -103,7 +107,8 @@ namespace Services.Financial
             IRepository<Core.Domain.Auditing.AuditLog> auditLogRepo = null,
             Microsoft.AspNetCore.Http.IHttpContextAccessor httpContextAccessor = null,
             Core.Authorization.IWorkspaceApprovalPolicyResolver approvalPolicyResolver = null,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
+            IRepository<LinkedEntryPair> linkedEntryPairRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -143,6 +148,7 @@ namespace Services.Financial
             _bankTransactionRepo = bankTransactionRepo;
             _bankReconciliationRepo = bankReconciliationRepo;
             _bankStatementLineRepo = bankStatementLineRepo;
+            _linkedEntryPairRepo = linkedEntryPairRepo;
             _reconciledPeriodGuard = reconciledPeriodGuard;
         }
 
@@ -448,12 +454,61 @@ namespace Services.Financial
                         && gl.Id != entry.Id && gl.CompanyId == entry.CompanyId)
                     && _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose).Allowed;
 
-                if (!isClosingReversal)
+                var reversedJournalId = entry.ReversedGeneralLedgerHeaderId;
+                var isLinkedEntryReversal = AllowLinkedEntryReversalDepth.Value > 0
+                    && reversedJournalId.HasValue
+                    && _generalLedgerRepository.Table.Any(gl => gl.Id == reversedJournalId.Value && gl.CompanyId == entry.CompanyId)
+                    && _journalEntryRepo.Table.Any(j => j.GeneralLedgerHeaderId == reversedJournalId.Value
+                        && j.CompanyId == entry.CompanyId && j.Posted == true)
+                    && _linkedEntryPairRepo != null
+                    && _linkedEntryPairRepo.Table.Any(p => p.State == "Posted"
+                        && ((p.SourceCompanyId == entry.CompanyId && _journalEntryRepo.Table.Any(j => j.Id == p.SourceJournalId
+                            && j.CompanyId == entry.CompanyId && j.GeneralLedgerHeaderId == reversedJournalId.Value && j.Posted == true))
+                            || (p.MirrorCompanyId == entry.CompanyId && _journalEntryRepo.Table.Any(j => j.Id == p.MirrorJournalId
+                            && j.CompanyId == entry.CompanyId && j.GeneralLedgerHeaderId == reversedJournalId.Value && j.Posted == true))))
+                    && !_generalLedgerRepository.Table.Any(gl => gl.ReversedGeneralLedgerHeaderId == reversedJournalId.Value
+                        && gl.Id != entry.Id && gl.CompanyId == entry.CompanyId);
+
+                var originalJournal = reversedJournalId.HasValue
+                    ? _journalEntryRepo.Table.FirstOrDefault(j => j.CompanyId == entry.CompanyId
+                        && j.GeneralLedgerHeaderId == reversedJournalId.Value && j.Posted == true)
+                    : null;
+                var isLinkedOriginal = originalJournal != null && IsLinkedEntryJournal(entry.CompanyId, originalJournal.Id);
+                if (isLinkedOriginal && AllowLinkedEntryReversalDepth.Value <= 0)
+                    throw new LinkedEntryOperationException("linked_entry_use_pair_reversal", "Linked journals can only be reversed through the linked entry pair.");
+
+                if (!isClosingReversal && !isLinkedEntryReversal)
                 {
                     throw new InvalidOperationException("Ordinary journal entries cannot be directly posted through general ledger save. Use UpdateJournalEntry.");
                 }
-
-                decision = Core.Authorization.AccessDecision.Allow(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, "POL-CLOSE", "1.0");
+                if (isClosingReversal)
+                    decision = Core.Authorization.AccessDecision.Allow(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, "POL-CLOSE", "1.0");
+                else if (isLinkedEntryReversal)
+                {
+                    var authorizedOriginalJournal = _journalEntryRepo.Table.First(j => j.CompanyId == entry.CompanyId
+                        && j.GeneralLedgerHeaderId == reversedJournalId!.Value && j.Posted == true);
+                    var actorId = _auth.ResolveActorContext()?.UserId;
+                    var preparerId = _auditLogRepo?.Table
+                        .Where(a => a.CompanyId == entry.CompanyId && a.TableName == "__JournalEntryPreparer"
+                            && a.RecordId == authorizedOriginalJournal.Id.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                        .OrderByDescending(a => a.Id).Select(a => a.NewValue).FirstOrDefault()
+                        ?? actorId;
+                    decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
+                        new Core.Authorization.AccessResourceContext
+                        {
+                            WorkspaceCompanyId = entry.CompanyId,
+                            ResourceCompanyId = entry.CompanyId,
+                            ResourceType = "JournalEntry",
+                            ResourceId = authorizedOriginalJournal.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            WorkflowState = "Draft",
+                            IsPeriodLockedOrClosed = false,
+                            PreparedByUserId = preparerId
+                        });
+                    if (!decision.Allowed && decision.ReasonCode == Core.Authorization.AccessReasonCode.IndependentApprovalRequired)
+                        throw new LinkedEntryOperationException("linked_entry_reversal_requires_review", "The reversal requires an independent reviewer.");
+                    if (!decision.Allowed)
+                        throw new LinkedEntryOperationException("linked_entry_permission_required", decision.SafeMessage ?? "Financial journal-post permission is required.");
+                }
             }
             if (!decision.Allowed && entry?.DocumentType == DocumentTypes.BankTransaction)
             {
@@ -469,7 +524,8 @@ namespace Services.Financial
             }
             if (!decision.Allowed)
             {
-                throw new InvalidOperationException($"Permission '{decision.MissingPermission ?? "financials.journal.post"}' is required for this action.");
+                throw new InvalidOperationException(decision.SafeMessage
+                    ?? $"Permission '{decision.MissingPermission ?? "financials.journal.post"}' is required for this action.");
             }
 
             if (ValidateGeneralLedgerEntry(entry))
@@ -585,6 +641,24 @@ namespace Services.Financial
             AllowClosingEntriesDepth.Value = AllowClosingEntriesDepth.Value + 1;
             return new ClosingEntriesScope(() =>
                 AllowClosingEntriesDepth.Value = Math.Max(0, AllowClosingEntriesDepth.Value - 1));
+        }
+
+        public IDisposable AllowLinkedEntryReversal()
+        {
+            AllowLinkedEntryReversalDepth.Value++;
+            return new ClosingEntriesScope(() => AllowLinkedEntryReversalDepth.Value = Math.Max(0, AllowLinkedEntryReversalDepth.Value - 1));
+        }
+
+        public IDisposable AllowLinkedEntryMirrorPosting()
+        {
+            AllowLinkedEntryMirrorPostingDepth.Value++;
+            return new ClosingEntriesScope(() => AllowLinkedEntryMirrorPostingDepth.Value = Math.Max(0, AllowLinkedEntryMirrorPostingDepth.Value - 1));
+        }
+
+        public IDisposable AllowLinkedEntrySourcePosting()
+        {
+            AllowLinkedEntrySourcePostingDepth.Value++;
+            return new ClosingEntriesScope(() => AllowLinkedEntrySourcePostingDepth.Value = Math.Max(0, AllowLinkedEntrySourcePostingDepth.Value - 1));
         }
 
         private sealed class ClosingEntriesScope : IDisposable
@@ -2096,6 +2170,11 @@ namespace Services.Financial
         {
             if (journalEntry == null)
                 throw new ArgumentNullException(nameof(journalEntry));
+            if (posted && journalEntry.Id > 0 && IsLinkedEntryMirrorJournal(journalEntry.CompanyId, journalEntry.Id)
+                && AllowLinkedEntryMirrorPostingDepth.Value <= 0)
+                throw new LinkedEntryOperationException("linked_entry_use_pair_reversal", "A linked mirror journal can only be posted through the linked entry service.");
+            if (!posted && journalEntry.Id > 0 && IsLinkedEntryJournal(journalEntry.CompanyId, journalEntry.Id))
+                throw new LinkedEntryOperationException("linked_entry_use_pair_reversal", "Linked journals must be corrected through the linked entry pair.");
             if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("Posted journal entries cannot be edited or posted again.");
 
@@ -2132,8 +2211,8 @@ namespace Services.Financial
                     effectivePreparer = persistedPreparer ?? actor?.UserId ?? "system:draft-preparer";
 
                     var req = _httpContextAccessor?.HttpContext?.Request;
-                    aprHeader = req?.Headers["X-Approval-Request-Id"].FirstOrDefault();
-                    approverHeader = req?.Headers["X-Approved-By-User-Id"].FirstOrDefault();
+                    aprHeader = AllowLinkedEntryMirrorPostingDepth.Value > 0 ? null : req?.Headers["X-Approval-Request-Id"].FirstOrDefault();
+                    approverHeader = AllowLinkedEntryMirrorPostingDepth.Value > 0 ? null : req?.Headers["X-Approved-By-User-Id"].FirstOrDefault();
 
                     entryFingerprint = Core.Authorization.AccessJournalFingerprint.Compute(
                         journalEntry.Date,
@@ -2372,10 +2451,11 @@ namespace Services.Financial
                             journalEntry.GeneralLedgerHeader = glEntry;
                             journalEntry.Posted = true;
 
-                            if (_auditLogRepo != null && !string.IsNullOrWhiteSpace(aprHeader))
+                            if (_auditLogRepo != null && !string.IsNullOrWhiteSpace(aprHeader) && AllowLinkedEntrySourcePostingDepth.Value <= 0)
                             {
                                 var approvalRow = _auditLogRepo.Table
-                                    .FirstOrDefault(a => a.TableName == "__AccessDelegationApproval" &&
+                                    .FirstOrDefault(a => a.CompanyId == journalEntry.CompanyId &&
+                                                        a.TableName == "__AccessDelegationApproval" &&
                                                         a.RecordId == aprHeader &&
                                                         a.OriginalValue == "Approved");
                                 if (approvalRow == null)
@@ -2477,6 +2557,13 @@ namespace Services.Financial
                 _journalEntryRepo.Update(journalEntry);
             }
         }
+
+        private bool IsLinkedEntryJournal(int companyId, int journalId) => _linkedEntryPairRepo != null &&
+            _linkedEntryPairRepo.Table.Any(p => (p.SourceCompanyId == companyId && p.SourceJournalId == journalId)
+                || (p.MirrorCompanyId == companyId && p.MirrorJournalId == journalId));
+
+        private bool IsLinkedEntryMirrorJournal(int companyId, int journalId) => _linkedEntryPairRepo != null &&
+            _linkedEntryPairRepo.Table.Any(p => p.MirrorCompanyId == companyId && p.MirrorJournalId == journalId);
 
         /// <summary>
         /// Records the durable first-useful-action marker for a qualifying committed action (sales invoice

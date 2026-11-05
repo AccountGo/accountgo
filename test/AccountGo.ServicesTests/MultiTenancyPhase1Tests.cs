@@ -45,7 +45,8 @@ public class MultiTenancyPhase1Tests
             "CompanyInvitation",
             // cross-workspace owner registry; must not be tenant-filtered
             "PersonalWorkspace",
-            "WorkspaceLink"
+            "WorkspaceLink",
+            "LinkedEntryPair"
         };
 
         foreach (var type in types)
@@ -65,6 +66,11 @@ public class MultiTenancyPhase1Tests
                 Assert.Equal(typeof(int), companyIdProp.PropertyType);
             }
         }
+
+        var linkedEntryPair = coreAssembly.GetType("Core.Domain.LinkedEntryPair");
+        Assert.NotNull(linkedEntryPair);
+        Assert.Contains(linkedEntryPair, types);
+        Assert.Contains(linkedEntryPair.Name, globalEntityNames);
     }
 
     [LocalDatabaseFact]
