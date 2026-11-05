@@ -23,6 +23,10 @@ namespace Core.Domain
         public string? CRA { get; set; }
 
         public string? Plan { get; set; }
+        /// <summary>
+        /// Workspace activation: <c>active</c> (default) or <c>pending_checkout</c> (awaiting billing provider confirmation).
+        /// </summary>
+        public string ActivationState { get; set; } = CompanyActivationStates.Active;
         /// <summary>Ops override only: null (derived from Plan) or "comp" (see Core.Entitlements.CompanyTiers).</summary>
         public string? Tier { get; set; }
         /// <summary>Legacy allow-list JSON. Prefer <see cref="DisabledModulesJson"/>. Kept for one-release read fallback.</summary>

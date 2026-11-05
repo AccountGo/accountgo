@@ -136,12 +136,14 @@ namespace Services.Entitlements
         {
             var decision = Evaluate(companyId, action);
             if (!decision.Allowed)
-                throw ToException(decision);
+                throw EntitlementDecisions.ToException(decision);
         }
 
         public EntitlementDecision EvaluateForUser(string userId, UserAction action) => action switch
         {
             UserAction.OwnAnotherWorkspace => new EntitlementDecision(true, null, null, UpgradeAvailable: false),
+            UserAction.CreateWorkspace => new EntitlementDecision(true, null, null, UpgradeAvailable: false, RequiresCheckout: false),
+            UserAction.ReceiveWorkspace => new EntitlementDecision(true, null, null, UpgradeAvailable: false, RequiresCheckout: false),
             UserAction.FeatureAmongMemberships feature => new EntitlementDecision(
                 false, "FEATURE_NOT_ENTITLED",
                 $"The '{feature.FeatureKey}' feature is not available on any of this user's workspaces.",
@@ -175,7 +177,7 @@ namespace Services.Entitlements
         {
             var decision = EvaluateForUser(userId, new UserAction.OwnAnotherWorkspace());
             if (!decision.Allowed)
-                throw ToException(decision);
+                throw EntitlementDecisions.ToException(decision);
         }
 
         public void EnsureSelfServicePlan(string plan)
@@ -279,42 +281,6 @@ namespace Services.Entitlements
         private Company LoadCompany(int companyId) =>
             _companies.Table.FirstOrDefault(c => c.Id == companyId)
             ?? throw new TenantEntityNotFoundException(nameof(Company), companyId);
-
-        private static EntitlementException ToException(EntitlementDecision decision)
-        {
-            if (decision.Code == "QUOTA_EXCEEDED" && decision.Resource is { } resource
-                && decision.Limit is { } limit && decision.Used is { } used)
-            {
-                return new QuotaExceededException(resource, limit, used, decision.Detail ?? "Quota exceeded")
-                {
-                    EffectivePlan = decision.EffectivePlan,
-                    UpgradeAvailable = decision.UpgradeAvailable,
-                    SubscriptionStatus = decision.SubscriptionStatus
-                };
-            }
-
-            if (decision.Code == "FEATURE_NOT_ENTITLED")
-            {
-                return new FeatureNotEntitledException(
-                    decision.RequiredFeature ?? "",
-                    decision.Detail ?? "Feature not entitled")
-                {
-                    EffectivePlan = decision.EffectivePlan,
-                    UpgradeAvailable = decision.UpgradeAvailable,
-                    SubscriptionStatus = decision.SubscriptionStatus
-                };
-            }
-
-            return new ModuleNotSubscribedException(
-                decision.Code ?? "MODULE_NOT_SUBSCRIBED",
-                decision.Detail ?? "Not entitled",
-                decision.RequiredModule)
-            {
-                EffectivePlan = decision.EffectivePlan,
-                UpgradeAvailable = decision.UpgradeAvailable,
-                SubscriptionStatus = decision.SubscriptionStatus
-            };
-        }
 
         private sealed class PolicyMemo
         {

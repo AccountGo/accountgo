@@ -143,6 +143,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("ActivationState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("active");
+
                     b.Property<string>("ActiveModulesJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -221,6 +228,7 @@ namespace Api.Data.Migrations.ApiDb
                         {
                             Id = 1,
                             AccessBootstrapAvailable = false,
+                            ActivationState = "active",
                             BillingManagedManually = false,
                             CRA = "012345678",
                             CancelAtPeriodEnd = false,

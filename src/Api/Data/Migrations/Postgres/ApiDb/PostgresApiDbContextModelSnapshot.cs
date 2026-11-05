@@ -143,6 +143,13 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("ActivationState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("active");
+
                     b.Property<string>("ActiveModulesJson")
                         .HasColumnType("text");
 
@@ -220,6 +227,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         {
                             Id = 1,
                             AccessBootstrapAvailable = false,
+                            ActivationState = "active",
                             BillingManagedManually = false,
                             CRA = "012345678",
                             CancelAtPeriodEnd = false,
