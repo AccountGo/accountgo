@@ -8,12 +8,12 @@ const FRAMEWORK_LABEL = { IfrsForSmes: 'IFRS for SMEs', UsGaapPrivate: 'US GAAP 
 const TAX_LABEL = { None: 'No tax', SalesTax: 'Sales tax', VatGst: 'VAT / GST' } as const;
 const INDUSTRY_LABEL = { Services: 'Services', ProductRetail: 'Products / retail', Mixed: 'Mixed' } as const;
 const INVENTORY_LABEL = { None: 'None', WeightedAverage: 'Weighted average', Fifo: 'FIFO' } as const;
-const PURPOSE_LABEL = { Personal: 'Personal finances', Business: 'Business or freelance work' } as const;
+const LEGAL_FORM_LABEL = { Corporation: 'Company', Partnership: 'Partnership', Cooperative: 'Cooperative', NonProfit: 'Non-profit' } as const;
 const COLLABORATION_LABEL = { JustMe: 'Just me', WithOthers: 'Me and others' } as const;
 
 export const ReviewStep: React.FC<{
   state: WizardState;
-  capabilities?: { soloSetupEnabled: boolean } | null;
+  capabilities?: { soloSetupEnabled: boolean; canAddPersonalBooks?: boolean } | null;
   isContinuation?: boolean;
   existingSettings?: { name?: string; slug?: string; plan?: string; currency?: string; fiscalYearEnd?: string } | null;
   catalog?: PlanCatalogEntry[] | null;
@@ -26,10 +26,15 @@ export const ReviewStep: React.FC<{
   const withOthers = state.collaborationIntent === 'WithOthers';
   const soloSetupAvailable = capabilities?.soloSetupEnabled !== false;
 
-  // The About answers (purpose, collaboration, access, journal workflow) are the ONLY things finishing
-  // setup applies — show them as "will be saved".
+  const purposeLabel = state.workKind === 'Company'
+    ? `A business or company · ${state.legalForm ? LEGAL_FORM_LABEL[state.legalForm] : '—'}`
+    : state.workKind === 'Freelance' ? 'Freelance or self-employed' : 'Personal books';
+
+  // About answers are the choices this setup applies; workspace facts below remain read-only on continuation.
   const aboutRows: [string, string][] = [
-    ...(soloSetupAvailable && state.workspacePurpose ? [['Purpose', PURPOSE_LABEL[state.workspacePurpose]] as [string, string]] : []),
+    ...(soloSetupAvailable && state.workspacePurpose ? [['Purpose', purposeLabel] as [string, string]] : []),
+    ...(soloSetupAvailable && state.workKind && capabilities?.canAddPersonalBooks === true
+      ? [['Personal books', state.addPersonalBooks ? 'Free, linked to this workspace' : 'Not now'] as [string, string]] : []),
     ...(soloSetupAvailable && state.collaborationIntent ? [['Who uses it', COLLABORATION_LABEL[state.collaborationIntent]] as [string, string]] : []),
     [
       'Your access',
@@ -77,7 +82,7 @@ export const ReviewStep: React.FC<{
         <div role="note" className="p-3.5 mb-4 rounded-xl bg-[var(--bg-subtle)] text-[var(--text-secondary)] text-xs font-medium space-y-1">
           <p className="font-semibold text-[var(--text-main)]">Finishing setup for your workspace</p>
           <p>
-            The details below were set when this workspace was created and are shown for reference — finishing setup does not change them. Finishing setup applies your access and journal workflow. You can change your plan or other settings anytime afterward.
+            The details below were set when this workspace was created and are shown for reference — finishing setup does not change them. Finishing setup applies your business type, access and journal workflow. You can change your plan or other settings anytime afterward.
           </p>
         </div>
       )}
@@ -97,6 +102,9 @@ export const ReviewStep: React.FC<{
           </div>
         ))}
       </dl>
+      {state.workKind === 'Freelance' && soloSetupAvailable && <p className="text-[11px] text-[var(--text-muted)] mt-3">
+        Freelance books keep money you take for personal use separate from your work profit.
+      </p>}
       {justMe && soloSetupAvailable && (
         <p className="text-[11px] text-[var(--text-muted)] mt-3">
           You’ll have full access to the tools included in your plan. You can invite someone later.

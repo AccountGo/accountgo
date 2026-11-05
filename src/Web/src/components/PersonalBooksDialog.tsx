@@ -4,12 +4,12 @@ import type { OrgDetails } from '../types';
 import { ModalShell } from './ModalShell';
 
 export function PersonalBooksDialog({ currentOrg, onClose, onCreated }: {
-  currentOrg: OrgDetails; onClose: () => void; onCreated: (slug: string) => void;
+  currentOrg?: OrgDetails; onClose: () => void; onCreated: (slug: string) => void;
 }) {
   const { user, authFetch } = useAuth();
   const [name, setName] = useState(`${user?.firstName?.trim() || user?.email?.split('@')[0] || 'My'} — Personal`);
-  const [currency, setCurrency] = useState(currentOrg.currency || 'USD');
-  const canLink = currentOrg.role === 'Owner' && !currentOrg.isPersonalBooks && !currentOrg.linkedPersonalCompanyId;
+  const [currency, setCurrency] = useState(currentOrg?.currency || 'USD');
+  const canLink = currentOrg?.role === 'Owner' && !currentOrg.isPersonalBooks && !currentOrg.linkedPersonalCompanyId;
   const [link, setLink] = useState(canLink);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -20,7 +20,7 @@ export function PersonalBooksDialog({ currentOrg, onClose, onCreated }: {
       const response = await authFetch('/api/organizations/personal', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), currency: currency.trim().toUpperCase(),
-          ...(canLink && link ? { linkWorkCompanyId: Number(currentOrg.id) } : {}) }),
+          ...(canLink && link ? { linkWorkCompanyId: Number(currentOrg!.id) } : {}) }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.detail || 'Could not create personal books.');
@@ -40,7 +40,7 @@ export function PersonalBooksDialog({ currentOrg, onClose, onCreated }: {
           className="mt-1 w-full rounded-lg p-2 bg-[var(--bg-subtle)] text-[var(--text-main)]" />
       </label>
       {canLink && <label className="flex gap-2 items-center text-sm text-[var(--text-secondary)]">
-        <input type="checkbox" checked={link} onChange={e => setLink(e.target.checked)} />Link to {currentOrg.name}
+        <input type="checkbox" checked={link} onChange={e => setLink(e.target.checked)} />Link to {currentOrg?.name}
       </label>}
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
       <div className="flex justify-end gap-2">

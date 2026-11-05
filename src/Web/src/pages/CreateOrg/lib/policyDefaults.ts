@@ -11,7 +11,13 @@ export type InventoryCostingMethod = 'None' | 'Fifo' | 'WeightedAverage';
 export type WorkspacePurpose = 'Personal' | 'Business';
 export type CollaborationIntent = 'JustMe' | 'WithOthers';
 
+export type WorkKind = 'Freelance' | 'Company' | '';
+export type LegalForm = 'Corporation' | 'Partnership' | 'Cooperative' | 'NonProfit' | '';
+
 export interface WizardState {
+  workKind: WorkKind;
+  legalForm: LegalForm;
+  addPersonalBooks: boolean | null;
   workspacePurpose: WorkspacePurpose | '';
   collaborationIntent: CollaborationIntent | '';
   plan: Plan;
@@ -32,12 +38,8 @@ export interface WizardState {
 export type StepId = 'about' | 'intent' | 'identity' | 'moneyTime' | 'reporting' | 'review';
 export const STEPS: StepId[] = ['about', 'intent', 'identity', 'moneyTime', 'reporting', 'review'];
 
-// Continuation mode initializes an EXISTING signup-created workspace. Its plan, identity, currency, books,
-// framework, tax, industry and inventory are already persisted and the continuation endpoint accepts none
-// of them — it applies only the About answers (purpose/collaboration → access + journal workflow). So the
-// continuation wizard presents ONLY the About step and a read-only Review of the stored workspace; it never
-// asks the user to edit — nor validates — fields it would silently discard. Plan changes happen afterward
-// through the billing flow.
+// Continuation edits only About answers, applying legal form through the existing policy endpoint.
+// Identity, currency and other policy settings remain the stored workspace's read-only facts.
 export const CONTINUATION_STEPS: StepId[] = ['about', 'review'];
 
 /** The ordered step list for the current mode. */
@@ -61,6 +63,9 @@ export const isoDate = (date: Date): string => {
 export const defaultState = (today: Date = new Date(), prefill: { name?: string; slug?: string } = {}): WizardState => {
   const name = (prefill.name ?? '').trim();
   return {
+    workKind: '',
+    legalForm: '',
+    addPersonalBooks: null,
     workspacePurpose: '',
     collaborationIntent: '',
     plan: 'accounting',
@@ -83,13 +88,18 @@ export const defaultState = (today: Date = new Date(), prefill: { name?: string;
 export const normalizeWizardState = (raw: Partial<WizardState> | null | undefined, today: Date = new Date()): WizardState => {
   const base = defaultState(today);
   if (!raw || typeof raw !== 'object') return base;
-  const purpose = raw.workspacePurpose === 'Personal' || raw.workspacePurpose === 'Business' ? raw.workspacePurpose : '';
+  const workKind = raw.workKind === 'Freelance' || raw.workKind === 'Company' ? raw.workKind : '';
+  const legalForm = ['Corporation', 'Partnership', 'Cooperative', 'NonProfit'].includes(raw.legalForm ?? '') ? raw.legalForm! : '';
+  const purpose = workKind ? 'Business' : '';
   const collaboration = raw.collaborationIntent === 'JustMe' || raw.collaborationIntent === 'WithOthers'
     ? raw.collaborationIntent
     : '';
   return {
     ...base,
     ...raw,
+    workKind,
+    legalForm,
+    addPersonalBooks: typeof raw.addPersonalBooks === 'boolean' ? raw.addPersonalBooks : null,
     workspacePurpose: purpose,
     collaborationIntent: collaboration,
   };
@@ -97,6 +107,7 @@ export const normalizeWizardState = (raw: Partial<WizardState> | null | undefine
 
 export interface SetupCapabilitiesPayloadOptions {
   soloSetupEnabled?: boolean;
+  canAddPersonalBooks?: boolean;
 }
 
 /** First step that still needs a required answer (not a numeric index). */
@@ -143,8 +154,10 @@ export const validateStep = (
   const errors: StepErrors = {};
   const soloEnabled = capabilities?.soloSetupEnabled !== false;
   if (step === 'about' && soloEnabled) {
-    if (state.workspacePurpose !== 'Personal' && state.workspacePurpose !== 'Business') {
-      errors.workspacePurpose = 'Choose what you will use this workspace for.';
+    if (!state.workKind) errors.workKind = 'Choose what this workspace is for.';
+    if (state.workKind === 'Company' && !state.legalForm) errors.legalForm = 'Choose what kind of business.';
+    if (state.workKind && capabilities?.canAddPersonalBooks === true && state.addPersonalBooks === null) {
+      errors.addPersonalBooks = 'Choose whether to set up personal books.';
     }
     if (state.collaborationIntent !== 'JustMe' && state.collaborationIntent !== 'WithOthers') {
       errors.collaborationIntent = 'Choose who will use this workspace.';
@@ -198,6 +211,7 @@ export const validateAll = (
       };
 
 export const buildPayload = (state: WizardState, capabilities?: SetupCapabilitiesPayloadOptions | null) => {
+  const workspacePurpose = state.workKind ? 'Business' : state.workspacePurpose;
   const soloEnabled = capabilities?.soloSetupEnabled !== false;
   return {
     name: state.name.trim(),
@@ -213,12 +227,13 @@ export const buildPayload = (state: WizardState, capabilities?: SetupCapabilitie
     taxRegime: state.taxRegime,
     industryTemplate: state.industryTemplate,
     inventoryCostingMethod: effectiveInventoryMethod(state),
-    workspacePurpose: soloEnabled ? (state.workspacePurpose || undefined) : undefined,
+    workspacePurpose: soloEnabled ? (workspacePurpose || undefined) : undefined,
     collaborationIntent: soloEnabled ? (state.collaborationIntent || undefined) : undefined,
-    // Personal purpose always uses the Individual accounting profile. Sending it here keeps Create and
-    // signup-continuation provisioning aligned with initialization; the server also defaults when personal
-    // is released, but the wizard must not rely on Sole Proprietor as a silent fallback.
-    entityType: soloEnabled && state.workspacePurpose === 'Personal' ? 'Individual' : undefined,
+    // Retain the Individual mapping for older callers that still supply Personal purpose.
+    entityType: soloEnabled
+      ? (workspacePurpose === 'Personal' ? 'Individual'
+        : state.workKind === 'Freelance' ? 'SoleProprietor' : state.legalForm || undefined)
+      : undefined,
     ownerAccessPreset: soloEnabled && (state.collaborationIntent === 'JustMe' || state.collaborationIntent === 'WithOthers')
       ? 'FullWorkspaceAccess'
       : undefined,
