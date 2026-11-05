@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   buildIntentPlanOptions,
   freeSlotBlockedMessage,
+  freeSlotPlanError,
   isFreeSlotUsed,
   isPaidWizardPlan,
 } from '../src/lib/createOrgPlanOptions.ts';
@@ -104,6 +105,16 @@ test('plan-step disables free cards when the free slot is used', () => {
   assert.equal(isPaidWizardPlan('fixture_paid_a', catalog), true);
 });
 
+test('plan step blocks Next on a free choice once the free slot is used', () => {
+  const used = { used: true, freeWorkspaceName: 'Studio One', freeWorkspaceSlug: 'studio-one' };
+  const open = { used: false, freeWorkspaceName: null, freeWorkspaceSlug: null };
+  assert.equal(freeSlotPlanError('invoicing', catalog, used), 'Choose a paid plan to continue.');
+  assert.equal(freeSlotPlanError('fixture_paid_a', catalog, used), null);
+  assert.equal(freeSlotPlanError('invoicing', catalog, open), null);
+  assert.equal(freeSlotPlanError('invoicing', null, used), null);
+  assert.doesNotMatch(freeSlotBlockedMessage('Studio One', true), /upgrade/i);
+});
+
 test('review-step redirects when checkoutUrl is present', () => {
   const outcome = interpretCreateOrgResponse(
     201,
@@ -138,7 +149,7 @@ test('review-step returns to plan step on owned_workspaces quota denial', () => 
   });
 });
 
-test('create returnUrl includes checkout success and billing interval', () => {
+test('create returnUrl carries the billing interval and leaves the checkout result to billing', () => {
   const url = buildCreateReturnUrl('https://app.example', 'acme-studio', 'year');
   assert.equal(url, 'https://app.example/org/acme-studio?interval=year');
 });
