@@ -53,7 +53,7 @@ export const IntentStep: React.FC<{
     <div className="space-y-4">
       {freeSlot.used && (
         <div role="status" className="p-3 rounded-xl bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs font-medium ring-1 ring-amber-500/20 space-y-1">
-          <p>{freeSlotBlockedMessage(freeSlot.freeWorkspaceName)}</p>
+          <p>{freeSlotBlockedMessage(freeSlot.freeWorkspaceName, !!freeSlot.freeWorkspaceSlug)}</p>
           {freeSlot.freeWorkspaceSlug && (
             <p>
               <Link
@@ -71,7 +71,8 @@ export const IntentStep: React.FC<{
       <ChoiceCards<string>
         legend="What do you need?"
         name="plan"
-        value={plan}
+        // A disabled (free) choice must not look selected.
+        value={built.some((o) => o.value === plan && !o.disabled) ? plan : ''}
         onChange={onChange}
         columns={options.length >= 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}
         options={options}
