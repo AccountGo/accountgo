@@ -1,6 +1,6 @@
 import { normalizeWizardState, type WizardState } from './policyDefaults';
 
-/** Bumped when About answers became required; v1 drafts resume without inventing those answers. */
+/** Both versions normalize missing work-kind, legal-form and companion answers without choosing them. */
 const KEY = 'accountgo.createOrgDraft.v2';
 const LEGACY_KEY = 'accountgo.createOrgDraft.v1';
 

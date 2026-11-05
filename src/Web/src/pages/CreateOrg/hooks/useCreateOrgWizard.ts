@@ -26,14 +26,13 @@ export type SubmitStatus = 'idle' | 'submitting' | 'success';
 
 export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pendingSlug?: string }) => {
   const navigate = useNavigate();
-  const { authFetch, refreshSession } = useAuth();
+  const { authFetch, refreshSession, user } = useAuth();
   const catalog = usePlanCatalog();
   // Continuation mode: a signup-created, still-unclassified workspace already exists. We initialize THAT
   // workspace (POST current/initialize) instead of creating a new one, so no duplicate is produced.
   const pendingSlug = prefill.pendingSlug?.trim() || undefined;
   const isContinuation = Boolean(pendingSlug);
-  // The active step list depends on mode: continuation presents only About + read-only Review (it applies
-  // nothing else), so the wizard never walks the user through — nor validates — discarded settings steps.
+  // Continuation presents About + Review; identity, plan and currency remain the stored settings.
   const steps = stepsFor(isContinuation);
   // Prefill name does not equal About consent; always resume at the first missing required choice.
   // In continuation mode the slug/name prefill is not About consent, so a saved draft (purpose/
@@ -55,6 +54,8 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   });
   const [errors, setErrors] = useState<StepErrors>({});
   const [status, setStatus] = useState<SubmitStatus>('idle');
+  const [personalBooksFailed, setPersonalBooksFailed] = useState(false);
+  const [businessTypeFailed, setBusinessTypeFailed] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [freeSlot, setFreeSlot] = useState<FreeSlotState>({ used: false, freeWorkspaceName: null, freeWorkspaceSlug: null });
@@ -63,6 +64,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
     soloSetupEnabled: boolean;
     personalPurposeEnabled: boolean;
     controlledRecoveryEnabled: boolean;
+    canAddPersonalBooks?: boolean;
   } | null>(null);
   // The About step waits for the server's setup capabilities so it never shows questions that the server then
   // hides (or the reverse). A failed request still unblocks the step; the server re-checks on submit.
@@ -71,6 +73,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   // real persisted name/plan/currency/books (read-only facts), never the local draft values, which the
   // continuation does not save.
   const [existingSettings, setExistingSettings] = useState<{
+    id?: string | number;
     name?: string;
     slug?: string;
     plan?: string;
@@ -87,6 +90,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
       .then((data) => {
         if (active && data) {
           setExistingSettings({
+            id: data.id,
             name: data.name,
             slug: data.slug,
             plan: data.plan,
@@ -214,10 +218,31 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
       setStepIndex(firstIncompleteStepIndex(state, new Date(), capabilities, isContinuation));
       return;
     }
+    setPersonalBooksFailed(false);
+    setBusinessTypeFailed(false);
     setStatus('submitting');
     setSubmitError(null);
     try {
       const payload = buildPayload(state, capabilities);
+      const shouldCreatePersonalBooks = state.addPersonalBooks === true
+        && capabilities?.canAddPersonalBooks === true && capabilities.soloSetupEnabled !== false;
+      const createPersonalBooks = async (companyId: unknown, currency: string) => {
+        if (!shouldCreatePersonalBooks) return;
+        try {
+          const id = Number(companyId);
+          if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Workspace id unavailable');
+          const personal = await authFetch('/api/organizations/personal', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: `${user?.firstName?.trim() || user?.email?.split('@')[0] || 'My'} — Personal`,
+              currency: currency.trim().toUpperCase(), linkWorkCompanyId: id,
+            }),
+          });
+          if (!personal.ok) throw new Error('Personal books creation failed');
+        } catch {
+          setPersonalBooksFailed(true);
+        }
+      };
 
       // Continuation: initialize the existing signup-created workspace in place (no duplicate).
       if (pendingSlug) {
@@ -229,9 +254,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
             collaborationIntent: payload.collaborationIntent,
             ownerAccessPreset: payload.ownerAccessPreset,
             initialJournalWorkflow: payload.initialJournalWorkflow,
-            // The continuation initializes on the workspace's existing (free/default) plan. Plan upgrades —
-            // and all accounting-policy fields — go through their own billing/settings flows, never here,
-            // so there is no silent books rewrite and no billing bypass.
+            // Legal form uses the existing policy endpoint above; initialization keeps the stored plan.
           }),
         });
         const data = await response.json().catch(() => null);
@@ -255,6 +278,40 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
           }
           setStatus('idle');
           return;
+        }
+        // Apply the chosen books type only after initialization succeeded, so an ineligible or already set-up
+        // workspace is never changed. Both work kinds apply it, so a retry after switching from Company to
+        // Freelance never keeps the earlier legal form. Skipped when it already matches or the ledger has postings.
+        const continuationEntityType = state.workKind === 'Freelance' ? 'SoleProprietor'
+          : state.workKind === 'Company' ? state.legalForm : '';
+        if (continuationEntityType && capabilities?.soloSetupEnabled !== false) {
+          try {
+            const headers = { 'Content-Type': 'application/json', 'X-AccountGo-Org': pendingSlug };
+            const current = await authFetch('/api/organizations/current/accounting-policy', { headers });
+            const stored = current.ok ? await current.json().catch(() => null) : null;
+            if (!stored || stored.entityType !== continuationEntityType) {
+              if (stored?.isLedgerFrozen) throw new Error('Ledger has postings');
+              const policy = await authFetch('/api/organizations/current/accounting-policy', {
+                method: 'PUT', headers, body: JSON.stringify({ entityType: continuationEntityType }),
+              });
+              if (!policy.ok) throw new Error('Business type not saved');
+            }
+          } catch {
+            setBusinessTypeFailed(true);
+          }
+        }
+        if (shouldCreatePersonalBooks) {
+          // Initialize need not return identity; resolve it under the same workspace header.
+          try {
+            let current = existingSettings;
+            if (!current?.id) {
+              const response = await authFetch('/api/organizations/current', { headers: { 'X-AccountGo-Org': pendingSlug } });
+              current = response.ok ? await response.json().catch(() => null) : null;
+            }
+            await createPersonalBooks(data?.id ?? current?.id, current?.currency || state.currency);
+          } catch {
+            setPersonalBooksFailed(true);
+          }
         }
         // Refresh the session so the just-granted workspace access is reflected before landing on the
         // dashboard (the new Full-access grant and single-actor rule take effect on the next token).
@@ -306,12 +363,6 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
         setStatus('idle');
         return;
       }
-      if (response.status === 422 && failureReason === 'personal_purpose_disabled') {
-        setSubmitError(data?.detail || 'Personal finances workspaces are not available yet. Choose business or freelance work, or try again later.');
-        setStepIndex(steps.indexOf('about'));
-        setStatus('idle');
-        return;
-      }
 
       const outcome = interpretCreateOrgResponse(response.status, data, fallbackSlug);
       if (outcome.kind === 'quota-free-slot') {
@@ -326,6 +377,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
         setStatus('idle');
         return;
       }
+      await createPersonalBooks(data?.id, state.currency);
       if (outcome.kind === 'redirect-checkout') {
         clearDraft();
         window.location.assign(outcome.url);
@@ -348,10 +400,10 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
       setSubmitError('We could not reach the server. Check your connection and try again.');
       setStatus('idle');
     }
-  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession, isContinuation, steps, billingInterval]);
+  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession, isContinuation, steps, billingInterval, user, existingSettings]);
 
   return {
-    state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, next, back, submit,
+    state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, personalBooksFailed, businessTypeFailed, next, back, submit,
     capabilities, capabilitiesReady, isContinuation, existingSettings, freeSlot, freeSlotMessage, billingInterval, setBillingInterval,
     catalog,
   };

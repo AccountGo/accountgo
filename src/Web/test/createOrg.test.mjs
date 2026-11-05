@@ -41,7 +41,7 @@ test('old drafts without About answers do not invent purpose or collaboration', 
   const legacy = normalizeWizardState({ name: 'Acme', slug: 'acme', plan: 'accounting' }, today);
   assert.equal(legacy.workspacePurpose, '');
   assert.equal(legacy.collaborationIntent, '');
-  assert.ok(validateStep('about', legacy, today).workspacePurpose);
+  assert.ok(validateStep('about', legacy, today).workKind);
 });
 
 test('cash basis framework forces cash basis; every other framework is accrual', () => {
@@ -60,9 +60,9 @@ test('inventory costing only applies to product, mixed or enterprise workspaces 
 
 test('hard gates block advancing until required fields are valid', () => {
   const state = defaultState(today);
-  assert.ok(validateStep('about', state, today).workspacePurpose);
+  assert.ok(validateStep('about', state, today).workKind);
   assert.ok(validateStep('about', state, today).collaborationIntent);
-  assert.deepEqual(validateStep('about', { ...state, workspacePurpose: 'Business', collaborationIntent: 'JustMe' }, today), {});
+  assert.deepEqual(validateStep('about', { ...state, workspacePurpose: 'Business', workKind: 'Freelance', collaborationIntent: 'JustMe' }, today), {});
   assert.ok(validateStep('identity', state, today).name);
   assert.deepEqual(validateStep('identity', { ...state, name: 'Acme', slug: 'acme' }, today), {});
   assert.ok(validateStep('moneyTime', { ...state, currency: 'US' }, today).currency);
@@ -71,14 +71,14 @@ test('hard gates block advancing until required fields are valid', () => {
   assert.ok(validateStep('moneyTime', { ...state, booksStartDate: '2028-01-01' }, today).booksStartDate);
   assert.ok(validateStep('moneyTime', { ...state, fiscalYearPattern: 'Custom' }, today).fiscalYearStartMonth);
   assert.deepEqual(validateAll({
-    ...state, workspacePurpose: 'Business', collaborationIntent: 'JustMe', name: 'Acme', slug: 'acme',
+    ...state, workspacePurpose: 'Business', workKind: 'Freelance', collaborationIntent: 'JustMe', name: 'Acme', slug: 'acme',
   }, today), {});
 });
 
 test('payload carries the full hard-gate DTO the API expects', () => {
   const payload = buildPayload({
     ...defaultState(today, { name: ' Acme Studio ' }),
-    workspacePurpose: 'Business',
+    workspacePurpose: 'Business', workKind: 'Freelance',
     collaborationIntent: 'JustMe',
     legalName: 'Acme Studio LLC',
     reportingFramework: 'CashBasis',
@@ -92,7 +92,7 @@ test('payload carries the full hard-gate DTO the API expects', () => {
     name: 'Acme Studio', slug: 'acme-studio', plan: 'accounting', currency: 'PHP', legalName: 'Acme Studio LLC',
     reportingFramework: 'CashBasis', accountingBasis: 'Cash', fiscalYearPattern: 'Custom', fiscalYearStartMonth: 10,
     booksStartDate: '2026-10-24', taxRegime: 'VatGst', industryTemplate: 'ProductRetail', inventoryCostingMethod: 'WeightedAverage',
-    workspacePurpose: 'Business', collaborationIntent: 'JustMe', entityType: undefined,
+    workspacePurpose: 'Business', collaborationIntent: 'JustMe', entityType: 'SoleProprietor',
     ownerAccessPreset: 'FullWorkspaceAccess',
     initialJournalWorkflow: 'SingleActorAllowed',
   });
@@ -113,7 +113,7 @@ test('personal purpose payload sends Individual entityType so provisioning match
 test('buildPayload omits About fields when solo setup is disabled to offer a legacy submission path', () => {
   const state = {
     ...defaultState(today, { name: 'Acme Studio' }),
-    workspacePurpose: 'Business',
+    workspacePurpose: 'Business', workKind: 'Freelance',
     collaborationIntent: 'JustMe',
   };
   const payload = buildPayload(state, { soloSetupEnabled: false });

@@ -97,7 +97,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     render(<CreateOrgPage />);
 
     expect(await screen.findByText('Loading setup options…')).toBeTruthy();
-    expect(screen.queryByDisplayValue('Business')).toBeNull();
+    expect(screen.queryByDisplayValue('Freelance')).toBeNull();
     expect(screen.queryByRole('note')).toBeNull();
     expect((screen.getByRole('button', { name: /Next/ }) as HTMLButtonElement).disabled).toBe(true);
 
@@ -106,7 +106,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     ));
 
-    expect(await screen.findByDisplayValue('Business')).toBeTruthy();
+    expect(await screen.findByDisplayValue('Freelance')).toBeTruthy();
     expect(screen.queryByText('Loading setup options…')).toBeNull();
     expect(screen.queryByRole('note')).toBeNull();
   });
@@ -147,7 +147,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     );
 
     // Unapplicable choices are hidden from customer
-    expect(screen.queryByDisplayValue('Business')).toBeNull();
+    expect(screen.queryByDisplayValue('Freelance')).toBeNull();
     expect(screen.queryByDisplayValue('Personal')).toBeNull();
     expect(screen.queryByDisplayValue('JustMe')).toBeNull();
     expect(screen.queryByDisplayValue('WithOthers')).toBeNull();
@@ -210,7 +210,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
 
     render(<CreateOrgPage />);
 
-    fireEvent.click(await screen.findByRole('radio', { name: /Business or freelance work/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Freelance or self-employed/ }));
     fireEvent.click(screen.getByRole('radio', { name: /Me and others/ }));
     expect(screen.getByText(/Journals will need independent review/)).toBeTruthy();
 
@@ -277,7 +277,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     });
 
     // Choices are visible when enabled
-    fireEvent.click(screen.getByDisplayValue('Business'));
+    fireEvent.click(screen.getByDisplayValue('Freelance'));
     fireEvent.click(screen.getByDisplayValue('JustMe'));
 
     // Advance to Review
@@ -285,7 +285,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
 
     // Review step initially shows full access and single-actor posting
     expect(screen.getByText('Purpose')).toBeTruthy();
-    expect(screen.getByText('Business or freelance work')).toBeTruthy();
+    expect(screen.getByText('Freelance or self-employed')).toBeTruthy();
     expect(screen.getByText('Who uses it')).toBeTruthy();
     expect(screen.getByText('Just me')).toBeTruthy();
     expect(screen.getByText('Owner · Full workspace access')).toBeTruthy();
@@ -312,7 +312,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     // Review step is updated: discarded choices are REMOVED from the created workspace summary
     expect(screen.queryByText('Purpose')).toBeNull();
     expect(screen.queryByText('Who uses it')).toBeNull();
-    expect(screen.queryByText('Business or freelance work')).toBeNull();
+    expect(screen.queryByText('Freelance or self-employed')).toBeNull();
 
     // Clearly states before confirmation that purpose and collaboration choices will not be saved
     const reviewNote = screen.getByRole('note');
@@ -377,7 +377,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     });
 
     render(<CreateOrgPage />);
-    fireEvent.click(await screen.findByDisplayValue('Business'));
+    fireEvent.click(await screen.findByDisplayValue('Freelance'));
     fireEvent.click(screen.getByDisplayValue('JustMe'));
 
     // Advance to Review
@@ -440,7 +440,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     expect(screen.queryByText('What do you need?')).toBeNull();
 
     // Choose Business + Just me, then advance to review.
-    fireEvent.click(screen.getByDisplayValue('Business'));
+    fireEvent.click(screen.getByDisplayValue('Freelance'));
     fireEvent.click(screen.getByDisplayValue('JustMe'));
     await advanceContinuationToReview();
 
@@ -514,7 +514,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     });
 
     render(<CreateOrgPage />);
-    fireEvent.click(await screen.findByDisplayValue('Business'));
+    fireEvent.click(await screen.findByDisplayValue('Freelance'));
     fireEvent.click(screen.getByDisplayValue('JustMe'));
     await advanceContinuationToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));

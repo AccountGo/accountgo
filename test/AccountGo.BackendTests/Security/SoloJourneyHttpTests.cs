@@ -127,6 +127,30 @@ namespace AccountGo.BackendTests.Security
         // ---- the real signup -> delivered OTP -> verification -> continuation journey ----------------
 
         [Fact]
+        public async Task CompanyContinuation_ExistingPolicyEndpointAppliesLegalFormBeforeInitialization()
+        {
+            const string email = "company-form@example.com";
+            const string slug = "company-form-books";
+            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Pat", "Company Form", slug)).StatusCode);
+            var (token, _) = await VerifyRealOtp(email);
+            Assert.False(OperatingState(slug)!.Value.Initialized);
+            using var policy = await SendScoped(HttpMethod.Put, "/api/organizations/current/accounting-policy", token, slug,
+                new { entityType = "Corporation" });
+            Assert.True(policy.StatusCode == HttpStatusCode.OK, await policy.Content.ReadAsStringAsync());
+            Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
+            using var currentPolicy = await SendScoped(HttpMethod.Get, "/api/organizations/current/accounting-policy", token, slug, null);
+            var body = await Json(currentPolicy);
+            Assert.Equal("Corporation", body.GetProperty("entityType").GetString());
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var companyId = db.Companies.Single(c => c.Slug == slug).Id;
+            var closeAccountId = db.GeneralLedgerSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId).PermanentAccountId;
+            Assert.Equal("30300", db.Accounts.IgnoreQueryFilters().Single(a => a.Id == closeAccountId).AccountCode);
+            Assert.Equal("Share Capital", db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == companyId && a.AccountCode == "30100").AccountName);
+            Assert.Equal(1, CompanyCount(slug));
+        }
+
+        [Fact]
         public async Task RegisteredOnePersonBusiness_SignupVerifyContinue_InitializesExactlyOneSoloWorkspace()
         {
             const string email = "solo-owner@example.com";
