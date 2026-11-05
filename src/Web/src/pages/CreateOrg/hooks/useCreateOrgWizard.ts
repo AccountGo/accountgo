@@ -64,6 +64,9 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
     personalPurposeEnabled: boolean;
     controlledRecoveryEnabled: boolean;
   } | null>(null);
+  // The About step waits for the server's setup capabilities so it never shows questions that the server then
+  // hides (or the reverse). A failed request still unblocks the step; the server re-checks on submit.
+  const [capabilitiesReady, setCapabilitiesReady] = useState(false);
   // In continuation mode, the workspace already exists: load its STORED settings so the review shows the
   // real persisted name/plan/currency/books (read-only facts), never the local draft values, which the
   // continuation does not save.
@@ -113,7 +116,10 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
           }
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setCapabilitiesReady(true);
+      });
     return () => {
       active = false;
     };
@@ -346,7 +352,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
 
   return {
     state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, next, back, submit,
-    capabilities, isContinuation, existingSettings, freeSlot, freeSlotMessage, billingInterval, setBillingInterval,
+    capabilities, capabilitiesReady, isContinuation, existingSettings, freeSlot, freeSlotMessage, billingInterval, setBillingInterval,
     catalog,
   };
 };

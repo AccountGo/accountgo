@@ -35,7 +35,7 @@ namespace AccountGo.BackendTests.Security
     ///
     /// The OTP is read from the deterministic email sink exactly as it was delivered; nothing here sets
     /// EmailConfirmed directly or mints a token that claims to prove the verification journey. The only
-    /// test-specific configuration is the isolated WorkspaceExperience enrollment (trusted server config),
+    /// test-specific configuration is the isolated WorkspaceExperience setup switch (trusted server config),
     /// which production leaves disabled.
     /// </summary>
     [Collection("SoloJourneyHttp")]
@@ -57,12 +57,7 @@ namespace AccountGo.BackendTests.Security
 
         public Task InitializeAsync()
         {
-            // Trusted canary enrollment comes from environment only. Enroll by email (for the anonymous
-            // signup boundary) and by any resolved user id (for the authenticated continuation) through a
-            // broad allow so the verified owner id is admitted. Production leaves all of this disabled.
             Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", "true");
-            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", "");
-            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", "");
 
             _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
@@ -106,8 +101,6 @@ namespace AccountGo.BackendTests.Security
         public Task DisposeAsync()
         {
             Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", null);
-            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", null);
-            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", null);
             _meterListener.Dispose();
             _client.Dispose();
             _factory.Dispose();
@@ -138,7 +131,6 @@ namespace AccountGo.BackendTests.Security
         {
             const string email = "solo-owner@example.com";
             const string slug = "solo-owner-books";
-            EnrollEmails(email);
 
             // 1. Anonymous signup with the About answers. The workspace is reserved but must stay
             //    unclassified before the email is verified.
@@ -149,9 +141,7 @@ namespace AccountGo.BackendTests.Security
             Assert.False(OperatingState(slug)!.Value.Initialized);
             Assert.Equal(0, FunctionalGrantCount(slug));
 
-            // 2. Verify the REAL delivered OTP. Enroll the resolved user id too, as operators enroll the
-            //    verified identity for the authenticated continuation path.
-            EnrollUserIds(await ResolveUserId(email));
+            // 2. Verify the REAL delivered OTP.
             var (token, _) = await VerifyRealOtp(email);
 
             // 3. Continuation initializes the EXISTING workspace: no duplicate, now SoloActive with Full
@@ -172,11 +162,9 @@ namespace AccountGo.BackendTests.Security
             // A freelancer without a business name at signup: verify first (email-only signup), then use the
             // authenticated create-and-initialize path. Exercises journey path 3 (authenticated create).
             const string email = "freelancer@example.com";
-            EnrollEmails(email);
             var signup = await Signup(email, "Sam", organizationName: null, slug: null);
             Assert.Equal(HttpStatusCode.OK, signup.StatusCode);
 
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
             const string slug = "freelance-books";
@@ -201,9 +189,7 @@ namespace AccountGo.BackendTests.Security
         {
             const string email = "repeat-owner@example.com";
             const string slug = "repeat-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Rae", "Repeat Books", slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
             Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
@@ -225,12 +211,11 @@ namespace AccountGo.BackendTests.Security
         [Fact]
         public async Task Continuation_WithoutSignupMarker_Rejected_NoElevation()
         {
-            // A verified, enrolled owner whose pristine workspace was created OUTSIDE the signup flow (no
+            // A verified owner whose pristine workspace was created OUTSIDE the signup flow (no
             // signup-continuation marker) must be rejected without any grant or policy change.
             const string email = "nomarker@example.com";
             const string slug = "nomarker-books";
             var (token, userId) = await CreateVerifiedUser(email);
-            EnrollUserIds(userId);
             using (var scope = _factory.Services.CreateScope())
             {
                 var workspaces = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
@@ -249,30 +234,12 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(WorkspaceApprovalRuleKind.IndependentReviewerRequired, JournalRuleKind(slug));
         }
 
-        // ---- enrollment and Business+JustMe scope enforced server-side --------------------------------
+        // ---- supported scope enforced server-side --------------------------------
 
         [Fact]
-        public async Task Create_UnenrolledVerifiedUser_Rejected_NoProvisioning()
-        {
-            var (token, _) = await CreateVerifiedUser("unenrolled-journey@example.com"); // not enrolled
-            var resp = await CreateOrg(token, new
-            {
-                name = "Unenrolled Journey",
-                slug = "unenrolled-journey",
-                workspacePurpose = "Business",
-                collaborationIntent = "JustMe"
-            });
-            Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
-            Assert.Contains(Core.Authorization.WorkspacePolicyReasonCodes.CanaryNotEnrolled,
-                await resp.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-            Assert.Equal(0, CompanyCount("unenrolled-journey"));
-        }
-
-        [Fact]
-        public async Task Create_EnrolledUser_BusinessWithOthers_InitializesTeamSetup_WithOwnerFullAccessAndIndependentReview()
+        public async Task Create_User_BusinessWithOthers_InitializesTeamSetup_WithOwnerFullAccessAndIndependentReview()
         {
             var (token, userId) = await CreateVerifiedUser("team-journey@example.com");
-            EnrollUserIds(userId);
 
             var resp = await CreateOrg(token, new
             {
@@ -293,10 +260,9 @@ namespace AccountGo.BackendTests.Security
         }
 
         [Fact]
-        public async Task Create_EnrolledUser_Personal_StaysRejected_ForSoloAndTeam()
+        public async Task Create_User_Personal_StaysRejected_ForSoloAndTeam()
         {
             var (token, userId) = await CreateVerifiedUser("personal-journey@example.com");
-            EnrollUserIds(userId);
 
             foreach (var intent in new[] { "JustMe", "WithOthers" })
             {
@@ -309,7 +275,7 @@ namespace AccountGo.BackendTests.Security
                     collaborationIntent = intent
                 });
                 Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
-                Assert.Contains(Core.Authorization.WorkspacePolicyReasonCodes.CanaryScopeNotAllowed,
+                Assert.Contains(Core.Authorization.WorkspacePolicyReasonCodes.SetupScopeNotAllowed,
                     await resp.Content.ReadAsStringAsync(), StringComparison.Ordinal);
                 Assert.Equal(0, CompanyCount(slug));
             }
@@ -320,10 +286,8 @@ namespace AccountGo.BackendTests.Security
         {
             const string email = "team-continuation@example.com";
             const string slug = "team-continuation-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Tess", "Team Continuation", slug)).StatusCode);
             var userId = await ResolveUserId(email);
-            EnrollUserIds(userId);
             var (token, _) = await VerifyRealOtp(email);
 
             Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "WithOthers")).StatusCode);
@@ -337,7 +301,6 @@ namespace AccountGo.BackendTests.Security
         private async Task<(string Token, string UserId, string Slug)> CreateTeamWorkspace(string email, string slug, string? ownerAccessPreset = null)
         {
             var (token, userId) = await CreateVerifiedUser(email);
-            EnrollUserIds(userId);
             var resp = await CreateOrg(token, new
             {
                 name = slug,
@@ -691,7 +654,6 @@ namespace AccountGo.BackendTests.Security
         {
             const string email = "measure-owner@example.com";
             const string slug = "measure-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Mea", "Measure Books", slug)).StatusCode);
 
             // The durable cohort START exists at the signup boundary — BEFORE verification or
@@ -699,7 +661,6 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
             Assert.Equal(0, OnboardingCohortCount(slug, "OnboardingCompletion"));
 
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
             var successBefore = NewWorkspaceCompletions("success");
@@ -720,7 +681,6 @@ namespace AccountGo.BackendTests.Security
             // structurally pinned to 100%.
             const string email = "measure-dropout@example.com";
             const string slug = "measure-dropout-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Drop", "Measure Dropout", slug)).StatusCode);
 
             Assert.Equal(1, OnboardingCohortCount(slug, "OnboardingStart"));
@@ -734,9 +694,7 @@ namespace AccountGo.BackendTests.Security
             // Reproduces the reviewer's requested restart/resume + retry + eventual completion lifecycle.
             const string email = "measure-retry@example.com";
             const string slug = "measure-retry-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Ret", "Measure Retry", slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
             // First attempt rejected (out of scope): the durable start from signup persists, still no
@@ -763,9 +721,7 @@ namespace AccountGo.BackendTests.Security
             // and no plan field sent to the endpoint has any effect.
             const string email = "measure-plan@example.com";
             const string slug = "measure-plan-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Pla", "Measure Plan", slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
             var planBefore = StoredPlan(slug);
@@ -790,9 +746,7 @@ namespace AccountGo.BackendTests.Security
         {
             const string email = "measure-repeat@example.com";
             const string slug = "measure-repeat-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Rep", "Measure Repeat", slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
             Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
 
@@ -816,9 +770,7 @@ namespace AccountGo.BackendTests.Security
             // persists (the workspace is a real cohort member awaiting conversion).
             const string email = "measure-reject@example.com";
             const string slug = "measure-reject-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Rej", "Measure Reject", slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
             var successBefore = NewWorkspaceCompletions("success");
@@ -831,8 +783,6 @@ namespace AccountGo.BackendTests.Security
             Assert.False(OperatingState(slug)!.Value.Initialized);
         }
 
-
-
         [Fact]
         public async Task PendingSignupContinuation_FlagIsServerDerived_TrueOnlyForUninitializedSignupOwner()
         {
@@ -843,9 +793,7 @@ namespace AccountGo.BackendTests.Security
             // it cannot complete.
             const string email = "pending-flag@example.com";
             const string slug = "pending-flag-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Pen", "Pending Flag", slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
             // Before initialization: a genuine pending-signup workspace reports the capability as true.
@@ -872,7 +820,6 @@ namespace AccountGo.BackendTests.Security
             const string email = "legacy-flag@example.com";
             const string slug = "legacy-flag-books";
             var (token, userId) = await CreateVerifiedUser(email);
-            EnrollUserIds(userId);
             using (var scope = _factory.Services.CreateScope())
             {
                 var workspaces = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
@@ -888,8 +835,6 @@ namespace AccountGo.BackendTests.Security
                 "a pristine non-signup workspace reports pendingSignupContinuation=false");
         }
 
-
-
         [Fact]
         public async Task PendingSignupContinuation_FlagIsFalse_WhenSetupDisabled_AndInitializeStill422()
         {
@@ -899,12 +844,10 @@ namespace AccountGo.BackendTests.Security
             // and initialization still returns 422 (authorization is retained, not merely hidden).
             const string email = "gate-disabled@example.com";
             const string slug = "gate-disabled-books";
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Gate", "Gate Disabled", slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
             var (token, _) = await VerifyRealOtp(email);
 
-            // Sanity: with setup enabled and the owner enrolled, the capability is available.
+            // Sanity: with setup enabled, the capability is available.
             Assert.True(await PendingSignupContinuationFlag(token, slug));
 
             // Bring up a host with solo setup DISABLED against the same database and signup workspace.
@@ -931,53 +874,6 @@ namespace AccountGo.BackendTests.Security
             {
                 Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_SOLO_SETUP_ENABLED", "true");
             }
-        }
-
-        [Fact]
-        public async Task PendingSignupContinuation_FlagIsFalse_WhenOwnerUnenrolled_AndInitializeStill422()
-        {
-            // Finding (round 5.1): with setup enabled but the owner NOT in the canary, the continuation is
-            // unavailable to them. The capability must be false (so routing does not send them into it) and
-            // initialization must still return 422 — enrollment is a server gate, not a routing hint.
-            const string email = "gate-unenrolled@example.com";
-            const string slug = "gate-unenrolled-books";
-            // Enroll ONLY for the anonymous signup boundary; do NOT enroll the resolved user id, so the
-            // authenticated continuation caller is unenrolled.
-            EnrollEmails(email);
-            Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Gate", "Gate Unenrolled", slug)).StatusCode);
-            var (token, _) = await VerifyRealOtp(email);
-
-            // Drop the signup email from enrollment so neither the email nor the user id is admitted now.
-            EnrollEmails(); // clears WORKSPACE_EXPERIENCE_CANARY_EMAILS
-
-            using var freshFactory = NewFactory(out var freshClient);
-            using (freshClient)
-            {
-                // Capability is false because the owner is not enrolled...
-                var flagResp = await SendScopedWith(freshClient, HttpMethod.Get, "/api/organizations/current", token, slug, null);
-                Assert.Equal(HttpStatusCode.OK, flagResp.StatusCode);
-                using var doc = JsonDocument.Parse(await flagResp.Content.ReadAsStringAsync());
-                Assert.False(doc.RootElement.GetProperty("operatingPolicy").GetProperty("pendingSignupContinuation").GetBoolean());
-
-                // ...and initialization still fails closed with 422 (authorization retained).
-                var init = await SendScopedWith(freshClient, HttpMethod.Post, "/api/organizations/current/initialize", token, slug,
-                    new { workspacePurpose = "Business", collaborationIntent = "JustMe" });
-                Assert.Equal(HttpStatusCode.UnprocessableEntity, init.StatusCode);
-                Assert.False(OperatingState(slug)!.Value.Initialized);
-            }
-        }
-
-
-
-        private void EnrollEmails(params string[] emails) =>
-            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_EMAILS", string.Join(",", emails));
-
-        private void EnrollUserIds(params string[] userIds)
-        {
-            var existing = Environment.GetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS");
-            var all = (existing ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Concat(userIds).Distinct();
-            Environment.SetEnvironmentVariable("WORKSPACE_EXPERIENCE_CANARY_USER_IDS", string.Join(",", all));
         }
 
         private Task<HttpResponseMessage> Signup(string email, string firstName, string? organizationName, string? slug)
@@ -1043,9 +939,7 @@ namespace AccountGo.BackendTests.Security
         /// <summary>Full real journey to a SoloActive, financials-entitled workspace owned by a verified user.</summary>
         private async Task<(string Token, string UserId, string Slug)> CreateInitializedSoloWorkspace(string email, string slug)
         {
-            EnrollEmails(email);
             Assert.Equal(HttpStatusCode.OK, (await Signup(email, "Owner", "Org " + slug, slug)).StatusCode);
-            EnrollUserIds(await ResolveUserId(email));
             var (token, userId) = await VerifyRealOtp(email);
             Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
             return (token, userId, slug);

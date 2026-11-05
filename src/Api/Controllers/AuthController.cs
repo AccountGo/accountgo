@@ -262,9 +262,8 @@ namespace Api.Controllers
             {
                 // Signup validates the shape of the About answers so the client gets early feedback, but it
                 // NEVER initializes the workspace, grants access, or sets the single-actor policy here: the
-                // email is unverified at this point (EmailConfirmed is false until OTP) and enrollment is a
-                // trusted-audience decision bound to a verified owner. Initialization — including the canary
-                // enrollment and Business+JustMe scope checks — happens only through the authenticated
+                // email is unverified at this point (EmailConfirmed is false until OTP). Initialization —
+                // including the setup switch and supported-scope checks — happens only through the authenticated
                 // create/initialization path after the owner verifies and signs in.
                 if (!hasPurpose || !hasCollaboration
                     || !Enum.TryParse<Core.Domain.WorkspacePurpose>(request.WorkspacePurpose, ignoreCase: true, out _)

@@ -86,6 +86,31 @@ async function advanceContinuationToReview() {
 }
 
 describe('CreateOrg wizard capability-aware journeys', () => {
+  it('about step waits for setup capabilities instead of flashing the questions', async () => {
+    let release: (res: Response) => void = () => {};
+    const pending = new Promise<Response>((resolve) => { release = resolve; });
+    authFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/organizations/setup-capabilities') return pending;
+      return new Response(null, { status: 404 });
+    });
+
+    render(<CreateOrgPage />);
+
+    expect(await screen.findByText('Loading setup options…')).toBeTruthy();
+    expect(screen.queryByDisplayValue('Business')).toBeNull();
+    expect(screen.queryByRole('note')).toBeNull();
+    expect((screen.getByRole('button', { name: /Next/ }) as HTMLButtonElement).disabled).toBe(true);
+
+    release(new Response(
+      JSON.stringify({ soloSetupEnabled: true, personalPurposeEnabled: false, controlledRecoveryEnabled: false }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ));
+
+    expect(await screen.findByDisplayValue('Business')).toBeTruthy();
+    expect(screen.queryByText('Loading setup options…')).toBeNull();
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
   it('known-disabled journey: hides unapplicable choices, clearly states they are not saved, and agrees with persisted payload', async () => {
     const postCalls: any[] = [];
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -352,7 +377,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     });
 
     render(<CreateOrgPage />);
-    fireEvent.click(screen.getByDisplayValue('Business'));
+    fireEvent.click(await screen.findByDisplayValue('Business'));
     fireEvent.click(screen.getByDisplayValue('JustMe'));
 
     // Advance to Review
@@ -489,7 +514,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     });
 
     render(<CreateOrgPage />);
-    fireEvent.click(screen.getByDisplayValue('Business'));
+    fireEvent.click(await screen.findByDisplayValue('Business'));
     fireEvent.click(screen.getByDisplayValue('JustMe'));
     await advanceContinuationToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
