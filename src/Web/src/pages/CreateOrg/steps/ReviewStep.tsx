@@ -1,8 +1,9 @@
 import React from 'react';
+import type { PlanCatalogEntry } from '../../../lib/usePlanCatalog';
 import { fiscalYearPreview } from '../lib/fyPreview';
 import { basisForFramework, effectiveInventoryMethod, inventoryRelevant, type WizardState } from '../lib/policyDefaults';
 
-const PLAN_LABEL = { invoicing: 'Invoicing', accounting: 'Full accounting', enterprise: 'Enterprise' } as const;
+const PLAN_LABEL: Record<string, string> = { invoicing: 'Invoicing', accounting: 'Full accounting', enterprise: 'Enterprise' };
 const FRAMEWORK_LABEL = { IfrsForSmes: 'IFRS for SMEs', UsGaapPrivate: 'US GAAP (private)', Ifrs: 'Full IFRS', CashBasis: 'Cash basis' } as const;
 const TAX_LABEL = { None: 'No tax', SalesTax: 'Sales tax', VatGst: 'VAT / GST' } as const;
 const INDUSTRY_LABEL = { Services: 'Services', ProductRetail: 'Products / retail', Mixed: 'Mixed' } as const;
@@ -15,7 +16,11 @@ export const ReviewStep: React.FC<{
   capabilities?: { soloSetupEnabled: boolean } | null;
   isContinuation?: boolean;
   existingSettings?: { name?: string; slug?: string; plan?: string; currency?: string; fiscalYearEnd?: string } | null;
-}> = ({ state, capabilities, isContinuation, existingSettings }) => {
+  catalog?: PlanCatalogEntry[] | null;
+}> = ({ state, capabilities, isContinuation, existingSettings, catalog }) => {
+  const planLabel = PLAN_LABEL[state.plan]
+    || catalog?.find((p) => p.key === state.plan)?.name
+    || state.plan;
   const preview = fiscalYearPreview(state.booksStartDate, state.fiscalYearPattern, state.fiscalYearStartMonth);
   const justMe = state.collaborationIntent === 'JustMe';
   const withOthers = state.collaborationIntent === 'WithOthers';
@@ -52,7 +57,7 @@ export const ReviewStep: React.FC<{
         ...(existingSettings?.fiscalYearEnd ? [['Fiscal year end', existingSettings.fiscalYearEnd] as [string, string]] : []),
       ]
     : [
-        ['Plan', PLAN_LABEL[state.plan]],
+        ['Plan', planLabel],
         ['Workspace', state.name.trim()],
         ['URL', `/org/${state.slug}`],
         ...(state.legalName.trim() ? [['Legal name', state.legalName.trim()] as [string, string]] : []),

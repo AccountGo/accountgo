@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../auth/AuthContext';
 import { setPersistedOrgSlug } from '../../../lib/storage';
+import { withSuppressedEntitlementDenial } from '../../../lib/entitlementEvents';
+import { isFreePlan, isFreeSlotUsed, type FreeSlotState } from '../../../lib/createOrgPlanOptions';
+import { buildCreateReturnUrl, interpretCreateOrgResponse } from '../../../lib/createOrgSubmit';
+import { usePlanCatalog } from '../../../lib/usePlanCatalog';
+import type { Organization } from '../../../types';
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft';
 import {
   buildPayload,
@@ -22,6 +27,7 @@ export type SubmitStatus = 'idle' | 'submitting' | 'success';
 export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pendingSlug?: string }) => {
   const navigate = useNavigate();
   const { authFetch, refreshSession } = useAuth();
+  const catalog = usePlanCatalog();
   // Continuation mode: a signup-created, still-unclassified workspace already exists. We initialize THAT
   // workspace (POST current/initialize) instead of creating a new one, so no duplicate is produced.
   const pendingSlug = prefill.pendingSlug?.trim() || undefined;
@@ -50,6 +56,9 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   const [errors, setErrors] = useState<StepErrors>({});
   const [status, setStatus] = useState<SubmitStatus>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
+  const [freeSlot, setFreeSlot] = useState<FreeSlotState>({ used: false, freeWorkspaceName: null, freeWorkspaceSlug: null });
+  const [freeSlotMessage, setFreeSlotMessage] = useState<string | null>(null);
   const [capabilities, setCapabilities] = useState<{
     soloSetupEnabled: boolean;
     personalPurposeEnabled: boolean;
@@ -109,6 +118,45 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
       active = false;
     };
   }, [authFetch]);
+
+  // Free-slot usage + the owner's existing free workspace (for the plan-step message).
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      authFetch('/api/entitlements/me').then(async (res) => (res.ok ? res.json() : null)),
+      authFetch('/api/organizations').then(async (res) => (res.ok ? res.json() : null)),
+    ])
+      .then(([me, orgs]) => {
+        if (!active) return;
+        const used = me?.freeWorkspace?.used as number | undefined;
+        const limit = me?.freeWorkspace?.limit as number | null | undefined;
+        const slotUsed = isFreeSlotUsed(used ?? 0, limit ?? null);
+        let freeWorkspaceName: string | null = null;
+        let freeWorkspaceSlug: string | null = null;
+        if (Array.isArray(orgs) && catalog.plans) {
+          const ownedFree = (orgs as Organization[]).find((org) => {
+            if (org.role !== 'Owner') return false;
+            if ((org.activationState || 'active') !== 'active') return false;
+            const entry = catalog.plans!.find((p) => p.key === org.plan)
+              || catalog.plans!.find((p) => (p.product || '').toLowerCase() === (org.plan || '').toLowerCase() && isFreePlan(p));
+            // Legacy create payload still uses product aliases ("invoicing" / "accounting") for free plans.
+            if (!entry) {
+              return org.plan === 'accounting' || org.plan === 'invoicing';
+            }
+            return isFreePlan(entry);
+          });
+          if (ownedFree) {
+            freeWorkspaceName = ownedFree.name;
+            freeWorkspaceSlug = ownedFree.slug;
+          }
+        }
+        setFreeSlot({ used: slotUsed, freeWorkspaceName, freeWorkspaceSlug });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [authFetch, catalog.plans]);
 
   useEffect(() => () => window.clearTimeout(redirectTimer.current), []);
 
@@ -204,53 +252,93 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
         return;
       }
 
-      const response = await authFetch('/api/organizations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const fallbackSlug = slugify(state.slug || state.name);
+      const createPayload = {
+        ...payload,
+        returnUrl: buildCreateReturnUrl(window.location.origin, fallbackSlug, billingInterval),
+      };
+      const response = await withSuppressedEntitlementDenial(() =>
+        authFetch('/api/organizations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(createPayload),
+        }),
+      );
       const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const failureReason = data?.reasonCode ?? data?.extensions?.reasonCode;
-        if (response.status === 409) {
-          setErrors({ slug: 'That URL is already taken. Choose another.' });
-          setStepIndex(steps.indexOf('identity'));
-        } else if (response.status === 422 && failureReason === 'solo_setup_disabled') {
-          setCapabilities((prev) => ({
-            soloSetupEnabled: false,
-            personalPurposeEnabled: prev?.personalPurposeEnabled ?? false,
-            controlledRecoveryEnabled: prev?.controlledRecoveryEnabled ?? false,
-          }));
-          setState((prev) => ({ ...prev, workspacePurpose: '', collaborationIntent: '' }));
-          void authFetch('/api/organizations/setup-capabilities')
-            .then(async (res) => (res.ok ? res.json() : null))
-            .then((fresh) => {
-              if (fresh) setCapabilities(fresh);
-            })
-            .catch(() => {});
-          setSubmitError(
-            'Solo setup is not enabled. Review and confirm the updated access and accounting policy before creating your workspace.',
-          );
-          setStepIndex(steps.indexOf('review'));
-        } else if (response.status === 422 && failureReason === 'personal_purpose_disabled') {
-          setSubmitError(data?.detail || 'Personal finances workspaces are not available yet. Choose business or freelance work, or try again later.');
-          setStepIndex(steps.indexOf('about'));
-        } else {
-          setSubmitError(data?.detail || data?.title || data?.message || 'We could not create the workspace. Try again.');
-        }
+      const failureReason = data?.reasonCode ?? data?.extensions?.reasonCode;
+      if (response.status === 409) {
+        setErrors({ slug: 'That URL is already taken. Choose another.' });
+        setStepIndex(steps.indexOf('identity'));
         setStatus('idle');
         return;
       }
-      const slug: string = data?.slug || slugify(state.slug || state.name);
-      setPersistedOrgSlug(slug);
+      if (response.status === 422 && failureReason === 'solo_setup_disabled') {
+        setCapabilities((prev) => ({
+          soloSetupEnabled: false,
+          personalPurposeEnabled: prev?.personalPurposeEnabled ?? false,
+          controlledRecoveryEnabled: prev?.controlledRecoveryEnabled ?? false,
+        }));
+        setState((prev) => ({ ...prev, workspacePurpose: '', collaborationIntent: '' }));
+        void authFetch('/api/organizations/setup-capabilities')
+          .then(async (res) => (res.ok ? res.json() : null))
+          .then((fresh) => {
+            if (fresh) setCapabilities(fresh);
+          })
+          .catch(() => {});
+        setSubmitError(
+          'Solo setup is not enabled. Review and confirm the updated access and accounting policy before creating your workspace.',
+        );
+        setStepIndex(steps.indexOf('review'));
+        setStatus('idle');
+        return;
+      }
+      if (response.status === 422 && failureReason === 'personal_purpose_disabled') {
+        setSubmitError(data?.detail || 'Personal finances workspaces are not available yet. Choose business or freelance work, or try again later.');
+        setStepIndex(steps.indexOf('about'));
+        setStatus('idle');
+        return;
+      }
+
+      const outcome = interpretCreateOrgResponse(response.status, data, fallbackSlug);
+      if (outcome.kind === 'quota-free-slot') {
+        setFreeSlotMessage(outcome.detail);
+        setFreeSlot((prev) => ({ ...prev, used: true }));
+        setStepIndex(steps.indexOf('intent'));
+        setStatus('idle');
+        return;
+      }
+      if (outcome.kind === 'error') {
+        setSubmitError(outcome.detail);
+        setStatus('idle');
+        return;
+      }
+      if (outcome.kind === 'redirect-checkout') {
+        clearDraft();
+        window.location.assign(outcome.url);
+        return;
+      }
+      if (outcome.kind === 'pending') {
+        setPersistedOrgSlug(outcome.slug);
+        clearDraft();
+        const q = outcome.checkoutError
+          ? `?checkoutError=${encodeURIComponent(outcome.checkoutError)}`
+          : '';
+        navigate(`/org/${encodeURIComponent(outcome.slug)}${q}`, { replace: true });
+        return;
+      }
+      setPersistedOrgSlug(outcome.slug);
       clearDraft();
       setStatus('success');
-      redirectTimer.current = window.setTimeout(() => navigate(`/org/${encodeURIComponent(slug)}/dashboard`, { replace: true }), 900);
+      redirectTimer.current = window.setTimeout(() => navigate(`/org/${encodeURIComponent(outcome.slug)}/dashboard`, { replace: true }), 900);
     } catch {
       setSubmitError('We could not reach the server. Check your connection and try again.');
       setStatus('idle');
     }
-  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession, isContinuation, steps]);
+  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession, isContinuation, steps, billingInterval]);
 
-  return { state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, next, back, submit, capabilities, isContinuation, existingSettings };
+  return {
+    state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, next, back, submit,
+    capabilities, isContinuation, existingSettings, freeSlot, freeSlotMessage, billingInterval, setBillingInterval,
+    catalog,
+  };
 };

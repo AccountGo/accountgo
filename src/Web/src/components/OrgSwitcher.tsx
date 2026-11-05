@@ -158,10 +158,15 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
                     {getInitials(displayName)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold truncate flex items-center justify-between">
+                    <div className="text-xs font-semibold truncate flex items-center justify-between gap-1">
                       <span className={isSelected ? 'text-[var(--brand-primary)] font-bold' : 'text-[var(--text-main)]'}>
                         {displayName}
                       </span>
+                      {org.activationState === 'pending_checkout' && (
+                        <span className="shrink-0 uppercase text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-sans font-semibold">
+                          Pending payment
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-[var(--text-muted)] font-mono truncate">
                       {org.slug}
