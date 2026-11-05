@@ -72,6 +72,31 @@ describe('Personal books switcher', () => {
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
+  it('never offers to link an older personal workspace as work books', () => {
+    const legacy: OrgDetails = { id: '5', name: 'Household', slug: 'household', role: 'Owner', currency: 'USD',
+      isPersonalPurpose: true, canAddPersonalBooks: true };
+    render(<MemoryRouter><OrgSwitcher currentOrg={legacy} availableOrgs={[legacy]} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add personal books' }));
+    expect(screen.queryByLabelText(/Link to/)).toBeNull();
+  });
+
+  it('records an older personal workspace as personal books instead of creating new ones', async () => {
+    const reload = vi.fn();
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, reload } });
+    authFetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const legacy: OrgDetails = { id: '5', name: 'Household', slug: 'household', role: 'Owner',
+      isPersonalPurpose: true, canAddPersonalBooks: true, canUseAsPersonalBooks: true };
+    render(<MemoryRouter><OrgSwitcher currentOrg={legacy} availableOrgs={[legacy]} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.queryByRole('menuitem', { name: 'Add personal books' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Use as my personal books' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use as my personal books' }));
+    await waitFor(() => expect(reload).toHaveBeenCalled());
+    expect(authFetch.mock.calls[0][0]).toBe('/api/organizations/personal/adopt/5');
+    expect(authFetch.mock.calls[0][1]).toEqual({ method: 'POST' });
+  });
+
   it('hides sales navigation when the sales module is absent', () => {
     const hasModule = (key: string) => ['financials', 'purchases', 'reports'].includes(key);
     render(<MemoryRouter><Sidebar currentOrg={personal} availableOrgs={[personal]} user={{ id: 'owner', name: 'Pat', email: 'pat@example.test', role: 'Owner' }}

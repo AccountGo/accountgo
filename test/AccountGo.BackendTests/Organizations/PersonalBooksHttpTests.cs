@@ -223,6 +223,95 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         Assert.Equal(4, await check.AuditLogs.IgnoreQueryFilters().CountAsync(a => a.TableName == "__WorkspaceLink"));
     }
 
+    private async Task<int> CreateLegacyPersonal(string slug, string? plan = null)
+    {
+        var id = await CreateWork(slug);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        db.SuppressTenantSecurityCheck = true;
+        var settings = await db.WorkspaceOperatingSettings.IgnoreQueryFilters().SingleOrDefaultAsync(s => s.CompanyId == id);
+        if (settings == null)
+        {
+            settings = new WorkspaceOperatingSettings { CompanyId = id };
+            db.WorkspaceOperatingSettings.Add(settings);
+        }
+        settings.Purpose = WorkspacePurpose.Personal;
+        if (plan != null) (await db.Companies.IgnoreQueryFilters().SingleAsync(c => c.Id == id)).Plan = plan;
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private async Task<JsonElement> Row(int id)
+    {
+        using var list = await Send(HttpMethod.Get, "/api/organizations");
+        var listing = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        return listing.RootElement.EnumerateArray().Single(r => r.GetProperty("id").GetString() == id.ToString(CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task Adopt_RecordsOlderPersonalWorkspace_KeepsPlan_ThenAllowsLinkingWork()
+    {
+        var legacyId = await CreateLegacyPersonal("household");
+        var workId = await CreateWork("studio");
+        var before = await Row(legacyId);
+        var planBefore = before.GetProperty("plan").GetString();
+        Assert.True(before.GetProperty("canUseAsPersonalBooks").GetBoolean());
+        Assert.True(before.GetProperty("isPersonalPurpose").GetBoolean());
+        Assert.False((await Row(workId)).GetProperty("canUseAsPersonalBooks").GetBoolean());
+
+        using (var workAdopt = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{workId}"))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, workAdopt.StatusCode);
+            Assert.Contains("personal_books_not_eligible", await workAdopt.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        }
+        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{legacyId}"))
+            Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
+
+        var after = await Row(legacyId);
+        Assert.True(after.GetProperty("isPersonalBooks").GetBoolean());
+        Assert.False(after.GetProperty("canUseAsPersonalBooks").GetBoolean());
+        Assert.False(after.GetProperty("canAddPersonalBooks").GetBoolean());
+        Assert.False(after.GetProperty("onPersonalBooksPlan").GetBoolean());
+        Assert.Equal(planBefore, after.GetProperty("plan").GetString());
+
+        using (var again = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{legacyId}"))
+            Assert.Contains("personal_workspace_exists", await again.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using (var created = await Personal())
+            Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
+        using (var linked = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = workId }))
+            Assert.Equal(HttpStatusCode.NoContent, linked.StatusCode);
+        Assert.Equal(legacyId, (await Row(workId)).GetProperty("linkedPersonalCompanyId").GetInt32());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        db.SuppressTenantSecurityCheck = true;
+        Assert.Equal(1, await db.AuditLogs.IgnoreQueryFilters().CountAsync(a => a.CompanyId == legacyId && a.TableName == "__PersonalBooks"));
+    }
+
+    [Fact]
+    public async Task Adopt_RequiresOwner_AndOnlyOneAdoptionPerPerson()
+    {
+        var first = await CreateLegacyPersonal("home-one");
+        var second = await CreateLegacyPersonal("home-two");
+        var notOwned = await CreateLegacyPersonal("home-shared");
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            (await db.CompanyMembers.IgnoreQueryFilters().SingleAsync(m => m.CompanyId == notOwned && m.UserId == _userId)).Role = CompanyMemberRole.Member;
+            await db.SaveChangesAsync();
+        }
+        Assert.False((await Row(notOwned)).GetProperty("canUseAsPersonalBooks").GetBoolean());
+        using (var denied = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{notOwned}"))
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{first}"))
+            Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
+        Assert.False((await Row(second)).GetProperty("canUseAsPersonalBooks").GetBoolean());
+        using var secondAdopt = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{second}");
+        Assert.Equal(HttpStatusCode.Conflict, secondAdopt.StatusCode);
+        Assert.Contains("personal_workspace_exists", await secondAdopt.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task PersonalCreateWithInvalidLink_RollsBackCompany()
     {

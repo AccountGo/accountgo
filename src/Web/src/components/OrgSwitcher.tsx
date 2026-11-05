@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronsUpDown, Check, Plus, Building2, ExternalLink } from 'lucide-react';
 import { OrgDetails } from '../types';
 import { PersonalBooksDialog } from './PersonalBooksDialog';
+import { AdoptPersonalBooksDialog } from './AdoptPersonalBooksDialog';
 
 interface OrgSwitcherProps {
   currentOrg: OrgDetails;
@@ -17,6 +18,7 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [personalSetupOpen, setPersonalSetupOpen] = useState(false);
+  const [adoptOpen, setAdoptOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -198,7 +200,13 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
           </div>
 
           <div className="mt-1.5 pt-1.5 space-y-0.5 border-t border-[var(--bg-subtle)]">
-            {availableOrgs.some(org => org.canAddPersonalBooks) && (
+            {currentOrg.canUseAsPersonalBooks && (
+              <button type="button" role="menuitem" onClick={() => { setIsOpen(false); setAdoptOpen(true); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)] cursor-pointer">
+                <Check className="w-3.5 h-3.5" />Use as my personal books
+              </button>
+            )}
+            {!currentOrg.canUseAsPersonalBooks && availableOrgs.some(org => org.canAddPersonalBooks) && (
               <button type="button" role="menuitem" onClick={() => { setIsOpen(false); setPersonalSetupOpen(true); }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)] cursor-pointer">
                 <Plus className="w-3.5 h-3.5" />Add personal books
@@ -234,6 +242,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
       )}
       {personalSetupOpen && <PersonalBooksDialog currentOrg={currentOrg} onClose={() => setPersonalSetupOpen(false)}
         onCreated={slug => { setPersonalSetupOpen(false); navigate(`/org/${slug}/dashboard`); }} />}
+      {adoptOpen && <AdoptPersonalBooksDialog org={currentOrg} onClose={() => setAdoptOpen(false)}
+        onAdopted={() => { setAdoptOpen(false); window.location.reload(); }} />}
     </div>
   );
 };

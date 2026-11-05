@@ -9,7 +9,9 @@ export function PersonalBooksDialog({ currentOrg, onClose, onCreated }: {
   const { user, authFetch } = useAuth();
   const [name, setName] = useState(`${user?.firstName?.trim() || user?.email?.split('@')[0] || 'My'} — Personal`);
   const [currency, setCurrency] = useState(currentOrg?.currency || 'USD');
-  const canLink = currentOrg?.role === 'Owner' && !currentOrg.isPersonalBooks && !currentOrg.linkedPersonalCompanyId;
+  // Only work books can be linked: never a personal workspace, registered or not.
+  const canLink = currentOrg?.role === 'Owner' && !currentOrg.isPersonalBooks && !currentOrg.isPersonalPurpose
+    && !currentOrg.linkedPersonalCompanyId;
   const [link, setLink] = useState(canLink);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
