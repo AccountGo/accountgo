@@ -28,6 +28,7 @@ namespace Core.Authorization
         public const string FinancialsJournalView = "financials.journal.view";
         public const string FinancialsJournalCreate = "financials.journal.create";
         public const string FinancialsJournalPost = "financials.journal.post";
+        public const string LinkedEntriesCreate = "financials.linked_entries.create";
         public const string FinancialsPeriodsClose = "financials.periods.close";
         public const string FinancialsReportsView = "financials.reports.view";
         public const string ReportsView = "reports.view";
@@ -265,6 +266,12 @@ namespace Core.Authorization
                     DisallowedWorkflowStates = new[] { "Posted", "Void", "PeriodLocked" },
                     Description = "Post or reverse journal entries with workflow and separation-of-duty checks."
                 },
+                Functional(
+                    LinkedEntriesCreate,
+                    "POL-FIN-LINKED-ENTRY-CREATE",
+                    permissionsAll: new[] { SystemPermissions.FinancialsJournalPost },
+                    modulesAny: new[] { SystemModules.Financials },
+                    description: "Create a linked journal pair while preserving each workspace's posting policy."),
                 Functional(
                     FinancialsPeriodsClose,
                     "POL-FIN-PERIOD-CLOSE",

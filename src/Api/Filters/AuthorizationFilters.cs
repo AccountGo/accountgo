@@ -113,6 +113,26 @@ namespace Api.Filters
             var tenantContext = context.HttpContext.RequestServices.GetRequiredService<ITenantContext>();
             var entitlements = context.HttpContext.RequestServices.GetService<IEntitlementService>();
             var db = context.HttpContext.RequestServices.GetService<ApiDbContext>();
+            if (context.ActionDescriptor.RouteValues.TryGetValue("action", out var actionName) &&
+                string.Equals(actionName, "PostJournalEntry", StringComparison.Ordinal) && tenantContext.CompanyId.HasValue)
+            {
+                var dto = context.ActionArguments.Values.OfType<Dto.Financial.JournalEntry>().FirstOrDefault();
+                var linkedEntries = context.HttpContext.RequestServices.GetService<Api.Service.LinkedEntryService>();
+                if (dto != null && dto.Id > 0 && linkedEntries != null)
+                {
+                    var code = linkedEntries.IsMirrorJournal(tenantContext.CompanyId.Value, dto.Id)
+                        ? "linked_entry_use_pair_reversal"
+                        : linkedEntries.GetSourcePairState(tenantContext.CompanyId.Value, dto.Id) is { } state && state != "PendingSource"
+                            ? "linked_entry_not_pending" : null;
+                    if (code != null)
+                    {
+                        var conflict = new ProblemDetails { Title = code, Detail = "Linked journals must be posted through their linked entry pair.", Status = StatusCodes.Status409Conflict };
+                        conflict.Extensions["code"] = code;
+                        context.Result = new ObjectResult(conflict) { StatusCode = StatusCodes.Status409Conflict };
+                        return;
+                    }
+                }
+            }
             var httpContextAccessor = context.HttpContext.RequestServices.GetService<IHttpContextAccessor>()
                 ?? new HttpContextAccessor { HttpContext = context.HttpContext };
             var authService = context.HttpContext.RequestServices.GetService<IAccessAuthorizationService>()

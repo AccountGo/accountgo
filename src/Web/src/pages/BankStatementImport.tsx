@@ -7,6 +7,7 @@ import { StatementLineExcludeDialog } from '../components/StatementLineExcludeDi
 import { StatementLineExpenseDialog } from '../components/StatementLineExpenseDialog';
 import { StatementLineOtherIncomeDialog } from '../components/StatementLineOtherIncomeDialog';
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
+import { LinkedEntryDialog } from '../components/LinkedEntryDialog';
 import { STATEMENT_EXCLUSION_REASONS } from '../types/banking';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
@@ -96,6 +97,8 @@ const BankStatementImportPage: React.FC = () => {
   const { hasPermission } = useTenantContext();
   const canManage = hasPermission('banking.accounts.manage');
   const canCreateTx = hasPermission('banking.transactions.create');
+  const canCreateLinkedEntry = currentOrg.entityType === 'SoleProprietor' &&
+    hasPermission('financials.journal.post') && hasPermission('financials.journal.create');
   const { canModule, canWrite, canCreate } = useCapabilities();
   const hasFinancials = canModule('financials');
   const purchasesWritable = canModule('purchases') && canWrite('purchases');
@@ -142,6 +145,7 @@ const BankStatementImportPage: React.FC = () => {
   const [matchConfirm, setMatchConfirm] = useState<{ line: BankStatementLine; ledgerId: number } | null>(null);
   const [applyFor, setApplyFor] = useState<BankStatementLine | null>(null);
   const [incomeFor, setIncomeFor] = useState<BankStatementLine | null>(null);
+  const [linkedEntryFor, setLinkedEntryFor] = useState<{ line: BankStatementLine; kind: 'Personal' | 'MoneyIn' } | null>(null);
   const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
   const [pickedCandidate, setPickedCandidate] = useState<Record<number, string>>({});
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -943,6 +947,10 @@ const BankStatementImportPage: React.FC = () => {
                             {canRecordExpense && !line.draftBillId ? 'Record expense' : 'Pay open bill'}
                           </button>
                         )}
+                        {!early && line.amount < 0 && !line.draftBillId && canCreateLinkedEntry && (
+                          <button type="button" disabled={busy} onClick={() => setLinkedEntryFor({ line, kind: 'Personal' })}
+                            className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-hover)]">Personal</button>
+                        )}
                         {!early && line.amount < 0 && canDraft && !line.draftBillId && (
                           <button type="button" disabled={busy} onClick={() => { setExpenseMode('draft'); setExpenseFor(line); }}
                             className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)]">Save bill draft</button>
@@ -971,6 +979,10 @@ const BankStatementImportPage: React.FC = () => {
                               </button>
                             )}
                           </>
+                        )}
+                        {!early && line.amount > 0 && !line.draftBillId && canCreateLinkedEntry && (
+                          <button type="button" disabled={busy} onClick={() => setLinkedEntryFor({ line, kind: 'MoneyIn' })}
+                            className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-hover)]">Money I put in</button>
                         )}
                         <button
                           type="button"
@@ -1034,6 +1046,17 @@ const BankStatementImportPage: React.FC = () => {
           }}
         />
       )}
+      {linkedEntryFor && <LinkedEntryDialog
+        line={linkedEntryFor.line}
+        workBankId={id}
+        initialKind={linkedEntryFor.kind}
+        workCurrency={currentOrg.currency || 'USD'}
+        onClose={() => setLinkedEntryFor(null)}
+        onSaved={async warning => {
+          setLinkedEntryFor(null);
+          setNotice(warning || 'Linked journals created. If this workspace requires review, the personal entry will post after the work journal is approved.');
+          await loadLines(status, page);
+        }} />}
       {matchConfirm && <ConfirmDialog title="Match existing ledger entry?"
         message={`Match ${formatCurrency(matchConfirm.line.amount)} dated ${matchConfirm.line.postedDate.slice(0, 10)} in ${account.name} to ledger line ${matchConfirm.ledgerId}. This links an existing posting; it does not create another payment.`}
         confirmLabel="Confirm match" busy={busy} onCancel={() => setMatchConfirm(null)}

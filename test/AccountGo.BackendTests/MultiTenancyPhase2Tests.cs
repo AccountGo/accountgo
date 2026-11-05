@@ -637,7 +637,11 @@ namespace AccountGo.BackendTests
                 "InvitationsController.cs",
                 // Personal setup and switcher summaries read explicit, membership-authorized company IDs before tenant resolution.
                 "OrganizationsController.cs",
-                "OrganizationsController.PersonalBooks.cs"
+                "OrganizationsController.PersonalBooks.cs",
+                // Linked entries explicitly scope cross-company reads to the pair's two authorized workspaces.
+                "LinkedEntryService.cs",
+                "LinkedEntryIntegrityScanner.cs",
+                "LinkedEntriesController.cs"
             };
 
             var solutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));

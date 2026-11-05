@@ -697,6 +697,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureEntityTypeAndYearEndClose(connection);
             EnsureRecurringScheduleTables(connection);
             EnsurePersonalBooksTables(connection);
+            EnsureLinkedEntryPairs(connection);
         }
 
         // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
@@ -1356,6 +1357,36 @@ WHERE NOT EXISTS (
                 CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspaceLinks_WorkCompanyId"" ON ""WorkspaceLinks"" (""WorkCompanyId"");
                 CREATE INDEX IF NOT EXISTS ""IX_WorkspaceLinks_PersonalCompanyId"" ON ""WorkspaceLinks"" (""PersonalCompanyId"");
                 CREATE INDEX IF NOT EXISTS ""IX_WorkspaceLinks_OwnerUserId"" ON ""WorkspaceLinks"" (""OwnerUserId"");";
+            command.ExecuteNonQuery();
+        }
+
+        private static void EnsureLinkedEntryPairs(DbConnection connection)
+        {
+            if (!TableExists(connection, "Company")) return;
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS ""LinkedEntryPairs"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""SourceCompanyId"" INTEGER NOT NULL,
+                    ""SourceJournalId"" INTEGER NULL,
+                    ""MirrorCompanyId"" INTEGER NOT NULL,
+                    ""MirrorJournalId"" INTEGER NULL,
+                    ""WorkBankAccountId"" INTEGER NOT NULL,
+                    ""StatementLineId"" INTEGER NULL,
+                    ""OwnerUserId"" TEXT NOT NULL,
+                    ""Kind"" TEXT NOT NULL,
+                    ""SourceAmount"" NUMERIC NOT NULL,
+                    ""MirrorAmount"" NUMERIC NOT NULL,
+                    ""SourceCurrency"" TEXT NOT NULL,
+                    ""MirrorCurrency"" TEXT NOT NULL,
+                    ""ExchangeRate"" NUMERIC NOT NULL,
+                    ""State"" TEXT NOT NULL,
+                    ""IdempotencyKey"" TEXT NULL,
+                    ""CreatedAtUtc"" TEXT NOT NULL);
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_LinkedEntryPairs_SourceCompanyId_SourceJournalId"" ON ""LinkedEntryPairs"" (""SourceCompanyId"", ""SourceJournalId"") WHERE ""SourceJournalId"" IS NOT NULL;
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_LinkedEntryPairs_MirrorCompanyId_MirrorJournalId"" ON ""LinkedEntryPairs"" (""MirrorCompanyId"", ""MirrorJournalId"") WHERE ""MirrorJournalId"" IS NOT NULL;
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_LinkedEntryPairs_SourceCompanyId_IdempotencyKey"" ON ""LinkedEntryPairs"" (""SourceCompanyId"", ""IdempotencyKey"") WHERE ""IdempotencyKey"" IS NOT NULL;
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_LinkedEntryPairs_StatementLineId"" ON ""LinkedEntryPairs"" (""StatementLineId"") WHERE ""StatementLineId"" IS NOT NULL;";
             command.ExecuteNonQuery();
         }
 
