@@ -140,5 +140,5 @@ test('review-step returns to plan step on owned_workspaces quota denial', () => 
 
 test('create returnUrl includes checkout success and billing interval', () => {
   const url = buildCreateReturnUrl('https://app.example', 'acme-studio', 'year');
-  assert.equal(url, 'https://app.example/org/acme-studio?checkout=success&interval=year');
+  assert.equal(url, 'https://app.example/org/acme-studio?interval=year');
 });

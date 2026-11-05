@@ -48,7 +48,8 @@ export function interpretCreateOrgResponse(
 
 export function buildCreateReturnUrl(origin: string, slug: string, interval: 'month' | 'year'): string {
   const url = new URL(`/org/${encodeURIComponent(slug)}`, origin);
-  url.searchParams.set('checkout', 'success');
+  // The billing provider appends checkout=success / checkout=cancel itself; adding it here would make a
+  // cancelled checkout read as success (URLSearchParams.get returns the first value).
   url.searchParams.set('interval', interval);
   return url.toString();
 }
