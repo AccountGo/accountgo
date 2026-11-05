@@ -76,7 +76,9 @@ export function useBilling() {
       let message = `Unable to start upgrade (HTTP ${response.status}).`;
       try {
         const body = await response.json();
-        if (body?.message) message = body.message;
+        if (typeof body?.message === 'string' && body.message.trim()) message = body.message;
+        else if (typeof body?.detail === 'string' && body.detail.trim()) message = body.detail;
+        else if (typeof body?.title === 'string' && body.title.trim()) message = body.title;
       } catch { /* keep default */ }
       throw new Error(message);
     }
