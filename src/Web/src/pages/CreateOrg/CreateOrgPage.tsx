@@ -9,6 +9,7 @@ import { MoneyTimeStep } from './steps/MoneyTimeStep';
 import { ReportingStep } from './steps/ReportingStep';
 import { ReviewStep } from './steps/ReviewStep';
 import type { StepId } from './lib/policyDefaults';
+import { isPaidWizardPlan } from '../../lib/createOrgPlanOptions';
 
 const TITLES: Record<StepId, { title: string; subtitle: string }> = {
   about: { title: 'About your workspace', subtitle: 'Tell us what it’s for and who will use it. These answers do not change your plan.' },
@@ -31,9 +32,13 @@ export const CreateOrgPage: React.FC = () => {
     slug: searchParams.get('slug') ?? continueSlug ?? undefined,
     pendingSlug: continueSlug,
   });
-  const { state, update, step, stepIndex, stepCount, errors, status, submitError, next, back, submit } = wizard;
+  const {
+    state, update, step, stepIndex, stepCount, errors, status, submitError, next, back, submit,
+    freeSlot, freeSlotMessage, billingInterval, setBillingInterval, catalog,
+  } = wizard;
   const headingRef = useRef<HTMLHeadingElement>(null);
   const busy = status !== 'idle';
+  const paidPlan = isPaidWizardPlan(state.plan, catalog.plans);
 
   // Move focus to the step heading so keyboard and screen reader users land at the top of each step.
   useEffect(() => {
@@ -98,19 +103,27 @@ export const CreateOrgPage: React.FC = () => {
               <h1 ref={headingRef} tabIndex={-1} className="text-lg font-bold text-[var(--text-main)] focus:outline-none">{title}</h1>
               <p className="text-xs text-[var(--text-muted)] mb-5">{subtitle}</p>
 
-              {submitError && (
+              {(submitError || (step === 'intent' && freeSlotMessage)) && (
                 <div role="alert" className="flex items-start gap-2 p-3 mb-4 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="flex-1">{submitError}</span>
+                  <span className="flex-1">{step === 'intent' && freeSlotMessage ? freeSlotMessage : submitError}</span>
                 </div>
               )}
 
               {step === 'about' && <AboutStep state={state} errors={errors} update={update} capabilities={wizard.capabilities} />}
-              {step === 'intent' && <IntentStep plan={state.plan} onChange={(plan) => update({ plan })} />}
+              {step === 'intent' && (
+                <IntentStep
+                  plan={state.plan}
+                  onChange={(plan) => update({ plan })}
+                  freeSlot={freeSlot}
+                  billingInterval={billingInterval}
+                  onBillingIntervalChange={setBillingInterval}
+                />
+              )}
               {step === 'identity' && <IdentityStep state={state} errors={errors} update={update} />}
               {step === 'moneyTime' && <MoneyTimeStep state={state} errors={errors} update={update} />}
               {step === 'reporting' && <ReportingStep state={state} update={update} />}
-              {step === 'review' && <ReviewStep state={state} capabilities={wizard.capabilities} isContinuation={wizard.isContinuation} existingSettings={wizard.existingSettings} />}
+              {step === 'review' && <ReviewStep state={state} capabilities={wizard.capabilities} isContinuation={wizard.isContinuation} existingSettings={wizard.existingSettings} catalog={catalog.plans} />}
 
               <div className="pt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                 <button
@@ -125,7 +138,7 @@ export const CreateOrgPage: React.FC = () => {
                   {status === 'submitting' ? (
                     <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Setting up your chart of accounts…</>
                   ) : step === 'review' ? (
-                    'Create workspace'
+                    paidPlan ? 'Continue to payment' : 'Create workspace'
                   ) : (
                     <>Next <ArrowRight className="w-4 h-4" aria-hidden="true" /></>
                   )}

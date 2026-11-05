@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Outlet, useNavigate, Link } from 'react-router-dom';
+import { useParams, Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { Building2, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo, Organization } from '../types';
 import { setPersistedOrgSlug, clearPersistedOrgSlug } from '../lib/storage';
@@ -10,6 +10,7 @@ import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { AssistantMount, AssistantProvider } from '../assistant';
 import { AnnouncementBar } from '../components/AnnouncementBar';
+import { PendingCheckoutScreen } from '../components/PendingCheckoutScreen';
 import { CapabilitiesProvider, useCapabilities } from '../lib/entitlements';
 import { IntegrationsProvider } from '../lib/integrations';
 
@@ -27,6 +28,7 @@ export function evaluateHasPermission(
 export const OrgLayout: React.FC = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { setTenantWhitelabel } = useTheme();
   const { user: authUser, authFetch } = useAuth();
 
@@ -85,6 +87,7 @@ export const OrgLayout: React.FC = () => {
           shortName: organization.shortName,
           role: organization.role,
           plan: organization.plan,
+          activationState: organization.activationState || 'active',
           avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
           whitelabel: {
             themeId: 'accountgo',
@@ -133,6 +136,7 @@ export const OrgLayout: React.FC = () => {
           currency: string;
           fiscalYearEnd?: string;
           operatingPolicy?: OrgDetails['operatingPolicy'];
+          activationState?: string;
         };
         if (mounted) {
           const resolvedOrg: OrgDetails = {
@@ -147,6 +151,7 @@ export const OrgLayout: React.FC = () => {
             fiscalYearEnd: current.fiscalYearEnd,
             permissions: current.permissions,
             operatingPolicy: current.operatingPolicy ?? null,
+            activationState: current.activationState || match.activationState || 'active',
             subscription: {
               planId: current.plan,
               planName: current.plan.charAt(0).toUpperCase() + current.plan.slice(1),
@@ -328,6 +333,21 @@ export const OrgLayout: React.FC = () => {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // Pending checkout: show only the payment card unless the user is on Settings (Resume payment).
+  const onSettingsRoute = /\/org\/[^/]+\/settings(?:\/|$|\?)/.test(location.pathname);
+  if (currentOrg.activationState === 'pending_checkout' && !onSettingsRoute) {
+    return (
+      <PendingCheckoutScreen
+        name={currentOrg.name}
+        slug={currentOrg.slug}
+        onActivated={() => {
+          updateCurrentOrg({ activationState: 'active' });
+          navigate(`/org/${encodeURIComponent(currentOrg.slug)}/dashboard`, { replace: true });
+        }}
+      />
     );
   }
 

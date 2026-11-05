@@ -1,7 +1,8 @@
 import type { FiscalYearPattern } from './fyPreview';
 
 export type { FiscalYearPattern };
-export type Plan = 'invoicing' | 'accounting' | 'enterprise';
+/** Free product aliases ("invoicing" / "accounting") or a paid catalog plan key. */
+export type Plan = string;
 export type ReportingFramework = 'IfrsForSmes' | 'UsGaapPrivate' | 'Ifrs' | 'CashBasis';
 export type AccountingBasis = 'Accrual' | 'Cash';
 export type TaxRegime = 'None' | 'SalesTax' | 'VatGst';
