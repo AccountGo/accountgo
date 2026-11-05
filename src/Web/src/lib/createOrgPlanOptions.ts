@@ -92,9 +92,17 @@ export function buildIntentPlanOptions(
   return [...uniqueFree, ...paidOptions];
 }
 
-export function freeSlotBlockedMessage(name: string | null): string {
+export function freeSlotBlockedMessage(name: string | null, hasUpgradeLink = false): string {
   const label = name?.trim() || 'your free workspace';
+  // With an upgrade link the next line already says "Upgrade {name} to free up your free slot."
+  if (hasUpgradeLink) return `You already have a free workspace (${label}). Choose a paid plan for this one.`;
   return `You already have a free workspace (${label}). Choose a paid plan for this one, or upgrade ${label} to free up your free slot.`;
+}
+
+/** Plan-step error when the free slot is used and a free choice is still selected; null when the choice is fine. */
+export function freeSlotPlanError(plan: string, catalog: PlanCatalogEntry[] | null, freeSlot: FreeSlotState): string | null {
+  if (!freeSlot.used || !catalog) return null;
+  return isPaidWizardPlan(plan, catalog) ? null : 'Choose a paid plan to continue.';
 }
 
 export function isPaidWizardPlan(plan: string, catalog: PlanCatalogEntry[] | null): boolean {
