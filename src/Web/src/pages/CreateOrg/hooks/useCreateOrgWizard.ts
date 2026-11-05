@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../auth/AuthContext';
 import { setPersistedOrgSlug } from '../../../lib/storage';
 import { withSuppressedEntitlementDenial } from '../../../lib/entitlementEvents';
-import { isFreePlan, isFreeSlotUsed, type FreeSlotState } from '../../../lib/createOrgPlanOptions';
+import { freeSlotPlanError, isFreePlan, isFreeSlotUsed, type FreeSlotState } from '../../../lib/createOrgPlanOptions';
 import { buildCreateReturnUrl, interpretCreateOrgResponse } from '../../../lib/createOrgSubmit';
 import { usePlanCatalog } from '../../../lib/usePlanCatalog';
 import type { Organization } from '../../../types';
@@ -184,8 +184,16 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   const next = useCallback(() => {
     const found = validateStep(step, state, new Date(), capabilities);
     setErrors(found);
-    if (Object.keys(found).length === 0) setStepIndex((index) => Math.min(index + 1, steps.length - 1));
-  }, [step, state, capabilities, steps.length]);
+    if (Object.keys(found).length > 0) return;
+    if (step === 'intent') {
+      const planError = freeSlotPlanError(state.plan, catalog.plans, freeSlot);
+      if (planError) {
+        setSubmitError(planError);
+        return;
+      }
+    }
+    setStepIndex((index) => Math.min(index + 1, steps.length - 1));
+  }, [step, state, capabilities, steps.length, catalog.plans, freeSlot]);
 
   const back = useCallback(() => {
     setErrors({});
