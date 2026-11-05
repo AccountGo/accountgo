@@ -29,6 +29,10 @@ export function planLimitCta(problem: EntitlementProblem, subscriptionHref: stri
   const canManage = !!problem.canManageBilling;
   const upgradeAvailable = !!problem.upgradeAvailable;
 
+  if (problem.resource === 'owned_workspaces') {
+    return { label: 'Manage workspaces', href: '/select-org', primary: true };
+  }
+
   if (!canManage) {
     return { label: 'Ask your workspace owner', href: null, primary: true };
   }
@@ -45,6 +49,9 @@ export function planLimitCta(problem: EntitlementProblem, subscriptionHref: stri
 }
 
 export function planLimitSupportCopy(problem: EntitlementProblem): string | null {
+  if (problem.resource === 'owned_workspaces') {
+    return null; // detail already names the free-slot limit; CTA links to workspace list
+  }
   if (problem.code === 'SUBSCRIPTION_INACTIVE') {
     return 'Update billing to restore paid modules and features.';
   }

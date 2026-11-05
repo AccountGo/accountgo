@@ -61,6 +61,25 @@ test('plan limit dialog explains the denial and offers support when manager cann
   assert.ok(html.includes('View plan usage'));
 });
 
+test('owned_workspaces denial shows detail and manage-workspaces link, never ask-owner', () => {
+  const html = renderToStaticMarkup(createElement(PlanLimitDialogView, {
+    problem: {
+      code: 'QUOTA_EXCEEDED',
+      resource: 'owned_workspaces',
+      detail: 'You already own a free workspace. Upgrade it or choose a paid plan.',
+      limit: 1,
+      used: 1,
+      canManageBilling: false,
+      upgradeAvailable: false,
+    },
+    onClose: () => {},
+  }));
+  assert.ok(html.includes('You already own a free workspace. Upgrade it or choose a paid plan.'));
+  assert.ok(html.includes('Manage workspaces'));
+  assert.ok(html.includes('href="/select-org"'));
+  assert.ok(!html.includes('Ask your workspace owner'));
+});
+
 test('subscription inactive dialog uses update billing CTA for billing managers', () => {
   assert.equal(isEntitlementProblem({ code: 'SUBSCRIPTION_INACTIVE' }), true);
   const html = renderToStaticMarkup(createElement(PlanLimitDialogView, {
@@ -98,17 +117,30 @@ test('only plan denials are announced, without consuming the response', async ()
 });
 
 test('create-workspace wizard hides plans the operator assigns', () => {
-  const plan = (key, selfService) => ({ key, name: key, description: '', includedModules: [], requiredModules: [], selfService, monthlyPrice: 0 });
+  const plan = (key, selfService, product = key) => ({
+    key, name: key, product, description: '', includedModules: [], requiredModules: [], selfService, monthlyPrice: 0, annualPrice: 0,
+  });
   const render = () => renderToStaticMarkup(createElement(AuthProvider, null,
-    createElement(IntentStep, { plan: 'accounting', onChange: () => {} })));
+    createElement(IntentStep, {
+      plan: 'accounting',
+      onChange: () => {},
+      freeSlot: { used: false, freeWorkspaceName: null, freeWorkspaceSlug: null },
+      billingInterval: 'month',
+      onBillingIntervalChange: () => {},
+    })));
 
-  // IntentStep option values are fixed; the catalog only filters which stay visible.
-  primePlanCatalog([plan('invoicing', true), plan('accounting', true), plan('enterprise', false)]);
+  // IntentStep builds options from self-service catalog entries only.
+  primePlanCatalog([plan('invoicing', true), plan('accounting', true), plan('enterprise', false, 'accounting')]);
   const restricted = render();
   assert.ok(restricted.includes('value="invoicing"') && restricted.includes('value="accounting"'));
   assert.ok(!restricted.includes('value="enterprise"'));
 
-  primePlanCatalog([plan('invoicing', true), plan('accounting', true), plan('enterprise', true)]);
+  // A self-service free plan without a free-product alias keeps its catalog key.
+  primePlanCatalog([
+    plan('invoicing', true),
+    plan('accounting', true),
+    { ...plan('enterprise', true, 'other'), monthlyPrice: 0 },
+  ]);
   assert.ok(render().includes('value="enterprise"'));
   primePlanCatalog(null);
 });

@@ -24,12 +24,14 @@ import {
   matchPresetKey,
   permissionsForRoles,
 } from '../lib/accessPresets';
+import { withSuppressedEntitlementDenial } from '../lib/entitlementEvents';
 
 interface PendingConfirm {
   title: string;
   message: string;
   confirmLabel: string;
   destructive: boolean;
+  error?: string;
   action: () => Promise<void>;
 }
 
@@ -767,7 +769,30 @@ export const Members: React.FC = () => {
                     message: `${member.email} will become the Owner of ${currentOrg.name}. You will become an Admin.`,
                     confirmLabel: 'Transfer ownership',
                     destructive: true,
-                    action: () => mutate('transfer-ownership', 'POST', { memberId: member.memberId }, 'Ownership transferred.'),
+                    action: async () => {
+                      setBusy(true);
+                      setError('');
+                      setErrorReasonCode('');
+                      try {
+                        const response = await withSuppressedEntitlementDenial(() =>
+                          authFetch(`${base}/transfer-ownership`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ memberId: member.memberId }),
+                          }));
+                        await requireSuccess(response);
+                        setPendingConfirm(null);
+                        setNotice('Ownership transferred.');
+                        await load();
+                      } catch (err) {
+                        const message = err instanceof Error ? err.message : 'Ownership transfer failed.';
+                        setPendingConfirm(current => (current
+                          ? { ...current, error: message }
+                          : null));
+                      } finally {
+                        setBusy(false);
+                      }
+                    },
                   })}>Transfer ownership</button>}
                 </div></td>
               </tr>;
@@ -919,10 +944,12 @@ export const Members: React.FC = () => {
           confirmLabel={pendingConfirm.confirmLabel}
           destructive={pendingConfirm.destructive}
           busy={busy}
+          error={pendingConfirm.error}
           onCancel={() => setPendingConfirm(null)}
           onConfirm={() => {
             const confirmed = pendingConfirm;
             // A follow-up confirmation raised by this action (for example a policy-change prompt) must survive.
+            // Transfer ownership keeps the same dialog open with an inline error on 403.
             void confirmed.action().finally(() => setPendingConfirm(current => (current === confirmed ? null : current)));
           }}
         />

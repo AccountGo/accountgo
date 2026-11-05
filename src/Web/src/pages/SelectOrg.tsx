@@ -59,6 +59,7 @@ export const SelectOrg: React.FC = () => {
               slug: organization.slug,
               role: organization.role,
               plan: organization.plan,
+              activationState: organization.activationState || 'active',
               avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
               whitelabel: {
                 themeId: 'accountgo',
@@ -291,7 +292,12 @@ export const SelectOrg: React.FC = () => {
                         {org.name.slice(0, 2).toUpperCase()}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {org.activationState === 'pending_checkout' && (
+                          <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                            Pending payment
+                          </span>
+                        )}
                         {org.plan && (
                           <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
                             {org.plan}
