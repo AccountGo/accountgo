@@ -4,7 +4,6 @@
 #nullable enable
 using System;
 using System.Linq;
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -13,7 +12,6 @@ using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Services.Billing;
 
 namespace Api.Controllers
 {
@@ -26,37 +24,13 @@ namespace Api.Controllers
     {
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
-        private readonly IPlanCatalog _plans;
 
         public EntitlementsController(
             IEntitlementService entitlements,
-            ITenantContext tenant,
-            IPlanCatalog plans)
+            ITenantContext tenant)
         {
             _entitlements = entitlements;
             _tenant = tenant;
-            _plans = plans;
-        }
-
-        /// <summary>User-scoped free-workspace slot usage (no tenant header required).</summary>
-        [TenantFree]
-        [HttpGet("me")]
-        public IActionResult GetMe()
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
-            if (string.IsNullOrWhiteSpace(userId))
-                return Unauthorized();
-
-            var decision = _entitlements.EvaluateForUser(
-                userId, new UserAction.CreateWorkspace(_plans.DefaultPlanKey));
-            return Ok(new
-            {
-                freeWorkspace = new
-                {
-                    used = decision.Used ?? 0,
-                    limit = decision.Limit
-                }
-            });
         }
 
         [HttpGet]

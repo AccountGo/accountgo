@@ -157,7 +157,7 @@ namespace Api.Controllers
 
         [TenantFree]
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateOrganizationRequest request, CancellationToken ct)
+        public async Task<IActionResult> Create([FromBody] CreateOrganizationRequest request, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(UserId))
                 return Unauthorized();
