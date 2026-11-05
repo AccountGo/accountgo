@@ -139,6 +139,53 @@ public partial class OrganizationsController
         }
     }
 
+    /// <summary>True when the caller can record this existing personal-purpose workspace as their personal books.</summary>
+    private bool CanUseAsPersonalBooks(int companyId, CompanyMemberRole role) =>
+        role == CompanyMemberRole.Owner && !string.IsNullOrWhiteSpace(UserId)
+        && !_db.PersonalWorkspaces.Any(p => p.OwnerUserId == UserId || p.CompanyId == companyId)
+        && !_db.WorkspaceLinks.Any(l => l.WorkCompanyId == companyId)
+        && _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Any(s => s.CompanyId == companyId && s.Purpose == WorkspacePurpose.Personal);
+
+    /// <summary>
+    /// Records an existing personal-purpose workspace the caller owns as their personal books. Only the registry
+    /// row is written: plan, chart of accounts and entries are unchanged.
+    /// </summary>
+    [TenantFree]
+    [HttpPost("personal/adopt/{companyId:int}")]
+    public IActionResult AdoptPersonal(int companyId)
+    {
+        if (string.IsNullOrWhiteSpace(UserId)) return Unauthorized();
+        if (!OwnsLiveWorkspace(companyId)) return Forbid();
+        using var tx = _db.Database.BeginTransaction(IsolationLevel.Serializable);
+        try
+        {
+            if (_db.PersonalWorkspaces.Any(p => p.OwnerUserId == UserId)) return PersonalExists();
+            if (!CanUseAsPersonalBooks(companyId, CompanyMemberRole.Owner))
+                return PersonalProblem(409, "personal_books_not_eligible", "Only a personal workspace that isn't linked as work books can be used as your personal books.");
+            _db.PersonalWorkspaces.Add(new PersonalWorkspace { OwnerUserId = UserId, CompanyId = companyId, CreatedAtUtc = DateTime.UtcNow });
+            var company = _db.Companies.Single(c => c.Id == companyId);
+            using (_tenant.Impersonate(companyId, company.Slug, CompanyMemberRole.Owner))
+            {
+                _db.AuditLogs.Add(new AuditLog
+                {
+                    CompanyId = companyId, UserName = UserId, AuditEventDateUTC = DateTime.UtcNow,
+                    AuditEventType = (int)AuditEventTypes.Added, TableName = "__PersonalBooks",
+                    RecordId = companyId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    NewValue = System.Text.Json.JsonSerializer.Serialize(new { adopted = true })
+                });
+                _db.SaveChanges();
+            }
+            tx.Commit();
+            return NoContent();
+        }
+        catch (Exception ex) when (IsPersonalUniqueViolation(ex) || IsPersonalTransactionConflict(ex))
+        {
+            tx.Rollback();
+            _db.ChangeTracker.Clear();
+            return PersonalExists();
+        }
+    }
+
     public sealed class PersonalLinkRequest { public int WorkCompanyId { get; set; } }
 
     [TenantFree]

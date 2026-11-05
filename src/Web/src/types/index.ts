@@ -88,6 +88,11 @@ export interface PersonalBooksMetadata {
   linkedPersonalCompanyId?: number | null;
   linkedWorkCompanyIds?: number[];
   canAddPersonalBooks?: boolean;
+  /** An existing personal-purpose workspace the caller can record as their personal books. */
+  canUseAsPersonalBooks?: boolean;
+  /** Plan and billing are the free personal books plan, not a paid plan on a personal workspace. */
+  onPersonalBooksPlan?: boolean;
+  isPersonalPurpose?: boolean;
   includedModules?: ModuleKey[];
   requiredModules?: ModuleKey[];
 }

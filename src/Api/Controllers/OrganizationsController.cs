@@ -1102,6 +1102,12 @@ namespace Api.Controllers
             return new
             {
                 isPersonalBooks = _db.PersonalWorkspaces.Any(p => p.CompanyId == company.Id),
+                onPersonalBooksPlan = _plans.PersonalBooksPlanKey != null
+                    ? string.Equals(_plans.ResolveStoredPlan(company.Plan).Key, _plans.PersonalBooksPlanKey, StringComparison.OrdinalIgnoreCase)
+                    : _db.PersonalWorkspaces.Any(p => p.CompanyId == company.Id),
+                canUseAsPersonalBooks = CanUseAsPersonalBooks(company.Id, role),
+                isPersonalPurpose = _db.WorkspaceOperatingSettings.IgnoreQueryFilters()
+                    .Any(s => s.CompanyId == company.Id && s.Purpose == WorkspacePurpose.Personal),
                 linkedPersonalCompanyId = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId && l.WorkCompanyId == company.Id)
                     .Select(l => (int?)l.PersonalCompanyId).FirstOrDefault(),
                 linkedWorkCompanyIds = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId && l.PersonalCompanyId == company.Id)
