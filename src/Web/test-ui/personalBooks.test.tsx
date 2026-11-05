@@ -34,6 +34,16 @@ describe('Personal books switcher', () => {
     expect(screen.getByTestId('location').textContent).toBe('/org/pat-personal/dashboard');
   });
 
+  it.each(['Juan — Personal', 'Juan — PERSONAL', 'Juan — personal'])('keeps the existing personal label in %s', name => {
+    const books = { ...personal, name };
+    render(<MemoryRouter><OrgSwitcher currentOrg={books} availableOrgs={[work, books]} /></MemoryRouter>);
+    expect(screen.getByRole('button', { expanded: false }).textContent).toContain(name);
+    expect(screen.getByRole('button', { expanded: false }).textContent).not.toContain(' · Personal');
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getByRole('menuitem', { name: new RegExp(name) }).textContent).not.toContain(' · Personal');
+    expect(screen.getByRole('menuitem', { name: /Consulting · Work/ })).toBeTruthy();
+  });
+
   it('submits personal books with owner defaults and switches to the created workspace', async () => {
     authFetch.mockResolvedValue(new Response(JSON.stringify({ id: '4', slug: 'pat-home' }), { status: 201 }));
     render(<MemoryRouter initialEntries={['/org/consulting/sales']}>
