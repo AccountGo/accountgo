@@ -45,6 +45,9 @@ interface DashboardSummary {
     totalSalesYtd: number;
     totalExpensesYtd: number;
     netProfitYtd: number;
+    earnedIncomeYtd?: number;
+    moneyFromFreelanceWorkYtd?: number;
+    drawingsYtd?: number;
     cashFlowYtd: number;
     overdueReceivables?: number;
     openInvoiceCount?: number;
@@ -77,6 +80,8 @@ interface DashboardSummary {
   bankCloseStatus?: BankCloseStatus | null;
 }
 
+interface LinkedWorkspaceInfo { otherWorkspace?: { name: string; slug: string } | null }
+
 interface YearEndYearRow {
   fiscalYearCode: string;
   endDate: string;
@@ -92,10 +97,12 @@ export const Dashboard: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [yearEndReminder, setYearEndReminder] = useState<YearEndYearRow | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [linkedWorkspace, setLinkedWorkspace] = useState<LinkedWorkspaceInfo['otherWorkspace']>(null);
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
   const hasFinancialsModule = hasModule('financials');
   const personal = isPersonalWorkspace(currentOrg);
+  const soleProprietor = !personal && currentOrg.entityType === 'SoleProprietor';
   const caps = summary?.capabilities;
   const surface = resolveDashboardSurface(summary?.surface, hasFinancialsModule);
   const invoicingSurface = surface === 'Invoicing';
@@ -151,6 +158,17 @@ export const Dashboard: React.FC = () => {
       cancelled = true;
     };
   }, [authFetch, currentOrg.slug, reloadToken]);
+
+  useEffect(() => {
+    let mounted = true;
+    setLinkedWorkspace(null);
+    void authFetch('/api/linked-entries').then(async (res) => {
+      if (!res.ok) return;
+      const body = (await res.json()) as LinkedWorkspaceInfo;
+      if (mounted) setLinkedWorkspace(body.otherWorkspace ?? null);
+    }).catch(() => { if (mounted) setLinkedWorkspace(null); });
+    return () => { mounted = false; };
+  }, [authFetch, currentOrg.slug]);
 
   useEffect(() => {
     if (!canShowFinancials || !hasPermission('financials.periods.close')) {
@@ -265,6 +283,21 @@ export const Dashboard: React.FC = () => {
         canManage={currentOrg.role === 'Owner' || currentOrg.role === 'Admin'}
       />
 
+      {linkedWorkspace && (
+        <Link to={`/org/${linkedWorkspace.slug}/dashboard`} className="inline-flex items-center rounded-full border border-[var(--brand-primary)]/20 bg-[var(--brand-subtle)] px-3 py-1 text-xs font-medium text-[var(--brand-primary)]" data-testid="linked-workspace-chip">
+          Linked to {linkedWorkspace.name}
+        </Link>
+      )}
+
+      {personal && canShowFinancials && !loadError && (
+        <section aria-label="Money in and out" className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="personal-money-in-out">
+          <h2 className="sm:col-span-3 text-sm font-bold text-[var(--text-main)]">Money in and out</h2>
+          <div><span className="text-xs text-[var(--text-muted)]">Earned income</span><strong className="block">{formatMetric(kpis?.earnedIncomeYtd, true)}</strong></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Money from my freelance work</span><strong className="block">{formatMetric(kpis?.moneyFromFreelanceWorkYtd, true)}</strong></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Money out</span><strong className="block">{formatMetric(kpis?.totalExpensesYtd, true)}</strong></div>
+        </section>
+      )}
+
       {loadError && (
         <div
           role="alert"
@@ -319,7 +352,7 @@ export const Dashboard: React.FC = () => {
         <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-[var(--text-muted)]">
-              {invoicingSurface ? 'Invoiced (YTD)' : 'Operating Sales (YTD)'}
+              {personal ? 'Earned income' : soleProprietor ? 'Money in' : invoicingSurface ? 'Invoiced (YTD)' : 'Operating Sales (YTD)'}
             </span>
             <div className="w-8 h-8 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] flex items-center justify-center shadow-sm">
               <TrendingUp className="w-4 h-4" />
@@ -330,7 +363,7 @@ export const Dashboard: React.FC = () => {
               <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
             ) : (
               formatMetric(
-                kpis?.totalSalesYtd,
+                personal ? kpis?.earnedIncomeYtd : soleProprietor ? kpis?.moneyInBank : kpis?.totalSalesYtd,
                 invoicingSurface ? canShowSales : canShowFinancials,
               )
             )}
@@ -344,7 +377,7 @@ export const Dashboard: React.FC = () => {
                   : ` · ${kpis?.openInvoiceCount ?? 0} open invoices`
                 : ''}
             </div>
-          ) : canShowFinancials ? (
+          ) : soleProprietor ? null : canShowFinancials ? (
             <div
               className={`flex items-center gap-1.5 text-xs mt-2 font-semibold ${
                 (kpis?.netProfitYtd ?? 0) >= 0 ? 'text-[var(--brand-primary)]' : 'text-rose-500'
@@ -368,7 +401,7 @@ export const Dashboard: React.FC = () => {
         <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-[var(--text-muted)]">
-              {personal ? 'Owed to you' : 'Receivables (A/R)'}
+              {personal ? 'Owed to you' : soleProprietor ? 'Money out' : 'Receivables (A/R)'}
             </span>
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shadow-sm">
               <Receipt className="w-4 h-4" />
@@ -378,11 +411,11 @@ export const Dashboard: React.FC = () => {
             {loading ? (
               <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
             ) : (
-              formatMetric(kpis?.outstandingReceivables, receivablesAvailable)
+              formatMetric(soleProprietor ? kpis?.totalExpensesYtd : kpis?.outstandingReceivables, soleProprietor ? canShowFinancials : receivablesAvailable)
             )}
           </div>
           <div className="text-xs text-[var(--text-muted)] mt-2">
-            {!receivablesAvailable
+            {soleProprietor ? 'Expenses for this period' : !receivablesAvailable
               ? 'Requires sales access'
               : (kpis?.outstandingReceivables ?? 0) > 0
                 ? 'Open invoices incl. tax, shipping, and discounts'
@@ -416,7 +449,7 @@ export const Dashboard: React.FC = () => {
         ) : (
           <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-[var(--text-muted)]">Cash & Bank Balances</span>
+              <span className="text-xs font-semibold text-[var(--text-muted)]">{soleProprietor ? 'Taken for personal use' : 'Cash & Bank Balances'}</span>
               <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shadow-sm">
                 <Wallet className="w-4 h-4" />
               </div>
@@ -425,15 +458,15 @@ export const Dashboard: React.FC = () => {
               {loading ? (
                 <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
               ) : (
-                formatMetric(kpis?.moneyInBank, moneyInBankAvailable)
+                formatMetric(soleProprietor ? kpis?.drawingsYtd : kpis?.moneyInBank, soleProprietor ? canShowFinancials : moneyInBankAvailable)
               )}
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-2">
-              {moneyInBankAvailable
+              {soleProprietor ? 'Owner drawings for this period' : moneyInBankAvailable
                 ? 'Available across cash and bank accounts'
                 : 'Requires banking or financials access'}
             </div>
-            {!loading && moneyInBankAvailable && (
+            {!soleProprietor && !loading && moneyInBankAvailable && (
               <MoneyInBankBreakdown
                 kpis={kpis}
                 orgSlug={currentOrg.slug}
@@ -473,7 +506,7 @@ export const Dashboard: React.FC = () => {
           <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-xl transition-all">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold text-[var(--text-muted)]">
-                {personal ? 'Net worth' : 'Total Assets'}
+                {personal ? 'Net worth (book value)' : soleProprietor && (kpis?.earnedIncomeYtd ?? 0) > 0 ? 'Work profit' : 'Total Assets'}
               </span>
               <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shadow-sm">
                 <BookOpen className="w-4 h-4" />
@@ -484,6 +517,8 @@ export const Dashboard: React.FC = () => {
                 <span className="inline-block w-28 h-7 bg-[var(--bg-subtle)] rounded animate-pulse" />
               ) : personal ? (
                 formatMetric(summary?.balanceSnapshot?.totalEquity, canShowFinancials)
+              ) : soleProprietor && (kpis?.earnedIncomeYtd ?? 0) > 0 ? (
+                formatMetric(kpis?.netProfitYtd, canShowFinancials)
               ) : (
                 formatMetric(kpis?.totalAssets, canShowFinancials)
               )}

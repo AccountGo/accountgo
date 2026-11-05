@@ -28,6 +28,9 @@ namespace Dto.Dashboard
         /// On accounting: income-statement revenue for the range.
         /// </summary>
         public decimal TotalSalesYtd { get; set; }
+        public decimal EarnedIncomeYtd { get; set; }
+        public decimal MoneyFromFreelanceWorkYtd { get; set; }
+        public decimal DrawingsYtd { get; set; }
         public decimal TotalExpensesYtd { get; set; }
         public decimal NetProfitYtd { get; set; }
         public decimal CashFlowYtd { get; set; }

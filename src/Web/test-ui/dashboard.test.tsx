@@ -21,6 +21,7 @@ const { authFetch, hasModule, hasPermission, outlet } = vi.hoisted(() => {
         currency: 'USD',
         role: 'Member',
         plan: 'accounting',
+        entityType: 'Company',
         operatingPolicy: { purpose: 'Business' },
       },
       user: { name: 'Pat', email: 'pat@example.com' },
@@ -102,6 +103,7 @@ beforeEach(() => {
     currency: 'USD',
     role: 'Member',
     plan: 'accounting',
+    entityType: 'Company',
     operatingPolicy: { purpose: 'Business' },
   };
 });
@@ -194,13 +196,53 @@ it('shows an error and retry when the summary request fails', async () => {
   expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
 });
 
+it('keeps freelance income separate from earned income and shows the linked workspace chip', async () => {
+  outlet.currentOrg = {
+    ...outlet.currentOrg,
+    operatingPolicy: { purpose: 'Personal' },
+  };
+  authFetch.mockImplementation(async (url: string) => url === '/api/linked-entries'
+    ? new Response(JSON.stringify({ otherWorkspace: { name: 'Studio', slug: 'studio' } }), { status: 200 })
+    : new Response(JSON.stringify(summaryPayload({
+      surface: 'Accounting',
+      capabilities: { financials: true, sales: true, purchases: true, banking: true, moneyInBank: true, receivables: true, payables: true },
+      kpis: { moneyInBank: 120, outstandingReceivables: 0, totalPayables: 0, totalAssets: 120, totalSalesYtd: 500, totalExpensesYtd: 40, netProfitYtd: 460, earnedIncomeYtd: 300, moneyFromFreelanceWorkYtd: 200, drawingsYtd: 0, cashFlowYtd: 120 },
+    })), { status: 200 }));
+
+  renderDashboard();
+
+  expect(await screen.findByTestId('linked-workspace-chip')).toBeTruthy();
+  expect(screen.getByTestId('linked-workspace-chip').getAttribute('href')).toBe('/org/studio/dashboard');
+  expect(screen.getByText('Money in and out')).toBeTruthy();
+  expect(screen.getAllByText('Earned income').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Money from my freelance work').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Net worth (book value)').length).toBeGreaterThan(0);
+});
+
+it('leads a sole proprietor with money in, money out and drawings without an empty profit panel', async () => {
+  outlet.currentOrg = { ...outlet.currentOrg, entityType: 'SoleProprietor' };
+  authFetch.mockResolvedValue(new Response(JSON.stringify(summaryPayload({
+    surface: 'Accounting',
+    capabilities: { financials: true, sales: true, purchases: true, banking: true, moneyInBank: true, receivables: true, payables: true },
+    kpis: { moneyInBank: 120, outstandingReceivables: 0, totalPayables: 0, totalAssets: 120, totalSalesYtd: 0, totalExpensesYtd: 40, netProfitYtd: -40, earnedIncomeYtd: 0, moneyFromFreelanceWorkYtd: 0, drawingsYtd: 25, cashFlowYtd: 120 },
+  })), { status: 200 }));
+
+  renderDashboard();
+
+  expect(await screen.findByText('Money in')).toBeTruthy();
+  expect(screen.getByText('Money out')).toBeTruthy();
+  expect(screen.getByText('Taken for personal use')).toBeTruthy();
+  expect(screen.queryByText('Work profit')).toBeNull();
+});
+
 it('ignores a stale workspace summary that resolves after switching orgs', async () => {
   let finishWorkspaceAJson!: () => void;
   const workspaceAJsonGate = new Promise<void>((resolve) => {
     finishWorkspaceAJson = resolve;
   });
 
-  authFetch.mockImplementation(async () => {
+  authFetch.mockImplementation(async (url: string) => {
+    if (url === '/api/linked-entries') return new Response(JSON.stringify({ otherWorkspace: null }), { status: 200 });
     const slugAtRequest = outlet.currentOrg.slug;
     if (slugAtRequest === 'workspace-a') {
       // Headers resolve immediately; body is delayed until after B has loaded.
@@ -263,7 +305,7 @@ it('ignores a stale workspace summary that resolves after switching orgs', async
   };
   const view = renderDashboard();
 
-  await waitFor(() => expect(authFetch).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(authFetch).toHaveBeenCalledTimes(2));
 
   view.switchWorkspace({ id: 'b', name: 'Workspace B', slug: 'workspace-b' });
 
