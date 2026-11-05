@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useBilling } from '../lib/useBilling';
@@ -82,6 +82,7 @@ export const AnnouncementBar: React.FC = () => {
   const { authFetch, user } = useAuth();
   const billing = useBilling();
   const navigate = useNavigate();
+  const { orgSlug } = useParams<{ orgSlug: string }>();
   const pastDue = usePastDueAnnouncement();
   const [remote, setRemote] = useState<AnnouncementItem[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
@@ -110,7 +111,7 @@ export const AnnouncementBar: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [authFetch, userId]);
+  }, [authFetch, userId, orgSlug]);
 
   const combined = useMemo(() => {
     const items = [...remote];
