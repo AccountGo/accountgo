@@ -23,6 +23,9 @@ beforeEach(() => {
     if (url === '/api/organizations/setup-capabilities') return json({ soloSetupEnabled: soloEnabled, personalPurposeEnabled: true, controlledRecoveryEnabled: false, canAddPersonalBooks: true });
     if (url === '/api/organizations/current') return json({ id: '42', name: 'Work', slug: 'work', currency: 'EUR' });
     if (url === '/api/organizations/current/initialize') return json({ initialized: true });
+    if (url === '/api/organizations/current/accounting-policy') return init?.method === 'PUT'
+      ? json({ entityType: JSON.parse(String(init?.body)).entityType })
+      : json({ entityType: 'Corporation', isLedgerFrozen: false });
     if (url === '/api/organizations/personal') return json({ slug: 'pat-personal' }, personalFails ? 500 : 201);
     if (url === '/api/organizations' && init?.method === 'POST') return json({ id: '42', slug: 'work', ...(checkout ? { checkoutUrl: 'https://checkout.example/pay' } : {}), ...(pending ? { activationState: 'pending_checkout' } : {}) }, 201);
     if (url === '/api/organizations') return json([]);
@@ -54,13 +57,14 @@ describe('companion personal books', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/org/work', { replace: true }));
     expect(calls).toEqual(['/api/organizations', '/api/organizations/personal']);
   });
-  it('applies a company legal form through the existing policy endpoint before initialization', async () => {
+  it('applies a company legal form through the existing policy endpoint after initialization', async () => {
     params.set('continue', 'work');
     const saved = JSON.parse(localStorage.getItem('accountgo.createOrgDraft.v2')!);
     saved.state.workKind = 'Company'; saved.state.legalForm = 'Partnership';
     localStorage.setItem('accountgo.createOrgDraft.v2', JSON.stringify(saved));
     const original = authFetch.getMockImplementation()!;
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/organizations/current/accounting-policy' && init?.method !== 'PUT') return json({ entityType: 'SoleProprietor', isLedgerFrozen: false });
       if (url === '/api/organizations/current/accounting-policy') {
         calls.push(url);
         expect(init?.headers).toMatchObject({ 'X-AccountGo-Org': 'work' });
@@ -70,7 +74,38 @@ describe('companion personal books', () => {
       return original(url, init);
     });
     await submit(); await screen.findByText('Your workspace is ready');
-    expect(calls).toEqual(['/api/organizations/current/accounting-policy', '/api/organizations/current/initialize', '/api/organizations/personal']);
+    expect(calls).toEqual(['/api/organizations/current/initialize', '/api/organizations/current/accounting-policy', '/api/organizations/personal']);
+  });
+
+  it('applies sole proprietor books for Freelance in continuation, so a retry after Company resets the legal form', async () => {
+    params.set('continue', 'work');
+    await submit(); await screen.findByText('Your workspace is ready');
+    const policy = authFetch.mock.calls.find(([url, init]) => url === '/api/organizations/current/accounting-policy' && init?.method === 'PUT')!;
+    expect(JSON.parse(String(policy[1].body))).toEqual({ entityType: 'SoleProprietor' });
+    expect(calls).toEqual(['/api/organizations/current/initialize', '/api/organizations/current/accounting-policy', '/api/organizations/personal']);
+  });
+
+  it('does not change the books type when initialization rejects the workspace', async () => {
+    params.set('continue', 'work');
+    const original = authFetch.getMockImplementation()!;
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/organizations/current/initialize') { calls.push(url); return json({ reasonCode: 'not_pending_signup_workspace' }, 422); }
+      return original(url, init);
+    });
+    await submit();
+    await screen.findByRole('alert');
+    expect(calls).toEqual(['/api/organizations/current/initialize']);
+  });
+
+  it('skips the change when the stored books type already matches', async () => {
+    params.set('continue', 'work');
+    const original = authFetch.getMockImplementation()!;
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/organizations/current/accounting-policy' && init?.method !== 'PUT') return json({ entityType: 'SoleProprietor', isLedgerFrozen: false });
+      return original(url, init);
+    });
+    await submit(); await screen.findByText('Your workspace is ready');
+    expect(calls).toEqual(['/api/organizations/current/initialize', '/api/organizations/personal']);
   });
 
   it('does not use a saved companion answer when standard setup hides the offer', async () => {
@@ -107,7 +142,7 @@ describe('companion personal books', () => {
   });
   it('creates the companion after signup initialization using the current company id', async () => {
     params.set('continue', 'work'); await submit(); await screen.findByText('Your workspace is ready');
-    expect(calls).toEqual(['/api/organizations/current/initialize', '/api/organizations/personal']);
+    expect(calls).toEqual(['/api/organizations/current/initialize', '/api/organizations/current/accounting-policy', '/api/organizations/personal']);
     const personal = authFetch.mock.calls.find(([url]) => url === '/api/organizations/personal')!;
     expect(JSON.parse(personal[1].body).linkWorkCompanyId).toBe(42);
   });
