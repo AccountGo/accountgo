@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   dismissalStorageKey,
   filterVisibleAnnouncements,
+  hasServerBillingAnnouncement,
+  mergeAnnouncementItems,
   mobileCollapse,
   readDismissedIds,
   sortAnnouncements,
@@ -56,4 +58,30 @@ test('dismissal persistence survives storage that throws', () => {
   assert.equal(storage.getItem(dismissalStorageKey('u1', 'a')), '1');
   assert.ok(readDismissedIds(storage, 'u1', ['a', 'b']).has('a'));
   assert.equal(readDismissedIds(storage, 'u1', ['a', 'b']).has('b'), false);
+});
+
+test('mergeAnnouncementItems skips client past-due when server sends billing: notices', () => {
+  const clientPastDue = {
+    id: 'client:past-due',
+    severity: 'warning',
+    message: 'Payment past due.',
+    dismissible: false,
+    clientOnly: true,
+  };
+  const withoutBilling = mergeAnnouncementItems(
+    [{ id: 'info-1', severity: 'info', message: 'Hello', dismissible: true }],
+    clientPastDue,
+  );
+  assert.deepEqual(withoutBilling.map((a) => a.id), ['info-1', 'client:past-due']);
+  assert.equal(hasServerBillingAnnouncement(withoutBilling), false);
+
+  const withBilling = mergeAnnouncementItems(
+    [{ id: 'billing:past-due:42', severity: 'warning', message: 'Update by Nov 5, 2026', dismissible: false }],
+    clientPastDue,
+  );
+  assert.deepEqual(withBilling.map((a) => a.id), ['billing:past-due:42']);
+  assert.equal(hasServerBillingAnnouncement(withBilling), true);
+
+  assert.deepEqual(mergeAnnouncementItems([], clientPastDue).map((a) => a.id), ['client:past-due']);
+  assert.deepEqual(mergeAnnouncementItems([], null), []);
 });
