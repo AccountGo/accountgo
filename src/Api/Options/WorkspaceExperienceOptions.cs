@@ -30,20 +30,10 @@ namespace Api.Options
 
         /// <summary>
         /// Governs the legacy "Set up for just me" confirmation and return-to-solo flows for existing
-        /// workspaces. Kept independent of <see cref="SoloSetupEnabled"/> so enabling the new
-        /// business/freelance solo canary never opens legacy confirmation. Default false.
+        /// workspaces. Kept independent of <see cref="SoloSetupEnabled"/> so enabling new
+        /// business/freelance solo setup never opens legacy confirmation. Default false.
         /// </summary>
         public bool LegacySoloConfirmationEnabled { get; set; }
-
-        /// <summary>
-        /// Trusted, operator-controlled enrollment for the new business/freelance solo canary audience.
-        /// This is the ONLY audience gate for new-workspace initialization: a caller is admitted only when
-        /// <see cref="SoloSetupEnabled"/> is true AND the caller's trusted subject (signup email or
-        /// authenticated user id) is enrolled here. It never opens legacy confirmation or controlled
-        /// recovery, and it is never populated from request fields, headers, browser flags, or
-        /// unverified identity claims — only from server configuration / environment.
-        /// </summary>
-        public WorkspaceCanaryEnrollmentOptions Canary { get; set; } = new();
 
         public static WorkspaceExperienceOptions FromEnvironment(WorkspaceExperienceOptions? configured = null)
         {
@@ -53,8 +43,6 @@ namespace Api.Options
                 && Core.Domain.EntityEquityMapping.IsIndividualMappingApproved;
             options.ControlledRecoveryEnabled = ReadBool("WORKSPACE_EXPERIENCE_CONTROLLED_RECOVERY_ENABLED", options.ControlledRecoveryEnabled);
             options.LegacySoloConfirmationEnabled = ReadBool("WORKSPACE_EXPERIENCE_LEGACY_SOLO_CONFIRMATION_ENABLED", options.LegacySoloConfirmationEnabled);
-            options.Canary ??= new WorkspaceCanaryEnrollmentOptions();
-            options.Canary = WorkspaceCanaryEnrollmentOptions.FromEnvironment(options.Canary);
             return options;
         }
 
@@ -65,48 +53,6 @@ namespace Api.Options
                 return value;
 
             return fallback;
-        }
-    }
-
-    /// <summary>
-    /// Operator-controlled enrollment lists for the new business/freelance solo canary audience.
-    /// Both lists are trusted server configuration. Emails cover the anonymous signup path (before an
-    /// account or workspace exists); user ids cover the authenticated workspace-creation path. Values
-    /// are compared case-insensitively; emails are trimmed and lower-cased to match the signup
-    /// normalization (<c>email.Trim().ToLowerInvariant()</c>).
-    /// </summary>
-    public sealed class WorkspaceCanaryEnrollmentOptions
-    {
-        /// <summary>Enrolled signup emails. Empty by default — nobody is admitted even when setup is enabled.</summary>
-        public IReadOnlyList<string> Emails { get; set; } = Array.Empty<string>();
-
-        /// <summary>Enrolled authenticated user ids. Empty by default.</summary>
-        public IReadOnlyList<string> UserIds { get; set; } = Array.Empty<string>();
-
-        public static WorkspaceCanaryEnrollmentOptions FromEnvironment(WorkspaceCanaryEnrollmentOptions? configured = null)
-        {
-            var options = configured ?? new WorkspaceCanaryEnrollmentOptions();
-
-            var envEmails = ReadList("WORKSPACE_EXPERIENCE_CANARY_EMAILS");
-            if (envEmails != null)
-                options.Emails = envEmails;
-
-            var envUserIds = ReadList("WORKSPACE_EXPERIENCE_CANARY_USER_IDS");
-            if (envUserIds != null)
-                options.UserIds = envUserIds;
-
-            return options;
-        }
-
-        private static IReadOnlyList<string>? ReadList(string key)
-        {
-            var raw = Environment.GetEnvironmentVariable(key);
-            if (string.IsNullOrWhiteSpace(raw))
-                return null;
-
-            return raw
-                .Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToArray();
         }
     }
 }

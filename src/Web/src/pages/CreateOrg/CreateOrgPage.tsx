@@ -38,6 +38,7 @@ export const CreateOrgPage: React.FC = () => {
   } = wizard;
   const headingRef = useRef<HTMLHeadingElement>(null);
   const busy = status !== 'idle';
+  const waitingForSetup = step === 'about' && !wizard.capabilitiesReady;
   const paidPlan = isPaidWizardPlan(state.plan, catalog.plans);
 
   // Move focus to the step heading so keyboard and screen reader users land at the top of each step.
@@ -47,7 +48,7 @@ export const CreateOrgPage: React.FC = () => {
 
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (busy) return;
+    if (busy || waitingForSetup) return;
     if (step === 'review') void submit();
     else next();
   };
@@ -110,7 +111,12 @@ export const CreateOrgPage: React.FC = () => {
                 </div>
               )}
 
-              {step === 'about' && <AboutStep state={state} errors={errors} update={update} capabilities={wizard.capabilities} />}
+              {step === 'about' && !wizard.capabilitiesReady && (
+                <div role="status" className="py-8 flex items-center justify-center gap-2 text-xs text-[var(--text-muted)]">
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Loading setup options…
+                </div>
+              )}
+              {step === 'about' && wizard.capabilitiesReady && <AboutStep state={state} errors={errors} update={update} capabilities={wizard.capabilities} />}
               {step === 'intent' && (
                 <IntentStep
                   plan={state.plan}
@@ -134,7 +140,7 @@ export const CreateOrgPage: React.FC = () => {
                 >
                   <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back
                 </button>
-                <button type="submit" disabled={busy} aria-busy={status === 'submitting'} className="btn-primary !h-11">
+                <button type="submit" disabled={busy || waitingForSetup} aria-busy={status === 'submitting'} className="btn-primary !h-11">
                   {status === 'submitting' ? (
                     <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Setting up your chart of accounts…</>
                   ) : step === 'review' ? (

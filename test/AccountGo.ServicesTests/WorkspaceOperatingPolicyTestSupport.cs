@@ -17,34 +17,10 @@ namespace AccountGo.ServicesTests;
 
 internal static class WorkspaceOperatingPolicyTestSupport
 {
-    /// <summary>
-    /// Builds a canary enrollment that admits the given subjects. A null/empty argument yields an
-    /// enrollment that admits nobody (the production default). The <paramref name="soloSetupEnabled"/>
-    /// flag mirrors the global rollout switch; admission still requires an enrolled subject.
-    /// </summary>
-    public static IWorkspaceCanaryEnrollment CreateEnrollment(
-        bool soloSetupEnabled,
-        IEnumerable<string>? enrolledUserIds = null,
-        IEnumerable<string>? enrolledEmails = null)
-    {
-        var options = Options.Create(new WorkspaceExperienceOptions
-        {
-            SoloSetupEnabled = soloSetupEnabled,
-            Canary = new WorkspaceCanaryEnrollmentOptions
-            {
-                UserIds = enrolledUserIds is null ? System.Array.Empty<string>() : new List<string>(enrolledUserIds),
-                Emails = enrolledEmails is null ? System.Array.Empty<string>() : new List<string>(enrolledEmails)
-            }
-        });
-        return new WorkspaceCanaryEnrollment(options);
-    }
-
     public static WorkspaceInitializationApplicator CreateInitializer(
         ApiDbContext db,
         ITenantContext? tenant = null,
         bool soloSetupEnabled = false,
-        IEnumerable<string>? enrolledUserIds = null,
-        IEnumerable<string>? enrolledEmails = null,
         bool personalReleasedForDisposableFixtures = false)
     {
         tenant ??= new TenantContext();
@@ -52,8 +28,7 @@ internal static class WorkspaceOperatingPolicyTestSupport
         var policyTx = new WorkspacePolicyTransaction(db, tenant);
         var catalog = new WorkspaceAccessProfileCatalog(db, Mock.Of<ISecurityService>(), System.Array.Empty<Core.Domain.Security.IWorkspaceAccessProfilePermissionContributor>());
         var resolver = new WorkspaceApprovalPolicyResolver(db);
-        var canary = CreateEnrollment(soloSetupEnabled, enrolledUserIds, enrolledEmails);
-        return new WorkspaceInitializationApplicator(db, policyTx, catalog, resolver, options, canary, personalReleasedForDisposableFixtures);
+        return new WorkspaceInitializationApplicator(db, policyTx, catalog, resolver, options, personalReleasedForDisposableFixtures);
     }
 
     /// <summary>

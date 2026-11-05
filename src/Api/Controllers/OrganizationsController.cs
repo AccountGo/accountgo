@@ -41,7 +41,6 @@ namespace Api.Controllers
         private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
         private readonly Api.Options.WorkspaceExperienceOptions _experience;
         private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
-        private readonly IWorkspaceCanaryEnrollment _canary;
         private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
         private readonly IEntitlementService _entitlements;
         private readonly IBillingProvider _billing;
@@ -58,7 +57,6 @@ namespace Api.Controllers
             IWorkspaceOperatingPolicyService operatingPolicy = null,
             Microsoft.Extensions.Options.IOptions<Api.Options.WorkspaceExperienceOptions> experienceOptions = null,
             Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
-            IWorkspaceCanaryEnrollment canary = null,
             IWorkspaceReviewerEligibility reviewerEligibility = null,
             IEntitlementService entitlements = null,
             IBillingProvider billing = null)
@@ -72,7 +70,6 @@ namespace Api.Controllers
             _workspaceInit = workspaceInit;
             _operatingPolicy = operatingPolicy;
             _policyTransaction = policyTransaction;
-            _canary = canary;
             _reviewerEligibility = reviewerEligibility;
             _entitlements = entitlements;
             _billing = billing;
@@ -213,27 +210,13 @@ namespace Api.Controllers
                     });
                 }
 
-                // Canary audience gate, evaluated before any provisioning. Eligibility is resolved from
-                // trusted server enrollment keyed on the authenticated user id — never from the request.
-                // An unenrolled caller cannot initialize the new experience even with setup enabled.
-                if (_canary != null && !_canary.IsEnrolled(email: null, userId: UserId))
-                {
-                    return UnprocessableEntity(new ProblemDetails
-                    {
-                        Title = "Workspace initialization unavailable",
-                        Detail = "This account is not part of the current setup audience.",
-                        Status = StatusCodes.Status422UnprocessableEntity,
-                        Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryNotEnrolled }
-                    });
-                }
-
                 if (!request.WorkspacePurpose.HasValue || !request.CollaborationIntent.HasValue)
                     return Problem(statusCode: 400, title: "About answers required",
                         detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
 
-                // Approved-journey scope gate at the request boundary: this canary releases the Business solo
+                // Approved-journey scope gate at the request boundary: setup releases the Business solo
                 // (Just me) and team (With others) journeys. Personal purpose is out of scope and is rejected
-                // here (and again at initialization) so an enrolled caller cannot reach it.
+                // here (and again at initialization) so no caller can reach it.
                 if (!WorkspaceInitializationScope.IsSupported(request.WorkspacePurpose.Value, request.CollaborationIntent.Value, WorkspaceInitializationScope.IsPersonalReleased(experience)))
                 {
                     return UnprocessableEntity(new ProblemDetails
@@ -241,7 +224,7 @@ namespace Api.Controllers
                         Title = "Workspace setup not available",
                         Detail = WorkspaceInitializationScope.UnsupportedScopeMessage,
                         Status = StatusCodes.Status422UnprocessableEntity,
-                        Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed }
+                        Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.SetupScopeNotAllowed }
                     });
                 }
 
@@ -278,8 +261,7 @@ namespace Api.Controllers
 
                         if (!initResult.Applied
                             && initResult.ReasonCode is WorkspacePolicyReasonCodes.PersonalPurposeDisabled
-                                or WorkspacePolicyReasonCodes.CanaryNotEnrolled
-                                or WorkspacePolicyReasonCodes.CanaryScopeNotAllowed
+                                or WorkspacePolicyReasonCodes.SetupScopeNotAllowed
                                 or WorkspacePolicyReasonCodes.EntityPurposeMismatch
                                 or WorkspacePolicyReasonCodes.NotPendingSignupWorkspace
                                 or WorkspacePolicyReasonCodes.SoloSetupNotEligible
@@ -364,9 +346,9 @@ namespace Api.Controllers
         /// Post-verification continuation for a workspace that was created (slug reserved) during signup but
         /// deliberately left unclassified until the owner verified their email. The authenticated, verified
         /// Owner applies their About answers here to initialize the EXISTING workspace. This does not create
-        /// a second workspace and is not the legacy confirmation flow: it runs the same canary-gated
+        /// a second workspace and is not the legacy confirmation flow: it runs the same
         /// new-workspace initializer, which only applies to an uninitialized workspace and re-checks
-        /// enrollment and the Business + Just-me scope against the verified identity.
+        /// the setup switch and the supported scope against the verified identity.
         /// </summary>
         [TenantScoped]
         [HttpPost("current/initialize")]
@@ -392,7 +374,7 @@ namespace Api.Controllers
                     Title = "Workspace setup not available",
                     Detail = WorkspaceInitializationScope.UnsupportedScopeMessage,
                     Status = StatusCodes.Status422UnprocessableEntity,
-                    Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed }
+                    Extensions = { ["reasonCode"] = WorkspacePolicyReasonCodes.SetupScopeNotAllowed }
                 });
             }
 
