@@ -791,6 +791,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionReason", "INTEGER NULL");
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionNote", "TEXT NULL");
             AddColumnIfMissing(connection, "RecurringOccurrences", "SeriesAdvanced", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing(connection, "Company", "ActivationState", "TEXT NOT NULL DEFAULT 'active'");
 
             using var idx = connection.CreateCommand();
             idx.CommandText = @"CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_ExcludedAt""

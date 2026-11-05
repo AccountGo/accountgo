@@ -9,6 +9,7 @@ using Api.Filters;
 using Api.Service;
 using Core.Authorization;
 using Core.Domain;
+using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -31,6 +32,7 @@ namespace Api.Controllers
         private readonly IWorkspaceOperatingPolicyService _operatingPolicy;
         private readonly IWorkspacePolicyTransaction _policyTransaction;
         private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
+        private readonly IEntitlementService _entitlements;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         private bool IsOwner => _tenant.Role == CompanyMemberRole.Owner;
 
@@ -39,7 +41,7 @@ namespace Api.Controllers
             ?? HttpContext?.RequestServices?.GetService<IAccessAuthorizationService>()
             ?? new AccessAuthorizationService(
                 _tenant,
-                HttpContext?.RequestServices?.GetService<Core.Entitlements.IEntitlementService>(),
+                HttpContext?.RequestServices?.GetService<IEntitlementService>(),
                 _db,
                 new HttpContextAccessor { HttpContext = HttpContext },
                 HttpContext?.RequestServices?.GetService<Api.Service.IMfaGate>());
@@ -51,7 +53,8 @@ namespace Api.Controllers
             IAccessAuthorizationService authorizationService = null,
             IWorkspaceOperatingPolicyService operatingPolicy = null,
             IWorkspacePolicyTransaction policyTransaction = null,
-            IWorkspaceReviewerEligibility reviewerEligibility = null)
+            IWorkspaceReviewerEligibility reviewerEligibility = null,
+            IEntitlementService entitlements = null)
         {
             _db = db;
             _identity = identity;
@@ -60,6 +63,7 @@ namespace Api.Controllers
             _operatingPolicy = operatingPolicy;
             _policyTransaction = policyTransaction;
             _reviewerEligibility = reviewerEligibility;
+            _entitlements = entitlements;
         }
 
         private IWorkspaceReviewerEligibility ReviewerEligibility =>
@@ -1125,6 +1129,24 @@ namespace Api.Controllers
                 if (target.UserId == UserId)
                     return Problem(statusCode: 400, title: "Choose another member");
 
+                var entitlements = _entitlements
+                    ?? HttpContext?.RequestServices?.GetService<IEntitlementService>();
+                if (entitlements != null)
+                {
+                    var decision = entitlements.EvaluateForUser(target.UserId, new UserAction.ReceiveWorkspace(companyId));
+                    if (!decision.Allowed)
+                    {
+                        var displayName = ResolveMemberDisplayName(target);
+                        var detail =
+                            $"{displayName} already has a free workspace. Upgrade this workspace before you transfer it, or pick another member.";
+                        var problem = EntitlementProblemFactory.FromDecision(
+                            decision with { Detail = detail },
+                            _tenant,
+                            entitlements.Options.SupportEmail);
+                        return StatusCode(problem.Status ?? StatusCodes.Status403Forbidden, problem);
+                    }
+                }
+
                 var caller = _db.CompanyMembers.Single(m => m.CompanyId == companyId && m.UserId == UserId);
                 target.Role = CompanyMemberRole.Owner;
                 caller.Role = CompanyMemberRole.Admin;
@@ -1174,6 +1196,16 @@ namespace Api.Controllers
         {
             var requested = ids.Distinct().ToList();
             return db.SecurityRoles.Count(r => requested.Contains(r.Id) && !r.SysAdmin && r.Name != "SystemAdministrators") == requested.Count;
+        }
+
+        private string ResolveMemberDisplayName(CompanyMember member)
+        {
+            var user = _identity.Users.AsNoTracking().FirstOrDefault(u => u.Id == member.UserId);
+            if (!string.IsNullOrWhiteSpace(user?.Email))
+                return user.Email;
+            if (!string.IsNullOrWhiteSpace(user?.UserName))
+                return user.UserName;
+            return "That member";
         }
 
         private CompanyMember FindMember(int memberId)

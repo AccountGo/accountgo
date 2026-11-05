@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Linq;
 using System.Security.Claims;
 using Api.Controllers;
@@ -65,9 +66,9 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_WhenNameIsEmpty_ReturnsBadRequest()
+    public async Task CreateCompany_WhenNameIsEmpty_ReturnsBadRequest()
     {
-        var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest { Name = "" });
+        var result = await NewController().Create(new OrganizationsController.CreateOrganizationRequest { Name = "" });
 
         var badRequest = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
@@ -76,9 +77,9 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_WithValidData_ReturnsCreated_And_Caller_Is_Owner()
+    public async Task CreateCompany_WithValidData_ReturnsCreated_And_Caller_Is_Owner()
     {
-        var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest
+        var result = await NewController().Create(new OrganizationsController.CreateOrganizationRequest
         {
             Name = "Pacific Rim Trading Inc.",
             Slug = "pacific-rim-trading",
@@ -99,13 +100,13 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_WhenSlugAlreadyExists_ReturnsConflict()
+    public async Task CreateCompany_WhenSlugAlreadyExists_ReturnsConflict()
     {
         _db.Companies.Add(new Company { Name = "Existing Workspace", Slug = "existing-workspace" });
         _db.SaveChanges();
         var before = _db.Companies.Count();
 
-        var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest
+        var result = await NewController().Create(new OrganizationsController.CreateOrganizationRequest
         {
             Name = "Another Workspace",
             Slug = "existing-workspace"
@@ -119,9 +120,9 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_WithSpecialCharactersInSlug_SanitizesCorrectly()
+    public async Task CreateCompany_WithSpecialCharactersInSlug_SanitizesCorrectly()
     {
-        var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest
+        var result = await NewController().Create(new OrganizationsController.CreateOrganizationRequest
         {
             Name = "Apex & Co. / Logistics!",
             Slug = "apex & co. / logistics!"
@@ -151,7 +152,7 @@ public class SignUpAndOrganizationTests : IDisposable
     [InlineData(FiscalYearPattern.AprMar, null, "2026-05-01", "2026-04-01", "2027-03-31", "FY2026-27")]
     [InlineData(FiscalYearPattern.AprMar, null, "2026-02-15", "2025-04-01", "2026-03-31", "FY2025-26")]
     [InlineData(FiscalYearPattern.Custom, 10, "2026-10-24", "2026-10-01", "2027-09-30", "FY2026-27")]
-    public void CreateCompany_DerivesFiscalYearFromPatternAndBooksStart(
+    public async Task CreateCompany_DerivesFiscalYearFromPatternAndBooksStart(
         FiscalYearPattern pattern, int? month, string booksStart, string start, string end, string code)
     {
         var request = FullRequest("fy-" + code.ToLowerInvariant());
@@ -159,7 +160,7 @@ public class SignUpAndOrganizationTests : IDisposable
         request.FiscalYearStartMonth = month;
         request.BooksStartDate = D(booksStart);
 
-        var result = Assert.IsType<ObjectResult>(NewController().Create(request));
+        var result = Assert.IsType<ObjectResult>(await NewController().Create(request));
         Assert.True(result.StatusCode == StatusCodes.Status201Created, (result.Value as ProblemDetails)?.Detail ?? (result.Value as ProblemDetails)?.Title);
 
         var company = _db.Companies.Single(c => c.Slug == request.Slug);
@@ -174,11 +175,11 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_PersistsPolicyAndTemplateId_AndSeedsNoJournals()
+    public async Task CreateCompany_PersistsPolicyAndTemplateId_AndSeedsNoJournals()
     {
         var request = FullRequest("acme-studio");
         request.LegalName = "Acme Studio LLC";
-        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(NewController().Create(request)).StatusCode);
+        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(await NewController().Create(request)).StatusCode);
 
         var company = _db.Companies.Single(c => c.Slug == "acme-studio");
         var setting = _db.CompanySettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
@@ -190,9 +191,9 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_LegacyPayload_UsesDocumentedDefaults()
+    public async Task CreateCompany_LegacyPayload_UsesDocumentedDefaults()
     {
-        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(NewController().Create(
+        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(await NewController().Create(
             new OrganizationsController.CreateOrganizationRequest { Name = "Legacy Co", Slug = "legacy-co" })).StatusCode);
 
         var company = _db.Companies.Single(c => c.Slug == "legacy-co");
@@ -213,14 +214,14 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_WithAboutAnswers_WhenSoloSetupDisabled_RejectsWith422()
+    public async Task CreateCompany_WithAboutAnswers_WhenSoloSetupDisabled_RejectsWith422()
     {
         var controller = NewController();
         var request = FullRequest("disabled-solo");
         request.WorkspacePurpose = WorkspacePurpose.Business;
         request.CollaborationIntent = WorkspaceCollaborationIntent.JustMe;
 
-        var result = Assert.IsType<UnprocessableEntityObjectResult>(controller.Create(request));
+        var result = Assert.IsType<UnprocessableEntityObjectResult>(await controller.Create(request));
         Assert.Equal(StatusCodes.Status422UnprocessableEntity, result.StatusCode);
         var problem = Assert.IsType<ProblemDetails>(result.Value);
         Assert.Equal(Core.Authorization.WorkspacePolicyReasonCodes.SoloSetupDisabled, problem.Extensions["reasonCode"]?.ToString());
@@ -228,7 +229,7 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_WithAboutAnswers_WhenSoloSetupEnabled_InitializesBusinessSolo()
+    public async Task CreateCompany_WithAboutAnswers_WhenSoloSetupEnabled_InitializesBusinessSolo()
     {
         var controller = new OrganizationsController(_tenantContext, _db,
             new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext), _tenantContext),
@@ -253,7 +254,7 @@ public class SignUpAndOrganizationTests : IDisposable
         request.OwnerAccessPreset = OwnerAccessPreset.FullWorkspaceAccess;
         request.InitialJournalWorkflow = WorkspaceApprovalRuleKind.SingleActorAllowed;
 
-        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(controller.Create(request)).StatusCode);
+        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(await controller.Create(request)).StatusCode);
 
         var company = _db.Companies.Single(c => c.Slug == "solo-biz");
         var operating = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
@@ -283,12 +284,12 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_CashBasisFramework_DefaultsToCashBasis()
+    public async Task CreateCompany_CashBasisFramework_DefaultsToCashBasis()
     {
         var request = FullRequest("cash-co");
         request.ReportingFramework = ReportingFramework.CashBasis;
         request.AccountingBasis = null;
-        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(NewController().Create(request)).StatusCode);
+        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(await NewController().Create(request)).StatusCode);
         var company = _db.Companies.Single(c => c.Slug == "cash-co");
         Assert.Equal(AccountingBasis.Cash, _db.CompanySettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id).AccountingBasis);
     }
@@ -302,7 +303,7 @@ public class SignUpAndOrganizationTests : IDisposable
     [InlineData("bad-costing")]
     [InlineData("bad-pattern")]
     [InlineData("bad-date")]
-    public void CreateCompany_InvalidPolicy_ReturnsBadRequest_AndCreatesNothing(string scenario)
+    public async Task CreateCompany_InvalidPolicy_ReturnsBadRequest_AndCreatesNothing(string scenario)
     {
         var request = FullRequest("bad-" + scenario);
         switch (scenario)
@@ -317,7 +318,7 @@ public class SignUpAndOrganizationTests : IDisposable
             case "bad-date": request.BooksStartDate = new DateTime(1850, 1, 1); break;
         }
 
-        var result = Assert.IsType<ObjectResult>(NewController().Create(request));
+        var result = Assert.IsType<ObjectResult>(await NewController().Create(request));
 
         Assert.Equal(StatusCodes.Status400BadRequest, result.StatusCode);
         Assert.Empty(_db.Companies.Where(c => c.Slug == request.Slug));
@@ -327,11 +328,11 @@ public class SignUpAndOrganizationTests : IDisposable
     [InlineData(TaxRegime.None, "NONE", true)]
     [InlineData(TaxRegime.SalesTax, "SALESTAX", false)]
     [InlineData(TaxRegime.VatGst, "VAT", false)]
-    public void CreateCompany_SeedsTaxByRegime(TaxRegime regime, string code, bool active)
+    public async Task CreateCompany_SeedsTaxByRegime(TaxRegime regime, string code, bool active)
     {
         var request = FullRequest("tax-" + code.ToLowerInvariant());
         request.TaxRegime = regime;
-        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(NewController().Create(request)).StatusCode);
+        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(await NewController().Create(request)).StatusCode);
 
         var company = _db.Companies.Single(c => c.Slug == request.Slug);
         var tax = _db.Taxes.IgnoreQueryFilters().Single(t => t.CompanyId == company.Id);
