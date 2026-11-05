@@ -16,6 +16,9 @@ public interface IPlanCatalog
     /// <summary>Plan key stored on new workspaces when the client omits one.</summary>
     string DefaultPlanKey { get; }
 
+    /// <summary>Plan stored on personal books; null = use DefaultPlanKey (community).</summary>
+    string? PersonalBooksPlanKey => null;
+
     /// <summary>The final plan list, in display order, with <see cref="PlanDefinitionDto.SelfService"/> already set.</summary>
     IReadOnlyList<PlanDefinitionDto> GetPlans();
 

@@ -1123,6 +1123,14 @@ namespace Api.Controllers
 
             return transaction.Execute<IActionResult>(companyId, guard =>
             {
+                if (_db.PersonalWorkspaces.Any(p => p.CompanyId == companyId))
+                    return Conflict(new ProblemDetails
+                    {
+                        Status = 409, Title = "Personal books cannot be transferred",
+                        Detail = "Personal books can't be transferred to another owner.",
+                        Extensions = { ["code"] = "personal_workspace_not_transferable" }
+                    });
+
                 var target = FindMember(request.MemberId);
                 if (target == null || target.Status != CompanyMemberStatus.Active)
                     return Problem(statusCode: 404, title: "Active member not found");
@@ -1148,6 +1156,7 @@ namespace Api.Controllers
                 }
 
                 var caller = _db.CompanyMembers.Single(m => m.CompanyId == companyId && m.UserId == UserId);
+                _db.WorkspaceLinks.RemoveRange(_db.WorkspaceLinks.Where(l => l.WorkCompanyId == companyId));
                 target.Role = CompanyMemberRole.Owner;
                 caller.Role = CompanyMemberRole.Admin;
 

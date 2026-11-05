@@ -29,7 +29,7 @@ namespace Api.Controllers
     [Authorize]
     [ApiController]
     [Route("api/organizations")]
-    public class OrganizationsController : BaseController
+    public partial class OrganizationsController : BaseController
     {
         private readonly ITenantContext _tenant;
         private readonly ApiDbContext _db;
@@ -166,6 +166,8 @@ namespace Api.Controllers
             if (!_plans.TryResolvePlan(requestedPlan, out var resolvedPlan))
                 return Problem(statusCode: 400, title: "Invalid workspace settings");
             var plan = resolvedPlan.Key;
+            if (_plans.PersonalBooksPlanKey != null && string.Equals(plan, _plans.PersonalBooksPlanKey, StringComparison.OrdinalIgnoreCase))
+                return PersonalProblem(400, "use_personal_books_setup", "Personal books are created from the personal books setup.");
             if (slug.Length == 0 || slug.Length > 100 || !System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$"))
                 return Problem(statusCode: 400, title: "Invalid workspace settings");
 
@@ -1096,6 +1098,15 @@ namespace Api.Controllers
         {
             return new
             {
+                isPersonalBooks = _db.PersonalWorkspaces.Any(p => p.CompanyId == company.Id),
+                linkedPersonalCompanyId = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId && l.WorkCompanyId == company.Id)
+                    .Select(l => (int?)l.PersonalCompanyId).FirstOrDefault(),
+                linkedWorkCompanyIds = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId && l.PersonalCompanyId == company.Id)
+                    .Select(l => l.WorkCompanyId).ToList(),
+                canAddPersonalBooks = CanAddPersonalBooks(),
+                includedModules = _plans.ResolveStoredPlan(company.Plan).IncludedModules,
+                requiredModules = _plans.ResolveStoredPlan(company.Plan).RequiredModules,
+                currency = _db.CompanySettings.IgnoreQueryFilters().Where(s => s.CompanyId == company.Id).Select(s => s.Currency).FirstOrDefault(),
                 id = company.Id.ToString(), name = company.Name, shortName = company.ShortName, slug = company.Slug,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, subscriptionStatus = company.SubscriptionStatus,
                 activationState = string.IsNullOrWhiteSpace(company.ActivationState)

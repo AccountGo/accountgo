@@ -87,6 +87,13 @@ export const OrgLayout: React.FC = () => {
           shortName: organization.shortName,
           role: organization.role,
           plan: organization.plan,
+          isPersonalBooks: organization.isPersonalBooks,
+          linkedPersonalCompanyId: organization.linkedPersonalCompanyId,
+          linkedWorkCompanyIds: organization.linkedWorkCompanyIds,
+          canAddPersonalBooks: organization.canAddPersonalBooks,
+          includedModules: organization.includedModules,
+          requiredModules: organization.requiredModules,
+          currency: organization.currency,
           activationState: organization.activationState || 'active',
           avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
           whitelabel: {
