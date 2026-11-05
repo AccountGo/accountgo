@@ -83,7 +83,16 @@ export interface WorkspacePolicyMutationResult {
   collaborationState: string;
 }
 
-export interface OrgDetails {
+export interface PersonalBooksMetadata {
+  isPersonalBooks?: boolean;
+  linkedPersonalCompanyId?: number | null;
+  linkedWorkCompanyIds?: number[];
+  canAddPersonalBooks?: boolean;
+  includedModules?: ModuleKey[];
+  requiredModules?: ModuleKey[];
+}
+
+export interface OrgDetails extends PersonalBooksMetadata {
   id: string;
   name: string;
   slug: string;
@@ -102,7 +111,7 @@ export interface OrgDetails {
   activationState?: string;
 }
 
-export interface Organization {
+export interface Organization extends PersonalBooksMetadata {
   id: string;
   name: string;
   shortName?: string;

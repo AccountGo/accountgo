@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronsUpDown, Check, Plus, Building2, ExternalLink } from 'lucide-react';
 import { OrgDetails } from '../types';
+import { PersonalBooksDialog } from './PersonalBooksDialog';
 
 interface OrgSwitcherProps {
   currentOrg: OrgDetails;
@@ -15,6 +16,7 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
   collapsed = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [personalSetupOpen, setPersonalSetupOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,7 +47,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
 
     // Preserve the current sub-path when switching orgs (e.g. /settings -> /settings)
     const currentSubPath = location.pathname.replace(/^\/org\/[^/]+/, '');
-    const targetPath = `/org/${targetSlug}${currentSubPath || '/dashboard'}`;
+    const target = availableOrgs.find(org => org.slug === targetSlug);
+    const targetPath = `/org/${targetSlug}${target?.isPersonalBooks ? '/dashboard' : currentSubPath || '/dashboard'}`;
     navigate(targetPath);
   };
 
@@ -68,7 +71,23 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
       .toUpperCase();
   };
 
-  const currentDisplayName = getDisplayName(currentOrg);
+  const groupedOrgs: OrgDetails[] = [];
+  const added = new Set<string>();
+  for (const org of availableOrgs) {
+    if (added.has(org.id)) continue;
+    const personal = org.isPersonalBooks ? org : availableOrgs.find(p => Number(p.id) === org.linkedPersonalCompanyId);
+    if (personal) {
+      for (const work of availableOrgs.filter(w => w.linkedPersonalCompanyId === Number(personal.id))) {
+        if (!added.has(work.id)) { groupedOrgs.push(work); added.add(work.id); }
+      }
+      if (!added.has(personal.id)) { groupedOrgs.push(personal); added.add(personal.id); }
+    } else { groupedOrgs.push(org); added.add(org.id); }
+  }
+  const workspaceLabel = (org: OrgDetails) => org.isPersonalBooks
+    ? /personal/i.test(org.name) ? org.name : `${org.name} · Personal`
+    : org.linkedPersonalCompanyId ? `${org.name} · Work` : getDisplayName(org);
+
+  const currentDisplayName = workspaceLabel(currentOrg);
 
   return (
     <div className="relative w-full" ref={containerRef}>
@@ -135,9 +154,9 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
           </div>
 
           <div className="space-y-0.5 max-h-60 overflow-y-auto smooth-scroll">
-            {availableOrgs.map((org) => {
+            {groupedOrgs.map((org) => {
               const isSelected = org.slug === currentOrg.slug;
-              const displayName = getDisplayName(org);
+              const displayName = workspaceLabel(org);
               return (
                 <button
                   key={org.id}
@@ -179,6 +198,12 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
           </div>
 
           <div className="mt-1.5 pt-1.5 space-y-0.5 border-t border-[var(--bg-subtle)]">
+            {availableOrgs.some(org => org.canAddPersonalBooks) && (
+              <button type="button" role="menuitem" onClick={() => { setIsOpen(false); setPersonalSetupOpen(true); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)] cursor-pointer">
+                <Plus className="w-3.5 h-3.5" />Add personal books
+              </button>
+            )}
             <button
               type="button"
               role="menuitem"
@@ -207,6 +232,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
           </div>
         </div>
       )}
+      {personalSetupOpen && <PersonalBooksDialog currentOrg={currentOrg} onClose={() => setPersonalSetupOpen(false)}
+        onCreated={slug => { setPersonalSetupOpen(false); navigate(`/org/${slug}/dashboard`); }} />}
     </div>
   );
 };

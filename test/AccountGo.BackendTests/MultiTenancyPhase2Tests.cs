@@ -634,7 +634,10 @@ namespace AccountGo.BackendTests
                 "AccountDeletionService.cs",
                 // Journal reviewer eligibility evaluates a named workspace's members and policy rule explicitly.
                 "WorkspaceReviewerEligibility.cs",
-                "InvitationsController.cs"
+                "InvitationsController.cs",
+                // Personal setup and switcher summaries read explicit, membership-authorized company IDs before tenant resolution.
+                "OrganizationsController.cs",
+                "OrganizationsController.PersonalBooks.cs"
             };
 
             var solutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
