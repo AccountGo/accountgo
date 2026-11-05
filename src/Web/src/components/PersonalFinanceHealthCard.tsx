@@ -65,7 +65,7 @@ export const PersonalFinanceHealthCard: React.FC<Props> = ({
     },
     hasFinancials
       ? {
-          label: 'Net worth',
+          label: 'Net worth (book value)',
           value: netWorth,
           available: netWorthAvailable,
           hint: 'Assets minus liabilities (books)',

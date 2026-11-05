@@ -88,6 +88,15 @@ namespace Services.Dashboard
                 .Select(a => a.Id)
                 .ToHashSet();
 
+            var freelanceIncomeAccountIds = accounts
+                .Where(a => a.AccountCode == "40900")
+                .Select(a => a.Id)
+                .ToHashSet();
+            var drawingsAccountIds = accounts
+                .Where(a => a.AccountCode == "30800")
+                .Select(a => a.Id)
+                .ToHashSet();
+
             // Workspaces without bank records still hold cash in the postable cash accounts (e.g. 10111).
             var bankAccountIds = canViewFinancials
                 ? (_financialService.GetCashAndBanks() ?? Enumerable.Empty<Bank>())
@@ -134,6 +143,15 @@ namespace Services.Dashboard
 
             var cashFlowYtd = canViewFinancials
                 ? ComputeNetAmount(ledger, bankAccountIds, normalBalanceIsDebit: true)
+                : 0m;
+            var moneyFromFreelanceWorkYtd = canViewFinancials
+                ? RoundMoney(ComputeNetAmount(ledger, freelanceIncomeAccountIds, normalBalanceIsDebit: false))
+                : 0m;
+            var earnedIncomeYtd = canViewFinancials
+                ? RoundMoney(totalSalesYtd - moneyFromFreelanceWorkYtd)
+                : totalSalesYtd;
+            var drawingsYtd = canViewFinancials
+                ? RoundMoney(ComputeNetAmount(ledger, drawingsAccountIds, normalBalanceIsDebit: true))
                 : 0m;
 
             var today = DateTime.Today;
@@ -193,6 +211,9 @@ namespace Services.Dashboard
                         .Where(item => item.AccountClassId == (int)AccountClasses.Assets)
                         .Sum(item => item.Amount),
                     TotalSalesYtd = totalSalesYtd,
+                    EarnedIncomeYtd = earnedIncomeYtd,
+                    MoneyFromFreelanceWorkYtd = moneyFromFreelanceWorkYtd,
+                    DrawingsYtd = drawingsYtd,
                     TotalExpensesYtd = totalExpensesYtd,
                     NetProfitYtd = canViewFinancials ? totalSalesYtd - totalExpensesYtd : 0m,
                     CashFlowYtd = cashFlowYtd,
