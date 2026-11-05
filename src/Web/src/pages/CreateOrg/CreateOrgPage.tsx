@@ -99,6 +99,7 @@ export const CreateOrgPage: React.FC = () => {
               </div>
               <p className="font-bold text-[var(--text-main)]">Your workspace is ready</p>
               {wizard.personalBooksFailed && <p className="text-xs text-[var(--text-muted)]">Your workspace is ready. Personal books weren't created — add them from the workspace switcher.</p>}
+              {wizard.businessTypeFailed && <p className="text-xs text-[var(--text-muted)]">Your business type wasn't saved. Set it in workspace settings before you record transactions.</p>}
               <p className="text-xs text-[var(--text-muted)]">Opening your dashboard…</p>
             </div>
           ) : (

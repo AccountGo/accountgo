@@ -55,6 +55,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   const [errors, setErrors] = useState<StepErrors>({});
   const [status, setStatus] = useState<SubmitStatus>('idle');
   const [personalBooksFailed, setPersonalBooksFailed] = useState(false);
+  const [businessTypeFailed, setBusinessTypeFailed] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [freeSlot, setFreeSlot] = useState<FreeSlotState>({ used: false, freeWorkspaceName: null, freeWorkspaceSlug: null });
@@ -218,6 +219,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
       return;
     }
     setPersonalBooksFailed(false);
+    setBusinessTypeFailed(false);
     setStatus('submitting');
     setSubmitError(null);
     try {
@@ -244,19 +246,6 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
 
       // Continuation: initialize the existing signup-created workspace in place (no duplicate).
       if (pendingSlug) {
-        if (state.workKind === 'Company' && capabilities?.soloSetupEnabled !== false) {
-          const policy = await authFetch('/api/organizations/current/accounting-policy', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-AccountGo-Org': pendingSlug },
-            body: JSON.stringify({ entityType: state.legalForm }),
-          });
-          if (!policy.ok) {
-            const error = await policy.json().catch(() => null);
-            setSubmitError(error?.detail || error?.title || 'We could not apply your business type. Try again.');
-            setStatus('idle');
-            return;
-          }
-        }
         const response = await authFetch('/api/organizations/current/initialize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-AccountGo-Org': pendingSlug },
@@ -289,6 +278,27 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
           }
           setStatus('idle');
           return;
+        }
+        // Apply the chosen books type only after initialization succeeded, so an ineligible or already set-up
+        // workspace is never changed. Both work kinds apply it, so a retry after switching from Company to
+        // Freelance never keeps the earlier legal form. Skipped when it already matches or the ledger has postings.
+        const continuationEntityType = state.workKind === 'Freelance' ? 'SoleProprietor'
+          : state.workKind === 'Company' ? state.legalForm : '';
+        if (continuationEntityType && capabilities?.soloSetupEnabled !== false) {
+          try {
+            const headers = { 'Content-Type': 'application/json', 'X-AccountGo-Org': pendingSlug };
+            const current = await authFetch('/api/organizations/current/accounting-policy', { headers });
+            const stored = current.ok ? await current.json().catch(() => null) : null;
+            if (!stored || stored.entityType !== continuationEntityType) {
+              if (stored?.isLedgerFrozen) throw new Error('Ledger has postings');
+              const policy = await authFetch('/api/organizations/current/accounting-policy', {
+                method: 'PUT', headers, body: JSON.stringify({ entityType: continuationEntityType }),
+              });
+              if (!policy.ok) throw new Error('Business type not saved');
+            }
+          } catch {
+            setBusinessTypeFailed(true);
+          }
         }
         if (shouldCreatePersonalBooks) {
           // Initialize need not return identity; resolve it under the same workspace header.
@@ -393,7 +403,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
   }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession, isContinuation, steps, billingInterval, user, existingSettings]);
 
   return {
-    state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, personalBooksFailed, next, back, submit,
+    state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, personalBooksFailed, businessTypeFailed, next, back, submit,
     capabilities, capabilitiesReady, isContinuation, existingSettings, freeSlot, freeSlotMessage, billingInterval, setBillingInterval,
     catalog,
   };
