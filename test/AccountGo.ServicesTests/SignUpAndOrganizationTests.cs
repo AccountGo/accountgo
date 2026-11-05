@@ -238,8 +238,7 @@ public class SignUpAndOrganizationTests : IDisposable
             Mock.Of<Services.Financial.IFinancialService>(),
             CreateEnabledInitializer(),
             WorkspaceOperatingPolicyTestSupport.CreateOperatingPolicy(_db, soloSetupEnabled: true, tenant: _tenantContext),
-            experienceOptions: Microsoft.Extensions.Options.Options.Create(new Api.Options.WorkspaceExperienceOptions { SoloSetupEnabled = true }),
-            canary: WorkspaceOperatingPolicyTestSupport.CreateEnrollment(soloSetupEnabled: true, enrolledUserIds: new[] { CallerId }));
+            experienceOptions: Microsoft.Extensions.Options.Options.Create(new Api.Options.WorkspaceExperienceOptions { SoloSetupEnabled = true }));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -280,7 +279,7 @@ public class SignUpAndOrganizationTests : IDisposable
             _db.SaveChanges();
         }
         return WorkspaceOperatingPolicyTestSupport.CreateInitializer(
-            _db, _tenantContext, soloSetupEnabled: true, enrolledUserIds: new[] { CallerId });
+            _db, _tenantContext, soloSetupEnabled: true);
     }
 
     [Fact]

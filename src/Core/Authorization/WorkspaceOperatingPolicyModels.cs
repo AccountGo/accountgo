@@ -16,8 +16,7 @@ namespace Core.Authorization
         public const string ReviewerRequired = "reviewer_required";
         public const string ApprovalPolicyChangeRequired = "approval_policy_change_required";
         public const string SoloSetupDisabled = "solo_setup_disabled";
-        public const string CanaryNotEnrolled = "canary_not_enrolled";
-        public const string CanaryScopeNotAllowed = "canary_scope_not_allowed";
+        public const string SetupScopeNotAllowed = "setup_scope_not_allowed";
         public const string NotPendingSignupWorkspace = "not_pending_signup_workspace";
         public const string PersonalPurposeDisabled = "personal_purpose_disabled";
 
@@ -104,13 +103,13 @@ namespace Core.Authorization
         bool SoloSetupEnabled,
         IReadOnlyList<string> AllowedNextActions,
         // Server-derived: true only when the approved solo setup is actually AVAILABLE to the authenticated
-        // caller — the admission gates (SoloSetupEnabled AND canary enrollment for this owner) pass — AND
+        // caller — SoloSetupEnabled is true — AND
         // the workspace still carries the signup-specific pending-continuation marker and remains
         // structurally eligible (uninitialized, pristine, sole-owner) for the post-verification
         // continuation — i.e. the exact condition current/initialize will accept. The SPA routes to the
         // guided continuation on THIS flag, never on CollaborationState, so a legacy/non-signup unclassified
-        // workspace, a non-owner member, an already-initialized workspace, setup being disabled, or an
-        // unenrolled owner each yields false and is never steered into a flow it cannot complete.
+        // workspace, a non-owner member, an already-initialized workspace, or setup being disabled each
+        // yields false and is never steered into a flow it cannot complete.
         bool PendingSignupContinuation);
 
     public interface IWorkspaceApprovalPolicyResolver

@@ -67,7 +67,6 @@ namespace Api.Service
         private readonly IWorkspaceApprovalPolicyResolver _approvalResolver;
         private readonly CompanyAccountingPolicyService _accountingPolicy;
         private readonly WorkspaceExperienceOptions _experience;
-        private readonly IWorkspaceCanaryEnrollment _canary;
         private readonly bool _personalReleasedForDisposableFixtures;
 
         /// <param name="personalReleasedForDisposableFixtures">
@@ -80,7 +79,6 @@ namespace Api.Service
             IWorkspaceAccessProfileCatalog accessCatalog,
             IWorkspaceApprovalPolicyResolver approvalResolver,
             IOptions<WorkspaceExperienceOptions> experienceOptions,
-            IWorkspaceCanaryEnrollment canary,
             bool personalReleasedForDisposableFixtures = false,
             CompanyAccountingPolicyService? accountingPolicy = null)
         {
@@ -91,7 +89,6 @@ namespace Api.Service
             _approvalResolver = approvalResolver;
             _accountingPolicy = accountingPolicy ?? new CompanyAccountingPolicyService(db);
             _experience = WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value);
-            _canary = canary;
         }
 
         public WorkspaceExperienceOptions Experience => _experience;
@@ -141,25 +138,9 @@ namespace Api.Service
                 };
             }
 
-            // Canary audience re-enforcement. Setup being enabled is necessary but not sufficient: the
-            // owner must be in the trusted enrollment. This repeats the controller check so a caller that
-            // reaches initialization directly (e.g. bypassing the pre-provision check) still cannot
-            // initialize. Enrollment is keyed on the owner's authenticated user id — the authoritative
-            // identity of the member being initialized — never on a request-supplied email.
-            if (!_canary.IsEnrolled(email: null, userId: ownerUserId))
-            {
-                return new WorkspaceInitializationResult
-                {
-                    Applied = false,
-                    ReasonCode = WorkspacePolicyReasonCodes.CanaryNotEnrolled,
-                    Message = "This workspace is not part of the current setup audience; it remains unclassified.",
-                    JournalMode = WorkspaceApprovalMode.CatalogDefault
-                };
-            }
-
-            // Approved-journey scope. This canary releases the Business solo (Just me) and team (With others)
-            // journeys. Personal purpose is out of scope until it is released and must not be reachable
-            // through the enrolled path, regardless of supplied answers or journal workflow.
+            // Approved-journey scope. Setup releases the Business solo (Just me) and team (With others)
+            // journeys. Personal purpose is out of scope until it is released and must not be reachable,
+            // regardless of supplied answers or journal workflow.
             var personalReleased = _personalReleasedForDisposableFixtures
                 || WorkspaceInitializationScope.IsPersonalReleased(_experience);
             if (!WorkspaceInitializationScope.IsSupported(request.Purpose, request.CollaborationIntent, personalReleased))
@@ -167,7 +148,7 @@ namespace Api.Service
                 return new WorkspaceInitializationResult
                 {
                     Applied = false,
-                    ReasonCode = WorkspacePolicyReasonCodes.CanaryScopeNotAllowed,
+                    ReasonCode = WorkspacePolicyReasonCodes.SetupScopeNotAllowed,
                     Message = WorkspaceInitializationScope.UnsupportedScopeMessage,
                     JournalMode = WorkspaceApprovalMode.CatalogDefault
                 };
