@@ -696,6 +696,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureBooksLockChange(connection);
             EnsureEntityTypeAndYearEndClose(connection);
             EnsureRecurringScheduleTables(connection);
+            EnsurePersonalBooksTables(connection);
         }
 
         // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
@@ -1334,6 +1335,30 @@ WHERE NOT EXISTS (
             );";
 
         // #479 Phase 1: Recurring schedules, lines, and occurrences
+        private static void EnsurePersonalBooksTables(DbConnection connection)
+        {
+            if (!TableExists(connection, "Company")) return;
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS ""PersonalWorkspaces"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""OwnerUserId"" TEXT NOT NULL,
+                    ""CompanyId"" INTEGER NOT NULL REFERENCES ""Company"" (""Id"") ON DELETE CASCADE,
+                    ""CreatedAtUtc"" TEXT NOT NULL);
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PersonalWorkspaces_OwnerUserId"" ON ""PersonalWorkspaces"" (""OwnerUserId"");
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PersonalWorkspaces_CompanyId"" ON ""PersonalWorkspaces"" (""CompanyId"");
+                CREATE TABLE IF NOT EXISTS ""WorkspaceLinks"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""OwnerUserId"" TEXT NOT NULL,
+                    ""WorkCompanyId"" INTEGER NOT NULL REFERENCES ""Company"" (""Id"") ON DELETE NO ACTION,
+                    ""PersonalCompanyId"" INTEGER NOT NULL REFERENCES ""Company"" (""Id"") ON DELETE NO ACTION,
+                    ""CreatedAtUtc"" TEXT NOT NULL);
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WorkspaceLinks_WorkCompanyId"" ON ""WorkspaceLinks"" (""WorkCompanyId"");
+                CREATE INDEX IF NOT EXISTS ""IX_WorkspaceLinks_PersonalCompanyId"" ON ""WorkspaceLinks"" (""PersonalCompanyId"");
+                CREATE INDEX IF NOT EXISTS ""IX_WorkspaceLinks_OwnerUserId"" ON ""WorkspaceLinks"" (""OwnerUserId"");";
+            command.ExecuteNonQuery();
+        }
+
         private static void EnsureRecurringScheduleTables(DbConnection connection)
         {
             if (!TableExists(connection, "Company") || !TableExists(connection, "Customer"))

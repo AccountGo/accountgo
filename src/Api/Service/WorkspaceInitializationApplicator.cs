@@ -70,8 +70,8 @@ namespace Api.Service
         private readonly bool _personalReleasedForDisposableFixtures;
 
         /// <param name="personalReleasedForDisposableFixtures">
-        /// Disposable-fixture seam only; dependency injection never supplies it. Production keeps Personal purpose closed
-        /// until <see cref="WorkspaceInitializationScope.IsPersonalReleased"/> is true.
+        /// Disposable-fixture seam only; dependency injection never supplies it. Wizard setup uses
+        /// <see cref="WorkspaceInitializationScope.IsPersonalReleased"/>; the dedicated personal-books path verifies its own admission.
         /// </param>
         public WorkspaceInitializationApplicator(
             ApiDbContext db,
@@ -98,9 +98,14 @@ namespace Api.Service
             string ownerUserId,
             int ownerMemberId,
             WorkspaceInitializationRequest request,
-            bool requireSignupContinuationEvidence = false)
+            bool requireSignupContinuationEvidence = false,
+            bool personalBooksSetup = false)
         {
-            if (!_experience.SoloSetupEnabled)
+            // Only the dedicated server setup path can admit personal books independently of the wizard rollout.
+            var dedicatedPersonalSetup = personalBooksSetup && EntityEquityMapping.IsIndividualMappingApproved
+                && request.Purpose == WorkspacePurpose.Personal
+                && request.CollaborationIntent == WorkspaceCollaborationIntent.JustMe;
+            if (!_experience.SoloSetupEnabled && !dedicatedPersonalSetup)
             {
                 if (request.CollaborationIntent == WorkspaceCollaborationIntent.JustMe)
                 {
@@ -141,7 +146,7 @@ namespace Api.Service
             // Approved-journey scope. Setup releases the Business solo (Just me) and team (With others)
             // journeys. Personal purpose is out of scope until it is released and must not be reachable,
             // regardless of supplied answers or journal workflow.
-            var personalReleased = _personalReleasedForDisposableFixtures
+            var personalReleased = dedicatedPersonalSetup || _personalReleasedForDisposableFixtures
                 || WorkspaceInitializationScope.IsPersonalReleased(_experience);
             if (!WorkspaceInitializationScope.IsSupported(request.Purpose, request.CollaborationIntent, personalReleased))
             {

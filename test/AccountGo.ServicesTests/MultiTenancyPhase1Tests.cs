@@ -42,7 +42,10 @@ public class MultiTenancyPhase1Tests
             "SecurityUserRole",
             "CompanyMember",
             "CompanyMemberSecurityRole",
-            "CompanyInvitation"
+            "CompanyInvitation",
+            // cross-workspace owner registry; must not be tenant-filtered
+            "PersonalWorkspace",
+            "WorkspaceLink"
         };
 
         foreach (var type in types)
