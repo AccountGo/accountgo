@@ -1,7 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, ArrowRight, Check, Layers, Loader2 } from 'lucide-react';
 import { useCreateOrgWizard } from './hooks/useCreateOrgWizard';
+import { PersonalBooksDialog } from '../../components/PersonalBooksDialog';
+import { clearDraft } from './lib/draft';
+import { setPersistedOrgSlug } from '../../lib/storage';
 import { AboutStep } from './steps/AboutStep';
 import { IdentityStep } from './steps/IdentityStep';
 import { IntentStep } from './steps/IntentStep';
@@ -22,6 +25,7 @@ const TITLES: Record<StepId, { title: string; subtitle: string }> = {
 
 export const CreateOrgPage: React.FC = () => {
   const navigate = useNavigate();
+  const [personalOnlyOpen, setPersonalOnlyOpen] = useState(false);
   const [searchParams] = useSearchParams();
   // Continuation mode: finish setup of an existing signup-created workspace (?continue=<slug>), reusing
   // this same onboarding flow rather than a separate wizard. Name/slug are prefilled from the existing
@@ -94,6 +98,7 @@ export const CreateOrgPage: React.FC = () => {
                 <Check className="w-7 h-7" aria-hidden="true" />
               </div>
               <p className="font-bold text-[var(--text-main)]">Your workspace is ready</p>
+              {wizard.personalBooksFailed && <p className="text-xs text-[var(--text-muted)]">Your workspace is ready. Personal books weren't created — add them from the workspace switcher.</p>}
               <p className="text-xs text-[var(--text-muted)]">Opening your dashboard…</p>
             </div>
           ) : (
@@ -116,7 +121,7 @@ export const CreateOrgPage: React.FC = () => {
                   <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Loading setup options…
                 </div>
               )}
-              {step === 'about' && wizard.capabilitiesReady && <AboutStep state={state} errors={errors} update={update} capabilities={wizard.capabilities} />}
+              {step === 'about' && wizard.capabilitiesReady && <AboutStep state={state} errors={errors} update={update} capabilities={wizard.capabilities} onPersonalOnly={() => setPersonalOnlyOpen(true)} />}
               {step === 'intent' && (
                 <IntentStep
                   plan={state.plan}
@@ -154,6 +159,11 @@ export const CreateOrgPage: React.FC = () => {
           )}
         </div>
       </main>
+      {personalOnlyOpen && <PersonalBooksDialog onClose={() => setPersonalOnlyOpen(false)} onCreated={(slug) => {
+        clearDraft();
+        setPersistedOrgSlug(slug);
+        navigate(`/org/${encodeURIComponent(slug)}/dashboard`, { replace: true });
+      }} />}
     </div>
   );
 };

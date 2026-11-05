@@ -1,11 +1,12 @@
 import React from 'react';
-import type { CollaborationIntent, StepErrors, WizardState, WorkspacePurpose } from '../lib/policyDefaults';
+import type { CollaborationIntent, StepErrors, WizardState, WorkKind, LegalForm } from '../lib/policyDefaults';
 import { ChoiceCards, type ChoiceOption } from './ui';
 
 export interface SetupCapabilities {
   soloSetupEnabled: boolean;
   personalPurposeEnabled: boolean;
   controlledRecoveryEnabled: boolean;
+  canAddPersonalBooks?: boolean;
 }
 
 export const AboutStep: React.FC<{
@@ -13,24 +14,20 @@ export const AboutStep: React.FC<{
   errors: StepErrors;
   update: (patch: Partial<WizardState>) => void;
   capabilities?: SetupCapabilities | null;
-}> = ({ state, errors, update, capabilities }) => {
+  onPersonalOnly?: () => void;
+}> = ({ state, errors, update, capabilities, onPersonalOnly }) => {
   const soloSetupAvailable = capabilities?.soloSetupEnabled !== false;
-  const personalDisabled = capabilities?.personalPurposeEnabled === false;
-  const purposeOptions: ChoiceOption<WorkspacePurpose>[] = [
-    {
-      value: 'Personal',
-      title: 'Personal finances',
-      description: personalDisabled
-        ? 'Personal finance mapping is not yet approved.'
-        : 'Manage your own money or household finances.',
-      disabled: personalDisabled,
-      badge: personalDisabled ? 'Coming soon' : undefined,
-    },
-    {
-      value: 'Business',
-      title: 'Business or freelance work',
-      description: 'Manage income, expenses, invoices, and business records.',
-    },
+  const purposeOptions: ChoiceOption<WorkKind>[] = [
+    { value: 'Freelance', title: 'Freelance or self-employed',
+      description: 'Your own work — clients, invoices and expenses. Personal money can go in linked personal books.' },
+    { value: 'Company', title: 'A business or company',
+      description: 'A separate legal business, such as a company, partnership, cooperative or non-profit.' },
+  ];
+  const legalOptions: ChoiceOption<LegalForm>[] = [
+    { value: 'Corporation', title: 'Company', description: '' },
+    { value: 'Partnership', title: 'Partnership', description: '' },
+    { value: 'Cooperative', title: 'Cooperative', description: '' },
+    { value: 'NonProfit', title: 'Non-profit', description: '' },
   ];
 
   const collaborationOptions: ChoiceOption<CollaborationIntent>[] = [
@@ -50,6 +47,11 @@ export const AboutStep: React.FC<{
     },
   ];
 
+  const personalOnlyLink = capabilities?.canAddPersonalBooks === true && (
+    <button type="button" onClick={onPersonalOnly}
+      className="text-xs text-[var(--brand-primary)] underline cursor-pointer">Only want to track personal money?</button>
+  );
+
   if (!soloSetupAvailable) {
     return (
       <div className="space-y-4">
@@ -62,6 +64,7 @@ export const AboutStep: React.FC<{
             Workspace purpose and collaboration choices cannot be applied and will not be saved. You can assign functional roles and manage permissions in Members settings after creation.
           </p>
         </div>
+        {personalOnlyLink}
       </div>
     );
   }
@@ -69,17 +72,32 @@ export const AboutStep: React.FC<{
   return (
     <div className="space-y-5">
       <div>
-        <ChoiceCards<WorkspacePurpose>
-          legend="What will you use this workspace for?"
-          name="workspacePurpose"
-          value={state.workspacePurpose}
-          onChange={(workspacePurpose) => update({ workspacePurpose })}
+        <ChoiceCards<WorkKind>
+          legend="What is this workspace for?"
+          name="workKind"
+          value={state.workKind}
+          onChange={(workKind) => update({ workKind, workspacePurpose: 'Business' })}
           options={purposeOptions}
         />
-        {errors.workspacePurpose && (
-          <p role="alert" className="text-[11px] text-rose-400 mt-1.5">{errors.workspacePurpose}</p>
-        )}
+        {errors.workKind && <p role="alert" className="text-[11px] text-rose-400 mt-1.5">{errors.workKind}</p>}
       </div>
+      {state.workKind === 'Company' && <div>
+        <ChoiceCards<LegalForm> legend="What kind of business?" name="legalForm" value={state.legalForm}
+          onChange={(legalForm) => update({ legalForm })} options={legalOptions} />
+        {errors.legalForm && <p role="alert" className="text-[11px] text-rose-400 mt-1.5">{errors.legalForm}</p>}
+      </div>}
+      {state.workKind && capabilities?.canAddPersonalBooks === true && <div>
+        <ChoiceCards<'yes' | 'no'> legend="Also keep your personal money?" name="addPersonalBooks"
+          value={state.addPersonalBooks === null ? '' : state.addPersonalBooks ? 'yes' : 'no'}
+          onChange={(value) => update({ addPersonalBooks: value === 'yes' })}
+          options={[
+            { value: 'yes', title: 'Yes, set up my free personal books too', description: '' },
+            { value: 'no', title: 'Not now', description: '' },
+          ]} />
+        {errors.addPersonalBooks && <p role="alert" className="text-[11px] text-rose-400 mt-1.5">{errors.addPersonalBooks}</p>}
+        <p className="text-[11px] text-[var(--text-muted)] mt-2">Personal books are always free and don't count toward your free workspace. You can add them later from the workspace switcher.</p>
+      </div>}
+      {personalOnlyLink}
 
       <div>
         <ChoiceCards<CollaborationIntent>
