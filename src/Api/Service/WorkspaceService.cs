@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Api.Data;
 using Core.Domain;
+using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,10 +28,10 @@ namespace Api.Service
         private readonly ApiDbContext _db;
         private readonly CompanyProvisioningService _provisioning;
         private readonly ITenantContext _tenant;
-        private readonly Core.Entitlements.IEntitlementService _entitlements;
+        private readonly IEntitlementService _entitlements;
 
         public WorkspaceService(ApiDbContext db, CompanyProvisioningService provisioning,
-            ITenantContext tenant, Core.Entitlements.IEntitlementService entitlements = null)
+            ITenantContext tenant, IEntitlementService entitlements = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _provisioning = provisioning ?? throw new ArgumentNullException(nameof(provisioning));
@@ -49,14 +50,24 @@ namespace Api.Service
             return _provisioning.SlugExists(slug);
         }
 
-        /// <summary>Creates company, ownership and defaults inside the caller's transaction.</summary>
+        /// <summary>
+        /// Creates company, ownership and defaults inside the caller's transaction.
+        /// <paramref name="plan"/> is the plan key stored on the company.
+        /// When paying during creation, pass the free plan of the product as <paramref name="plan"/>,
+        /// the requested paid key as <paramref name="requestedPlanKey"/>, and <paramref name="pendingCheckout"/> true.
+        /// </summary>
         public Company Create(string userId, string name, string slug, string plan, string currency, string shortName = null,
             CompanyProvisionOptions options = null, System.Collections.Generic.IEnumerable<int> initialSecurityRoleIds = null,
-            bool markPendingSignupContinuation = false)
+            bool markPendingSignupContinuation = false, string requestedPlanKey = null, bool pendingCheckout = false)
         {
             options = options ?? new CompanyProvisionOptions();
-            _entitlements?.EnsureSelfServicePlan(plan);
-            _entitlements?.EnsureCanOwnAnotherWorkspace(userId);
+            var gatePlan = string.IsNullOrWhiteSpace(requestedPlanKey) ? plan : requestedPlanKey;
+            if (_entitlements != null)
+            {
+                var decision = _entitlements.EvaluateForUser(userId, new UserAction.CreateWorkspace(gatePlan));
+                if (!decision.Allowed)
+                    throw EntitlementDecisions.ToException(decision);
+            }
             options.Currency = currency;
             var errors = CompanyAccountingPolicyRules.Validate(options, DateTime.UtcNow);
             if (errors.Count > 0)
@@ -71,7 +82,9 @@ namespace Api.Service
                 Name = name.Trim(), Slug = slug,
                 ShortName = string.IsNullOrWhiteSpace(shortName) ? name.Trim().Substring(0, Math.Min(4, name.Trim().Length)).ToUpperInvariant() : shortName.Trim(),
                 CompanyCode = RandomNumberGenerator.GetInt32(100, 1000).ToString(),
-                Plan = plan, SubscriptionStatus = "active", CreatedByUserId = userId,
+                Plan = plan,
+                ActivationState = pendingCheckout ? CompanyActivationStates.PendingCheckout : CompanyActivationStates.Active,
+                SubscriptionStatus = "active", CreatedByUserId = userId,
                 AccessBootstrapAvailable = initialSecurityRoleIds == null || !initialSecurityRoleIds.Any()
             };
             _db.Companies.Add(company);
