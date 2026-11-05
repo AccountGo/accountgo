@@ -87,7 +87,8 @@ namespace Api.Controllers
             {
                 soloSetupEnabled = options.SoloSetupEnabled,
                 personalPurposeEnabled = options.PersonalPurposeEnabled,
-                controlledRecoveryEnabled = options.ControlledRecoveryEnabled
+                controlledRecoveryEnabled = options.ControlledRecoveryEnabled,
+                canAddPersonalBooks = CanAddPersonalBooks()
             });
         }
 

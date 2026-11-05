@@ -99,6 +99,21 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SetupCapabilities_OffersPersonalBooksToNewOwner_UntilPersonalBooksExist()
+    {
+        using var before = await Send(HttpMethod.Get, "/api/organizations/setup-capabilities");
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        using var beforeJson = JsonDocument.Parse(await before.Content.ReadAsStringAsync());
+        Assert.True(beforeJson.RootElement.GetProperty("canAddPersonalBooks").GetBoolean());
+        using var created = await Personal();
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var after = await Send(HttpMethod.Get, "/api/organizations/setup-capabilities");
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        using var afterJson = JsonDocument.Parse(await after.Content.ReadAsStringAsync());
+        Assert.False(afterJson.RootElement.GetProperty("canAddPersonalBooks").GetBoolean());
+    }
+
+    [Fact]
     public async Task PersonalCreate_InitializesIndividualSoloWithFullOwnerAccess_WithoutPurposeFlag()
     {
         using var response = await Personal();
