@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using System.Threading.Tasks;
 using Api.Service;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Http;
@@ -11,10 +12,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Auditing
 {
-    /// <summary>Best-effort <c>access.denied</c> logging, rate-limited to one event per user/operation/minute.</summary>
+    /// <summary>
+    /// Best-effort <c>access.denied</c> logging, rate-limited to one event per user/operation/minute.
+    /// Awaited in-request so the shared identity DbContext is never used concurrently and the write
+    /// cannot outlive the request scope.
+    /// </summary>
     public static class AccessDeniedAudit
     {
-        public static void TryLog(
+        public static async Task TryLogAsync(
             HttpContext http,
             string? operation,
             string? permission,
@@ -44,7 +49,7 @@ namespace Api.Auditing
                 var audit = http.RequestServices.GetService<ISecurityAuditService>();
                 if (audit is null) return;
                 var companyId = http.RequestServices.GetService<ITenantContext>()?.CompanyId;
-                _ = audit.LogEventAsync(
+                await audit.LogEventAsync(
                     "access.denied",
                     "denied",
                     userId == "anonymous" ? null : userId,
