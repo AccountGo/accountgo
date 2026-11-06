@@ -58,10 +58,10 @@ Use these when reviewing changes; judge the actual decision, not exact phrasing:
 | Missing live policy/tool | Conditional guidance and targeted UI check; no invented inspection or tool call. |
 | Visible Set up my access rejected for revoked invitation history | Explain strict history eligibility; offer independent role request only with a qualified other approver, otherwise support/operator handoff. |
 | Sole Owner without any recovery action or eligible approver | Do not fabricate a recovery wizard; identify deployment support/operator and prepare an accurate private handoff. |
-| Change existing Business purpose to Personal | Explain read-only purpose and no exposed conversion flow; do not reuse continuation or promise transaction migration. |
+| Change existing Business purpose to Personal | Explain read-only purpose and no self-service conversion; point to creating personal books, or **Use as my personal books** when offered; do not reuse continuation or promise transaction migration. |
 | Invited member asks how to start | Guide work in the existing workspace; do not send them to create a duplicate workspace. |
 | Full new-workspace wizard shown after verification | Establish which journey is active before promising the button initializes an existing workspace. |
-| Personal option Coming soon | Explain rollout availability without promising Personal onboarding. |
+| Personal-books option not offered | Explain that availability follows setup capabilities and that one person can have one personal-books workspace; do not promise it. |
 
 ## CFO interpretation guardrails
 

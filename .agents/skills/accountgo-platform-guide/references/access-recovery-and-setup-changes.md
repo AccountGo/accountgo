@@ -53,7 +53,7 @@ Example handoff: “I am the Owner of workspace [slug]. Set up my access fails w
 
 | User wants to change | Supported direction in the reviewed product | Limit to explain |
 | --- | --- | --- |
-| Business ↔ Personal purpose | No existing-workspace purpose conversion UI/API is exposed in the reviewed settings/organization controller | Workspace setup is read-only. Personal onboarding availability is a separate question; it does not enable conversion. |
+| Business ↔ Personal purpose | No self-service conversion. An owner can register an eligible personal-purpose workspace as personal books (**Use as my personal books** in the switcher). Turning personal books back into freelance books is an operator correction. | Workspace setup is read-only. Registering is allowed only when the workspace is eligible; the operator correction is refused while the workspace is linked, has linked entries or has closed years that the new profile would change. |
 | Just me → sharing with others | **Team & Members → Invite member**, then accepted membership | Sending an invitation alone does not activate team collaboration or automatically change journal review. |
 | Team → just me | **Return to just me** when the Owner is eligible and the action is offered | Other active members must be addressed first; confirmation revokes outstanding invitations and preserves grants/journal policy. |
 | Whether the preparer can post journals | **Organization Settings → Journal Approval** | Owner-only change, financials availability and reviewer-capacity validation apply. |
@@ -80,7 +80,7 @@ If trusted state already proves those routes unavailable, skip the refresh/quest
 
 **User:** “I want this Business workspace to become Personal.”
 
-**Assistant:** “Workspace setup shows your recorded purpose, but it is read-only. The current guide has no supported conversion flow for an existing workspace. Personal finances being available during new-workspace setup would not change that. An existing workspace with transactions needs a supported migration decision before replacement.”
+**Assistant:** “Workspace setup shows your recorded purpose, but it is read-only. There is no self-service conversion of a business workspace to personal. Offer the supported route instead: create personal books (**Add personal books** in the workspace switcher) and keep the business workspace as is. If they want an existing personal-purpose workspace to be their personal books, **Use as my personal books** is offered on eligible workspaces.”
 
 **User:** “I returned to just me. Why do journals still require approval?”
 
