@@ -45,6 +45,7 @@ import { pendingEmailKey, readPendingEmail } from '../lib/customEmail';
 import { recoverPendingEmail, sendInvoiceEmailRequest } from '../lib/invoiceEmailDispatch';
 import type { PendingEmailAttempt } from '../lib/customEmail';
 import { useEmailCapabilities } from '../lib/useEmailCapabilities';
+import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -60,6 +61,7 @@ export const InvoiceDetail: React.FC = () => {
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const history = useRecordHistory();
 
   // State
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -649,6 +651,7 @@ export const InvoiceDetail: React.FC = () => {
               />
             )}
             <HeaderButton label="Download PDF" icon={FileDown} compact busy={isDownloadingPdf} onClick={handleDownloadPdf} />
+            {history.canShow && <RecordHistoryButton onClick={history.openPanel} />}
             <HeaderMenu
               items={[
                 // Opens a new invoice prefilled from this one; nothing is saved until the user saves it.
@@ -699,6 +702,15 @@ export const InvoiceDetail: React.FC = () => {
           </>
         }
       />
+      {history.canShow && (
+        <RecordHistoryPanel
+          entityType="SalesInvoiceHeader"
+          entityId={invoice.id}
+          open={history.open}
+          onClose={history.closePanel}
+          personal={history.personal}
+        />
+      )}
 
       {/* Notifications */}
       {errorBanner && (

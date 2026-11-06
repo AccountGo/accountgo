@@ -12,6 +12,7 @@ import { usePermissions, ReadOnlyModuleBanner } from '../components/Gating';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 import { ModalShell } from '../components/ModalShell';
 import type { TenantContextType } from '../types';
+import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 import type { RecurringOccurrenceView, RecurringScheduleDetail } from '../types/recurring';
 import {
   cadenceLabel, formatRunDate, occurrenceStatusLabel, occurrenceStatusTone, scheduleStatusTone,
@@ -21,6 +22,7 @@ export const RecurringScheduleDetailPage: React.FC = () => {
   const { canWrite } = useOutletContext<TenantContextType>();
   const { hasPermission } = usePermissions();
   const { authFetch } = useAuth();
+  const history = useRecordHistory();
   const { orgSlug, scheduleId } = useParams<{ orgSlug: string; scheduleId: string }>();
 
   const salesWritable = canWrite('sales');
@@ -175,6 +177,7 @@ export const RecurringScheduleDetailPage: React.FC = () => {
             {canManage && paused && (
               <HeaderButton label="Resume" icon={Play} variant="primary" busy={busy === 'resume'} onClick={doResume} />
             )}
+            {history.canShow && <RecordHistoryButton onClick={history.openPanel} />}
             {canManage && (
               <HeaderMenu
                 items={[
@@ -189,6 +192,15 @@ export const RecurringScheduleDetailPage: React.FC = () => {
           </>
         }
       />
+      {history.canShow && (
+        <RecordHistoryPanel
+          entityType="RecurringSchedule"
+          entityId={schedule.id}
+          open={history.open}
+          onClose={history.closePanel}
+          personal={history.personal}
+        />
+      )}
 
       {error && (
         <div role="alert" className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl flex items-start gap-3">

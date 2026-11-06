@@ -363,6 +363,11 @@ export function useCapabilities(): Capabilities {
   return ctx;
 }
 
+/** Like useCapabilities, but null outside CapabilitiesProvider (for optional UI such as History buttons). */
+export function useOptionalCapabilities(): Capabilities | null {
+  return useContext(CapabilitiesContext);
+}
+
 /** Snapshot-only convenience for pages that already sit under OrgLayout. */
 export function useEntitlements() {
   const caps = useCapabilities();

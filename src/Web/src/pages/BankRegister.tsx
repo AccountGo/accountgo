@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { AlertTriangle, Archive, FileUp, Loader2, Pencil, Plus, Scale, Star } from 'lucide-react';
 import { PageHeader, HeaderButton, HeaderMenu } from '../components/PageHeader';
+import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 import { BankAccountFormDialog } from '../components/BankAccountFormDialog';
 import { BankTransactionDialog } from '../components/BankTransactionDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -48,6 +49,7 @@ const BankRegisterPage: React.FC = () => {
   const canCreateTx = hasPermission('banking.transactions.create');
   const canReconcile = hasPermission('banking.reconcile');
   const canViewAccounts = hasPermission('banking.accounts.view');
+  const history = useRecordHistory();
 
   const [account, setAccount] = useState<BankAccount | null>(null);
   const [banks, setBanks] = useState<BankAccount[]>([]);
@@ -245,6 +247,7 @@ const BankRegisterPage: React.FC = () => {
                 onClick={() => setBalanceCheckOpen(true)}
               />
             )}
+            {history.canShow && <RecordHistoryButton onClick={history.openPanel} />}
             {canManage ? (
               <HeaderMenu
                 label="Actions"
@@ -266,6 +269,15 @@ const BankRegisterPage: React.FC = () => {
           </div>
         }
       />
+      {history.canShow && (
+        <RecordHistoryPanel
+          entityType="Bank"
+          entityId={account.id}
+          open={history.open}
+          onClose={history.closePanel}
+          personal={history.personal}
+        />
+      )}
 
       <BankLiveFeed orgSlug={currentOrg.slug} bankId={account.id} />
       {error && (
