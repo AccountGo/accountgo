@@ -35,6 +35,7 @@ namespace Api.Service
         private readonly IHostEnvironment _environment;
         private readonly ILogger<EmailOtpService> _logger;
         private readonly byte[] _hmacKey;
+        private readonly ISecurityAuditService? _securityAudit;
 
         public EmailOtpService(
             UserManager<ApplicationUser> userManager,
@@ -45,7 +46,8 @@ namespace Api.Service
             IMfaGate mfaGate,
             IConfiguration configuration,
             IHostEnvironment environment,
-            ILogger<EmailOtpService> logger)
+            ILogger<EmailOtpService> logger,
+            ISecurityAuditService? securityAudit = null)
         {
             _userManager = userManager;
             _identityContext = identityContext;
@@ -56,6 +58,7 @@ namespace Api.Service
             _configuration = configuration;
             _environment = environment;
             _logger = logger;
+            _securityAudit = securityAudit;
 
             var secret = _configuration["SECRET_KEY"] ?? _configuration["SECRET:key"] ?? _configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET_KEY");
             if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
@@ -74,7 +77,7 @@ namespace Api.Service
             // A closed account is treated the same way so the address cannot be distinguished, and no code is sent.
             if (user == null || user.DeletedAt != null)
             {
-                _logger.LogInformation("OTP request for non-existent email {Email} from {IP} - running dummy hash compute.", normalizedEmail, ipAddress);
+                _logger.LogInformation("OTP request for non-existent email {Email} from {IP} - running dummy hash compute.", RedactEmailForLog(normalizedEmail), ipAddress);
                 PerformDummyWork(normalizedEmail);
                 return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null, null);
             }
@@ -160,7 +163,7 @@ namespace Api.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to deliver OTP email to {Email}", normalizedEmail);
+                _logger.LogError(ex, "Failed to deliver OTP email to {Email}", RedactEmailForLog(normalizedEmail));
                 return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
             }
 
@@ -229,7 +232,7 @@ namespace Api.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to deliver welcome OTP email to {Email}", normalizedEmail);
+                _logger.LogError(ex, "Failed to deliver welcome OTP email to {Email}", RedactEmailForLog(normalizedEmail));
                 return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
             }
 
@@ -300,6 +303,7 @@ namespace Api.Service
                 if (payload.FailedAttempts >= MaxFailedAttempts)
                 {
                     await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
+                    await AuditOtpLockedAsync(user.Id);
                 }
                 else
                 {
@@ -373,6 +377,36 @@ namespace Api.Service
             ApplicationUser user, string? ipAddress, string? userAgent)
         {
             return _sessionService.CreateSessionForUserAsync(user, ipAddress, userAgent);
+        }
+
+        /// <summary>Best-effort <c>auth.otp.locked</c> event; never includes the submitted code.</summary>
+        private async Task AuditOtpLockedAsync(string userId)
+        {
+            if (_securityAudit == null) return;
+            try
+            {
+                await _securityAudit.LogEventAsync(
+                    "auth.otp.locked",
+                    "failure",
+                    userId,
+                    null,
+                    new { maxFailedAttempts = MaxFailedAttempts });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Security audit write failed for auth.otp.locked.");
+            }
+        }
+
+        /// <summary>
+        /// Pseudonymizes an address for logs as <c>email#</c> + the first 12 hex chars of the SHA-256 of the
+        /// normalized (trimmed, lower-cased) address.
+        /// </summary>
+        internal static string RedactEmailForLog(string? email)
+        {
+            var normalized = (email ?? string.Empty).Trim().ToLowerInvariant();
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+            return "email#" + Convert.ToHexString(hash).Substring(0, 12).ToLowerInvariant();
         }
 
         private string ComputeHmac(string input)

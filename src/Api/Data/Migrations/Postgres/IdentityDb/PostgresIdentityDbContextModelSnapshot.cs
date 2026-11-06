@@ -286,6 +286,10 @@ namespace Api.Data.Migrations.Postgres.IdentityDb
                     b.Property<int?>("CompanyId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -299,6 +303,10 @@ namespace Api.Data.Migrations.Postgres.IdentityDb
                     b.Property<string>("MetadataJson")
                         .HasColumnType("text");
 
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("UserAgent")
                         .HasColumnType("text");
 
@@ -308,6 +316,10 @@ namespace Api.Data.Migrations.Postgres.IdentityDb
                     b.HasKey("Id");
 
                     b.HasIndex("EventType");
+
+                    b.HasIndex("CompanyId", "CreatedAt");
+
+                    b.HasIndex("EventType", "CreatedAt");
 
                     b.HasIndex("UserId", "CreatedAt");
 

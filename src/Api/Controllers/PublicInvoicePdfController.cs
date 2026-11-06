@@ -26,6 +26,7 @@ namespace Api.Controllers
         private readonly InvoicePdfRenderer _pdfs;
         private readonly ApiDbContext _db;
         private readonly ILogger<PublicInvoicePdfController> _logger;
+        private readonly ISecurityAuditService? _securityAudit;
 
         public PublicInvoicePdfController(
             IConfiguration configuration,
@@ -33,7 +34,8 @@ namespace Api.Controllers
             SalesInvoicePresentation invoices,
             InvoicePdfRenderer pdfs,
             ApiDbContext db,
-            ILogger<PublicInvoicePdfController> logger)
+            ILogger<PublicInvoicePdfController> logger,
+            ISecurityAuditService? securityAudit = null)
         {
             _configuration = configuration;
             _tenant = tenant;
@@ -41,6 +43,21 @@ namespace Api.Controllers
             _pdfs = pdfs;
             _db = db;
             _logger = logger;
+            _securityAudit = securityAudit;
+        }
+
+        /// <summary>Best-effort <c>invoice.pdf.public</c> event. Never records the signed link, signature, or recipient email.</summary>
+        private async Task AuditPublicPdfAsync(int companyId, int invoiceId)
+        {
+            if (_securityAudit == null) return;
+            try
+            {
+                await _securityAudit.LogEventAsync("invoice.pdf.public", "success", null, companyId, new { companyId, invoiceId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Security audit write failed for invoice.pdf.public.");
+            }
         }
 
         [HttpGet("pdf")]
@@ -94,6 +111,7 @@ namespace Api.Controllers
                 var fileName = InvoiceEmailTemplate.PdfFileName(rendered.InvoiceNumber);
                 Response.Headers["Content-Disposition"] = $"inline; filename=\"{fileName}\"";
                 Response.Headers.CacheControl = "private, no-store";
+                await AuditPublicPdfAsync(claims.CompanyId, claims.InvoiceId);
                 return File(rendered.Pdf, "application/pdf");
             }
         }

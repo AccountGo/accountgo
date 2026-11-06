@@ -248,12 +248,15 @@ namespace Services.Administration
             return _securityRepository.GetUser(username);
         }
 
-        public IEnumerable<AuditLog> AuditLogs()
+        public IEnumerable<AuditLog> AuditLogs(int? beforeId = null, int limit = 100)
         {
-            return _auditLogRepo.Table
+            limit = limit <= 0 ? 100 : Math.Min(limit, 100);
+            var query = _auditLogRepo.Table
                 .Where(a => a.TableName != Core.Authorization.ApprovalEvidence.ApprovalTable &&
-                            a.TableName != Core.Authorization.ApprovalEvidence.StateTable)
-                .AsEnumerable();
+                            a.TableName != Core.Authorization.ApprovalEvidence.StateTable);
+            if (beforeId.HasValue)
+                query = query.Where(a => a.Id < beforeId.Value);
+            return query.OrderByDescending(a => a.Id).Take(limit).AsEnumerable();
         }
 
         public TenantSubscriptionDto GetCurrentSubscription()

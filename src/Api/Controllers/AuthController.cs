@@ -47,6 +47,7 @@ namespace Api.Controllers
         private readonly IPlanCatalog _plans;
         private readonly WorkspaceInitializationApplicator _workspaceInit;
         private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
+        private readonly ISecurityAuditService? _securityAudit;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -64,7 +65,8 @@ namespace Api.Controllers
             AccountDeletionService accountDeletion,
             IPlanCatalog plans,
             WorkspaceInitializationApplicator workspaceInit = null,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
+            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
+            ISecurityAuditService? securityAudit = null)
         {
             _otpService = otpService;
             _authService = authService;
@@ -82,7 +84,24 @@ namespace Api.Controllers
             _plans = plans;
             _workspaceInit = workspaceInit;
             _policyTransaction = policyTransaction;
+            _securityAudit = securityAudit;
         }
+
+        private async Task AuditAsync(string eventType, string outcome, string? userId, object? metadata = null)
+        {
+            if (_securityAudit == null) return;
+            try
+            {
+                await _securityAudit.LogEventAsync(eventType, outcome, userId, null, metadata);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Security audit write failed for {EventType}.", eventType);
+            }
+        }
+
+        private Task AuditSignInFailureAsync(string method, string reason, string? userId = null) =>
+            AuditAsync("auth.signin.failure", "failure", userId, new { method, reason });
 
         [AllowAnonymous]
         [EnableRateLimiting("otp-verify")]
@@ -98,6 +117,7 @@ namespace Api.Controllers
                 var googleClientId = _configuration["Google:ClientId"];
                 if (string.IsNullOrWhiteSpace(googleClientId))
                 {
+                    await AuditSignInFailureAsync("google", "not_configured");
                     return BadRequest(new ProblemDetails
                     {
                         Title = "Google Sign-In Not Configured",
@@ -110,6 +130,7 @@ namespace Api.Controllers
                 var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
                 if (payload == null || !payload.EmailVerified)
                 {
+                    await AuditSignInFailureAsync("google", "email_unverified");
                     return BadRequest(new ProblemDetails
                     {
                         Title = "Google Authentication Failed",
@@ -123,11 +144,15 @@ namespace Api.Controllers
                 if (!string.IsNullOrEmpty(allowedHostedDomain) &&
                     !string.Equals(payload.HostedDomain, allowedHostedDomain, StringComparison.OrdinalIgnoreCase))
                 {
+                    await AuditSignInFailureAsync("google", "hosted_domain_mismatch");
                     return Forbid();
                 }
 
                 if (string.IsNullOrWhiteSpace(payload.Subject) || string.IsNullOrWhiteSpace(payload.Email))
+                {
+                    await AuditSignInFailureAsync("google", "invalid_identity");
                     return BadRequest(new ProblemDetails { Title = "Google Authentication Failed", Detail = "Invalid Google identity." });
+                }
 
                 // Resolve the stable provider subject first. Email alone is not proof of current ownership
                 // for third-party addresses, even when Google has previously verified it.
@@ -135,16 +160,28 @@ namespace Api.Controllers
                 if (user == null)
                 {
                     if (!GoogleIdentityPolicy.IsAuthoritativeEmail(payload.Email, payload.HostedDomain))
+                    {
+                        await AuditSignInFailureAsync("google", "account_linking_required");
                         return BadRequest(new ProblemDetails { Title = "Account linking required", Detail = "Sign in with your email code. This Google address cannot be linked automatically." });
+                    }
                     user = await _userManager.FindByEmailAsync(payload.Email);
                     if (user == null || user.DeletedAt != null || !user.EmailConfirmed)
+                    {
+                        await AuditSignInFailureAsync("google", "account_not_found", user?.Id);
                         return BadRequest(new ProblemDetails { Title = "Account Not Found", Detail = "Sign in or register with your email code first." });
+                    }
                     var linkResult = await _userManager.AddLoginAsync(user, new UserLoginInfo("Google", payload.Subject, "Google"));
                     if (!linkResult.Succeeded)
+                    {
+                        await AuditSignInFailureAsync("google", "account_link_failed", user.Id);
                         return BadRequest(new ProblemDetails { Title = "Account linking failed", Detail = "Unable to link this Google account. Sign in with your email code." });
+                    }
                 }
                 if (user.DeletedAt != null)
+                {
+                    await AuditSignInFailureAsync("google", "account_deleted", user.Id);
                     return BadRequest(new ProblemDetails { Title = "Account Not Found", Detail = "This account is unavailable." });
+                }
 
                 Request.Cookies.TryGetValue("ag_td", out var agTdToken);
                 var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(user, "google", agTdToken);
@@ -177,6 +214,7 @@ namespace Api.Controllers
 
                 if (!result.Success || result.Response == null)
                 {
+                    await AuditSignInFailureAsync("google", "session_creation_failed", user.Id);
                     return BadRequest(new ProblemDetails
                     {
                         Title = "Session Creation Failed",
@@ -190,10 +228,12 @@ namespace Api.Controllers
                     SetRefreshTokenCookie(result.RawRefreshToken);
                 }
 
+                await AuditAsync("auth.signin.success", "success", user.Id, new { method = "google" });
                 return Ok(result.Response);
             }
             catch (InvalidJwtException ex)
             {
+                await AuditSignInFailureAsync("google", "invalid_token");
                 _logger.LogWarning(ex, "Google sign-in failed due to invalid JWT token.");
                 return BadRequest(new ProblemDetails
                 {
@@ -205,6 +245,7 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error occurred during Google authentication.");
+                await AuditSignInFailureAsync("google", "unexpected_error");
                 return BadRequest(new ProblemDetails
                 {
                     Title = "Google Authentication Failed",
@@ -230,6 +271,7 @@ namespace Api.Controllers
 
             if (existingAppUser != null || existingDomainUser != null)
             {
+                await AuditAsync("auth.signup", "failure", null, new { reason = "account_exists" });
                 return BadRequest(new ProblemDetails
                 {
                     Title = "Account Already Exists",
@@ -248,12 +290,18 @@ namespace Api.Controllers
 
                 cleanSlug = WorkspaceService.NormalizeSlug(rawSlug);
                 if (cleanSlug.Length == 0 || cleanSlug.Length > 100)
+                {
+                    await AuditAsync("auth.signup", "failure", null, new { reason = "invalid_workspace_slug" });
                     return Problem(statusCode: 400, title: "Invalid workspace slug");
+                }
             }
 
             var currency = (request.Currency ?? "USD").Trim().ToUpperInvariant();
             if (!Regex.IsMatch(currency, "^[A-Z]{3}$"))
+            {
+                await AuditAsync("auth.signup", "failure", null, new { reason = "invalid_currency" });
                 return Problem(statusCode: 400, title: "Invalid currency");
+            }
 
             var hasPurpose = !string.IsNullOrWhiteSpace(request.WorkspacePurpose);
             var hasCollaboration = !string.IsNullOrWhiteSpace(request.CollaborationIntent);
@@ -269,79 +317,107 @@ namespace Api.Controllers
                     || !Enum.TryParse<Core.Domain.WorkspacePurpose>(request.WorkspacePurpose, ignoreCase: true, out _)
                     || !Enum.TryParse<Core.Domain.WorkspaceCollaborationIntent>(request.CollaborationIntent, ignoreCase: true, out _))
                 {
+                    await AuditAsync("auth.signup", "failure", null, new { reason = "about_answers_required" });
                     return Problem(statusCode: 400, title: "About answers required",
                         detail: "Both workspacePurpose and collaborationIntent are required for the new workspace experience.");
                 }
             }
 
             // Identity and domain writes share a transaction; failed provisioning or email delivery leaves no orphan.
-            using (var transaction = await _apiDb.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable))
+            var signUpFailureReason = "unexpected_error";
+            var signUpSucceeded = false;
+            string? signUpUserId = null;
+            try
             {
-                _identityContext.Database.SetDbConnection(_apiDb.Database.GetDbConnection());
-                await _identityContext.Database.UseTransactionAsync(transaction.GetDbTransaction());
-                var policyScope = _policyTransaction?.BeginExternalScope();
-                if (cleanSlug != null && _workspaces.SlugExists(cleanSlug))
+                using (var transaction = await _apiDb.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable))
                 {
-                    policyScope?.RolledBack();
-                    return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
-                }
-
-                var appUser = new ApplicationUser
-                {
-                    UserName = normalizedEmail,
-                    Email = normalizedEmail,
-                    EmailConfirmed = false
-                };
-
-                var createResult = await _userManager.CreateAsync(appUser);
-                if (!createResult.Succeeded)
-                {
-                    return BadRequest(new ProblemDetails
+                    _identityContext.Database.SetDbConnection(_apiDb.Database.GetDbConnection());
+                    await _identityContext.Database.UseTransactionAsync(transaction.GetDbTransaction());
+                    var policyScope = _policyTransaction?.BeginExternalScope();
+                    if (cleanSlug != null && _workspaces.SlugExists(cleanSlug))
                     {
-                        Title = "Registration Failed",
-                        Detail = string.Join("; ", createResult.Errors.Select(e => e.Description)),
-                        Status = StatusCodes.Status400BadRequest
-                    });
-                }
+                        policyScope?.RolledBack();
+                        signUpFailureReason = "workspace_slug_taken";
+                        return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
+                    }
 
-                _securityService.AddUser(normalizedEmail, normalizedEmail,
-                    request.FirstName?.Trim() ?? string.Empty, request.LastName?.Trim() ?? string.Empty, new List<int>());
-
-                Core.Domain.Company? company = null;
-                if (cleanSlug != null)
-                {
-                    // Create the workspace unclassified (name/slug prefill only). Initialization — Full
-                    // workspace access and the single-actor journal policy — is deliberately NOT applied
-                    // here: the account's email is not yet verified (EmailConfirmed is false until OTP).
-                    // Granting access or policy to an unverified address would violate the trusted-audience
-                    // boundary. The owner completes About and initializes through the authenticated
-                    // create/initialization path after verifying and signing in, where enrollment is
-                    // re-checked against the verified identity.
-                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, _plans.DefaultPlanKey, currency,
-                        markPendingSignupContinuation: true);
-                }
-
-                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-                // Keep delivery inside the transaction so a failed send rolls back signup and workspace creation.
-                var result = await _otpService.SendWelcomeOtpAsync(appUser, string.IsNullOrWhiteSpace(request.FirstName) ? "there" : request.FirstName.Trim(), company?.Name, ipAddress);
-                if (!result.Success)
-                {
-                    // Transaction will roll back; discard this scope's queued work.
-                    policyScope?.RolledBack();
-                    return BadRequest(new ProblemDetails
+                    var appUser = new ApplicationUser
                     {
-                        Title = "Verification Email Failed",
-                        Detail = result.Error ?? "Failed to deliver verification code email. Please check your address or try again.",
-                        Status = StatusCodes.Status400BadRequest
-                    });
+                        UserName = normalizedEmail,
+                        Email = normalizedEmail,
+                        EmailConfirmed = false
+                    };
+                    signUpUserId = appUser.Id;
+
+                    var createResult = await _userManager.CreateAsync(appUser);
+                    if (!createResult.Succeeded)
+                    {
+                        signUpFailureReason = "registration_failed";
+                        return BadRequest(new ProblemDetails
+                        {
+                            Title = "Registration Failed",
+                            Detail = string.Join("; ", createResult.Errors.Select(e => e.Description)),
+                            Status = StatusCodes.Status400BadRequest
+                        });
+                    }
+
+                    _securityService.AddUser(normalizedEmail, normalizedEmail,
+                        request.FirstName?.Trim() ?? string.Empty, request.LastName?.Trim() ?? string.Empty, new List<int>());
+
+                    Core.Domain.Company? company = null;
+                    if (cleanSlug != null)
+                    {
+                        // Create the workspace unclassified (name/slug prefill only). Initialization — Full
+                        // workspace access and the single-actor journal policy — is deliberately NOT applied
+                        // here: the account's email is not yet verified (EmailConfirmed is false until OTP).
+                        // Granting access or policy to an unverified address would violate the trusted-audience
+                        // boundary. The owner completes About and initializes through the authenticated
+                        // create/initialization path after verifying and signing in, where enrollment is
+                        // re-checked against the verified identity.
+                        company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, _plans.DefaultPlanKey, currency,
+                            markPendingSignupContinuation: true);
+                    }
+
+                    var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                    // Keep delivery inside the transaction so a failed send rolls back signup and workspace creation.
+                    var result = await _otpService.SendWelcomeOtpAsync(appUser, string.IsNullOrWhiteSpace(request.FirstName) ? "there" : request.FirstName.Trim(), company?.Name, ipAddress);
+                    if (!result.Success)
+                    {
+                        // Transaction will roll back; discard this scope's queued work.
+                        policyScope?.RolledBack();
+                        signUpFailureReason = "verification_email_failed";
+                        return BadRequest(new ProblemDetails
+                        {
+                            Title = "Verification Email Failed",
+                            Detail = result.Error ?? "Failed to deliver verification code email. Please check your address or try again.",
+                            Status = StatusCodes.Status400BadRequest
+                        });
+                    }
+                    await transaction.CommitAsync();
+                    // Externally-owned transaction committed; drain ONLY this scope's deferred committed-state
+                    // verification. Never throws.
+                    policyScope?.Committed();
+                    signUpSucceeded = true;
+                    return Ok(new SignUpResponse(
+                        Success: true, Message: result.Message, Email: normalizedEmail, OrgSlug: company?.Slug,
+                        ExpiresInSeconds: result.ExpiresInSeconds, DevCode: result.DevCode));
                 }
-                await transaction.CommitAsync();
-                // Externally-owned transaction committed; drain ONLY this scope's deferred committed-state
-                // verification. Never throws.
-                policyScope?.Committed();
-                return Ok(new SignUpResponse(
-                    Success: true, Message: result.Message, Email: normalizedEmail, OrgSlug: company?.Slug,
-                    ExpiresInSeconds: result.ExpiresInSeconds, DevCode: result.DevCode));
+            }
+            finally
+            {
+                // Audit after the signup transaction scope is disposed so the event is not rolled back with it.
+                try
+                {
+                    await _identityContext.Database.UseTransactionAsync((System.Data.Common.DbTransaction?)null);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Unable to detach the signup transaction from the identity context before auditing.");
+                }
+                if (signUpSucceeded)
+                    await AuditAsync("auth.signup", "success", signUpUserId);
+                else
+                    await AuditAsync("auth.signup", "failure", null, new { reason = signUpFailureReason });
             }
         }
 
@@ -390,6 +466,7 @@ namespace Api.Controllers
 
             if (!result.Success)
             {
+                await AuditSignInFailureAsync("otp", ClassifyOtpFailure(result.Error));
                 return BadRequest(new ProblemDetails
                 {
                     Title = "Verification Failed",
@@ -422,6 +499,7 @@ namespace Api.Controllers
 
             if (result.Response == null)
             {
+                await AuditSignInFailureAsync("otp", ClassifyOtpFailure(result.Error));
                 return BadRequest(new ProblemDetails
                 {
                     Title = "Verification Failed",
@@ -437,12 +515,25 @@ namespace Api.Controllers
 
             var verifiedUser = await _userManager.FindByEmailAsync(request.Email.Trim());
             if (verifiedUser == null)
+            {
+                await AuditSignInFailureAsync("otp", "user_not_found");
                 return Unauthorized();
+            }
             result.Response.Organizations = (from m in _apiDb.CompanyMembers
                                              join c in _apiDb.Companies on m.CompanyId equals c.Id
                                              where m.UserId == verifiedUser.Id && m.Status == Core.Domain.CompanyMemberStatus.Active
                                              select new OrganizationDto { Slug = c.Slug ?? "", Name = c.Name, Role = m.Role.ToString() }).ToList();
+            await AuditAsync("auth.signin.success", "success", verifiedUser.Id, new { method = "otp" });
             return Ok(result.Response);
+        }
+
+        private static string ClassifyOtpFailure(string? error)
+        {
+            if (error != null && error.StartsWith("Code locked", StringComparison.OrdinalIgnoreCase))
+                return "otp_locked";
+            if (error == null || error.StartsWith("Invalid or expired", StringComparison.OrdinalIgnoreCase))
+                return "invalid_or_expired_code";
+            return "session_creation_failed";
         }
 
         [AllowAnonymous]
@@ -651,6 +742,7 @@ namespace Api.Controllers
             {
                 if (string.IsNullOrWhiteSpace(request.CurrentPassword))
                 {
+                    await AuditAsync("auth.password.change", "failure", user.Id, new { reason = "current_password_required" });
                     return BadRequest(new ProblemDetails
                     {
                         Title = "Password Required",
@@ -667,6 +759,7 @@ namespace Api.Controllers
 
             if (!result.Succeeded)
             {
+                await AuditAsync("auth.password.change", "failure", user.Id, new { reason = "update_failed" });
                 return BadRequest(new ProblemDetails
                 {
                     Title = "Password Update Failed",
@@ -675,6 +768,7 @@ namespace Api.Controllers
                 });
             }
 
+            await AuditAsync("auth.password.change", "success", user.Id);
             return Ok(new { success = true, message = "Password updated successfully." });
         }
 
@@ -786,6 +880,7 @@ namespace Api.Controllers
             }
 
             await _identityContext.SaveChangesAsync();
+            await AuditAsync("auth.session.revoke_others", "success", user.Id, new { revokedCount = otherSessions.Count });
             return Ok(new { success = true, revokedCount = otherSessions.Count });
         }
 
@@ -879,6 +974,10 @@ namespace Api.Controllers
             }
 
             ClearRefreshTokenCookie();
+            await AuditAsync(
+                "auth.logout",
+                "success",
+                User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value);
             return Ok(new { message = "Logged out successfully" });
         }
 

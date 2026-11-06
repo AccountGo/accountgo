@@ -14,5 +14,15 @@ namespace Api.Service
             string? ipAddress,
             string? userAgent,
             object? metadata = null);
+
+        /// <summary>
+        /// Records a security event using IP, user agent and correlation ID from the current request.
+        /// </summary>
+        Task LogEventAsync(
+            string eventType,
+            string? outcome,
+            string? userId,
+            int? companyId,
+            object? metadata = null);
     }
 }

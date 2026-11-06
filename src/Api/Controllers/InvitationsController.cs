@@ -32,6 +32,7 @@ namespace Api.Controllers
         private readonly ITenantContext _tenant;
         private readonly IAccessAuthorizationService _authorizationService;
         private readonly IWorkspacePolicyTransaction _policyTransaction;
+        private readonly ISecurityAuditService _securityAudit;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public InvitationsController(
@@ -40,7 +41,8 @@ namespace Api.Controllers
             Core.Entitlements.IEntitlementService entitlements = null,
             ITenantContext tenant = null,
             IAccessAuthorizationService authorizationService = null,
-            IWorkspacePolicyTransaction policyTransaction = null)
+            IWorkspacePolicyTransaction policyTransaction = null,
+            ISecurityAuditService securityAudit = null)
         {
             _db = db;
             _identity = identity;
@@ -48,6 +50,7 @@ namespace Api.Controllers
             _tenant = tenant;
             _authorizationService = authorizationService;
             _policyTransaction = policyTransaction;
+            _securityAudit = securityAudit;
         }
 
         private IAccessAuthorizationService AuthService =>
@@ -139,7 +142,9 @@ namespace Api.Controllers
             if (preliminaryInvitation == null)
                 return NotFound();
 
-            return policyTx.Execute<IActionResult>(preliminaryInvitation.CompanyId, guard =>
+            object acceptedAudit = null;
+            int? acceptedCompanyId = null;
+            var acceptResult = policyTx.Execute<IActionResult>(preliminaryInvitation.CompanyId, guard =>
             {
                 var invitation = find();
                 if (invitation == null)
@@ -324,9 +329,37 @@ namespace Api.Controllers
                 }
 
                 _db.SaveChanges();
+                acceptedCompanyId = invitation.CompanyId;
+                acceptedAudit = new
+                {
+                    invitationId = invitation.Id,
+                    role = invitation.Role.ToString(),
+                    securityRoleIds = distinctRoles,
+                    invitedByUserId = invitation.InvitedByUserId
+                };
                 AuthService.InvalidateContextCache();
                 return Ok(new { slug = _db.Companies.Where(c => c.Id == invitation.CompanyId).Select(c => c.Slug).Single(), role = member.Role.ToString() });
             });
+
+            if (acceptedAudit != null)
+                AuditInvitationAccepted(user.Id, acceptedCompanyId, acceptedAudit);
+            return acceptResult;
+        }
+
+        /// <summary>Best-effort <c>invitation.accept</c> event; awaited in-request so the shared identity context is not used concurrently.</summary>
+        private void AuditInvitationAccepted(string userId, int? companyId, object metadata)
+        {
+            var audit = _securityAudit ?? HttpContext?.RequestServices?.GetService<ISecurityAuditService>();
+            if (audit == null)
+                return;
+            try
+            {
+                audit.LogEventAsync("invitation.accept", "success", userId, companyId, metadata).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Best effort: auditing must not change the request outcome.
+            }
         }
 
         private CompanyInvitation Find(string token)

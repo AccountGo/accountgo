@@ -30,6 +30,7 @@ public class SessionService : ISessionService
     private readonly ApiDbContext? _apiDb;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SessionService> _logger;
+    private readonly ISecurityAuditService? _securityAudit;
 
     public SessionService(
         UserManager<ApplicationUser> userManager,
@@ -38,7 +39,8 @@ public class SessionService : ISessionService
         ISecurityService securityService,
         IConfiguration configuration,
         ILogger<SessionService> logger,
-        ApiDbContext? apiDb = null)
+        ApiDbContext? apiDb = null,
+        ISecurityAuditService? securityAudit = null)
     {
         _userManager = userManager;
         _identityContext = identityContext;
@@ -47,6 +49,26 @@ public class SessionService : ISessionService
         _configuration = configuration;
         _logger = logger;
         _apiDb = apiDb;
+        _securityAudit = securityAudit;
+    }
+
+    /// <summary>Best-effort <c>auth.refresh.reuse</c> event. Never includes token material.</summary>
+    private async Task AuditRefreshReuseAsync(RefreshTokenSession session, string reason)
+    {
+        if (_securityAudit == null) return;
+        try
+        {
+            await _securityAudit.LogEventAsync(
+                "auth.refresh.reuse",
+                "denied",
+                session.UserId,
+                null,
+                new { reason, familyId = session.FamilyId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Security audit write failed for auth.refresh.reuse.");
+        }
     }
 
     public Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionForUserAsync(
@@ -159,6 +181,7 @@ public class SessionService : ISessionService
                         ipAddress,
                         userAgent,
                         "Grace reuse bound exceeded");
+                    await AuditRefreshReuseAsync(session, "grace_reuse_bound_exceeded");
                     return (false, null, null, "Session security violation detected. Please sign in again.");
                 }
 
@@ -172,6 +195,7 @@ public class SessionService : ISessionService
                 ipAddress,
                 userAgent,
                 "Revoked refresh token reuse outside grace window");
+            await AuditRefreshReuseAsync(session, "reuse_outside_grace_window");
             return (false, null, null, "Session security violation detected. Please sign in again.");
         }
 

@@ -44,6 +44,7 @@ namespace Api.Controllers
         private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
         private readonly IEntitlementService _entitlements;
         private readonly IBillingProvider _billing;
+        private readonly ISecurityAuditService _securityAudit;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -59,7 +60,8 @@ namespace Api.Controllers
             Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
             IWorkspaceReviewerEligibility reviewerEligibility = null,
             IEntitlementService entitlements = null,
-            IBillingProvider billing = null)
+            IBillingProvider billing = null,
+            ISecurityAuditService securityAudit = null)
         {
             _tenant = tenant;
             _db = db;
@@ -73,6 +75,7 @@ namespace Api.Controllers
             _reviewerEligibility = reviewerEligibility;
             _entitlements = entitlements;
             _billing = billing;
+            _securityAudit = securityAudit;
             _experience = experienceOptions?.Value != null
                 ? Api.Options.WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value)
                 : (workspaceInit?.Experience ?? new Api.Options.WorkspaceExperienceOptions());
@@ -732,7 +735,24 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Workspace slug confirmation does not match");
             company.DeletedAt = DateTime.UtcNow;
             _db.SaveChanges();
+            AuditWorkspaceDeleted(company.Id);
             return NoContent();
+        }
+
+        /// <summary>Best-effort <c>workspace.delete</c> event; awaited in-request so the identity context is not used concurrently.</summary>
+        private void AuditWorkspaceDeleted(int companyId)
+        {
+            var audit = _securityAudit ?? HttpContext?.RequestServices?.GetService<ISecurityAuditService>();
+            if (audit == null)
+                return;
+            try
+            {
+                audit.LogEventAsync("workspace.delete", "success", UserId, companyId, new { companyId }).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Best effort: auditing must not change the request outcome.
+            }
         }
 
         public class PostalAddressModel

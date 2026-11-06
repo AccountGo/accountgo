@@ -14,6 +14,8 @@ namespace Api.Data
         public string? IpAddress { get; set; }
         public string? UserAgent { get; set; }
         public string? MetadataJson { get; set; }
+        public string? CorrelationId { get; set; }
+        public string? Outcome { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
