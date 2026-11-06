@@ -207,6 +207,9 @@ public static class AccountGoApp
         builder.Services.AddHostedService<Api.Service.StartupWarmup>();
         builder.Services.AddHostedService<Api.Service.WorkspaceInvariantRecoveryScanner>();
         builder.Services.AddHostedService<Api.Service.LinkedEntryIntegrityScanner>();
+        builder.Services.Configure<Api.Options.AuditRetentionOptions>(
+            builder.Configuration.GetSection(Api.Options.AuditRetentionOptions.SectionName));
+        builder.Services.AddHostedService<Api.Service.AuditRetentionWorker>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
         builder.Services.AddSingleton(Api.Options.EntitlementsConfiguration.FromConfiguration(builder.Configuration));

@@ -93,11 +93,31 @@ docker run -d \
 | `JwtSettings__validIssuer` / `validAudience` | Match your public API origin |
 | `SUPPORT_EMAIL` | Shown when a quota is exceeded |
 | `SERVER_TIMING_ENABLED` | Optional. Default `"true"`. When `"false"`, no `Server-Timing` header from the .NET API, API worker, or web worker |
+| `AuditRetention__Enabled` | Optional. Default `true`. Daily background purge of expired security / data-access events |
+| `AuditRetention__SecurityEventDays` | Optional. Default `730`. Days to keep security events (raised to 730 if lower) |
+| `AuditRetention__DataAccessDays` | Optional. Default `365`. Days to keep `data.*` / `invoice.pdf.public` events (raised to 365 if lower) |
 
 > [!CAUTION]
 > Never commit real secret keys, database connection strings, or Cloudflare API tokens to a public repository.
 
 See `src/Api/.env.example` for local development placeholders.
+
+### Audit retention
+
+The API keeps **minimum retention periods** for security and data-access events written to `SecurityAuditEvents`:
+
+| Category | Minimum | Notes |
+|---|---|---|
+| Security events (sign-in, access denied, membership, …) | 730 days | Everything that is not a data-access event |
+| Data-access events | 365 days | `data.*` and `invoice.pdf.public` |
+
+Configuration may **lengthen** these periods; values below the floors are raised to the floors (and a warning is logged). Database triggers enforce the same floors so a delete cannot shorten retention without a new migration.
+
+**Change and evidence records** (`RecordChanges`, and `AuditLog` rows whose `TableName` starts with `__`) are kept for as long as the workspace's books. The retention job never touches them.
+
+Operators are responsible for meeting local legal requirements; these are operational minimums, not legal advice.
+
+A single daily background run deletes expired rows in batches. On Postgres, parallel API instances use an advisory lock so only one run proceeds. Each purge that deletes anything writes one `audit.retention.purge` security event with counts and cutoffs (no event content).
 
 ### Reading Server-Timing (latency)
 
