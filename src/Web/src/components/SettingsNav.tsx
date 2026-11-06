@@ -16,6 +16,7 @@ interface SettingsNavProps<K extends string> {
   groups: SettingsNavGroup<K>[];
   current: K;
   onChange: (key: K) => void;
+  label?: string;
 }
 
 /**
@@ -23,7 +24,7 @@ interface SettingsNavProps<K extends string> {
  * content, so adding a section never widens the page; below lg it collapses into a single picker that
  * opens the platform's native list (a bottom sheet on phones).
  */
-export function SettingsNav<K extends string>({ groups, current, onChange }: SettingsNavProps<K>) {
+export function SettingsNav<K extends string>({ groups, current, onChange, label = 'Organization Settings Sections' }: SettingsNavProps<K>) {
   const tabRefs = useRef(new Map<K, HTMLButtonElement>());
   const items = groups.flatMap((group) => group.items);
   const currentItem = items.find((item) => item.key === current) ?? items[0];
@@ -73,7 +74,7 @@ export function SettingsNav<K extends string>({ groups, current, onChange }: Set
       {/* Grouped vertical tabs (lg and up) */}
       <nav
         role="tablist"
-        aria-label="Organization Settings Sections"
+        aria-label={label}
         aria-orientation="vertical"
         className="hidden lg:flex flex-col gap-5 p-2 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-sm lg:sticky lg:top-4"
       >

@@ -68,6 +68,7 @@ interface LivePaymentTerm {
 export const Settings: React.FC = () => {
   const tenantContext = useOutletContext<TenantContextType>();
   const { currentOrg, user, updateCurrentOrg, updateOrgWhitelabel, hasModule, hasPermission, subscription } = tenantContext;
+  const personal = !!currentOrg.isPersonalBooks;
   const hasFinancials = hasModule('financials');
   const hasSalesOrPurchases = hasModule('sales') || hasModule('purchases');
   const { authFetch } = useAuth();
@@ -84,30 +85,30 @@ export const Settings: React.FC = () => {
 
   const settingsSections: SettingsNavGroup<TabKey>[] = [
     {
-      label: 'Workspace',
+      label: personal ? 'Profile' : 'Workspace',
       items: [
-        { key: 'general', label: 'General Profile', icon: Building2 },
-        { key: 'whitelabel', label: 'Whitelabel & Branding', icon: Palette },
-        ...(integrations.capabilities?.canManage ? [{ key: 'integrations' as const, label: 'Integrations', icon: Plug }] : []),
+        { key: 'general', label: personal ? 'Profile' : 'General Profile', icon: Building2 },
+        ...(!personal ? [{ key: 'whitelabel' as const, label: 'Whitelabel & Branding', icon: Palette }] : []),
+        ...(!personal && integrations.capabilities?.canManage ? [{ key: 'integrations' as const, label: 'Integrations', icon: Plug }] : []),
       ],
     },
     ...(hasModule('sales') ? [{
       label: 'Sales',
       items: [{ key: 'invoices' as const, label: 'Invoices', icon: FileText }, { key: 'email' as const, label: 'Email', icon: Mail }],
     }] : []),
-    ...(hasSalesOrPurchases
+    ...(!personal && hasSalesOrPurchases
       ? [{ label: 'Sales & Purchases', items: [{ key: 'taxes' as const, label: 'Taxes', icon: Percent }] }]
       : []),
     // Only sections for modules this workspace has; an invoicing-only workspace has no ledger to configure.
     ...(hasFinancials
-      ? [{ label: 'Accounting', items: [{ key: 'financials' as const, label: 'Financial Rules & Banking', icon: Coins }] }]
+      ? [{ label: 'Accounting', items: [{ key: 'financials' as const, label: personal ? 'Books' : 'Financial Rules & Banking', icon: Coins }] }]
       : []),
     {
       label: 'Access & Billing',
       items: [
         { key: 'roles', label: 'Roles & Permissions', icon: Shield },
-        ...(hasFinancials && isWorkspaceAdminRole ? [{ key: 'approvals' as const, label: 'Journal Approval', icon: Shield }] : []),
-        { key: 'subscription', label: 'Subscription & Modules', icon: Sparkles },
+        ...(!personal && hasFinancials && isWorkspaceAdminRole ? [{ key: 'approvals' as const, label: 'Journal Approval', icon: Shield }] : []),
+        { key: 'subscription', label: personal ? 'Plan' : 'Subscription & Modules', icon: Sparkles },
       ],
     },
   ];
@@ -123,6 +124,13 @@ export const Settings: React.FC = () => {
 
   // 1. General Profile State (bound to live database Company table)
   const [companyId, setCompanyId] = useState<number>(Number(currentOrg.id) || 0);
+  const [ledgerFrozen, setLedgerFrozen] = useState(true);
+  useEffect(() => {
+    if (!personal) return;
+    let active = true;
+    authFetch('/api/organizations/current/accounting-policy').then(async r => { if (r.ok && active) setLedgerFrozen(Boolean((await r.json()).isLedgerFrozen)); }).catch(() => {});
+    return () => { active = false; };
+  }, [authFetch, personal]);
   const [orgName, setOrgName] = useState(currentOrg.name);
   const [shortName, setShortName] = useState(currentOrg.shortName || '');
   const [companyCode, setCompanyCode] = useState(currentOrg.companyCode || '');
@@ -244,18 +252,20 @@ export const Settings: React.FC = () => {
     const cleanSlug = orgSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-').trim();
 
     try {
-      const metadataResponse = await authFetch('/api/Administration/company', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: companyId,
-          shortName: shortName.trim(),
-          companyCode: companyCode.trim(),
-          cra: cra.trim(),
-        }),
-      });
-      if (!metadataResponse.ok) {
-        throw new Error('Failed to update workspace registration details.');
+      if (!personal) {
+        const metadataResponse = await authFetch('/api/Administration/company', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: companyId,
+            shortName: shortName.trim(),
+            companyCode: companyCode.trim(),
+            cra: cra.trim(),
+          }),
+        });
+        if (!metadataResponse.ok) {
+          throw new Error('Failed to update workspace registration details.');
+        }
       }
 
       const res = await authFetch('/api/organizations/current', {
@@ -263,7 +273,7 @@ export const Settings: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: orgName.trim(),
-          slug: cleanSlug,
+          ...(!personal ? { slug: cleanSlug } : {}),
           currency,
         }),
       });
@@ -282,7 +292,7 @@ export const Settings: React.FC = () => {
       setCompanySaveSuccess(true);
       setTimeout(() => setCompanySaveSuccess(false), 3000);
     } catch (err) {
-      setCompanySaveError(err instanceof Error ? err.message : 'Error updating organization settings.');
+      setCompanySaveError(err instanceof Error ? err.message : personal ? 'Error updating settings.' : 'Error updating organization settings.');
     } finally {
       setIsSavingCompany(false);
     }
@@ -337,23 +347,23 @@ export const Settings: React.FC = () => {
       {/* Top Workspace Context Banner (Border-Less) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[var(--bg-surface)] via-[var(--bg-surface)] to-[var(--brand-subtle)] shadow-xl">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          {!personal && <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[var(--brand-primary)] animate-pulse" />
             <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[var(--brand-primary)]">
               Workspace Configuration
             </span>
-          </div>
+          </div>}
           <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
-            Organization Settings
+            {personal ? 'Settings' : 'Organization Settings'}
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            Manage legal registration, {hasFinancials ? 'financial rules' : 'invoicing'}, whitelabeling, and role-based permissions for{' '}
-            <span className="text-[var(--text-main)] font-semibold">{currentOrg.name}</span>.
+            {personal ? 'Manage your personal books.' : <>Manage legal registration, {hasFinancials ? 'financial rules' : 'invoicing'}, whitelabeling, and role-based permissions for{' '}
+            <span className="text-[var(--text-main)] font-semibold">{currentOrg.name}</span>.</>}
           </p>
         </div>
 
         {/* Tenant Meta Pill Badges */}
-        <div className="flex flex-wrap items-center gap-2 sm:self-center">
+        {!personal && <div className="flex flex-wrap items-center gap-2 sm:self-center">
           <div className="px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] shadow-sm text-xs">
             <span className="text-[var(--text-muted)]">Org ID: </span>
             <code className="text-[var(--text-secondary)] font-mono font-medium">{companyId}</code>
@@ -369,12 +379,12 @@ export const Settings: React.FC = () => {
           <div className="px-3 py-1.5 rounded-xl bg-[var(--brand-subtle)] text-xs text-[var(--brand-primary)] font-medium">
             Plan: {subscription.planId.toUpperCase()}
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Section navigation: grouped side tabs on wide screens, a single picker on small ones */}
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start">
-        <SettingsNav groups={settingsSections} current={currentTab} onChange={handleTabChange} />
+        <SettingsNav groups={settingsSections} current={currentTab} onChange={handleTabChange} label={personal ? 'Settings sections' : undefined} />
 
         <div className="min-w-0 space-y-6">
           {currentTab === 'integrations' && <div role="tabpanel" id="panel-integrations" aria-labelledby="tab-integrations" tabIndex={0}><IntegrationsSettingsTab /></div>}
@@ -390,7 +400,7 @@ export const Settings: React.FC = () => {
               tabIndex={0}
               className="space-y-6 focus:outline-none"
             >
-              <WorkspaceSetupCard />
+              {!personal && <WorkspaceSetupCard />}
 
               <form onSubmit={handleSaveCompany} className="space-y-6">
                 {/* Feedback Notifications */}
@@ -401,7 +411,7 @@ export const Settings: React.FC = () => {
                     className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm"
                   >
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>Organization profile updated.</span>
+                    <span>{personal ? 'Profile updated.' : 'Organization profile updated.'}</span>
                   </div>
                 )}
                 {companySaveError && (
@@ -422,11 +432,11 @@ export const Settings: React.FC = () => {
                       <Building2 className="w-5 h-5 text-[var(--brand-primary)]" />
                       <div>
                         <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)]">
-                          Legal Entity & Registration
+                          {personal ? 'Profile' : 'Legal Entity & Registration'}
                         </h2>
-                        <p className="text-xs text-[var(--text-muted)]">
+                        {!personal && <p className="text-xs text-[var(--text-muted)]">
                           Persistent attributes mapped to the active Company database entity
-                        </p>
+                        </p>}
                       </div>
                     </div>
                     {isLoadingCompany && (
@@ -437,7 +447,7 @@ export const Settings: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="org-name-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
-                        Organization / Trading Name
+                        {personal ? 'Name' : 'Organization / Trading Name'}
                       </label>
                       <input
                         id="org-name-input"
@@ -445,15 +455,15 @@ export const Settings: React.FC = () => {
                         required
                         value={orgName}
                         onChange={(e) => setOrgName(e.target.value)}
-                        placeholder="e.g. Financial Solutions Inc."
+                        placeholder={personal ? 'e.g. My books' : 'e.g. Financial Solutions Inc.'}
                         className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
                       />
-                      <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                      {!personal && <p className="text-[11px] text-[var(--text-muted)] mt-1">
                         The name you trade under. Invoices print it unless you choose your legal name under Invoices.
-                      </p>
+                      </p>}
                     </div>
 
-                    <div>
+                    {!personal && <><div>
                       <label htmlFor="short-name-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                         Short Name / Trading Acronym
                       </label>
@@ -506,12 +516,14 @@ export const Settings: React.FC = () => {
                       </p>
                     </div>
 
+                    </>}
                     <div>
                       <label htmlFor="currency-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
-                        Functional Base Currency
+                        {personal ? 'Currency' : 'Functional Base Currency'}
                       </label>
                       <select
                         id="currency-input"
+                        disabled={personal && ledgerFrozen}
                         value={currency}
                         onChange={(e) => setCurrency(e.target.value)}
                         className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm font-mono text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] cursor-pointer"
@@ -528,7 +540,7 @@ export const Settings: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="sm:col-span-1">
+                    {!personal && <div className="sm:col-span-1">
                       <label htmlFor="org-slug-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                         Tenant Workspace URL Slug (:orgSlug)
                       </label>
@@ -546,7 +558,7 @@ export const Settings: React.FC = () => {
                       <p className="text-[11px] text-[var(--text-muted)] mt-1">
                         Changing the workspace slug immediately updates browser routing and deep link scoping.
                       </p>
-                    </div>
+                    </div>}
                   </div>
 
                   {/* Save Button */}
@@ -564,7 +576,7 @@ export const Settings: React.FC = () => {
                       ) : (
                         <>
                           <Save className="w-4 h-4" />
-                          <span>Save Entity Profile</span>
+                          <span>{personal ? 'Save profile' : 'Save Entity Profile'}</span>
                         </>
                       )}
                     </button>
@@ -572,10 +584,10 @@ export const Settings: React.FC = () => {
                 </div>
               </form>
 
-              <BusinessDetailsCard canEdit={isWorkspaceAdmin} />
+              <BusinessDetailsCard canEdit={isWorkspaceAdmin} personal={personal} />
 
               {/* Authorized Members Card (Border-Less) */}
-              <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
+              {!personal && <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[var(--border-subtle)]">
                   <div className="flex items-center gap-2.5">
                     <Users className="w-5 h-5 text-purple-400" />
@@ -659,6 +671,7 @@ export const Settings: React.FC = () => {
                 </div>
               </div>
 
+              }
               {currentOrg.role === 'Owner' && (
                 <section className="p-4 sm:p-6 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-3">
                   <div>
@@ -814,10 +827,11 @@ export const Settings: React.FC = () => {
               tabIndex={0}
               className="space-y-6 focus:outline-none"
             >
-              <AccountingPolicyCard canEdit={isWorkspaceAdmin} />
+              <AccountingPolicyCard canEdit={isWorkspaceAdmin} personal={personal} />
               <BooksLockCard canClose={hasPermission('financials.periods.close')} />
-              <YearEndCloseCard canClose={hasPermission('financials.periods.close')} />
+              <YearEndCloseCard canClose={hasPermission('financials.periods.close')} personal={personal} />
 
+              {!personal && <>
               {/* Fiscal Year Section */}
               <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
@@ -899,7 +913,7 @@ export const Settings: React.FC = () => {
                   </Link>
                 </div>
               </div>
-
+              </>}
             </div>
           )}
 

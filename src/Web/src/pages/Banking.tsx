@@ -131,7 +131,7 @@ const Banking: React.FC = () => {
       ) : accounts.length === 0 && unassigned.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--bg-surface)] p-10 text-center space-y-3">
           <Landmark className="w-8 h-8 mx-auto text-[var(--text-muted)]" />
-          <p className="text-sm font-semibold text-[var(--text-main)]">No bank accounts yet</p>
+          <p className="text-sm font-semibold text-[var(--text-main)]">{currentOrg.isPersonalBooks ? 'Add your first bank account' : 'No bank accounts yet'}</p>
           <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
             Add the accounts you deposit into and pay from so each payment lands in the right place.
           </p>

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { getOrgSlugFromLocation, useAuth } from '../auth/AuthContext';
-import { ENTITLEMENT_DENIED_EVENT, type EntitlementCode, type EntitlementProblem } from '../lib/entitlementEvents';
+import { ENTITLEMENT_DENIED_EVENT, isActivePersonalBooks, type EntitlementCode, type EntitlementProblem } from '../lib/entitlementEvents';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
 import { useBilling } from '../lib/useBilling';
 import { eligibleUpgradePlans, planPriceLabel } from '../lib/planCards';
@@ -77,17 +77,18 @@ export function planLimitSupportCopy(problem: EntitlementProblem): string | null
  * Mounted once at the app root; listens for the event raised by authFetch.
  */
 export const PlanLimitDialog: React.FC = () => {
-  const [problem, setProblem] = useState<EntitlementProblem | null>(null);
+  const [denial, setDenial] = useState<{ problem: EntitlementProblem; personal: boolean } | null>(null);
 
   useEffect(() => {
-    const onDenied = (event: Event) => setProblem((event as CustomEvent<EntitlementProblem>).detail);
+    const onDenied = (event: Event) => setDenial({ problem: (event as CustomEvent<EntitlementProblem>).detail, personal: isActivePersonalBooks(getOrgSlugFromLocation()) });
     window.addEventListener(ENTITLEMENT_DENIED_EVENT, onDenied);
     return () => window.removeEventListener(ENTITLEMENT_DENIED_EVENT, onDenied);
   }, []);
 
-  if (!problem) return null;
-  return <PlanLimitDialogView problem={problem} onClose={() => setProblem(null)}>
-    {problem.canManageBilling && problem.upgradeAvailable && <UpgradeOptions problem={problem} />}
+  if (!denial) return null;
+  const { problem, personal } = denial;
+  return <PlanLimitDialogView problem={problem} personal={personal} onClose={() => setDenial(null)}>
+    {!personal && problem.canManageBilling && problem.upgradeAvailable && <UpgradeOptions problem={problem} />}
   </PlanLimitDialogView>;
 };
 
@@ -136,14 +137,14 @@ const UpgradeOptions: React.FC<{ problem: EntitlementProblem }> = ({ problem }) 
   </div>;
 };
 
-export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClose: () => void; children?: React.ReactNode }> = ({ problem, onClose, children }) => {
+export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClose: () => void; children?: React.ReactNode; personal?: boolean }> = ({ problem, onClose, children, personal = false }) => {
   const closeRef = useRef<HTMLButtonElement>(null);
   const slug = typeof window === 'undefined' ? null : getOrgSlugFromLocation();
   const subscriptionHref = slug
     ? `/org/${encodeURIComponent(slug)}/settings?tab=subscription`
     : null;
   const cta = planLimitCta(problem, subscriptionHref);
-  const supportCopy = planLimitSupportCopy(problem);
+  const supportCopy = personal ? null : planLimitSupportCopy(problem);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -172,10 +173,10 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
         </h2>
       </div>
       <div id="plan-limit-detail" className="space-y-2 text-sm text-[var(--text-secondary)]">
-        {problem.detail && <p>{problem.detail}</p>}
+        {personal ? <p>This action is unavailable in these books.</p> : problem.detail && <p>{problem.detail}</p>}
         {usage && <p>{usage}</p>}
         {supportCopy && <p>{supportCopy}</p>}
-        {!supportCopy && problem.canManageBilling && !problem.upgradeAvailable && problem.contact ? (
+        {!personal && !supportCopy && problem.canManageBilling && !problem.upgradeAvailable && problem.contact ? (
           <p>
             Paid plans are coming soon. Need more now?{' '}
             <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${problem.contact}`}>
@@ -187,7 +188,7 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
       </div>
       {children}
       <div className="flex justify-end gap-2">
-        {cta.href ? (
+        {!personal && (cta.href ? (
           <a
             href={cta.href}
             className={
@@ -202,7 +203,7 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
           <span className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] inline-flex items-center">
             {cta.label}
           </span>
-        )}
+        ))}
         <button
           type="button"
           ref={closeRef}

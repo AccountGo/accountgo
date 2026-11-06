@@ -661,6 +661,46 @@ namespace Api.Controllers
             return Ok(_financialService.CashFlow(from, to, basis));
         }
 
+        [HttpGet("cash-movement")]
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public async Task<IActionResult> CashMovement(DateTime? from = null, DateTime? to = null)
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
+                return denied!;
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+
+            var accounts = await _db.Accounts.AsNoTracking().Select(a => new { a.Id, a.AccountName, a.IsCash, a.ParentAccountId }).ToListAsync();
+            var cashIds = accounts.Where(a => a.IsCash || (a.ParentAccountId.HasValue && accounts.Any(p => p.Id == a.ParentAccountId && p.IsCash))).Select(a => a.Id).ToHashSet();
+            var query = _db.GeneralLedgerHeaders.AsNoTracking().Include(h => h.GeneralLedgerLines).AsQueryable();
+            if (to.HasValue && to.Value.Date < DateTime.MaxValue.Date)
+                query = query.Where(h => h.Date < to.Value.Date.AddDays(1));
+            var headers = await query.OrderBy(h => h.Date).ThenBy(h => h.Id).ToListAsync();
+            decimal opening = 0;
+            var lines = new List<object>();
+            decimal totalIn = 0, totalOut = 0;
+            var names = accounts.ToDictionary(a => a.Id, a => a.AccountName);
+            foreach (var header in headers)
+            {
+                var all = header.GeneralLedgerLines.OrderBy(l => l.Id).ToArray();
+                foreach (var line in all.Where(l => cashIds.Contains(l.AccountId)))
+                {
+                    var incoming = line.DrCr == Core.Domain.DrOrCrSide.Dr ? line.Amount : 0m;
+                    var outgoing = line.DrCr == Core.Domain.DrOrCrSide.Cr ? line.Amount : 0m;
+                    if (from.HasValue && header.Date < from.Value.Date)
+                    {
+                        opening += incoming - outgoing;
+                        continue;
+                    }
+                    totalIn += incoming;
+                    totalOut += outgoing;
+                    var counterpart = all.Length == 2 ? names.GetValueOrDefault(all.Single(l => l.Id != line.Id).AccountId, "Unknown") : "Split";
+                    lines.Add(new { date = header.Date, generalLedgerHeaderId = header.Id, description = header.Description, accountName = names.GetValueOrDefault(line.AccountId, "Unknown"), counterpartAccountName = counterpart, moneyIn = incoming, moneyOut = outgoing });
+                }
+            }
+            return Ok(new { openingCash = opening, lines, totalIn, totalOut, closingCash = opening + totalIn - totalOut });
+        }
+
         #region CRUD for Accounts
 
         [HttpGet]

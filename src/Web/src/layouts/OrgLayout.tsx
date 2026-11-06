@@ -13,6 +13,7 @@ import { AnnouncementBar } from '../components/AnnouncementBar';
 import { PendingCheckoutScreen } from '../components/PendingCheckoutScreen';
 import { CapabilitiesProvider, useCapabilities } from '../lib/entitlements';
 import { IntegrationsProvider } from '../lib/integrations';
+import { setEntitlementWorkspace } from '../lib/entitlementEvents';
 
 export function evaluateHasPermission(
   userPermissions: readonly string[] | undefined,
@@ -34,6 +35,10 @@ export const OrgLayout: React.FC = () => {
 
   const [availableOrgs, setAvailableOrgs] = useState<OrgDetails[]>([]);
   const [currentOrg, setCurrentOrg] = useState<OrgDetails | null>(null);
+  useEffect(() => {
+    if (!currentOrg || currentOrg.slug !== orgSlug) return;
+    return setEntitlementWorkspace(currentOrg.slug, !!currentOrg.isPersonalBooks);
+  }, [currentOrg?.slug, currentOrg?.isPersonalBooks, orgSlug]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
   const userProfile: UserProfile = useMemo(() => ({

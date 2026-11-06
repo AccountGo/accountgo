@@ -97,3 +97,8 @@ it('shows Unavailable for restricted metrics and omits the combined figure', () 
   expect(card.textContent).toMatch(/Unavailable/);
   expect(card.textContent).not.toContain('$0.00');
 });
+
+it('personal books do not show upgrade or financial statement wording', () => {
+  render(<PersonalFinanceHealthCard loading={false} hasFinancials={false} personalBooks currencyFormat={() => 'Unavailable'} moneyInBankAvailable={false} receivablesAvailable={false} payablesAvailable={false} netWorthAvailable={false} />);
+  expect(screen.getByTestId('personal-finance-health').textContent).not.toMatch(/upgrade|personal financial statement/i);
+});

@@ -64,14 +64,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       permission: 'sales.invoices.view',
     },
     {
-      name: 'Purchases & Bills',
+      name: currentOrg.isPersonalBooks ? 'Bills' : 'Purchases & Bills',
       path: `/org/${currentOrg.slug}/purchases`,
       icon: ShoppingBag,
       module: 'purchases',
       permission: 'purchases.bills.view',
     },
     {
-      name: 'Banking',
+      name: currentOrg.isPersonalBooks ? 'Bank accounts' : 'Banking',
       path: `/org/${currentOrg.slug}/banking`,
       icon: Landmark,
       module: ['sales', 'purchases', 'financials'],
@@ -86,7 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       permission: 'inventory.items.view',
     },
     {
-      name: 'General Ledger',
+      name: currentOrg.isPersonalBooks ? 'Transactions' : 'General Ledger',
       path: `/org/${currentOrg.slug}/financials`,
       icon: BookOpen,
       module: 'financials',
@@ -102,20 +102,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const visibleMainLinks = mainLinks.filter((link) => {
+    if (currentOrg.isPersonalBooks && link.path.endsWith('/items')) return false;
     if (link.module && hasModule && !(Array.isArray(link.module) ? link.module : [link.module]).some(hasModule)) return false;
     if (hasPermission && link.permission && !hasPermission(link.permission)) return false;
     return true;
   });
 
+  if (currentOrg.isPersonalBooks) {
+    const bank = visibleMainLinks.findIndex(link => link.path.endsWith('/banking'));
+    const bills = visibleMainLinks.findIndex(link => link.path.endsWith('/purchases'));
+    if (bank >= 0 && bills >= 0 && bank > bills) {
+      const [item] = visibleMainLinks.splice(bank, 1);
+      visibleMainLinks.splice(bills, 0, item);
+    }
+  }
+
   const adminLinks = [
     {
-      name: 'Team & Members',
+      name: currentOrg.isPersonalBooks ? 'People' : 'Team & Members',
       path: `/org/${currentOrg.slug}/members`,
       icon: Users,
       visible: true,
     },
     {
-      name: 'Organization Settings',
+      name: currentOrg.isPersonalBooks ? 'Settings' : 'Organization Settings',
       path: `/org/${currentOrg.slug}/settings`,
       icon: Settings,
       visible: currentOrg.role === 'Owner' || currentOrg.role === 'Admin',
@@ -230,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
 
           {/* Invoicing Plan Upgrade Teaser */}
-          {(!isCollapsed || isMobile) && subscription?.planId === 'invoicing' && (
+          {!currentOrg.isPersonalBooks && (!isCollapsed || isMobile) && subscription?.planId === 'invoicing' && (
             <div className="mt-4 p-3 rounded-2xl bg-[var(--brand-subtle)] text-[var(--text-main)] border border-transparent">
               <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--brand-primary)] mb-1">
                 <Sparkles className="w-3.5 h-3.5" />

@@ -317,6 +317,7 @@ export const Dashboard: React.FC = () => {
 
       {personal && !loadError && (
         <PersonalFinanceHealthCard
+          personalBooks={currentOrg.isPersonalBooks}
           loading={loading}
           hasFinancials={canShowFinancials}
           currencyFormat={formatMetric}

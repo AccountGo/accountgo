@@ -5,6 +5,7 @@ import { recordedCashReceivablesMinusBills } from '../lib/dashboardProduct';
 interface Props {
   loading: boolean;
   hasFinancials: boolean;
+  personalBooks?: boolean;
   /** Formats a loaded amount; pass null/undefined through as Unavailable. */
   currencyFormat: (val: number | null | undefined, available: boolean) => string;
   moneyInBank?: number | null;
@@ -25,6 +26,7 @@ interface Props {
 export const PersonalFinanceHealthCard: React.FC<Props> = ({
   loading,
   hasFinancials,
+  personalBooks = false,
   currencyFormat,
   moneyInBank,
   moneyInBankAvailable,
@@ -91,7 +93,7 @@ export const PersonalFinanceHealthCard: React.FC<Props> = ({
             Personal money overview
           </h2>
           <p className="text-[11px] text-[var(--text-muted)]">
-            {hasFinancials
+            {personalBooks ? 'A household picture from your books.' : hasFinancials
               ? 'Household picture from your books. Not a formal personal financial statement.'
               : 'Recorded invoice and cash totals only. Upgrade to Full accounting for net worth.'}
           </p>

@@ -52,21 +52,21 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       permission: 'sales.invoices.view',
     },
     {
-      name: 'Purchases',
+      name: currentOrg.isPersonalBooks ? 'Bills' : 'Purchases',
       path: `/org/${currentOrg.slug}/purchases`,
       icon: ShoppingBag,
       module: 'purchases',
       permission: 'purchases.bills.view',
     },
     {
-      name: 'Banking',
+      name: currentOrg.isPersonalBooks ? 'Bank accounts' : 'Banking',
       path: `/org/${currentOrg.slug}/banking`,
       icon: Landmark,
       module: ['sales', 'purchases', 'financials'],
       permission: 'banking.accounts.view',
     },
     {
-      name: 'Ledger',
+      name: currentOrg.isPersonalBooks ? 'Transactions' : 'Ledger',
       path: `/org/${currentOrg.slug}/financials`,
       icon: BookOpen,
       module: 'financials',
@@ -85,6 +85,15 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     (!item.permission || hasPermission(item.permission)) &&
     (!item.adminOnly || currentOrg.role === 'Owner' || currentOrg.role === 'Admin')
   );
+
+  if (currentOrg.isPersonalBooks) {
+    const bank = navItems.findIndex(item => item.path.endsWith('/banking'));
+    const bills = navItems.findIndex(item => item.path.endsWith('/purchases'));
+    if (bank >= 0 && bills >= 0 && bank > bills) {
+      const [item] = navItems.splice(bank, 1);
+      navItems.splice(bills, 0, item);
+    }
+  }
 
   return (
     <nav
