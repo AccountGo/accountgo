@@ -6,7 +6,7 @@ Trusted workspace reads are `GET /api/organizations/current` (contains `operatin
 
 | Dimension | Values / source | What it determines |
 | --- | --- | --- |
-| Purpose | `Business`, `Personal`, `Unspecified` | Recorded use; Personal can affect dashboard presentation. Does not buy modules or grant access. |
+| Purpose | `Business`, `Personal`, `Unspecified` | Recorded use; Personal changes dashboard wording. A workspace registered as personal books (`isPersonalBooks`) additionally gets the personal-books surface and locked policies, see Personal books in onboarding-and-workflows.md. Does not buy modules or grant access. |
 | Collaboration intent | `JustMe`, `WithOthers`, `Unspecified` | Setup answer, not proof of present reviewer capacity or effective policy. |
 | Collaboration state | `SoloActive`, `TeamSetupPending`, `TeamActive`, `LegacyUnclassified` | Current collaboration lifecycle. Never infer it solely from member count. |
 | Functional access | Effective permissions; `ownAccessProfileKey`, `ownAccessProfileDisplayName` | Which business actions the caller can perform. **Full workspace access** remains bounded by the plan and approval rules. |
@@ -28,7 +28,7 @@ Detailed operating settings also expose `policyRevision`, `soloSetupEnabled`, `a
 | Setup rollout unavailable | About step says **Standard workspace setup** and purpose/collaboration choices are not saved | Use standard functional access setup. Do not promise automatic solo initialization. |
 | Pending signup continuation | Existing workspace needs About answers after verification; continuation is About + read-only Review | Finish that workspace, not a duplicate. |
 
-Setup is rollout/enrollment dependent. Personal finances may show **Coming soon**, and backend release also requires approved Individual equity mapping. Never present the presence of Personal-related code as proof that Personal onboarding is released.
+Setup is rollout dependent. The create-workspace wizard asks **Freelance or self-employed** or **A business or company**; it has no "Personal finances" purpose. Personal money is set up as personal books (the wizard's personal-books question, **Only want to track personal money?**, or **Add personal books** in the workspace switcher), and availability follows `canAddPersonalBooks` from setup capabilities. The **Workspace setup** summary can still say **Personal finances** for a workspace whose recorded purpose is Personal.
 
 ## Where to inspect setup versus change policy
 

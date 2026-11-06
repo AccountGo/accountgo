@@ -58,6 +58,9 @@ All workspace screens live under `/org/{orgSlug}/...` and are accessed from the 
 - **User Profile Footer** (bottom of left sidebar): Opens `/org/{orgSlug}/profile` for personal profile details, active device sessions, and security settings.
 - **AccountGo Assistant** (header **Sparkles** button): Opens or closes the AI assistant side panel.
 
+### Personal books workspaces
+When `currentOrg.isPersonalBooks` is true (the switcher and dashboard show **· Personal**), the navigation differs: **Bank accounts** (Banking), **Bills**, **Transactions** (General Ledger), **Reports**, **People** (Team & Members) and **Settings** (Organization Settings); **Products & services** is hidden. Settings has only **Profile**, **Books**, **Roles & Permissions** and **Plan**. Reports are **Net worth (book value)**, **Money in and out**, **Cash movement** and **Trial balance** (under **Advanced**). Use these labels instead of the work labels above, never suggest an upgrade there, and do not identify personal books by plan name. Details are in `references/onboarding-and-workflows.md` under Personal books.
+
 ## Progressive disclosure map (read only what is needed)
 
 Keep context lean by loading only the relevant reference file(s) from `references/` before answering detailed workflow questions:
@@ -83,6 +86,9 @@ Keep context lean by loading only the relevant reference file(s) from `reference
   - Inviting teammates, assigning `Admin` vs. `Member` workspace roles, assigning granular security roles, and transferring ownership in **Team & Members** (`/org/{orgSlug}/members`).
   - Configuring **Organization Settings** (`/org/{orgSlug}/settings`): General Profile, Whitelabel & Branding, Invoices, Taxes, Financial Rules & Banking (fiscal years, cash/bank accounts), Roles & Permissions (including MFA policies), and Subscription & Modules.
   - Read when the user asks about settings, users, invitations, permissions, taxes, payment terms, fiscal years, or upgrading plans/modules.
+- **`references/onboarding-and-workflows.md`**
+  - Creating a workspace (wizard steps, Freelance vs Company, Just me vs Me and others), personal books (what they are, how to add one, what the UI shows), and linking work and personal books from bank lines.
+  - Read when the user asks about creating a workspace, personal money or personal books, linked entries, or what the About answers change.
 
 ## How to apply
 
