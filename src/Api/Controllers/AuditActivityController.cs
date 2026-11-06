@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using Api.Data;
 using Api.Filters;
@@ -16,10 +16,9 @@ using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json.Linq;
 
 namespace Api.Controllers
 {
@@ -29,6 +28,8 @@ namespace Api.Controllers
     [Route("api/organizations/current")]
     public sealed class AuditActivityController : BaseController
     {
+        private const int ExportRowCap = 10_000;
+
         private readonly ApiDbContext _db;
         private readonly ApplicationIdentityDbContext _identity;
         private readonly ITenantContext _tenant;
@@ -51,6 +52,7 @@ namespace Api.Controllers
         public async Task<IActionResult> Activity(
             [FromQuery] string? entityType = null,
             [FromQuery] int? entityId = null,
+            [FromQuery] bool includeChildren = false,
             [FromQuery] string? actorUserId = null,
             [FromQuery] DateTimeOffset? from = null,
             [FromQuery] DateTimeOffset? to = null,
@@ -78,19 +80,7 @@ namespace Api.Controllers
                 }
             }
 
-            var query = _db.RecordChanges.AsNoTracking().Where(r => r.CompanyId == companyId);
-            if (!string.IsNullOrWhiteSpace(entityType))
-                query = query.Where(r => r.EntityType == entityType);
-            if (entityId.HasValue)
-                query = query.Where(r => r.EntityId == entityId.Value);
-            if (!string.IsNullOrWhiteSpace(actorUserId))
-                query = query.Where(r => r.ActorUserId == actorUserId);
-            if (from.HasValue)
-                query = query.Where(r => r.OccurredAt >= from.Value.UtcDateTime);
-            if (to.HasValue)
-                query = query.Where(r => r.OccurredAt <= to.Value.UtcDateTime);
-            if (cursor.HasValue)
-                query = query.Where(r => r.Id < cursor.Value);
+            var query = BuildActivityQuery(companyId, entityType, entityId, includeChildren, actorUserId, from, to, cursor);
 
             var rows = await query
                 .OrderByDescending(r => r.Id)
@@ -106,6 +96,8 @@ namespace Api.Controllers
                 id = r.Id,
                 entityType = r.EntityType,
                 entityId = r.EntityId,
+                parentEntityType = r.ParentEntityType,
+                parentEntityId = r.ParentEntityId,
                 action = r.Action,
                 changes = ParseChanges(r.ChangesJson),
                 actorUserId = r.ActorUserId,
@@ -116,6 +108,40 @@ namespace Api.Controllers
             });
 
             return Ok(new { items, nextCursor, windowDays });
+        }
+
+        [RequirePermission(SystemPermissions.AuditLogsView)]
+        [HttpGet("activity/export")]
+        [AuditDataAccess("activity.export", "data.export")]
+        public async Task<IActionResult> ExportActivity(
+            [FromQuery] string? entityType = null,
+            [FromQuery] int? entityId = null,
+            [FromQuery] bool includeChildren = false,
+            [FromQuery] string? actorUserId = null,
+            [FromQuery] DateTimeOffset? from = null,
+            [FromQuery] DateTimeOffset? to = null)
+        {
+            var companyId = _tenant.RequireCompanyId();
+            if (AuditHistoryAccess.Evaluate(_entitlements, companyId) != AuditHistoryAccessLevel.Full)
+                return FeatureNotEntitled(FeatureKeys.AuditHistoryFull,
+                    "Full activity export is not available for this workspace.");
+
+            var singleRecord = !string.IsNullOrWhiteSpace(entityType) && entityId.HasValue;
+            if (!singleRecord)
+            {
+                // Export uses the same filters as /activity but never the 90-day window — Full only.
+            }
+
+            var query = BuildActivityQuery(companyId, entityType, entityId, includeChildren, actorUserId, from, to, cursor: null);
+            var rows = await query
+                .OrderByDescending(r => r.Id)
+                .Take(ExportRowCap)
+                .ToListAsync();
+
+            var names = await ResolveActorNames(rows.Select(p => p.ActorUserId).Where(id => !string.IsNullOrWhiteSpace(id))!);
+            var csv = BuildActivityCsv(rows, names);
+            var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray();
+            return File(bytes, "text/csv; charset=utf-8", "activity-export.csv");
         }
 
         [RequirePermission(SystemPermissions.AuditLogsView)]
@@ -170,6 +196,129 @@ namespace Api.Controllers
             });
 
             return Ok(new { items, nextCursor });
+        }
+
+        private IQueryable<RecordChange> BuildActivityQuery(
+            int companyId,
+            string? entityType,
+            int? entityId,
+            bool includeChildren,
+            string? actorUserId,
+            DateTimeOffset? from,
+            DateTimeOffset? to,
+            long? cursor)
+        {
+            var query = _db.RecordChanges.AsNoTracking().Where(r => r.CompanyId == companyId);
+            if (!string.IsNullOrWhiteSpace(entityType) && entityId.HasValue && includeChildren)
+            {
+                var type = entityType;
+                var id = entityId.Value;
+                query = query.Where(r =>
+                    (r.EntityType == type && r.EntityId == id)
+                    || (r.ParentEntityType == type && r.ParentEntityId == id));
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(entityType))
+                    query = query.Where(r => r.EntityType == entityType);
+                if (entityId.HasValue)
+                    query = query.Where(r => r.EntityId == entityId.Value);
+            }
+            if (!string.IsNullOrWhiteSpace(actorUserId))
+                query = query.Where(r => r.ActorUserId == actorUserId);
+            if (from.HasValue)
+                query = query.Where(r => r.OccurredAt >= from.Value.UtcDateTime);
+            if (to.HasValue)
+                query = query.Where(r => r.OccurredAt <= to.Value.UtcDateTime);
+            if (cursor.HasValue)
+                query = query.Where(r => r.Id < cursor.Value);
+            return query;
+        }
+
+        private static string BuildActivityCsv(IReadOnlyList<RecordChange> rows, IReadOnlyDictionary<string, string> names)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("occurredAt,actor,actorKind,entityType,entityId,action,field,oldValue,newValue,correlationId");
+            foreach (var row in rows)
+            {
+                var actor = row.ActorUserId != null && names.TryGetValue(row.ActorUserId, out var name) && !string.IsNullOrWhiteSpace(name)
+                    ? name
+                    : row.ActorUserId ?? string.Empty;
+                var occurredAt = DateTime.SpecifyKind(row.OccurredAt, DateTimeKind.Utc)
+                    .ToString("o", CultureInfo.InvariantCulture);
+                foreach (var field in ExpandChangeFields(row.ChangesJson))
+                {
+                    builder.Append(Csv(occurredAt)).Append(',')
+                        .Append(Csv(actor)).Append(',')
+                        .Append(Csv(row.ActorKind)).Append(',')
+                        .Append(Csv(row.EntityType)).Append(',')
+                        .Append(Csv(row.EntityId.ToString(CultureInfo.InvariantCulture))).Append(',')
+                        .Append(Csv(row.Action)).Append(',')
+                        .Append(Csv(field.Field)).Append(',')
+                        .Append(Csv(field.OldValue)).Append(',')
+                        .Append(Csv(field.NewValue)).Append(',')
+                        .Append(Csv(row.CorrelationId))
+                        .AppendLine();
+                }
+            }
+            return builder.ToString();
+        }
+
+        private sealed record ChangeField(string Field, string OldValue, string NewValue);
+
+        private static IEnumerable<ChangeField> ExpandChangeFields(string? changesJson)
+        {
+            if (string.IsNullOrWhiteSpace(changesJson))
+                yield break;
+            JToken token;
+            try { token = JToken.Parse(changesJson); }
+            catch (Newtonsoft.Json.JsonException) { yield break; }
+            if (token is not JObject obj)
+                yield break;
+            foreach (var property in obj.Properties())
+            {
+                if (property.Value is JArray { Count: >= 2 } pair)
+                {
+                    yield return new ChangeField(property.Name, FormatCsvValue(pair[0]), FormatCsvValue(pair[1]));
+                    continue;
+                }
+                if (property.Value is JObject named
+                    && named.TryGetValue("old", StringComparison.OrdinalIgnoreCase, out var oldToken)
+                    && named.TryGetValue("new", StringComparison.OrdinalIgnoreCase, out var newToken))
+                {
+                    yield return new ChangeField(property.Name, FormatCsvValue(oldToken), FormatCsvValue(newToken));
+                    continue;
+                }
+                // Added / Deleted snapshots store a single value per field.
+                yield return new ChangeField(property.Name, string.Empty, FormatCsvValue(property.Value));
+            }
+        }
+
+        private static string FormatCsvValue(JToken? token)
+        {
+            if (token is null || token.Type == JTokenType.Null) return string.Empty;
+            if (token.Type == JTokenType.Boolean) return token.Value<bool>() ? "true" : "false";
+            return token.Type is JTokenType.String or JTokenType.Integer or JTokenType.Float or JTokenType.Date
+                ? token.ToString()
+                : token.ToString(Newtonsoft.Json.Formatting.None);
+        }
+
+        private static string Csv(string? value)
+        {
+            var text = NeutraliseCsvFormula(value ?? string.Empty);
+            if (text.IndexOfAny(new[] { ',', '"', '\r', '\n' }) >= 0)
+                return "\"" + text.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
+            return text;
+        }
+
+        /// <summary>Prefix formula-like cells so spreadsheet apps do not execute them.</summary>
+        public static string NeutraliseCsvFormula(string value)
+        {
+            if (value.Length == 0) return value;
+            var first = value[0];
+            if (first is '=' or '+' or '-' or '@')
+                return "'" + value;
+            return value;
         }
 
         private IActionResult FeatureNotEntitled(string requiredFeature, string detail)

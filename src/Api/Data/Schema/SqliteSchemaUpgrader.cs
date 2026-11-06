@@ -174,6 +174,15 @@ namespace Api.Data.Schema
                 command.CommandText = sql;
                 command.ExecuteNonQuery();
             }
+
+            // Pre-PR4 tables lack parent columns; add without backfill so legacy rows stay null.
+            AddColumnIfMissing(connection, "RecordChanges", "ParentEntityType", "TEXT NULL");
+            AddColumnIfMissing(connection, "RecordChanges", "ParentEntityId", "INTEGER NULL");
+            using (var indexCommand = connection.CreateCommand())
+            {
+                indexCommand.CommandText = SqliteRecordChangesSql.ParentIndex;
+                indexCommand.ExecuteNonQuery();
+            }
         }
 
         private static void EnsureAuditEvidenceIntegrity(DbConnection connection)
