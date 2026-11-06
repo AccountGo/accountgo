@@ -34,7 +34,7 @@ const selectClass =
 const labelClass = 'block text-xs font-semibold text-[var(--text-secondary)] mb-1.5';
 
 /** Accounting policy chosen at creation. Framework, fiscal year and books start lock after the first journal entry. */
-export const AccountingPolicyCard: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
+export const AccountingPolicyCard: React.FC<{ canEdit: boolean; personal?: boolean }> = ({ canEdit, personal = false }) => {
   const { authFetch } = useAuth();
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [saved, setSaved] = useState<Policy | null>(null);
@@ -117,19 +117,19 @@ export const AccountingPolicyCard: React.FC<{ canEdit: boolean }> = ({ canEdit }
       {frozen && (
         <div role="note" className="flex items-start gap-2 p-3 rounded-xl bg-[var(--bg-subtle)] text-xs text-[var(--text-secondary)]">
           <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-          <span>Framework, accounting basis, fiscal year and books start date are locked because journal entries exist. Tax regime and inventory method can still change.</span>
+          <span>{personal ? 'Fiscal year and books start date are locked because journal entries exist.' : 'Framework, accounting basis, fiscal year and books start date are locked because journal entries exist. Tax regime and inventory method can still change.'}</span>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
+        {!personal && <div>
           <label htmlFor="policy-framework" className={labelClass}>Reporting framework</label>
           <select id="policy-framework" className={selectClass} disabled={lockedDisabled} value={policy.reportingFramework}
             onChange={(e) => set({ reportingFramework: e.target.value, accountingBasis: e.target.value === 'CashBasis' ? 'Cash' : 'Accrual' })}>
             {FRAMEWORKS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <p className="text-[11px] text-[var(--text-muted)] mt-1">Basis: {policy.accountingBasis}</p>
-        </div>
+        </div>}
         <div>
           <label htmlFor="policy-books-start" className={labelClass}>Books start date</label>
           <input id="policy-books-start" type="date" className={selectClass} disabled={lockedDisabled} value={policy.booksStartDate}
@@ -151,7 +151,7 @@ export const AccountingPolicyCard: React.FC<{ canEdit: boolean }> = ({ canEdit }
             </select>
           </div>
         )}
-        <div>
+        {!personal && <><div>
           <label htmlFor="policy-tax" className={labelClass}>Tax regime</label>
           <select id="policy-tax" className={selectClass} disabled={!canEdit} value={policy.taxRegime} onChange={(e) => set({ taxRegime: e.target.value })}>
             {TAX.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -168,7 +168,7 @@ export const AccountingPolicyCard: React.FC<{ canEdit: boolean }> = ({ canEdit }
           <select id="policy-inventory" className={selectClass} disabled={!canEdit} value={policy.inventoryCostingMethod} onChange={(e) => set({ inventoryCostingMethod: e.target.value })}>
             {INVENTORY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-        </div>
+        </div></>}
       </div>
 
       {message && (

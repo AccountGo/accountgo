@@ -5,6 +5,7 @@ import { BusinessProfile } from '../types/invoicing';
 
 interface BusinessDetailsCardProps {
   canEdit: boolean;
+  personal?: boolean;
 }
 
 const EMPTY_PROFILE: BusinessProfile = {
@@ -19,7 +20,7 @@ const inputClass =
 const labelClass = 'block text-xs font-semibold text-[var(--text-secondary)] mb-1.5';
 
 /** The seller's legal name, contact details and address, printed in the "From" block of invoices. */
-export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdit }) => {
+export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdit, personal = false }) => {
   const { authFetch, user } = useAuth();
   const [profile, setProfile] = useState<BusinessProfile>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
@@ -82,10 +83,10 @@ export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdi
         <div className="flex items-center gap-2.5">
           <MapPin className="w-5 h-5 text-[var(--brand-primary)]" />
           <div>
-            <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)]">Business Details</h2>
-            <p className="text-xs text-[var(--text-muted)]">
+            <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)]">{personal ? 'Your details' : 'Business Details'}</h2>
+            {!personal && <p className="text-xs text-[var(--text-muted)]">
               Who your invoices come from. Changes apply to drafts and new invoices; issued invoices keep the details they were sent with.
-            </p>
+            </p>}
           </div>
         </div>
         {loading && <RefreshCw className="w-4 h-4 text-[var(--brand-primary)] animate-spin" />}
@@ -94,7 +95,7 @@ export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdi
       {saved && (
         <div role="alert" aria-live="polite" className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Business details saved.</span>
+          <span>{personal ? 'Details saved.' : 'Business details saved.'}</span>
         </div>
       )}
       {error && (
@@ -106,7 +107,7 @@ export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdi
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <label htmlFor="legal-name-input" className={labelClass}>Legal Name</label>
+          <label htmlFor="legal-name-input" className={labelClass}>{personal ? 'Your name' : 'Legal Name'}</label>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               id="legal-name-input"
@@ -129,12 +130,13 @@ export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdi
               </button>
             )}
           </div>
-          <p className="text-[11px] text-[var(--text-muted)] mt-1">
+          {!personal && <p className="text-[11px] text-[var(--text-muted)] mt-1">
             Registered or personal name. Independent contractors usually invoice under their own name; choose it under Settings → Invoices.
-          </p>
+          </p>}
         </div>
 
-        <div>
+        {personal && <div><span className={labelClass}>Email</span><span>{user?.email}</span></div>}
+        {!personal && <><div>
           <label htmlFor="business-email-input" className={labelClass}>Business Email</label>
           <input
             id="business-email-input"
@@ -227,6 +229,7 @@ export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdi
           />
         </div>
 
+        </>}
         <div>
           <label htmlFor="address-country-input" className={labelClass}>Country</label>
           <input
@@ -246,11 +249,11 @@ export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdi
         <div className="pt-3 flex items-center justify-end">
           <button type="submit" disabled={disabled} className="btn-primary !h-11 !px-6 text-sm flex items-center gap-2">
             {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>{saving ? 'Saving…' : 'Save Business Details'}</span>
+            <span>{saving ? 'Saving…' : personal ? 'Save details' : 'Save Business Details'}</span>
           </button>
         </div>
       ) : (
-        <p className="text-[11px] text-[var(--text-muted)]">Only workspace owners and admins can change business details.</p>
+        <p className="text-[11px] text-[var(--text-muted)]">{personal ? 'Only workspace owners and admins can change these details.' : 'Only workspace owners and admins can change business details.'}</p>
       )}
     </form>
   );

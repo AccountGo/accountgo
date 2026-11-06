@@ -145,8 +145,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         : entitlements.tier === 'free' ? 'Free' : entitlements.tier;
   // Only self-service plans can be picked; an operator-assigned current plan stays visible.
   const visiblePlans = (catalog.plans || []).filter((plan) => plan.selfService || plan.key === currentPlan);
-  // A paid plan on a workspace used as personal books keeps its plan and billing view.
-  const personalBooks = Boolean(tenantContext.currentOrg?.isPersonalBooks && tenantContext.currentOrg?.onPersonalBooksPlan !== false);
+  const personalBooks = Boolean(tenantContext.currentOrg?.isPersonalBooks);
   const planModules = tenantContext.currentOrg?.includedModules ?? catalog.includedModules(currentPlan);
   const isIncluded = (module: ModuleKey) => planModules.includes(module);
   const isRequired = (module: ModuleKey) => tenantContext.currentOrg?.requiredModules?.includes(module) ?? catalog.isRequired(currentPlan, module);
@@ -273,6 +272,14 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         year: 'numeric', month: 'short', day: 'numeric',
       })
     : null;
+
+  if (personalBooks) return (
+    <section className="p-6 rounded-2xl bg-[var(--bg-surface)] space-y-4">
+      <h2 className="text-lg font-bold">Personal books — free</h2>
+      <h3 className="text-sm font-bold">Modules</h3>
+      <ul>{MODULES_CATALOG.filter(mod => activeModules.includes(mod.key)).map(mod => <li key={mod.key}>{mod.name}</li>)}</ul>
+    </section>
+  );
 
   return (
     <div className="space-y-6">

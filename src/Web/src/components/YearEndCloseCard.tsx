@@ -88,7 +88,7 @@ function CheckList({
 }
 
 /** Fiscal year-end close / reopen on Financial Rules (#455 Phase 2b-1). */
-export const YearEndCloseCard: React.FC<{ canClose: boolean }> = ({ canClose }) => {
+export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean }> = ({ canClose, personal = false }) => {
   const { authFetch } = useAuth();
   const [years, setYears] = useState<YearEndYearRow[] | null>(null);
   const [busyCode, setBusyCode] = useState<string | null>(null);
@@ -217,7 +217,7 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean }> = ({ canClose }) 
             <div>
               <h3 className="text-sm font-bold text-[var(--text-main)]">Year-end close</h3>
               <p className="text-xs text-[var(--text-muted)]">
-                Close completed fiscal years to zero revenue and expense into equity.
+                {personal ? 'Close completed fiscal years.' : 'Close completed fiscal years to zero revenue and expense into equity.'}
               </p>
             </div>
           </div>

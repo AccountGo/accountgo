@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -89,11 +89,20 @@ export interface CashFlowStatementDto {
   message?: string;
 }
 
+interface CashMovement {
+  openingCash: number;
+  lines: { date: string; generalLedgerHeaderId: number; description: string; accountName: string; counterpartAccountName: string; moneyIn: number; moneyOut: number }[];
+  totalIn: number;
+  totalOut: number;
+  closingCash: number;
+}
+
 export interface ReportData {
   trialBalance: TrialBalanceRow[];
   income: IncomeRow[];
   balanceSheet: BalanceRow[];
   cashFlow: CashFlowStatementDto;
+  cashMovement?: CashMovement;
   years: FinancialYear[];
   accounts: Account[];
 }
@@ -160,6 +169,7 @@ export async function loadReportData(
   fetcher: (url: string) => Promise<Response>,
   range: DateRange,
   basis: AccountingBasis = 'accrual',
+  personal = false,
 ): Promise<ReportData> {
   async function read<T>(path: string): Promise<T[]> {
     const response = await fetcher(path);
@@ -176,13 +186,14 @@ export async function loadReportData(
     return data;
   }
   const query = reportQuery(range, basis);
-  const [trialBalance, income, balanceSheet, cashFlow, years, accounts] = await Promise.all([
+  const [trialBalance, income, balanceSheet, cashFlow, years, accounts, cashMovement] = await Promise.all([
     read<TrialBalanceRow>(`/api/Financials/trialbalance${query}`),
     read<IncomeRow>(`/api/Financials/IncomeStatement${query}`),
     read<BalanceRow>(`/api/Financials/BalanceSheet${query}`),
-    readObject<CashFlowStatementDto>(`/api/Financials/CashFlow${query}`),
+    personal ? Promise.resolve({} as CashFlowStatementDto) : readObject<CashFlowStatementDto>(`/api/Financials/CashFlow${query}`),
     read<FinancialYear>('/api/Administration/financialyears'),
     read<Account>('/api/Financials/Accounts'),
+    personal ? readObject<CashMovement>(`/api/financials/cash-movement${reportQuery(range)}`) : Promise.resolve(undefined),
   ]);
   for (const row of trialBalance) { minorUnits(row.debit); minorUnits(row.credit); }
   for (const row of [...income, ...balanceSheet]) minorUnits(row.amount);
@@ -200,7 +211,7 @@ export async function loadReportData(
   ]) {
     minorUnits(row.amount);
   }
-  return { trialBalance, income, balanceSheet, cashFlow, years, accounts };
+  return { trialBalance, income, balanceSheet, cashFlow, cashMovement, years, accounts };
 }
 
 function minorUnits(amount: number): number {
@@ -213,7 +224,7 @@ function minorUnits(amount: number): number {
 const byCode = <T extends { accountCode: string }>(rows: T[]): T[] =>
   [...rows].sort((a, b) => a.accountCode.localeCompare(b.accountCode, undefined, { numeric: true }));
 
-export function buildStatement(statement: Statement, data: ReportData, hideZero = true): StatementRow[] {
+export function buildStatement(statement: Statement, data: ReportData, hideZero = true, personal = false): StatementRow[] {
   if (statement === 'trialBalance') {
     const rows: StatementRow[] = byCode(data.trialBalance).map(a => {
       const net = minorUnits(a.debit) - minorUnits(a.credit);
@@ -241,7 +252,14 @@ export function buildStatement(statement: Statement, data: ReportData, hideZero 
     rows.push({ code: '', label: `Total ${label}`, kind: 'total', amount });
     return amount;
   };
-  if (statement === 'income') {
+  if (statement === 'income' && personal) {
+    const earned = section('Earned income', data.income.filter(a => !a.isExpense && a.accountCode !== '40900'));
+    const freelance = data.income.filter(a => !a.isExpense && a.accountCode === '40900');
+    const freelanceAmount = freelance.reduce((sum, a) => sum + minorUnits(a.amount), 0);
+    rows.push({ code: '40900', label: 'Money from my freelance work', kind: 'account', amount: freelanceAmount, accountId: freelance[0]?.accountId });
+    const spending = section('Spending', data.income.filter(a => a.isExpense));
+    rows.push({ code: '', label: 'Net', kind: 'total', amount: earned + freelanceAmount - spending });
+  } else if (statement === 'income') {
     const costIds = new Set<number>();
     const visit = (accounts: Account[], isCost = false) => {
       for (const account of accounts) {
@@ -299,12 +317,25 @@ export function buildStatement(statement: Statement, data: ReportData, hideZero 
     rows.push({ code: '', label: 'Difference', kind: 'total', amount: diff });
   } else {
     const assets = section('Assets', data.balanceSheet.filter(a => a.accountClassId === 1));
-    const liabilities = section('Liabilities', data.balanceSheet.filter(a => a.accountClassId === 2));
-    const equity = section('Equity', data.balanceSheet.filter(a => a.accountClassId === 3));
-    rows.push({ code: '', label: 'Total Liabilities + Equity', kind: 'total', amount: liabilities + equity });
+    const liabilities = section(personal ? 'Debts' : 'Liabilities', data.balanceSheet.filter(a => a.accountClassId === 2));
+    const equity = section(personal ? 'Net worth' : 'Equity', data.balanceSheet.filter(a => a.accountClassId === 3));
+    rows.push({ code: '', label: personal ? 'Total debts and net worth' : 'Total Liabilities + Equity', kind: 'total', amount: liabilities + equity });
     rows.push({ code: '', label: 'Difference', kind: 'total', amount: assets - liabilities - equity });
   }
   return rows;
+}
+
+export function cashMovementCsv(data: CashMovement): string {
+  const rows = [
+    ['Opening cash', String(data.openingCash)],
+    ['Date', 'Description', 'Account', 'Counterpart', 'Money in', 'Money out'],
+    ...data.lines.map(l => [l.date, l.description || '', l.accountName, l.counterpartAccountName, String(l.moneyIn), String(l.moneyOut)]),
+    ['Total in', String(data.totalIn)], ['Total out', String(data.totalOut)], ['Closing cash', String(data.closingCash)],
+  ];
+  return rows.map(row => row.map(cell => {
+    const safe = /^\s*[=+@\t\r-]/.test(cell) && !/^-?\d+(\.\d+)?$/.test(cell) ? `'${cell}` : cell;
+    return `"${safe.replaceAll('"', '""')}"`;
+  }).join(',')).join('\r\n');
 }
 
 export function statementCsv(
@@ -384,9 +415,10 @@ export function applyComparativeAmounts(
 export default function Reports() {
   const { currentOrg, hasPermission, hasModule } = useTenantContext();
   const { authFetch } = useAuth();
+  const personal = !!currentOrg.isPersonalBooks;
   const allowed = hasPermission('reports.view');
   const showBankCloseStatus = hasModule('financials') && hasPermission('banking.accounts.view');
-  const [statement, setStatement] = useState<Statement>('trialBalance');
+  const [statement, setStatement] = useState<Statement>(personal ? 'balanceSheet' : 'trialBalance');
   const [basis, setBasis] = useState<AccountingBasis>('accrual');
   const [preset, setPreset] = useState<Preset>('month');
   const [range, setRange] = useState<DateRange>(() => getDateRange('month', new Date()));
@@ -397,7 +429,7 @@ export default function Reports() {
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const validRange = !!range.to && (!range.from || range.from <= range.to);
   const canCompare = statement === 'income' || statement === 'balanceSheet';
-  const key = JSON.stringify([currentOrg.slug, range.from, range.to, basis, revision, compare && canCompare]);
+  const key = JSON.stringify([currentOrg.slug, personal, range.from, range.to, basis, revision, compare && canCompare]);
   const data = result?.key === key ? result.data : null;
   const comparativeData = result?.key === key ? result.comparative : undefined;
   const activeCompareRange = result?.key === key ? result.comparativeRange : undefined;
@@ -413,7 +445,7 @@ export default function Reports() {
     (async () => {
       try {
         const [data, policyRes] = await Promise.all([
-          loadReportData(authFetch, range, basis),
+          loadReportData(authFetch, range, basis, personal),
           authFetch('/api/organizations/current/accounting-policy'),
         ]);
         let booksStart: string | null = null;
@@ -432,7 +464,7 @@ export default function Reports() {
             statement === 'balanceSheet' ? 'balanceSheet' : 'income',
             booksStart,
           );
-          if (prior) comparative = await loadReportData(authFetch, prior, basis);
+          if (prior) comparative = await loadReportData(authFetch, prior, basis, personal);
         }
         if (!cancelled) {
           setResult({ key, slug: currentOrg.slug, data, comparative, comparativeRange: prior });
@@ -448,11 +480,17 @@ export default function Reports() {
   if (!allowed) return <PermissionDeniedCard permission="reports.view" />;
 
   const showingCompare = !!(compare && canCompare && comparativeData && activeCompareRange);
-  const baseRows = data ? buildStatement(statement, data, hideZero) : [];
+  const baseRows = data ? buildStatement(statement, data, hideZero, personal) : [];
   const rows = showingCompare && (statement === 'income' || statement === 'balanceSheet')
-    ? applyComparativeAmounts(baseRows, buildStatement(statement, comparativeData!, hideZero))
+    ? applyComparativeAmounts(baseRows, buildStatement(statement, comparativeData!, hideZero, personal))
     : baseRows;
-  const title = statements.find(s => s.key === statement)!.label;
+  const visibleStatements = personal ? [
+    { key: 'balanceSheet' as const, label: 'Net worth (book value)' },
+    { key: 'income' as const, label: 'Money in and out' },
+    { key: 'cashFlow' as const, label: 'Cash movement' },
+    { key: 'trialBalance' as const, label: 'Trial balance' },
+  ] : statements;
+  const title = visibleStatements.find(s => s.key === statement)!.label;
   const basisLabel = basis === 'cash' ? 'Cash Basis' : 'Accrual Basis';
   const period = statement === 'balanceSheet' ? `As of ${range.to}` : `${range.from || 'All time'} to ${range.to}`;
   const comparativePeriod = !activeCompareRange ? ''
@@ -466,8 +504,10 @@ export default function Reports() {
     : rows.at(-1)?.amount ?? 0;
   const exportCsv = () => {
     if (!data || !validRange || error) return;
-    const csv = statementCsv(statement, rows, [
-      ['Statement', title], ['Accounting Basis', basisLabel], ['Organization', currentOrg.name], ['Currency', currentOrg.currency || DEFAULT_CURRENCY],
+    const csv = personal && statement === 'cashFlow' && data.cashMovement
+      ? cashMovementCsv(data.cashMovement)
+      : statementCsv(statement, rows, [
+      ['Statement', title], ['Accounting Basis', basisLabel], [personal ? 'Books' : 'Organization', currentOrg.name], ['Currency', currentOrg.currency || DEFAULT_CURRENCY],
       ['Period', period],
       ...(showingCompare ? [['Comparative period', comparativePeriod]] : []),
       ['Financial Year', activeYear?.fiscalYearName || 'No active financial year'],
@@ -545,26 +585,32 @@ export default function Reports() {
         </label>}
       </div>
       <nav aria-label="Financial statements" className="flex flex-wrap gap-2">
-        {statements.map(tab => <button key={tab.key} type="button" aria-pressed={statement === tab.key} onClick={() => setStatement(tab.key)}
+        {visibleStatements.map(tab => <Fragment key={tab.key}>{personal && tab.key === 'trialBalance' && <h3 className="text-sm font-semibold">Advanced</h3>}<button type="button" aria-pressed={statement === tab.key} onClick={() => setStatement(tab.key)}
           className={`rounded-lg px-4 py-2 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${statement === tab.key ? 'bg-[var(--brand-primary)] text-[var(--brand-text)]' : 'bg-[var(--bg-surface)] text-[var(--text-secondary)]'}`}>
           {tab.label}
-        </button>)}
+        </button></Fragment>)}
       </nav>
       {!validRange ? <p role="alert" className="text-red-500">Select an end date on or after the start date.</p>
         : error ? <p role="alert" className="text-red-500">{error} Use Refresh to retry.</p>
         : loading ? <div role="status" className="flex items-center gap-2 p-6"><Loader2 className="h-5 w-5 animate-spin" />Loading financial reports...</div>
         : data && <section aria-label={title} className="overflow-hidden rounded-2xl bg-[var(--bg-surface)]">
           <div className="flex flex-wrap items-center justify-between gap-3 p-5">
-            <div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-[var(--text-secondary)]">{period} | {basisLabel} | {currentOrg.currency || DEFAULT_CURRENCY}</p></div>
-            {statement !== 'income' && <p role="status" className={difference === 0 ? 'text-emerald-500' : 'text-red-500'}>
+            <div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-[var(--text-secondary)]">{period} | {personal && statement === 'cashFlow' ? '' : `${basisLabel} | `}{currentOrg.currency || DEFAULT_CURRENCY}</p></div>
+            {statement !== 'income' && !(personal && statement === 'cashFlow') && <p role="status" className={difference === 0 ? 'text-emerald-500' : 'text-red-500'}>
               {difference === 0 ? 'In balance' : `Out of balance: ${formatAmount(Math.abs(difference))}`}
             </p>}
           </div>
           {statement === 'balanceSheet' && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">Cumulative balances through the as-of date, including opening balances and unclosed earnings.</p>}
           {compare && canCompare && !showingCompare && data && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No prior period is available (comparative range would start before the books start).</p>}
-          {statement === 'cashFlow' && basis === 'cash' && data.cashFlow?.message && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">{data.cashFlow.message}</p>}
-          {!rows.some(row => row.kind === 'account') && (!data.cashFlow?.message || statement !== 'cashFlow') && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No ledger activity for the selected dates and filters.</p>}
-          <div className="overflow-x-auto">
+          {!personal && statement === 'cashFlow' && basis === 'cash' && data.cashFlow?.message && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">{data.cashFlow.message}</p>}
+          {!(personal && statement === 'cashFlow') && !rows.some(row => row.kind === 'account') && (!data.cashFlow?.message || statement !== 'cashFlow') && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No ledger activity for the selected dates and filters.</p>}
+          {personal && statement === 'cashFlow' && data.cashMovement ? <div className="overflow-x-auto p-5">
+            <p><span>Opening cash</span>: {formatAmount(minorUnits(data.cashMovement.openingCash))}</p>
+            <table className="w-full text-sm"><thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Counterpart</th><th>Money in</th><th>Money out</th></tr></thead>
+              <tbody>{data.cashMovement.lines.map((line, index) => <tr key={`${line.generalLedgerHeaderId}-${index}`}><td>{line.date.slice(0, 10)}</td><td>{line.description}</td><td>{line.accountName}</td><td>{line.counterpartAccountName}</td><td>{formatAmount(minorUnits(line.moneyIn))}</td><td>{formatAmount(minorUnits(line.moneyOut))}</td></tr>)}</tbody>
+            </table>
+            <p><span>Total in</span>: {formatAmount(minorUnits(data.cashMovement.totalIn))}</p><p><span>Total out</span>: {formatAmount(minorUnits(data.cashMovement.totalOut))}</p><p><span>Closing cash</span>: {formatAmount(minorUnits(data.cashMovement.closingCash))}</p>
+          </div> : <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <caption className="sr-only">{title}, {period}, {currentOrg.currency || DEFAULT_CURRENCY}</caption>
               <thead className="bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
@@ -603,7 +649,7 @@ export default function Reports() {
                 </tr>)}
               </tfoot>}
             </table>
-          </div>
+          </div>}
         </section>}
     </div>
   );

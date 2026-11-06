@@ -7,13 +7,14 @@ vi.mock('../src/lib/entitlements', () => ({ useCapabilities: () => ({ entitlemen
 vi.mock('../src/lib/useBilling', () => ({ useBilling: () => ({ billingEnabled: true, status: 'active', plan: 'household-test', billing: { tier: 'free' }, reload: vi.fn() }) }));
 afterEach(cleanup);
 it('personal books use workspace module metadata without showing sales or upgrade prompts', () => {
-  const context = { currentOrg: { isPersonalBooks: true, includedModules: ['financials', 'purchases', 'reports'], requiredModules: [] },
+  const context = { currentOrg: { isPersonalBooks: true, onPersonalBooksPlan: false, includedModules: ['financials', 'purchases', 'reports'], requiredModules: [] },
     subscription: { planId: 'household-test', planName: 'Personal', activeModules: ['financials', 'purchases', 'reports'] },
     updateSubscription: vi.fn() } as unknown as TenantContextType;
   render(<SubscriptionSettingsTab tenantContext={context} />);
+  expect(screen.getByText('Personal books — free')).toBeTruthy();
   expect(screen.queryByText('Change plan')).toBeNull();
   expect(screen.queryByText('Invoicing & Sales')).toBeNull();
   expect(screen.queryByText('Upgrade')).toBeNull();
   expect(screen.getByText('General Ledger & Banking')).toBeTruthy();
-  expect(screen.getAllByRole('switch').every(toggle => toggle.getAttribute('aria-checked') === 'true')).toBe(true);
+  expect(screen.queryAllByRole('switch')).toHaveLength(0);
 });

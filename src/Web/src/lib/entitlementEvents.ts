@@ -28,6 +28,17 @@ export interface EntitlementProblem {
 
 export const ENTITLEMENT_DENIED_EVENT = 'accountgo:entitlement-denied';
 
+let activeWorkspace: { slug: string; personal: boolean } | null = null;
+export function setEntitlementWorkspace(slug: string, personal: boolean): () => void {
+  const workspace = { slug, personal };
+  activeWorkspace = workspace;
+  return () => { if (activeWorkspace === workspace) activeWorkspace = null; };
+}
+export function isActivePersonalBooks(slug: string | null): boolean {
+  return !!slug && activeWorkspace?.slug === slug && activeWorkspace.personal;
+}
+
+
 let suppressDenialDepth = 0;
 
 /** Temporarily skip the shared plan-limit dialog (wizard / transfer show their own copy). */

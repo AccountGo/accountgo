@@ -15,6 +15,7 @@ using Api.Service;
 using Core.Authorization;
 using Core.Domain;
 using Core.Domain.Security;
+using Core.Domain.Financials;
 using Dto.Subscription;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -141,6 +142,71 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         if (field == "inventoryCostingMethod") payload["industryTemplate"] = "ProductRetail";
         using var response = await Send(HttpMethod.Put, "/api/organizations/current/accounting-policy", payload, "work-books");
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task CashMovement_ReadsPostedCashLinesWithInclusiveDatesAndTransfers()
+    {
+        using var created = await Personal();
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var otherCompanyId = await CreateWork("other-books");
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var companyId = (await db.Companies.SingleAsync(c => c.Slug == "personal-books")).Id;
+            var cash = new Account { CompanyId = companyId, AccountClassId = 1, AccountCode = "19991", AccountName = "Bank A", IsCash = true };
+            var cash2 = new Account { CompanyId = companyId, AccountClassId = 1, AccountCode = "19992", AccountName = "Bank B", IsCash = true };
+            var other = new Account { CompanyId = companyId, AccountClassId = 3, AccountCode = "39991", AccountName = "Other" };
+            var otherCash = new Account { CompanyId = otherCompanyId, AccountClassId = 1, AccountCode = "19993", AccountName = "Other tenant bank", IsCash = true };
+            db.Accounts.AddRange(cash, cash2, other, otherCash);
+            await db.SaveChangesAsync();
+            var foreignHeader = new GeneralLedgerHeader { CompanyId = otherCompanyId, Date = new DateTime(2026, 2, 3), Description = "Other tenant" };
+            foreignHeader.GeneralLedgerLines.Add(new GeneralLedgerLine { CompanyId = otherCompanyId, AccountId = otherCash.Id, DrCr = DrOrCrSide.Dr, Amount = 500m });
+            db.GeneralLedgerHeaders.Add(foreignHeader);
+            void Post(int day, string description, Account debit, Account credit, decimal amount)
+            {
+                var header = new GeneralLedgerHeader { CompanyId = companyId, Date = new DateTime(2026, 2, day), Description = description };
+                header.GeneralLedgerLines.Add(new GeneralLedgerLine { CompanyId = companyId, AccountId = debit.Id, DrCr = DrOrCrSide.Dr, Amount = amount });
+                header.GeneralLedgerLines.Add(new GeneralLedgerLine { CompanyId = companyId, AccountId = credit.Id, DrCr = DrOrCrSide.Cr, Amount = amount });
+                db.GeneralLedgerHeaders.Add(header);
+            }
+            Post(1, "Opening", cash, other, 100m);
+            Post(2, "Bill one", other, cash, 10m);
+            Post(3, "Income", cash, other, 25m);
+            Post(4, "Transfer", cash2, cash, 20m);
+            var split = new GeneralLedgerHeader { CompanyId = companyId, Date = new DateTime(2026, 2, 4), Description = "Split entry" };
+            split.GeneralLedgerLines.Add(new GeneralLedgerLine { CompanyId = companyId, AccountId = cash.Id, DrCr = DrOrCrSide.Dr, Amount = 4m });
+            split.GeneralLedgerLines.Add(new GeneralLedgerLine { CompanyId = companyId, AccountId = other.Id, DrCr = DrOrCrSide.Cr, Amount = 2m });
+            split.GeneralLedgerLines.Add(new GeneralLedgerLine { CompanyId = companyId, AccountId = other.Id, DrCr = DrOrCrSide.Cr, Amount = 2m });
+            db.GeneralLedgerHeaders.Add(split);
+            Post(5, "Bill two", other, cash2, 5m);
+            Post(6, "Outside", other, cash, 2m);
+            var draft = new JournalEntryHeader { CompanyId = companyId, Date = new DateTime(2026, 2, 3), Memo = "Draft", Posted = false };
+            draft.JournalEntryLines.Add(new JournalEntryLine { CompanyId = companyId, AccountId = cash.Id, DrCr = DrOrCrSide.Dr, Amount = 999m });
+            db.JournalEntryHeaders.Add(draft);
+            await db.SaveChangesAsync();
+        }
+        using var oldBefore = await Send(HttpMethod.Get, "/api/financials/cashflow?from=2026-02-02&to=2026-02-05", slug: "personal-books");
+        Assert.Equal(HttpStatusCode.OK, oldBefore.StatusCode);
+        var oldBody = await oldBefore.Content.ReadAsStringAsync();
+        using var response = await Send(HttpMethod.Get, "/api/financials/cash-movement?from=2026-02-02&to=2026-02-05", slug: "personal-books");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = json.RootElement;
+        Assert.Equal(100m, data.GetProperty("openingCash").GetDecimal());
+        Assert.Equal(49m, data.GetProperty("totalIn").GetDecimal());
+        Assert.Equal(35m, data.GetProperty("totalOut").GetDecimal());
+        Assert.Equal(114m, data.GetProperty("closingCash").GetDecimal());
+        var lines = data.GetProperty("lines").EnumerateArray().ToArray();
+        Assert.Equal(6, lines.Length);
+        Assert.Equal(new[] { "Bill one", "Income", "Transfer", "Transfer", "Split entry", "Bill two" }, lines.Select(x => x.GetProperty("description").GetString()).ToArray());
+        Assert.All(lines, x => Assert.InRange(DateTime.Parse(x.GetProperty("date").GetString()!), new DateTime(2026, 2, 2), new DateTime(2026, 2, 5, 23, 59, 59)));
+        Assert.Equal(2, lines.Count(x => x.GetProperty("description").GetString() == "Transfer"));
+        Assert.Contains(lines, x => x.GetProperty("counterpartAccountName").GetString() == "Bank B");
+        Assert.Equal("Split", lines.Single(x => x.GetProperty("description").GetString() == "Split entry").GetProperty("counterpartAccountName").GetString());
+        using var oldAfter = await Send(HttpMethod.Get, "/api/financials/cashflow?from=2026-02-02&to=2026-02-05", slug: "personal-books");
+        Assert.Equal(oldBody, await oldAfter.Content.ReadAsStringAsync());
     }
 
     [Fact]

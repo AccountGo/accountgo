@@ -80,6 +80,7 @@ export const RequiresModule: React.FC<RequiresModuleProps> = ({
     return <>{fallback}</>;
   }
 
+  if (currentOrg.isPersonalBooks) return <p role="status">This feature is unavailable in these books.</p>;
   return <ModuleLockedCard module={modules[0]} orgSlug={currentOrg.slug} />;
 };
 
@@ -99,6 +100,7 @@ export const RequiresStatementImport: React.FC<{ children: React.ReactNode; fall
     return <>{fallback}</>;
   }
 
+  if (currentOrg.isPersonalBooks) return <p role="status">Statement import is unavailable in these books.</p>;
   return <StatementImportUpgradeCard orgSlug={currentOrg.slug} />;
 };
 
