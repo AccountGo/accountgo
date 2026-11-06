@@ -348,20 +348,50 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SetupCorrection_RefusesPersonalBooksAndBusinessWorkspaces()
+    public async Task SetupCorrection_RefusesBusinessAndLinkedWorkspaces()
     {
         var businessId = await CreateWork("real-business");
         var blocked = Convert(businessId);
         Assert.False(blocked.Applied);
         Assert.Equal("setup_correction_blocked", blocked.Code);
 
-        var booksId = await CreateLegacyPersonal("my-books");
+        var booksId = await CreateLegacyPersonal("linked-books");
         using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{booksId}"))
             Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
+        var workId = await CreateWork("linked-work");
+        using (var linked = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = workId }))
+            Assert.Equal(HttpStatusCode.NoContent, linked.StatusCode);
         var refused = Convert(booksId);
         Assert.False(refused.Applied);
-        Assert.Contains("personal books", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("Unlink", refused.Message, StringComparison.Ordinal);
         Assert.Equal("Personal", refused.Before!.Purpose);
+    }
+
+    [Fact]
+    public async Task SetupCorrection_ReleasesPersonalBooksRecord_SoNewPersonalBooksCanBeCreatedAndLinked()
+    {
+        var oldId = await CreateLegacyPersonal("was-personal");
+        await MakeIndividual(oldId);
+        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{oldId}"))
+            Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
+
+        var result = Convert(oldId);
+        Assert.True(result.Applied, result.Message);
+        Assert.True(result.Before!.IsPersonalBooks);
+        Assert.False(result.After!.IsPersonalBooks);
+
+        using (var personal = await Personal(slug: "new-personal", link: oldId))
+            Assert.Equal(HttpStatusCode.Created, personal.StatusCode);
+        var row = await Row(oldId);
+        Assert.False(row.GetProperty("isPersonalBooks").GetBoolean());
+        Assert.True(row.GetProperty("linkedPersonalCompanyId").GetInt32() > 0);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        db.SuppressTenantSecurityCheck = true;
+        var audit = await db.AuditLogs.IgnoreQueryFilters().SingleAsync(a => a.CompanyId == oldId
+            && a.TableName == Api.Service.WorkspaceSetupCorrectionService.AuditTable);
+        Assert.Contains(_userId, audit.OriginalValue, StringComparison.Ordinal);
     }
 
     [Fact]
