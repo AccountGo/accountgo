@@ -644,7 +644,9 @@ namespace AccountGo.BackendTests
                 // Linked entries explicitly scope cross-company reads to the pair's two authorized workspaces.
                 "LinkedEntryService.cs",
                 "LinkedEntryIntegrityScanner.cs",
-                "LinkedEntriesController.cs"
+                "LinkedEntriesController.cs",
+                // Audit writes resolve membership ownership when the grant navigation is not loaded.
+                "RecordChangeInterceptor.cs"
             };
 
             var solutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));

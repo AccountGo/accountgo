@@ -196,7 +196,8 @@ namespace Api.Extensions
                 services.AddDbContext<ApiDbContext>((sp, options) =>
                 {
                     options.UseSqlite(sqliteConnection);
-                    options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
+                    options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>(),
+                        sp.GetRequiredService<RecordChangeInterceptor>());
                     if (environment.IsDevelopment())
                     {
                         options.EnableSensitiveDataLogging();
@@ -229,7 +230,7 @@ namespace Api.Extensions
                     options.UseNpgsql(postgresConnection,
                         npgsql => npgsql.ExecutionStrategy(d => new BufferingExecutionStrategy(d)));
                     options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>(),
-                        new WriteLockTransactionInterceptor());
+                        new WriteLockTransactionInterceptor(), sp.GetRequiredService<RecordChangeInterceptor>());
                     if (environment.IsDevelopment())
                     {
                         options.EnableSensitiveDataLogging();

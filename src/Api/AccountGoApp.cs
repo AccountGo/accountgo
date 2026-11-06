@@ -110,6 +110,8 @@ public static class AccountGoApp
         // Add database context and provide builder environment information to the extended method for debugging purpose
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<Api.Observability.ServerTimingDbCommandInterceptor>();
+        builder.Services.AddScoped<Api.Auditing.IRequestAuditContext, Api.Auditing.RequestAuditContext>();
+        builder.Services.AddScoped<Api.Data.RecordChangeInterceptor>();
         builder.Services.ConfigureSqlContext(builder.Configuration, builder.Environment);
 
         builder.AddServiceDefaults();
@@ -467,6 +469,7 @@ public static class AccountGoApp
         app.UseMiddleware<Api.Middleware.ServerTimingMiddleware>();
 
         app.UseForwardedHeaders();
+        app.UseMiddleware<Api.Middleware.CorrelationIdMiddleware>();
         app.UseExceptionHandler();
         app.UseStatusCodePages();
 
