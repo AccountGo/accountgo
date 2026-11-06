@@ -310,6 +310,9 @@ public class WorkspaceOperatingPolicyServiceTests : IDisposable
     }
 
     [Theory]
+    [InlineData("__JournalEntryPreparer")]
+    [InlineData("__AccessDelegationApproval")]
+    [InlineData("__WorkspaceLink")]
     [InlineData("__WorkspaceOrigin")]
     [InlineData("__InvitationTransition")]
     [InlineData("__JournalPostingAuthorization")]
@@ -345,6 +348,153 @@ public class WorkspaceOperatingPolicyServiceTests : IDisposable
             _db.AuditLogs.Remove(log);
             var exDelete = Assert.Throws<InvalidOperationException>(() => _db.SaveChanges());
             Assert.Contains("append-only evidence", exDelete.Message);
+        }
+    }
+
+    [Fact]
+    public void OrdinaryAuditRows_CanBeUpdated()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var log = new Core.Domain.Auditing.AuditLog
+            {
+                CompanyId = company.Id, UserName = _ownerUserId,
+                AuditEventDateUTC = DateTime.UtcNow,
+                AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                TableName = "Ordinary", RecordId = "1", FieldName = "Test", NewValue = "Original"
+            };
+            _db.AuditLogs.Add(log);
+            _db.SaveChanges();
+            log.NewValue = "Changed";
+            _db.SaveChanges();
+            Assert.Equal("Changed", _db.AuditLogs.AsNoTracking().Single(a => a.Id == log.Id).NewValue);
+        }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task RevokingApproval_AppendsStateAndPreservesGrant()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var grant = new Core.Domain.Auditing.AuditLog
+            {
+                CompanyId = company.Id, UserName = _ownerUserId,
+                AuditEventDateUTC = DateTime.UtcNow,
+                AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                TableName = "__AccessDelegationApproval", RecordId = "request-1",
+                FieldName = "Status", OriginalValue = "Approved",
+                NewValue = "{\"OperationKey\":\"journal.post\",\"ResourceId\":\"1\"}"
+            };
+            _db.AuditLogs.Add(grant);
+            await _db.SaveChangesAsync();
+            var originalPayload = grant.NewValue;
+
+            Assert.True(await Api.Authorization.AccessAuthorizationService.RevokeAuthenticatedApprovalAsync(_db, company.Id, grant.RecordId));
+            _db.ChangeTracker.Clear();
+            var rows = _db.AuditLogs.AsNoTracking().Where(a => a.RecordId == "request-1").ToList();
+            var persistedGrant = Assert.Single(rows, a => a.TableName == "__AccessDelegationApproval");
+            Assert.Equal("Approved", persistedGrant.OriginalValue);
+            Assert.Equal(originalPayload, persistedGrant.NewValue);
+            var state = Assert.Single(rows, a => a.TableName == "__AccessDelegationApprovalState");
+            Assert.Equal("Revoked", state.OriginalValue);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, "Revoked")]
+    [InlineData(true, "Consumed")]
+    public async System.Threading.Tasks.Task ApprovalLifecycle_AppendsStateOnce(bool consume, string expected)
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var payload = new Core.Authorization.PersistedAccessApprovalPayload
+            {
+                RequestId = "request-2", CompanyId = company.Id, ApproverUserId = "reviewer",
+                OperationKey = "journal.post", ResourceId = "42", Status = "Approved",
+                ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1)
+            };
+            var grant = new Core.Domain.Auditing.AuditLog
+            {
+                CompanyId = company.Id, UserName = "reviewer", AuditEventDateUTC = DateTime.UtcNow,
+                AuditEventType = (int)Core.Domain.Auditing.AuditEventTypes.Added,
+                TableName = "__AccessDelegationApproval", RecordId = payload.RequestId,
+                FieldName = "Status", OriginalValue = "Approved", NewValue = System.Text.Json.JsonSerializer.Serialize(payload)
+            };
+            _db.AuditLogs.Add(grant);
+            await _db.SaveChangesAsync();
+            if (consume)
+            {
+                Assert.True(await Api.Authorization.AccessAuthorizationService.ConsumeMatchingApprovalAsync(
+                    _db, company.Id, _ownerUserId, null, null, null, null, approvalRequestId: payload.RequestId));
+                Assert.False(await Api.Authorization.AccessAuthorizationService.ConsumeMatchingApprovalAsync(
+                    _db, company.Id, _ownerUserId, null, null, null, null, approvalRequestId: payload.RequestId));
+            }
+            else
+            {
+                await Api.Authorization.AccessAuthorizationService.InvalidateApprovalsForResourceAsync(_db, company.Id, payload.OperationKey, payload.ResourceId!);
+                await Api.Authorization.AccessAuthorizationService.InvalidateApprovalsForResourceAsync(_db, company.Id, payload.OperationKey, payload.ResourceId!);
+            }
+            _db.ChangeTracker.Clear();
+            var rows = _db.AuditLogs.AsNoTracking().Where(a => a.RecordId == payload.RequestId).ToList();
+            Assert.Equal("Approved", Assert.Single(rows, a => a.TableName == "__AccessDelegationApproval").OriginalValue);
+            Assert.Equal(expected, Assert.Single(rows, a => a.TableName == "__AccessDelegationApprovalState").OriginalValue);
+        }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task ApprovalConsumption_RejectsPayloadFromAnotherCompany()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            var payload = new Core.Authorization.PersistedAccessApprovalPayload
+            {
+                RequestId = "wrong-company", CompanyId = company.Id + 1, ApproverUserId = "reviewer",
+                OperationKey = "journal.post", ResourceId = "42", Status = "Approved", ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1)
+            };
+            _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+            {
+                CompanyId = company.Id, UserName = "reviewer", AuditEventDateUTC = DateTime.UtcNow, AuditEventType = 1,
+                TableName = "__AccessDelegationApproval", RecordId = payload.RequestId, FieldName = "Status",
+                OriginalValue = "Approved", NewValue = System.Text.Json.JsonSerializer.Serialize(payload)
+            });
+            await _db.SaveChangesAsync();
+            Assert.False(await Api.Authorization.AccessAuthorizationService.ConsumeMatchingApprovalAsync(
+                _db, company.Id, _ownerUserId, null, null, null, null, approvalRequestId: payload.RequestId));
+        }
+    }
+
+    [Fact]
+    public void SqliteUpgrade_PreservesLegacyApprovalStatesAndProtectsEvidence()
+    {
+        var (company, _) = SeedSoloInitializedCompany();
+        using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
+        {
+            foreach (var status in new[] { "Consumed", "Revoked" })
+            {
+                _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+                {
+                    CompanyId = company.Id, UserName = _ownerUserId, AuditEventDateUTC = DateTime.UtcNow,
+                    AuditEventType = 1, TableName = "__AccessDelegationApproval", RecordId = status,
+                    FieldName = "Status", OriginalValue = status, NewValue = "{}"
+                });
+            }
+            _db.SaveChanges();
+            Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(_connection);
+            Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(_connection);
+            var rows = _db.AuditLogs.AsNoTracking().Where(a => a.RecordId == "Consumed" || a.RecordId == "Revoked").ToList();
+            Assert.Equal(4, rows.Count);
+            foreach (var status in new[] { "Consumed", "Revoked" })
+            {
+                Assert.Equal(status, Assert.Single(rows, a => a.TableName == "__AccessDelegationApproval" && a.RecordId == status).OriginalValue);
+                Assert.Equal(status, Assert.Single(rows, a => a.TableName == "__AccessDelegationApprovalState" && a.RecordId == status).OriginalValue);
+            }
+            Assert.Throws<SqliteException>(() => _db.Database.ExecuteSqlRaw("UPDATE \"AuditLog\" SET \"NewValue\" = 'tampered' WHERE \"TableName\" = '__AccessDelegationApproval'"));
+            Assert.Throws<SqliteException>(() => _db.Database.ExecuteSqlRaw("DELETE FROM \"AuditLog\" WHERE \"TableName\" = '__AccessDelegationApproval'"));
+            Assert.Throws<SqliteException>(() => _db.Database.ExecuteSqlRaw("INSERT INTO \"AuditLog\" (\"CompanyId\", \"UserName\", \"AuditEventDateUTC\", \"AuditEventType\", \"TableName\", \"RecordId\", \"FieldName\", \"OriginalValue\", \"NewValue\") SELECT \"CompanyId\", \"UserName\", \"AuditEventDateUTC\", 1, \"TableName\", \"RecordId\", \"FieldName\", \"OriginalValue\", \"NewValue\" FROM \"AuditLog\" WHERE \"TableName\" = '__AccessDelegationApprovalState' LIMIT 1"));
         }
     }
 

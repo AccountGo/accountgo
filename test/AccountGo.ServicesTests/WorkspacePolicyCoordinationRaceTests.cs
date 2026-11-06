@@ -262,6 +262,65 @@ public class WorkspacePolicyCoordinationRaceTests
 
     [Theory]
     [MemberData(nameof(Providers))]
+    public async Task ConcurrentApprovalConsumption_AllowsOneLedgerWrite_OnConfiguredProvider(string provider)
+    {
+        using var database = PolicyRaceDatabase.Create(provider);
+        if (!database.IsPostgres)
+        {
+            using var schema = database.CreateContext(new TenantContext());
+            Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(schema.Db.Database.GetDbConnection());
+        }
+        var companyId = SeedWorkspace(database, "Approval race", "approval-race", policyRevision: 1, seedMore: (db, id) =>
+        {
+            var payload = new Core.Authorization.PersistedAccessApprovalPayload
+            {
+                CompanyId = id, RequestId = "race-approval", ApproverUserId = "reviewer", OperationKey = "test.post",
+                Status = "Approved", ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1)
+            };
+            db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
+            {
+                CompanyId = id, UserName = "reviewer", AuditEventDateUTC = DateTime.UtcNow, AuditEventType = 1,
+                TableName = "__AccessDelegationApproval", RecordId = payload.RequestId, FieldName = "Status", OriginalValue = "Approved",
+                NewValue = System.Text.Json.JsonSerializer.Serialize(payload)
+            });
+            db.SaveChanges();
+        });
+        using var barrier = new Barrier(ConcurrentWriterCount);
+        var committed = 0;
+        Task Post() => Task.Run(() =>
+        {
+            Assert.True(barrier.SignalAndWait(BarrierTimeout));
+            RunWithRetry(database, PolicyAdvanceRetryDelayMilliseconds, () =>
+            {
+                var tenant = new TenantContext();
+                using var impersonation = tenant.ImpersonateUser(companyId, "poster", role: CompanyMemberRole.Owner);
+                using var context = database.CreateContext(tenant);
+                var accepted = false;
+                new WorkspacePolicyTransaction(context.Db, tenant).Execute(companyId, guard =>
+                {
+                    accepted = Api.Authorization.AccessAuthorizationService.ConsumeMatchingApprovalAsync(context.Db, companyId,
+                        "poster", null, null, null, null, approvalRequestId: "race-approval", operationKey: "test.post")
+                        .GetAwaiter().GetResult();
+                    if (!accepted) return;
+                    context.Db.GeneralLedgerHeaders.Add(new GeneralLedgerHeader
+                    {
+                        CompanyId = companyId, Date = DateTime.UtcNow, DocumentType = DocumentTypes.JournalEntry, Description = "Approved posting"
+                    });
+                    context.Db.SaveChanges();
+                    guard.AdvanceRevision();
+                });
+                if (accepted) Interlocked.Increment(ref committed);
+            });
+        });
+        await Task.WhenAll(Post(), Post());
+        Assert.Equal(1, committed);
+        using var verify = database.CreateContext(new TenantContext());
+        Assert.Equal(1, verify.Db.AuditLogs.IgnoreQueryFilters().Count(a => a.CompanyId == companyId && a.TableName == "__AccessDelegationApprovalState" && a.RecordId == "race-approval"));
+        Assert.Equal(1, verify.Db.GeneralLedgerHeaders.IgnoreQueryFilters().Count(a => a.CompanyId == companyId && a.Description == "Approved posting"));
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
     public void WorkspacePolicyTestGate_CoordinatesRoleRevocation_RollsBackJournalPost_OnConfiguredProvider(string provider)
     {
         using var database = PolicyRaceDatabase.Create(provider);

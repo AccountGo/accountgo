@@ -201,11 +201,8 @@ namespace Api.Controllers
 
                     if (string.IsNullOrWhiteSpace(approvalRequestId))
                     {
-                        var matchingApproval = _db.AuditLogs
-                            .AsNoTracking()
-                            .Where(a => a.CompanyId == invitation.CompanyId &&
-                                        a.TableName == AccessAuthorizationService.ApprovalAuditTableName &&
-                                        a.OriginalValue == "Approved")
+                        var matchingApproval = Core.Authorization.ApprovalEvidence
+                            .Available(_db.AuditLogs.AsNoTracking(), invitation.CompanyId)
                             .OrderByDescending(a => a.Id)
                             .ToList()
                             .FirstOrDefault(a =>
@@ -214,7 +211,7 @@ namespace Api.Controllers
                                 try
                                 {
                                     var p = JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(a.NewValue);
-                                    return p != null &&
+                                    return Core.Authorization.ApprovalEvidence.IsValidApproval(_db.AuditLogs.AsNoTracking(), a, p, invitation.CompanyId, DateTimeOffset.UtcNow, AccessOperationCatalog.WorkspaceInvitationsCreate) &&
                                            string.Equals(p.TargetEmail, invitation.Email, StringComparison.OrdinalIgnoreCase) &&
                                            string.Equals(p.OperationKey, AccessOperationCatalog.WorkspaceInvitationsCreate, StringComparison.Ordinal) &&
                                            p.ExpiresAtUtc > DateTimeOffset.UtcNow;

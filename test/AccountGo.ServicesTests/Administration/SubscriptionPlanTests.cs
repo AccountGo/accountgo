@@ -23,6 +23,7 @@ public class SubscriptionPlanTests
 {
     private readonly Company _company = new() { Id = 7, Name = "Acme", Slug = "acme", Plan = "community" };
     private readonly Mock<IRepository<Company>> _companyRepo = new();
+    private readonly Mock<IRepository<AuditLog>> _auditRepo = new();
     private readonly AdministrationService _service;
 
     public SubscriptionPlanTests()
@@ -41,7 +42,7 @@ public class SubscriptionPlanTests
             Mock.Of<IRepository<Tax>>(),
             Mock.Of<IRepository<GeneralLedgerSetting>>(),
             Mock.Of<IRepository<Account>>(),
-            Mock.Of<IRepository<AuditLog>>(),
+            _auditRepo.Object,
             Mock.Of<IRepository<SalesInvoiceLine>>(),
             Mock.Of<IRepository<PurchaseInvoiceLine>>(),
             Mock.Of<ISecurityRepository>(),
@@ -49,6 +50,18 @@ public class SubscriptionPlanTests
             new CommunityPlanCatalog(),
             _companyRepo.Object,
             tenant.Object);
+    }
+
+    [Fact]
+    public void AuditLogs_OmitsApprovalGrantsAndStates()
+    {
+        _auditRepo.SetupGet(r => r.Table).Returns(new[]
+        {
+            new AuditLog { TableName = "__AccessDelegationApproval" },
+            new AuditLog { TableName = "__AccessDelegationApprovalState" },
+            new AuditLog { TableName = "Ordinary" }
+        }.AsQueryable());
+        Assert.Equal("Ordinary", Assert.Single(_service.AuditLogs()).TableName);
     }
 
     [Theory]

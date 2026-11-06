@@ -259,13 +259,8 @@ namespace Api.Controllers
                     "Only an active Owner or Admin who can post journals in this workspace can review a journal entry.",
                     WorkspacePolicyReasonCodes.ReviewerRequired);
 
-            var journalKey = journalId.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var preparer = _db.AuditLogs.AsNoTracking()
-                .Where(a => a.CompanyId == companyId && a.TableName == "__JournalEntryPreparer" && a.RecordId == journalKey)
-                .OrderByDescending(a => a.Id)
-                .Select(a => a.NewValue)
-                .FirstOrDefault();
-            if (string.Equals(preparer, UserId, StringComparison.Ordinal))
+            var preparers = JournalEvidence.PreparerIds(_db.AuditLogs.AsNoTracking(), companyId, journalId);
+            if (preparers.Contains(UserId))
                 return Problem(statusCode: 403, title: "Approval denied", detail: "The person who prepared a journal entry cannot review it.");
 
             return null;
@@ -279,7 +274,7 @@ namespace Api.Controllers
             var approvalJson = _db.AuditLogs.AsNoTracking()
                 .Where(a => a.CompanyId == companyId && a.TableName == "__AccessDelegationApproval" && a.RecordId == requestId)
                 .Select(a => a.NewValue).FirstOrDefault();
-            var revoked = await AccessAuthorizationService.RevokeAuthenticatedApprovalAsync(_db, companyId, requestId);
+            var revoked = await AccessAuthorizationService.RevokeAuthenticatedApprovalAsync(_db, companyId, requestId, actorUserId: UserId);
             if (!revoked)
                 return NotFound();
             if (_linkedEntries != null && !string.IsNullOrWhiteSpace(approvalJson))
@@ -379,7 +374,7 @@ namespace Api.Controllers
                 if (addedRoleIds != null && addedRoleIds.Count > 0 &&
                     (!string.IsNullOrWhiteSpace(request.ApprovedByUserId) || !string.IsNullOrWhiteSpace(request.ApprovalRequestId)))
                 {
-                    AccessAuthorizationService.ConsumeMatchingApprovalAsync(
+                    var consumed = AccessAuthorizationService.ConsumeMatchingApprovalAsync(
                         _db,
                         companyId,
                         UserId,
@@ -389,6 +384,9 @@ namespace Api.Controllers
                         addedRoleIds,
                         request.ApprovalRequestId,
                         request.ApprovedByUserId).GetAwaiter().GetResult();
+                    if (!consumed)
+                        return Problem(statusCode: 403, title: "Approval consumption failed",
+                            detail: "The independent approval could not be consumed or has expired.");
                 }
 
                 _db.SaveChanges();

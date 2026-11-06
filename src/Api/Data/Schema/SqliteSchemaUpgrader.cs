@@ -146,6 +146,7 @@ namespace Api.Data.Schema
                 EnsurePriorPeriodAdjustment(connection);
                 EnsureSecurityTables(connection);
                 EnsureWorkspaceOperatingPolicy(connection);
+                EnsureAuditEvidenceIntegrity(connection);
             }
             finally
             {
@@ -154,6 +155,21 @@ namespace Api.Data.Schema
                     connection.Close();
                 }
             }
+        }
+
+        private static void EnsureAuditEvidenceIntegrity(DbConnection connection)
+        {
+            if (!TableExists(connection, "AuditLog")) return;
+            using var transaction = connection.BeginTransaction();
+            foreach (var sql in new[] { SqliteAuditEvidenceSql.Backfill, SqliteAuditEvidenceSql.Index,
+                SqliteAuditEvidenceSql.UpdateTrigger, SqliteAuditEvidenceSql.DeleteTrigger })
+            {
+                using var command = connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
+            transaction.Commit();
         }
 
         private static void EnsureLifecycleColumns(DbConnection connection)

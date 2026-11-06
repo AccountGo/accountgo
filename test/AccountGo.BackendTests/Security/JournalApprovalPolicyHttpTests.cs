@@ -601,6 +601,104 @@ namespace AccountGo.BackendTests.Security
             var posted = await PostJournal(team, journalId,
                 body.GetProperty("approvalRequestId").GetString(), body.GetProperty("approverUserId").GetString());
             Assert.True(posted.IsSuccessStatusCode, await posted.Content.ReadAsStringAsync());
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var requestId = body.GetProperty("approvalRequestId").GetString();
+                var rows = db.AuditLogs.IgnoreQueryFilters().Where(a => a.CompanyId == team.CompanyId && a.RecordId == requestId).ToList();
+                Assert.Contains(rows, a => a.TableName == "__AccessDelegationApprovalState" && a.OriginalValue == "Consumed");
+                var persisted = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(rows.Single(a => a.TableName == "__AccessDelegationApproval").NewValue)!;
+                Assert.Equal(journalId.ToString(), persisted.ResourceId);
+            }
+            var retry = await PostJournal(team, journalId,
+                body.GetProperty("approvalRequestId").GetString(), body.GetProperty("approverUserId").GetString());
+            Assert.True(retry.StatusCode == HttpStatusCode.Conflict, await retry.Content.ReadAsStringAsync());
+            Assert.Equal("approval_already_used", (await Fixture.Json(retry)).GetProperty("code").GetString());
+        }
+
+        [Fact]
+        public async Task IndependentReview_ConcurrentPostsConsumeApprovalOnce()
+        {
+            var team = await CreateTeam();
+            var journalId = await SaveDraft(team);
+            var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                token: team.Reviewer.Token, org: team.Slug);
+            Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
+            var body = await Fixture.Json(approval);
+            var approvalId = body.GetProperty("approvalRequestId").GetString();
+            var approverId = body.GetProperty("approverUserId").GetString();
+            var results = await Task.WhenAll(PostJournal(team, journalId, approvalId, approverId), PostJournal(team, journalId, approvalId, approverId));
+            Assert.Single(results, r => r.IsSuccessStatusCode);
+            // Loser may hit approval_already_used (unique/DbUpdate) or already-posted BadRequest if the
+            // winner committed before the loser's WasConsumed check; both refuse a second post.
+            Assert.Single(results, r => r.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.BadRequest);
+            using var scope = _fixture.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            Assert.Equal(1, await db.AuditLogs.IgnoreQueryFilters().CountAsync(a => a.CompanyId == team.CompanyId &&
+                a.TableName == "__AccessDelegationApprovalState" && a.RecordId == approvalId && a.OriginalValue == "Consumed"));
+            Assert.Equal(1, await db.GeneralLedgerHeaders.IgnoreQueryFilters().CountAsync(g => g.CompanyId == team.CompanyId && g.SourceDocumentId == journalId &&
+                g.DocumentType == Core.Domain.DocumentTypes.JournalEntry));
+        }
+
+        [Fact]
+        public async Task IndependentReview_EarlierPreparerCannotPostAfterAnotherPreparer()
+        {
+            var team = await CreateTeam();
+            var journalId = await SaveDraft(team);
+            var loaded = await _fixture.Send(HttpMethod.Get, $"/api/Financials/JournalEntry?id={journalId}", token: team.Reviewer.Token, org: team.Slug);
+            Assert.Equal(HttpStatusCode.OK, loaded.StatusCode);
+            var draft = await Fixture.Json(loaded);
+            var saved = await _fixture.Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft, token: team.Reviewer.Token, org: team.Slug);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var response = await PostJournal(team, journalId);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Equal("SEPARATION_OF_DUTIES_VIOLATION", (await Fixture.Json(response)).GetProperty("code").GetString());
+            var reviewerApproval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                token: team.Reviewer.Token, org: team.Slug);
+            Assert.Equal(HttpStatusCode.Forbidden, reviewerApproval.StatusCode);
+            var independent = await _fixture.CreateUser($"independent-{team.Slug}@example.com");
+            await _fixture.AddMemberDirectAsync(team.CompanyId, independent.Id, CompanyMemberRole.Admin, new[] { "Accountant" });
+            var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                token: independent.Token, org: team.Slug);
+            Assert.True(approval.IsSuccessStatusCode, await approval.Content.ReadAsStringAsync());
+            var body = await Fixture.Json(approval);
+            var posted = await PostJournal(team, journalId, body.GetProperty("approvalRequestId").GetString(), body.GetProperty("approverUserId").GetString());
+            Assert.True(posted.IsSuccessStatusCode, await posted.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
+        public async Task IndependentReview_ThirdPersonCanPostAfterTwoPreparers()
+        {
+            var team = await CreateTeam();
+            var journalId = await SaveDraft(team);
+            var loaded = await _fixture.Send(HttpMethod.Get, $"/api/Financials/JournalEntry?id={journalId}", token: team.Reviewer.Token, org: team.Slug);
+            Assert.Equal(HttpStatusCode.OK, loaded.StatusCode);
+            var saved = await _fixture.Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", await Fixture.Json(loaded), token: team.Reviewer.Token, org: team.Slug);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var independent = await _fixture.CreateUser($"poster-{team.Slug}@example.com");
+            await _fixture.AddMemberDirectAsync(team.CompanyId, independent.Id, CompanyMemberRole.Admin, new[] { "Accountant" });
+            var posted = await _fixture.Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = journalId }, token: independent.Token, org: team.Slug);
+            Assert.True(posted.IsSuccessStatusCode, await posted.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
+        public async Task IndependentReview_RevokedApprovalCannotAuthorizePost()
+        {
+            var team = await CreateTeam();
+            var journalId = await SaveDraft(team);
+            var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() }, token: team.Reviewer.Token, org: team.Slug);
+            Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
+            var body = await Fixture.Json(approval);
+            var approvalId = body.GetProperty("approvalRequestId").GetString();
+            var approverId = body.GetProperty("approverUserId").GetString();
+            var revoke = await _fixture.Send(HttpMethod.Delete, Current + "/members/access-approvals/" + approvalId, token: team.Owner.Token, org: team.Slug);
+            Assert.Equal(HttpStatusCode.NoContent, revoke.StatusCode);
+            var posted = await PostJournal(team, journalId, approvalId, approverId);
+            Assert.Equal(HttpStatusCode.Forbidden, posted.StatusCode);
         }
 
         [Fact]

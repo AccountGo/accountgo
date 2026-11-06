@@ -265,7 +265,9 @@ namespace AccountGo.BackendTests
             Assert.Equal(25m, posted.GetProperty("totalCredit").GetDecimal());
             draft.Memo = "Must not replace posted memo";
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft)).StatusCode);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr)).StatusCode);
+            var repeatedPost = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr);
+            Assert.Equal(HttpStatusCode.Conflict, repeatedPost.StatusCode);
+            Assert.Equal("approval_already_used", (await Json(repeatedPost)).GetProperty("code").GetString());
             var after = Assert.Single((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray());
             Assert.Equal(posted.GetRawText(), after.GetRawText());
             var voucher = await Json(await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + draft.Id));
