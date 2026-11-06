@@ -77,8 +77,12 @@ namespace Api.Data
             {
                 entity.ToTable("SecurityAuditEvents");
                 entity.HasKey(e => e.Id);
+                entity.Property(e => e.CorrelationId).HasMaxLength(128);
+                entity.Property(e => e.Outcome).HasMaxLength(16);
                 entity.HasIndex(e => e.EventType);
                 entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+                entity.HasIndex(e => new { e.CompanyId, e.CreatedAt });
+                entity.HasIndex(e => new { e.EventType, e.CreatedAt });
             });
 
             builder.Entity<UserRecoveryCode>(entity =>

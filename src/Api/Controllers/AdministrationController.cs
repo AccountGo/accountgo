@@ -42,6 +42,7 @@ namespace Api.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly IPlanCatalog _plans;
+        private readonly Api.Service.ISecurityAuditService? _securityAudit;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -51,7 +52,8 @@ namespace Api.Controllers
             ISecurityService securityService,
             UserManager<ApplicationUser> userManager,
             Core.Tenancy.ITenantContext tenantContext,
-            IPlanCatalog plans)
+            IPlanCatalog plans,
+            Api.Service.ISecurityAuditService? securityAudit = null)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -62,6 +64,63 @@ namespace Api.Controllers
             _userManager = userManager;
             _tenantContext = tenantContext;
             _plans = plans;
+            _securityAudit = securityAudit;
+        }
+
+        private Dictionary<int, string> SnapshotRolePermissions(ApiDbContext? db, int roleId)
+        {
+            if (roleId <= 0)
+                return new Dictionary<int, string>();
+            if (db != null)
+            {
+                return db.Set<Core.Domain.Security.SecurityRolePermission>()
+                    .Where(srp => srp.SecurityRoleId == roleId && srp.SecurityPermission != null)
+                    .Select(srp => new { srp.SecurityPermissionId, srp.SecurityPermission.Name })
+                    .ToList()
+                    .ToDictionary(p => p.SecurityPermissionId, p => p.Name);
+            }
+            var role = _securityService.GetSecurityRole(roleId);
+            return role?.Permissions?
+                .Where(p => p?.SecurityPermission != null)
+                .GroupBy(p => p.SecurityPermissionId)
+                .ToDictionary(g => g.Key, g => g.First().SecurityPermission.Name)
+                ?? new Dictionary<int, string>();
+        }
+
+        /// <summary>Best-effort <c>platform.role.change</c> event (no workspace); awaited in-request. Never throws.</summary>
+        private void AuditPlatformRoleChange(
+            string operation,
+            int? roleId,
+            string? roleName,
+            IReadOnlyDictionary<int, string> permissionsBefore,
+            IReadOnlyDictionary<int, string> permissionsAfter)
+        {
+            var audit = _securityAudit ?? HttpContext?.RequestServices?.GetService(typeof(Api.Service.ISecurityAuditService)) as Api.Service.ISecurityAuditService;
+            if (audit == null)
+                return;
+            try
+            {
+                var added = permissionsAfter.Where(p => !permissionsBefore.ContainsKey(p.Key)).OrderBy(p => p.Key).ToList();
+                var removed = permissionsBefore.Where(p => !permissionsAfter.ContainsKey(p.Key)).OrderBy(p => p.Key).ToList();
+                var actorUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+                audit.LogEventAsync(
+                    "platform.role.change",
+                    "success",
+                    actorUserId,
+                    null,
+                    new
+                    {
+                        operation,
+                        roleId,
+                        roleName,
+                        permissionsAdded = added.Select(p => new { id = p.Key, name = p.Value }).ToList(),
+                        permissionsRemoved = removed.Select(p => new { id = p.Key, name = p.Value }).ToList()
+                    }).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Best effort: auditing must not change the request outcome.
+            }
         }
 
         [Api.Filters.RequireWorkspaceRole(Core.Domain.CompanyMemberRole.Owner)]
@@ -182,9 +241,9 @@ namespace Api.Controllers
         [Api.Filters.RequirePermission(Core.Domain.Security.SystemPermissions.AuditLogsView)]
         [HttpGet]
         [Route("auditlogs")] // api/Administration/AuditLogs
-        public IActionResult AuditLogs()
+        public IActionResult AuditLogs([FromQuery] int? beforeId = null, [FromQuery] int limit = 100)
         {
-            var auditLogs = _adminService.AuditLogs();
+            var auditLogs = _adminService.AuditLogs(beforeId, limit);
             var auditLogsDto = auditLogs.Select(log => new AuditLog()
             {
                 Id = log.Id,
@@ -263,6 +322,23 @@ namespace Api.Controllers
 
             var displayName = !string.IsNullOrWhiteSpace(request.DisplayName) ? request.DisplayName.Trim() : request.Name.Trim();
             var permissionIds = request.PermissionIds ?? new List<int>();
+            var permissionsBeforeSave = SnapshotRolePermissions(db, request.Id);
+
+            IActionResult FinishSave(IActionResult saveResult)
+            {
+                if (saveResult is OkObjectResult)
+                {
+                    var savedName = request.Name.Trim();
+                    var savedRoleId = request.Id > 0 ? request.Id : _securityService.GetRole(savedName)?.Id ?? 0;
+                    AuditPlatformRoleChange(
+                        request.Id > 0 ? "update" : "create",
+                        savedRoleId > 0 ? savedRoleId : null,
+                        savedName,
+                        permissionsBeforeSave,
+                        SnapshotRolePermissions(db, savedRoleId));
+                }
+                return saveResult;
+            }
 
             var affectedCompanyIds = request.Id > 0 && db != null
                 ? db.CompanyMemberSecurityRoles
@@ -284,7 +360,7 @@ namespace Api.Controllers
             {
                 // Eligibility must re-check under the coordination lock so a concurrent member removal
                 // cannot race past a pre-lock validation and leave independent review unusable.
-                return policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
+                return FinishSave(policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
                 {
                     if (reviewerEligibility != null && permissionNames != null)
                     {
@@ -313,11 +389,11 @@ namespace Api.Controllers
                         guard.AdvanceRevision();
                     _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, permissionIds);
                     return Ok(new { success = true });
-                });
+                }));
             }
 
             _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, permissionIds);
-            return Ok(new { success = true });
+            return FinishSave(Ok(new { success = true }));
         }
 
         [Authorize(Roles = PlatformAdminRole)]
@@ -354,9 +430,19 @@ namespace Api.Controllers
                     .ToList()
                 : new List<int>();
 
+            var permissionsBeforeDelete = SnapshotRolePermissions(db, id);
+            var deletedRoleName = role.Name;
+
+            IActionResult FinishDelete(IActionResult deleteResult)
+            {
+                if (deleteResult is OkObjectResult)
+                    AuditPlatformRoleChange("delete", id, deletedRoleName, permissionsBeforeDelete, new Dictionary<int, string>());
+                return deleteResult;
+            }
+
             if (affectedCompanyIds.Count > 0 && policyTransaction != null)
             {
-                return policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
+                return FinishDelete(policyTransaction.ExecuteAcrossCompanies(affectedCompanyIds, guards =>
                 {
                     if (reviewerEligibility != null)
                     {
@@ -386,11 +472,11 @@ namespace Api.Controllers
                         guard.AdvanceRevision();
                     _securityService.DeleteRole(id);
                     return Ok(new { success = true, message = "Role deleted successfully." });
-                });
+                }));
             }
 
             _securityService.DeleteRole(id);
-            return Ok(new { success = true, message = "Role deleted successfully." });
+            return FinishDelete(Ok(new { success = true, message = "Role deleted successfully." }));
         }
 
         private static User MapToUserDto(Core.Domain.Security.User user)

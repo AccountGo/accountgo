@@ -575,6 +575,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("GeneralLedger")]
         [RequirePermission(SystemPermissions.FinancialsJournalView)]
+        [AuditDataAccess("general_ledger")]
         public ActionResult GeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
             string? accountCode = null,
@@ -605,6 +606,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("trialbalance")]
         [RequirePermission(SystemPermissions.ReportsView)]
+        [AuditDataAccess("trial_balance")]
         public ActionResult TrialBalance(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
@@ -622,6 +624,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("BalanceSheet")]
         [RequirePermission(SystemPermissions.ReportsView)]
+        [AuditDataAccess("balance_sheet")]
         public ActionResult BalanceSheet(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
@@ -639,6 +642,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("IncomeStatement")]
         [RequirePermission(SystemPermissions.ReportsView)]
+        [AuditDataAccess("income_statement")]
         public IActionResult IncomeStatement(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
@@ -655,6 +659,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("CashFlow")]
         [RequirePermission(SystemPermissions.ReportsView)]
+        [AuditDataAccess("cash_flow")]
         public IActionResult CashFlow(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
@@ -945,6 +950,7 @@ namespace Api.Controllers
         [Route("ExportStructure")]
         [RequireModule("financials")]
         [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
+        [AuditDataAccess("export_structure", "data.export")]
         public IActionResult ExportStructure()
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportStructure, SystemPermissions.FinancialsAccountsManage, out var denied))
@@ -959,6 +965,7 @@ namespace Api.Controllers
         [Route("ExportSnapshot")]
         [RequireModule("financials", "reports")]
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
+        [AuditDataAccess("export_snapshot", "data.export")]
         public IActionResult ExportSnapshot()
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportSnapshot, SystemPermissions.FinancialsAccountsView, out var denied))
@@ -973,6 +980,7 @@ namespace Api.Controllers
         [Route("ExportTemplate")]
         [RequireModule("financials")]
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
+        [AuditDataAccess("export_template", "data.export")]
         public IActionResult ExportTemplate()
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsExportTemplate, SystemPermissions.FinancialsAccountsView, out var denied))
@@ -986,6 +994,7 @@ namespace Api.Controllers
         [Route("ExportAccounts")]
         [RequireModule("financials", "reports")]
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
+        [AuditDataAccess("export_accounts", "data.export")]
         public IActionResult ExportAccounts([FromQuery] string mode = "structure")
         {
             if (string.Equals(mode, "snapshot", StringComparison.OrdinalIgnoreCase))

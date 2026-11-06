@@ -287,6 +287,10 @@ namespace Api.Data.Migrations.IdentityDb
                     b.Property<int?>("CompanyId")
                         .HasColumnType("int");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -300,6 +304,10 @@ namespace Api.Data.Migrations.IdentityDb
                     b.Property<string>("MetadataJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<string>("UserAgent")
                         .HasColumnType("nvarchar(max)");
 
@@ -309,6 +317,10 @@ namespace Api.Data.Migrations.IdentityDb
                     b.HasKey("Id");
 
                     b.HasIndex("EventType");
+
+                    b.HasIndex("CompanyId", "CreatedAt");
+
+                    b.HasIndex("EventType", "CreatedAt");
 
                     b.HasIndex("UserId", "CreatedAt");
 

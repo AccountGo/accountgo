@@ -880,6 +880,13 @@ WHERE ""DisabledModulesJson"" IS NULL
             using var cmd = connection.CreateCommand();
             cmd.CommandText = SecurityTablesSql;
             cmd.ExecuteNonQuery();
+            AddColumnIfMissing(connection, "SecurityAuditEvents", "CorrelationId", "TEXT NULL");
+            AddColumnIfMissing(connection, "SecurityAuditEvents", "Outcome", "TEXT NULL");
+            using var idx = connection.CreateCommand();
+            idx.CommandText = @"
+                CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_CompanyId_CreatedAt"" ON ""SecurityAuditEvents"" (""CompanyId"", ""CreatedAt"");
+                CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_EventType_CreatedAt"" ON ""SecurityAuditEvents"" (""EventType"", ""CreatedAt"");";
+            idx.ExecuteNonQuery();
         }
 
         private static void EnsureWorkspaceOperatingPolicy(DbConnection connection)
@@ -1057,10 +1064,14 @@ WHERE NOT EXISTS (
                 ""IpAddress"" TEXT NULL,
                 ""UserAgent"" TEXT NULL,
                 ""MetadataJson"" TEXT NULL,
+                ""CorrelationId"" TEXT NULL,
+                ""Outcome"" TEXT NULL,
                 ""CreatedAt"" TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_EventType"" ON ""SecurityAuditEvents"" (""EventType"");
             CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_UserId_CreatedAt"" ON ""SecurityAuditEvents"" (""UserId"", ""CreatedAt"");
+            CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_CompanyId_CreatedAt"" ON ""SecurityAuditEvents"" (""CompanyId"", ""CreatedAt"");
+            CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_EventType_CreatedAt"" ON ""SecurityAuditEvents"" (""EventType"", ""CreatedAt"");
 
             CREATE TABLE IF NOT EXISTS ""UserRecoveryCodes"" (
                 ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_UserRecoveryCodes"" PRIMARY KEY AUTOINCREMENT,

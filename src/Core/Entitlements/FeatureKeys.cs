@@ -13,6 +13,12 @@ namespace Core.Entitlements
         /// community edition is allowed by the compound gate without emitting it.
         /// </summary>
         public const string BankingStatementImport = "banking.statement_import";
+
+        /// <summary>Full workspace activity history, security-event reads and audit export.</summary>
+        public const string AuditHistoryFull = "audit.history.full";
+
+        /// <summary>Workspace activity list limited to a recent window.</summary>
+        public const string AuditActivity = "audit.activity";
     }
 
     /// <summary>Well-known plan keys shared by community and hosted entitlement engines.</summary>

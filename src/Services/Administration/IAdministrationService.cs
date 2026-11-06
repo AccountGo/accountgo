@@ -42,7 +42,7 @@ namespace Services.Administration
         bool IsSystemInitialized();
         void SaveUser(User user);
         User GetUser(string username);
-        IEnumerable<AuditLog> AuditLogs();
+        IEnumerable<AuditLog> AuditLogs(int? beforeId = null, int limit = 100);
 
         TenantSubscriptionDto GetCurrentSubscription();
         TenantSubscriptionDto UpdateSubscription(UpdateSubscriptionDto dto);

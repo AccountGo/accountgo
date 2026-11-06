@@ -608,6 +608,7 @@ namespace Api.Controllers
         [HttpGet("Reconciliations/{id:int}/Report.pdf")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
+        [AuditDataAccess("reconciliation_report", "data.export")]
         public IActionResult ReconciliationReportPdf(int id)
         {
             try

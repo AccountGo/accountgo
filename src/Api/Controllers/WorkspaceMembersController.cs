@@ -34,6 +34,7 @@ namespace Api.Controllers
         private readonly IWorkspaceReviewerEligibility _reviewerEligibility;
         private readonly IEntitlementService _entitlements;
         private readonly LinkedEntryService _linkedEntries;
+        private readonly ISecurityAuditService _securityAudit;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         private bool IsOwner => _tenant.Role == CompanyMemberRole.Owner;
 
@@ -56,7 +57,8 @@ namespace Api.Controllers
             IWorkspacePolicyTransaction policyTransaction = null,
             IWorkspaceReviewerEligibility reviewerEligibility = null,
             IEntitlementService entitlements = null,
-            LinkedEntryService linkedEntries = null)
+            LinkedEntryService linkedEntries = null,
+            ISecurityAuditService securityAudit = null)
         {
             _db = db;
             _identity = identity;
@@ -67,7 +69,33 @@ namespace Api.Controllers
             _reviewerEligibility = reviewerEligibility;
             _entitlements = entitlements;
             _linkedEntries = linkedEntries;
+            _securityAudit = securityAudit;
         }
+
+        private ISecurityAuditService Audit =>
+            _securityAudit ?? HttpContext?.RequestServices?.GetService<ISecurityAuditService>();
+
+        /// <summary>
+        /// Best-effort security event. Awaited in-request so the shared identity DbContext is never used
+        /// concurrently and the write cannot outlive the request scope. Never throws.
+        /// </summary>
+        private async System.Threading.Tasks.Task AuditEventAsync(string eventType, string outcome, object metadata)
+        {
+            var audit = Audit;
+            if (audit == null)
+                return;
+            try
+            {
+                await audit.LogEventAsync(eventType, outcome, UserId, _tenant.CompanyId, metadata);
+            }
+            catch
+            {
+                // Best effort: auditing must not change the request outcome.
+            }
+        }
+
+        private void AuditEvent(string eventType, string outcome, object metadata) =>
+            AuditEventAsync(eventType, outcome, metadata).GetAwaiter().GetResult();
 
         private IWorkspaceReviewerEligibility ReviewerEligibility =>
             _reviewerEligibility
@@ -225,6 +253,17 @@ namespace Api.Controllers
                     request.SecurityRoleIds,
                     request.ResourceId);
 
+                await AuditEventAsync("approval.grant", "success", new
+                {
+                    requestId,
+                    operation = opKey,
+                    targetMemberId = request.TargetMemberId,
+                    targetUserId = request.TargetUserId,
+                    resourceId = request.ResourceId,
+                    securityRoleIds = request.SecurityRoleIds,
+                    expiresAt
+                });
+
                 return StatusCode(StatusCodes.Status201Created, new
                 {
                     approvalRequestId = requestId,
@@ -277,6 +316,13 @@ namespace Api.Controllers
             var revoked = await AccessAuthorizationService.RevokeAuthenticatedApprovalAsync(_db, companyId, requestId, actorUserId: UserId);
             if (!revoked)
                 return NotFound();
+            string revokedOperation = null;
+            if (!string.IsNullOrWhiteSpace(approvalJson))
+            {
+                try { revokedOperation = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(approvalJson)?.OperationKey; }
+                catch (System.Text.Json.JsonException) { }
+            }
+            await AuditEventAsync("approval.revoke", "success", new { requestId, operation = revokedOperation });
             if (_linkedEntries != null && !string.IsNullOrWhiteSpace(approvalJson))
             {
                 var approval = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(approvalJson);
@@ -296,7 +342,8 @@ namespace Api.Controllers
             if (transaction == null)
                 return Problem(statusCode: 503, title: "Policy service unavailable", detail: "Workspace policy coordination is unavailable.");
 
-            return transaction.Execute<IActionResult>(companyId, guard =>
+            object roleChangeAudit = null;
+            var updateResult = transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var member = FindMember(memberId);
                 if (member == null)
@@ -356,6 +403,8 @@ namespace Api.Controllers
                         return blocked;
                 }
 
+                var previousRole = member.Role;
+                var previousSecurityRoleIds = member.SecurityRoles.Select(sr => sr.SecurityRoleId).OrderBy(id => id).ToList();
                 member.Role = role;
                 if (request.SecurityRoleIds != null)
                 {
@@ -390,9 +439,22 @@ namespace Api.Controllers
                 }
 
                 _db.SaveChanges();
+                roleChangeAudit = new
+                {
+                    targetMemberId = member.Id,
+                    targetUserId = member.UserId,
+                    oldRole = previousRole.ToString(),
+                    newRole = member.Role.ToString(),
+                    oldSecurityRoleIds = previousSecurityRoleIds,
+                    newSecurityRoleIds = request.SecurityRoleIds?.Distinct().OrderBy(id => id).ToList(),
+                    approvalRequestId = request.ApprovalRequestId
+                };
                 AuthService.InvalidateContextCache();
                 return NoContent();
             });
+            if (roleChangeAudit != null)
+                AuditEvent("member.role.change", "success", roleChangeAudit);
+            return updateResult;
         }
 
         [HttpDelete("members/{memberId:int}")]
@@ -406,7 +468,8 @@ namespace Api.Controllers
             if (transaction == null)
                 return Problem(statusCode: 503, title: "Policy service unavailable", detail: "Workspace policy coordination is unavailable.");
 
-            return transaction.Execute<IActionResult>(companyId, guard =>
+            object? removeAudit = null;
+            var removeResult = transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var member = FindMember(memberId);
                 if (member == null)
@@ -435,9 +498,19 @@ namespace Api.Controllers
                 _db.CompanyMemberSecurityRoles.RemoveRange(member.SecurityRoles);
                 _db.CompanyMembers.Remove(member);
                 _db.SaveChanges();
+                removeAudit = new
+                {
+                    targetMemberId = member.Id,
+                    targetUserId = member.UserId,
+                    role = member.Role.ToString(),
+                    self
+                };
                 AuthService.InvalidateContextCache();
                 return NoContent();
             });
+            if (removeAudit != null)
+                AuditEvent("member.remove", "success", removeAudit);
+            return removeResult;
         }
 
         public class TransferRequest
@@ -720,6 +793,7 @@ namespace Api.Controllers
                 return Problem(statusCode: 503, title: "Workspace policy coordination is unavailable.");
 
             CompanyMember? targetMemberRef = null;
+            object approveAudit = null;
             var result = transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var request = _db.WorkspaceAccessRequests
@@ -772,6 +846,7 @@ namespace Api.Controllers
 
                 // Atomically update target member roles
                 var existingRoleIds = targetMember.SecurityRoles.Select(sr => sr.SecurityRoleId).ToHashSet();
+                var previousRoleIds = existingRoleIds.OrderBy(id => id).ToList();
                 foreach (var roleId in requestedRoleIds)
                 {
                     if (!existingRoleIds.Contains(roleId))
@@ -821,11 +896,23 @@ namespace Api.Controllers
 
                 _db.SaveChanges();
                 targetMemberRef = targetMember;
+                approveAudit = new
+                {
+                    requestId = request.RequestId,
+                    targetMemberId = targetMember.Id,
+                    targetUserId = targetMember.UserId,
+                    role = targetMember.Role.ToString(),
+                    oldSecurityRoleIds = previousRoleIds,
+                    newSecurityRoleIds = targetMember.SecurityRoles.Select(sr => sr.SecurityRoleId).OrderBy(id => id).ToList()
+                };
                 return Ok(new { message = "Access request approved and functional roles applied successfully.", status = "Applied" });
             });
 
             if (result is not OkObjectResult)
                 return result;
+
+            if (approveAudit != null)
+                await AuditEventAsync("member.role.change", "success", approveAudit);
 
             AccessAuthorizationService.BumpGlobalSecurityRevision();
             AuthService.InvalidateContextCache();
@@ -1008,6 +1095,7 @@ namespace Api.Controllers
             if (transaction == null)
                 return Problem(statusCode: 503, title: "Workspace access setup is unavailable.");
 
+            object ownerSetupAudit = null;
             var result = transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var verification = ContractAVerifier.Verify(_db, companyId, actor, ids);
@@ -1030,11 +1118,22 @@ namespace Api.Controllers
                         NewValue = System.Text.Json.JsonSerializer.Serialize(current.Union(additions).OrderBy(id => id))
                     });
                     guard.AdvanceRevision();
+                    ownerSetupAudit = new
+                    {
+                        source = "owner_access_setup",
+                        targetMemberId = owner.Id,
+                        targetUserId = owner.UserId,
+                        role = owner.Role.ToString(),
+                        oldSecurityRoleIds = current.OrderBy(id => id).ToList(),
+                        newSecurityRoleIds = current.Union(additions).OrderBy(id => id).ToList()
+                    };
                 }
                 return Ok(new { rolesAssigned = additions });
             });
             if (result is OkObjectResult)
             {
+                if (ownerSetupAudit != null)
+                    AuditEvent("member.role.change", "success", ownerSetupAudit);
                 AccessAuthorizationService.BumpGlobalSecurityRevision();
                 AuthService.InvalidateContextCache();
             }
@@ -1065,6 +1164,7 @@ namespace Api.Controllers
                     roleIdsToAssign.Add(defaultRole.Id);
             }
 
+            object accessSetupAudit = null;
             var result = transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var company = _db.Companies.SingleOrDefault(c => c.Id == companyId);
@@ -1077,6 +1177,7 @@ namespace Api.Controllers
                     return Problem(statusCode: 403, title: verification.Title, detail: verification.Detail);
 
                 var callerMember = verification.OwnerMember!;
+                var roleIdsBeforeSetup = callerMember.SecurityRoles.Select(sr => sr.SecurityRoleId).OrderBy(id => id).ToList();
                 foreach (var roleId in roleIdsToAssign)
                 {
                     if (!callerMember.SecurityRoles.Any(sr => sr.SecurityRoleId == roleId))
@@ -1107,6 +1208,16 @@ namespace Api.Controllers
                     NewValue = "Completed"
                 });
 
+                accessSetupAudit = new
+                {
+                    source = "access_setup",
+                    targetMemberId = callerMember.Id,
+                    targetUserId = callerMember.UserId,
+                    role = callerMember.Role.ToString(),
+                    oldSecurityRoleIds = roleIdsBeforeSetup,
+                    newSecurityRoleIds = roleIdsBeforeSetup.Union(roleIdsToAssign).OrderBy(id => id).ToList()
+                };
+
                 return Ok(new
                 {
                     message = "Initial access setup completed successfully.",
@@ -1116,6 +1227,8 @@ namespace Api.Controllers
 
             if (result is OkObjectResult)
             {
+                if (accessSetupAudit != null)
+                    AuditEvent("member.role.change", "success", accessSetupAudit);
                 AccessAuthorizationService.BumpGlobalSecurityRevision();
                 AuthService.InvalidateContextCache();
             }
@@ -1132,7 +1245,8 @@ namespace Api.Controllers
             if (transaction == null)
                 return Problem(statusCode: 503, title: "Workspace policy coordination is unavailable.");
 
-            return transaction.Execute<IActionResult>(companyId, guard =>
+            object transferAudit = null;
+            var transferResult = transaction.Execute<IActionResult>(companyId, guard =>
             {
                 if (_db.PersonalWorkspaces.Any(p => p.CompanyId == companyId))
                     return Conflict(new ProblemDetails
@@ -1197,9 +1311,19 @@ namespace Api.Controllers
                 });
 
                 _db.SaveChanges();
+                transferAudit = new
+                {
+                    fromUserId = caller.UserId,
+                    toUserId = target.UserId,
+                    fromMemberId = caller.Id,
+                    toMemberId = target.Id
+                };
                 AuthService.InvalidateContextCache();
                 return NoContent();
             });
+            if (transferAudit != null)
+                AuditEvent("member.ownership.transfer", "success", transferAudit);
+            return transferResult;
         }
 
         internal static bool TryAssignableRole(string value, out CompanyMemberRole role)

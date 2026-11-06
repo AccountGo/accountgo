@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Api.Auditing;
 using Api.Authorization;
 using Api.Data;
 using Api.Service;
@@ -159,6 +160,11 @@ namespace Api.Filters
                 }
                 if (decision.ReasonCode == AccessReasonCode.PermissionDenied)
                 {
+                    AccessDeniedAudit.TryLog(
+                        context.HttpContext,
+                        _permission,
+                        decision.MissingPermission ?? _permission,
+                        decision.ReasonCodeString);
                     context.Result = Denied(decision.MissingPermission ?? _permission, decision.PolicyId, decision.PolicyVersion);
                     return;
                 }
@@ -172,6 +178,14 @@ namespace Api.Filters
                 problem.Extensions["code"] = decision.ReasonCodeString;
                 problem.Extensions["policyId"] = decision.PolicyId;
                 problem.Extensions["policyVersion"] = decision.PolicyVersion;
+                if (decision.HttpStatus == StatusCodes.Status403Forbidden)
+                {
+                    AccessDeniedAudit.TryLog(
+                        context.HttpContext,
+                        _permission,
+                        decision.MissingPermission ?? _permission,
+                        decision.ReasonCodeString);
+                }
                 context.Result = new ObjectResult(problem)
                 {
                     StatusCode = decision.HttpStatus
@@ -394,6 +408,7 @@ namespace Api.Filters
             {
                 if (decision.ReasonCode == AccessReasonCode.PermissionDenied && !string.IsNullOrWhiteSpace(decision.MissingPermission))
                 {
+                    AccessDeniedAudit.TryLog(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
                     context.Result = RequirePermissionAttribute.Denied(decision.MissingPermission!, decision.PolicyId, decision.PolicyVersion);
                     return;
                 }
@@ -406,6 +421,7 @@ namespace Api.Filters
                         tenantContext,
                         entitlements?.Options.SupportEmail,
                         requiredModules: decision.RequiredModules);
+                    AccessDeniedAudit.TryLog(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
                     context.Result = new ObjectResult(entProblem)
                     {
                         StatusCode = StatusCodes.Status403Forbidden
@@ -422,6 +438,8 @@ namespace Api.Filters
                 problem.Extensions["code"] = decision.ReasonCodeString;
                 problem.Extensions["policyId"] = decision.PolicyId;
                 problem.Extensions["policyVersion"] = decision.PolicyVersion;
+                if (decision.HttpStatus == StatusCodes.Status403Forbidden)
+                    AccessDeniedAudit.TryLog(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
                 context.Result = new ObjectResult(problem)
                 {
                     StatusCode = decision.HttpStatus
