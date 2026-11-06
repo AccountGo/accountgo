@@ -488,11 +488,11 @@ namespace Services.Financial
                     var authorizedOriginalJournal = _journalEntryRepo.Table.First(j => j.CompanyId == entry.CompanyId
                         && j.GeneralLedgerHeaderId == reversedJournalId!.Value && j.Posted == true);
                     var actorId = _auth.ResolveActorContext()?.UserId;
-                    var preparerId = _auditLogRepo?.Table
-                        .Where(a => a.CompanyId == entry.CompanyId && a.TableName == "__JournalEntryPreparer"
-                            && a.RecordId == authorizedOriginalJournal.Id.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                        .OrderByDescending(a => a.Id).Select(a => a.NewValue).FirstOrDefault()
-                        ?? actorId;
+                    var preparerIds = _auditLogRepo == null
+                        ? new HashSet<string>(StringComparer.Ordinal)
+                        : Core.Authorization.JournalEvidence.PreparerIds(_auditLogRepo.Table, entry.CompanyId, authorizedOriginalJournal.Id);
+                    var preparerId = preparerIds.FirstOrDefault() ?? actorId;
+                    if (preparerIds.Count == 0 && preparerId != null) preparerIds.Add(preparerId);
                     decision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
                         new Core.Authorization.AccessResourceContext
                         {
@@ -502,7 +502,8 @@ namespace Services.Financial
                             ResourceId = authorizedOriginalJournal.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
                             WorkflowState = "Draft",
                             IsPeriodLockedOrClosed = false,
-                            PreparedByUserId = preparerId
+                            PreparedByUserId = preparerId,
+                            PreparedByUserIds = preparerIds
                         });
                     if (!decision.Allowed && decision.ReasonCode == Core.Authorization.AccessReasonCode.IndependentApprovalRequired)
                         throw new LinkedEntryOperationException("linked_entry_reversal_requires_review", "The reversal requires an independent reviewer.");
@@ -2184,7 +2185,7 @@ namespace Services.Financial
             string aprHeader = null;
             string approverHeader = null;
             string entryFingerprint = null;
-            string persistedPreparer = null;
+            var preparerIds = new HashSet<string>(StringComparer.Ordinal);
             string effectivePreparer = null;
             Core.Authorization.AccessResourceContext postResource = null;
             if (posted)
@@ -2198,17 +2199,11 @@ namespace Services.Financial
                 else
                 {
                     if (_auditLogRepo != null && journalEntry.Id > 0)
-                    {
-                        var idStr = journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                        persistedPreparer = _auditLogRepo.Table
-                            .Where(a => a.TableName == "__JournalEntryPreparer" && a.RecordId == idStr)
-                            .OrderByDescending(a => a.Id)
-                            .Select(a => a.NewValue)
-                            .FirstOrDefault();
-                    }
+                        preparerIds = Core.Authorization.JournalEvidence.PreparerIds(_auditLogRepo.Table, journalEntry.CompanyId, journalEntry.Id);
 
                     var actor = _auth.ResolveActorContext();
-                    effectivePreparer = persistedPreparer ?? actor?.UserId ?? "system:draft-preparer";
+                    effectivePreparer = preparerIds.FirstOrDefault() ?? actor?.UserId ?? "system:draft-preparer";
+                    if (preparerIds.Count == 0) preparerIds.Add(effectivePreparer);
 
                     var req = _httpContextAccessor?.HttpContext?.Request;
                     aprHeader = AllowLinkedEntryMirrorPostingDepth.Value > 0 ? null : req?.Headers["X-Approval-Request-Id"].FirstOrDefault();
@@ -2248,6 +2243,7 @@ namespace Services.Financial
                         WorkflowState = isAlreadyPosted ? "Posted" : "Draft",
                         IsPeriodLockedOrClosed = false,
                         PreparedByUserId = effectivePreparer,
+                        PreparedByUserIds = preparerIds,
                         IndependentApproverUserId = approverHeader,
                         ApprovalRequestId = aprHeader
                     };
@@ -2282,28 +2278,22 @@ namespace Services.Financial
                     if (_auditLogRepo != null && journalEntry.Id > 0)
                     {
                         var idStr = journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                        var pendingApprovals = _auditLogRepo.Table
-                            .Where(a => a.TableName == "__AccessDelegationApproval" &&
-                                        a.OriginalValue == "Approved")
-                            .ToList();
+                        var pendingApprovals = Core.Authorization.ApprovalEvidence
+                            .Available(_auditLogRepo.Table, journalEntry.CompanyId).ToList();
 
                         foreach (var row in pendingApprovals)
                         {
                             if (string.IsNullOrWhiteSpace(row.NewValue)) continue;
-                            try
+                            Core.Authorization.PersistedAccessApprovalPayload p;
+                            try { p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(row.NewValue); }
+                            catch (System.Text.Json.JsonException) { continue; }
+                            if (p != null &&
+                                string.Equals(p.OperationKey, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) &&
+                                string.Equals(p.ResourceId, idStr, StringComparison.Ordinal))
                             {
-                                var p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(row.NewValue);
-                                if (p != null &&
-                                    string.Equals(p.OperationKey, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) &&
-                                    string.Equals(p.ResourceId, idStr, StringComparison.Ordinal))
-                                {
-                                    row.OriginalValue = "Revoked";
-                                    p.Status = "Revoked";
-                                    row.NewValue = System.Text.Json.JsonSerializer.Serialize(p);
-                                    _auditLogRepo.Update(row);
-                                }
+                                _auditLogRepo.Insert(Core.Authorization.ApprovalEvidence.State(
+                                    row, "Revoked", _auth.ResolveActorContext()?.UserId));
                             }
-                            catch { }
                         }
                     }
                 }
@@ -2363,18 +2353,15 @@ namespace Services.Financial
                             throw new InvalidOperationException("A general ledger header already exists for this journal entry.");
                     }
 
-                    // Reload latest persisted preparer under the guard to guard against concurrent edits changing preparer.
+                    // Reload all preparers under the posting guard.
                     if (_auditLogRepo != null && journalEntry.Id > 0)
                     {
-                        var idStr = journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                        var freshPreparer = _auditLogRepo.TableNoTracking
-                            .Where(a => a.TableName == "__JournalEntryPreparer" && a.RecordId == idStr)
-                            .OrderByDescending(a => a.Id)
-                            .Select(a => a.NewValue)
-                            .FirstOrDefault();
-                        if (!string.IsNullOrEmpty(freshPreparer))
+                        var freshPreparers = Core.Authorization.JournalEvidence.PreparerIds(
+                            _auditLogRepo.TableNoTracking, journalEntry.CompanyId, journalEntry.Id);
+                        if (freshPreparers.Count > 0)
                         {
-                            effectivePreparer = freshPreparer;
+                            preparerIds = freshPreparers;
+                            effectivePreparer = preparerIds.First();
                         }
                     }
 
@@ -2394,6 +2381,7 @@ namespace Services.Financial
                         WorkflowState = "Draft",
                         IsPeriodLockedOrClosed = _booksLockGuard?.IsDateLocked(journalEntry.Date) == true,
                         PreparedByUserId = effectivePreparer,
+                        PreparedByUserIds = preparerIds,
                         IndependentApproverUserId = approverHeader,
                         ApprovalRequestId = aprHeader
                     };
@@ -2451,20 +2439,18 @@ namespace Services.Financial
                             journalEntry.GeneralLedgerHeader = glEntry;
                             journalEntry.Posted = true;
 
-                            if (_auditLogRepo != null && !string.IsNullOrWhiteSpace(aprHeader) && AllowLinkedEntrySourcePostingDepth.Value <= 0)
+                            if (_auditLogRepo != null && !string.IsNullOrWhiteSpace(aprHeader))
                             {
-                                var approvalRow = _auditLogRepo.Table
-                                    .FirstOrDefault(a => a.CompanyId == journalEntry.CompanyId &&
-                                                        a.TableName == "__AccessDelegationApproval" &&
-                                                        a.RecordId == aprHeader &&
-                                                        a.OriginalValue == "Approved");
+                                var approvalRow = Core.Authorization.ApprovalEvidence
+                                    .Available(_auditLogRepo.Table, journalEntry.CompanyId)
+                                    .FirstOrDefault(a => a.RecordId == aprHeader);
                                 if (approvalRow == null)
                                 {
                                     throw new InvalidOperationException("The independent approval for posting could not be found or is not in Approved state.");
                                 }
 
                                 var p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(approvalRow.NewValue);
-                                if (p == null)
+                                if (!Core.Authorization.ApprovalEvidence.IsValidApproval(_auditLogRepo.TableNoTracking, approvalRow, p, journalEntry.CompanyId, DateTimeOffset.UtcNow, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost))
                                 {
                                     throw new InvalidOperationException("The independent approval payload is invalid.");
                                 }
@@ -2489,10 +2475,8 @@ namespace Services.Financial
                                 {
                                     throw new InvalidOperationException("The independent approval content fingerprint does not match the journal entry being posted.");
                                 }
-                                approvalRow.OriginalValue = "Consumed";
-                                p.Status = "Consumed";
-                                approvalRow.NewValue = System.Text.Json.JsonSerializer.Serialize(p);
-                                _auditLogRepo.Update(approvalRow);
+                                _auditLogRepo.Insert(Core.Authorization.ApprovalEvidence.State(
+                                    approvalRow, "Consumed", _auth.ResolveActorContext()?.UserId));
                             }
 
                             if (!isClosingEntry)

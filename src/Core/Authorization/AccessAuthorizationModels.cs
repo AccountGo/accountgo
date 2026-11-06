@@ -142,6 +142,7 @@ namespace Core.Authorization
         public string? WorkflowState { get; init; }
         public bool? IsPeriodLockedOrClosed { get; init; }
         public string? PreparedByUserId { get; init; }
+        public IReadOnlySet<string>? PreparedByUserIds { get; init; }
         public string? TargetUserId { get; init; }
         public int? TargetMemberId { get; init; }
         public string? TargetEmail { get; init; }

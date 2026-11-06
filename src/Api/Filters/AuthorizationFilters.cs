@@ -147,6 +147,16 @@ namespace Api.Filters
 
             if (!decision.Allowed)
             {
+                if ((decision.ReasonCode is AccessReasonCode.WorkflowStateInvalid or AccessReasonCode.SeparationOfDutiesViolation) && db != null && tenantContext.CompanyId.HasValue &&
+                    context.ActionDescriptor.RouteValues.TryGetValue("action", out var action) &&
+                    string.Equals(action, "PostJournalEntry", StringComparison.Ordinal) &&
+                    context.ActionArguments.Values.OfType<Dto.Financial.JournalEntry>().FirstOrDefault() is { Id: > 0 } journal &&
+                    ApprovalEvidence.WasConsumedForJournal(db.AuditLogs.AsNoTracking(), tenantContext.CompanyId.Value,
+                        context.HttpContext.Request.Headers["X-Approval-Request-Id"].FirstOrDefault(), journal.Id))
+                {
+                    context.Result = new ConflictObjectResult(new { code = "approval_already_used", detail = "This approval was already used. Ask for a new approval." });
+                    return;
+                }
                 if (decision.ReasonCode == AccessReasonCode.PermissionDenied)
                 {
                     context.Result = Denied(decision.MissingPermission ?? _permission, decision.PolicyId, decision.PolicyVersion);
@@ -189,21 +199,12 @@ namespace Api.Filters
             {
                 var companyId = tenantContext.CompanyId.Value;
                 var dto = context.ActionArguments.Values.OfType<Dto.Financial.JournalEntry>().FirstOrDefault();
-                string? persistedPreparer = null;
-                if (db != null && dto != null && dto.Id > 0)
-                {
-                    persistedPreparer = db.AuditLogs
-                        .AsNoTracking()
-                        .Where(a => a.CompanyId == companyId &&
-                                    a.TableName == "__JournalEntryPreparer" &&
-                                    a.RecordId == dto.Id.ToString())
-                        .OrderByDescending(a => a.Id)
-                        .Select(a => a.NewValue)
-                        .FirstOrDefault();
-                }
-
+                var preparerIds = db != null && dto != null && dto.Id > 0
+                    ? JournalEvidence.PreparerIds(db.AuditLogs.AsNoTracking(), companyId, dto.Id)
+                    : new HashSet<string>(StringComparer.Ordinal);
                 var currentActorId = tenantContext.UserId;
-                var effectivePreparer = persistedPreparer ?? currentActorId ?? "system:draft-preparer";
+                var effectivePreparer = preparerIds.FirstOrDefault() ?? currentActorId ?? "system:draft-preparer";
+                if (preparerIds.Count == 0) preparerIds.Add(effectivePreparer);
                 var aprHeader = context.HttpContext.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
                 var approverHeader = context.HttpContext.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
 
@@ -224,6 +225,7 @@ namespace Api.Filters
                             WorkflowState = "Draft",
                             IsPeriodLockedOrClosed = false,
                             PreparedByUserId = effectivePreparer,
+                        PreparedByUserIds = preparerIds,
                             IndependentApproverUserId = approverHeader,
                             ApprovalRequestId = aprHeader
                         };
@@ -239,6 +241,7 @@ namespace Api.Filters
                         WorkflowState = isPosted ? "Posted" : "Draft",
                         IsPeriodLockedOrClosed = false,
                         PreparedByUserId = effectivePreparer,
+                        PreparedByUserIds = preparerIds,
                         IndependentApproverUserId = approverHeader,
                         ApprovalRequestId = aprHeader
                     };
@@ -252,6 +255,7 @@ namespace Api.Filters
                     WorkflowState = "Draft",
                     IsPeriodLockedOrClosed = false,
                     PreparedByUserId = effectivePreparer,
+                    PreparedByUserIds = preparerIds,
                     IndependentApproverUserId = approverHeader,
                     ApprovalRequestId = aprHeader
                 };

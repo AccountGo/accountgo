@@ -251,7 +251,8 @@ namespace Services.Administration
         public IEnumerable<AuditLog> AuditLogs()
         {
             return _auditLogRepo.Table
-                .Where(a => a.TableName != "__AccessDelegationApproval")
+                .Where(a => a.TableName != Core.Authorization.ApprovalEvidence.ApprovalTable &&
+                            a.TableName != Core.Authorization.ApprovalEvidence.StateTable)
                 .AsEnumerable();
         }
 

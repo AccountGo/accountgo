@@ -982,7 +982,7 @@ namespace Api.Authorization
 
             if (policy.RequiresSeparationOfDuties)
             {
-                if (resource == null || string.IsNullOrWhiteSpace(resource.PreparedByUserId))
+                if (resource == null || (string.IsNullOrWhiteSpace(resource.PreparedByUserId) && (resource.PreparedByUserIds == null || resource.PreparedByUserIds.Count == 0)))
                 {
                     return AccessDecision.Deny(
                         AccessReasonCode.MissingContext,
@@ -1006,7 +1006,8 @@ namespace Api.Authorization
 
                 if (!singleActorAllowed
                     && !string.IsNullOrWhiteSpace(actor.UserId) &&
-                    string.Equals(resource.PreparedByUserId, actor.UserId, StringComparison.Ordinal))
+                    (resource.PreparedByUserIds?.Contains(actor.UserId) == true ||
+                     string.Equals(resource.PreparedByUserId, actor.UserId, StringComparison.Ordinal)))
                 {
                     var hasVerifiedApproval = await HasValidIndependentApproverAsync(
                         targetCompanyId,
@@ -1324,11 +1325,7 @@ namespace Api.Authorization
 
             // Require a server-persisted approval record created by an authenticated independent approver.
             // Caller-supplied approvedByUserId strings without a matching persisted approval record are rejected.
-            var candidates = await _db.AuditLogs
-                .AsNoTracking()
-                .Where(a => a.CompanyId == companyId.Value &&
-                            a.TableName == ApprovalAuditTableName &&
-                            a.OriginalValue == "Approved")
+            var candidates = await Core.Authorization.ApprovalEvidence.Available(_db.AuditLogs.AsNoTracking(), companyId.Value)
                 .OrderByDescending(a => a.Id)
                 .ToListAsync(cancellationToken);
 
@@ -1359,10 +1356,9 @@ namespace Api.Authorization
                     continue;
                 }
 
-                if (payload == null ||
-                    payload.CompanyId != companyId.Value ||
-                    !string.Equals(payload.Status, "Approved", StringComparison.Ordinal) ||
-                    payload.ExpiresAtUtc <= now ||
+                if (!Core.Authorization.ApprovalEvidence.IsValidApproval(_db.AuditLogs.AsNoTracking(), row, payload, companyId.Value, now, operationKey,
+                        string.Equals(operationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) ? resource?.ResourceId : null,
+                        string.Equals(operationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) ? resource?.ResourceFingerprint : null) ||
                     !string.Equals(payload.PolicyVersion, CatalogVersion, StringComparison.Ordinal))
                 {
                     continue;
@@ -1388,6 +1384,8 @@ namespace Api.Authorization
 
                 if (string.Equals(operationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal))
                 {
+                    if (resource?.PreparedByUserIds?.Contains(payload.ApproverUserId) == true)
+                        continue;
                     if (!string.Equals(payload.OperationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal))
                         continue;
 
@@ -1582,37 +1580,19 @@ namespace Api.Authorization
             ApiDbContext db,
             int companyId,
             string requestId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? actorUserId = null)
         {
             ArgumentNullException.ThrowIfNull(db);
             if (string.IsNullOrWhiteSpace(requestId))
                 return false;
 
-            var row = await db.AuditLogs
-                .FirstOrDefaultAsync(a =>
-                    a.CompanyId == companyId &&
-                    a.TableName == ApprovalAuditTableName &&
-                    a.RecordId == requestId &&
-                    a.OriginalValue == "Approved",
-                    cancellationToken);
-
+            var row = await Core.Authorization.ApprovalEvidence.Available(db.AuditLogs, companyId)
+                .FirstOrDefaultAsync(a => a.RecordId == requestId, cancellationToken);
             if (row == null)
                 return false;
 
-            row.OriginalValue = "Revoked";
-            if (!string.IsNullOrWhiteSpace(row.NewValue))
-            {
-                try
-                {
-                    var payload = JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(row.NewValue);
-                    if (payload != null)
-                    {
-                        payload.Status = "Revoked";
-                        row.NewValue = JsonSerializer.Serialize(payload);
-                    }
-                }
-                catch { }
-            }
+            db.AuditLogs.Add(Core.Authorization.ApprovalEvidence.State(row, "Revoked", actorUserId));
 
             await db.SaveChangesAsync(cancellationToken);
             BumpGlobalSecurityRevision();
@@ -1624,12 +1604,10 @@ namespace Api.Authorization
             int companyId,
             string operationKey,
             string resourceId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? actorUserId = null)
         {
-            var rows = await db.AuditLogs
-                .Where(a => a.CompanyId == companyId &&
-                            a.TableName == ApprovalAuditTableName &&
-                            a.OriginalValue == "Approved")
+            var rows = await Core.Authorization.ApprovalEvidence.Available(db.AuditLogs, companyId)
                 .ToListAsync(cancellationToken);
 
             var modified = false;
@@ -1643,9 +1621,7 @@ namespace Api.Authorization
                         string.Equals(p.OperationKey, operationKey, StringComparison.Ordinal) &&
                         string.Equals(p.ResourceId, resourceId, StringComparison.Ordinal))
                     {
-                        row.OriginalValue = "Revoked";
-                        p.Status = "Revoked";
-                        row.NewValue = JsonSerializer.Serialize(p);
+                        db.AuditLogs.Add(Core.Authorization.ApprovalEvidence.State(row, "Revoked", actorUserId));
                         modified = true;
                     }
                 }
@@ -1672,10 +1648,7 @@ namespace Api.Authorization
             string? operationKey = null,
             CancellationToken cancellationToken = default)
         {
-            var rows = await db.AuditLogs
-                .Where(a => a.CompanyId == companyId &&
-                            a.TableName == ApprovalAuditTableName &&
-                            a.OriginalValue == "Approved")
+            var rows = await Core.Authorization.ApprovalEvidence.Available(db.AuditLogs, companyId)
                 .OrderByDescending(a => a.Id)
                 .ToListAsync(cancellationToken);
 
@@ -1700,7 +1673,7 @@ namespace Api.Authorization
                     continue;
                 }
 
-                if (payload == null || payload.Status != "Approved" || payload.ExpiresAtUtc <= now)
+                if (!Core.Authorization.ApprovalEvidence.IsValidApproval(db.AuditLogs.AsNoTracking(), row, payload, companyId, now, operationKey))
                     continue;
 
                 if (!string.IsNullOrWhiteSpace(operationKey) &&
@@ -1734,10 +1707,20 @@ namespace Api.Authorization
                         continue;
                 }
 
-                row.OriginalValue = "Consumed";
-                payload.Status = "Consumed";
-                row.NewValue = JsonSerializer.Serialize(payload);
-                await db.SaveChangesAsync(cancellationToken);
+                var stateRow = Core.Authorization.ApprovalEvidence.State(row, "Consumed", actorUserId);
+                db.AuditLogs.Add(stateRow);
+                try
+                {
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+                catch (Exception ex) when (Core.Authorization.ApprovalEvidence.IsApprovalStateUniqueViolation(ex))
+                {
+                    var failed = db.ChangeTracker.Entries<Core.Domain.Auditing.AuditLog>()
+                        .FirstOrDefault(e => ReferenceEquals(e.Entity, stateRow));
+                    if (failed != null)
+                        failed.State = EntityState.Detached;
+                    return false;
+                }
                 BumpGlobalSecurityRevision();
                 return true;
             }

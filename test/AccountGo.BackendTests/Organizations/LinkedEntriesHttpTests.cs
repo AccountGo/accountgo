@@ -336,6 +336,8 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         {
             var db = verifyScope.ServiceProvider.GetRequiredService<ApiDbContext>();
             var saved = await db.LinkedEntryPairs.AsNoTracking().SingleAsync(p => p.Id == postedPairId);
+            Assert.True(await db.AuditLogs.IgnoreQueryFilters().AnyAsync(a => a.CompanyId == workId &&
+                a.TableName == "__AccessDelegationApprovalState" && a.RecordId == approvalRequestId && a.OriginalValue == "Consumed"));
             Assert.Equal("Posted", saved.State);
             Assert.NotNull(await db.JournalEntryHeaders.IgnoreQueryFilters().Where(j => j.CompanyId == workId && j.Id == saved.SourceJournalId).Select(j => j.GeneralLedgerHeaderId).SingleAsync());
             Assert.NotNull(await db.JournalEntryHeaders.IgnoreQueryFilters().Where(j => j.CompanyId == personalId && j.Id == saved.MirrorJournalId).Select(j => j.GeneralLedgerHeaderId).SingleAsync());
@@ -361,6 +363,44 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         Assert.False(await readDb.JournalEntryHeaders.IgnoreQueryFilters().AnyAsync(j => j.CompanyId == personalId && j.Id == cancelledPair.MirrorJournalId));
         Assert.Equal(2, await readDb.AuditLogs.IgnoreQueryFilters().CountAsync(a => a.TableName == "__LinkedEntryDraft" &&
             a.RecordId != null && (a.RecordId == cancelledPair.SourceJournalId.ToString() || a.RecordId == cancelledPair.MirrorJournalId.ToString())));
+    }
+
+    [Fact]
+    public async Task LinkedEntryConflict_OnJournalWithConsumedApproval_ReturnsLinkedEntryCode()
+    {
+        var (workId, personalId, workSlug) = await CreateLinkedWorkspaces();
+        var accounts = await SeedAccounts(workId, personalId);
+        var reviewer = await AddReviewer(workId, workSlug);
+        using var create = await Send(HttpMethod.Post, "/api/linked-entries", new
+        {
+            kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+        }, workSlug);
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        using var createJson = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+        var pairId = createJson.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var pair = await db.LinkedEntryPairs.AsNoTracking().SingleAsync(p => p.Id == pairId);
+        using var approval = await Send(HttpMethod.Post, "/api/organizations/current/members/access-approvals", new
+        {
+            operationKey = Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
+            resourceId = pair.SourceJournalId!.Value.ToString(CultureInfo.InvariantCulture)
+        }, workSlug, reviewer.Token);
+        Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
+        using var approvalJson = JsonDocument.Parse(await approval.Content.ReadAsStringAsync());
+        var approvalRequestId = approvalJson.RootElement.GetProperty("approvalRequestId").GetString();
+        var approverId = approvalJson.RootElement.GetProperty("approverUserId").GetString();
+        using var post = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = pair.SourceJournalId },
+            workSlug, _token, approvalRequestId, approverId);
+        Assert.True(post.StatusCode == HttpStatusCode.OK, await post.Content.ReadAsStringAsync());
+
+        using var retry = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = pair.SourceJournalId },
+            workSlug, _token, approvalRequestId, approverId);
+        Assert.True(retry.StatusCode == HttpStatusCode.Conflict, await retry.Content.ReadAsStringAsync());
+        var body = await retry.Content.ReadAsStringAsync();
+        Assert.Contains("linked_entry_not_pending", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("approval_already_used", body, StringComparison.Ordinal);
     }
 
     [Fact]

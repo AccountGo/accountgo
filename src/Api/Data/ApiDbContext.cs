@@ -146,24 +146,6 @@ namespace Api.Data
             PersonalWorkspaces.RemoveRange(PersonalWorkspaces.Where(p => ids.Contains(p.CompanyId)));
         }
 
-        private static readonly HashSet<string> ImmutableAuditTables = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "__WorkspaceInitialization",
-            "__OwnerAccessSetup",
-            "__WorkspacePolicyTransition",
-            "__JournalPostingAuthorization",
-            "__InvitationTransition",
-            "__WorkspaceOrigin",
-            "__WorkspaceCollaborationEvidence",
-            // Measurement and invariant-detection depend on these records staying intact.
-            "__WorkspaceFirstUsefulAction",
-            "__WorkspaceInvariantIncident",
-            // Durable onboarding cohort anchors (start/completion) for conversion analysis.
-            "__WorkspaceOnboardingCohort",
-            // Signup-specific pending-continuation marker (slice 2); immutable like the others.
-            "__WorkspaceSignupContinuation"
-        };
-
         private void EnforceAuditLogImmutability()
         {
             var auditEntries = ChangeTracker.Entries<Core.Domain.Auditing.AuditLog>()
@@ -175,9 +157,9 @@ namespace Api.Data
                 var originalTable = entry.Property(nameof(Core.Domain.Auditing.AuditLog.TableName)).OriginalValue as string;
                 var currentTable = entry.Entity.TableName;
 
-                var protectedTable = (originalTable != null && ImmutableAuditTables.Contains(originalTable))
+                var protectedTable = (originalTable != null && originalTable.StartsWith("__", StringComparison.Ordinal))
                     ? originalTable
-                    : (currentTable != null && ImmutableAuditTables.Contains(currentTable) ? currentTable : null);
+                    : (currentTable != null && currentTable.StartsWith("__", StringComparison.Ordinal) ? currentTable : null);
 
                 if (protectedTable != null)
                 {

@@ -302,21 +302,12 @@ namespace Api.Controllers
                     .FirstOrDefault(h => h.Id == journalEntryDto.Id);
             }
 
-            string? persistedPreparer = null;
-            if (journalEntryDto != null && journalEntryDto.Id > 0 && companyId.HasValue)
-            {
-                persistedPreparer = _db.AuditLogs
-                    .AsNoTracking()
-                    .Where(a => a.CompanyId == companyId.Value &&
-                                a.TableName == "__JournalEntryPreparer" &&
-                                a.RecordId == journalEntryDto.Id.ToString(CultureInfo.InvariantCulture))
-                    .OrderByDescending(a => a.Id)
-                    .Select(a => a.NewValue)
-                    .FirstOrDefault();
-            }
-
+            var preparerIds = journalEntryDto != null && journalEntryDto.Id > 0 && companyId.HasValue
+                ? JournalEvidence.PreparerIds(_db.AuditLogs.AsNoTracking(), companyId.Value, journalEntryDto.Id)
+                : new HashSet<string>(StringComparer.Ordinal);
             var currentActorId = _tenantContext.UserId ?? User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var effectivePreparer = persistedPreparer ?? currentActorId ?? "system:draft-preparer";
+            var effectivePreparer = preparerIds.FirstOrDefault() ?? currentActorId ?? "system:draft-preparer";
+            if (preparerIds.Count == 0) preparerIds.Add(effectivePreparer);
 
             var isPosted = existingHeader != null && (existingHeader.Posted == true || existingHeader.GeneralLedgerHeaderId.HasValue);
             var aprHeader = HttpContext?.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
@@ -334,9 +325,14 @@ namespace Api.Controllers
                 WorkflowState = isPosted ? "Posted" : "Draft",
                 IsPeriodLockedOrClosed = isLocked,
                 PreparedByUserId = effectivePreparer,
+                PreparedByUserIds = preparerIds,
                 IndependentApproverUserId = approverHeader,
                 ApprovalRequestId = aprHeader
             };
+
+            if (companyId.HasValue && journalEntryDto?.Id > 0 &&
+                ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader, journalEntryDto.Id))
+                return ApprovalAlreadyUsed();
 
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalPost, SystemPermissions.FinancialsJournalPost, out var denied, postResource))
                 return denied!;
@@ -372,13 +368,24 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ApprovalEvidence.IsApprovalStateUniqueViolation(ex))
+                    return ApprovalAlreadyUsed();
                 if (ex is Services.Financial.LinkedEntryOperationException linkedFailure)
                     return Conflict(new { code = linkedFailure.Code, message = linkedFailure.Message });
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
+                if (ex is DbUpdateException && companyId.HasValue && journalEntryDto?.Id > 0 &&
+                    ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader, journalEntryDto.Id))
+                    return ApprovalAlreadyUsed();
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }
+
+        private IActionResult ApprovalAlreadyUsed() => Conflict(new
+        {
+            code = "approval_already_used",
+            detail = "This approval was already used. Ask for a new approval."
+        });
 
         [HttpPost]
         [Route("SaveJournalEntry")]
@@ -552,7 +559,7 @@ namespace Api.Controllers
                         _db,
                         currentCompanyId.Value,
                         AccessOperationCatalog.FinancialsJournalPost,
-                        journalEntry.Id.ToString(CultureInfo.InvariantCulture)).GetAwaiter().GetResult();
+                        journalEntry.Id.ToString(CultureInfo.InvariantCulture), actorUserId: preparerUserId).GetAwaiter().GetResult();
                 }
 
                 return Ok(new { id = journalEntry.Id });
