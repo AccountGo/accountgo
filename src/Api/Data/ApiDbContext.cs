@@ -21,7 +21,6 @@ namespace Api.Data
     public class ApiDbContext : DbContext
     {
         private readonly ITenantContext? _tenantContext;
-        private readonly AuditLogHelper _auditLogHelper = new();
 
         public int CurrentTenantCompanyId => _tenantContext?.CompanyId ?? -1;
         public bool SuppressTenantSecurityCheck { get; set; }
@@ -407,6 +406,22 @@ namespace Api.Data
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            builder.Entity<RecordChange>(entity =>
+            {
+                entity.ToTable("RecordChanges");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.EntityType).HasMaxLength(120).IsRequired();
+                entity.Property(e => e.Action).HasMaxLength(16).IsRequired();
+                entity.Property(e => e.ChangesJson).IsRequired();
+                entity.Property(e => e.ActorKind).HasMaxLength(16).IsRequired();
+                entity.Property(e => e.CorrelationId).HasMaxLength(128).IsRequired();
+                entity.HasIndex(e => new { e.CompanyId, e.OccurredAt }).IsDescending(false, true).HasDatabaseName("IX_RecordChanges_Company_OccurredAt");
+                entity.HasIndex(e => new { e.CompanyId, e.EntityType, e.EntityId }).HasDatabaseName("IX_RecordChanges_Company_Entity");
+                entity.HasIndex(e => new { e.CompanyId, e.ActorUserId, e.OccurredAt }).IsDescending(false, false, true).HasDatabaseName("IX_RecordChanges_Company_Actor_OccurredAt");
+            });
+
             builder.Entity<PersonalWorkspace>(entity =>
             {
                 entity.ToTable("PersonalWorkspaces");
@@ -1193,6 +1208,7 @@ namespace Api.Data
         public virtual DbSet<AccountClass> AccountClasses { get; set; }
         public virtual DbSet<Address> Addresses { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
+        public virtual DbSet<RecordChange> RecordChanges { get; set; }
         public virtual DbSet<AuditableAttribute> AuditableAttributes { get; set; }
         public virtual DbSet<AuditableEntity> AuditableEntities { get; set; }
         public virtual DbSet<Bank> Banks { get; set; }
@@ -1273,57 +1289,5 @@ namespace Api.Data
         public virtual DbSet<RecurringScheduleLine> RecurringScheduleLines { get; set; }
         public virtual DbSet<RecurringOccurrence> RecurringOccurrences { get; set; }
 
-        #region Audit Logs
-        private void SaveAuditLog()
-        {
-            string username = string.Empty;
-            _auditLogHelper.ClearAddedEntities();
-
-            var dbEntityEntries = ChangeTracker.Entries().ToList()
-                .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
-
-            foreach (var dbEntityEntry in dbEntityEntries)
-            {
-                try
-                {
-                    username = ((BaseEntity)dbEntityEntry.Entity).ModifiedBy;
-                    var auditLogs = _auditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
-                    foreach (var auditlog in auditLogs)
-                        if (auditlog != null)
-                            AuditLogs.Add(auditlog);
-                }
-                catch
-                {
-                    continue;
-                }
-            }
-        }
-
-        private void UpdateAuditLogRecordId()
-        {
-            foreach (var entity in _auditLogHelper.AddedEntities)
-            {
-                if (ChangeTracker.Entries().ToList().Contains(entity.Value))
-                {
-                    string keyName = entity.Value.Entity
-                        .GetType()
-                        .GetProperties()
-                        .Single(p => p.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.KeyAttribute), false).Count() > 0).Name;
-
-                    string? recid = entity.Value.Property(keyName).CurrentValue!.ToString();
-
-                    var auditLog = this.AuditLogs.FirstOrDefault(log => log.AuditEventDateUTC == entity.Key);
-
-                    if (auditLog != null)
-                    {
-                        auditLog.RecordId = recid;
-                        base.SaveChanges();
-                    }
-                }
-            }
-
-            _auditLogHelper.ClearAddedEntities();
-        }
-        #endregion
     }
 }

@@ -130,6 +130,32 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("AuditableEntity", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.Auditing.RecordChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("CompanyId").HasColumnType("integer");
+                    b.Property<string>("EntityType").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)");
+                    b.Property<int>("EntityId").HasColumnType("integer");
+                    b.Property<string>("Action").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)");
+                    b.Property<string>("ChangesJson").IsRequired().HasColumnType("text");
+                    b.Property<string>("ActorUserId").HasColumnType("text");
+                    b.Property<string>("ActorKind").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)");
+                    b.Property<string>("CorrelationId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
+                    b.Property<string>("IpAddress").HasColumnType("text");
+                    b.Property<DateTime>("OccurredAt").HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+                    b.HasIndex("CompanyId", "OccurredAt").IsDescending(false, true).HasDatabaseName("IX_RecordChanges_Company_OccurredAt");
+                    b.HasIndex("CompanyId", "EntityType", "EntityId").HasDatabaseName("IX_RecordChanges_Company_Entity");
+                    b.HasIndex("CompanyId", "ActorUserId", "OccurredAt").IsDescending(false, false, true).HasDatabaseName("IX_RecordChanges_Company_Actor_OccurredAt");
+                    b.ToTable("RecordChanges");
+                });
+
             modelBuilder.Entity("Core.Domain.Company", b =>
                 {
                     b.Property<int>("Id")

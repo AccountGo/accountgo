@@ -146,6 +146,7 @@ namespace Api.Data.Schema
                 EnsurePriorPeriodAdjustment(connection);
                 EnsureSecurityTables(connection);
                 EnsureWorkspaceOperatingPolicy(connection);
+                EnsureRecordChanges(connection);
                 EnsureAuditEvidenceIntegrity(connection);
             }
             finally
@@ -154,6 +155,24 @@ namespace Api.Data.Schema
                 {
                     connection.Close();
                 }
+            }
+        }
+
+        private static void EnsureRecordChanges(DbConnection connection)
+        {
+            foreach (var sql in new[]
+            {
+                SqliteRecordChangesSql.CreateTable,
+                SqliteRecordChangesSql.CompanyTimeIndex,
+                SqliteRecordChangesSql.EntityIndex,
+                SqliteRecordChangesSql.ActorIndex,
+                SqliteRecordChangesSql.UpdateTrigger,
+                SqliteRecordChangesSql.DeleteTrigger
+            })
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
             }
         }
 

@@ -130,6 +130,69 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("AuditableEntity", "dbo");
                 });
 
+            modelBuilder.Entity("Core.Domain.Auditing.RecordChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("ActorKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("ActorUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ChangesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("EntityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "OccurredAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_RecordChanges_Company_OccurredAt");
+
+                    b.HasIndex("CompanyId", "ActorUserId", "OccurredAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("IX_RecordChanges_Company_Actor_OccurredAt");
+
+                    b.HasIndex("CompanyId", "EntityType", "EntityId")
+                        .HasDatabaseName("IX_RecordChanges_Company_Entity");
+
+                    b.ToTable("RecordChanges", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Company", b =>
                 {
                     b.Property<int>("Id")

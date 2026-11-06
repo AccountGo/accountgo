@@ -341,6 +341,12 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
             Assert.Equal("Posted", saved.State);
             Assert.NotNull(await db.JournalEntryHeaders.IgnoreQueryFilters().Where(j => j.CompanyId == workId && j.Id == saved.SourceJournalId).Select(j => j.GeneralLedgerHeaderId).SingleAsync());
             Assert.NotNull(await db.JournalEntryHeaders.IgnoreQueryFilters().Where(j => j.CompanyId == personalId && j.Id == saved.MirrorJournalId).Select(j => j.GeneralLedgerHeaderId).SingleAsync());
+            var sourceAudit = await db.RecordChanges.IgnoreQueryFilters().AsNoTracking().AnyAsync(r =>
+                r.CompanyId == workId && r.EntityType == "JournalEntryHeader" && r.EntityId == saved.SourceJournalId);
+            var mirrorAudit = await db.RecordChanges.IgnoreQueryFilters().AsNoTracking().AnyAsync(r =>
+                r.CompanyId == personalId && r.EntityType == "JournalEntryHeader" && r.EntityId == saved.MirrorJournalId);
+            Assert.True(sourceAudit, "The source journal change must stay in the work workspace.");
+            Assert.True(mirrorAudit, "The mirrored journal change must stay in the personal workspace.");
         }
 
         using var second = await Send(HttpMethod.Post, "/api/linked-entries", createBody, workSlug);
@@ -644,7 +650,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
     {
         const string workSlug = "linked-work";
         using var work = await Send(HttpMethod.Post, "/api/organizations", new { name = "Linked work", slug = workSlug, currency = "USD" });
-        Assert.Equal(HttpStatusCode.Created, work.StatusCode);
+        Assert.True(work.StatusCode == HttpStatusCode.Created, await work.Content.ReadAsStringAsync());
         using var workJson = JsonDocument.Parse(await work.Content.ReadAsStringAsync());
         var workId = int.Parse(workJson.RootElement.GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
         using var personal = await Send(HttpMethod.Post, "/api/organizations/personal", new
