@@ -13,6 +13,7 @@ import {
   Edit2,
   FileDown,
   FileText,
+  History,
   Loader2,
   Plus,
   RefreshCw,
@@ -29,6 +30,7 @@ import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { ModalShell } from '../components/ModalShell';
+import { RecordHistoryPanel, useRecordHistoryAccess } from '../components/RecordHistoryPanel';
 
 export interface ChartOfAccountsStatus {
   isEmptyBooks: boolean;
@@ -161,6 +163,8 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
   const symbol = getCurrencySymbol(currentOrg.currency);
 
   const canManage = hasPermission('financials.accounts.manage');
+  const recordHistory = useRecordHistoryAccess();
+  const [historyAccount, setHistoryAccount] = useState<ApiAccount | null>(null);
 
   const [accounts, setAccounts] = useState<ApiAccount[]>([]);
   /** GL account id → bank account id for linked cash accounts. */
@@ -1020,6 +1024,17 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
                       {canManage && (
                         <td className="py-1.5 px-3 text-right whitespace-nowrap">
                           <div className="inline-flex items-center gap-1 justify-end">
+                            {recordHistory.canShow && (
+                              <button
+                                type="button"
+                                aria-label={`History for ${a.accountCode}`}
+                                title="History"
+                                onClick={() => setHistoryAccount(a)}
+                                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-subtle)]"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               aria-label={`Edit ${a.accountCode}`}
@@ -1072,6 +1087,16 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
           </div>
         )}
       </div>
+
+      {recordHistory.canShow && historyAccount && (
+        <RecordHistoryPanel
+          entityType="Account"
+          entityId={historyAccount.id}
+          open
+          onClose={() => setHistoryAccount(null)}
+          personal={recordHistory.personal}
+        />
+      )}
 
       {/* Add / Edit Account Modal Dialog */}
       <ModalShell

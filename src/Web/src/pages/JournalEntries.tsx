@@ -4,6 +4,7 @@ import { Plus, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, ReadOnlyModuleBanner, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
+import { RecordHistoryAction } from '../components/RecordHistoryPanel';
 import { currencySymbol } from '../lib/currency';
 import {
   journalVoucherTypeLabel,
@@ -281,6 +282,7 @@ export default function JournalEntries() {
     {error ? <p role="alert" className="text-red-500">{error} Use Refresh to retry.</p>
       : !data ? <p role="status">Loading manual journals...</p>
       : <>
+        {!isNew && selected && <div className="flex justify-end"><RecordHistoryAction entityType="JournalEntryHeader" entityId={selected.id} /></div>}
         {isNew && !canCreate ? <PermissionDeniedCard permission="financials.journal.create" />
           : initial ? <JournalEditor key={`${key}-${isNew ? 'new' : initial.id}`} initial={initial} accounts={flatten(data.accounts)}
             closedYears={data.closedYears} canCreate={canCreate} canPost={canPost}

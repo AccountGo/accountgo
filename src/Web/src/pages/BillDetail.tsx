@@ -13,6 +13,7 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
 import { useCapabilities } from '../lib/entitlements';
 import { BillStatementSources } from '../components/BillStatementSources';
+import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 
 /** One bill: who it is from, its lines and the accounts they are booked to, what is still owed, and its payments. */
 export const BillDetail: React.FC = () => {
@@ -20,6 +21,7 @@ export const BillDetail: React.FC = () => {
   const { billId } = useParams<{ billId: string }>();
   const { authFetch } = useAuth();
   const navigate = useNavigate();
+  const history = useRecordHistory();
   const { hasPermission } = usePermissions();
   const { canCreate: canCreateResource } = useCapabilities();
   const purchasesWritable = canWrite('purchases');
@@ -229,6 +231,7 @@ export const BillDetail: React.FC = () => {
         actions={
           <>
             {isDraft && canEdit && <HeaderButton label="Edit" icon={Pencil} compact to={`/org/${orgSlug}/purchases/${bill.id}/edit`} />}
+            {history.canShow && <RecordHistoryButton onClick={history.openPanel} />}
             {(canCreate || canEdit || canVoid) && (
               <HeaderMenu
                 items={[
@@ -262,6 +265,15 @@ export const BillDetail: React.FC = () => {
           </>
         }
       />
+      {history.canShow && (
+        <RecordHistoryPanel
+          entityType="PurchaseInvoiceHeader"
+          entityId={bill.id}
+          open={history.open}
+          onClose={history.closePanel}
+          personal={history.personal}
+        />
+      )}
 
       {notice && (
         <div role="status" className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm flex items-center justify-between">

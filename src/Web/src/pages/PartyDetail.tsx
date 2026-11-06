@@ -26,6 +26,7 @@ import { ContactPerson, PartyBase, PaymentTermOption, TenantContextType } from '
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { PartyDocumentRow, PartyRole, partyRoles } from '../lib/partyRoles';
+import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 
 /** One client or vendor: its details, what it owes or is owed, and its invoices or bills. */
 export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
@@ -35,6 +36,7 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
   const navigate = useNavigate();
+  const history = useRecordHistory();
   const canManage = hasPermission(config.managePermission);
   const canCreateDocument = hasPermission(config.createDocumentPermission);
   const listPath = config.listPath(currentOrg.slug);
@@ -186,6 +188,7 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
         actions={
           <>
             {canManage && <HeaderButton label="Edit" icon={Pencil} compact onClick={() => setIsEditing(true)} />}
+            {history.canShow && <RecordHistoryButton onClick={history.openPanel} />}
             {canManage && (
               <HeaderMenu
                 items={[
@@ -203,6 +206,16 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
           </>
         }
       />
+      {history.canShow && (
+        <RecordHistoryPanel
+          // The page's id is the customer's or vendor's own id (the API does not return the contact row id).
+          entityType={role === 'vendor' ? 'Vendor' : 'Customer'}
+          entityId={party.id}
+          open={history.open}
+          onClose={history.closePanel}
+          personal={history.personal}
+        />
+      )}
 
       {error && (
         <div role="alert" className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-sm flex items-center justify-between">

@@ -23,6 +23,7 @@ import {
   Percent,
   Mail,
   Plug,
+  ScrollText,
 } from 'lucide-react';
 import { TenantContextType, WorkspaceMember } from '../types';
 import { DEFAULT_CURRENCY } from '../lib/currency';
@@ -34,6 +35,7 @@ import { useDeleteCurrentWorkspace } from '../lib/useDeleteCurrentWorkspace';
 import { StepUpPrompt } from '../components/StepUpPrompt';
 import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
+import { ActivitySettingsTab } from '../components/ActivitySettingsTab';
 import { JournalApprovalPolicyCard } from '../components/JournalApprovalPolicyCard';
 import { WorkspaceSetupCard } from '../components/WorkspaceSetupCard';
 import { BusinessDetailsCard } from '../components/BusinessDetailsCard';
@@ -47,6 +49,8 @@ import { SettingsNav, SettingsNavGroup } from '../components/SettingsNav';
 import { ModalShell } from '../components/ModalShell';
 import { IntegrationsSettingsTab } from '../components/IntegrationsSettingsTab';
 import { useIntegrations } from '../lib/integrations';
+import { useOptionalCapabilities } from '../lib/entitlements';
+import { activityTabMode, auditAccessLevel } from '../lib/auditAccess';
 
 interface LiveFinancialYear {
   id: number;
@@ -76,8 +80,12 @@ export const Settings: React.FC = () => {
   const isWorkspaceAdminRole = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
   const [searchParams, setSearchParams] = useSearchParams();
   const integrations = useIntegrations();
+  const capabilities = useOptionalCapabilities();
+  // Plan-dependent: without a loaded plan snapshot the Activity tab stays hidden rather than guess.
+  const auditAccess = auditAccessLevel(capabilities?.entitlements ?? null, hasPermission);
+  const activityMode = capabilities?.entitlements ? activityTabMode(auditAccess, personal) : 'hidden';
 
-  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles' | 'approvals' | 'integrations';
+  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles' | 'activity' | 'approvals' | 'integrations';
 
   const handleTabChange = (tab: TabKey) => {
     setSearchParams(tab === 'general' ? {} : { tab });
@@ -107,6 +115,7 @@ export const Settings: React.FC = () => {
       label: 'Access & Billing',
       items: [
         { key: 'roles', label: 'Roles & Permissions', icon: Shield },
+        ...(activityMode !== 'hidden' ? [{ key: 'activity' as const, label: 'Activity', icon: ScrollText }] : []),
         ...(!personal && hasFinancials && isWorkspaceAdminRole ? [{ key: 'approvals' as const, label: 'Journal Approval', icon: Shield }] : []),
         { key: 'subscription', label: personal ? 'Plan' : 'Subscription & Modules', icon: Sparkles },
       ],
@@ -1128,6 +1137,25 @@ export const Settings: React.FC = () => {
               className="focus:outline-none"
             >
               <RolesSettingsTab tenantContext={tenantContext} />
+            </div>
+          )}
+
+          {currentTab === 'activity' && activityMode !== 'hidden' && (
+            <div
+              role="tabpanel"
+              id="panel-activity"
+              aria-labelledby="tab-activity"
+              tabIndex={0}
+              className="focus:outline-none"
+            >
+              <ActivitySettingsTab
+                mode={activityMode}
+                access={auditAccess}
+                personal={personal}
+                members={members}
+                canManageBilling={!!capabilities?.canManageBilling}
+                subscriptionHref={`/org/${encodeURIComponent(currentOrg.slug)}/settings?tab=subscription`}
+              />
             </div>
           )}
         </div>
