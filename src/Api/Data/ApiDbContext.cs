@@ -413,12 +413,14 @@ namespace Api.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
                 entity.Property(e => e.EntityType).HasMaxLength(120).IsRequired();
+                entity.Property(e => e.ParentEntityType).HasMaxLength(120);
                 entity.Property(e => e.Action).HasMaxLength(16).IsRequired();
                 entity.Property(e => e.ChangesJson).IsRequired();
                 entity.Property(e => e.ActorKind).HasMaxLength(16).IsRequired();
                 entity.Property(e => e.CorrelationId).HasMaxLength(128).IsRequired();
                 entity.HasIndex(e => new { e.CompanyId, e.OccurredAt }).IsDescending(false, true).HasDatabaseName("IX_RecordChanges_Company_OccurredAt");
                 entity.HasIndex(e => new { e.CompanyId, e.EntityType, e.EntityId }).HasDatabaseName("IX_RecordChanges_Company_Entity");
+                entity.HasIndex(e => new { e.CompanyId, e.ParentEntityType, e.ParentEntityId }).HasDatabaseName("IX_RecordChanges_Company_Parent");
                 entity.HasIndex(e => new { e.CompanyId, e.ActorUserId, e.OccurredAt }).IsDescending(false, false, true).HasDatabaseName("IX_RecordChanges_Company_Actor_OccurredAt");
             });
 

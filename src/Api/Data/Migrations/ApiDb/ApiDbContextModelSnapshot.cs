@@ -177,6 +177,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("ParentEntityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ParentEntityType")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId", "OccurredAt")
@@ -189,6 +196,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId", "EntityType", "EntityId")
                         .HasDatabaseName("IX_RecordChanges_Company_Entity");
+
+                    b.HasIndex("CompanyId", "ParentEntityType", "ParentEntityId")
+                        .HasDatabaseName("IX_RecordChanges_Company_Parent");
 
                     b.ToTable("RecordChanges", (string)null);
                 });

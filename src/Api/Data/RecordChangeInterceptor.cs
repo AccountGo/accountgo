@@ -20,7 +20,8 @@ namespace Api.Data;
 public sealed class RecordChangeInterceptor : SaveChangesInterceptor
 {
     private sealed record CapturedChange(EntityEntry Entry, int CompanyId, string EntityType,
-        string Action, Dictionary<string, object?> Values, string KeyName);
+        string Action, Dictionary<string, object?> Values, string KeyName,
+        string? ParentEntityType, int? ParentEntityId);
     private sealed class SaveState
     {
         public List<CapturedChange> Changes { get; } = new();
@@ -45,6 +46,19 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
         [typeof(CompanyMember)] = "CompanyMember", [typeof(CompanyMemberSecurityRole)] = "CompanyMemberSecurityRole",
         [typeof(RecurringSchedule)] = "RecurringSchedule", [typeof(RecurringScheduleLine)] = "RecurringScheduleLine"
     };
+
+    /// <summary>Line/child types → (parent allow-list name, FK property). Used to fill ParentEntity* columns.</summary>
+    public static IReadOnlyDictionary<Type, (string ParentEntityType, string ForeignKeyProperty)> ParentLinks { get; } =
+        new Dictionary<Type, (string, string)>
+        {
+            [typeof(SalesInvoiceLine)] = ("SalesInvoiceHeader", nameof(SalesInvoiceLine.SalesInvoiceHeaderId)),
+            [typeof(PurchaseInvoiceLine)] = ("PurchaseInvoiceHeader", nameof(PurchaseInvoiceLine.PurchaseInvoiceHeaderId)),
+            [typeof(JournalEntryLine)] = ("JournalEntryHeader", nameof(JournalEntryLine.JournalEntryHeaderId)),
+            [typeof(SalesReceiptLine)] = ("SalesReceiptHeader", nameof(SalesReceiptLine.SalesReceiptHeaderId)),
+            [typeof(RecurringScheduleLine)] = ("RecurringSchedule", nameof(RecurringScheduleLine.RecurringScheduleId)),
+            [typeof(TaxGroupTax)] = ("TaxGroup", nameof(TaxGroupTax.TaxGroupId)),
+            [typeof(CompanyMemberSecurityRole)] = ("CompanyMember", nameof(CompanyMemberSecurityRole.CompanyMemberId))
+        };
 
     private readonly IRequestAuditContext _auditContext;
     private readonly ConcurrentDictionary<DbContext, SaveState> _states = new();
@@ -93,8 +107,9 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
             if (key is null || key.Properties.Count != 1 || (Nullable.GetUnderlyingType(key.Properties[0].ClrType) ?? key.Properties[0].ClrType) != typeof(int))
                 throw new InvalidOperationException($"Audited type {entry.Metadata.ClrType.Name} must have a single integer key.");
             var companyId = await ResolveCompanyId(context, entry, async, cancellationToken).ConfigureAwait(false);
+            var (parentType, parentId) = ResolveParent(entry);
             state.Changes.Add(new CapturedChange(entry, companyId, AllowList[entry.Metadata.ClrType],
-                entry.State.ToString(), Snapshot(entry, entry.State), key.Properties[0].Name));
+                entry.State.ToString(), Snapshot(entry, entry.State), key.Properties[0].Name, parentType, parentId));
         }
         if (context.Database.CurrentTransaction is null)
             state.OwnedTransaction = async
@@ -121,6 +136,17 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
             return async ? await query.SingleAsync(cancellationToken).ConfigureAwait(false) : query.Single();
         }
         throw new InvalidOperationException($"Audited type {entry.Metadata.ClrType.Name} has no workspace owner.");
+    }
+
+    /// <summary>Resolves parent document identity for a tracked line entry (Deleted uses original FK values).</summary>
+    public static (string? ParentEntityType, int? ParentEntityId) ResolveParent(EntityEntry entry)
+    {
+        if (!ParentLinks.TryGetValue(entry.Metadata.ClrType, out var link))
+            return (null, null);
+        var property = entry.Property(link.ForeignKeyProperty);
+        var raw = entry.State == EntityState.Deleted ? property.OriginalValue : property.CurrentValue;
+        if (raw is null) return (link.ParentEntityType, null);
+        return (link.ParentEntityType, Convert.ToInt32(raw));
     }
 
     private static Dictionary<string, object?> Snapshot(EntityEntry entry, EntityState state)
@@ -161,11 +187,11 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
         try
         {
             var connection = context.Database.GetDbConnection();
-            const string insert = "INSERT INTO \"RecordChanges\" (\"CompanyId\", \"EntityType\", \"EntityId\", \"Action\", \"ChangesJson\", \"ActorUserId\", \"ActorKind\", \"CorrelationId\", \"IpAddress\", \"OccurredAt\") VALUES ";
+            const string insert = "INSERT INTO \"RecordChanges\" (\"CompanyId\", \"EntityType\", \"EntityId\", \"ParentEntityType\", \"ParentEntityId\", \"Action\", \"ChangesJson\", \"ActorUserId\", \"ActorKind\", \"CorrelationId\", \"IpAddress\", \"OccurredAt\") VALUES ";
             foreach (var batch in state.Changes.Chunk(80))
             {
                 using var parameterCommand = connection.CreateCommand();
-                var parameters = new List<object>(batch.Length * 10);
+                var parameters = new List<object>(batch.Length * 12);
                 var rows = new List<string>(batch.Length);
                 foreach (var change in batch)
                 {
@@ -177,6 +203,8 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
                         change.Entry.Entity is Company company ? company.Id : change.CompanyId,
                         change.EntityType,
                         Convert.ToInt32(change.Entry.Property(change.KeyName).CurrentValue),
+                        (object?)change.ParentEntityType ?? DBNull.Value,
+                        (object?)change.ParentEntityId ?? DBNull.Value,
                         change.Action,
                         JsonSerializer.Serialize(change.Values),
                         (object?)_auditContext.ActorUserId ?? DBNull.Value,

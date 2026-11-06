@@ -272,7 +272,17 @@ namespace AccountGo.BackendTests.Auditing
             await identity.SaveChangesAsync();
         }
 
-        public async Task InsertRecordChanges(int companyId, int count, DateTime? firstOccurredAt = null, TimeSpan? spacing = null, string entityType = "Item", int entityId = 0, string? actorUserId = null)
+        public async Task InsertRecordChanges(
+            int companyId,
+            int count,
+            DateTime? firstOccurredAt = null,
+            TimeSpan? spacing = null,
+            string entityType = "Item",
+            int entityId = 0,
+            string? actorUserId = null,
+            string? parentEntityType = null,
+            int? parentEntityId = null,
+            string changesJson = "{\"Name\":{\"old\":\"a\",\"new\":\"b\"}}")
         {
             using var scope = Factory.Services.CreateScope();
             var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
@@ -287,8 +297,10 @@ namespace AccountGo.BackendTests.Auditing
                     CompanyId = companyId,
                     EntityType = entityType,
                     EntityId = entityId == 0 ? index + 1 : entityId,
+                    ParentEntityType = parentEntityType,
+                    ParentEntityId = parentEntityId,
                     Action = "Modified",
-                    ChangesJson = "{\"Name\":{\"old\":\"a\",\"new\":\"b\"}}",
+                    ChangesJson = changesJson,
                     ActorUserId = actorUserId,
                     ActorKind = "user",
                     CorrelationId = "seed-" + index.ToString(CultureInfo.InvariantCulture),

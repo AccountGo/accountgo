@@ -141,6 +141,8 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int>("CompanyId").HasColumnType("integer");
                     b.Property<string>("EntityType").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)");
                     b.Property<int>("EntityId").HasColumnType("integer");
+                    b.Property<string>("ParentEntityType").HasMaxLength(120).HasColumnType("character varying(120)");
+                    b.Property<int?>("ParentEntityId").HasColumnType("integer");
                     b.Property<string>("Action").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)");
                     b.Property<string>("ChangesJson").IsRequired().HasColumnType("text");
                     b.Property<string>("ActorUserId").HasColumnType("text");
@@ -152,6 +154,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasKey("Id");
                     b.HasIndex("CompanyId", "OccurredAt").IsDescending(false, true).HasDatabaseName("IX_RecordChanges_Company_OccurredAt");
                     b.HasIndex("CompanyId", "EntityType", "EntityId").HasDatabaseName("IX_RecordChanges_Company_Entity");
+                    b.HasIndex("CompanyId", "ParentEntityType", "ParentEntityId").HasDatabaseName("IX_RecordChanges_Company_Parent");
                     b.HasIndex("CompanyId", "ActorUserId", "OccurredAt").IsDescending(false, false, true).HasDatabaseName("IX_RecordChanges_Company_Actor_OccurredAt");
                     b.ToTable("RecordChanges");
                 });

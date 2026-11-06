@@ -10,6 +10,10 @@ public sealed class RecordChange : ICompanyOwned
     public int CompanyId { get; set; }
     public string EntityType { get; set; } = string.Empty;
     public int EntityId { get; set; }
+    /// <summary>Document/header type when this row is a child line; null for top-level records and pre-migration rows.</summary>
+    public string? ParentEntityType { get; set; }
+    /// <summary>Document/header id when this row is a child line; null for top-level records and pre-migration rows.</summary>
+    public int? ParentEntityId { get; set; }
     public string Action { get; set; } = string.Empty;
     public string ChangesJson { get; set; } = string.Empty;
     public string? ActorUserId { get; set; }
