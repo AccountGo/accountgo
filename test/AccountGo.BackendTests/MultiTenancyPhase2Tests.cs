@@ -614,6 +614,9 @@ namespace AccountGo.BackendTests
                 // Workspace operating policy coordination, setup, and invitation acceptance
                 // execute by explicit companyId before or during tenant bootstrap.
                 "WorkspaceOperatingPolicyService.cs",
+                // Operator-only setup correction: reads and writes one workspace by explicit companyId
+                // under tenant impersonation; never reachable from a workspace request.
+                "WorkspaceSetupCorrectionService.cs",
                 "WorkspacePolicyTransaction.cs",
                 "WorkspaceApprovalPolicyResolver.cs",
                 "WorkspaceInitializationApplicator.cs",

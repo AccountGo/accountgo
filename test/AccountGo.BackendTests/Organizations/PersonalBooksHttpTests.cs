@@ -288,6 +288,82 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         Assert.Equal(1, await db.AuditLogs.IgnoreQueryFilters().CountAsync(a => a.CompanyId == legacyId && a.TableName == "__PersonalBooks"));
     }
 
+    private async Task MakeIndividual(int companyId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        db.SuppressTenantSecurityCheck = true;
+        (await db.CompanySettings.IgnoreQueryFilters().SingleAsync(s => s.CompanyId == companyId)).EntityType = EntityType.Individual;
+        var capital = await db.Accounts.IgnoreQueryFilters().SingleAsync(a => a.CompanyId == companyId && a.AccountCode == "30100");
+        capital.AccountName = "Accumulated net worth";
+        await db.SaveChangesAsync();
+    }
+
+    private Api.Service.WorkspaceSetupCorrectionResult Convert(int companyId, string reason = "Owner confirmed these are freelance books")
+    {
+        using var scope = _factory.Services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<Api.Service.WorkspaceSetupCorrectionService>()
+            .ConvertPersonalToFreelance(companyId, "staff-operator", reason);
+    }
+
+    [Fact]
+    public async Task SetupCorrection_TurnsOlderPersonalWorkspaceIntoFreelanceBooks_WithoutTouchingEntries()
+    {
+        var legacyId = await CreateLegacyPersonal("old-personal");
+        await MakeIndividual(legacyId);
+        long revisionBefore;
+        int accountsBefore;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            revisionBefore = (await db.WorkspaceOperatingSettings.IgnoreQueryFilters().SingleAsync(s => s.CompanyId == legacyId)).PolicyRevision;
+            accountsBefore = await db.Accounts.IgnoreQueryFilters().CountAsync(a => a.CompanyId == legacyId);
+        }
+
+        Assert.Equal("reason_required", Convert(legacyId, " ").Code);
+        var result = Convert(legacyId);
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal("Personal", result.Before!.Purpose);
+        Assert.Equal("Individual", result.Before.EntityType);
+        Assert.Equal("Business", result.After!.Purpose);
+        Assert.Equal("SoleProprietor", result.After.EntityType);
+        Assert.Equal("Owner's Capital", result.After.EquityAccounts.Single(a => a.Code == "30100").Name);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            Assert.Equal(revisionBefore + 1, (await db.WorkspaceOperatingSettings.IgnoreQueryFilters().SingleAsync(s => s.CompanyId == legacyId)).PolicyRevision);
+            Assert.Equal(accountsBefore, await db.Accounts.IgnoreQueryFilters().CountAsync(a => a.CompanyId == legacyId));
+            Assert.Equal(1, await db.AuditLogs.IgnoreQueryFilters().CountAsync(a => a.CompanyId == legacyId
+                && a.TableName == Api.Service.WorkspaceSetupCorrectionService.AuditTable));
+        }
+
+        Assert.False((await Row(legacyId)).GetProperty("canUseAsPersonalBooks").GetBoolean());
+        Assert.Equal("setup_correction_blocked", Convert(legacyId).Code);
+        using (var personal = await Personal(link: legacyId))
+            Assert.Equal(HttpStatusCode.Created, personal.StatusCode);
+        Assert.True((await Row(legacyId)).GetProperty("linkedPersonalCompanyId").GetInt32() > 0);
+    }
+
+    [Fact]
+    public async Task SetupCorrection_RefusesPersonalBooksAndBusinessWorkspaces()
+    {
+        var businessId = await CreateWork("real-business");
+        var blocked = Convert(businessId);
+        Assert.False(blocked.Applied);
+        Assert.Equal("setup_correction_blocked", blocked.Code);
+
+        var booksId = await CreateLegacyPersonal("my-books");
+        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{booksId}"))
+            Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
+        var refused = Convert(booksId);
+        Assert.False(refused.Applied);
+        Assert.Contains("personal books", refused.Message, StringComparison.Ordinal);
+        Assert.Equal("Personal", refused.Before!.Purpose);
+    }
+
     [Fact]
     public async Task Adopt_RequiresOwner_AndOnlyOneAdoptionPerPerson()
     {
