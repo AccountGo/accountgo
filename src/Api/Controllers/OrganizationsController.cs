@@ -626,6 +626,9 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Journal workflow required",
                     detail: "Choose IndependentReviewerRequired or SingleActorAllowed.");
             var id = _tenant.RequireCompanyId();
+            if (request.JournalWorkflow != WorkspaceApprovalRuleKind.SingleActorAllowed
+                && _db.PersonalWorkspaces.Any(p => p.CompanyId == id))
+                return PersonalProblem(409, "personal_books_single_user", "Personal books are posted by one person; journal review isn't used.");
             var result = _operatingPolicy?.ChangeJournalApprovalPolicy(
                 id,
                 UserId,
@@ -890,6 +893,12 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Accounting policy required");
 
             var setting = GetOrCreateSetting();
+            if (_db.PersonalWorkspaces.Any(p => p.CompanyId == _tenant.RequireCompanyId()) &&
+                ((request.EntityType.HasValue && request.EntityType != setting.EntityType) ||
+                 (request.ReportingFramework.HasValue && request.ReportingFramework != setting.ReportingFramework) ||
+                 (request.TaxRegime.HasValue && request.TaxRegime != setting.TaxRegime) ||
+                 (request.InventoryCostingMethod.HasValue && request.InventoryCostingMethod != setting.InventoryCostingMethod)))
+                return PersonalProblem(409, "personal_books_policy_locked", "Personal books always use household bookkeeping. Create a work workspace for business books.");
             var result = _accountingPolicy.Apply(setting, new AccountingPolicyChange
             {
                 ReportingFramework = request.ReportingFramework,

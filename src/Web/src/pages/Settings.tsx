@@ -91,10 +91,10 @@ export const Settings: React.FC = () => {
         ...(integrations.capabilities?.canManage ? [{ key: 'integrations' as const, label: 'Integrations', icon: Plug }] : []),
       ],
     },
-    {
+    ...(hasModule('sales') ? [{
       label: 'Sales',
-      items: [{ key: 'invoices', label: 'Invoices', icon: FileText }, { key: 'email', label: 'Email', icon: Mail }],
-    },
+      items: [{ key: 'invoices' as const, label: 'Invoices', icon: FileText }, { key: 'email' as const, label: 'Email', icon: Mail }],
+    }] : []),
     ...(hasSalesOrPurchases
       ? [{ label: 'Sales & Purchases', items: [{ key: 'taxes' as const, label: 'Taxes', icon: Percent }] }]
       : []),

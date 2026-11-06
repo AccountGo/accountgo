@@ -98,6 +98,51 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         return int.Parse(json.RootElement.GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
     }
 
+    [Theory]
+    [InlineData("entityType", "SoleProprietor")]
+    [InlineData("reportingFramework", "UsGaapPrivate")]
+    [InlineData("taxRegime", "VatGst")]
+    [InlineData("inventoryCostingMethod", "Fifo")]
+    public async Task AccountingPolicy_PersonalBooksRejectsNatureChangesWithoutMutation(string field, string value)
+    {
+        using var created = await Personal();
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var before = await Send(HttpMethod.Get, "/api/organizations/current/accounting-policy", slug: "personal-books");
+        var original = await before.Content.ReadAsStringAsync();
+        using var changed = await Send(HttpMethod.Put, "/api/organizations/current/accounting-policy", new Dictionary<string, string> { [field] = value }, "personal-books");
+        Assert.Equal(HttpStatusCode.Conflict, changed.StatusCode);
+        Assert.Contains("personal_books_policy_locked", await changed.Content.ReadAsStringAsync());
+        using var after = await Send(HttpMethod.Get, "/api/organizations/current/accounting-policy", slug: "personal-books");
+        Assert.Equal(original, await after.Content.ReadAsStringAsync());
+        using var json = JsonDocument.Parse(original);
+        using var unchanged = await Send(HttpMethod.Put, "/api/organizations/current/accounting-policy", new Dictionary<string, string> { [field] = json.RootElement.GetProperty(field).GetString()! }, "personal-books");
+        Assert.Equal(HttpStatusCode.OK, unchanged.StatusCode);
+    }
+
+    [Fact]
+    public async Task JournalApproval_PersonalBooksRejectsIndependentReview()
+    {
+        using var created = await Personal();
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var response = await Send(HttpMethod.Post, "/api/organizations/current/operating-settings/journal-approval-policy", new { expectedPolicyRevision = 1, journalWorkflow = "IndependentReviewerRequired" }, "personal-books");
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("personal_books_single_user", await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("entityType", "SoleProprietor")]
+    [InlineData("reportingFramework", "UsGaapPrivate")]
+    [InlineData("taxRegime", "VatGst")]
+    [InlineData("inventoryCostingMethod", "Fifo")]
+    public async Task AccountingPolicy_WorkWorkspaceAllowsNatureChanges(string field, string value)
+    {
+        await CreateWork("work-books");
+        var payload = new Dictionary<string, string> { [field] = value };
+        if (field == "inventoryCostingMethod") payload["industryTemplate"] = "ProductRetail";
+        using var response = await Send(HttpMethod.Put, "/api/organizations/current/accounting-policy", payload, "work-books");
+        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task SetupCapabilities_OffersPersonalBooksToNewOwner_UntilPersonalBooksExist()
     {
