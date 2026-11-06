@@ -178,7 +178,29 @@ namespace AccountGo.BackendTests.Auditing
             {
                 Assert.DoesNotContain(code, line.Message);
                 Assert.DoesNotContain(wrong, line.Message);
+                // Text logs keep type/outcome/request id only — never IP, UA, user id or metadata.
+                Assert.DoesNotContain("ip=", line.Message, StringComparison.Ordinal);
+                Assert.DoesNotContain("ua=", line.Message, StringComparison.Ordinal);
+                Assert.DoesNotContain("userId=", line.Message, StringComparison.Ordinal);
+                Assert.DoesNotContain("metadata=", line.Message, StringComparison.Ordinal);
+                Assert.DoesNotContain(Host.ClientIp, line.Message, StringComparison.Ordinal);
             });
+        }
+
+        [Fact]
+        public async Task AccessDenied_IsAwaited_SoTheEventIsPersistedBeforeTheResponseReturns()
+        {
+            await WaitForSafeMinuteWindow();
+            var owner = await _host.CreateUser(Unique("deny-await") + "@example.com");
+            var slug = Unique("deny-await");
+            await _host.CreateWorkspace(owner.Token, "Denied Await", slug);
+
+            var response = await _host.Send(HttpMethod.Get, "/api/Administration/AuditLogs", token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+            // No polling: an awaited write is visible as soon as the HTTP response completes.
+            var immediate = _host.ReadEvents(e => e.EventType == AccessDenied && e.UserId == owner.Id);
+            Assert.Single(immediate);
         }
 
         // ---- access.denied ----------------------------------------------------------------------------

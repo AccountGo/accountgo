@@ -90,9 +90,10 @@ namespace Api.Service
                 _logger.LogWarning(ex, "Failed to serialize security audit metadata for {EventType}", eventType);
             }
 
+            // Text logs keep only type/outcome/request id — IP, user agent, user id and metadata stay in the DB row.
             _logger.LogInformation(
-                "[SecurityAudit] eventType={EventType} outcome={Outcome} userId={UserId} companyId={CompanyId} ip={IpAddress} ua={UserAgent} correlationId={CorrelationId} metadata={Metadata}",
-                eventType, outcome, userId, companyId, ipAddress, userAgent, correlationId, metadataJson);
+                "[SecurityAudit] eventType={EventType} outcome={Outcome} correlationId={CorrelationId}",
+                eventType, outcome, correlationId);
 
             try
             {

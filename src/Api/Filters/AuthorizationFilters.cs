@@ -160,7 +160,7 @@ namespace Api.Filters
                 }
                 if (decision.ReasonCode == AccessReasonCode.PermissionDenied)
                 {
-                    AccessDeniedAudit.TryLog(
+                    await AccessDeniedAudit.TryLogAsync(
                         context.HttpContext,
                         _permission,
                         decision.MissingPermission ?? _permission,
@@ -180,7 +180,7 @@ namespace Api.Filters
                 problem.Extensions["policyVersion"] = decision.PolicyVersion;
                 if (decision.HttpStatus == StatusCodes.Status403Forbidden)
                 {
-                    AccessDeniedAudit.TryLog(
+                    await AccessDeniedAudit.TryLogAsync(
                         context.HttpContext,
                         _permission,
                         decision.MissingPermission ?? _permission,
@@ -408,7 +408,7 @@ namespace Api.Filters
             {
                 if (decision.ReasonCode == AccessReasonCode.PermissionDenied && !string.IsNullOrWhiteSpace(decision.MissingPermission))
                 {
-                    AccessDeniedAudit.TryLog(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
+                    await AccessDeniedAudit.TryLogAsync(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
                     context.Result = RequirePermissionAttribute.Denied(decision.MissingPermission!, decision.PolicyId, decision.PolicyVersion);
                     return;
                 }
@@ -421,7 +421,7 @@ namespace Api.Filters
                         tenantContext,
                         entitlements?.Options.SupportEmail,
                         requiredModules: decision.RequiredModules);
-                    AccessDeniedAudit.TryLog(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
+                    await AccessDeniedAudit.TryLogAsync(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
                     context.Result = new ObjectResult(entProblem)
                     {
                         StatusCode = StatusCodes.Status403Forbidden
@@ -439,7 +439,7 @@ namespace Api.Filters
                 problem.Extensions["policyId"] = decision.PolicyId;
                 problem.Extensions["policyVersion"] = decision.PolicyVersion;
                 if (decision.HttpStatus == StatusCodes.Status403Forbidden)
-                    AccessDeniedAudit.TryLog(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
+                    await AccessDeniedAudit.TryLogAsync(context.HttpContext, OperationKey, decision.MissingPermission, decision.ReasonCodeString);
                 context.Result = new ObjectResult(problem)
                 {
                     StatusCode = decision.HttpStatus
