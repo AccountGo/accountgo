@@ -31,6 +31,14 @@ Personal books are a separate workspace for household money. Use this section wh
 
 Wording to use and avoid: say net worth, book value, money in and out. Do not call these "personal financial statements", and do not say profit, revenue or deductible for personal books; they are historical-cost household records, not current-value statements or tax advice.
 
+## Account names and codes are defaults, not constants
+
+Account codes and names in this guide (30100, 30800, 40900, Owner's Capital, Owner's Drawings, Accumulated net worth, Money from my freelance work) are what the standard chart uses. A workspace can rename accounts or its entity profile can relabel equity (for example a partnership uses partners' names), so a real chart can differ.
+
+- When an answer depends on a specific account, call the chart of accounts tool (`get_chart_of_accounts`) for the current workspace and quote the name and code it returns. If no workspace data is available, say "the owner's drawings account (30800 in the standard chart)" and say it should be checked.
+- Never state a balance or invent an account from this guide. Use ledger tools for balances.
+- Linked entries look up the accounts by code: owner's drawings 30800 and owner's capital 30100 in the work workspace, and 40900 in the personal workspace (created on first use). If a workspace has removed or renumbered one of these, linking fails with a message that the required account is not configured; send the owner to the chart of accounts to restore it rather than suggesting another account.
+
 ## Link work and personal books (linked entries)
 
 A freelance (sole proprietor) workspace can link to the owner's personal books. One work workspace links to one personal workspace. The link is made at creation (the wizard answer, or the **Link to {work workspace}** tick in **Add personal books**); the app has no unlink screen. Company, partnership, cooperative and non-profit workspaces never get linked-entry actions; that is by design.
