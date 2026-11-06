@@ -25,6 +25,7 @@ public sealed record WorkspaceSetupSnapshot(
     int ClosedFinancialYears,
     bool IsPersonalBooks,
     bool IsLinkedAsWork,
+    int LinkedEntryPairs,
     IReadOnlyList<WorkspaceSetupAccount> EquityAccounts,
     IReadOnlyList<string> Blockers);
 
@@ -34,6 +35,8 @@ public sealed record WorkspaceSetupCorrectionResult(bool Applied, string? Code, 
 /// Operator-only correction of a workspace that was set up as personal finances but is really a freelancer's
 /// work books. It changes the setup only: purpose becomes Business and the business type becomes Sole proprietor,
 /// using the same business-type change the accounting policy endpoint applies (close target and equity labels).
+/// If the workspace was recorded as its owner's personal books, that record is released so the owner can create
+/// new personal books; a workspace with links or linked entries is refused.
 /// Posted entries, balances, members, plan and billing are never touched. Not exposed to workspace users.
 /// </summary>
 public sealed class WorkspaceSetupCorrectionService
@@ -73,6 +76,10 @@ public sealed class WorkspaceSetupCorrectionService
 
             var outcome = _transaction.Execute(companyId, _ =>
             {
+                // A workspace recorded as personal books stops being personal books; the owner's slot is freed.
+                var personalBooks = _db.PersonalWorkspaces.Where(p => p.CompanyId == companyId).ToList();
+                _db.PersonalWorkspaces.RemoveRange(personalBooks);
+
                 var settings = _db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId);
                 settings.Purpose = WorkspacePurpose.Business;
                 settings.PolicyRevision++;
@@ -92,7 +99,11 @@ public sealed class WorkspaceSetupCorrectionService
                     CompanyId = companyId, UserName = operatorId, AuditEventDateUTC = DateTime.UtcNow,
                     AuditEventType = (int)AuditEventTypes.Modified, TableName = AuditTable,
                     RecordId = companyId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    OriginalValue = System.Text.Json.JsonSerializer.Serialize(new { purpose = before.Purpose, entityType = before.EntityType }),
+                    OriginalValue = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        purpose = before.Purpose, entityType = before.EntityType,
+                        personalBooksOwner = personalBooks.Select(p => p.OwnerUserId).FirstOrDefault()
+                    }),
                     NewValue = System.Text.Json.JsonSerializer.Serialize(new
                     {
                         purpose = nameof(WorkspacePurpose.Business), entityType = nameof(EntityType.SoleProprietor),
@@ -119,6 +130,7 @@ public sealed class WorkspaceSetupCorrectionService
         var closedYears = _db.FinancialYears.IgnoreQueryFilters().Count(fy => fy.CompanyId == id && fy.ClosedAt != null);
         var isPersonalBooks = _db.PersonalWorkspaces.Any(p => p.CompanyId == id);
         var linkedAsWork = _db.WorkspaceLinks.Any(l => l.WorkCompanyId == id || l.PersonalCompanyId == id);
+        var pairs = _db.LinkedEntryPairs.Count(p => p.SourceCompanyId == id || p.MirrorCompanyId == id);
         var equity = _db.Accounts.IgnoreQueryFilters().AsNoTracking()
             .Where(a => a.CompanyId == id && a.AccountCode.StartsWith("30"))
             .OrderBy(a => a.AccountCode)
@@ -134,12 +146,12 @@ public sealed class WorkspaceSetupCorrectionService
         else if (settings.Purpose != WorkspacePurpose.Personal) blockers.Add("Only a workspace set up for personal finances can be corrected to freelance books.");
         if (entityType is not (EntityType.Individual or EntityType.SoleProprietor)) blockers.Add("The business type must be Individual or Sole proprietor.");
         if (closedYears > 0 && entityType != EntityType.SoleProprietor) blockers.Add("Reopen closed years before changing the business type.");
-        if (isPersonalBooks) blockers.Add("This workspace is someone's personal books.");
         if (linkedAsWork) blockers.Add("Unlink this workspace first.");
+        if (pairs > 0) blockers.Add("This workspace has linked entries.");
         if (!equity.Any(a => a.Code == "30800")) blockers.Add("Account 30800 (drawings) is missing from the chart.");
 
         return new WorkspaceSetupSnapshot(id, company.Slug, company.Name,
             settings?.Purpose.ToString() ?? "Unspecified", settings?.CollaborationIntent.ToString() ?? "Unspecified",
-            entityType?.ToString() ?? "Unspecified", posted, closedYears, isPersonalBooks, linkedAsWork, equity, blockers);
+            entityType?.ToString() ?? "Unspecified", posted, closedYears, isPersonalBooks, linkedAsWork, pairs, equity, blockers);
     }
 }
