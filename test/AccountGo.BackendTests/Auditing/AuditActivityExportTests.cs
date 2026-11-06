@@ -193,6 +193,8 @@ namespace AccountGo.BackendTests.Auditing
         [InlineData("+1", "'+1")]
         [InlineData("-1", "'-1")]
         [InlineData("@cmd", "'@cmd")]
+        [InlineData("\t=1+1", "'\t=1+1")]
+        [InlineData("\r=1+1", "'\r=1+1")]
         [InlineData("safe", "safe")]
         [InlineData("", "")]
         public void NeutraliseCsvFormula_PrefixesDangerousCells(string input, string expected)

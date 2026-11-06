@@ -311,12 +311,15 @@ namespace Api.Controllers
             return text;
         }
 
-        /// <summary>Prefix formula-like cells so spreadsheet apps do not execute them.</summary>
+        /// <summary>
+        /// Prefix formula-like cells so spreadsheet apps do not execute them.
+        /// Leading tab and carriage return are included: Excel/Sheets can treat those as formulas too.
+        /// </summary>
         public static string NeutraliseCsvFormula(string value)
         {
             if (value.Length == 0) return value;
             var first = value[0];
-            if (first is '=' or '+' or '-' or '@')
+            if (first is '=' or '+' or '-' or '@' or '\t' or '\r')
                 return "'" + value;
             return value;
         }
