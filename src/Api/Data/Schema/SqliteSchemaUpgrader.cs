@@ -896,6 +896,23 @@ WHERE ""DisabledModulesJson"" IS NULL
                 CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_CompanyId_CreatedAt"" ON ""SecurityAuditEvents"" (""CompanyId"", ""CreatedAt"");
                 CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_EventType_CreatedAt"" ON ""SecurityAuditEvents"" (""EventType"", ""CreatedAt"");";
             idx.ExecuteNonQuery();
+            EnsureSecurityAuditEventRetention(connection);
+        }
+
+        /// <summary>Append-only UPDATE block and retention-floor DELETE triggers for security events.</summary>
+        private static void EnsureSecurityAuditEventRetention(DbConnection connection)
+        {
+            if (!TableExists(connection, "SecurityAuditEvents")) return;
+            foreach (var sql in new[]
+            {
+                SqliteSecurityAuditEventsSql.UpdateTrigger,
+                SqliteSecurityAuditEventsSql.DeleteTrigger
+            })
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
         }
 
         private static void EnsureWorkspaceOperatingPolicy(DbConnection connection)
