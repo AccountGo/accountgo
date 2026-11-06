@@ -67,6 +67,7 @@ namespace AccountGo.BackendTests.Auditing
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
                 builder.UseSetting("SERVER_TIMING_ENABLED", "true");
+                builder.UseSetting("AuditRetention:Enabled", "false");
                 builder.ConfigureLogging(logging => logging.AddProvider(Logs));
                 builder.ConfigureTestServices(services =>
                 {

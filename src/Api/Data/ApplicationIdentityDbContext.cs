@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,32 @@ namespace Api.Data
         public DbSet<TrustedDevice> TrustedDevices { get; set; } = null!;
         public DbSet<UserWebAuthnCredential> WebAuthnCredentials { get; set; } = null!;
         public DbSet<WebAuthnChallengeEntity> WebAuthnChallenges { get; set; } = null!;
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            EnforceSecurityAuditEventImmutability();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        {
+            EnforceSecurityAuditEventImmutability();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        /// <summary>
+        /// Tracked modify/delete is blocked in-process; the retention job uses <c>ExecuteDeleteAsync</c>,
+        /// which bypasses change tracking and is checked by the database trigger instead.
+        /// </summary>
+        private void EnforceSecurityAuditEventImmutability()
+        {
+            var blocked = ChangeTracker.Entries<SecurityAuditEvent>()
+                .Where(e => e.State is EntityState.Modified or EntityState.Deleted)
+                .ToList();
+            if (blocked.Count == 0) return;
+            throw new InvalidOperationException(
+                "SecurityAuditEvents rows are append-only evidence and cannot be modified or deleted.");
+        }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
