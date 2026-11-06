@@ -41,7 +41,7 @@ Account codes and names in this guide (30100, 30800, 40900, Owner's Capital, Own
 
 ## Link work and personal books (linked entries)
 
-A freelance (sole proprietor) workspace can link to the owner's personal books. One work workspace links to one personal workspace. The link is made at creation (the wizard answer, or the **Link to {work workspace}** tick in **Add personal books**); the app has no unlink screen. Company, partnership, cooperative and non-profit workspaces never get linked-entry actions; that is by design.
+One work workspace links to one personal workspace. The link is made at creation (the wizard answer, or the **Link to {work workspace}** tick in **Add personal books**); the app has no unlink screen. A link is only a registry record. The money-moving actions below exist only when the work workspace is a freelance (sole proprietor) workspace: a company, partnership, cooperative or non-profit workspace can be linked, but the server refuses linked entries for it (`linked_entry_not_available`) and the **Personal** and **Money I put in** buttons are not shown. So never say a company workspace cannot be linked; say linking gives it no posting between workspaces.
 
 Linking is done from a bank statement line on **Bank statement import** (not by hand in the ledger), in the work workspace only. Unmatched withdrawals show a **Personal** button; unmatched deposits show **Money I put in**. Each opens **Link this bank line**, which creates a balanced journal in each workspace:
 
@@ -50,7 +50,7 @@ Linking is done from a bank statement line on **Bank statement import** (not by 
 | **Personal** → **Personal spending** (withdrawal; choose a **Household spending category**) | **Owner's Drawings** (30800) up, work bank down | The household expense, with the matching credit to **Money from my freelance work** (40900) |
 | **Personal** → **Move to a personal bank account** (choose a **Personal bank account**) | **Owner's Drawings** up, work bank down | The personal bank account up, credit to 40900 |
 | **Personal** → **Split part of this purchase as a work expense** (**Work expense category**, **Work amount**) | The work part is expensed, the rest goes to drawings | Only the personal part is recorded |
-| **Money I put in** (deposit) | Work bank up, **Owner's Capital** (30100) up (the equity account is named Owner's Capital for a sole proprietor; there is no account called Owner's Contributions) | 40900 reduced, personal bank down |
+| **Money I put in** (deposit; choose the **Personal bank account** the money came from) | Work bank up, **Owner's Capital** (30100) up (the equity account is named Owner's Capital for a sole proprietor; there is no account called Owner's Contributions) | 40900 reduced, personal bank down |
 
 Rules to explain:
 - The posting date must fall in an open fiscal year in both workspaces; the error names the workspace that blocks it. If the work workspace requires independent review, both sides wait as a pending pair until approved; rejecting or cancelling deletes both drafts.
@@ -69,7 +69,7 @@ Answer from this model; do not describe the two workspaces as unlinked ledgers w
 4. If the money goes to a genuinely separate personal bank account of the owner, use **Personal** → **Move to a personal bank account** and choose that **Personal bank account** (a cash account in the personal workspace). The work books record the same drawing, the personal bank account goes up, and 40900 is credited. That personal account is then reconciled in the personal workspace against its own statement.
 5. Business receipts and bills stay in the work workspace as normal invoices, payments and bills; they are not mirrored. A client payment is Dr Bank / Cr Accounts Receivable; revenue is recognised when the invoice is issued.
 6. Limits: the posting date must be in an open fiscal year in both workspaces; with independent review the pair waits for approval; correct linked journals with **Reverse** on the linked entry, not by editing. Only freelance (sole proprietor) workspaces get these actions.
-7. These actions exist only in a linked freelance (sole proprietor) workspace; a company, partnership, cooperative or non-profit workspace has no **Personal** or **Money I put in** buttons, and the answer for them is to keep personal money out of those books.
+7. A company, partnership, cooperative or non-profit workspace has no linked entries, even if it was linked. Do not give it a workaround with invented accounts (for example Shareholder Loan or Due from Shareholder), and do not give legal advice. Say that personal money should stay out of those books, that the owner's and shareholders' equity or loan accounts are whatever the workspace's chart contains (look them up with `get_chart_of_accounts`), and that their accountant decides the treatment. Recommending a separate business bank account is appropriate.
 8. Optional advice, after the answer: a separate business account makes statements cleaner, but it is a recommendation, not a requirement.
 
 Do not tell the user to book mirror equity entries by hand in both workspaces, to use accounts called "Owner's Contributions", "Due from Business" or "Personal Income", or to use a `/banking` route without `/org/{orgSlug}`.
