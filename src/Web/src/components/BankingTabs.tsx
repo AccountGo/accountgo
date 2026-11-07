@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { PageTabs } from './PageTabs';
 import { useTenantContext } from './Gating';
 import { useIntegrations } from '../lib/integrations';
 
@@ -23,26 +23,7 @@ export const BankingTabs: React.FC<BankingTabsProps> = ({ active, orgSlug }) => 
     ] : []),
   ];
 
-  return (
-    <div className="flex flex-wrap gap-1 border-b border-[var(--border-subtle)] pb-px">
-      {tabs.map((tab) => {
-        const isActive = tab.id === active;
-        return (
-          <Link
-            key={tab.id}
-            to={tab.to}
-            className={`h-9 px-4 rounded-t-xl text-xs font-semibold transition ${
-              isActive
-                ? 'bg-[var(--bg-surface)] text-[var(--text-main)] border border-b-0 border-[var(--border-subtle)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-            }`}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
+  return <PageTabs label="Banking" tabs={tabs.map((tab) => ({ ...tab, end: true, active: tab.id === active }))} />;
 };
 
 export default BankingTabs;
