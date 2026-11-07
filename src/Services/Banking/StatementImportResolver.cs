@@ -63,6 +63,11 @@ namespace Services.Banking
                     ?? FirstNonBlankIndex(records);
             }
 
+            var header = headerIndex.HasValue && headerIndex.Value < records.Count
+                ? records[headerIndex.Value]
+                : null;
+            map = StatementImportPresets.WithLayoutDefaults(header, map);
+
             var dataStart = headerIndex.HasValue ? headerIndex.Value + 1 : 0;
             var dateSamples = records
                 .Skip(dataStart)
@@ -107,6 +112,11 @@ namespace Services.Banking
             var directionSigns = BuildDirectionSigns(map);
             var allowedStatuses = BuildAllowedStatuses(map);
             var skippedTypes = BuildSkippedTypes(map);
+            var skippedDirections = BuildSkippedDirections(map);
+            var columnCount = header?.Count ?? records.Select(r => r.Count).DefaultIfEmpty(0).Max();
+            if (skippedDirections.Count > 0 &&
+                (!map.DirectionColumn.HasValue || map.DirectionColumn.Value < 0 || map.DirectionColumn.Value >= columnCount))
+                throw new InvalidOperationException("Select a valid direction column to apply the skipped direction rule.");
             var accountCurrency = string.IsNullOrWhiteSpace(accountCurrencyCode)
                 ? null
                 : accountCurrencyCode.Trim().ToUpperInvariant();
@@ -125,6 +135,8 @@ namespace Services.Banking
                 FeeColumn = map.FeeColumn,
                 DirectionColumn = map.DirectionColumn,
                 DirectionSigns = directionSigns,
+                SkippedDirections = skippedDirections,
+                AmountCarriesSign = map.AmountCarriesSign == true,
                 PayeeColumn = map.PayeeColumn,
                 MemoColumn = map.MemoColumn,
                 ReferenceColumn = map.ReferenceColumn,
@@ -170,6 +182,7 @@ namespace Services.Banking
                     Currency = currencySummary,
                     Status = statusSummary,
                     Header = headerSummary,
+                    RowRule = StatementImportPresets.DescribeRowRule(map),
                     NeedsDateFormatChoice = needsDateChoice,
                     NeedsAmountFormatChoice = needsAmountChoice
                 }
@@ -210,13 +223,15 @@ namespace Services.Banking
             BankStatementColumnMap map,
             StatementColumnDetector.AmountDetection amountDetection)
         {
-            var shape = map.AmountColumn.HasValue && map.DirectionColumn.HasValue
-                ? "unsigned + direction"
-                : map.AmountColumn.HasValue
-                    ? "signed amount"
-                    : map.DepositColumn.HasValue || map.WithdrawalColumn.HasValue
-                        ? "deposit / withdrawal columns"
-                        : "unmapped";
+            var shape = map.AmountColumn.HasValue && map.DirectionColumn.HasValue && map.AmountCarriesSign == true
+                ? "signed amount"
+                : map.AmountColumn.HasValue && map.DirectionColumn.HasValue
+                    ? "unsigned + direction"
+                    : map.AmountColumn.HasValue
+                        ? "signed amount"
+                        : map.DepositColumn.HasValue || map.WithdrawalColumn.HasValue
+                            ? "deposit / withdrawal columns"
+                            : "unmapped";
             if (amountDetection.Kind is StatementColumnDetector.AmountDecimalKind.Unknown
                 or StatementColumnDetector.AmountDecimalKind.Ambiguous)
                 return shape;
@@ -255,6 +270,15 @@ namespace Services.Banking
                 return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             return new HashSet<string>(
                 map.SkippedTypes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static IReadOnlySet<string> BuildSkippedDirections(BankStatementColumnMap map)
+        {
+            if (map.SkippedDirections == null || map.SkippedDirections.Count == 0)
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return new HashSet<string>(
+                map.SkippedDirections.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()),
                 StringComparer.OrdinalIgnoreCase);
         }
 
