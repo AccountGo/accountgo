@@ -43,6 +43,10 @@ export interface AuthResponse {
   expiresIn: number;
   user: UserDto;
   organizations?: { slug: string; name: string; role: string }[];
+  /** Sign out after this many seconds without activity (strictest of the user's workspaces). */
+  idleTimeoutSeconds?: number;
+  /** Hard end of this sign-in (ISO 8601, UTC); activity does not extend it. */
+  sessionExpiresAt?: string;
 }
 
 export interface OtpSendResponse {
@@ -132,11 +136,14 @@ export interface AuthContextType {
   verifyOtp: (email: string, otp: string, turnstileToken?: string) => Promise<VerifyOtpResult>;
   completeSession: (authData: AuthResponse) => void;
   completeStepUp: (newToken: string) => void;
-  logout: () => Promise<void>;
+  /** `reason` marks an automatic sign-out so it is recorded as one. */
+  logout: (reason?: 'idle' | 'expired') => Promise<void>;
   /** Drops the in-memory session. Use after the server has already revoked it. */
   clearSession: () => void;
   authFetch: (url: string, init?: RequestInit | AuthFetchInit, planDialog?: boolean) => Promise<Response>;
   refreshUser: () => Promise<void>;
   /** Mints a fresh session token from the refresh cookie, picking up newly granted workspace access. */
   refreshSession: () => Promise<string | null>;
+  /** Why the user was signed out automatically, for the sign-in page. Cleared by the next sign-in. */
+  signedOutNotice: string | null;
 }

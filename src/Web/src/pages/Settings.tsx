@@ -35,6 +35,7 @@ import { useDeleteCurrentWorkspace } from '../lib/useDeleteCurrentWorkspace';
 import { StepUpPrompt } from '../components/StepUpPrompt';
 import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
+import { AutomaticSignOutCard } from '../components/AutomaticSignOutCard';
 import { ActivitySettingsTab } from '../components/ActivitySettingsTab';
 import { JournalApprovalPolicyCard } from '../components/JournalApprovalPolicyCard';
 import { WorkspaceSetupCard } from '../components/WorkspaceSetupCard';
@@ -1136,7 +1137,10 @@ export const Settings: React.FC = () => {
               tabIndex={0}
               className="focus:outline-none"
             >
-              <RolesSettingsTab tenantContext={tenantContext} />
+              <div className="space-y-6">
+                <RolesSettingsTab tenantContext={tenantContext} />
+                <AutomaticSignOutCard canEdit={isWorkspaceAdmin} />
+              </div>
             </div>
           )}
 

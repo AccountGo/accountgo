@@ -64,6 +64,9 @@ namespace Core.Domain
         public DateTime? MfaGracePeriodEndsAt { get; set; }
         public bool RequireMfaEveryLogin { get; set; } = false;
 
+        /// <summary>Minutes without activity before members are signed out. See <see cref="SessionTimeoutPolicy"/>.</summary>
+        public int IdleTimeoutMinutes { get; set; } = SessionTimeoutPolicy.DefaultIdleMinutes;
+
         public SalesInvoiceSettings GetSalesInvoiceSettings() => SalesInvoiceSettings.FromJson(SalesInvoiceSettingsJson);
 
         public void SetSalesInvoiceSettings(SalesInvoiceSettings settings) => SalesInvoiceSettingsJson = settings.ToJson();
