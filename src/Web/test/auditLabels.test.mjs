@@ -203,6 +203,7 @@ const PR3_EVENT_LABELS = {
   'auth.signin.failure': 'Sign-in failed',
   'auth.signup': 'Account sign-up',
   'auth.logout': 'Signed out',
+  'auth.session.timeout': 'Signed out automatically',
   'auth.password.change': 'Password changed',
   'auth.session.revoke_others': 'Signed out other devices',
   'auth.otp.locked': 'Sign-in code locked after too many attempts',

@@ -26,6 +26,12 @@ namespace Dto.Security
     )
     {
         public IEnumerable<OrganizationDto> Organizations { get; set; } = new List<OrganizationDto>();
+
+        /// <summary>Sign the user out after this many seconds without activity (strictest of their workspaces).</summary>
+        public int? IdleTimeoutSeconds { get; set; }
+
+        /// <summary>Hard end of this sign-in (UTC); activity does not extend it.</summary>
+        public DateTime? SessionExpiresAt { get; set; }
     }
 
     #nullable disable

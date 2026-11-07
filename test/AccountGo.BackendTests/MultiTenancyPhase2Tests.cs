@@ -635,6 +635,9 @@ namespace AccountGo.BackendTests
                 "WorkspaceOnboardingCohort.cs",
                 // Account deletion coordinates each authenticated user's affected company explicitly.
                 "AccountDeletionService.cs",
+                // Sign-in sessions read only the idle timeout of the signed-in user's own active memberships, before
+                // any workspace is resolved (one sign-in covers all of them).
+                "SessionService.cs",
                 // Journal reviewer eligibility evaluates a named workspace's members and policy rule explicitly.
                 "WorkspaceReviewerEligibility.cs",
                 "InvitationsController.cs",

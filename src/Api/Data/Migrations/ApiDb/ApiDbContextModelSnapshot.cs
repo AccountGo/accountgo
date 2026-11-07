@@ -509,6 +509,11 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("FiscalYearStartMonth")
                         .HasColumnType("int");
 
+                    b.Property<int>("IdleTimeoutMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(60);
+
                     b.Property<int>("IndustryTemplate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
