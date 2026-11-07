@@ -464,6 +464,11 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int?>("FiscalYearStartMonth")
                         .HasColumnType("integer");
 
+                    b.Property<int>("IdleTimeoutMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(60);
+
                     b.Property<int>("IndustryTemplate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")

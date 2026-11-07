@@ -398,7 +398,7 @@ namespace Api.Controllers
 
             if (!string.IsNullOrEmpty(result.RawRefreshToken))
             {
-                SetRefreshTokenCookie(result.RawRefreshToken);
+                SetRefreshTokenCookie(result.RawRefreshToken, result.Response?.SessionExpiresAt);
             }
 
             await AuditAsync("auth.signin.success", "success", user.Id, new { method = "google" });
@@ -680,7 +680,7 @@ namespace Api.Controllers
 
             if (!string.IsNullOrEmpty(result.RawRefreshToken))
             {
-                SetRefreshTokenCookie(result.RawRefreshToken);
+                SetRefreshTokenCookie(result.RawRefreshToken, result.Response?.SessionExpiresAt);
             }
 
             var verifiedUser = await _userManager.FindByEmailAsync(request.Email.Trim());
@@ -740,7 +740,7 @@ namespace Api.Controllers
 
             if (!string.IsNullOrEmpty(result.NewRawRefreshToken))
             {
-                SetRefreshTokenCookie(result.NewRawRefreshToken);
+                SetRefreshTokenCookie(result.NewRawRefreshToken, result.Response.SessionExpiresAt);
             }
 
             return Ok(result.Response);
@@ -1133,25 +1133,41 @@ namespace Api.Controllers
             };
         }
 
-        [Authorize]
+        // Anonymous so an automatic sign-out still revokes the cookie after the in-memory access token has expired.
+        // The refresh cookie is SameSite=Lax and path-scoped, so another site cannot sign the user out.
+        [AllowAnonymous]
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout()
+        public async Task<IActionResult> Logout([FromQuery] string? reason = null)
         {
+            var callerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+            var userId = callerId;
+            var revoked = false;
             var rawRefreshToken = Request.Cookies[RefreshCookieName];
             if (!string.IsNullOrEmpty(rawRefreshToken))
             {
-                await _otpService.RevokeSessionAsync(rawRefreshToken);
+                if (userId == null)
+                {
+                    var hash = SessionService.HashRefreshToken(rawRefreshToken);
+                    userId = await _identityContext.RefreshTokens
+                        .Where(t => t.TokenHash == hash)
+                        .Select(t => t.UserId)
+                        .FirstOrDefaultAsync();
+                }
+                revoked = await _otpService.RevokeSessionAsync(rawRefreshToken);
             }
 
             ClearRefreshTokenCookie();
-            await AuditAsync(
-                "auth.logout",
-                "success",
-                User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value);
+            // Record only sign-outs that ended something: a replayed cookie or a second tab signing out the same,
+            // already-revoked sign-in writes nothing. Browser-reported reason: "idle" or "expired" (12-hour limit).
+            var automatic = reason is "idle" or "expired";
+            if (userId != null && automatic && revoked)
+                await AuditAsync("auth.session.timeout", "success", userId, new { reason });
+            else if (userId != null && !automatic && (revoked || callerId != null))
+                await AuditAsync("auth.logout", "success", userId);
             return Ok(new { message = "Logged out successfully" });
         }
 
-        private void SetRefreshTokenCookie(string token)
+        private void SetRefreshTokenCookie(string token, DateTime? sessionExpiresAt)
         {
             var isHttps = Request.IsHttps || string.Equals(Request.Headers["X-Forwarded-Proto"], "https", StringComparison.OrdinalIgnoreCase);
             var cookieOptions = new CookieOptions
@@ -1160,7 +1176,8 @@ namespace Api.Controllers
                 Secure = isHttps,
                 // Lax: SPA and API share the registrable domain (or same-origin via proxy); avoids CSRF via cross-site cookie send.
                 SameSite = SameSiteMode.Lax,
-                Expires = DateTime.UtcNow.AddDays(7),
+                // The server enforces idle and absolute limits; the cookie just never outlives the sign-in.
+                Expires = sessionExpiresAt ?? DateTime.UtcNow.AddHours(Core.Domain.SessionTimeoutPolicy.DefaultAbsoluteHours),
                 Path = "/api"
             };
             Response.Cookies.Append(RefreshCookieName, token, cookieOptions);

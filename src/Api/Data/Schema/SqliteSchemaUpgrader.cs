@@ -293,6 +293,7 @@ namespace Api.Data.Schema
                     new[] { "CompanySetting", "MfaGracePeriodEndsAt", "TEXT NULL" },
                     new[] { "CompanySetting", "RequireMfaEveryLogin", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "Timezone", "TEXT NOT NULL DEFAULT 'UTC'" },
+                    new[] { "CompanySetting", "IdleTimeoutMinutes", "INTEGER NOT NULL DEFAULT 60" },
                     new[] { "AspNetUsers", "MfaReEnrollRequired", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "RefreshTokens", "MfaMethod", "TEXT NULL" },
                     new[] { "RefreshTokens", "Amr", "TEXT NULL" },
