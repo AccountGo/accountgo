@@ -673,6 +673,147 @@ namespace Api.Controllers
             return Ok(_financialService.CashFlow(from, to, basis));
         }
 
+        [HttpGet]
+        [Route("Report.pdf")]
+        [RequirePermission(SystemPermissions.ReportsView)]
+        [AuditDataAccess("financial_report_pdf", "data.export")]
+        public async Task<IActionResult> ReportPdf(
+            string? statement,
+            DateTime? from = null,
+            DateTime? to = null,
+            Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual,
+            bool hideZero = true,
+            DateTime? compareFrom = null,
+            DateTime? compareTo = null)
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
+                return denied!;
+
+            if (!TryParseReportKind(statement, out var kind))
+                return BadRequest(new { message = "Provide a statement: trialBalance, income, balanceSheet, or cashFlow." });
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            if (compareFrom.HasValue && !compareTo.HasValue)
+                return BadRequest(new { message = "Provide compareTo when compareFrom is set." });
+            if (compareFrom.HasValue && compareTo.HasValue && compareFrom.Value > compareTo.Value)
+                return BadRequest(new { message = "Provide a valid comparative date range: compareFrom must not be after compareTo." });
+
+            var companyId = _tenantContext.RequireCompanyId();
+            var company = await _db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == companyId);
+            if (company == null)
+                return NotFound(new { message = "Workspace not found." });
+            var settings = await _db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(s => s.CompanyId == companyId);
+            var personal = await _db.PersonalWorkspaces.AsNoTracking().AnyAsync(p => p.CompanyId == companyId);
+            var compare = compareTo.HasValue
+                && (kind == Services.Financial.FinancialReportKind.IncomeStatement || kind == Services.Financial.FinancialReportKind.BalanceSheet);
+
+            IReadOnlyList<Services.Financial.TrialBalance>? trial = null;
+            IReadOnlyList<Services.Financial.IncomeStatement>? income = null;
+            IReadOnlyList<Services.Financial.IncomeStatement>? comparativeIncome = null;
+            IReadOnlyList<Services.Financial.BalanceSheet>? balance = null;
+            IReadOnlyList<Services.Financial.BalanceSheet>? comparativeBalance = null;
+            Services.Financial.CashFlowStatement? cashFlow = null;
+            IReadOnlyList<Services.Financial.FinancialReportAccountNode>? accounts = null;
+            Services.Financial.FinancialReportCashMovement? movement = null;
+
+            switch (kind)
+            {
+                case Services.Financial.FinancialReportKind.TrialBalance:
+                    trial = _financialService.TrialBalance(from, to, basis).ToList();
+                    break;
+                case Services.Financial.FinancialReportKind.IncomeStatement:
+                    income = _financialService.IncomeStatement(from, to, basis).ToList();
+                    accounts = await LoadReportAccountNodesAsync();
+                    if (compare)
+                        comparativeIncome = _financialService.IncomeStatement(compareFrom, compareTo, basis).ToList();
+                    break;
+                case Services.Financial.FinancialReportKind.BalanceSheet:
+                    balance = _financialService.BalanceSheet(from, to, basis).ToList();
+                    if (compare)
+                        comparativeBalance = _financialService.BalanceSheet(compareFrom, compareTo, basis).ToList();
+                    break;
+                default:
+                    if (personal)
+                        movement = await LoadCashMovementAsync(from, to);
+                    else
+                        cashFlow = _financialService.CashFlow(from, to, basis);
+                    break;
+            }
+
+            var print = Services.Financial.FinancialReportComposer.Compose(new Services.Financial.FinancialReportRequest
+            {
+                Kind = kind,
+                Personal = personal,
+                HideZero = hideZero,
+                CompanyName = company.Name,
+                LegalName = settings?.LegalName,
+                CurrencyCode = string.IsNullOrWhiteSpace(settings?.Currency) ? "USD" : settings!.Currency,
+                Basis = basis,
+                From = from,
+                To = to,
+                CompareFrom = compare ? compareFrom : null,
+                CompareTo = compare ? compareTo : null,
+                Slug = company.Slug,
+                GeneratedAtUtc = DateTime.UtcNow,
+                TimeZoneId = settings?.Timezone,
+                TrialBalance = trial,
+                Income = income,
+                ComparativeIncome = comparativeIncome,
+                BalanceSheet = balance,
+                ComparativeBalanceSheet = comparativeBalance,
+                CashFlow = cashFlow,
+                Accounts = accounts,
+                CashMovement = movement,
+            });
+            var document = new Api.Service.FinancialReportPdfDocument(print);
+            var bytes = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(document);
+            return File(bytes, "application/pdf", document.FileStem + ".pdf");
+        }
+
+        private static bool TryParseReportKind(string? statement, out Services.Financial.FinancialReportKind kind)
+        {
+            switch (statement?.Trim().ToLowerInvariant())
+            {
+                case "trialbalance":
+                case "trial-balance":
+                    kind = Services.Financial.FinancialReportKind.TrialBalance;
+                    return true;
+                case "income":
+                case "incomestatement":
+                case "profitandloss":
+                case "profit-and-loss":
+                    kind = Services.Financial.FinancialReportKind.IncomeStatement;
+                    return true;
+                case "balancesheet":
+                case "balance-sheet":
+                    kind = Services.Financial.FinancialReportKind.BalanceSheet;
+                    return true;
+                case "cashflow":
+                case "cash-flow":
+                    kind = Services.Financial.FinancialReportKind.CashFlow;
+                    return true;
+                default:
+                    kind = default;
+                    return false;
+            }
+        }
+
+        private async Task<IReadOnlyList<Services.Financial.FinancialReportAccountNode>> LoadReportAccountNodesAsync()
+        {
+            var rows = await _db.Accounts.AsNoTracking()
+                .Select(account => new { account.Id, account.ParentAccountId, account.AccountName })
+                .ToListAsync();
+            return rows.Select(account => new Services.Financial.FinancialReportAccountNode
+            {
+                Id = account.Id,
+                ParentAccountId = account.ParentAccountId,
+                AccountName = account.AccountName,
+            }).ToList();
+        }
+
         [HttpGet("cash-movement")]
         [RequirePermission(SystemPermissions.ReportsView)]
         public async Task<IActionResult> CashMovement(DateTime? from = null, DateTime? to = null)
@@ -682,6 +823,28 @@ namespace Api.Controllers
             if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date))
                 return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
 
+            var movement = await LoadCashMovementAsync(from, to);
+            return Ok(new
+            {
+                openingCash = movement.OpeningCash,
+                lines = movement.Lines.Select(line => new
+                {
+                    date = line.Date,
+                    generalLedgerHeaderId = line.GeneralLedgerHeaderId,
+                    description = line.Description,
+                    accountName = line.AccountName,
+                    counterpartAccountName = line.CounterpartAccountName,
+                    moneyIn = line.MoneyIn,
+                    moneyOut = line.MoneyOut,
+                }),
+                totalIn = movement.TotalIn,
+                totalOut = movement.TotalOut,
+                closingCash = movement.ClosingCash,
+            });
+        }
+
+        private async Task<Services.Financial.FinancialReportCashMovement> LoadCashMovementAsync(DateTime? from, DateTime? to)
+        {
             var accounts = await _db.Accounts.AsNoTracking().Select(a => new { a.Id, a.AccountName, a.IsCash, a.ParentAccountId }).ToListAsync();
             var cashIds = accounts.Where(a => a.IsCash || (a.ParentAccountId.HasValue && accounts.Any(p => p.Id == a.ParentAccountId && p.IsCash))).Select(a => a.Id).ToHashSet();
             var query = _db.GeneralLedgerHeaders.AsNoTracking().Include(h => h.GeneralLedgerLines).AsQueryable();
@@ -689,7 +852,7 @@ namespace Api.Controllers
                 query = query.Where(h => h.Date < to.Value.Date.AddDays(1));
             var headers = await query.OrderBy(h => h.Date).ThenBy(h => h.Id).ToListAsync();
             decimal opening = 0;
-            var lines = new List<object>();
+            var lines = new List<Services.Financial.FinancialReportCashMovementLine>();
             decimal totalIn = 0, totalOut = 0;
             var names = accounts.ToDictionary(a => a.Id, a => a.AccountName);
             foreach (var header in headers)
@@ -707,10 +870,26 @@ namespace Api.Controllers
                     totalIn += incoming;
                     totalOut += outgoing;
                     var counterpart = all.Length == 2 ? names.GetValueOrDefault(all.Single(l => l.Id != line.Id).AccountId, "Unknown") : "Split";
-                    lines.Add(new { date = header.Date, generalLedgerHeaderId = header.Id, description = header.Description, accountName = names.GetValueOrDefault(line.AccountId, "Unknown"), counterpartAccountName = counterpart, moneyIn = incoming, moneyOut = outgoing });
+                    lines.Add(new Services.Financial.FinancialReportCashMovementLine
+                    {
+                        Date = header.Date,
+                        GeneralLedgerHeaderId = header.Id,
+                        Description = header.Description,
+                        AccountName = names.GetValueOrDefault(line.AccountId, "Unknown"),
+                        CounterpartAccountName = counterpart,
+                        MoneyIn = incoming,
+                        MoneyOut = outgoing,
+                    });
                 }
             }
-            return Ok(new { openingCash = opening, lines, totalIn, totalOut, closingCash = opening + totalIn - totalOut });
+            return new Services.Financial.FinancialReportCashMovement
+            {
+                OpeningCash = opening,
+                Lines = lines,
+                TotalIn = totalIn,
+                TotalOut = totalOut,
+                ClosingCash = opening + totalIn - totalOut,
+            };
         }
 
         #region CRUD for Accounts

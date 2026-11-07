@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Core.Domain;
 using Core.Domain.Financials;
+using UglyToad.PdfPig;
 using Xunit;
 
 namespace AccountGo.BackendTests
@@ -710,6 +711,33 @@ namespace AccountGo.BackendTests
             Assert.DoesNotContain(marCashTrial, a => a.GetProperty("accountCode").GetString() == "20120");
             Assert.DoesNotContain(marCashTrial, a => a.GetProperty("accountCode").GetString() == "10120");
             Assert.Single(marCashTrial, a => a.GetProperty("accountCode").GetString() == "40100" && a.GetProperty("credit").GetDecimal() == 200m);
+        }
+
+        [Fact]
+        public async Task Reports_PdfDownload_ReturnsTheStatementForThisWorkspaceOnly()
+        {
+            WithDb(db =>
+            {
+                db.Companies.Single(c => c.Id == _companyId).ActiveModulesJson = "[\"reports\"]";
+                db.SaveChanges();
+            });
+            var response = await Send(HttpMethod.Get, "/api/Financials/Report.pdf?statement=trialBalance&to=2026-04-30T23:59:59.9999999");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+            var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+            Assert.Equal("phase-three-trial-balance-accrual-2026-04-30.pdf", fileName);
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            Assert.True(bytes.Length > 100);
+            Assert.Equal((byte)'%', bytes[0]);
+            using var document = PdfDocument.Open(bytes);
+            var text = string.Join("\n", document.GetPages().Select(page => page.Text));
+            Assert.Contains("Phase Three", text);
+            Assert.Contains("Trial Balance", text);
+            Assert.Contains("In balance", text);
+            Assert.Equal("AccountGo", document.Information.Creator);
+
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Get, "/api/Financials/Report.pdf?statement=nope")).StatusCode);
+            Assert.False((await Send(HttpMethod.Get, "/api/Financials/Report.pdf?statement=trialBalance&to=2026-04-30T23:59:59.9999999", token: _otherToken)).IsSuccessStatusCode);
         }
 
         private GeneralLedgerHeader ReportEntry(DateTime date, Account debit, Account credit, decimal amount)
