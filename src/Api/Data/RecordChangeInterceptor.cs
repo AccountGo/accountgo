@@ -31,6 +31,7 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
     public static IReadOnlyDictionary<Type, string> AllowList { get; } = new Dictionary<Type, string>
     {
         [typeof(Account)] = "Account", [typeof(Bank)] = "Bank",
+        [typeof(BankTransaction)] = "BankTransaction", [typeof(BankReconciliation)] = "BankReconciliation",
         [typeof(BankStatementDescriptionRule)] = "BankStatementDescriptionRule",
         [typeof(JournalEntryHeader)] = "JournalEntryHeader", [typeof(JournalEntryLine)] = "JournalEntryLine",
         [typeof(SalesInvoiceHeader)] = "SalesInvoiceHeader", [typeof(SalesInvoiceLine)] = "SalesInvoiceLine",
@@ -163,6 +164,13 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
                 ? new object?[] { Mask(property.Metadata.Name, oldValue, entry.Entity is Bank), Mask(property.Metadata.Name, newValue, entry.Entity is Bank) }
                 : Mask(property.Metadata.Name, state == EntityState.Deleted ? oldValue : newValue, entry.Entity is Bank);
         }
+        if (state == EntityState.Modified && entry.Entity is BankReconciliation reconciliation)
+        {
+            values[nameof(BankReconciliation.BankId)] = reconciliation.BankId;
+            values[nameof(BankReconciliation.StatementEndDate)] = reconciliation.StatementEndDate;
+        }
+        if (state == EntityState.Modified && entry.Entity is BankTransaction transaction)
+            values[nameof(BankTransaction.BankId)] = transaction.BankId;
         return values;
     }
 

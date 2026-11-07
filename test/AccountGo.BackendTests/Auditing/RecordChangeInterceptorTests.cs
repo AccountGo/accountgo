@@ -19,6 +19,64 @@ namespace AccountGo.BackendTests.Auditing;
 public sealed class RecordChangeInterceptorTests
 {
     [Fact]
+    public void Banking_transaction_and_reconciliation_lifecycle_are_audited()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:;Foreign Keys=False");
+        connection.Open();
+        using var db = CreateDb(connection, new FixedAuditContext());
+        db.Database.EnsureCreated();
+        var transaction = new BankTransaction { CompanyId = 1, BankId = 7, No = "BT-1", Amount = 25, Date = new DateTime(2026, 10, 1), Kind = BankTransactionKinds.MoneyOut };
+        var reconciliation = new BankReconciliation { CompanyId = 1, BankId = 7, StatementEndDate = new DateTime(2026, 10, 31), Status = BankReconciliationStatuses.Draft, CreatedAt = DateTime.UtcNow };
+        db.BankTransactions.Add(transaction);
+        db.BankReconciliations.Add(reconciliation);
+        db.SaveChanges();
+        transaction.VoidGeneralLedgerHeaderId = 99;
+        reconciliation.Status = BankReconciliationStatuses.Finished;
+        reconciliation.FinishedBy = "actor-1";
+        reconciliation.FinishedAt = DateTime.UtcNow;
+        db.SaveChanges();
+        reconciliation.Status = BankReconciliationStatuses.Undone;
+        reconciliation.UndoneBy = "actor-1";
+        reconciliation.UndoneAt = DateTime.UtcNow;
+        reconciliation.UndoReason = "Statement correction";
+        db.SaveChanges();
+
+        var changes = db.RecordChanges.IgnoreQueryFilters().AsNoTracking().OrderBy(x => x.Id).ToList();
+        var txChanges = changes.Where(x => x.EntityType == "BankTransaction").ToList();
+        Assert.Equal(2, txChanges.Count);
+        Assert.Contains("VoidGeneralLedgerHeaderId", txChanges[1].ChangesJson);
+        var reconChanges = changes.Where(x => x.EntityType == "BankReconciliation").ToList();
+        Assert.Equal(3, reconChanges.Count);
+        Assert.Contains("FinishedAt", reconChanges[1].ChangesJson);
+        Assert.Contains("Statement correction", reconChanges[2].ChangesJson);
+        using var finish = JsonDocument.Parse(reconChanges[1].ChangesJson);
+        Assert.Equal(7, finish.RootElement.GetProperty("BankId").GetInt32());
+        Assert.StartsWith("2026-10-31", finish.RootElement.GetProperty("StatementEndDate").GetString());
+        Assert.All(changes, change => { Assert.Equal(1, change.CompanyId); Assert.Equal("actor-1", change.ActorUserId); Assert.NotEqual(default, change.OccurredAt); });
+    }
+
+    [Fact]
+    public void Banking_audit_failure_rolls_back_reconciliation_finish()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:;Foreign Keys=False");
+        connection.Open();
+        using (var setup = CreateDb(connection, new FixedAuditContext()))
+        {
+            setup.Database.EnsureCreated();
+            setup.BankReconciliations.Add(new BankReconciliation { CompanyId = 1, BankId = 7, StatementEndDate = new DateTime(2026, 10, 31), Status = BankReconciliationStatuses.Draft, CreatedAt = DateTime.UtcNow });
+            setup.SaveChanges();
+        }
+        using var db = CreateDb(connection, new FixedAuditContext(), new FailRecordChangeInsert());
+        var reconciliation = db.BankReconciliations.IgnoreQueryFilters().Single();
+        reconciliation.Status = BankReconciliationStatuses.Finished;
+        reconciliation.FinishedAt = DateTime.UtcNow;
+        Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
+        using var verify = CreateDb(connection, new FixedAuditContext());
+        Assert.Equal(BankReconciliationStatuses.Draft, verify.BankReconciliations.IgnoreQueryFilters().AsNoTracking().Single().Status);
+        Assert.Single(verify.RecordChanges.IgnoreQueryFilters().AsNoTracking());
+    }
+
+    [Fact]
     public void Company_add_modify_delete_writes_tenant_scoped_append_only_snapshots()
     {
         using var connection = new SqliteConnection("Data Source=:memory:;Foreign Keys=False");
