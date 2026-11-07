@@ -1,4 +1,6 @@
-# Code evidence and maintenance
+# Platform guide maintenance
+
+Maintainer notes for people editing `.agents/skills/accountgo-platform-guide`. This file is not part of that skill. Do not link it from `SKILL.md` or from `references/`. The customer assistant loads that skill and must not receive this source map.
 
 Reviewed 2026-11-04 against local checkout revision `097edb28` at `/Users/mp/Dev-Workspaces/github/accountgo`. The working tree was clean before skill edits. This checkout contains newer setup behavior than the task worktree at `dfb4cb6b`; the user-requested checkout is the source of truth. This records repository evidence, not confirmation of production rollout.
 
@@ -62,6 +64,8 @@ Use these when reviewing changes; judge the actual decision, not exact phrasing:
 | Invited member asks how to start | Guide work in the existing workspace; do not send them to create a duplicate workspace. |
 | Full new-workspace wizard shown after verification | Establish which journey is active before promising the button initializes an existing workspace. |
 | Personal-books option not offered | Explain that availability follows setup capabilities and that one person can have one personal-books workspace; do not promise it. |
+| Why personal books include Transactions | Customer wording only: **Transactions** keeps **Net worth (book value)**, **Money in and out**, **Bills**, and money moved home. Everyday path is **Bank accounts** and **Bills**. No account codes, module names, plan names, or source paths. Do not suggest an upgrade. |
+| Why personal books cannot issue an invoice | Customer wording only: a client bill belongs in the work workspace; money moved home shows as **Money from my freelance work**, separate from **Earned income**, via **Link this bank line**. If **Invoices & Sales** is visible, say this workspace still has it. No account codes, module names, plan names, or source paths. |
 
 ## CFO interpretation guardrails
 
