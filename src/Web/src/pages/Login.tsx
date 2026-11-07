@@ -178,6 +178,10 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       setErrorMessage('Please enter a valid work email address.');
       return;
     }
+    if (email.trim().toLowerCase() === 'admin@accountgo.ph') {
+      setErrorMessage('This email is not a valid email. Please sign in using your own email or sign up free account.');
+      return;
+    }
     if (!acceptedTerms) {
       setErrorMessage('Please accept the Privacy Policy and Terms of Use to continue.');
       return;
