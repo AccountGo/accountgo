@@ -326,18 +326,19 @@ const BankRegisterPage: React.FC = () => {
             {(register?.lines ?? []).map((line) => {
               const href =
                 line.sourceDoc && sourcePath(currentOrg.slug, line.sourceDoc.type, line.sourceDoc.id);
+              const reference = line.reference || (href ? line.sourceDoc?.no || `#${line.sourceDoc?.id}` : '—');
               return (
                 <tr key={line.lineId} className="text-[var(--text-main)]">
                   <td className="px-4 py-2.5 whitespace-nowrap">{String(line.date).slice(0, 10)}</td>
                   <td className="px-4 py-2.5">{line.type}</td>
                   <td className="px-4 py-2.5">{line.payee || '—'}</td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-2.5 max-w-[14rem]">
                     {href ? (
-                      <Link to={href} className="text-[var(--brand-primary)] hover:underline">
-                        {line.reference || line.sourceDoc?.no || `#${line.sourceDoc?.id}`}
+                      <Link to={href} className="block truncate text-[var(--brand-primary)] hover:underline" title={reference}>
+                        {reference}
                       </Link>
                     ) : (
-                      line.reference || '—'
+                      <span className="block truncate" title={line.reference || undefined}>{reference}</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">{line.in ? formatCurrency(line.in) : ''}</td>

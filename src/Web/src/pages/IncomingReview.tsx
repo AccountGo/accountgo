@@ -48,7 +48,7 @@ export default function IncomingReview() {
     setParams(next);
   };
   if (!capabilities?.canReview) return <p role="alert">Incoming review is unavailable or not permitted.</p>;
-  return <div className="space-y-5">
+  return <div className="space-y-6">
     <h1 className="text-xl font-bold">Needs review</h1>
     <p className="text-sm text-[var(--text-secondary)]">Incoming transactions are unmatched statement lines, not bills or payments. Open an item to inspect suggestions, supply missing details and explicitly choose an accounting action, or leave it for later.</p>
     <BankingTabs active="review" orgSlug={currentOrg.slug} />
