@@ -20,8 +20,8 @@ public sealed class ExternalTokenRedemptions : Migration
             {
                 Provider = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                 TokenId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                ExpiresAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                RedeemedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                ExpiresAtUtc = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                RedeemedAtUtc = table.Column<DateTime>(type: "timestamp without time zone", nullable: false)
             },
             constraints: table =>
             {
