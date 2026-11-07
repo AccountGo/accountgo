@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Api.Data;
+using Core.Domain;
 using Dto.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -113,14 +114,18 @@ public class SessionService : ISessionService
 
         var rawRefreshToken = GenerateSecureToken();
         var tokenHash = ComputeSha256(rawRefreshToken);
+        var now = DateTime.UtcNow;
+        var idle = await ResolveIdleTimeoutAsync(user.Id);
+        var absoluteExpiresAt = now + AbsoluteLifetime();
 
         var session = new RefreshTokenSession
         {
             UserId = user.Id,
             FamilyId = NewFamilyId(),
             TokenHash = tokenHash,
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            CreatedAt = now,
+            ExpiresAt = IdleExpiry(now, idle, absoluteExpiresAt),
+            AbsoluteExpiresAt = absoluteExpiresAt,
             CreatedByIp = ipAddress,
             UserAgent = userAgent,
             GraceReuseCount = 0,
@@ -139,7 +144,11 @@ public class SessionService : ISessionService
         var authResponse = new AuthResponse(
             tokenResult.AccessToken,
             expiresInSeconds,
-            userDto);
+            userDto)
+        {
+            IdleTimeoutSeconds = (int)idle.TotalSeconds,
+            SessionExpiresAt = absoluteExpiresAt
+        };
 
         return (true, authResponse, rawRefreshToken, null);
     }
@@ -170,6 +179,11 @@ public class SessionService : ISessionService
             var withinGrace = session.ReplacedByTokenHash != null
                 && session.RevokedAt.HasValue
                 && session.RevokedAt.Value > now - RotationGracePeriod;
+
+            if (withinGrace && session.AbsoluteExpiresAt.HasValue && now >= session.AbsoluteExpiresAt.Value)
+            {
+                return (false, null, null, "Session has expired. Please sign in again.");
+            }
 
             if (withinGrace)
             {
@@ -225,13 +239,18 @@ public class SessionService : ISessionService
         session.RevokedAt ??= now;
         session.ReplacedByTokenHash = newTokenHash;
 
+        var idle = await ResolveIdleTimeoutAsync(user.Id);
+        // Rows from before the 12-hour limit get one from now.
+        var absoluteExpiresAt = session.AbsoluteExpiresAt ?? now + AbsoluteLifetime();
+
         var newSession = new RefreshTokenSession
         {
             UserId = user.Id,
             FamilyId = session.FamilyId,
             TokenHash = newTokenHash,
             CreatedAt = now,
-            ExpiresAt = now.AddDays(7),
+            ExpiresAt = IdleExpiry(now, idle, absoluteExpiresAt),
+            AbsoluteExpiresAt = absoluteExpiresAt,
             CreatedByIp = ipAddress,
             UserAgent = userAgent,
             GraceReuseCount = 0,
@@ -243,7 +262,7 @@ public class SessionService : ISessionService
         _identityContext.RefreshTokens.Add(newSession);
         await _identityContext.SaveChangesAsync();
 
-        return await BuildRefreshResponseAsync(user, newRawToken);
+        return await BuildRefreshResponseAsync(user, newRawToken, idle, absoluteExpiresAt);
     }
 
     /// <summary>
@@ -261,13 +280,17 @@ public class SessionService : ISessionService
         var newRawToken = GenerateSecureToken();
         var newTokenHash = ComputeSha256(newRawToken);
 
+        var idle = await ResolveIdleTimeoutAsync(user.Id);
+        var absoluteExpiresAt = parent.AbsoluteExpiresAt ?? now + AbsoluteLifetime();
+
         var sibling = new RefreshTokenSession
         {
             UserId = user.Id,
             FamilyId = parent.FamilyId,
             TokenHash = newTokenHash,
             CreatedAt = now,
-            ExpiresAt = now.AddDays(7),
+            ExpiresAt = IdleExpiry(now, idle, absoluteExpiresAt),
+            AbsoluteExpiresAt = absoluteExpiresAt,
             CreatedByIp = ipAddress,
             UserAgent = userAgent,
             GraceReuseCount = 0,
@@ -279,7 +302,7 @@ public class SessionService : ISessionService
         _identityContext.RefreshTokens.Add(sibling);
         await _identityContext.SaveChangesAsync();
 
-        return await BuildRefreshResponseAsync(user, newRawToken);
+        return await BuildRefreshResponseAsync(user, newRawToken, idle, absoluteExpiresAt);
     }
 
     private async Task RevokeFamilyAsync(
@@ -312,7 +335,9 @@ public class SessionService : ISessionService
 
     private async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> BuildRefreshResponseAsync(
         ApplicationUser user,
-        string newRawToken)
+        string newRawToken,
+        TimeSpan idle,
+        DateTime absoluteExpiresAt)
     {
         var tokenResult = await _authService.CreateToken(user, populateExp: false);
         var userDto = await BuildUserDtoAsync(user);
@@ -322,7 +347,11 @@ public class SessionService : ISessionService
         var authResponse = new AuthResponse(
             tokenResult.AccessToken,
             expiresInSeconds,
-            userDto);
+            userDto)
+        {
+            IdleTimeoutSeconds = (int)idle.TotalSeconds,
+            SessionExpiresAt = absoluteExpiresAt
+        };
 
         return (true, authResponse, newRawToken, null);
     }
@@ -344,10 +373,24 @@ public class SessionService : ISessionService
 
         var tokenHash = ComputeSha256(rawRefreshToken);
         var session = await _identityContext.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
-        if (session == null || session.IsRevoked)
+        if (session == null)
             return false;
 
-        session.RevokedAt = DateTime.UtcNow;
+        // Sign-out ends the whole sign-in: grace siblings held by other tabs must not keep it alive.
+        EnsureFamilyId(session);
+        var now = DateTime.UtcNow;
+        var familyId = session.FamilyId;
+        var active = await _identityContext.RefreshTokens
+            .Where(t => t.FamilyId == familyId && t.RevokedAt == null)
+            .ToListAsync();
+        // Rows without a stored FamilyId only get one in memory, so the query above can miss the cookie's own row.
+        if (session.RevokedAt == null && !active.Contains(session))
+            active.Add(session);
+        if (active.Count == 0)
+            return false;
+
+        foreach (var t in active)
+            t.RevokedAt = now;
         await _identityContext.SaveChangesAsync();
         return true;
     }
@@ -408,6 +451,49 @@ public class SessionService : ISessionService
             !string.IsNullOrEmpty(user.PasswordHash),
             user.MfaReEnrollRequired);
     }
+
+    /// <summary>Strictest idle timeout across the user's active, non-deleted workspaces.</summary>
+    private async Task<TimeSpan> ResolveIdleTimeoutAsync(string userId)
+    {
+        var minutes = SessionTimeoutPolicy.DefaultIdleMinutes;
+        if (_apiDb != null)
+        {
+            var strictest = await _apiDb.CompanyMembers
+                .IgnoreQueryFilters()
+                .Where(m => m.UserId == userId
+                    && m.Status == CompanyMemberStatus.Active
+                    && m.Company.DeletedAt == null)
+                .Join(
+                    _apiDb.CompanySettings.IgnoreQueryFilters(),
+                    m => m.CompanyId,
+                    s => s.CompanyId,
+                    (m, s) => (int?)s.IdleTimeoutMinutes)
+                .MinAsync();
+            if (strictest.HasValue)
+                minutes = SessionTimeoutPolicy.Normalize(strictest.Value);
+        }
+        return TimeSpan.FromMinutes(minutes);
+    }
+
+    private TimeSpan AbsoluteLifetime() => TimeSpan.FromHours(AbsoluteHours(_configuration));
+
+    /// <summary>Hours from sign-in until the session ends regardless of activity (<c>Session:AbsoluteHours</c>).</summary>
+    internal static int AbsoluteHours(IConfiguration configuration) =>
+        int.TryParse(configuration["Session:AbsoluteHours"], out var hours) && hours > 0
+            ? hours
+            : SessionTimeoutPolicy.DefaultAbsoluteHours;
+
+    /// <summary>
+    /// Idle deadline for a refresh token issued now. Slack covers the browser's activity-refresh interval, so the
+    /// browser (which knows about mouse and keyboard activity) always signs out first while a tab is open.
+    /// </summary>
+    private static DateTime IdleExpiry(DateTime now, TimeSpan idle, DateTime absoluteExpiresAt)
+    {
+        var idleExpiry = now + idle + SessionTimeoutPolicy.ServerSlack;
+        return idleExpiry < absoluteExpiresAt ? idleExpiry : absoluteExpiresAt;
+    }
+
+    internal static string HashRefreshToken(string rawRefreshToken) => ComputeSha256(rawRefreshToken);
 
     private static string ComputeSha256(string input)
     {
