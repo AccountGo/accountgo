@@ -493,6 +493,166 @@ public class YearEndCloseTests
     }
 
     [Fact]
+    public void Close_BlocksWhenFirstPartialFiscalYearIsStillOpen()
+    {
+        using var harness = new Harness(booksStartDate: D(2024, 3, 1));
+        harness.FiscalYears.Insert(new FinancialYear
+        {
+            CompanyId = 1, FiscalYearCode = "FY2024", FiscalYearName = "FY2024",
+            StartDate = D(2024, 1, 1), EndDate = EndOfDay(D(2024, 12, 31)), IsActive = true
+        });
+        Assert.Contains(harness.YearEnd.Preview(Harness.Fy2025Code).Blocking, b => b.Code == "earlier_year_open");
+        Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Close(Harness.Fy2025Code, true, "reviewer"));
+    }
+
+    [Fact]
+    public void Preview_WarnsForConfiguredGoodsReceivedClearingBalanceAtYearEnd()
+    {
+        using var harness = new Harness();
+        harness.GlSettings.Table.Single().GoodsReceiptNoteClearingAccountId = harness.ExpenseId;
+        harness.Post(D(2025, 12, 10), harness.ExpenseId, harness.CashId, 75m);
+        harness.Post(D(2026, 1, 10), harness.CashId, harness.ExpenseId, 75m);
+        var warning = Assert.Single(harness.YearEnd.Preview(Harness.Fy2025Code).Warnings.Where(w => w.Code == "suspense_clearing"));
+        Assert.Contains("50100", warning.Message);
+        Assert.Contains("75", warning.Message);
+        Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Close(Harness.Fy2025Code, false, "reviewer"));
+    }
+
+    [Fact]
+    public void Reopen_WithIndependentMonthlyLock_RequiresAcknowledgementBeforeReversal()
+    {
+        using var harness = new Harness(booksLockedThrough: D(2025, 6, 30));
+        harness.Post(D(2025, 7, 10), harness.CashId, harness.RevenueId, 100m);
+        harness.YearEnd.Close(Harness.Fy2025Code, true, "reviewer");
+        var before = harness.GlHeaders.Table.Count();
+        var ex = Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Reopen(Harness.Fy2025Code, "Correction", "reviewer"));
+        Assert.Contains("acknowledge", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(harness.FiscalYears.Table.Single(y => y.FiscalYearCode == Harness.Fy2025Code).ClosedAt);
+        Assert.Equal(before, harness.GlHeaders.Table.Count());
+        Assert.Equal(D(2025, 12, 31), harness.Settings.Table.Single().BooksLockedThrough);
+    }
+
+    [Fact]
+    public void Reopen_ConfirmedIndependentLock_ReversesOnceAndAllowsCorrectionAndReclose()
+    {
+        using var harness = new Harness(booksLockedThrough: D(2025, 6, 30));
+        harness.Post(D(2025, 7, 10), harness.CashId, harness.RevenueId, 100m);
+        harness.YearEnd.Close(Harness.Fy2025Code, true, "closer");
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+        Assert.Equal(D(2025, 12, 31), preview.CurrentBooksLockedThrough);
+        Assert.Null(preview.ProposedBooksLockedThrough);
+        Assert.True(preview.RequiresLockAcknowledgement);
+        Assert.Equal(D(2025, 1, 1), preview.NewlyUnlockedFrom);
+        Assert.Equal(D(2025, 12, 31), preview.NewlyUnlockedThrough);
+        Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Reopen(Harness.Fy2025Code, "Correction", "reviewer", true, D(2025, 11, 30)));
+        harness.YearEnd.Reopen(Harness.Fy2025Code, "Correction", "reviewer", true, D(2025, 12, 31));
+        Assert.Null(harness.Settings.Table.Single().BooksLockedThrough);
+        var change = harness.LockChanges.Table.OrderByDescending(c => c.Id).First();
+        Assert.Equal(D(2025, 12, 31), change.PreviousLockedThrough);
+        Assert.Null(change.NewLockedThrough);
+        Assert.Equal("Correction", change.Reason);
+        Assert.Equal("reviewer", change.ChangedBy);
+        harness.Post(D(2025, 8, 10), harness.CashId, harness.RevenueId, 20m);
+        harness.YearEnd.Close(Harness.Fy2025Code, true, "reviewer");
+        Assert.Single(harness.GlHeaders.Table.Where(h => h.ReversedGeneralLedgerHeaderId != null));
+    }
+
+    [Fact]
+    public void Reopen_LaterIndependentLock_RequiresAcknowledgement()
+    {
+        using var harness = new Harness(booksLockedThrough: D(2026, 2, 28));
+        harness.YearEnd.Close(Harness.Fy2025Code, true, "closer");
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+        Assert.True(preview.RequiresLockAcknowledgement);
+        Assert.Equal(D(2026, 2, 28), preview.CurrentBooksLockedThrough);
+        Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Reopen(Harness.Fy2025Code, "Correction", "reviewer"));
+    }
+
+    [Fact]
+    public void Preview_ReportsOnlyNonzeroConfiguredClearingAccountsInThisWorkspace()
+    {
+        using var harness = new Harness();
+        var clearing = System.Text.Json.JsonSerializer.Deserialize<Account>(
+            "{\"Id\":91,\"CompanyId\":1,\"AccountCode\":\"19001\",\"AccountName\":\"Control A\",\"AccountClassId\":1,\"IsSuspenseOrClearing\":true}")!;
+        var zero = System.Text.Json.JsonSerializer.Deserialize<Account>(
+            "{\"Id\":92,\"CompanyId\":1,\"AccountCode\":\"19002\",\"AccountName\":\"Control B\",\"AccountClassId\":1,\"IsSuspenseOrClearing\":true}")!;
+        var other = System.Text.Json.JsonSerializer.Deserialize<Account>(
+            "{\"Id\":93,\"CompanyId\":2,\"AccountCode\":\"19003\",\"AccountName\":\"Other company\",\"AccountClassId\":1,\"IsSuspenseOrClearing\":true}")!;
+        harness.Accounts.Insert(clearing); harness.Accounts.Insert(zero); harness.Accounts.Insert(other);
+        harness.GlSettings.Table.Single().GoodsReceiptNoteClearingAccountId = harness.ExpenseId;
+        harness.Post(D(2025, 12, 10), other.Id, harness.CashId, 999m);
+        var foreignHeader = new GeneralLedgerHeader { CompanyId = 2, Date = D(2025, 12, 10), DocumentType = DocumentTypes.JournalEntry };
+        foreignHeader.GeneralLedgerLines.Add(new GeneralLedgerLine { CompanyId = 2, AccountId = clearing.Id, DrCr = DrOrCrSide.Dr, Amount = 999m });
+        harness.GlHeaders.Insert(foreignHeader);
+        harness.Post(D(2025, 12, 10), clearing.Id, harness.CashId, 20m);
+        harness.Post(D(2025, 12, 10), harness.ExpenseId, harness.CashId, 30m);
+        harness.Post(D(2025, 12, 10), zero.Id, harness.CashId, 10m);
+        harness.Post(D(2025, 12, 11), harness.CashId, zero.Id, 10m);
+        harness.Post(D(2026, 1, 1), harness.CashId, clearing.Id, 20m);
+        var warning = Assert.Single(harness.YearEnd.Preview(Harness.Fy2025Code).Warnings, w => w.Code == "suspense_clearing");
+        Assert.Equal(2, warning.Count);
+        Assert.Contains("19001", warning.Message);
+        Assert.Contains("20.00", warning.Message);
+        Assert.Contains("50100", warning.Message);
+        Assert.DoesNotContain("19002", warning.Message);
+        Assert.DoesNotContain("19003", warning.Message);
+    }
+
+    [Fact]
+    public void Reopen_PreservesPriorClosedYearLock()
+    {
+        using var harness = new Harness(booksStartDate: D(2024, 3, 1), booksLockedThrough: D(2024, 12, 31));
+        harness.FiscalYears.Insert(new FinancialYear {
+            CompanyId = 1, FiscalYearCode = "FY2024", FiscalYearName = "FY2024",
+            StartDate = D(2024, 1, 1), EndDate = EndOfDay(D(2024, 12, 31)),
+            IsActive = true, ClosedAt = D(2025, 1, 5), ClosedBy = "earlier"
+        });
+        harness.YearEnd.Close(Harness.Fy2025Code, true, "closer");
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+        Assert.False(preview.RequiresLockAcknowledgement);
+        Assert.Equal(D(2024, 12, 31), preview.ProposedBooksLockedThrough);
+        harness.YearEnd.Reopen(Harness.Fy2025Code, "Correction", "reviewer");
+        Assert.Equal(D(2024, 12, 31), harness.Settings.Table.Single().BooksLockedThrough);
+        Assert.NotNull(harness.FiscalYears.Table.Single(y => y.FiscalYearCode == "FY2024").ClosedAt);
+    }
+
+    [Fact]
+    public void Preview_ZeroClearingBalancesDoNotRequireAcknowledgement()
+    {
+        using var harness = new Harness();
+        harness.GlSettings.Table.Single().GoodsReceiptNoteClearingAccountId = harness.ExpenseId;
+        harness.Post(D(2025, 10, 1), harness.ExpenseId, harness.CashId, 40m);
+        harness.Post(D(2025, 11, 1), harness.CashId, harness.ExpenseId, 40m);
+        harness.Post(D(2026, 1, 1), harness.ExpenseId, harness.CashId, 99m);
+        Assert.DoesNotContain(harness.YearEnd.Preview(Harness.Fy2025Code).Warnings, w => w.Code == "suspense_clearing");
+    }
+
+    [Fact]
+    public void Close_BlocksWhenFirstPartialNonCalendarYearIsStillOpen()
+    {
+        using var harness = new Harness(booksStartDate: D(2024, 6, 1));
+        harness.Settings.Table.Single().FiscalYearPattern = FiscalYearPattern.AprMar;
+        harness.FiscalYears.Insert(new FinancialYear {
+            CompanyId = 1, FiscalYearCode = "FY2024-25", FiscalYearName = "FY2024-25",
+            StartDate = D(2024, 4, 1), EndDate = EndOfDay(D(2025, 3, 31)), IsActive = true
+        });
+        harness.FiscalYears.Insert(new FinancialYear {
+            CompanyId = 1, FiscalYearCode = "FY2025-26", FiscalYearName = "FY2025-26",
+            StartDate = D(2025, 4, 1), EndDate = EndOfDay(D(2026, 3, 31)), IsActive = true
+        });
+        Assert.Contains(harness.YearEnd.Preview("FY2025-26").Blocking, w => w.Code == "earlier_year_open" && w.Message.Contains("FY2024-25"));
+    }
+
+    [Fact]
+    public void Close_CannotSkipAnEarlierMissingFiscalYear()
+    {
+        using var harness = new Harness(booksStartDate: D(2024, 3, 1));
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+        Assert.Contains(preview.Blocking, b => b.Code == "earlier_year_missing" && b.Message.Contains("FY2024"));
+        Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Close(Harness.Fy2025Code, true, "reviewer"));
+    }
+
+    [Fact]
     public void Close_Blocked_WhenFiscalYearHasNotEnded()
     {
         using var harness = new Harness();
