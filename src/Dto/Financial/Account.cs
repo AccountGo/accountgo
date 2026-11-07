@@ -12,6 +12,7 @@ namespace Dto.Financial
         public string? Description { get; set; }
         public bool IsCash { get; set; }
         public bool IsContraAccount { get; set; }
+        public bool? IsSuspenseOrClearing { get; set; }
         public bool Archived { get; set; }
         public System.DateTime? ArchivedAt { get; set; }
         public bool IsProtected { get; set; }

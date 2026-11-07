@@ -146,6 +146,7 @@ public class AccountService : IAccountService
         if (updatedAccount.Description != null) account.Description = updatedAccount.Description;
         account.IsCash = updatedAccount.IsCash;
         account.IsContraAccount = updatedAccount.IsContraAccount;
+        account.IsSuspenseOrClearing = updatedAccount.IsSuspenseOrClearing;
 
         Account? proposedParent = null;
         if (account.ParentAccountId.HasValue)

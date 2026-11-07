@@ -38,6 +38,8 @@ namespace Core.Domain.Financials
         public string Description { get; set; }
         public bool IsCash { get; set; }
         public bool IsContraAccount { get; set; }
+        /// <summary>Include this account in the year-end suspense and clearing review.</summary>
+        public bool IsSuspenseOrClearing { get; set; }
         public DateTime? ArchivedAt { get; set; }
         [Column(TypeName = "timestamp")]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]

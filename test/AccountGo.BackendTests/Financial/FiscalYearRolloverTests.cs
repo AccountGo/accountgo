@@ -195,19 +195,58 @@ public class FiscalYearRolloverTests
     }
 
     [Fact]
-    public void PostingTenYearsAhead_FailsOutOfRange_CreatesNoYears()
+    public void PostingInClosedFiscalYear_IsRefusedWithoutReactivatingOrReplacingIt()
+    {
+        var closed = Year("FY2025", D(2025, 1, 1), D(2026, 1, 1).AddTicks(-1));
+        closed.ClosedAt = D(2026, 1, 2);
+        using var harness = new Harness(D(2025, 1, 1), seedYears: closed);
+        Assert.Throws<InvalidOperationException>(() => harness.Financial.ValidateGeneralLedgerEntry(harness.BalancedEntry(D(2025, 7, 1))));
+        Assert.Single(harness.FiscalYears.Table);
+        Assert.NotNull(harness.FiscalYears.Table.Single().ClosedAt);
+    }
+
+    [Fact]
+    public void PostingOverlappingInactiveClosedYear_IsRefusedEvenWhenAnotherYearIsActive()
+    {
+        var closed = Year("FY2025", D(2025, 1, 1), D(2026, 1, 1).AddTicks(-1), active: false);
+        closed.ClosedAt = D(2026, 1, 2);
+        var overlap = Year("ALT2025", D(2025, 1, 1), D(2026, 1, 1).AddTicks(-1));
+        using var harness = new Harness(D(2025, 1, 1), seedYears: [closed, overlap]);
+        Assert.Throws<InvalidOperationException>(() => harness.Financial.ValidateGeneralLedgerEntry(harness.BalancedEntry(D(2025, 7, 1))));
+        Assert.Equal(2, harness.FiscalYears.Table.Count());
+    }
+
+    [Fact]
+    public void PostingTenYearsAhead_CreatesEveryMissingYearOnce()
     {
         using var harness = new Harness(
             D(2026, 1, 1),
             seedYears: Year("FY2026", D(2026, 1, 1), Parse("2026-12-31").Date.AddDays(1).AddTicks(-1)));
-        var before = harness.FiscalYears.Table.Count();
-        var far = DateTime.UtcNow.Date.AddYears(10);
+        var far = D(2036, 6, 1);
+        Assert.True(harness.Financial.ValidateGeneralLedgerEntry(harness.BalancedEntry(far)));
+        Assert.True(harness.Financial.ValidateGeneralLedgerEntry(harness.BalancedEntry(far)));
+        Assert.Equal(11, harness.FiscalYears.Table.Count());
+        Assert.Single(harness.FiscalYears.Table.Where(y => y.FiscalYearCode == "FY2036"));
+    }
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            harness.Financial.ValidateGeneralLedgerEntry(harness.BalancedEntry(far)));
-
-        Assert.Contains("out of range", ex.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(before, harness.FiscalYears.Table.Count());
+    [Theory]
+    [InlineData(FiscalYearPattern.AprMar, null, "FY2024-25", 4, "FY2035-36")]
+    [InlineData(FiscalYearPattern.Custom, 10, "FY2023-24", 10, "FY2034-35")]
+    public void EnsureYears_MidYearBooksStart_PreservesClosedFirstYearAndCreatesFutureYears(
+        FiscalYearPattern pattern, int? customMonth, string firstCode, int startMonth, string lastCode)
+    {
+        var startYear = pattern == FiscalYearPattern.Custom ? 2023 : 2024;
+        var first = Year(firstCode, D(startYear, startMonth, 1), D(startYear + 1, startMonth, 1).AddTicks(-1), active: false);
+        first.ClosedAt = D(2025, 1, 1);
+        using var harness = new Harness(D(2024, 6, 1), pattern, customMonth, first);
+        var requested = D(2035, 6, 1);
+        harness.Financial.EnsureFiscalYearsThrough(requested);
+        harness.Financial.EnsureFiscalYearsThrough(requested);
+        var unchanged = Assert.Single(harness.FiscalYears.Table.Where(y => y.FiscalYearCode == firstCode));
+        Assert.False(unchanged.IsActive);
+        Assert.NotNull(unchanged.ClosedAt);
+        Assert.Single(harness.FiscalYears.Table.Where(y => y.FiscalYearCode == lastCode));
+        Assert.Equal(harness.FiscalYears.Table.Count(), harness.FiscalYears.Table.Select(y => y.FiscalYearCode).Distinct().Count());
     }
 
     [Fact]
