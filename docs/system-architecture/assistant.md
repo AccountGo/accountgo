@@ -22,6 +22,14 @@ Context variables on every turn:
 - **Server-owned (always overwritten):** `userId` (workspace-scoped `ag_c{companyId}_u_{userId}`), `accountGoUserId`, `sessionId`, `organizationId`, `companyId`, `companySlug` from JWT + resolved `ITenantContext`; plus entitlement hints `companyPlan`, `activeModules` (comma-separated), `companyRole`, `subscriptionStatus` from `IAdministrationService.GetCurrentSubscription()`.
 - **Client-allowed:** `pageRoute`, `pageTitle` (and other non-identity hints). Client-supplied tenant/identity/entitlement keys are stripped.
 
+### Workspace data tools
+
+Besides the financial reports, `/mcp` exposes read-only workspace data tools (`src/Api/Mcp/Tools`): `get_workspace_context`, `get_dashboard_summary`, clients and invoices (`search_clients`, `get_client`, `search_invoices`, `get_invoice`, `get_receivables_aging`, `get_recurring_schedules`), vendors and bills (`search_vendors`, `get_vendor`, `search_bills`, `get_bill`, `get_payables_aging`), banking (`list_bank_accounts`, `get_bank_register`, `get_bank_reconciliations`, `get_bank_statement_lines`), journals (`search_journal_entries`, `get_journal_entry`), `search_items`, `get_tax_rates` and `get_linked_entries`.
+
+They do not query the database themselves. `McpControllerReader` runs the page's own GET action in-process, behind that action's filters (tenant classification, `RequireModule`, `RequirePermission`, `RequireOperation`, statement-import and workspace-role guards), as the member resolved from the caller assertion. A tool therefore returns the same records, statuses and totals as the screen and is refused exactly where the screen would be. Only `[HttpGet]` actions can be read this way. Full bank account, routing, IBAN and SWIFT numbers are stripped from every result. Each result carries `status`, `kind`, `data`, paging fields for lists, and `link` (a `/org/{slug}/…` page path). GL transactions carry `sourceDocumentId`, so the agent can open the invoice, bill or journal behind a ledger line.
+
+After deploying new tools, refresh the Anter catalog (`test_mcp_server_connection`) and enable them on the agent's MCP toolset.
+
 Financial MCP tools never throw on plan or permission gates: they return `Status` `PlanRestricted` or `AccessDenied` with a clear `Message` (and empty report payloads) so the agent can explain upgrade paths without tripping Anter’s tool-failure circuit breaker. Unresolved tenant and argument validation still throw.
 
 ## Agent prompt (Anter `accountgo-assistant`)

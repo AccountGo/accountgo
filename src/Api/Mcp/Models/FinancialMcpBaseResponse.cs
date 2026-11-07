@@ -30,5 +30,14 @@ namespace Api.Mcp.Models
         public const string Success = "Success";
         public const string PlanRestricted = "PlanRestricted";
         public const string AccessDenied = "AccessDenied";
+
+        /// <summary>The requested record does not exist in this workspace.</summary>
+        public const string NotFound = "NotFound";
+
+        /// <summary>The arguments were not valid for this lookup; Message says why.</summary>
+        public const string InvalidRequest = "InvalidRequest";
+
+        /// <summary>The lookup failed for another reason; Message says what to tell the user.</summary>
+        public const string Error = "Error";
     }
 }

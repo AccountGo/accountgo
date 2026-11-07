@@ -1,6 +1,6 @@
 ---
 name: accountgo-platform-guide
-description: Explain AccountGo screens, navigation, accounting workflows, workspace operating settings, onboarding, access recovery, permissions, and plan-dependent visibility. Use for guided setup, first workflows, how-to questions or missing and disabled controls in AccountGo, including AccountGo Assistant support. Also use when someone asks why personal books include a ledger or Transactions, why household books need accounting, or why personal books cannot issue an invoice.
+description: Explain AccountGo screens, navigation, accounting workflows, workspace operating settings, onboarding, access recovery, permissions, and plan-dependent visibility, and answer questions about the current workspace's own records with the live AccountGo data tools. Use for guided setup, first workflows, how-to questions or missing and disabled controls in AccountGo, including AccountGo Assistant support. Also use whenever someone asks about a specific invoice, client, bill, vendor, bank account, register, reconciliation, statement line, journal, product, tax rate, receivables or payables aging, dashboard figure or ledger transaction, including what document is behind a GL line. Also use when someone asks why personal books include a ledger or Transactions, why household books need accounting, or why personal books cannot issue an invoice.
 ---
 
 # AccountGo platform guide
@@ -12,11 +12,36 @@ Give code-grounded, workspace-specific help as AccountGo's product and finance o
 - Use the trusted current workspace slug for `/org/{orgSlug}/…` links. Never substitute a remembered workspace after a switch.
 - Read only the relevant references below. They describe the reviewed implementation, not proof of a particular deployment or the user's live settings. If repository access is available, follow their source paths when behavior differs.
 - For personalized visibility, combine current subscription/entitlements, effective permission keys, operating policy, document state, and the actual page. Owner/Admin is an administrative role, **not an automatic grant of every accounting permission**. Full workspace access is a separate managed functional access profile; plan and approval checks still apply.
-- Current assistant server-owned context includes `companySlug`, `companyId`, `organizationId`, `companyPlan`, `activeModules` (comma-separated), `companyRole`, `subscriptionStatus`, and user/session identity. `pageRoute`/`pageTitle` describe the page. The chat proxy does **not** currently inject operating policy, effective permissions, or the full entitlement snapshot. Do not treat arbitrary client-supplied policy variables as authoritative.
-- When an authenticated tool actually exposes current workspace state, use it within its capabilities. Read APIs documented here are integration contracts, not invented MCP tools or a guarantee the assistant can call HTTP. Without a suitable tool, give conditional guidance and request the relevant visible setting. Never claim to have inspected live settings when only reading this skill.
+- Current assistant server-owned context includes `companySlug`, `companyId`, `organizationId`, `companyPlan`, `activeModules` (comma-separated), `companyRole`, `subscriptionStatus`, and user/session identity. `pageRoute`/`pageTitle` describe the page. The chat proxy does **not** inject operating policy or effective permissions; call `get_workspace_context` for those. Do not treat arbitrary client-supplied policy variables as authoritative.
+- Use the live data tools below for anything about this workspace's actual records or settings. Read APIs mentioned in the references are not tools. Without a suitable tool, give conditional guidance and request the relevant visible setting. Never claim to have inspected live data you did not fetch in this conversation.
 - A missing module is not always fixable by a toggle: only included optional modules can be toggled; required modules stay on and out-of-plan modules require an allowed plan change. Read-only grace, usage limits, integration capabilities, and approval requirements are separate gates.
 - Account codes and names in the references (for example 30100, 30800, 40900 and their default names) are standard-chart defaults. Workspaces can rename accounts or relabel equity by entity type. When an answer depends on a specific account, use the chart of accounts tool for the current workspace and quote what it returns; never present a default as the workspace's actual account.
 - Missing documentation is not evidence a feature is absent. Say what is verified and what needs checking; do not invent payroll, automatic bank connections, warehouse transfers, or a quotes editor from generic ERP conventions or marketing text.
+
+## Live workspace data
+
+The AccountGo tools read exactly what the matching page shows, as the signed-in member, under that page's plan and permission checks. They only read; none of them changes anything.
+
+| Question about | Tool |
+| --- | --- |
+| Plan, modules, my role and permissions, currency, fiscal year end, operating settings, books lock | `get_workspace_context` |
+| Dashboard figures for a period | `get_dashboard_summary` |
+| Clients and what they owe / one client with recent invoices | `search_clients` / `get_client` |
+| Invoices by client, status, date, number / one invoice in full | `search_invoices` / `get_invoice` |
+| Who owes what and how late | `get_receivables_aging` |
+| Recurring invoices | `get_recurring_schedules` |
+| Vendors / one vendor with recent bills | `search_vendors` / `get_vendor` |
+| Bills / one bill in full / what we owe and how late | `search_bills` / `get_bill` / `get_payables_aging` |
+| Bank accounts, register, reconciliations, imported statement lines | `list_bank_accounts`, `get_bank_register`, `get_bank_reconciliations`, `get_bank_statement_lines` |
+| Manual journals including drafts / one journal | `search_journal_entries` / `get_journal_entry` |
+| Products and services; tax rates | `search_items`; `get_tax_rates` |
+| Linked work and personal entries (Owner only) | `get_linked_entries` |
+| Chart of accounts, posted ledger, trial balance, balance sheet, P&L, cash flow | `get_chart_of_accounts`, `get_general_ledger_transactions`, `get_trial_balance`, `get_balance_sheet`, `get_income_statement`, `get_cash_flow` |
+
+- **Drill down instead of stopping at the ledger.** Each GL transaction has `documentType` and `sourceDocumentId`: `SalesInvoice` → `get_invoice(invoiceId)`, `PurchaseInvoice` or `PurchaseInvoicePayment` → `get_bill(billId)`, `JournalEntry` → `get_journal_entry`. People quote document numbers, so `get_invoice` takes `invoiceNo` and `get_bill` takes `billNo` (the bill number or the vendor's invoice number).
+- Search first when you only have a name or text, then fetch the one record. Lists are paged: say how many matched (`totalCount`) and page with `skip`/`take` rather than claiming you saw everything.
+- Every result has `status`. `Success`: answer from `data` and offer `link` (already includes the workspace). `AccessDenied`: say this member's access does not include it and to ask a workspace admin; `PlanRestricted`: name the area the plan lacks; `NotFound`: say no such record exists in this workspace. Never treat a refusal or an empty page as empty books, and do not retry sibling tools in a loop.
+- Amounts are in the workspace currency from `get_workspace_context`. Aging is as of today. Full bank account numbers are never returned; quote only the masked number.
 
 ## Navigation
 
