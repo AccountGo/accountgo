@@ -202,6 +202,19 @@ namespace Services.Financial
                     }).ToList()
                 }).ToList();
 
+            // Bank register paths for the whole page in two lookups instead of one per row.
+            var bankSourceIds = transactions
+                .Where(t => t.SourceDocumentId.HasValue && t.DocumentType == nameof(DocumentTypes.BankTransaction))
+                .Select(t => t.SourceDocumentId.Value).Distinct().ToList();
+            var bankIdBySource = new Dictionary<int, int>();
+            if (bankSourceIds.Count > 0 && _bankTransactionRepo != null)
+                foreach (var row in _bankTransactionRepo.Table.Where(b => bankSourceIds.Contains(b.Id)).Select(b => new { b.Id, b.BankId }).ToList())
+                    bankIdBySource[row.Id] = row.BankId;
+            var unmatched = bankSourceIds.Where(id => !bankIdBySource.ContainsKey(id)).ToList();
+            if (unmatched.Count > 0 && _bankRepo != null)
+                foreach (var bankId in _bankRepo.Table.Where(b => unmatched.Contains(b.Id)).Select(b => b.Id).ToList())
+                    bankIdBySource[bankId] = bankId;
+
             foreach (var transaction in transactions)
             {
                 transaction.DocumentTypeLabel = System.Text.RegularExpressions.Regex.Replace(transaction.DocumentType, "([a-z])([A-Z])", "$1 $2");
@@ -220,10 +233,8 @@ namespace Services.Financial
                     case nameof(DocumentTypes.InventoryAdjustment): transaction.SourcePath = "/items/inventory"; break;
                     case nameof(DocumentTypes.BankTransaction):
                         // SourceDocumentId is the BankTransaction id; path goes to the bank register.
-                        var bankId = _bankTransactionRepo?.GetById(id)?.BankId
-                            ?? _bankRepo?.GetById(id)?.Id;
-                        if (bankId.HasValue)
-                            transaction.SourcePath = "/banking/" + bankId.Value;
+                        if (bankIdBySource.TryGetValue(id, out var bankId))
+                            transaction.SourcePath = "/banking/" + bankId;
                         break;
                 }
             }
@@ -1987,6 +1998,33 @@ namespace Services.Financial
             var sortedList = allDrcr.OrderBy(gl => gl.Id).ToList().Reverse<MasterGeneralLedger>();
 
             return sortedList.ToList();
+        }
+
+        public IReadOnlyList<LedgerMonthlyTotal> LedgerMonthlyTotals()
+        {
+            if (_auth == null || !_auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView).Allowed)
+                return new List<LedgerMonthlyTotal>();
+
+            // Joins the account and header like MasterGeneralLedger's includes, so the same lines count.
+            return (from line in _generalLedgerLineRepository.Table
+                    join account in _accountRepo.Table on line.AccountId equals account.Id
+                    let date = line.GeneralLedgerHeader.Date
+                    group line by new { line.AccountId, date.Year, date.Month } into g
+                    select new LedgerMonthlyTotal(
+                        g.Key.AccountId,
+                        g.Key.Year,
+                        g.Key.Month,
+                        g.Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : 0m),
+                        g.Sum(l => l.DrCr == DrOrCrSide.Cr ? l.Amount : 0m)))
+                .ToList();
+        }
+
+        public IReadOnlyList<Account> GetAccountsWithoutLedgerLines()
+        {
+            if (_auth == null || !_auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsAccountsView).Allowed)
+                return new List<Account>();
+
+            return _accountRepo.GetAllIncluding(a => a.AccountClass, c => c.ChildAccounts, p => p.ParentAccount).ToList();
         }
 
         public new IEnumerable<Bank> GetCashAndBanks()

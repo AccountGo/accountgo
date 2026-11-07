@@ -105,7 +105,8 @@ namespace Api.Controllers
                         orderby c.Name
                         select new { Company = c, m.Role }).ToList();
             var canAddPersonalBooks = CanAddPersonalBooks();
-            return Ok(rows.Select(r => Summary(r.Company, r.Role, canAddPersonalBooks: canAddPersonalBooks)));
+            var facts = LoadSummaryFacts(rows.Select(r => r.Company.Id).ToList());
+            return Ok(rows.Select(r => Summary(r.Company, r.Role, canAddPersonalBooks: canAddPersonalBooks, facts: facts)));
         }
 
         public class CreateOrganizationRequest
@@ -431,20 +432,26 @@ namespace Api.Controllers
         public IActionResult GetCurrent()
         {
             var id = _tenant.RequireCompanyId();
-            var company = _db.Companies.Single(c => c.Id == id);
+            // Tenant resolution already loaded this workspace and the caller's membership for the request.
+            var company = _tenant is IResolvedCompanyContext { ResolvedCompany: { } resolved } && resolved.Id == id
+                ? resolved
+                : _db.Companies.Single(c => c.Id == id);
             var fiscalYear = _financial.CurrentFiscalYear();
-            var memberId = _db.CompanyMembers
-                .Where(m => m.CompanyId == id && m.UserId == UserId)
-                .Select(m => (int?)m.Id)
-                .FirstOrDefault();
+            var memberId = _tenant.MemberId is int resolvedMemberId && string.Equals(_tenant.UserId, UserId, StringComparison.Ordinal)
+                ? resolvedMemberId
+                : _db.CompanyMembers
+                    .Where(m => m.CompanyId == id && m.UserId == UserId)
+                    .Select(m => (int?)m.Id)
+                    .FirstOrDefault();
             var operating = _operatingPolicy?.GetSummary(id, memberId, UserId);
+            var settings = _db.CompanySettings.Select(s => new { s.Currency, s.EntityType }).FirstOrDefault();
             return Ok(new
             {
                 id = company.Id, name = company.Name, slug = company.Slug, shortName = company.ShortName,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), subscriptionStatus = company.SubscriptionStatus,
                 role = _tenant.Role.ToString(), permissions = _tenant.Permissions,
-                currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault() ?? "USD",
-                entityType = _db.CompanySettings.Select(s => s.EntityType.ToString()).FirstOrDefault(),
+                currency = settings?.Currency ?? "USD",
+                entityType = settings?.EntityType.ToString(),
                 fiscalYearEnd = fiscalYear?.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 operatingPolicy = operating == null ? null : new
                 {
@@ -1126,25 +1133,30 @@ namespace Api.Controllers
         };
 
         private object Summary(Company company, CompanyMemberRole role, WorkspaceInitializationResult initResult = null,
-            string checkoutUrl = null, string checkoutError = null, bool? canAddPersonalBooks = null)
+            string checkoutUrl = null, string checkoutError = null, bool? canAddPersonalBooks = null, SummaryFacts facts = null)
         {
+            facts ??= LoadSummaryFacts(new[] { company.Id });
+            var isPersonalBooks = facts.PersonalBooksCompanyIds.Contains(company.Id);
+            var isPersonalPurpose = facts.PersonalPurposeCompanyIds.Contains(company.Id);
             return new
             {
-                isPersonalBooks = _db.PersonalWorkspaces.Any(p => p.CompanyId == company.Id),
+                isPersonalBooks,
                 onPersonalBooksPlan = _plans.PersonalBooksPlanKey != null
                     ? string.Equals(_plans.ResolveStoredPlan(company.Plan).Key, _plans.PersonalBooksPlanKey, StringComparison.OrdinalIgnoreCase)
-                    : _db.PersonalWorkspaces.Any(p => p.CompanyId == company.Id),
-                canUseAsPersonalBooks = CanUseAsPersonalBooks(company.Id, role),
-                isPersonalPurpose = _db.WorkspaceOperatingSettings.IgnoreQueryFilters()
-                    .Any(s => s.CompanyId == company.Id && s.Purpose == WorkspacePurpose.Personal),
-                linkedPersonalCompanyId = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId && l.WorkCompanyId == company.Id)
+                    : isPersonalBooks,
+                // Same rule as CanUseAsPersonalBooks, answered from the batched facts.
+                canUseAsPersonalBooks = role == CompanyMemberRole.Owner && !string.IsNullOrWhiteSpace(UserId)
+                    && !facts.UserHasPersonalBooks && !isPersonalBooks
+                    && !facts.LinkedAsWorkCompanyIds.Contains(company.Id) && isPersonalPurpose,
+                isPersonalPurpose,
+                linkedPersonalCompanyId = facts.UserLinks.Where(l => l.WorkCompanyId == company.Id)
                     .Select(l => (int?)l.PersonalCompanyId).FirstOrDefault(),
-                linkedWorkCompanyIds = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId && l.PersonalCompanyId == company.Id)
+                linkedWorkCompanyIds = facts.UserLinks.Where(l => l.PersonalCompanyId == company.Id)
                     .Select(l => l.WorkCompanyId).ToList(),
                 canAddPersonalBooks = canAddPersonalBooks ?? CanAddPersonalBooks(),
                 includedModules = _plans.ResolveStoredPlan(company.Plan).IncludedModules,
                 requiredModules = _plans.ResolveStoredPlan(company.Plan).RequiredModules,
-                currency = _db.CompanySettings.IgnoreQueryFilters().Where(s => s.CompanyId == company.Id).Select(s => s.Currency).FirstOrDefault(),
+                currency = facts.Currencies.TryGetValue(company.Id, out var currency) ? currency : null,
                 id = company.Id.ToString(), name = company.Name, shortName = company.ShortName, slug = company.Slug,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, subscriptionStatus = company.SubscriptionStatus,
                 activationState = string.IsNullOrWhiteSpace(company.ActivationState)
@@ -1163,6 +1175,41 @@ namespace Api.Controllers
                     journalWorkflow = initResult.JournalMode.ToString()
                 }
             };
+        }
+            /// <summary>Workspace facts the summary needs, loaded once for every listed workspace.</summary>
+        private sealed record SummaryFacts(
+            HashSet<int> PersonalBooksCompanyIds,
+            bool UserHasPersonalBooks,
+            HashSet<int> LinkedAsWorkCompanyIds,
+            HashSet<int> PersonalPurposeCompanyIds,
+            List<(int WorkCompanyId, int PersonalCompanyId)> UserLinks,
+            Dictionary<int, string> Currencies);
+
+        private SummaryFacts LoadSummaryFacts(IReadOnlyCollection<int> companyIds)
+        {
+            var personalBooks = _db.PersonalWorkspaces
+                .Where(p => companyIds.Contains(p.CompanyId) || p.OwnerUserId == UserId)
+                .Select(p => new { p.CompanyId, p.OwnerUserId })
+                .ToList();
+            var linkedAsWork = _db.WorkspaceLinks.Where(l => companyIds.Contains(l.WorkCompanyId))
+                .Select(l => l.WorkCompanyId).Distinct().ToList();
+            var personalPurpose = _db.WorkspaceOperatingSettings.IgnoreQueryFilters()
+                .Where(s => companyIds.Contains(s.CompanyId) && s.Purpose == WorkspacePurpose.Personal)
+                .Select(s => s.CompanyId).Distinct().ToList();
+            var userLinks = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId)
+                .Select(l => new { l.WorkCompanyId, l.PersonalCompanyId }).ToList();
+            var currencies = new Dictionary<int, string>();
+            foreach (var row in _db.CompanySettings.IgnoreQueryFilters()
+                         .Where(s => companyIds.Contains(s.CompanyId))
+                         .Select(s => new { s.CompanyId, s.Currency }).ToList())
+                currencies.TryAdd(row.CompanyId, row.Currency);
+            return new SummaryFacts(
+                personalBooks.Where(p => companyIds.Contains(p.CompanyId)).Select(p => p.CompanyId).ToHashSet(),
+                !string.IsNullOrWhiteSpace(UserId) && personalBooks.Any(p => p.OwnerUserId == UserId),
+                linkedAsWork.ToHashSet(),
+                personalPurpose.ToHashSet(),
+                userLinks.Select(l => (l.WorkCompanyId, l.PersonalCompanyId)).ToList(),
+                currencies);
         }
     }
 }

@@ -798,9 +798,17 @@ namespace Services.Banking
         /// <summary>Book balance from GL lines (does not rely on <see cref="Account.GeneralLedgerLines"/> being loaded).</summary>
         private decimal BookBalance(Account account)
         {
-            var lines = LinesForAccount(account.Id).ToList();
-            var dr = lines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount);
-            var cr = lines.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount);
+            // Summed in the database; an account without lines has no group and balances to zero.
+            var totals = LinesForAccount(account.Id)
+                .GroupBy(l => l.AccountId)
+                .Select(g => new
+                {
+                    Dr = g.Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : 0m),
+                    Cr = g.Sum(l => l.DrCr == DrOrCrSide.Cr ? l.Amount : 0m)
+                })
+                .FirstOrDefault();
+            var dr = totals?.Dr ?? 0m;
+            var cr = totals?.Cr ?? 0m;
             var isDebitNormal = account.AccountClass?.NormalBalance == "Dr"
                 || (account.AccountClass == null && account.DrOrCrSide == DrOrCrSide.Dr);
             return isDebitNormal ? dr - cr : cr - dr;

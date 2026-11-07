@@ -115,8 +115,11 @@ namespace Services.Security
         public IEnumerable<string> GetPermissionsForUser(string username)
         {
             if (string.IsNullOrEmpty(username)) return Enumerable.Empty<string>();
-            var user = GetUser(username);
+            return GetPermissionsForUser(GetUser(username));
+        }
 
+        public IEnumerable<string> GetPermissionsForUser(User user)
+        {
             if (user == null)
                 return Enumerable.Empty<string>();
 
@@ -131,7 +134,7 @@ namespace Services.Security
                 return permissionsSysAdmin;
             }
 
-            var roles = GetRolesForUser(username);
+            var roles = user.Roles;
             if (roles == null) return Enumerable.Empty<string>();
 
             var permissions = roles

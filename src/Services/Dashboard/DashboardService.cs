@@ -56,12 +56,17 @@ namespace Services.Dashboard
 
             // Ledger accounts only when financials is authorized — never use GetAccounts() to price banks
             // for an invoicing caller who only has banking (that call returns an empty set under auth).
+            // Balances come from the banking service whenever banking is allowed, so ledger lines are only
+            // loaded for the chart-of-accounts fallback in BuildMoneyInBankFromAccounts.
             var accounts = canViewFinancials
-                ? (_financialService.GetAccounts()?.ToList() ?? new List<Account>())
+                ? (canViewBanks
+                    ? _financialService.GetAccountsWithoutLedgerLines()?.ToList()
+                    : _financialService.GetAccounts()?.ToList()) ?? new List<Account>()
                 : new List<Account>();
+            // Totals summed in the database over the same lines MasterGeneralLedger returns (all dates).
             var ledger = canViewFinancials
-                ? (_financialService.MasterGeneralLedger(rangeStart, rangeEnd)?.ToList() ?? new List<MasterGeneralLedger>())
-                : new List<MasterGeneralLedger>();
+                ? (_financialService.LedgerMonthlyTotals()?.ToList() ?? new List<LedgerMonthlyTotal>())
+                : new List<LedgerMonthlyTotal>();
             var balanceSheet = canViewFinancials
                 ? (_financialService.BalanceSheet()?.ToList() ?? new List<BalanceSheet>())
                 : new List<BalanceSheet>();
@@ -440,13 +445,13 @@ namespace Services.Dashboard
         private List<DashboardTrendPointDto> BuildMonthlyTrend(
             DateTime rangeStart,
             DateTime rangeEnd,
-            IEnumerable<MasterGeneralLedger> ledger,
+            IEnumerable<LedgerMonthlyTotal> ledger,
             ISet<int> accountIds,
             bool normalBalanceIsDebit)
         {
             var monthlyAmounts = ledger
                 .Where(line => accountIds.Contains(line.AccountId))
-                .GroupBy(line => new { line.Date.Year, line.Date.Month })
+                .GroupBy(line => new { line.Year, line.Month })
                 .ToDictionary(
                     group => new DateTime(group.Key.Year, group.Key.Month, 1),
                     group => normalBalanceIsDebit
@@ -474,7 +479,7 @@ namespace Services.Dashboard
         }
 
         private static decimal ComputeNetAmount(
-            IEnumerable<MasterGeneralLedger> ledger,
+            IEnumerable<LedgerMonthlyTotal> ledger,
             ISet<int> accountIds,
             bool normalBalanceIsDebit)
         {

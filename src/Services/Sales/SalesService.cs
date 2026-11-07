@@ -491,22 +491,65 @@ namespace Services.Sales
                 c => c.TaxGroup,
             };
 
-            var customers = _customerRepo.GetAllIncluding(includeProperties);
+            // Materialized once: callers enumerate the result, which would otherwise run the query again.
+            var customers = _customerRepo.GetAllIncluding(includeProperties).ToList();
 
-            foreach (var customer in customers)
-            {
-                foreach (var invoice in customer.SalesInvoices)
-                {
-                    invoice.SalesInvoiceLines = GetSalesInvoiceById(invoice.Id).SalesInvoiceLines;
-                }
-
-                foreach (var receipt in customer.SalesReceipts)
-                {
-                    receipt.SalesReceiptLines = GetSalesReceiptById(receipt.Id).SalesReceiptLines;
-                }
-            }
+            // Loads the same graph GetSalesInvoiceById / GetSalesReceiptById would, for every document at once.
+            LoadInvoiceDetails(customers.SelectMany(c => c.SalesInvoices ?? Enumerable.Empty<SalesInvoiceHeader>()).ToList());
+            LoadReceiptDetails(customers.SelectMany(c => c.SalesReceipts ?? Enumerable.Empty<SalesReceiptHeader>()).ToList());
 
             return customers;
+        }
+
+        private void LoadInvoiceDetails(IReadOnlyCollection<SalesInvoiceHeader> invoices)
+        {
+            if (invoices.Count == 0) return;
+            var ids = invoices.Select(i => i.Id).Distinct().ToList();
+            var loaded = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
+                    inv => inv.Customer.Party,
+                    inv => inv.Customer.BillToContact,
+                    inv => inv.Customer.BillToContact.Party,
+                    inv => inv.Customer.PrimaryContact,
+                    inv => inv.Customer.PrimaryContact.Party,
+                    inv => inv.Customer.CustomerAdvancesAccount,
+                    inv => inv.Customer.AccountsReceivableAccount,
+                    inv => inv.CustomerAllocations,
+                    inv => inv.SalesInvoiceLines)
+                .Where(inv => ids.Contains(inv.Id))
+                .ToDictionary(inv => inv.Id);
+            var lines = loaded.Values.SelectMany(i => i.SalesInvoiceLines ?? Enumerable.Empty<SalesInvoiceLine>()).ToList();
+            var itemIds = lines.Select(l => l.ItemId).Distinct().ToList();
+            var items = _itemRepo.Table.Where(i => itemIds.Contains(i.Id)).ToDictionary(i => i.Id);
+            var measurementIds = lines.Select(l => l.MeasurementId).Distinct().ToList();
+            var measurements = _measurementRepo.Table.Where(m => measurementIds.Contains(m.Id)).ToDictionary(m => m.Id);
+            var accounts = lines.Any(l => l.SalesAccountId.HasValue)
+                ? _financialService.GetAccounts().GroupBy(a => a.Id).ToDictionary(g => g.Key, g => g.First())
+                : null;
+            foreach (var line in lines)
+            {
+                line.Item = items.TryGetValue(line.ItemId, out var item) ? item : null;
+                line.Measurement = measurements.TryGetValue(line.MeasurementId, out var measurement) ? measurement : null;
+                if (line.SalesAccountId.HasValue)
+                    line.SalesAccount = accounts != null && accounts.TryGetValue(line.SalesAccountId.Value, out var account) ? account : null;
+            }
+            foreach (var invoice in invoices)
+                if (loaded.TryGetValue(invoice.Id, out var full))
+                    invoice.SalesInvoiceLines = full.SalesInvoiceLines;
+        }
+
+        private void LoadReceiptDetails(IReadOnlyCollection<SalesReceiptHeader> receipts)
+        {
+            if (receipts.Count == 0) return;
+            var ids = receipts.Select(r => r.Id).Distinct().ToList();
+            var loaded = _salesReceiptRepo.GetAllIncluding(r => r.Customer,
+                    r => r.CustomerAllocations,
+                    r => r.SalesReceiptLines,
+                    r => r.Customer.Party)
+                .Where(r => ids.Contains(r.Id))
+                .ToDictionary(r => r.Id);
+            foreach (var receipt in receipts)
+                if (loaded.TryGetValue(receipt.Id, out var full))
+                    receipt.SalesReceiptLines = full.SalesReceiptLines;
         }
 
         public Customer GetCustomerById(int id)
