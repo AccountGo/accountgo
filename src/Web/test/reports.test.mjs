@@ -7,7 +7,7 @@ import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 after(() => server.close());
-const { default: Reports, buildStatement, getDateRange, loadReportData, reportQuery, statementCsv } =
+const { default: Reports, applyComparativeAmounts, buildStatement, getDateRange, loadReportData, reportPdfQuery, reportQuery, statementCsv } =
   await server.ssrLoadModule('/src/pages/Reports.tsx');
 const { AuthProvider } = await server.ssrLoadModule('/src/auth/AuthContext.tsx');
 
@@ -46,13 +46,14 @@ test('the reports route renders all statement controls and respects reports.view
           } }),
         }, createElement(Route, { path: 'reports', element: createElement(Reports) }))))));
   const html = render(true);
-  for (const label of ['Trial Balance', 'Profit &amp; Loss', 'Balance Sheet', 'Cash Flow', 'Accounting Basis', 'Accrual', 'Cash', 'Export CSV', 'Quarter-to-Date', 'Year-to-Date', 'All Time / As-of Date'])
+  for (const label of ['Trial Balance', 'Profit &amp; Loss', 'Balance Sheet', 'Cash Flow', 'Accounting Basis', 'Accrual', 'Cash', 'Download PDF', 'Export CSV', 'Quarter-to-Date', 'Year-to-Date', 'All Time / As-of Date'])
     assert.ok(html.includes(label), label);
   assert.ok(html.includes('Loading financial reports...'));
   assert.ok(!html.includes('Reconciled'));
   const denied = render(false);
   assert.ok(denied.includes('Access Restricted'));
   assert.ok(!denied.includes('Export CSV'));
+  assert.ok(!denied.includes('Download PDF'));
 });
 
 test('trial balance nets gross postings, sorts codes and totals exact cents', () => {
@@ -163,6 +164,22 @@ test('cash flow reconciles operating, investing, and financing cash flows to net
   assert.equal(total(cashRows, 'Difference').amount, 0);
 });
 
+test('personal freelance compare stays one row when only the prior period has 40900', () => {
+  const base = empty();
+  base.income = [{ accountId: 1, accountCode: '40100', accountName: 'Pay', isExpense: false, amount: 100 }];
+  const prior = empty();
+  prior.income = [
+    { accountId: 1, accountCode: '40100', accountName: 'Pay', isExpense: false, amount: 80 },
+    { accountId: 7, accountCode: '40900', accountName: 'Transfer', isExpense: false, amount: 40 },
+  ];
+  const rows = applyComparativeAmounts(buildStatement('income', base, true, true), buildStatement('income', prior, true, true));
+  const freelance = rows.filter(row => row.label === 'Money from my freelance work');
+  assert.equal(freelance.length, 1);
+  assert.equal(freelance[0].amount, 0);
+  assert.equal(freelance[0].comparativeAmount, 4000);
+  assert.ok(rows.findIndex(row => row.label === 'Money from my freelance work') < rows.findIndex(row => row.label === 'Spending'));
+});
+
 test('presets use local calendar dates and the active fiscal year, including non-calendar years', () => {
   const today = new Date(2026, 9, 24, 12);
   assert.deepEqual(getDateRange('month', today), { from: '2026-10-01', to: '2026-10-24' });
@@ -187,6 +204,18 @@ test('presets use local calendar dates and the active fiscal year, including non
   assert.equal(params.has('basis'), false);
   const cashParams = new URLSearchParams(reportQuery({ from: '2026-04-01', to: '2026-04-30' }, 'cash'));
   assert.equal(cashParams.get('basis'), 'Cash');
+  const pdf = new URLSearchParams(reportPdfQuery('income', { from: '2026-04-01', to: '2026-04-30' }, 'cash', false, { from: '2025-04-01', to: '2025-04-30' }));
+  assert.equal(pdf.get('statement'), 'income');
+  assert.equal(pdf.get('basis'), 'Cash');
+  assert.equal(pdf.get('hideZero'), 'false');
+  assert.equal(pdf.get('compareFrom'), '2025-04-01T00:00:00');
+  assert.equal(pdf.get('compareTo'), '2025-04-30T23:59:59.9999999');
+  const sheetPdf = new URLSearchParams(reportPdfQuery('balanceSheet', { from: '', to: '2026-04-30' }, 'accrual', true, { from: '', to: '2025-12-31' }));
+  assert.equal(sheetPdf.has('from'), false);
+  assert.equal(sheetPdf.has('basis'), false);
+  assert.equal(sheetPdf.has('hideZero'), false);
+  assert.equal(sheetPdf.has('compareFrom'), false);
+  assert.equal(sheetPdf.get('compareTo'), '2025-12-31T23:59:59.9999999');
   assert.equal(new URLSearchParams(reportQuery({ from: '', to: '2026-04-30' })).has('from'), false);
 });
 

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, Loader2, RefreshCw } from 'lucide-react';
+import { Download, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
@@ -165,6 +165,24 @@ export function reportQuery(range: DateRange, basis: AccountingBasis = 'accrual'
   return params.size ? `?${params}` : '';
 }
 
+/** Query string for the printed statement. Comparative columns follow the on-screen prior period. */
+export function reportPdfQuery(
+  statement: Statement,
+  range: DateRange,
+  basis: AccountingBasis,
+  hideZero: boolean,
+  comparative?: DateRange | null,
+): string {
+  const params = new URLSearchParams(reportQuery(range, basis).replace(/^\?/, ''));
+  params.set('statement', statement);
+  if (!hideZero) params.set('hideZero', 'false');
+  if (comparative && (statement === 'income' || statement === 'balanceSheet')) {
+    if (comparative.from) params.set('compareFrom', `${comparative.from}T00:00:00`);
+    if (comparative.to) params.set('compareTo', `${comparative.to}T23:59:59.9999999`);
+  }
+  return params.toString();
+}
+
 export async function loadReportData(
   fetcher: (url: string) => Promise<Response>,
   range: DateRange,
@@ -256,7 +274,8 @@ export function buildStatement(statement: Statement, data: ReportData, hideZero 
     const earned = section('Earned income', data.income.filter(a => !a.isExpense && a.accountCode !== '40900'));
     const freelance = data.income.filter(a => !a.isExpense && a.accountCode === '40900');
     const freelanceAmount = freelance.reduce((sum, a) => sum + minorUnits(a.amount), 0);
-    rows.push({ code: '40900', label: 'Money from my freelance work', kind: 'account', amount: freelanceAmount, accountId: freelance[0]?.accountId });
+    // Stable compare key: this line is synthetic, so it must not switch between an account id and the label.
+    rows.push({ code: '40900', label: 'Money from my freelance work', kind: 'account', amount: freelanceAmount });
     const spending = section('Spending', data.income.filter(a => a.isExpense));
     rows.push({ code: '', label: 'Net', kind: 'total', amount: earned + freelanceAmount - spending });
   } else if (statement === 'income') {
@@ -425,6 +444,8 @@ export default function Reports() {
   const [hideZero, setHideZero] = useState(true);
   const [compare, setCompare] = useState(readCompareToggle);
   const [revision, setRevision] = useState(0);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [result, setResult] = useState<{ key: string; slug: string; data: ReportData; comparative?: ReportData; comparativeRange?: DateRange | null } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const validRange = !!range.to && (!range.from || range.from <= range.to);
@@ -525,6 +546,33 @@ export default function Reports() {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+  const downloadPdf = async () => {
+    if (!data || !validRange || error || pdfBusy) return;
+    setPdfBusy(true);
+    setPdfError(null);
+    try {
+      const query = reportPdfQuery(statement, range, basis, hideZero, showingCompare ? activeCompareRange : null);
+      const response = await authFetch(`/api/Financials/Report.pdf?${query}`);
+      if (!response.ok) throw new Error('Unable to download the report PDF.');
+      const blob = await response.blob();
+      if (!blob.size) throw new Error('Unable to download the report PDF.');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const named = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition);
+      const fileName = decodeURIComponent((named?.[1] || named?.[2] || `${currentOrg.slug}-${statement}-${basis}-${range.to}.pdf`).replaceAll('"', ''));
+      link.href = url;
+      link.download = fileName.endsWith('.pdf') ? fileName : `${currentOrg.slug}-${statement}-${basis}-${range.to}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (downloadError) {
+      setPdfError(downloadError instanceof Error ? downloadError.message : 'Unable to download the report PDF.');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
   const inputClass = 'rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]';
   const setCompareAndPersist = (value: boolean) => {
     setCompare(value);
@@ -540,9 +588,11 @@ export default function Reports() {
           : loading ? 'Loading financial year...' : 'No active financial year available'}
         actions={<>
           <HeaderButton label="Refresh" icon={RefreshCw} disabled={loading || !validRange} onClick={() => setRevision(r => r + 1)} />
+          <HeaderButton label="Download PDF" icon={FileDown} busy={pdfBusy} disabled={!data || !validRange || !!error || pdfBusy} onClick={downloadPdf} />
           <HeaderButton label="Export CSV" icon={Download} disabled={!data || !validRange || !!error} onClick={exportCsv} />
         </>}
       />
+      {pdfError && <p role="alert" className="text-red-500">{pdfError}</p>}
       {showBankCloseStatus && <BankCloseStatusLoader orgSlug={currentOrg.slug} />}
       <div className="flex flex-wrap items-end gap-4 rounded-2xl bg-[var(--bg-surface)] p-4">
         <label className="grid gap-1 text-xs text-[var(--text-secondary)]">Accounting Basis
