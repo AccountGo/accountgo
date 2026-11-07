@@ -33,6 +33,14 @@ const render = (planId, activeModules) => renderToStaticMarkup(createElement(Aut
     },
   }))));
 
+test('subscription heading uses the catalog name of the current plan', () => {
+  primePlanCatalog(CATALOG);
+  const html = render('plan_b', ['sales', 'financials', 'purchases', 'reports']);
+  assert.match(html, /<h2[^>]*>Plan B<\/h2>/);
+  assert.equal(html.includes('plan_b Plan'), false);
+  assert.equal(html.includes('Plan B Plan'), false);
+});
+
 test('subscription settings locks modules outside the current plan', () => {
   primePlanCatalog(CATALOG);
   const html = render('plan_b', ['sales', 'financials', 'purchases', 'reports']);

@@ -10,6 +10,14 @@ export interface PlanCardCatalogEntry {
 
 export type PlanCardRole = 'current' | 'action';
 
+/** Same label the current-plan card uses: catalog name, or the plan key when the catalog has no row. */
+export function currentPlanDisplayName(
+  currentPlanKey: string,
+  catalog: readonly { key: string; name: string }[],
+): string {
+  return catalog.find((plan) => plan.key === currentPlanKey)?.name ?? currentPlanKey;
+}
+
 export function plansForProduct<T extends { product?: string | null }>(plans: T[], product: string): T[] {
   return plans.filter(plan => plan.product === product);
 }
@@ -65,7 +73,7 @@ export function derivePlanCards(
     {
       key: currentPlanKey,
       role: 'current',
-      name: current?.name ?? currentPlanKey,
+      name: currentPlanDisplayName(currentPlanKey, catalog),
       description: current?.description ?? '',
       monthlyPrice: currentPrice,
       annualPrice: current?.annualPrice ?? null,
