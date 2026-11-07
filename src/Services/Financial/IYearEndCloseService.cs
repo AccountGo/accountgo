@@ -42,6 +42,11 @@ namespace Services.Financial
         public IReadOnlyList<YearEndCheckItem> Blocking { get; set; } = Array.Empty<YearEndCheckItem>();
         public IReadOnlyList<YearEndCheckItem> Warnings { get; set; } = Array.Empty<YearEndCheckItem>();
         public IReadOnlyList<YearEndClosingLine> ClosingLines { get; set; } = Array.Empty<YearEndClosingLine>();
+        public DateTime? CurrentBooksLockedThrough { get; set; }
+        public DateTime? ProposedBooksLockedThrough { get; set; }
+        public bool RequiresLockAcknowledgement { get; set; }
+        public DateTime? NewlyUnlockedFrom { get; set; }
+        public DateTime? NewlyUnlockedThrough { get; set; }
         public bool CanClose => Status != FiscalYearCloseStatus.Closed && Blocking.Count == 0;
     }
 
@@ -61,6 +66,6 @@ namespace Services.Financial
         IReadOnlyList<YearEndYearSummary> ListYears();
         YearEndPreview Preview(string fiscalYearCode);
         YearEndPreview Close(string fiscalYearCode, bool acknowledgeWarnings, string closedBy);
-        YearEndPreview Reopen(string fiscalYearCode, string reason, string reopenedBy);
+        YearEndPreview Reopen(string fiscalYearCode, string reason, string reopenedBy, bool acknowledgeIndependentLock = false, DateTime? expectedLockThrough = null);
     }
 }

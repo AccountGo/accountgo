@@ -767,6 +767,7 @@ WHERE ""DisabledModulesJson"" IS NULL
         // D1 0046_entity_type_and_year_end_close.sql (#455 Phase 2b-1)
         private static void EnsureEntityTypeAndYearEndClose(DbConnection connection)
         {
+            AddColumnIfMissing(connection, "Account", "IsSuspenseOrClearing", "INTEGER NOT NULL DEFAULT 0");
             AddColumnIfMissing(connection, "CompanySetting", "EntityType", "INTEGER NOT NULL DEFAULT 3");
             AddColumnIfMissing(connection, "FinancialYear", "ClosedAt", "TEXT NULL");
             AddColumnIfMissing(connection, "FinancialYear", "ClosedBy", "TEXT NULL");

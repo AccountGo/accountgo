@@ -295,29 +295,47 @@ namespace Services.Financial
             var pattern = setting.FiscalYearPattern;
             var startMonth = setting.FiscalYearStartMonth;
             var requested = FiscalYearCalculator.Containing(date, pattern, startMonth);
-            var max = FiscalYearCalculator.Containing(DateTime.UtcNow.Date.AddYears(1), pattern, startMonth);
-            // Horizon is next fiscal year from today; later dates create nothing.
-            if (requested.Start > max.Start)
+            var existingCodes = _fiscalYearRepo.Table.Select(fy => fy.FiscalYearCode).ToHashSet();
+            var probe = FiscalYearCalculator.Containing(booksStart, pattern, startMonth);
+            var needsCreation = false;
+            while (probe.Start <= requested.Start)
+            {
+                if (!existingCodes.Contains(probe.Code))
+                {
+                    needsCreation = true;
+                    break;
+                }
+                probe = FiscalYearCalculator.Containing(probe.Start.AddYears(1), pattern, startMonth);
+            }
+            if (!needsCreation)
                 return;
 
-            var cursor = FiscalYearCalculator.Containing(booksStart, pattern, startMonth);
-            while (cursor.Start <= requested.Start)
+            void EnsureMissingYears()
             {
-                if (!_fiscalYearRepo.Table.Any(fy => fy.FiscalYearCode == cursor.Code))
+                var cursor = FiscalYearCalculator.Containing(booksStart, pattern, startMonth);
+                while (cursor.Start <= requested.Start)
                 {
-                    _fiscalYearRepo.Insert(new FinancialYear
+                    if (!_fiscalYearRepo.Table.Any(fy => fy.FiscalYearCode == cursor.Code))
                     {
-                        CompanyId = setting.CompanyId,
-                        FiscalYearCode = cursor.Code,
-                        FiscalYearName = cursor.Code,
-                        StartDate = cursor.Start,
-                        EndDate = cursor.End,
-                        IsActive = true
-                    });
-                }
+                        _fiscalYearRepo.Insert(new FinancialYear
+                        {
+                            CompanyId = setting.CompanyId,
+                            FiscalYearCode = cursor.Code,
+                            FiscalYearName = cursor.Code,
+                            StartDate = cursor.Start,
+                            EndDate = cursor.End,
+                            IsActive = true
+                        });
+                    }
 
-                cursor = FiscalYearCalculator.Containing(cursor.Start.AddYears(1), pattern, startMonth);
+                    cursor = FiscalYearCalculator.Containing(cursor.Start.AddYears(1), pattern, startMonth);
+                }
             }
+
+            if (_policyTransaction != null && setting.CompanyId > 0)
+                _policyTransaction.Execute(setting.CompanyId, _ => EnsureMissingYears());
+            else
+                EnsureMissingYears();
         }
 
         /// <summary>Rejects postings dated before the company's books start date (resolved in the current tenant scope).</summary>
@@ -600,6 +618,13 @@ namespace Services.Financial
 
             EnsureFiscalYearsThrough(glEntry.Date);
 
+            if (AllowClosingEntriesDepth.Value == 0)
+            {
+                var closedYear = _fiscalYearRepo.Table.FirstOrDefault(fy => fy.ClosedAt.HasValue
+                    && glEntry.Date >= fy.StartDate && glEntry.Date <= fy.EndDate);
+                if (closedYear != null)
+                    throw new InvalidOperationException($"Fiscal year {closedYear.FiscalYearCode} is closed. Reopen it before posting.");
+            }
             var activeFiscalYear = _fiscalYearRepo.Table
                 .FirstOrDefault(fy => fy.IsActive && glEntry.Date >= fy.StartDate && glEntry.Date <= fy.EndDate);
 

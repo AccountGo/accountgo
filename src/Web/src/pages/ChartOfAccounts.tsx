@@ -104,6 +104,7 @@ export interface ApiAccount {
   normalBalance?: 'Dr' | 'Cr' | 'NA';
   isCash: boolean;
   isContraAccount: boolean;
+  isSuspenseOrClearing?: boolean;
   canPost: boolean;
   archived?: boolean;
   archivedAt?: string | null;
@@ -195,6 +196,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
     description: '',
     isCash: false,
     isContraAccount: false,
+    isSuspenseOrClearing: false,
   });
 
   // Action feedback dialog
@@ -598,6 +600,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
       description: '',
       isCash: false,
       isContraAccount: false,
+      isSuspenseOrClearing: false,
     });
     setEditorOpen(true);
   };
@@ -613,6 +616,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
       description: account.description || '',
       isCash: account.isCash,
       isContraAccount: account.isContraAccount,
+      isSuspenseOrClearing: account.isSuspenseOrClearing ?? false,
     });
     setEditorOpen(true);
   };
@@ -643,6 +647,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
         description: formData.description.trim() || null,
         isCash: formData.isCash,
         isContraAccount: formData.isContraAccount,
+        isSuspenseOrClearing: formData.isSuspenseOrClearing,
       };
 
       let res: Response;
@@ -1225,6 +1230,15 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
                     className="accent-[var(--brand-primary)]"
                   />
                   Contra Account
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    checked={formData.isSuspenseOrClearing}
+                    onChange={(e) => setFormData({ ...formData, isSuspenseOrClearing: e.target.checked })}
+                    className="accent-[var(--brand-primary)]"
+                  />
+                  Review as suspense or clearing at year-end
                 </label>
               </div>
 

@@ -193,6 +193,7 @@ namespace Api.Controllers
                 Description = account.Description,
                 IsCash = account.IsCash,
                 IsContraAccount = account.IsContraAccount,
+                IsSuspenseOrClearing = account.IsSuspenseOrClearing,
                 Archived = account.ArchivedAt.HasValue,
                 ArchivedAt = account.ArchivedAt,
                 IsProtected = isProtected,
@@ -919,6 +920,7 @@ namespace Api.Controllers
                 Description = account.Description,
                 IsCash = account.IsCash,
                 IsContraAccount = account.IsContraAccount,
+                IsSuspenseOrClearing = account.IsSuspenseOrClearing,
                 Archived = account.ArchivedAt.HasValue,
                 ArchivedAt = account.ArchivedAt,
                 IsProtected = isProtected,
@@ -956,7 +958,8 @@ namespace Api.Controllers
                 ParentAccountId = newAccountDto.ParentAccountId,
                 Description = newAccountDto.Description,
                 IsCash = newAccountDto.IsCash,
-                IsContraAccount = newAccountDto.IsContraAccount
+                IsContraAccount = newAccountDto.IsContraAccount,
+                IsSuspenseOrClearing = newAccountDto.IsSuspenseOrClearing ?? false
             };
 
             Core.Domain.Financials.Account createdAccount;
@@ -979,6 +982,7 @@ namespace Api.Controllers
                 Description = createdAccount.Description,
                 IsCash = createdAccount.IsCash,
                 IsContraAccount = createdAccount.IsContraAccount,
+                IsSuspenseOrClearing = createdAccount.IsSuspenseOrClearing,
                 Archived = createdAccount.ArchivedAt.HasValue,
                 ArchivedAt = createdAccount.ArchivedAt,
                 Balance = 0,
@@ -1006,6 +1010,8 @@ namespace Api.Controllers
                 _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(updatedAccountDto.ParentAccountId, nameof(updatedAccountDto.ParentAccountId));
             }
 
+            var existingForClassification = updatedAccountDto.IsSuspenseOrClearing.HasValue
+                ? null : await _accountService.GetAccountByCodeAsync(accountCode);
             Core.Domain.Financials.Account? updatedAccount;
             try
             {
@@ -1017,7 +1023,8 @@ namespace Api.Controllers
                     ParentAccountId = updatedAccountDto.ParentAccountId,
                     Description = updatedAccountDto.Description,
                     IsCash = updatedAccountDto.IsCash,
-                    IsContraAccount = updatedAccountDto.IsContraAccount
+                    IsContraAccount = updatedAccountDto.IsContraAccount,
+                    IsSuspenseOrClearing = updatedAccountDto.IsSuspenseOrClearing ?? existingForClassification?.IsSuspenseOrClearing ?? false
                 });
             }
             catch (InvalidOperationException ex)
@@ -1037,6 +1044,7 @@ namespace Api.Controllers
                 Description = updatedAccount.Description,
                 IsCash = updatedAccount.IsCash,
                 IsContraAccount = updatedAccount.IsContraAccount,
+                IsSuspenseOrClearing = updatedAccount.IsSuspenseOrClearing,
                 Archived = updatedAccount.ArchivedAt.HasValue,
                 ArchivedAt = updatedAccount.ArchivedAt,
                 Balance = 0,
@@ -1692,6 +1700,7 @@ namespace Api.Controllers
                     Description = account.Description,
                     IsCash = account.IsCash,
                     IsContraAccount = account.IsContraAccount,
+                    IsSuspenseOrClearing = account.IsSuspenseOrClearing,
                     Archived = account.ArchivedAt.HasValue,
                     ArchivedAt = account.ArchivedAt,
                     IsProtected = isProtected,
@@ -1874,6 +1883,19 @@ namespace Api.Controllers
             return Ok(years.Select(MapYearEndSummary));
         }
 
+        /// <summary>Persist missing fiscal years through the next fiscal year without changing existing years.</summary>
+        [HttpPost]
+        [Route("YearEnd/EnsureYears")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
+        public IActionResult EnsureYearEndYears()
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out var denied))
+                return denied!;
+            _financialService.EnsureFiscalYearsThrough(DateTime.UtcNow.Date.AddYears(1));
+            return Ok(new { message = "Fiscal years are available through next year." });
+        }
+
         [HttpGet]
         [Route("YearEnd/{code}")]
         [RequireModule("financials")]
@@ -1931,6 +1953,8 @@ namespace Api.Controllers
         public sealed class YearEndReopenRequest
         {
             public string Reason { get; set; }
+            public bool AcknowledgeIndependentLock { get; set; }
+            public DateTime? ExpectedLockThrough { get; set; }
         }
 
         [HttpPost]
@@ -1948,7 +1972,9 @@ namespace Api.Controllers
                 var preview = _yearEndCloseService.Reopen(
                     code,
                     request?.Reason ?? "",
-                    YearEndActor);
+                    YearEndActor,
+                    request?.AcknowledgeIndependentLock ?? false,
+                    request?.ExpectedLockThrough);
                 tx.Commit();
                 return Ok(MapYearEndPreview(preview));
             }
@@ -2012,6 +2038,11 @@ namespace Api.Controllers
                 drCr = line.DrCr,
                 amount = line.Amount
             }),
+            currentBooksLockedThrough = preview.CurrentBooksLockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            proposedBooksLockedThrough = preview.ProposedBooksLockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            requiresLockAcknowledgement = preview.RequiresLockAcknowledgement,
+            newlyUnlockedFrom = preview.NewlyUnlockedFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            newlyUnlockedThrough = preview.NewlyUnlockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             canClose = preview.CanClose
         };
 
