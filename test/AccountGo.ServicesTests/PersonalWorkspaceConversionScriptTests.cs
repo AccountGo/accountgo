@@ -61,7 +61,11 @@ public sealed class PersonalWorkspaceConversionScriptTests
     private static string ToLibpqUri(string npgsqlConnectionString)
     {
         var builder = new NpgsqlConnectionStringBuilder(npgsqlConnectionString);
-        return $"postgresql://{Uri.EscapeDataString(builder.Username!)}:{Uri.EscapeDataString(builder.Password!)}@{builder.Host}:{builder.Port}/{builder.Database}";
+        // Local servers often trust connections without a password; libpq accepts a user with no password part.
+        var credentials = Uri.EscapeDataString(builder.Username ?? string.Empty);
+        if (!string.IsNullOrEmpty(builder.Password))
+            credentials += ":" + Uri.EscapeDataString(builder.Password);
+        return $"postgresql://{credentials}@{builder.Host}:{builder.Port}/{builder.Database}";
     }
 
     private static ScriptResult RunScript(string databaseUri, params string[] arguments)
