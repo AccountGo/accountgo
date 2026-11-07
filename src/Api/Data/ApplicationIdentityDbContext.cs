@@ -28,6 +28,7 @@ namespace Api.Data
         public DbSet<TrustedDevice> TrustedDevices { get; set; } = null!;
         public DbSet<UserWebAuthnCredential> WebAuthnCredentials { get; set; } = null!;
         public DbSet<WebAuthnChallengeEntity> WebAuthnChallenges { get; set; } = null!;
+        public DbSet<ExternalTokenRedemption> ExternalTokenRedemptions { get; set; } = null!;
 
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
@@ -144,6 +145,15 @@ namespace Api.Data
                 entity.Property(e => e.Purpose).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.JsonPayload).IsRequired();
                 entity.HasIndex(e => new { e.UserId, e.Purpose }).IsUnique();
+            });
+
+            builder.Entity<ExternalTokenRedemption>(entity =>
+            {
+                entity.ToTable("ExternalTokenRedemptions");
+                entity.HasKey(e => new { e.Provider, e.TokenId });
+                entity.Property(e => e.Provider).HasMaxLength(64).IsRequired();
+                entity.Property(e => e.TokenId).HasMaxLength(128).IsRequired();
+                entity.HasIndex(e => e.ExpiresAtUtc);
             });
         }
     }

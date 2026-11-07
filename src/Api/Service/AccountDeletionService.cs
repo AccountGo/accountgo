@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Api.Data;
 using Core.Domain;
@@ -77,6 +78,20 @@ namespace Api.Service
 
             var otpTokens = await _identity.Set<IdentityUserToken<string>>().Where(t => t.UserId == user.Id).ToListAsync();
             _identity.RemoveRange(otpTokens);
+
+            var logins = await _identity.Set<IdentityUserLogin<string>>().Where(l => l.UserId == user.Id).ToListAsync();
+            foreach (var login in logins)
+            {
+                _identity.SecurityAuditEvents.Add(new SecurityAuditEvent
+                {
+                    EventType = "auth.external_login.removed",
+                    Outcome = "success",
+                    UserId = user.Id,
+                    MetadataJson = JsonSerializer.Serialize(new { provider = login.LoginProvider, reason = "account_deleted" }),
+                    CreatedAt = now
+                });
+            }
+            _identity.Set<IdentityUserLogin<string>>().RemoveRange(logins);
 
             var members = await _apiDb.CompanyMembers.Include(m => m.SecurityRoles).Where(m => m.UserId == user.Id).ToListAsync();
             var companyIds = members.Select(m => m.CompanyId).Distinct().OrderBy(id => id).ToList();

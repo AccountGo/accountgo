@@ -127,6 +127,9 @@ public sealed class AuditRetentionWorker : BackgroundService
                 securityCutoff,
                 cancellationToken);
 
+            var redemptionsCutoff = now.AddMinutes(-10);
+            await identity.ExternalTokenRedemptions.Where(r => r.ExpiresAtUtc < redemptionsCutoff).ExecuteDeleteAsync(cancellationToken);
+
             _logger.LogInformation(
                 "Audit retention complete: dataAccessDeleted={DataAccessDeleted} securityDeleted={SecurityDeleted} dataAccessCutoff={DataAccessCutoff:o} securityCutoff={SecurityCutoff:o}",
                 dataAccessDeleted, securityDeleted, dataAccessCutoff, securityCutoff);

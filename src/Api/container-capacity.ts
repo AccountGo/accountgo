@@ -143,7 +143,7 @@ function normalizeSlug(slug: string | null | undefined): string | null {
 
 /** Authentication requests that benefit from the optional V2 public sign-in pool. */
 const PUBLIC_AUTH_PATHS = new Set([
-    "/api/auth/google", "/api/auth/signup", "/api/auth/send-otp", "/api/auth/verify-otp",
+    "/api/auth/google", "/api/auth/google/start", "/api/auth/signup", "/api/auth/send-otp", "/api/auth/verify-otp",
     "/api/auth/refresh", "/api/auth/mfa/totp/verify", "/api/auth/mfa/recovery/verify",
     "/api/auth/mfa/webauthn/assertion/options", "/api/auth/mfa/webauthn/assertion/complete",
     "/api/auth/mfa/totp/enroll/begin", "/api/auth/mfa/totp/enroll/complete",
