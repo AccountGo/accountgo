@@ -31,16 +31,16 @@ public sealed class RequestQueryBudgetTests
 
     internal static readonly (string Path, int Budget)[] Budgets =
     [
-        ("/api/auth/me", 9), ("/api/organizations", 16), ("/api/organizations/current", 16),
-        ("/api/entitlements", 11), ("/api/security/capabilities", 5), ("/api/security/policy", 5),
-        ("/api/linked-entries", 11), ("/api/Dashboard/Summary", 74), ("/api/Financials/Accounts", 39),
-        ("/api/Banking/Accounts", 18), ("/api/Sales/SalesInvoices", 14), ("/api/Sales/Customers", 14),
-        ("/api/Purchasing/Bills", 14), ("/api/Purchasing/Vendors", 15), ("/api/Financials/trialbalance", 24),
-        ("/api/Financials/BalanceSheet", 32), ("/api/Financials/IncomeStatement", 21),
-        ("/api/Financials/GeneralLedger", 25), ("/api/Financials/CashFlow", 38),
-        ("/api/organizations/current/accounting-policy", 7), ("/api/organizations/current/operating-settings", 14),
-        ("/api/Tax/Taxes", 13), ("/api/Common/PaymentTerms", 11), ("/api/Administration/financialyears", 8),
-        ("/api/Banking/Reconciliations", 13),
+        ("/api/auth/me", 7), ("/api/organizations", 14), ("/api/organizations/current", 14),
+        ("/api/entitlements", 8), ("/api/security/capabilities", 3), ("/api/security/policy", 3),
+        ("/api/linked-entries", 4), ("/api/Dashboard/Summary", 29), ("/api/Financials/Accounts", 20),
+        ("/api/Banking/Accounts", 9), ("/api/Sales/SalesInvoices", 5), ("/api/Sales/Customers", 5),
+        ("/api/Purchasing/Bills", 5), ("/api/Purchasing/Vendors", 6), ("/api/Financials/trialbalance", 5),
+        ("/api/Financials/BalanceSheet", 8), ("/api/Financials/IncomeStatement", 7),
+        ("/api/Financials/GeneralLedger", 6), ("/api/Financials/CashFlow", 14),
+        ("/api/organizations/current/accounting-policy", 5), ("/api/organizations/current/operating-settings", 11),
+        ("/api/Tax/Taxes", 6), ("/api/Common/PaymentTerms", 4), ("/api/Administration/financialyears", 6),
+        ("/api/Banking/Reconciliations", 4),
     ];
 
     [Fact]
