@@ -1022,6 +1022,214 @@
     "totalPayables": 0.0,
     "moneyInBank": 1190.0
   },
+  "dashboardLedger": {
+    "kpis": {
+      "totalAssets": 1190.0,
+      "totalSalesYtd": 270.0,
+      "earnedIncomeYtd": 270.0,
+      "moneyFromFreelanceWorkYtd": 0.0,
+      "drawingsYtd": 0.0,
+      "totalExpensesYtd": 80.0,
+      "netProfitYtd": 190.0,
+      "cashFlowYtd": 1190.0
+    },
+    "monthlySales": [
+      {
+        "label": "Apr",
+        "amount": 0.0
+      },
+      {
+        "label": "Apr",
+        "amount": 0.0
+      },
+      {
+        "label": "Aug",
+        "amount": 0.0
+      },
+      {
+        "label": "Aug",
+        "amount": 0.0
+      },
+      {
+        "label": "Dec",
+        "amount": 0.0
+      },
+      {
+        "label": "Dec",
+        "amount": 0.0
+      },
+      {
+        "label": "Feb",
+        "amount": 135.0
+      },
+      {
+        "label": "Feb",
+        "amount": 135.0
+      },
+      {
+        "label": "Jan",
+        "amount": 0.0
+      },
+      {
+        "label": "Jan",
+        "amount": 0.0
+      },
+      {
+        "label": "Jul",
+        "amount": 0.0
+      },
+      {
+        "label": "Jul",
+        "amount": 0.0
+      },
+      {
+        "label": "Jun",
+        "amount": 0.0
+      },
+      {
+        "label": "Jun",
+        "amount": 0.0
+      },
+      {
+        "label": "Mar",
+        "amount": 0.0
+      },
+      {
+        "label": "Mar",
+        "amount": 0.0
+      },
+      {
+        "label": "May",
+        "amount": 0.0
+      },
+      {
+        "label": "May",
+        "amount": 0.0
+      },
+      {
+        "label": "Nov",
+        "amount": 0.0
+      },
+      {
+        "label": "Nov",
+        "amount": 0.0
+      },
+      {
+        "label": "Oct",
+        "amount": 0.0
+      },
+      {
+        "label": "Oct",
+        "amount": 0.0
+      },
+      {
+        "label": "Sep",
+        "amount": 0.0
+      },
+      {
+        "label": "Sep",
+        "amount": 0.0
+      }
+    ],
+    "monthlyExpenses": [
+      {
+        "label": "Apr",
+        "amount": 0.0
+      },
+      {
+        "label": "Apr",
+        "amount": 0.0
+      },
+      {
+        "label": "Aug",
+        "amount": 0.0
+      },
+      {
+        "label": "Aug",
+        "amount": 0.0
+      },
+      {
+        "label": "Dec",
+        "amount": 0.0
+      },
+      {
+        "label": "Dec",
+        "amount": 0.0
+      },
+      {
+        "label": "Feb",
+        "amount": 40.0
+      },
+      {
+        "label": "Feb",
+        "amount": 40.0
+      },
+      {
+        "label": "Jan",
+        "amount": 0.0
+      },
+      {
+        "label": "Jan",
+        "amount": 0.0
+      },
+      {
+        "label": "Jul",
+        "amount": 0.0
+      },
+      {
+        "label": "Jul",
+        "amount": 0.0
+      },
+      {
+        "label": "Jun",
+        "amount": 0.0
+      },
+      {
+        "label": "Jun",
+        "amount": 0.0
+      },
+      {
+        "label": "Mar",
+        "amount": 0.0
+      },
+      {
+        "label": "Mar",
+        "amount": 0.0
+      },
+      {
+        "label": "May",
+        "amount": 0.0
+      },
+      {
+        "label": "May",
+        "amount": 0.0
+      },
+      {
+        "label": "Nov",
+        "amount": 0.0
+      },
+      {
+        "label": "Nov",
+        "amount": 0.0
+      },
+      {
+        "label": "Oct",
+        "amount": 0.0
+      },
+      {
+        "label": "Oct",
+        "amount": 0.0
+      },
+      {
+        "label": "Sep",
+        "amount": 0.0
+      },
+      {
+        "label": "Sep",
+        "amount": 0.0
+      }
+    ]
+  },
   "bankRegister": {
     "broughtForward": 0.0,
     "lines": [

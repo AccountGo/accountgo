@@ -31,9 +31,9 @@ public sealed class RequestQueryBudgetTests
 
     internal static readonly (string Path, int Budget)[] Budgets =
     [
-        ("/api/auth/me", 7), ("/api/organizations", 14), ("/api/organizations/current", 14),
+        ("/api/auth/me", 5), ("/api/organizations", 10), ("/api/organizations/current", 11),
         ("/api/entitlements", 8), ("/api/security/capabilities", 3), ("/api/security/policy", 3),
-        ("/api/linked-entries", 4), ("/api/Dashboard/Summary", 29), ("/api/Financials/Accounts", 20),
+        ("/api/linked-entries", 4), ("/api/Dashboard/Summary", 28), ("/api/Financials/Accounts", 20),
         ("/api/Banking/Accounts", 9), ("/api/Sales/SalesInvoices", 5), ("/api/Sales/Customers", 5),
         ("/api/Purchasing/Bills", 5), ("/api/Purchasing/Vendors", 6), ("/api/Financials/trialbalance", 5),
         ("/api/Financials/BalanceSheet", 8), ("/api/Financials/IncomeStatement", 7),
@@ -120,6 +120,20 @@ public sealed class RequestQueryBudgetTests
                 }
             }
             Assert.True(failures.Count == 0, string.Join("\n\n", failures));
+
+            // The workspace list answers every workspace from one batch, so more workspaces add no queries.
+            var listCount = (await Send("/api/organizations")).Commands.Count;
+            foreach (var extra in new[] { "budget-two", "budget-three" })
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, "/api/organizations");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                request.Content = JsonContent.Create(new { name = extra, slug = extra, currency = "USD" });
+                using var response = await client.SendAsync(request);
+                Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            }
+            var (listStatus, listCommands) = await Send("/api/organizations");
+            Assert.Equal(HttpStatusCode.OK, listStatus);
+            Assert.Equal(listCount, listCommands.Count);
         }
         finally
         {

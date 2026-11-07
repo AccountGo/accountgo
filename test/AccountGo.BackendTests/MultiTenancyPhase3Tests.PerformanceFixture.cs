@@ -102,6 +102,22 @@ public partial class MultiTenancyPhase3Tests
                 ["moneyInBank"] = kpis["moneyInBank"]?.DeepClone()
             };
         }
+        // Ledger-derived dashboard figures over a fixed range, so the snapshot does not depend on today's date.
+        using (var response = await Send(HttpMethod.Get, "/api/Dashboard/Summary?from=2026-01-01&to=2027-12-31"))
+        {
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            var summary = JsonNode.Parse(await response.Content.ReadAsStringAsync());
+            var ledgerKpis = new JsonObject();
+            foreach (var key in new[] { "totalAssets", "totalSalesYtd", "earnedIncomeYtd", "moneyFromFreelanceWorkYtd",
+                         "drawingsYtd", "totalExpensesYtd", "netProfitYtd", "cashFlowYtd" })
+                ledgerKpis[key] = summary["kpis"][key]?.DeepClone();
+            golden["dashboardLedger"] = new JsonObject
+            {
+                ["kpis"] = ledgerKpis,
+                ["monthlySales"] = summary["monthlySales"]?.DeepClone(),
+                ["monthlyExpenses"] = summary["monthlyExpenses"]?.DeepClone()
+            };
+        }
         using (var response = await Send(HttpMethod.Get, $"/api/Banking/Accounts/{first.Id}/Register?from=2026-01-01&to=2027-12-31&pageSize=100"))
         {
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
@@ -127,6 +143,7 @@ public partial class MultiTenancyPhase3Tests
         var snapshotPath = Path.Combine(Path.GetDirectoryName(PerformanceFixtureSource())!, "Observability", "performance-books-golden.json");
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(File.ReadAllText(snapshotPath)), normalized), "Golden report output changed");
         using var collector = new RequestQueryBudgetTests.RequestCommandCollector();
+        var counts = new Dictionary<string, Dictionary<string, int>>();
         async Task Measure(string scale)
         {
             foreach (var (path, _) in RequestQueryBudgetTests.Budgets)
@@ -137,11 +154,16 @@ public partial class MultiTenancyPhase3Tests
                 finally { collector.Current = null; }
                 Assert.NotEmpty(commands);
                 _output.WriteLine($"VOLUME {scale} {path} {commands.Count}");
+                if (!counts.TryGetValue(path, out var byScale)) counts[path] = byScale = new Dictionary<string, int>();
+                byScale[scale] = commands.Count;
             }
         }
         await Measure("1x");
         for (var i = 1; i <= 8; i++) await AddBooks(secondDate.AddDays(i), 1);
         await Measure("5x");
+        // No endpoint may run more queries because the books hold more documents.
+        var growing = counts.Where(c => c.Value["5x"] > c.Value["1x"]).Select(c => $"{c.Key}: {c.Value["1x"]} -> {c.Value["5x"]}").ToList();
+        Assert.True(growing.Count == 0, "Query count grows with volume: " + string.Join(", ", growing));
     }
     private static string PerformanceFixtureSource([CallerFilePath] string path = "") => path;
 
