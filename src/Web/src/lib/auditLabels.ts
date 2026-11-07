@@ -58,6 +58,8 @@ const BUSINESS_ENTITY_NAMES: Record<string, string> = {
   VendorPayment: 'Bill payment',
   CustomerAllocation: 'Payment allocation',
   Bank: 'Bank account',
+  BankTransaction: 'Bank transaction',
+  BankReconciliation: 'Bank reconciliation',
   BankStatementDescriptionRule: 'Bank rule',
   Account: 'Account',
   MainContraAccount: 'Contra account',
@@ -108,7 +110,7 @@ export function auditEntityName(entityType: string, personal: boolean): string {
 
 const BUSINESS_ONLY_FILTER_TYPES = new Set(['Customer', 'Vendor', 'CompanyMember']);
 const FILTER_ENTITY_TYPES = [
-  'SalesInvoiceHeader', 'PurchaseInvoiceHeader', 'SalesReceiptHeader', 'VendorPayment', 'Bank', 'Account',
+  'SalesInvoiceHeader', 'PurchaseInvoiceHeader', 'SalesReceiptHeader', 'VendorPayment', 'Bank', 'BankTransaction', 'BankReconciliation', 'Account',
   'JournalEntryHeader', 'Customer', 'Vendor', 'Party', 'Tax', 'CompanyMember', 'CompanySetting',
   'RecurringSchedule', 'FinancialYear', 'BooksLockChange',
 ];
@@ -141,6 +143,7 @@ export const AUDIT_FIELD_LABELS: Readonly<Record<string, string>> = {
   Posted: 'posted status',
   VoidedAt: 'void date',
   VoidReason: 'void reason',
+  UndoReason: 'undo reason',
   Name: 'name',
   AccountName: 'name',
   AccountCode: 'code',
@@ -182,6 +185,7 @@ const ENUM_VALUE_NAMES: Readonly<Record<string, Readonly<Record<number, string>>
   'CompanyMember.Role': { 1: 'Owner', 2: 'Admin', 3: 'Member' },
   'CompanyMember.Status': { 1: 'Active', 2: 'Suspended' },
   'RecurringSchedule.Status': { 1: 'Active', 2: 'Paused', 3: 'Ended' },
+  'BankReconciliation.Status': { 1: 'Draft', 2: 'Finished', 3: 'Undone' },
 };
 
 /** One value as plain text: masked values unchanged, empty → "empty", booleans → Yes/No, dates in a fixed format. */
@@ -277,6 +281,12 @@ export function describeChange(row: AuditChangeRow, personal: boolean): string[]
   }
 
   return parsed.map((change) => {
+    if (row.action === 'Modified' && !change.isPair && (row.entityType === 'BankTransaction' || row.entityType === 'BankReconciliation')) {
+      if (change.field === 'BankId') return `Bank account #${change.newValue}`;
+      if (change.field === 'StatementEndDate') return `Statement ending ${formatAuditValue(row.entityType, change.field, change.newValue)}`;
+    }
+    if (row.entityType === 'BankTransaction' && change.field === 'VoidGeneralLedgerHeaderId'
+      && isEmptyValue(change.oldValue) && !isEmptyValue(change.newValue)) return 'Voided bank transaction';
     const subject = phrase(change.field);
     const before = formatAuditValue(row.entityType, change.field, change.oldValue);
     const after = formatAuditValue(row.entityType, change.field, change.newValue);

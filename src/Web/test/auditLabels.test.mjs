@@ -25,6 +25,15 @@ const {
 
 const modified = (entityType, changes) => ({ entityType, entityId: 1, action: 'Modified', changes });
 
+test('banking activity identifies reconciliation transitions and transaction voids', () => {
+  assert.equal(auditEntityName('BankReconciliation', false), 'Bank reconciliation');
+  assert.ok(auditEntityFilterOptions(false).some((option) => option.value === 'BankTransaction'));
+  assert.ok(describeChange(modified('BankReconciliation', { Status: [1, 2], BankId: 7, StatementEndDate: '2026-10-31T00:00:00' }), false).some((text) => text.includes('Finished')));
+  assert.ok(describeChange(modified('BankReconciliation', { Status: [1, 2], BankId: 7, StatementEndDate: '2026-10-31T00:00:00' }), false).some((text) => text.includes('31 Oct 2026')));
+  assert.ok(describeChange(modified('BankReconciliation', { Status: [2, 3], UndoReason: [null, 'Statement correction'] }), false).some((text) => text.includes('Statement correction')));
+  assert.ok(describeChange(modified('BankTransaction', { VoidGeneralLedgerHeaderId: [null, 99] }), false).some((text) => text.includes('Voided')));
+});
+
 test('dates use a fixed day-month-year format regardless of the runtime locale', () => {
   const original = {
     toLocaleDateString: Date.prototype.toLocaleDateString,
