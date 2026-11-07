@@ -618,7 +618,7 @@ namespace Api.Controllers
                 }
             }
 
-            var permissions = _securityService.GetPermissionsForUser(user.UserName ?? user.Email ?? string.Empty);
+            var permissions = _securityService.GetPermissionsForUser(domainUser);
 
             var userDto = new UserDto(
                 user.Id,
@@ -696,7 +696,7 @@ namespace Api.Controllers
                 }
             }
 
-            var permissions = _securityService.GetPermissionsForUser(user.UserName ?? user.Email ?? string.Empty);
+            var permissions = _securityService.GetPermissionsForUser(domainUser);
 
             var updatedDto = new UserDto(
                 user.Id,

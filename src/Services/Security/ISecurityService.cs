@@ -17,6 +17,8 @@ namespace Services.Security
         IEnumerable<SecurityUserRole> GetRolesForUser(string username);
         IEnumerable<SecurityRolePermission> GetPermissionsForRole(string rolename);
         IEnumerable<string> GetPermissionsForUser(string username);
+        /// <summary>Same as <see cref="GetPermissionsForUser(string)"/> for a user the caller already loaded.</summary>
+        IEnumerable<string> GetPermissionsForUser(User user);
         User GetUser(string username);
         User GetUserById(int id);
         SecurityRole GetRole(string rolename);

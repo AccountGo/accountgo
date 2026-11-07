@@ -395,7 +395,7 @@ public class SessionService : ISessionService
             }
         }
 
-        var permissions = _securityService.GetPermissionsForUser(user.UserName ?? user.Email ?? string.Empty);
+        var permissions = _securityService.GetPermissionsForUser(domainUser);
 
         return new UserDto(
             user.Id,

@@ -40,6 +40,13 @@ namespace Services.Financial
         ICollection<IncomeStatement> IncomeStatement(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         CashFlowStatement CashFlow(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null);
+        /// <summary>
+        /// Debit and credit totals per account and calendar month over every ledger line, summed in the
+        /// database. Same lines and authorization as <see cref="MasterGeneralLedger"/> without date filters.
+        /// </summary>
+        IReadOnlyList<LedgerMonthlyTotal> LedgerMonthlyTotals();
+        /// <summary>Chart of accounts with parent and child accounts but without ledger lines, so <see cref="Account.Balance"/> is not available.</summary>
+        IReadOnlyList<Account> GetAccountsWithoutLedgerLines();
         /// <summary>Lists tenant-scoped posted journals, retaining complete entries for account filters.</summary>
         /// <param name="from">Inclusive posting date start.</param>
         /// <param name="to">Inclusive posting date end (date-only values expand to end of calendar day).</param>
@@ -85,4 +92,6 @@ namespace Services.Financial
         Bank GetBank(int id);
         void DeleteBank(int id);
     }
+
+    public sealed record LedgerMonthlyTotal(int AccountId, int Year, int Month, decimal Debit, decimal Credit);
 }
