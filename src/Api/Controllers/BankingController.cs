@@ -647,6 +647,29 @@ namespace Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Read-only. Lists statement lines already stored for rows the current Wise rule would skip.
+        /// Does not delete, unmatch, reverse, or change a reconciliation.
+        /// </summary>
+        [HttpPost("Accounts/{bankId:int}/StatementImports/WiseConversionImpact")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        public IActionResult WiseConversionImpact(int bankId, [FromBody] BankStatementImportRequest request)
+        {
+            try
+            {
+                return Ok(_statements.ReportWiseConversionImpact(bankId, request));
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Bank account not found" });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         /// <summary>Saved mapping or built-in preset for this CSV header — never skips preview (#447 Phase B).</summary>
         [HttpPost("Accounts/{bankId:int}/StatementImports/ResolveMapping")]
         [RequireStatementImport]

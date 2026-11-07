@@ -43,6 +43,18 @@ namespace Dto.Banking
         public List<string>? SkippedTypes { get; set; }
         /// <summary>Optional direction column when the amount is unsigned (<c>in</c>/<c>out</c>, <c>CR</c>/<c>DR</c>, …).</summary>
         public int? DirectionColumn { get; set; }
+        /// <summary>
+        /// Direction tokens that are not money in or out (Wise: <c>neutral</c>, <c>internal</c>).
+        /// Null means "use the layout default when the file matches a preset that defines one".
+        /// An empty list means the user confirmed that no direction value is skipped.
+        /// </summary>
+        public List<string>? SkippedDirections { get; set; }
+        /// <summary>
+        /// When true, the amount column already carries a sign. A mapped in/out direction must agree
+        /// with that sign. When false or null, a direction token supplies the sign for an unsigned amount.
+        /// Eligibility (skipped / unknown direction) is decided before this sign is applied.
+        /// </summary>
+        public bool? AmountCarriesSign { get; set; }
         /// <summary>Optional overrides for direction tokens → +1 (in) or −1 (out).</summary>
         public Dictionary<string, int>? DirectionValueMap { get; set; }
         public int? PayeeColumn { get; set; }
@@ -83,7 +95,7 @@ namespace Dto.Banking
         public string? Memo { get; set; }
         public string? Reference { get; set; }
         public string? ExternalId { get; set; }
-        /// <summary>ok | duplicate | error</summary>
+        /// <summary>ok | duplicate | error | skipped</summary>
         public string Status { get; set; } = "ok";
         public string? Error { get; set; }
     }
@@ -95,6 +107,8 @@ namespace Dto.Banking
         public string? Currency { get; set; }
         public string? Status { get; set; }
         public string? Header { get; set; }
+        /// <summary>Preview of the row-eligibility rule, for example Wise neutral/internal conversions.</summary>
+        public string? RowRule { get; set; }
         public bool NeedsDateFormatChoice { get; set; }
         public bool NeedsAmountFormatChoice { get; set; }
     }
@@ -106,6 +120,8 @@ namespace Dto.Banking
         public int ReadyRows { get; set; }
         public int DuplicateRows { get; set; }
         public int ErrorRows { get; set; }
+        /// <summary>Rows rejected by an eligibility rule. They are not imported and are not parse errors.</summary>
+        public int SkippedRows { get; set; }
         /// <summary>Per-column detection notes (#447). Null for OFX.</summary>
         public BankStatementDetectionSummaryDto? Detection { get; set; }
         /// <summary>saved | preset | request | none — where the column map came from (#447 Phase B).</summary>
@@ -132,6 +148,10 @@ namespace Dto.Banking
         public int Imported { get; set; }
         public int Duplicates { get; set; }
         public int Errors { get; set; }
+        /// <summary>Eligibility skips (for example a Wise neutral conversion). Not imported.</summary>
+        public int Skipped { get; set; }
+        /// <summary>All eligibility skips, including source row numbers and reasons.</summary>
+        public IReadOnlyList<BankStatementPreviewRowDto> SkippedRowDetails { get; set; } = Array.Empty<BankStatementPreviewRowDto>();
         public int AutoMatched { get; set; }
         /// <summary>Imported lines dated before the books start date: nothing can be posted for them.</summary>
         public int BeforeBooksStart { get; set; }
@@ -212,5 +232,41 @@ namespace Dto.Banking
         public int Kind { get; set; }
         public int? ContraAccountId { get; set; }
         public string? Memo { get; set; }
+    }
+
+    /// <summary>
+    /// Read-only list of statement lines already stored for rows the current Wise rule would skip.
+    /// The caller reviews each state. Nothing is deleted, unmatched, reversed, or reconciled.
+    /// </summary>
+    public class WiseConversionImpactReportDto
+    {
+        public int CompanyId { get; set; }
+        public int BankId { get; set; }
+        public string? BankName { get; set; }
+        public int SkippedInFile { get; set; }
+        /// <summary>External IDs do not establish that a stored line came from the supplied file.</summary>
+        public string MatchQualification { get; set; } = "Same-source external ID matches are candidates only; verify the original import before taking action.";
+        /// <summary>Same-source ID matches only; file provenance must be independently verified.</summary>
+        public IReadOnlyList<WiseConversionImpactRowDto> Candidates { get; set; } = Array.Empty<WiseConversionImpactRowDto>();
+    }
+
+    public class WiseConversionImpactRowDto
+    {
+        public int CompanyId { get; set; }
+        public int BankId { get; set; }
+        public string? BankName { get; set; }
+        public int ImportId { get; set; }
+        public string? ImportFileName { get; set; }
+        public int StatementLineId { get; set; }
+        public string? ExternalId { get; set; }
+        /// <summary>1-based record number in the file that was re-read. Null when the file has no row number.</summary>
+        public int? SourceRowNumber { get; set; }
+        public decimal Amount { get; set; }
+        /// <summary>unmatched | matched | excluded</summary>
+        public string MatchStatus { get; set; } = "unmatched";
+        /// <summary>none | posted | reconciled | draft-bill</summary>
+        public string PostingStatus { get; set; } = "none";
+        public int? MatchedGeneralLedgerLineId { get; set; }
+        public int? BankReconciliationId { get; set; }
     }
 }

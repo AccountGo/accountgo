@@ -20,6 +20,12 @@ namespace Services.Banking
         /// <summary>Store new statement lines (deduped by ExternalId) and auto-match unique candidates.</summary>
         BankStatementCommitResultDto Commit(int bankId, BankStatementImportRequest request, string actor);
 
+        /// <summary>
+        /// Re-reads a file and lists statement lines already stored for rows the current rule would skip.
+        /// Writes nothing.
+        /// </summary>
+        WiseConversionImpactReportDto ReportWiseConversionImpact(int bankId, BankStatementImportRequest request);
+
         /// <param name="status">unmatched (default), matched, excluded, or all.</param>
         BankStatementLineListDto ListLines(int bankId, string? status, int page = 1, int pageSize = BankStatementImportService.DefaultListPageSize, int? lineId = null);
 

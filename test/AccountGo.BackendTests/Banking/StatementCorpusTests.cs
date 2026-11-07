@@ -58,9 +58,14 @@ public class StatementCorpusTests
         Assert.Contains("PHP row skipped", rows[2].Error, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("USD", rows[2].Error, StringComparison.Ordinal);
 
-        // Neutral transfer still imports via signed_amount; status filter drops pending.
-        Assert.True(rows[3].IsValid, rows[3].Error);
-        Assert.Equal(100.00m, rows[3].Amount);
+        // Direction says neutral. The signed amount must not turn that into a deposit or a withdrawal.
+        var neutral = rows[3];
+        Assert.True(neutral.IsSkipped);
+        Assert.False(neutral.IsValid);
+        Assert.Null(neutral.Amount);
+        Assert.Contains("neutral conversion skipped", neutral.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"row {neutral.RowNumber}", neutral.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("ACT-INT-001", neutral.ExternalId);
 
         Assert.False(rows[4].IsValid);
         Assert.Contains("pending row skipped", rows[4].Error, StringComparison.OrdinalIgnoreCase);

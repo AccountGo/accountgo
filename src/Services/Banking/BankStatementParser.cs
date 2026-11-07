@@ -26,6 +26,8 @@ namespace Services.Banking
         public string? Reference { get; set; }
         public string? ExternalId { get; set; }
         public string? Error { get; set; }
+        /// <summary>True when a source rule rejected the row as not a bank movement. It is not a parse failure.</summary>
+        public bool IsSkipped { get; set; }
         public bool IsValid => Error == null && PostedDate.HasValue && Amount.HasValue;
     }
 
@@ -135,6 +137,12 @@ namespace Services.Banking
                 var row = new ParsedStatementRow { RowNumber = recordNumber };
                 try
                 {
+                    // Identity is kept on skipped and error rows so a later impact report can find them.
+                    row.Payee = Truncate(Field(fields, map.PayeeColumn), MaxPayeeLength);
+                    row.Memo = Truncate(Field(fields, map.MemoColumn), MaxMemoLength);
+                    row.Reference = Truncate(Field(fields, map.ReferenceColumn), MaxReferenceLength);
+                    row.ExternalId = Truncate(Field(fields, map.ExternalIdColumn), MaxExternalIdLength);
+
                     if (map.NeedsDateFormatChoice)
                         throw new FormatException(
                             $"Date '{Field(fields, map.DateColumn)}' needs a date format (for example MM/dd/yyyy or dd/MM/yyyy). Set it in the column map.");
@@ -168,13 +176,17 @@ namespace Services.Banking
                         }
                     }
 
+                    if (TrySkipIneligibleDirection(fields, map, recordNumber, out var skipReason))
+                    {
+                        row.IsSkipped = true;
+                        row.Error = skipReason;
+                        rows.Add(row);
+                        continue;
+                    }
+
                     row.PostedDate = ParseDate(Field(fields, map.DateColumn), map);
-                    row.Amount = ReadAmount(fields, map);
-                    row.Payee = Truncate(Field(fields, map.PayeeColumn), MaxPayeeLength);
-                    row.Memo = Truncate(Field(fields, map.MemoColumn), MaxMemoLength);
-                    row.Reference = Truncate(Field(fields, map.ReferenceColumn), MaxReferenceLength);
-                    var external = Truncate(Field(fields, map.ExternalIdColumn), MaxExternalIdLength);
-                    row.ExternalId = external ?? SyntheticExternalId(row, occurrences);
+                    row.Amount = ReadAmount(fields, map, recordNumber);
+                    row.ExternalId ??= SyntheticExternalId(row, occurrences);
                 }
                 catch (FormatException ex)
                 {
@@ -429,7 +441,34 @@ namespace Services.Banking
         private static DateTime AsUtcCalendarDate(DateTime date) =>
             DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
 
-        private static decimal ReadAmount(IReadOnlyList<string> fields, ResolvedStatementMap map)
+        /// <summary>
+        /// Eligibility is independent of the amount sign. A neutral or internal token skips the row.
+        /// An unknown token is reported and is not treated as money in or out.
+        /// </summary>
+        private static bool TrySkipIneligibleDirection(
+            IReadOnlyList<string> fields,
+            ResolvedStatementMap map,
+            int recordNumber,
+            out string? reason)
+        {
+            reason = null;
+            if (!map.DirectionColumn.HasValue)
+                return false;
+
+            var direction = Field(fields, map.DirectionColumn);
+            if (direction == null)
+                throw new FormatException($"Direction is missing (row {recordNumber}).");
+            if (map.SkippedDirections.Contains(direction))
+            {
+                reason = $"{direction.Trim().ToLowerInvariant()} conversion skipped: not a bank movement (row {recordNumber})";
+                return true;
+            }
+            if (!map.DirectionSigns.ContainsKey(direction))
+                throw new FormatException($"unknown direction '{direction}' (row {recordNumber})");
+            return false;
+        }
+
+        private static decimal ReadAmount(IReadOnlyList<string> fields, ResolvedStatementMap map, int recordNumber)
         {
             decimal amount;
             if (map.AmountColumn.HasValue)
@@ -443,10 +482,22 @@ namespace Services.Banking
                 {
                     var direction = Field(fields, map.DirectionColumn);
                     if (direction == null)
-                        throw new FormatException("Direction is missing.");
+                        throw new FormatException($"Direction is missing (row {recordNumber}).");
                     if (!map.DirectionSigns.TryGetValue(direction, out var sign))
-                        throw new FormatException($"unknown direction '{direction}'");
-                    amount = Math.Abs(amount) * sign;
+                        throw new FormatException($"unknown direction '{direction}' (row {recordNumber})");
+                    if (map.AmountCarriesSign)
+                    {
+                        var amountSign = amount < 0m ? -1 : amount > 0m ? 1 : 0;
+                        if (amountSign == 0)
+                            throw new FormatException($"Amount is zero (row {recordNumber}).");
+                        if (amountSign != sign)
+                            throw new FormatException(
+                                $"conflicting direction '{direction}' and amount {amount.ToString("0.00", CultureInfo.InvariantCulture)} (row {recordNumber})");
+                    }
+                    else
+                    {
+                        amount = Math.Abs(amount) * sign;
+                    }
                 }
             }
             else
@@ -478,6 +529,12 @@ namespace Services.Banking
             if (map.InvertSign)
                 amount = -amount;
             amount = Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+            if (map.DirectionColumn.HasValue && amount != 0m)
+            {
+                var direction = Field(fields, map.DirectionColumn)!;
+                if (map.DirectionSigns.TryGetValue(direction, out var directionSign) && Math.Sign(amount) != directionSign)
+                    throw new FormatException($"final amount conflicts with direction '{direction}' (row {recordNumber}); check sign inversion and fees.");
+            }
             if (amount == 0m)
                 throw new FormatException("Amount is zero.");
             return amount;

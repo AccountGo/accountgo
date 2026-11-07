@@ -228,11 +228,13 @@ export function importSummary(result: {
   duplicates: number;
   errors: number;
   autoMatched: number;
+  skipped?: number;
   beforeBooksStart?: number;
 }): string {
   const parts = [`Imported ${result.imported} line${result.imported === 1 ? '' : 's'}`];
   if (result.autoMatched > 0) parts.push(`${result.autoMatched} matched automatically`);
   if (result.duplicates > 0) parts.push(`${result.duplicates} already imported`);
+  if (result.skipped) parts.push(`${result.skipped} skipped`);
   if (result.errors > 0) parts.push(`${result.errors} skipped with errors`);
   const early = result.beforeBooksStart ?? 0;
   if (early > 0) parts.push(`${early} dated before your books start date`);

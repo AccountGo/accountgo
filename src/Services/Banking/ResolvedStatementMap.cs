@@ -41,6 +41,11 @@ namespace Services.Banking
         public int? DirectionColumn { get; init; }
         public IReadOnlyDictionary<string, int> DirectionSigns { get; init; } =
             StatementImportResolver.DefaultDirectionSigns;
+        /// <summary>Direction tokens that are not bank movements. Checked before amount sign.</summary>
+        public IReadOnlySet<string> SkippedDirections { get; init; } =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>When true, an in/out direction must agree with the amount's own sign.</summary>
+        public bool AmountCarriesSign { get; init; }
         public int? PayeeColumn { get; init; }
         public int? MemoColumn { get; init; }
         public int? ReferenceColumn { get; init; }
@@ -72,6 +77,7 @@ namespace Services.Banking
         public string? Currency { get; init; }
         public string? Status { get; init; }
         public string? Header { get; init; }
+        public string? RowRule { get; init; }
         public bool NeedsDateFormatChoice { get; init; }
         public bool NeedsAmountFormatChoice { get; init; }
     }
