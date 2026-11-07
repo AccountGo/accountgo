@@ -170,13 +170,16 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
     {
         if (type == typeof(byte[]) || type == typeof(Stream)) return true;
         if (name.EndsWith("Id", StringComparison.OrdinalIgnoreCase)) return false;
-        var privateNameParts = new[] { "Password", "Hash", "Secret", "Token", "Stamp", "Seed", "Key" };
-        return privateNameParts.Any(part => name.Contains(part, StringComparison.OrdinalIgnoreCase))
-            || privateNameParts.Any(part => type.Name.Contains(part, StringComparison.OrdinalIgnoreCase));
+        foreach (var part in PrivateNameParts)
+            if (name.Contains(part, StringComparison.OrdinalIgnoreCase) || type.Name.Contains(part, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
     }
+    private static readonly string[] PrivateNameParts = { "Password", "Hash", "Secret", "Token", "Stamp", "Seed", "Key" };
+    private static readonly string[] MaskedNameParts = { "Iban", "RoutingNumber", "AccountNumber", "BankAccountNumber" };
     private static object? Mask(string name, object? value, bool isBank)
     {
-        if (value is not string text || !(isBank && name.Equals("Number", StringComparison.OrdinalIgnoreCase)) && !new[] { "Iban", "RoutingNumber", "AccountNumber", "BankAccountNumber" }
+        if (value is not string text || !(isBank && name.Equals("Number", StringComparison.OrdinalIgnoreCase)) && !MaskedNameParts
                 .Any(part => name.Contains(part, StringComparison.OrdinalIgnoreCase))) return value;
         return "****" + text[^Math.Min(4, text.Length)..];
     }
@@ -186,46 +189,10 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
         if (context is null || !_states.TryGetValue(context, out var state)) return;
         try
         {
-            var connection = context.Database.GetDbConnection();
-            const string insert = "INSERT INTO \"RecordChanges\" (\"CompanyId\", \"EntityType\", \"EntityId\", \"ParentEntityType\", \"ParentEntityId\", \"Action\", \"ChangesJson\", \"ActorUserId\", \"ActorKind\", \"CorrelationId\", \"IpAddress\", \"OccurredAt\") VALUES ";
-            foreach (var batch in state.Changes.Chunk(80))
-            {
-                using var parameterCommand = connection.CreateCommand();
-                var parameters = new List<object>(batch.Length * 12);
-                var rows = new List<string>(batch.Length);
-                foreach (var change in batch)
-                {
-                    if (change.Action == EntityState.Added.ToString())
-                        change.Values[change.KeyName] = change.Entry.Property(change.KeyName).CurrentValue;
-                    var offset = parameters.Count;
-                    var rowValues = new object[]
-                    {
-                        change.Entry.Entity is Company company ? company.Id : change.CompanyId,
-                        change.EntityType,
-                        Convert.ToInt32(change.Entry.Property(change.KeyName).CurrentValue),
-                        (object?)change.ParentEntityType ?? DBNull.Value,
-                        (object?)change.ParentEntityId ?? DBNull.Value,
-                        change.Action,
-                        JsonSerializer.Serialize(change.Values),
-                        (object?)_auditContext.ActorUserId ?? DBNull.Value,
-                        _auditContext.ActorKind,
-                        _auditContext.CorrelationId,
-                        (object?)_auditContext.IpAddress ?? DBNull.Value,
-                        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
-                    };
-                    var names = new string[rowValues.Length];
-                    for (var i = 0; i < rowValues.Length; i++)
-                    {
-                        var name = $"@p{offset + i}";
-                        names[i] = name;
-                        parameters.Add(Parameter(parameterCommand, name, rowValues[i]));
-                    }
-                    rows.Add($"({string.Join(", ", names)})");
-                }
-                var sql = insert + string.Join(", ", rows);
-                if (async) await context.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken).ConfigureAwait(false);
-                else context.Database.ExecuteSqlRaw(sql, parameters);
-            }
+            if (context.Database.ProviderName == PostgresProviderName)
+                await PersistPostgres(context, state, async, cancellationToken).ConfigureAwait(false);
+            else
+                await PersistValues(context, state, async, cancellationToken).ConfigureAwait(false);
             if (state.OwnedTransaction is not null)
             {
                 if (async) await state.OwnedTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -251,6 +218,123 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
                 if (async) await state.OwnedTransaction.DisposeAsync().ConfigureAwait(false);
                 else state.OwnedTransaction.Dispose();
             }
+        }
+    }
+
+    /// <summary>
+    /// Added rows get database-generated keys during the save, after capture. Their own key, foreign keys and
+    /// parent id are read again here so the record holds the saved values instead of temporary ones.
+    /// </summary>
+    private static int? FinalizeAdded(CapturedChange change)
+    {
+        if (change.Action != EntityState.Added.ToString())
+            return change.ParentEntityId;
+        foreach (var property in change.Entry.Properties)
+            if ((property.Metadata.IsPrimaryKey() || property.Metadata.IsForeignKey()) && change.Values.ContainsKey(property.Metadata.Name))
+                change.Values[property.Metadata.Name] = property.CurrentValue;
+        return ResolveParent(change.Entry).ParentEntityId;
+    }
+
+    private const string PostgresProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL";
+
+    /// <summary>
+    /// Postgres: one fixed statement with an array per column, so the server plans it once instead of parsing a
+    /// new multi-row VALUES statement on every save. WITH ORDINALITY keeps rows (and their ids) in capture order.
+    /// </summary>
+    private const string PostgresInsert =
+        "INSERT INTO \"RecordChanges\" (\"CompanyId\", \"EntityType\", \"EntityId\", \"ParentEntityType\", \"ParentEntityId\", \"Action\", \"ChangesJson\", \"ActorUserId\", \"ActorKind\", \"CorrelationId\", \"IpAddress\", \"OccurredAt\") " +
+        "SELECT r.company_id, r.entity_type, r.entity_id, r.parent_type, r.parent_id, r.action, r.changes, r.actor_user_id, r.actor_kind, r.correlation_id, r.ip_address, r.occurred_at " +
+        "FROM unnest(@rc0::integer[], @rc1::text[], @rc2::integer[], @rc3::text[], @rc4::integer[], @rc5::text[], @rc6::text[], @rc7::text[], @rc8::text[], @rc9::text[], @rc10::text[], @rc11::timestamp[]) " +
+        "WITH ORDINALITY AS r(company_id, entity_type, entity_id, parent_type, parent_id, action, changes, actor_user_id, actor_kind, correlation_id, ip_address, occurred_at, ordinal) " +
+        "ORDER BY r.ordinal";
+
+    private async Task PersistPostgres(DbContext context, SaveState state, bool async, CancellationToken cancellationToken)
+    {
+        var count = state.Changes.Count;
+        var companyIds = new int[count];
+        var entityTypes = new string[count];
+        var entityIds = new int[count];
+        var parentTypes = new string?[count];
+        var parentIds = new int?[count];
+        var actions = new string[count];
+        var changes = new string[count];
+        var actorUserIds = new string?[count];
+        var actorKinds = new string[count];
+        var correlationIds = new string[count];
+        var ipAddresses = new string?[count];
+        var occurredAt = new DateTime[count];
+        for (var i = 0; i < count; i++)
+        {
+            var change = state.Changes[i];
+            var parentId = FinalizeAdded(change);
+            companyIds[i] = change.Entry.Entity is Company company ? company.Id : change.CompanyId;
+            entityTypes[i] = change.EntityType;
+            entityIds[i] = Convert.ToInt32(change.Entry.Property(change.KeyName).CurrentValue);
+            parentTypes[i] = change.ParentEntityType;
+            parentIds[i] = parentId;
+            actions[i] = change.Action;
+            changes[i] = JsonSerializer.Serialize(change.Values);
+            actorUserIds[i] = _auditContext.ActorUserId;
+            actorKinds[i] = _auditContext.ActorKind;
+            correlationIds[i] = _auditContext.CorrelationId;
+            ipAddresses[i] = _auditContext.IpAddress;
+            occurredAt[i] = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        }
+        static Npgsql.NpgsqlParameter Column(int index, object values, NpgsqlTypes.NpgsqlDbType type) =>
+            new($"@rc{index}", NpgsqlTypes.NpgsqlDbType.Array | type) { Value = values };
+        object[] parameters =
+        {
+            Column(0, companyIds, NpgsqlTypes.NpgsqlDbType.Integer), Column(1, entityTypes, NpgsqlTypes.NpgsqlDbType.Text),
+            Column(2, entityIds, NpgsqlTypes.NpgsqlDbType.Integer), Column(3, parentTypes, NpgsqlTypes.NpgsqlDbType.Text),
+            Column(4, parentIds, NpgsqlTypes.NpgsqlDbType.Integer), Column(5, actions, NpgsqlTypes.NpgsqlDbType.Text),
+            Column(6, changes, NpgsqlTypes.NpgsqlDbType.Text), Column(7, actorUserIds, NpgsqlTypes.NpgsqlDbType.Text),
+            Column(8, actorKinds, NpgsqlTypes.NpgsqlDbType.Text), Column(9, correlationIds, NpgsqlTypes.NpgsqlDbType.Text),
+            Column(10, ipAddresses, NpgsqlTypes.NpgsqlDbType.Text), Column(11, occurredAt, NpgsqlTypes.NpgsqlDbType.Timestamp)
+        };
+        if (async) await context.Database.ExecuteSqlRawAsync(PostgresInsert, parameters, cancellationToken).ConfigureAwait(false);
+        else context.Database.ExecuteSqlRaw(PostgresInsert, parameters);
+    }
+
+    private async Task PersistValues(DbContext context, SaveState state, bool async, CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+        const string insert = "INSERT INTO \"RecordChanges\" (\"CompanyId\", \"EntityType\", \"EntityId\", \"ParentEntityType\", \"ParentEntityId\", \"Action\", \"ChangesJson\", \"ActorUserId\", \"ActorKind\", \"CorrelationId\", \"IpAddress\", \"OccurredAt\") VALUES ";
+        foreach (var batch in state.Changes.Chunk(80))
+        {
+            using var parameterCommand = connection.CreateCommand();
+            var parameters = new List<object>(batch.Length * 12);
+            var rows = new List<string>(batch.Length);
+            foreach (var change in batch)
+            {
+                var parentId = FinalizeAdded(change);
+                var offset = parameters.Count;
+                var rowValues = new object[]
+                {
+                    change.Entry.Entity is Company company ? company.Id : change.CompanyId,
+                    change.EntityType,
+                    Convert.ToInt32(change.Entry.Property(change.KeyName).CurrentValue),
+                    (object?)change.ParentEntityType ?? DBNull.Value,
+                    (object?)parentId ?? DBNull.Value,
+                    change.Action,
+                    JsonSerializer.Serialize(change.Values),
+                    (object?)_auditContext.ActorUserId ?? DBNull.Value,
+                    _auditContext.ActorKind,
+                    _auditContext.CorrelationId,
+                    (object?)_auditContext.IpAddress ?? DBNull.Value,
+                    DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                };
+                var names = new string[rowValues.Length];
+                for (var i = 0; i < rowValues.Length; i++)
+                {
+                    var name = $"@p{offset + i}";
+                    names[i] = name;
+                    parameters.Add(Parameter(parameterCommand, name, rowValues[i]));
+                }
+                rows.Add($"({string.Join(", ", names)})");
+            }
+            var sql = insert + string.Join(", ", rows);
+            if (async) await context.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken).ConfigureAwait(false);
+            else context.Database.ExecuteSqlRaw(sql, parameters);
         }
     }
     private static DbParameter Parameter(DbCommand command, string name, object value)
