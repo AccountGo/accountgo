@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType, VerifyOtpResult, MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
 import { announceEntitlementDenial } from '../lib/entitlementEvents';
 import { ENTITLEMENTS_VERSION_HEADER, observeEntitlementsVersionHeader } from '../lib/entitlementVersion';
+import { startIdleSession, type IdleSession, type SessionWarning, type SignOutReason } from '../lib/idleSession';
+import { SessionTimeoutDialog } from '../components/SessionTimeoutDialog';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -56,11 +58,31 @@ export function withRefreshLock<T>(work: () => Promise<T>): Promise<T> {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function describeDuration(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60 || minutes % 60 !== 0) return `${minutes} minutes`;
+  const hours = minutes / 60;
+  return hours === 1 ? '1 hour' : `${hours} hours`;
+}
+
+export function signedOutNotice(reason: SignOutReason, idleMs: number): string {
+  return reason === 'idle'
+    ? `You were signed out after ${describeDuration(idleMs)} of inactivity. Sign in to continue where you left off.`
+    : 'For your security, your session reached its time limit. Sign in to continue where you left off.';
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserDto | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isStarting, setIsStarting] = useState<boolean>(false);
+  // Automatic sign-out. Plain numbers so a routine refresh with the same limits doesn't restart the idle clock.
+  const [idleMs, setIdleMs] = useState<number | null>(null);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
+  const [sessionWarning, setSessionWarning] = useState<SessionWarning>(null);
+  const [signedOutNoticeText, setSignedOutNoticeText] = useState<string | null>(null);
+  const idleSessionRef = useRef<IdleSession | null>(null);
+  const refreshedAtRef = useRef<number>(0);
 
   // Ref to hold current token synchronously for fetch interceptor & refresh loops
   const tokenRef = useRef<string | null>(null);
@@ -68,6 +90,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Single-flight refresh promise to prevent multiple concurrent refresh calls
   const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
+
+  // Adopt the server's sign-out limits from any sign-in or refresh response.
+  const applySessionLimits = useCallback((data: AuthResponse) => {
+    refreshedAtRef.current = Date.now();
+    idleSessionRef.current?.markRefreshed(refreshedAtRef.current);
+    setIdleMs(typeof data.idleTimeoutSeconds === 'number' && data.idleTimeoutSeconds > 0 ? data.idleTimeoutSeconds * 1000 : null);
+    const expires = data.sessionExpiresAt ? Date.parse(data.sessionExpiresAt) : NaN;
+    setSessionExpiresAt(Number.isFinite(expires) ? expires : null);
+    setSignedOutNoticeText(null);
+  }, []);
 
   // Silent refresh helper
   const performRefresh = useCallback(async (): Promise<string | null> => {
@@ -96,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const data: AuthResponse = await res.json();
             setAccessToken(data.accessToken);
             setUser(data.user);
+            applySessionLimits(data);
             return data.accessToken;
           }
           if (res && res.status < 500) {
@@ -120,7 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return refreshPromiseRef.current;
-  }, []);
+  }, [applySessionLimits]);
 
   // Initialize session on mount via httpOnly refresh cookie
   useEffect(() => {
@@ -261,14 +294,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     tokenRef.current = authData.accessToken;
     setAccessToken(authData.accessToken);
     setUser(authData.user);
+    applySessionLimits(authData);
     return { type: 'success', data: authData };
-  }, []);
+  }, [applySessionLimits]);
 
   const completeSession = useCallback((authData: AuthResponse) => {
     tokenRef.current = authData.accessToken;
     setAccessToken(authData.accessToken);
     setUser(authData.user);
-  }, []);
+    applySessionLimits(authData);
+  }, [applySessionLimits]);
 
   const completeStepUp = useCallback((newToken: string) => {
     tokenRef.current = newToken;
@@ -282,10 +317,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   }, []);
 
-  const logout = useCallback(async (): Promise<void> => {
+  const logout = useCallback(async (reason?: SignOutReason): Promise<void> => {
     try {
       const currentToken = tokenRef.current;
-      await fetch('/api/auth/logout', {
+      // Works without a live access token: the server revokes the sign-in from the refresh cookie.
+      await fetch(reason ? `/api/auth/logout?reason=${reason}` : '/api/auth/logout', {
         method: 'POST',
         headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
         credentials: 'include',
@@ -387,10 +423,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   }, [authFetch]);
 
+  const isAuthenticated = !!user && !!accessToken;
+
+  useEffect(() => {
+    if (!isAuthenticated || idleMs === null) return;
+    const session = startIdleSession({
+      idleMs,
+      sessionExpiresAt,
+      refreshedAt: refreshedAtRef.current,
+      onWarning: setSessionWarning,
+      onRefreshDue: () => {
+        void performRefresh();
+      },
+      onSignOut: (reason, origin) => {
+        setSignedOutNoticeText(signedOutNotice(reason, idleMs));
+        if (origin) void logout(reason);
+        else clearSession();
+      },
+    });
+    idleSessionRef.current = session;
+    return () => {
+      session.stop();
+      idleSessionRef.current = null;
+      setSessionWarning(null);
+    };
+  }, [isAuthenticated, idleMs, sessionExpiresAt, performRefresh, logout, clearSession]);
+
   const value: AuthContextType = {
     user,
     accessToken,
-    isAuthenticated: !!user && !!accessToken,
+    isAuthenticated,
     isLoading,
     isStarting,
     sendOtp,
@@ -403,9 +465,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authFetch,
     refreshUser,
     refreshSession: performRefresh,
+    signedOutNotice: signedOutNoticeText,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {sessionWarning && (
+        <SessionTimeoutDialog
+          warning={sessionWarning}
+          onStay={() => idleSessionRef.current?.markActive()}
+          onDismissExpiry={() => idleSessionRef.current?.dismissExpiryWarning()}
+          onSignOut={() => {
+            idleSessionRef.current?.stop();
+            void logout();
+          }}
+        />
+      )}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = (): AuthContextType => {
