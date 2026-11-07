@@ -249,7 +249,9 @@ namespace Services.Banking
             }
             else
             {
-                account = ResolveAccountForCreate(name);
+                account = request.LeaveCashHistoryUnassigned
+                    ? CreateDedicatedCashAccount(name)
+                    : ResolveAccountForCreate(name);
             }
 
             _entitlements.EnsureCanCreate(MeteredResource.BankAccounts);

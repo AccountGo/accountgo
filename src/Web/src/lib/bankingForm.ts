@@ -39,6 +39,7 @@ export function buildCreatePayload(input: {
   openingBalance?: string;
   openingBalanceDate?: string;
   adoptAccountId?: number | null;
+  leaveCashHistoryUnassigned?: boolean;
   postingAccountId?: number | null;
 }): CreateBankAccountPayload {
   const name = input.name.trim();
@@ -57,6 +58,7 @@ export function buildCreatePayload(input: {
     isDefaultForPayments: !!input.isDefaultForPayments,
   };
 
+  if (input.leaveCashHistoryUnassigned) payload.leaveCashHistoryUnassigned = true;
   if (input.adoptAccountId != null) payload.adoptAccountId = input.adoptAccountId;
   if (input.postingAccountId != null) payload.postingAccountId = input.postingAccountId;
 

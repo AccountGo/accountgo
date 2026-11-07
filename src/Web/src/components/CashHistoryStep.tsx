@@ -37,7 +37,7 @@ export const CashHistoryStep: React.FC<{
             </h3>
           </div>
           <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-            Payments were posted to more than one cash account. Pick which ones belong to{' '}
+            Choose whether a past cash account belongs to{' '}
             <strong>{bankName}</strong>, or leave them as unassigned cash.
           </p>
         </div>

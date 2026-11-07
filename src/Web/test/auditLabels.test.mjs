@@ -282,3 +282,9 @@ test('personal books drop business-only record filters', () => {
   assert.ok(personal.includes('JournalEntryHeader'));
   assert.ok(auditEntityFilterOptions(false).map((option) => option.value).includes('Customer'));
 });
+
+test('created bank transaction activity identifies its bank', () => {
+  const sentences = describeChange({ entityType: 'BankTransaction', entityId: 42, action: 'Added', changes: { BankId: 7, No: 'BT-42', Amount: 25 } }, false);
+  assert.ok(sentences.includes('Bank account #7'));
+  assert.ok(sentences.some((sentence) => sentence.includes('BT-42')));
+});

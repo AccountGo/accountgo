@@ -73,6 +73,8 @@ namespace Dto.Banking
         public bool IsDefaultForPayments { get; set; }
         public decimal? OpeningBalance { get; set; }
         public DateTime? OpeningBalanceDate { get; set; }
+        /// <summary>Create a new posting account after explicitly leaving existing cash history unassigned.</summary>
+        public bool LeaveCashHistoryUnassigned { get; set; }
         public int? AdoptAccountId { get; set; }
         public int? PostingAccountId { get; set; }
         public string? CurrencyCode { get; set; }

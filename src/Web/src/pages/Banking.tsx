@@ -31,6 +31,7 @@ const Banking: React.FC = () => {
     pendingName: string;
   } | null>(null);
   const [adoptHint, setAdoptHint] = useState<number | null>(null);
+  const [leaveCashHistoryUnassigned, setLeaveCashHistoryUnassigned] = useState(false);
 
   const formatCurrency = useCallback(
     (n: number) =>
@@ -66,12 +67,13 @@ const Banking: React.FC = () => {
   const startAdd = async () => {
     setEditAccount(undefined);
     setAdoptHint(null);
+    setLeaveCashHistoryUnassigned(false);
     if (canManage) {
       const hist = await authFetch('/api/Banking/Accounts/CashHistory');
       if (hist.ok) {
         const groups: UnassignedCash[] = await hist.json();
         const activeCount = data?.accounts.filter((a) => !a.archivedAt).length ?? 0;
-        if (activeCount === 0 && needsCashHistoryStep(groups)) {
+        if ((activeCount === 0 && needsCashHistoryStep(groups)) || (activeCount > 0 && groups.length > 0)) {
           setCashStep({ groups, pendingName: 'New account' });
           return;
         }
@@ -226,6 +228,7 @@ const Banking: React.FC = () => {
           account={editAccount}
           hasFinancials={hasFinancials}
           defaultAdoptAccountId={adoptHint}
+          leaveCashHistoryUnassigned={leaveCashHistoryUnassigned}
           onSaved={async () => {
             setFormOpen(false);
             setAdoptHint(null);
@@ -251,6 +254,7 @@ const Banking: React.FC = () => {
           }}
           onSkipAll={() => {
             setCashStep(null);
+            setLeaveCashHistoryUnassigned(true);
             setFormOpen(true);
           }}
           onClose={() => setCashStep(null)}
