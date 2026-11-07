@@ -158,7 +158,8 @@ public sealed class AuditRetentionWorker : BackgroundService
         }
         finally
         {
-            await ReleasePostgresLockAsync(identity, cancellationToken);
+            // Release even when shutdown cancels the run, so the session lock never outlives the pass.
+            await ReleasePostgresLockAsync(identity);
         }
     }
 
@@ -217,9 +218,7 @@ public sealed class AuditRetentionWorker : BackgroundService
         };
     }
 
-    private static async Task ReleasePostgresLockAsync(
-        ApplicationIdentityDbContext identity,
-        CancellationToken cancellationToken)
+    private static async Task ReleasePostgresLockAsync(ApplicationIdentityDbContext identity)
     {
         if (!IsNpgsql(identity)) return;
         try
@@ -230,7 +229,7 @@ public sealed class AuditRetentionWorker : BackgroundService
             parameter.ParameterName = "key";
             parameter.Value = AuditRetentionOptions.PostgresAdvisoryLockKey;
             command.Parameters.Add(parameter);
-            await command.ExecuteScalarAsync(cancellationToken);
+            await command.ExecuteScalarAsync(CancellationToken.None);
         }
         catch
         {
