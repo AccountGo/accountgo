@@ -24,6 +24,11 @@ namespace Services.Banking
             public required IReadOnlyDictionary<string, string[]> RoleHeaders { get; init; }
             /// <summary>Optional type values to skip (e.g. PayPal Memo).</summary>
             public IReadOnlyList<string>? SkippedTypes { get; init; }
+            /// <summary>
+            /// Direction tokens that are not money movements. Wise uses <c>neutral</c> and <c>internal</c>
+            /// for conversions. Checked even when the amount column is signed.
+            /// </summary>
+            public IReadOnlyList<string>? SkippedDirections { get; init; }
             /// <summary>Optional direction token overrides (e.g. PayPal Balance Impact).</summary>
             public IReadOnlyDictionary<string, int>? DirectionValueMap { get; init; }
 
@@ -53,20 +58,22 @@ namespace Services.Banking
 
                 var amountNames = RoleHeaders.GetValueOrDefault("amount") ?? Array.Empty<string>();
                 var amountColumn = Find(amountNames);
-                // signed_amount already encodes direction — only map direction for unsigned amount columns.
                 var amountHeader = amountColumn.HasValue
                     ? StatementColumnDetector.NormalizeHeaderToken(fileHeaders[amountColumn.Value])
                     : null;
                 var usesSignedAmount = amountHeader is "signed_amount" or "signedamount";
+                // Sign and eligibility are separate. A signed amount does not drop the direction column:
+                // Wise neutral/internal conversions still have to be recognised.
+                var directionColumn = Find(RoleHeaders.GetValueOrDefault("direction") ?? Array.Empty<string>());
 
                 var map = new BankStatementColumnMap
                 {
                     HasHeaderRow = true,
                     DateColumn = Require("date"),
                     AmountColumn = amountColumn,
-                    DirectionColumn = usesSignedAmount
-                        ? null
-                        : Find(RoleHeaders.GetValueOrDefault("direction") ?? Array.Empty<string>()),
+                    AmountCarriesSign = usesSignedAmount ? true : null,
+                    DirectionColumn = directionColumn,
+                    SkippedDirections = SkippedDirections?.ToList(),
                     CurrencyColumn = Find(RoleHeaders.GetValueOrDefault("currency") ?? Array.Empty<string>()),
                     StatusColumn = Find(RoleHeaders.GetValueOrDefault("status") ?? Array.Empty<string>()),
                     ExternalIdColumn = Find(RoleHeaders.GetValueOrDefault("externalId") ?? Array.Empty<string>()),
@@ -97,6 +104,7 @@ namespace Services.Banking
 
         /// <summary>
         /// Header sets taken from anonymised real exports (Wise activity, PayPal activity, Revolut statement).
+        /// Payoneer and Stripe presets are not included until anonymised sample files exist.
         /// </summary>
         private static readonly Preset[] All =
         {
@@ -116,7 +124,9 @@ namespace Services.Banking
                     ["externalId"] = new[] { "activity_id" },
                     ["payee"] = new[] { "title" },
                     ["memo"] = new[] { "description", "type" }
-                }
+                },
+                // Fixture-backed. Do not infer this from the words in the description.
+                SkippedDirections = new[] { "neutral", "internal" }
             },
             new()
             {
@@ -177,6 +187,81 @@ namespace Services.Banking
         }
 
         public static IReadOnlyList<Preset> List() => All;
+
+        /// <summary>
+        /// Fills eligibility fields a preset defines when the saved or requested map left them unset.
+        /// User-confirmed values (including an empty skip list) are kept. Amount, date, currency and
+        /// status columns are never replaced.
+        /// </summary>
+        public static BankStatementColumnMap WithLayoutDefaults(IReadOnlyList<string>? header, BankStatementColumnMap map)
+        {
+            if (header == null || header.Count == 0)
+                return map;
+            var preset = FindMatching(header);
+            if (preset?.SkippedDirections == null || preset.SkippedDirections.Count == 0)
+                return map;
+
+            var copy = Copy(map);
+            if (copy.SkippedDirections == null)
+                copy.SkippedDirections = preset.SkippedDirections.ToList();
+
+            if (copy.DirectionColumn == null && map.SkippedDirections == null)
+            {
+                var bound = preset.Bind(header);
+                copy.DirectionColumn = bound.DirectionColumn;
+            }
+
+            if (!copy.AmountCarriesSign.HasValue
+                && copy.AmountColumn.HasValue
+                && copy.AmountColumn.Value < header.Count)
+            {
+                var token = StatementColumnDetector.NormalizeHeaderToken(header[copy.AmountColumn.Value]);
+                if (token is "signed_amount" or "signedamount")
+                    copy.AmountCarriesSign = true;
+            }
+
+            return copy;
+        }
+
+        public static string? DescribeRowRule(BankStatementColumnMap map)
+        {
+            if (map.SkippedDirections == null || map.SkippedDirections.Count == 0 || map.DirectionColumn == null)
+                return null;
+            var tokens = string.Join(", ", map.SkippedDirections.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+            if (tokens.Length == 0)
+                return null;
+            return $"skip direction {tokens} (not a bank movement)";
+        }
+
+        private static BankStatementColumnMap Copy(BankStatementColumnMap map) => new()
+        {
+            HasHeaderRow = map.HasHeaderRow,
+            HeaderRowIndex = map.HeaderRowIndex,
+            Delimiter = map.Delimiter,
+            DateFormat = map.DateFormat,
+            DecimalSeparator = map.DecimalSeparator,
+            DateColumn = map.DateColumn,
+            AmountColumn = map.AmountColumn,
+            DepositColumn = map.DepositColumn,
+            WithdrawalColumn = map.WithdrawalColumn,
+            FeeColumn = map.FeeColumn,
+            TypeColumn = map.TypeColumn,
+            SkippedTypes = map.SkippedTypes?.ToList(),
+            DirectionColumn = map.DirectionColumn,
+            SkippedDirections = map.SkippedDirections?.ToList(),
+            AmountCarriesSign = map.AmountCarriesSign,
+            DirectionValueMap = map.DirectionValueMap == null
+                ? null
+                : new Dictionary<string, int>(map.DirectionValueMap, StringComparer.OrdinalIgnoreCase),
+            PayeeColumn = map.PayeeColumn,
+            MemoColumn = map.MemoColumn,
+            ReferenceColumn = map.ReferenceColumn,
+            ExternalIdColumn = map.ExternalIdColumn,
+            CurrencyColumn = map.CurrencyColumn,
+            StatusColumn = map.StatusColumn,
+            AllowedStatuses = map.AllowedStatuses?.ToList(),
+            InvertSign = map.InvertSign
+        };
 
         private static IReadOnlyList<string> NormalizeMany(params string[] headers) =>
             headers.Select(StatementColumnDetector.NormalizeHeaderToken).ToList();

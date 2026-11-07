@@ -28,7 +28,10 @@ public class StatementImportPresetsTests
         Assert.Equal(4, map.DateColumn); // created_on
         Assert.Equal(15, map.AmountColumn); // signed_amount preferred
         Assert.Equal(3, map.ExternalIdColumn); // activity_id
-        Assert.Null(map.DirectionColumn); // signed_amount already encodes direction
+        Assert.Equal(12, map.DirectionColumn); // eligibility stays mapped when the amount is signed
+        Assert.True(map.AmountCarriesSign);
+        Assert.Contains("neutral", map.SkippedDirections!);
+        Assert.Contains("internal", map.SkippedDirections!);
         Assert.Equal(14, map.CurrencyColumn);
         Assert.Equal(10, map.PayeeColumn); // title
         Assert.Equal(11, map.MemoColumn); // description
@@ -75,5 +78,13 @@ public class StatementImportPresetsTests
     public void UnknownHeaders_ReturnsNull()
     {
         Assert.Null(StatementImportPresets.FindMatching(new[] { "date", "mystery_col" }));
+    }
+
+    [Fact]
+    public void PayoneerAndStripe_AreNotPresetsUntilAnonymisedSamplesExist()
+    {
+        Assert.DoesNotContain(StatementImportPresets.List(), p =>
+            p.Name.Contains("Payoneer", StringComparison.OrdinalIgnoreCase)
+            || p.Name.Contains("Stripe", StringComparison.OrdinalIgnoreCase));
     }
 }

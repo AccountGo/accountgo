@@ -40,6 +40,8 @@ public class StatementColumnMappingServiceTests
 
         var commitMap = resolved.ColumnMap;
         commitMap.DateFormat = null;
+        commitMap.AmountColumn = 13;
+        commitMap.AmountCarriesSign = false;
         var result = h.Statements.Commit(bank.Id, new BankStatementImportRequest
         {
             Source = 1,
@@ -59,5 +61,7 @@ public class StatementColumnMappingServiceTests
         Assert.NotNull(again.ColumnMap);
         Assert.Equal(commitMap.DateColumn, again.ColumnMap!.DateColumn);
         Assert.Equal(commitMap.DirectionColumn, again.ColumnMap.DirectionColumn);
+        Assert.Equal(13, again.ColumnMap.AmountColumn);
+        Assert.False(again.ColumnMap.AmountCarriesSign);
     }
 }
