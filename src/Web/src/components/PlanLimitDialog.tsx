@@ -188,8 +188,7 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
       </div>
       {children}
       <div className="flex justify-end gap-2">
-        {/* Inline plan cards already offer Upgrade; skip the redundant "Upgrade plan" footer CTA. */}
-        {!personal && cta.label !== 'Upgrade plan' && (cta.href ? (
+        {!personal && (cta.href ? (
           <a
             href={cta.href}
             className={
@@ -210,7 +209,7 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
           ref={closeRef}
           onClick={onClose}
           className={
-            cta.primary && cta.href && cta.label !== 'Upgrade plan'
+            cta.primary && cta.href
               ? 'h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
               : 'h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)]'
           }
