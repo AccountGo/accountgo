@@ -96,11 +96,29 @@ docker run -d \
 | `AuditRetention__Enabled` | Optional. Default `true`. Daily background purge of expired security / data-access events |
 | `AuditRetention__SecurityEventDays` | Optional. Default `730`. Days to keep security events (raised to 730 if lower) |
 | `AuditRetention__DataAccessDays` | Optional. Default `365`. Days to keep `data.*` / `invoice.pdf.public` events (raised to 365 if lower) |
+| `Google__Enabled` | Optional. Default `false`. Enable Google Sign-In |
+| `Google__ClientId` | Google OAuth 2.0 Web Client ID (required if `Google__Enabled` is true) |
+| `Google__HostedDomain` | Optional. Restrict Google Sign-In to a specific Google Workspace domain (e.g. `company.com`) |
 
 > [!CAUTION]
 > Never commit real secret keys, database connection strings, or Cloudflare API tokens to a public repository.
 
 See `src/Api/.env.example` for local development placeholders.
+
+### Google Sign-In Setup & Headers
+
+When enabling Google Sign-In (`Google__Enabled=true`), ensure your web server and edge proxy configure appropriate CSP and COOP headers:
+
+#### 1. Content Security Policy (CSP)
+Allow Google Identity Services (GIS) assets:
+- `script-src`: `https://accounts.google.com/gsi/client`
+- `frame-src`: `https://accounts.google.com/gsi/`
+- `connect-src`: `https://accounts.google.com/gsi/`
+- `style-src`: `https://accounts.google.com/gsi/style`
+
+#### 2. Cross-Origin-Opener-Policy (COOP)
+- **Requirement**: `Cross-Origin-Opener-Policy` must either be omitted or set to `same-origin-allow-popups`.
+- **Caution**: Never set COOP to `same-origin`. A value of `same-origin` severs the `window.opener` reference required by the Google Sign-In One Tap and popup authentication flow, breaking sign-in.
 
 ### Audit retention
 

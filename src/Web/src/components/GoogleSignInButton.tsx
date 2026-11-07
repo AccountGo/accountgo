@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 
 type GoogleIdentity = {
   accounts: { id: {
-    initialize(options: { client_id: string; callback: (response: { credential: string }) => void }): void;
+    initialize(options: { client_id: string; nonce?: string; callback: (response: { credential: string }) => void }): void;
     renderButton(element: HTMLElement, options: object): void;
   } };
 };
 
 declare global { interface Window { google?: GoogleIdentity } }
 
-export function GoogleSignInButton({ clientId, enabled, onStart, onCredential, onError }: {
-  clientId: string; enabled: boolean; onStart?: () => void; onCredential: (credential: string) => void; onError: (message: string) => void;
+export function GoogleSignInButton({ clientId, nonce, enabled, onStart, onCredential, onError }: {
+  clientId: string; nonce?: string; enabled: boolean; onStart?: () => void; onCredential: (credential: string) => void; onError: (message: string) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const callback = useRef(onCredential);
@@ -32,7 +32,11 @@ export function GoogleSignInButton({ clientId, enabled, onStart, onCredential, o
     let active = true;
     const render = () => {
       if (!active || !container.current || !window.google) return;
-      window.google.accounts.id.initialize({ client_id: clientId, callback: ({ credential }) => { if (isEnabled.current) callback.current(credential); } });
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        ...(nonce ? { nonce } : {}),
+        callback: ({ credential }) => { if (isEnabled.current) callback.current(credential); }
+      });
       container.current.replaceChildren();
       window.google.accounts.id.renderButton(container.current, { theme: 'outline', size: 'large', text: 'continue_with', width: 320, click_listener: () => { if (isEnabled.current) start.current?.(); } });
       setReady(true);
@@ -47,7 +51,7 @@ export function GoogleSignInButton({ clientId, enabled, onStart, onCredential, o
       document.head.appendChild(script);
     }
     return () => { active = false; };
-  }, [clientId, enabled]);
+  }, [clientId, nonce, enabled]);
 
   return <div className="flex justify-center">
     {(!enabled || !ready) && <div className="relative w-full group" tabIndex={!enabled ? 0 : undefined} aria-describedby={!enabled ? 'google-terms-tooltip' : undefined}>

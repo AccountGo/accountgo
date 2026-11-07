@@ -122,6 +122,29 @@ namespace Api.Data.Migrations.IdentityDb
                     b.ToTable("DataProtectionKeys", (string)null);
                 });
 
+            modelBuilder.Entity("Api.Data.ExternalTokenRedemption", b =>
+                {
+                    b.Property<string>("Provider")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("TokenId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("RedeemedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Provider", "TokenId");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.ToTable("ExternalTokenRedemptions", (string)null);
+                });
+
             modelBuilder.Entity("Api.Data.OAuthAuthorizationRequest", b =>
                 {
                     b.Property<string>("Id")

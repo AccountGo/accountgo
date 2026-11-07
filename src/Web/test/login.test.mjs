@@ -53,23 +53,30 @@ test('Login page includes privacy and terms acceptance checkbox and excludes edg
 });
 
 test('login offers Google sign-in when configured while retaining email OTP', async () => {
-  const previous = process.env.VITE_GOOGLE_CLIENT_ID;
-  process.env.VITE_GOOGLE_CLIENT_ID = 'test-client.apps.googleusercontent.com';
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' });
   try {
     const { Login } = await server.ssrLoadModule('/src/pages/Login.tsx');
     const { AuthProvider } = await server.ssrLoadModule('/src/auth/AuthContext.tsx');
     const html = renderToStaticMarkup(createElement(AuthProvider, null,
-      createElement(MemoryRouter, { initialEntries: ['/login'] }, createElement(Login, { initialMode: 'signin' }))));
+      createElement(MemoryRouter, { initialEntries: ['/login'] }, createElement(Login, { initialMode: 'signin', initialGoogleConfig: { enabled: true, clientId: 'test-client.apps.googleusercontent.com' } }))));
     assert.match(html, /Google/);
     assert.match(html, /signin-accept-terms/);
     assert.doesNotMatch(html, /Accept the Privacy Policy and Terms of Use below to continue/);
     const signup = renderToStaticMarkup(createElement(AuthProvider, null,
-      createElement(MemoryRouter, { initialEntries: ['/signup'] }, createElement(Login, { initialMode: 'signup' }))));
-    assert.match(signup, /Google/);
+      createElement(MemoryRouter, { initialEntries: ['/signup'] }, createElement(Login, { initialMode: 'signup', initialGoogleConfig: { enabled: true, clientId: 'test-client.apps.googleusercontent.com' } }))));
+    assert.match(signup, /Sign in with Google/);
+    assert.doesNotMatch(signup, /Continue with Google/);
   } finally {
     await server.close();
-    if (previous === undefined) delete process.env.VITE_GOOGLE_CLIENT_ID;
-    else process.env.VITE_GOOGLE_CLIENT_ID = previous;
+  }
+});
+
+test('COOP header in index.html is absent or same-origin-allow-popups, never same-origin', () => {
+  const html = readFileSync(resolve(__dirname, '../index.html'), 'utf-8');
+  const coopMeta = html.match(/<meta[^>]*http-equiv=["']Cross-Origin-Opener-Policy["'][^>]*content=["']([^"']*)["']/i);
+  if (coopMeta) {
+    const value = coopMeta[1].toLowerCase().trim();
+    assert.notEqual(value, 'same-origin', 'COOP cannot be same-origin because it breaks Google Identity Services (GIS) popups');
+    assert.equal(value, 'same-origin-allow-popups');
   }
 });

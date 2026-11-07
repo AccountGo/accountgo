@@ -163,6 +163,15 @@ public static class AccountGoApp
         builder.Services.AddScoped<Core.Authorization.IWorkspacePolicyTransaction, Api.Service.WorkspacePolicyTransaction>();
         builder.Services.AddScoped<Api.Service.LinkedEntryService>();
         builder.Services.AddScoped<Api.Service.WorkspaceSetupCorrectionService>();
+        builder.Services.AddScoped<Api.Service.Google.IGoogleIdTokenValidator, Api.Service.Google.GoogleIdTokenValidator>();
+        builder.Services.AddScoped<Api.Service.Google.IGoogleSignInService, Api.Service.Google.GoogleSignInService>();
+
+        var googleEnabled = builder.Configuration.GetValue<bool>("Google:Enabled");
+        var googleClientId = builder.Configuration["Google:ClientId"];
+        if (googleEnabled && string.IsNullOrWhiteSpace(googleClientId))
+        {
+            Console.WriteLine("⚠ Google:Enabled is true but Google:ClientId is empty. Google sign-in will act as disabled.");
+        }
         builder.Services.AddScoped<Core.Authorization.IWorkspaceReviewerEligibility, Api.Service.WorkspaceReviewerEligibility>();
         builder.Services.AddScoped<Core.Authorization.IWorkspaceOperatingPolicyService, Api.Service.WorkspaceOperatingPolicyService>();
         builder.Services.AddScoped<Api.Service.WorkspaceInitializationApplicator>();
@@ -424,6 +433,19 @@ public static class AccountGoApp
                 var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                 var key = !string.IsNullOrEmpty(userId) ? $"cli_oauth_user_{userId}" : $"cli_oauth_ip_{ip}";
                 return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = builder.Environment.IsDevelopment() ? 300 : 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                });
+            });
+
+            // Google Sign-In Start: 30 requests per minute per IP, outside the Factor-A bucket.
+            options.AddPolicy("google-start", httpContext =>
+            {
+                var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter($"google_start_{ip}", _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = builder.Environment.IsDevelopment() ? 300 : 30,
                     Window = TimeSpan.FromMinutes(1),

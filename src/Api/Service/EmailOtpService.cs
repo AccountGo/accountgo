@@ -248,7 +248,7 @@ namespace Api.Service
             var normalizedEmail = email.Trim().ToLowerInvariant();
             var user = await _userManager.FindByEmailAsync(normalizedEmail);
 
-            if (user == null || user.DeletedAt != null)
+            if (!UserEligibility.IsEligible(user))
             {
                 PerformDummyWork(normalizedEmail);
                 return new OtpVerificationResult(false, null, null, "Invalid or expired code.");

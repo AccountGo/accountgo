@@ -7,6 +7,8 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Api.Data;
 using Api.Service;
+using Api.Service.Google;
+using System.Text;
 using Dto.Security;
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authorization;
@@ -48,6 +50,8 @@ namespace Api.Controllers
         private readonly WorkspaceInitializationApplicator _workspaceInit;
         private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
         private readonly ISecurityAuditService? _securityAudit;
+        private readonly IGoogleIdTokenValidator _googleValidator;
+        private readonly IGoogleSignInService _googleSignInService;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -64,6 +68,8 @@ namespace Api.Controllers
             WorkspaceService workspaces,
             AccountDeletionService accountDeletion,
             IPlanCatalog plans,
+            IGoogleIdTokenValidator googleValidator,
+            IGoogleSignInService googleSignInService,
             WorkspaceInitializationApplicator workspaceInit = null,
             Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
             ISecurityAuditService? securityAudit = null)
@@ -82,6 +88,8 @@ namespace Api.Controllers
             _workspaces = workspaces;
             _accountDeletion = accountDeletion;
             _plans = plans;
+            _googleValidator = googleValidator;
+            _googleSignInService = googleSignInService;
             _workspaceInit = workspaceInit;
             _policyTransaction = policyTransaction;
             _securityAudit = securityAudit;
@@ -104,155 +112,317 @@ namespace Api.Controllers
             AuditAsync("auth.signin.failure", "failure", userId, new { method, reason });
 
         [AllowAnonymous]
+        [EnableRateLimiting("google-start")]
+        [HttpGet("google/start")]
+        public IActionResult GoogleStart()
+        {
+            var enabled = _configuration.GetValue<bool>("Google:Enabled");
+            var clientId = _configuration["Google:ClientId"];
+            if (!enabled || string.IsNullOrWhiteSpace(clientId))
+            {
+                return Ok(new { enabled = false });
+            }
+
+            var nonceBytes = RandomNumberGenerator.GetBytes(32);
+            var nonce = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(nonceBytes);
+
+            Response.Cookies.Append("__Host-ag_gnonce", nonce, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true, // explicit per design: container sees plain HTTP behind Worker
+                SameSite = SameSiteMode.Strict,
+                Path = "/",
+                MaxAge = TimeSpan.FromSeconds(600)
+            });
+
+            return Ok(new { enabled = true, clientId, nonce });
+        }
+
+        [AllowAnonymous]
         [EnableRateLimiting("otp-verify")]
         [HttpPost("google")]
-        public async Task<IActionResult> GoogleSignIn([FromBody] GoogleSignInRequest request)
+        public async Task<IActionResult> GoogleSignIn([FromBody] GoogleSignInRequest request, CancellationToken cancellationToken = default)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            // Read and then ensure nonce cookie is deleted on every outcome
+            Request.Cookies.TryGetValue("__Host-ag_gnonce", out var cookieNonce);
+            Response.Cookies.Delete("__Host-ag_gnonce", new CookieOptions
+            {
+                Path = "/",
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                HttpOnly = true
+            });
+
+            // 1. Sec-Fetch-Site check
+            if (Request.Headers.TryGetValue("Sec-Fetch-Site", out var sfs) && !string.IsNullOrEmpty(sfs))
+            {
+                if (!string.Equals(sfs, "same-origin", StringComparison.OrdinalIgnoreCase))
+                {
+                    await AuditSignInFailureAsync("google", "cross_site");
+                    return StatusCode(StatusCodes.Status403Forbidden,
+                        CreateProblemDetails("Cross-site request prohibited", "Cross-site Google sign-in is not allowed.", StatusCodes.Status403Forbidden, "cross_site"));
+                }
+            }
+
+            // Check if feature is enabled or configured
+            var enabled = _configuration.GetValue<bool>("Google:Enabled");
+            var clientId = _configuration["Google:ClientId"];
+            if (!enabled || string.IsNullOrWhiteSpace(clientId))
+            {
+                await AuditSignInFailureAsync("google", "google_disabled");
+                return NotFound(CreateProblemDetails("Google Sign-In Disabled", "Google authentication is not enabled or configured on this server.", StatusCodes.Status404NotFound, "google_disabled"));
+            }
+
+            // 2. Validate token
+            GoogleIdentity identity;
             try
             {
-                var settings = new GoogleJsonWebSignature.ValidationSettings();
-                var googleClientId = _configuration["Google:ClientId"];
-                if (string.IsNullOrWhiteSpace(googleClientId))
-                {
-                    await AuditSignInFailureAsync("google", "not_configured");
-                    return BadRequest(new ProblemDetails
-                    {
-                        Title = "Google Sign-In Not Configured",
-                        Detail = "Google authentication is not configured on this server.",
-                        Status = StatusCodes.Status400BadRequest
-                    });
-                }
-                settings.Audience = new[] { googleClientId };
-
-                var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
-                if (payload == null || !payload.EmailVerified)
-                {
-                    await AuditSignInFailureAsync("google", "email_unverified");
-                    return BadRequest(new ProblemDetails
-                    {
-                        Title = "Google Authentication Failed",
-                        Detail = "Unverified Google email or invalid token.",
-                        Status = StatusCodes.Status400BadRequest
-                    });
-                }
-
-                // Provisioning policy: check domain restriction if configured
-                var allowedHostedDomain = _configuration["Google:HostedDomain"];
-                if (!string.IsNullOrEmpty(allowedHostedDomain) &&
-                    !string.Equals(payload.HostedDomain, allowedHostedDomain, StringComparison.OrdinalIgnoreCase))
-                {
-                    await AuditSignInFailureAsync("google", "hosted_domain_mismatch");
-                    return Forbid();
-                }
-
-                if (string.IsNullOrWhiteSpace(payload.Subject) || string.IsNullOrWhiteSpace(payload.Email))
-                {
-                    await AuditSignInFailureAsync("google", "invalid_identity");
-                    return BadRequest(new ProblemDetails { Title = "Google Authentication Failed", Detail = "Invalid Google identity." });
-                }
-
-                // Resolve the stable provider subject first. Email alone is not proof of current ownership
-                // for third-party addresses, even when Google has previously verified it.
-                var user = await _userManager.FindByLoginAsync("Google", payload.Subject);
-                if (user == null)
-                {
-                    if (!GoogleIdentityPolicy.IsAuthoritativeEmail(payload.Email, payload.HostedDomain))
-                    {
-                        await AuditSignInFailureAsync("google", "account_linking_required");
-                        return BadRequest(new ProblemDetails { Title = "Account linking required", Detail = "Sign in with your email code. This Google address cannot be linked automatically." });
-                    }
-                    user = await _userManager.FindByEmailAsync(payload.Email);
-                    if (user == null || user.DeletedAt != null || !user.EmailConfirmed)
-                    {
-                        await AuditSignInFailureAsync("google", "account_not_found", user?.Id);
-                        return BadRequest(new ProblemDetails { Title = "Account Not Found", Detail = "Sign in or register with your email code first." });
-                    }
-                    var linkResult = await _userManager.AddLoginAsync(user, new UserLoginInfo("Google", payload.Subject, "Google"));
-                    if (!linkResult.Succeeded)
-                    {
-                        await AuditSignInFailureAsync("google", "account_link_failed", user.Id);
-                        return BadRequest(new ProblemDetails { Title = "Account linking failed", Detail = "Unable to link this Google account. Sign in with your email code." });
-                    }
-                }
-                if (user.DeletedAt != null)
-                {
-                    await AuditSignInFailureAsync("google", "account_deleted", user.Id);
-                    return BadRequest(new ProblemDetails { Title = "Account Not Found", Detail = "This account is unavailable." });
-                }
-
-                Request.Cookies.TryGetValue("ag_td", out var agTdToken);
-                var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(user, "google", agTdToken);
-                if (mfaDecision.Result == MfaGateResult.Challenge)
-                {
-                    var pendingToken = await _authService.CreateToken(user, purpose: "mfa_pending");
-                    return Ok(new
-                    {
-                        status = "mfa_required",
-                        mfaToken = pendingToken.AccessToken,
-                        methods = mfaDecision.Methods,
-                        policy = mfaDecision.Policy
-                    });
-                }
-                if (mfaDecision.Result == MfaGateResult.Enrollment)
-                {
-                    var enrollToken = await _authService.CreateToken(user, purpose: "mfa_enroll");
-                    return Ok(new
-                    {
-                        status = "mfa_enrollment_required",
-                        mfaToken = enrollToken.AccessToken,
-                        methods = mfaDecision.Methods,
-                        policy = mfaDecision.Policy
-                    });
-                }
-
-                var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
-                var userAgent = Request.Headers.UserAgent.ToString();
-                var result = await _sessionService.CreateSessionForUserAsync(user, ip, userAgent, amr: "google");
-
-                if (!result.Success || result.Response == null)
-                {
-                    await AuditSignInFailureAsync("google", "session_creation_failed", user.Id);
-                    return BadRequest(new ProblemDetails
-                    {
-                        Title = "Session Creation Failed",
-                        Detail = result.Error ?? "Unable to create session.",
-                        Status = StatusCodes.Status400BadRequest
-                    });
-                }
-
-                if (!string.IsNullOrEmpty(result.RawRefreshToken))
-                {
-                    SetRefreshTokenCookie(result.RawRefreshToken);
-                }
-
-                await AuditAsync("auth.signin.success", "success", user.Id, new { method = "google" });
-                return Ok(result.Response);
+                identity = await _googleValidator.ValidateAsync(request.IdToken, cancellationToken);
             }
             catch (InvalidJwtException ex)
             {
-                await AuditSignInFailureAsync("google", "invalid_token");
                 _logger.LogWarning(ex, "Google sign-in failed due to invalid JWT token.");
-                return BadRequest(new ProblemDetails
-                {
-                    Title = "Invalid Google Token",
-                    Detail = "The provided Google ID token is invalid or expired.",
-                    Status = StatusCodes.Status400BadRequest
-                });
+                await AuditSignInFailureAsync("google", "invalid_token");
+                return Unauthorized(CreateProblemDetails("Invalid Google Token", "The provided Google ID token is invalid or expired.", StatusCodes.Status401Unauthorized, "invalid_token"));
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogWarning(ex, "Google certificate fetch failed during Google authentication.");
+                await AuditSignInFailureAsync("google", "google_unavailable");
+                return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    CreateProblemDetails("Google Service Unavailable", "Google certificate service is unavailable right now. Use your email code.", StatusCodes.Status503ServiceUnavailable, "google_unavailable"));
+            }
+            catch (Exception ex) when (ex is TaskCanceledException or TimeoutException)
+            {
+                _logger.LogWarning(ex, "Google token validation timed out.");
+                await AuditSignInFailureAsync("google", "google_unavailable");
+                return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    CreateProblemDetails("Google Service Unavailable", "Google authentication timed out. Use your email code.", StatusCodes.Status503ServiceUnavailable, "google_unavailable"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error occurred during Google authentication.");
+                _logger.LogError(ex, "Unexpected error validating Google token.");
                 await AuditSignInFailureAsync("google", "unexpected_error");
-                return BadRequest(new ProblemDetails
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    CreateProblemDetails("Google Authentication Failed", "An unexpected error occurred during Google sign-in. Please try again or contact support.", StatusCodes.Status500InternalServerError, "unexpected_error"));
+            }
+
+            // 3. Nonce check
+            if (string.IsNullOrWhiteSpace(cookieNonce))
+            {
+                await AuditSignInFailureAsync("google", "nonce_missing");
+                return Unauthorized(CreateProblemDetails("Missing Nonce", "That sign-in expired. Try again.", StatusCodes.Status401Unauthorized, "nonce_missing"));
+            }
+
+            if (string.IsNullOrWhiteSpace(identity.Nonce) ||
+                !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(identity.Nonce), Encoding.UTF8.GetBytes(cookieNonce)))
+            {
+                await AuditSignInFailureAsync("google", "nonce_mismatch");
+                return Unauthorized(CreateProblemDetails("Invalid Nonce", "That sign-in expired. Try again.", StatusCodes.Status401Unauthorized, "nonce_mismatch"));
+            }
+
+            // 4. One-time redemption check
+            var redemption = new ExternalTokenRedemption
+            {
+                Provider = "Google",
+                TokenId = identity.TokenId,
+                ExpiresAtUtc = identity.ExpiresAtUtc,
+                RedeemedAtUtc = DateTime.UtcNow
+            };
+            _identityContext.ExternalTokenRedemptions.Add(redemption);
+            try
+            {
+                await _identityContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex)
+            {
+                _identityContext.Entry(redemption).State = EntityState.Detached;
+
+                // Check whether the token was already redeemed (primary-key clash)
+                bool isReplay = false;
+                try
                 {
-                    Title = "Google Authentication Failed",
-                    Detail = "An unexpected error occurred during Google sign-in. Please try again or contact support.",
-                    Status = StatusCodes.Status400BadRequest
+                    isReplay = await _identityContext.ExternalTokenRedemptions
+                        .AsNoTracking()
+                        .AnyAsync(r => r.Provider == "Google" && r.TokenId == identity.TokenId, cancellationToken);
+                }
+                catch (Exception checkEx)
+                {
+                    _logger.LogError(checkEx, "Failed to verify token redemption replay state after DbUpdateException.");
+                }
+
+                if (isReplay)
+                {
+                    await AuditSignInFailureAsync("google", "token_replayed");
+                    return Unauthorized(CreateProblemDetails("Token Replayed", "That sign-in expired. Try again.", StatusCodes.Status401Unauthorized, "token_replayed"));
+                }
+
+                _logger.LogError(ex, "Database error recording Google token redemption for TokenId {TokenId}", identity.TokenId);
+                await AuditSignInFailureAsync("google", "unexpected_error");
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    CreateProblemDetails("Google Authentication Failed", "An unexpected error occurred during Google sign-in. Please try again or contact support.", StatusCodes.Status500InternalServerError, "unexpected_error"));
+            }
+
+            // 5. Identity claims check
+            if (!identity.EmailVerified || string.IsNullOrWhiteSpace(identity.Subject) || string.IsNullOrWhiteSpace(identity.Email))
+            {
+                await AuditSignInFailureAsync("google", "invalid_token");
+                return Unauthorized(CreateProblemDetails("Invalid Google Token", "The provided Google ID token is invalid or unverified.", StatusCodes.Status401Unauthorized, "invalid_token"));
+            }
+
+            var allowedHostedDomain = _configuration["Google:HostedDomain"];
+            if (!string.IsNullOrEmpty(allowedHostedDomain) &&
+                !string.Equals(identity.HostedDomain, allowedHostedDomain, StringComparison.OrdinalIgnoreCase))
+            {
+                await AuditSignInFailureAsync("google", "hosted_domain_mismatch");
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    CreateProblemDetails("Hosted Domain Mismatch", "This hosted domain is not permitted for Google sign-in.", StatusCodes.Status403Forbidden, "hosted_domain_mismatch"));
+            }
+
+            // 6. Identity Resolution
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var userAgent = Request.Headers.UserAgent.ToString();
+            var correlationId = HttpContext.TraceIdentifier;
+
+            GoogleSignInResolveResult resolution;
+            try
+            {
+                resolution = await _googleSignInService.ResolveAsync(identity, ip, userAgent, correlationId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error resolving Google identity.");
+                await AuditSignInFailureAsync("google", "unexpected_error");
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    CreateProblemDetails("Google Authentication Failed", "An unexpected error occurred during Google sign-in. Please try again or contact support.", StatusCodes.Status500InternalServerError, "unexpected_error"));
+            }
+            if (resolution.User == null)
+            {
+                var denyCode = resolution.DenyCode ?? "unexpected_error";
+                await AuditSignInFailureAsync("google", denyCode);
+
+                return denyCode switch
+                {
+                    "account_not_found" => NotFound(CreateProblemDetails(
+                        "Account Not Found",
+                        $"No AccountGo account uses {identity.Email}.",
+                        StatusCodes.Status404NotFound,
+                        "account_not_found",
+                        new Dictionary<string, object?> { ["email"] = identity.Email })),
+
+                    "account_linking_required" => StatusCode(StatusCodes.Status409Conflict, CreateProblemDetails(
+                        "Account Linking Required",
+                        "Google can't confirm this address for us. Sign in with your email code, then connect Google in Settings.",
+                        StatusCodes.Status409Conflict,
+                        "account_linking_required")),
+
+                    "google_already_linked" => StatusCode(StatusCodes.Status409Conflict, CreateProblemDetails(
+                        "Google Account Already Linked",
+                        "Your account is connected to a different Google account.",
+                        StatusCodes.Status409Conflict,
+                        "google_already_linked")),
+
+                    "account_unavailable" => StatusCode(StatusCodes.Status403Forbidden, CreateProblemDetails(
+                        "Account Unavailable",
+                        "This account can't sign in. Contact support.",
+                        StatusCodes.Status403Forbidden,
+                        "account_unavailable")),
+
+                    "account_link_conflict" => StatusCode(StatusCodes.Status409Conflict, CreateProblemDetails(
+                        "Account Link Conflict",
+                        "Unable to link this Google account due to a concurrent conflict. Sign in with your email code.",
+                        StatusCodes.Status409Conflict,
+                        "account_link_conflict")),
+
+                    _ => StatusCode(StatusCodes.Status500InternalServerError, CreateProblemDetails(
+                        "Google Authentication Failed",
+                        "An unexpected error occurred during Google sign-in. Please try again or contact support.",
+                        StatusCodes.Status500InternalServerError,
+                        "unexpected_error"))
+                };
+            }
+
+            var user = resolution.User;
+
+            // 7. MFA Gate
+            Request.Cookies.TryGetValue("ag_td", out var agTdToken);
+            var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(user, "google", agTdToken);
+            if (mfaDecision.Result == MfaGateResult.Challenge)
+            {
+                var pendingToken = await _authService.CreateToken(user, purpose: "mfa_pending");
+                return Ok(new
+                {
+                    status = "mfa_required",
+                    mfaToken = pendingToken.AccessToken,
+                    methods = mfaDecision.Methods,
+                    policy = mfaDecision.Policy
                 });
             }
+            if (mfaDecision.Result == MfaGateResult.Enrollment)
+            {
+                var enrollToken = await _authService.CreateToken(user, purpose: "mfa_enroll");
+                return Ok(new
+                {
+                    status = "mfa_enrollment_required",
+                    mfaToken = enrollToken.AccessToken,
+                    methods = mfaDecision.Methods,
+                    policy = mfaDecision.Policy
+                });
+            }
+
+            // 8. Session creation & cookies
+            (bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error) result;
+            try
+            {
+                result = await _sessionService.CreateSessionForUserAsync(user, ip, userAgent, amr: "google");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error creating session for Google sign-in.");
+                await AuditSignInFailureAsync("google", "unexpected_error", user.Id);
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    CreateProblemDetails("Google Authentication Failed", "An unexpected error occurred during Google sign-in. Please try again or contact support.", StatusCodes.Status500InternalServerError, "unexpected_error"));
+            }
+            if (!result.Success || result.Response == null)
+            {
+                await AuditSignInFailureAsync("google", "session_creation_failed", user.Id);
+                return BadRequest(CreateProblemDetails(
+                    "Session Creation Failed",
+                    result.Error ?? "Unable to create session.",
+                    StatusCodes.Status400BadRequest,
+                    "session_creation_failed"));
+            }
+
+            if (!string.IsNullOrEmpty(result.RawRefreshToken))
+            {
+                SetRefreshTokenCookie(result.RawRefreshToken);
+            }
+
+            await AuditAsync("auth.signin.success", "success", user.Id, new { method = "google" });
+            return Ok(result.Response);
+        }
+
+        private static ProblemDetails CreateProblemDetails(
+            string title, string detail, int status, string code, IDictionary<string, object?>? additionalExtensions = null)
+        {
+            var pd = new ProblemDetails
+            {
+                Title = title,
+                Detail = detail,
+                Status = status
+            };
+            pd.Extensions["code"] = code;
+            if (additionalExtensions != null)
+            {
+                foreach (var (k, v) in additionalExtensions)
+                {
+                    pd.Extensions[k] = v;
+                }
+            }
+            return pd;
         }
 
         [AllowAnonymous]

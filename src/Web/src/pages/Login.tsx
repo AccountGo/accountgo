@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
@@ -25,9 +25,10 @@ const TERMS_OF_USE_URL = 'https://www.accountgo.dev/legal/terms-of-use/';
 
 interface LoginProps {
   initialMode?: 'signin' | 'signup';
+  initialGoogleConfig?: { enabled: boolean; clientId?: string; nonce?: string };
 }
 
-export const Login: React.FC<LoginProps> = ({ initialMode }) => {
+export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading, sendOtp, signUp, verifyOtp, completeSession, authFetch } = useAuth();
@@ -61,8 +62,106 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [googleProgress, setGoogleProgress] = useState<'selecting' | 'signing-in' | null>(null);
+  const [googleConfig, setGoogleConfig] = useState<{ enabled: boolean; clientId?: string; nonce?: string } | null>(
+    () => initialGoogleConfig ?? null
+  );
+  const [errorAction, setErrorAction] = useState<React.ReactNode | null>(null);
   const googleAttempt = useRef(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const fetchGoogleConfig = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/google/start', { credentials: 'include' });
+      if (!res.ok) {
+        setGoogleConfig({ enabled: false });
+        return;
+      }
+      const data = await res.json();
+      setGoogleConfig(data);
+    } catch {
+      setGoogleConfig({ enabled: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGoogleConfig();
+  }, [fetchGoogleConfig]);
+
+  const handleGoogleError = (code?: string, errEmail?: string) => {
+    setErrorAction(null);
+    switch (code) {
+      case 'account_not_found': {
+        const resolvedEmail = errEmail || email;
+        setErrorMessage(`No AccountGo account uses ${resolvedEmail || 'this email'}.`);
+        setErrorAction(
+          <button
+            type="button"
+            className="underline font-semibold ml-1.5 cursor-pointer"
+            onClick={() => {
+              setMode('signup');
+              if (resolvedEmail) setEmail(resolvedEmail);
+              setErrorMessage(null);
+              setErrorAction(null);
+            }}
+          >
+            Create an account
+          </button>
+        );
+        break;
+      }
+      case 'account_linking_required':
+        setErrorMessage("Google can't confirm this address for us. Sign in with your email code, then connect Google in Settings.");
+        setErrorAction(
+          <button
+            type="button"
+            className="underline font-semibold ml-1.5 cursor-pointer"
+            onClick={() => {
+              document.getElementById('email-input')?.focus();
+            }}
+          >
+            Sign in with email
+          </button>
+        );
+        break;
+      case 'google_already_linked':
+        setErrorMessage('Your account is connected to a different Google account.');
+        setErrorAction(
+          <button
+            type="button"
+            className="underline font-semibold ml-1.5 cursor-pointer"
+            onClick={() => {
+              document.getElementById('email-input')?.focus();
+            }}
+          >
+            Sign in with email
+          </button>
+        );
+        break;
+      case 'account_unavailable':
+        setErrorMessage("This account can't sign in. Contact support.");
+        setErrorAction(
+          <a
+            href="mailto:support@accountgo.dev"
+            className="underline font-semibold ml-1.5"
+          >
+            Contact support
+          </a>
+        );
+        break;
+      case 'token_replayed':
+      case 'nonce_missing':
+      case 'nonce_mismatch':
+      case 'invalid_token':
+      case 'cross_site':
+        setErrorMessage('That sign-in expired. Try again.');
+        break;
+      case 'google_unavailable':
+      case 'unexpected_error':
+      default:
+        setErrorMessage('Google sign-in is unavailable right now. Use your email code.');
+        break;
+    }
+  };
 
   // Turnstile verification tokens and widget refs
   const [turnstileToken, setTurnstileToken] = useState<string>('');
@@ -485,38 +584,73 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                 className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20 animate-fade-in"
               >
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span className="flex-1">{errorMessage}</span>
+                <div className="flex-1">
+                  <span>{errorMessage}</span>
+                  {errorAction}
+                </div>
               </div>
             )}
 
-            {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
-              <GoogleSignInButton clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID} enabled={acceptedTerms} onError={setErrorMessage}
-                onStart={() => { googleAttempt.current = true; setGoogleProgress('selecting'); }}
+            {mode === 'signin' && googleConfig?.enabled && googleConfig.clientId && (
+              <GoogleSignInButton
+                clientId={googleConfig.clientId}
+                nonce={googleConfig.nonce}
+                enabled={acceptedTerms && Boolean(googleConfig.nonce)}
+                onError={(msg) => setErrorMessage(msg)}
+                onStart={() => {
+                  googleAttempt.current = true;
+                  setGoogleProgress('selecting');
+                }}
                 onCredential={async (credential) => {
                   if (!googleAttempt.current) return;
                   googleAttempt.current = false;
                   setGoogleProgress('signing-in');
+                  setGoogleConfig((prev) => (prev ? { ...prev, nonce: undefined } : null));
                   setErrorMessage(null);
+                  setErrorAction(null);
                   verificationOwnsNavigation.current = true;
                   try {
-                    const res = await fetch('/api/auth/google', { method: 'POST', credentials: 'include',
-                      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: credential }) });
+                    const res = await fetch('/api/auth/google', {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ idToken: credential })
+                    });
                     const data = await res.json();
-                    if (!res.ok) throw new Error(data.detail || 'Google sign-in failed.');
-                    if (data.status === 'mfa_required') { googleMfa.current = true; setMfaChallengeData(data); setStep('mfa_challenge'); verificationOwnsNavigation.current = false; return; }
-                    if (data.status === 'mfa_enrollment_required') { googleMfa.current = true; setMfaEnrollData(data); setStep('mfa_enroll'); verificationOwnsNavigation.current = false; return; }
+                    if (!res.ok) {
+                      const code = data?.code || data?.extensions?.code;
+                      const errEmail = data?.email || data?.extensions?.email;
+                      handleGoogleError(code, errEmail);
+                      return;
+                    }
+                    if (data.status === 'mfa_required') {
+                      googleMfa.current = true;
+                      setMfaChallengeData(data);
+                      setStep('mfa_challenge');
+                      verificationOwnsNavigation.current = false;
+                      return;
+                    }
+                    if (data.status === 'mfa_enrollment_required') {
+                      googleMfa.current = true;
+                      setMfaEnrollData(data);
+                      setStep('mfa_enroll');
+                      verificationOwnsNavigation.current = false;
+                      return;
+                    }
                     completeSession(data);
                     await handlePostAuthSuccess();
                   } catch (error) {
                     verificationOwnsNavigation.current = false;
-                    setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed.');
+                    handleGoogleError('unexpected_error');
                   } finally {
                     setGoogleProgress(null);
+                    await fetchGoogleConfig();
                   }
-                }} />
+                }}
+              />
             )}
 
-            {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+            {mode === 'signin' && googleConfig?.enabled && (
               <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]" aria-hidden="true">
                 <span className="h-px flex-1 bg-[var(--border-subtle)]" />or<span className="h-px flex-1 bg-[var(--border-subtle)]" />
               </div>
@@ -697,6 +831,23 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                 </button>
 
               </form>
+            )}
+
+            {mode === 'signup' && googleConfig?.enabled && (
+              <p className="text-center text-sm text-[var(--text-secondary)] mt-4">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  className="font-semibold text-[var(--text-main)] underline underline-offset-2 cursor-pointer"
+                  onClick={() => {
+                    setMode('signin');
+                    setErrorMessage(null);
+                    setErrorAction(null);
+                  }}
+                >
+                  Sign in with Google
+                </button>
+              </p>
             )}
           </div>
         )}
