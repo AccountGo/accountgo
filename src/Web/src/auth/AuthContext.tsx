@@ -300,7 +300,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Authenticated fetch wrapper with automatic Bearer injection and single-flight silent refresh on 401
   const authFetch = useCallback(
-    async (url: string, init?: RequestInit): Promise<Response> => {
+    async (url: string, init?: RequestInit, planDialog?: boolean): Promise<Response> => {
       let token = tokenRef.current;
 
       const headers = new Headers(init?.headers || {});
@@ -320,12 +320,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const method = (init?.method || 'GET').toUpperCase();
       const shouldRetry503 = method === 'GET';
 
+      const effectivePlanDialog = planDialog !== undefined
+        ? planDialog
+        : (init as { planDialog?: boolean } | undefined)?.planDialog;
+
+      const shouldAnnounce = effectivePlanDialog !== undefined
+        ? effectivePlanDialog
+        : method !== 'GET' && method !== 'HEAD';
+
+      const { planDialog: _, ...fetchInit } = (init as { planDialog?: boolean } & RequestInit) || {};
+
       let res = shouldRetry503
-        ? await fetchWith503Retry(url, { ...init, headers, credentials: 'include' })
-        : await fetch(url, { ...init, headers, credentials: 'include' });
+        ? await fetchWith503Retry(url, { ...fetchInit, headers, credentials: 'include' })
+        : await fetch(url, { ...fetchInit, headers, credentials: 'include' });
 
       // Plan denials (limits, modules, plans) get one shared explanation; callers still handle the response.
-      void announceEntitlementDenial(res);
+      if (shouldAnnounce) {
+        void announceEntitlementDenial(res);
+      }
       // Hook adopts /api/entitlements versions itself — observing here would duplicate the reload.
       if (requestPath !== '/api/entitlements') {
         observeEntitlementsVersionHeader(
@@ -345,8 +357,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             retryHeaders.set(ORG_HEADER, orgSlug);
           }
           res = shouldRetry503
-            ? await fetchWith503Retry(url, { ...init, headers: retryHeaders, credentials: 'include' })
-            : await fetch(url, { ...init, headers: retryHeaders, credentials: 'include' });
+            ? await fetchWith503Retry(url, { ...fetchInit, headers: retryHeaders, credentials: 'include' })
+            : await fetch(url, { ...fetchInit, headers: retryHeaders, credentials: 'include' });
+          if (shouldAnnounce) {
+            void announceEntitlementDenial(res);
+          }
           if (requestPath !== '/api/entitlements') {
             observeEntitlementsVersionHeader(
               orgSlug,

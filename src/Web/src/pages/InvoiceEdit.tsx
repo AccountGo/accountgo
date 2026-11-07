@@ -22,6 +22,7 @@ import { PartyPickerDialog } from '../components/PartyPickerDialog';
 import { PartyFormDialog } from '../components/PartyFormDialog';
 import { ItemFormDialog } from '../components/ItemFormDialog';
 import { usePermissions } from '../components/Gating';
+import { useOptionalCapabilities } from '../lib/entitlements';
 import {
   TenantContextType,
   Invoice,
@@ -66,6 +67,7 @@ const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 1
 
 export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const { currentOrg, hasModule, subscription, canWrite } = useOutletContext<TenantContextType>();
+  const caps = useOptionalCapabilities();
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
   const salesWritable = canWrite('sales');
@@ -154,10 +156,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const loadReferenceData = useCallback(async () => {
     setIsLoadingRefs(true);
     try {
+      const canInventory = hasModule('inventory') && hasPermission('inventory.items.view');
       const [custRes, termsRes, itemsRes, taxesRes, accountsRes] = await Promise.all([
         authFetch('/api/Sales/Customers'),
         authFetch('/api/Common/PaymentTerms'),
-        authFetch('/api/Common/Items'),
+        canInventory ? authFetch('/api/Common/Items') : Promise.resolve(null),
         authFetch('/api/Tax/Taxes'),
         authFetch('/api/Sales/SalesAccounts'),
       ]);
@@ -179,7 +182,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         }
       }
 
-      if (itemsRes.ok) {
+      if (itemsRes && itemsRes.ok) {
         const itemsList = await itemsRes.json();
         setCatalogItems(Array.isArray(itemsList) ? itemsList : []);
       }
@@ -198,11 +201,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       setIsLoadingRefs(false);
     }
     // Runs once per page; the dates it reads are only the starting values of a new invoice.
-  }, [authFetch, isEdit]);
+  }, [authFetch, isEdit, hasModule, hasPermission]);
 
   useEffect(() => {
+    if (caps && !caps.ready) return;
     loadReferenceData();
-  }, [loadReferenceData]);
+  }, [loadReferenceData, caps?.ready]);
 
   useEffect(() => {
     let cancelled = false;

@@ -66,7 +66,7 @@ function usePagedFeed<T>(buildUrl: (cursor: number | null) => string, enabled: b
     setLoading(true);
     setError(null);
     try {
-      const response = await authFetch(buildUrl(cursor));
+      const response = await authFetch(buildUrl(cursor), undefined, true);
       const body = await response.json().catch(() => null);
       if (requestId !== requestRef.current) return;
       if (!response.ok) {
@@ -169,7 +169,7 @@ const ChangesView: React.FC<ActivitySettingsTabProps> = ({ access, personal, mem
     setExporting(true);
     setExportError(null);
     try {
-      const response = await authFetch(activityListUrl(filters, null, true));
+      const response = await authFetch(activityListUrl(filters, null, true), undefined, true);
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         setExportError(problemMessage(body, 'Could not export activity.'));

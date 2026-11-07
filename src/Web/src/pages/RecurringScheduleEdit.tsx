@@ -8,6 +8,7 @@ import { useAuth } from '../auth/AuthContext';
 import { usePermissions, ReadOnlyModuleBanner } from '../components/Gating';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
+import { useOptionalCapabilities } from '../lib/entitlements';
 import type { CustomerOption, ItemOption, PaymentTermOption, TenantContextType } from '../types';
 import type {
   RecurringAction, RecurringCadence, RecurringLineInput, RecurringScheduleDetail,
@@ -23,9 +24,10 @@ const emptyLine = (): RecurringLineInput => ({
 });
 
 export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
-  const { canWrite } = useOutletContext<TenantContextType>();
+  const { canWrite, hasModule } = useOutletContext<TenantContextType>();
   const { hasPermission } = usePermissions();
   const { authFetch } = useAuth();
+  const caps = useOptionalCapabilities();
   const { orgSlug, scheduleId } = useParams<{ orgSlug: string; scheduleId?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -69,15 +71,16 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
   const loadRefs = useCallback(async () => {
     setIsLoadingRefs(true);
     try {
+      const canInventory = hasModule('inventory') && hasPermission('inventory.items.view');
       const [custRes, termsRes, itemsRes, taxesRes] = await Promise.all([
         authFetch('/api/Sales/Customers'),
         authFetch('/api/Common/PaymentTerms'),
-        authFetch('/api/Common/Items'),
+        canInventory ? authFetch('/api/Common/Items') : Promise.resolve(null),
         authFetch('/api/Tax/Taxes'),
       ]);
       if (custRes.ok) setCustomers((await custRes.json()) as CustomerOption[]);
       if (termsRes.ok) setPaymentTerms((await termsRes.json()) as PaymentTermOption[]);
-      if (itemsRes.ok) setCatalogItems((await itemsRes.json()) as ItemOption[]);
+      if (itemsRes && itemsRes.ok) setCatalogItems((await itemsRes.json()) as ItemOption[]);
       if (taxesRes.ok) {
         const taxData = await taxesRes.json();
         setTaxes((taxData?.taxes ?? []) as WorkspaceTax[]);
@@ -87,9 +90,12 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
     } finally {
       setIsLoadingRefs(false);
     }
-  }, [authFetch]);
+  }, [authFetch, hasModule, hasPermission]);
 
-  useEffect(() => { void loadRefs(); }, [loadRefs]);
+  useEffect(() => {
+    if (caps && !caps.ready) return;
+    void loadRefs();
+  }, [loadRefs, caps?.ready]);
 
   // ----- load existing schedule (edit) -----
   useEffect(() => {
