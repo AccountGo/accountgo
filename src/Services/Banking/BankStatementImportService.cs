@@ -121,6 +121,7 @@ namespace Services.Banking
                 ReadyRows = classified.Count(c => c.Status == RowStatus.Ready),
                 DuplicateRows = classified.Count(c => c.Status == RowStatus.Duplicate),
                 ErrorRows = classified.Count(c => c.Status == RowStatus.Error),
+                SkippedRows = classified.Count(c => c.Status == RowStatus.Skipped),
                 Detection = detection,
                 MappingSource = mappingSource,
                 HeaderSignature = headerSignature,
@@ -143,6 +144,85 @@ namespace Services.Banking
             return LookupSavedOrPreset(bank.Id, content);
         }
 
+        public WiseConversionImpactReportDto ReportWiseConversionImpact(int bankId, BankStatementImportRequest request)
+        {
+            EnsureCompany();
+            var bank = RequireBank(bankId);
+            var source = ParseSource(request);
+            if (source is not (BankStatementSources.Csv or BankStatementSources.Xlsx))
+                throw new InvalidOperationException("Wise conversion review reads a CSV or Excel statement.");
+
+            var content = ResolveContent(request);
+            var map = request.ColumnMap ?? LookupSavedOrPreset(bank.Id, content).ColumnMap
+                ?? throw new InvalidOperationException("Map the CSV columns first.");
+            var resolved = StatementImportResolver.Resolve(content, map, bank.CurrencyCode);
+            var rows = BankStatementParser.ParseCsv(content, resolved.Map, resolved.Records);
+            var skipped = rows.Where(r => r.IsSkipped && !string.IsNullOrWhiteSpace(r.ExternalId)).ToList();
+
+            var companyId = _tenant.RequireCompanyId();
+            var externalIds = skipped.Select(r => r.ExternalId!).Distinct(StringComparer.Ordinal).ToList();
+            var lines = externalIds.Count == 0
+                ? new List<BankStatementLine>()
+                : _lines.Table
+                    .Where(l => l.CompanyId == companyId && l.BankId == bank.Id && l.Source == source && l.ExternalId != null && externalIds.Contains(l.ExternalId))
+                    .ToList();
+
+            var importIds = lines.Select(l => l.BankStatementImportId).Distinct().ToList();
+            var imports = importIds.Count == 0
+                ? new Dictionary<int, BankStatementImport>()
+                : _imports.Table.Where(i => i.CompanyId == companyId && i.BankId == bank.Id && i.Source == source && importIds.Contains(i.Id)).ToDictionary(i => i.Id);
+
+            var glIds = lines.Where(l => l.MatchedGeneralLedgerLineId.HasValue)
+                .Select(l => l.MatchedGeneralLedgerLineId!.Value)
+                .Distinct()
+                .ToList();
+            var glLines = glIds.Count == 0
+                ? new Dictionary<int, GeneralLedgerLine>()
+                : _glLines.Table.Where(l => l.CompanyId == companyId && glIds.Contains(l.Id)).ToDictionary(l => l.Id);
+
+            var rowByExternalId = skipped
+                .GroupBy(r => r.ExternalId!, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+            var candidates = lines.Where(l => imports.ContainsKey(l.BankStatementImportId))
+                .OrderBy(l => l.BankStatementImportId)
+                .ThenBy(l => l.Id)
+                .Select(line =>
+                {
+                    rowByExternalId.TryGetValue(line.ExternalId!, out var sourceRow);
+                    imports.TryGetValue(line.BankStatementImportId, out var import);
+                    GeneralLedgerLine? gl = null;
+                    if (line.MatchedGeneralLedgerLineId.HasValue)
+                        glLines.TryGetValue(line.MatchedGeneralLedgerLineId.Value, out gl);
+                    return new WiseConversionImpactRowDto
+                    {
+                        CompanyId = companyId,
+                        BankId = bank.Id,
+                        BankName = bank.Name,
+                        ImportId = line.BankStatementImportId,
+                        ImportFileName = import?.FileName,
+                        StatementLineId = line.Id,
+                        ExternalId = line.ExternalId,
+                        SourceRowNumber = sourceRow?.RowNumber,
+                        Amount = line.Amount,
+                        MatchStatus = MatchStatusOf(line),
+                        PostingStatus = PostingStatusOf(line, gl),
+                        MatchedGeneralLedgerLineId = line.MatchedGeneralLedgerLineId,
+                        BankReconciliationId = gl?.BankReconciliationId
+                    };
+                })
+                .ToList();
+
+            return new WiseConversionImpactReportDto
+            {
+                CompanyId = companyId,
+                BankId = bank.Id,
+                BankName = bank.Name,
+                SkippedInFile = rows.Count(r => r.IsSkipped),
+                Candidates = candidates
+            };
+        }
+
         public BankStatementCommitResultDto Commit(int bankId, BankStatementImportRequest request, string actor)
         {
             EnsureCompany();
@@ -156,7 +236,9 @@ namespace Services.Banking
             var result = new BankStatementCommitResultDto
             {
                 Duplicates = classified.Count(c => c.Status == RowStatus.Duplicate),
-                Errors = classified.Count(c => c.Status == RowStatus.Error)
+                Errors = classified.Count(c => c.Status == RowStatus.Error),
+                Skipped = classified.Count(c => c.Status == RowStatus.Skipped),
+                SkippedRowDetails = classified.Where(c => c.Status == RowStatus.Skipped).Select(ToPreviewRow).ToList()
             };
 
             var ready = classified.Where(c => c.Status == RowStatus.Ready).Select(c => c.Row).ToList();
@@ -649,7 +731,7 @@ namespace Services.Banking
 
         // ------------------------------------------------------------ import helpers
 
-        private enum RowStatus { Ready, Duplicate, Error }
+        private enum RowStatus { Ready, Duplicate, Error, Skipped }
 
         private sealed record ClassifiedRow(ParsedStatementRow Row, RowStatus Status);
 
@@ -661,7 +743,7 @@ namespace Services.Banking
             {
                 if (!row.IsValid)
                 {
-                    result.Add(new ClassifiedRow(row, RowStatus.Error));
+                    result.Add(new ClassifiedRow(row, row.IsSkipped ? RowStatus.Skipped : RowStatus.Error));
                     continue;
                 }
 
@@ -716,6 +798,7 @@ namespace Services.Banking
             {
                 RowStatus.Duplicate => "duplicate",
                 RowStatus.Error => "error",
+                RowStatus.Skipped => "skipped",
                 _ => "ok"
             },
             Error = classified.Row.Error
@@ -773,9 +856,10 @@ namespace Services.Banking
                 {
                     return new BankStatementResolveMappingDto
                     {
-                        ColumnMap = map,
+                        ColumnMap = StatementImportPresets.WithLayoutDefaults(header, map),
                         MappingSource = "saved",
-                        HeaderSignature = signature
+                        HeaderSignature = signature,
+                        PresetName = StatementImportPresets.FindMatching(header)?.Name
                     };
                 }
             }
@@ -891,6 +975,7 @@ namespace Services.Banking
             Currency = summary.Currency,
             Status = summary.Status,
             Header = summary.Header,
+            RowRule = summary.RowRule,
             NeedsDateFormatChoice = summary.NeedsDateFormatChoice,
             NeedsAmountFormatChoice = summary.NeedsAmountFormatChoice
         };
@@ -903,6 +988,24 @@ namespace Services.Banking
                 or BankStatementSources.Qif or BankStatementSources.Xlsx))
                 throw new InvalidOperationException("Pick a supported statement file.");
             return source;
+        }
+
+        private static string MatchStatusOf(BankStatementLine line)
+        {
+            if (line.ExcludedAt.HasValue)
+                return "excluded";
+            return line.MatchedGeneralLedgerLineId.HasValue ? "matched" : "unmatched";
+        }
+
+        private static string PostingStatusOf(BankStatementLine line, GeneralLedgerLine? matched)
+        {
+            if (matched?.BankReconciliationId != null)
+                return "reconciled";
+            if (line.MatchedGeneralLedgerLineId.HasValue)
+                return "posted";
+            if (line.DraftBillId.HasValue)
+                return "draft-bill";
+            return "none";
         }
 
         private static string NormalizeStatus(string? status)

@@ -138,6 +138,7 @@ const BankStatementImportPage: React.FC = () => {
   const [mappingSource, setMappingSource] = useState<string | null>(null);
   const [presetName, setPresetName] = useState<string | null>(null);
   const [preview, setPreview] = useState<BankStatementPreview | null>(null);
+  const [skippedDetails, setSkippedDetails] = useState<BankStatementCommitResult['skippedRowDetails']>([]);
 
   const [createFor, setCreateFor] = useState<BankStatementLine | null>(null);
   const [expenseFor, setExpenseFor] = useState<BankStatementLine | null>(null);
@@ -249,6 +250,7 @@ const BankStatementImportPage: React.FC = () => {
   const onFile = async (file: File | null) => {
     setPreview(null);
     setNotice(null);
+    setSkippedDetails([]);
     setError(null);
     if (!file) return;
     const detected = sourceForFileName(file.name);
@@ -308,7 +310,13 @@ const BankStatementImportPage: React.FC = () => {
 
   const setColumn = (key: ColumnKey, value: string) => {
     setPreview(null);
-    setColumnMap((prev) => ({ ...prev, [key]: value === '' ? null : Number(value) }));
+    setColumnMap((prev) => {
+      const index = value === '' ? null : Number(value);
+      if (key !== 'amountColumn') return { ...prev, [key]: index };
+      const header = index == null ? '' : (headers[index] ?? '').trim().toLowerCase();
+      const amountCarriesSign = header === 'signed_amount' ? true : header === 'amount' ? false : null;
+      return { ...prev, amountColumn: index, amountCarriesSign };
+    });
   };
 
   const payload = () => ({
@@ -320,12 +328,15 @@ const BankStatementImportPage: React.FC = () => {
     columnMap: source === 1 || source === 7 || source === 6 ? columnMap : null,
   });
 
-  const mappingReady =
+  const usesColumnMap = source === 1 || source === 7;
+  const amountInterpretationMissing = usesColumnMap && columnMap.directionColumn != null && columnMap.amountColumn != null && columnMap.amountCarriesSign == null;
+  const directionRequired = usesColumnMap && (columnMap.skippedDirections?.some((direction) => direction.trim() !== '') ?? false) && columnMap.directionColumn == null;
+  const mappingReady = !amountInterpretationMissing && !directionRequired && (
     source === 2 ||
     source === 4 ||
     source === 5 ||
     source === 6 ||
-    ((source === 1 || source === 7) && hasAmountMapping(columnMap));
+    ((source === 1 || source === 7) && hasAmountMapping(columnMap)));
   const dateFormatBlockingImport =
     !!preview?.detection?.needsDateFormatChoice && !columnMap.dateFormat;
   const amountFormatBlockingImport =
@@ -369,6 +380,7 @@ const BankStatementImportPage: React.FC = () => {
       }
       const result: BankStatementCommitResult = await res.json();
       setNotice(importSummary(result));
+      setSkippedDetails(result.skippedRowDetails ?? []);
       setPreview(null);
       setContent('');
       setContentBase64(null);
@@ -493,6 +505,13 @@ const BankStatementImportPage: React.FC = () => {
           <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
           {notice}
         </div>
+      )}
+
+      {skippedDetails.length > 0 && (
+        <section aria-label="Skipped rows" className="text-sm space-y-1">
+          <h2 className="font-semibold">Skipped rows</h2>
+          <ul>{skippedDetails.map((row) => <li key={row.rowNumber}>Row {row.rowNumber}: {row.error}</li>)}</ul>
+        </section>
       )}
 
       {canManage && !account.archivedAt && !focusedLineId && (
@@ -628,6 +647,19 @@ const BankStatementImportPage: React.FC = () => {
                   </select>
                 </div>
               </div>
+              {columnMap.directionColumn != null && columnMap.amountColumn != null && (
+                <div>
+                  <label className={labelClass} htmlFor="amount-sign-interpretation">Amount interpretation</label>
+                  <select id="amount-sign-interpretation" className={inputClass} value={columnMap.amountCarriesSign == null ? '' : String(columnMap.amountCarriesSign)} onChange={(e) => {
+                    setPreview(null);
+                    setColumnMap((prev) => ({ ...prev, amountCarriesSign: e.target.value === '' ? null : e.target.value === 'true' }));
+                  }}>
+                    <option value="">Choose how amounts are represented</option>
+                    <option value="true">Signed amounts: validate against direction</option>
+                    <option value="false">Unsigned amounts: use direction for sign</option>
+                  </select>
+                </div>
+              )}
               <label className="flex items-center gap-2 text-sm text-[var(--text-main)]">
                 <input
                   type="checkbox"
@@ -639,6 +671,9 @@ const BankStatementImportPage: React.FC = () => {
                 />
                 Payments are shown as positive amounts (flip the sign)
               </label>
+              {directionRequired && <p className="text-xs text-amber-600">Select a direction column to apply the skipped direction rule.</p>}
+              {amountInterpretationMissing && <p className="text-xs text-amber-600">Choose how the selected amount column represents its sign.</p>}
+              {columnMap.directionColumn != null && columnMap.invertSign && <p className="text-xs text-amber-600">Final amounts must agree with direction; conflicting rows will be rejected.</p>}
               {!hasAmountMapping(columnMap) && (
                 <p className="text-xs text-amber-600">Pick the amount column, or the deposit and withdrawal columns.</p>
               )}
@@ -665,7 +700,7 @@ const BankStatementImportPage: React.FC = () => {
                 busy={busy}
                 disabled={!mappingReady}
               />
-              {preview && preview.readyRows > 0 && (
+              {preview && (preview.readyRows > 0 || (preview.skippedRows ?? 0) > 0) && (
                 <HeaderButton
                   label={`Import ${preview.readyRows} line${preview.readyRows === 1 ? '' : 's'}`}
                   variant="primary"
@@ -687,6 +722,7 @@ const BankStatementImportPage: React.FC = () => {
                     preview.detection.currency && `Currency: ${preview.detection.currency}`,
                     preview.detection.status && `Status: ${preview.detection.status}`,
                     preview.detection.header && `Header: ${preview.detection.header}`,
+                    preview.detection.rowRule && `Rows: ${preview.detection.rowRule}`,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -694,7 +730,7 @@ const BankStatementImportPage: React.FC = () => {
               )}
               <p className="text-sm text-[var(--text-secondary)]">
                 {preview.totalRows} rows: {preview.readyRows} new, {preview.duplicateRows} already imported,{' '}
-                {preview.errorRows} with errors.
+                {preview.skippedRows ?? 0} skipped, {preview.errorRows} with errors.
               </p>
               <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
                 <table className="w-full text-sm min-w-[560px]">
@@ -719,6 +755,7 @@ const BankStatementImportPage: React.FC = () => {
                         <td className="px-3 py-2">
                           {row.status === 'ok' && 'New'}
                           {row.status === 'duplicate' && <span className="text-[var(--text-muted)]">Already imported</span>}
+                          {row.status === 'skipped' && <span className="text-[var(--text-muted)]">{row.error}</span>}
                           {row.status === 'error' && <span className="text-rose-600">{row.error}</span>}
                         </td>
                       </tr>

@@ -328,6 +328,10 @@ export interface BankStatementColumnMap {
   withdrawalColumn?: number | null;
   feeColumn?: number | null;
   directionColumn?: number | null;
+  /** Direction tokens that are not money movements. Null lets the server apply a Wise layout default. */
+  skippedDirections?: string[] | null;
+  /** True when the amount column already carries a sign that must agree with direction. */
+  amountCarriesSign?: boolean | null;
   payeeColumn?: number | null;
   memoColumn?: number | null;
   referenceColumn?: number | null;
@@ -355,7 +359,7 @@ export interface BankStatementPreviewRow {
   memo?: string | null;
   reference?: string | null;
   externalId?: string | null;
-  status: 'ok' | 'duplicate' | 'error';
+  status: 'ok' | 'duplicate' | 'error' | 'skipped';
   error?: string | null;
 }
 
@@ -365,6 +369,7 @@ export interface BankStatementDetectionSummary {
   currency?: string | null;
   status?: string | null;
   header?: string | null;
+  rowRule?: string | null;
   needsDateFormatChoice: boolean;
   needsAmountFormatChoice?: boolean;
 }
@@ -375,6 +380,7 @@ export interface BankStatementPreview {
   readyRows: number;
   duplicateRows: number;
   errorRows: number;
+  skippedRows?: number;
   detection?: BankStatementDetectionSummary | null;
   mappingSource?: string | null;
   headerSignature?: string | null;
@@ -395,6 +401,8 @@ export interface BankStatementCommitResult {
   duplicates: number;
   errors: number;
   autoMatched: number;
+  skipped: number;
+  skippedRowDetails: BankStatementPreviewRow[];
   /** Imported lines dated before the books start date; they can only be excluded. */
   beforeBooksStart?: number;
 }
