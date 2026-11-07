@@ -1139,7 +1139,9 @@ namespace Api.Controllers
         [HttpPost("logout")]
         public async Task<IActionResult> Logout([FromQuery] string? reason = null)
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+            var callerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+            var userId = callerId;
+            var revoked = false;
             var rawRefreshToken = Request.Cookies[RefreshCookieName];
             if (!string.IsNullOrEmpty(rawRefreshToken))
             {
@@ -1151,18 +1153,17 @@ namespace Api.Controllers
                         .Select(t => t.UserId)
                         .FirstOrDefaultAsync();
                 }
-                await _otpService.RevokeSessionAsync(rawRefreshToken);
+                revoked = await _otpService.RevokeSessionAsync(rawRefreshToken);
             }
 
             ClearRefreshTokenCookie();
-            if (userId != null)
-            {
-                // Browser-reported reason for an automatic sign-out: "idle" or "expired" (12-hour limit).
-                if (reason is "idle" or "expired")
-                    await AuditAsync("auth.session.timeout", "success", userId, new { reason });
-                else
-                    await AuditAsync("auth.logout", "success", userId);
-            }
+            // Record only sign-outs that ended something: a replayed cookie or a second tab signing out the same,
+            // already-revoked sign-in writes nothing. Browser-reported reason: "idle" or "expired" (12-hour limit).
+            var automatic = reason is "idle" or "expired";
+            if (userId != null && automatic && revoked)
+                await AuditAsync("auth.session.timeout", "success", userId, new { reason });
+            else if (userId != null && !automatic && (revoked || callerId != null))
+                await AuditAsync("auth.logout", "success", userId);
             return Ok(new { message = "Logged out successfully" });
         }
 

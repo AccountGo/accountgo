@@ -124,23 +124,62 @@ test('warns a minute before the idle limit, then signs out and tells other tabs'
   assert.equal(a.listening(), 0, 'listeners removed after sign-out');
 });
 
-test('moving the mouse keeps the session alive and closes an open warning', () => {
+test('moving the mouse resets the timer before the warning appears', () => {
   const world = createWorld();
   const a = world.tab();
   a.start();
 
-  world.advance(14 * MIN);
+  world.advance(13 * MIN);
   a.fire('pointermove');
+  world.advance(13 * MIN);
+  a.fire('wheel');
   world.advance(13 * MIN);
   assert.equal(a.events.signOuts.length, 0);
   assert.equal(lastWarning(a), null);
+});
 
-  world.advance(90_000); // inside the warning minute
+test('once the warning is up, reaching for its buttons does not dismiss it; only "Stay signed in" does', () => {
+  const world = createWorld();
+  const a = world.tab();
+  const session = a.start();
+
+  world.advance(14 * MIN + 10_000);
   assert.equal(lastWarning(a)?.kind, 'idle');
   a.fire('pointermove');
-  assert.equal(lastWarning(a), null, 'activity dismisses the warning at once');
-  world.advance(10 * MIN);
+  a.fire('keydown'); // e.g. Tab to reach "Sign out"
+  a.fire('pointerdown');
+  assert.equal(lastWarning(a)?.kind, 'idle', 'ambient input leaves the prompt open');
+
+  session.markActive();
+  assert.equal(lastWarning(a), null);
+  world.advance(14 * MIN);
   assert.equal(a.events.signOuts.length, 0);
+});
+
+test('ambient input during the warning does not keep the session alive', () => {
+  const world = createWorld();
+  const a = world.tab();
+  a.start();
+
+  world.advance(14 * MIN + 10_000);
+  a.fire('pointermove');
+  world.advance(IDLE_WARNING_MS);
+  assert.deepEqual(a.events.signOuts, [{ reason: 'idle', origin: true }]);
+});
+
+test('"Stay signed in" in one tab closes the warning in every tab', () => {
+  const world = createWorld();
+  const a = world.tab();
+  const b = world.tab();
+  const sa = a.start();
+  b.start();
+
+  world.advance(14 * MIN + 10_000);
+  assert.equal(lastWarning(a)?.kind, 'idle');
+  assert.equal(lastWarning(b)?.kind, 'idle');
+  sa.markActive();
+  assert.equal(lastWarning(a), null);
+  assert.equal(lastWarning(b), null);
 });
 
 test('activity in another tab keeps every tab signed in', () => {
@@ -198,10 +237,10 @@ test('the 12-hour limit warns two minutes ahead, ignores activity, and signs out
   const session = a.start({ sessionExpiresAt: expiresAt });
 
   for (let i = 0; i < 2; i++) {
-    world.advance(14 * MIN);
+    world.advance(13 * MIN);
     a.fire('pointermove');
   }
-  world.advance(2 * MIN - EXPIRY_WARNING_MS);
+  world.advance(4 * MIN - EXPIRY_WARNING_MS); // 28 minutes in: two minutes before the hard limit
   assert.deepEqual(lastWarning(a), { kind: 'expiry', deadline: expiresAt });
 
   a.fire('pointermove');

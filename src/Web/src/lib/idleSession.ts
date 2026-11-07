@@ -56,7 +56,7 @@ export interface IdleSessionOptions {
 }
 
 export interface IdleSession {
-  /** Treat as activity (e.g. "Stay signed in"). */
+  /** Explicit "Stay signed in": the only local activity that closes an open idle warning. */
   markActive(): void;
   /** Record a completed session refresh, here or in another tab. */
   markRefreshed(at?: number): void;
@@ -133,10 +133,14 @@ export function startIdleSession(options: IdleSessionOptions, env: IdleSessionEn
     timer = env.setTimeout(evaluate, Math.min(wakeAt - now, 2 ** 31 - 1));
   };
 
-  const recordActivity = (at: number, local: boolean) => {
+  // `ambient`: mouse/keyboard/touch in this tab. `explicit`: "Stay signed in". `remote`: another tab's activity.
+  const recordActivity = (at: number, source: 'ambient' | 'explicit' | 'remote') => {
+    // Once "Are you still there?" is up, reaching for its buttons must not dismiss it: only an explicit answer
+    // (here or in another tab) keeps the session.
+    if (source === 'ambient' && warning?.kind === 'idle') return;
     if (at <= lastActivity) return;
     lastActivity = at;
-    if (local) {
+    if (source !== 'remote') {
       if (warning || at - lastBroadcast >= BROADCAST_THROTTLE_MS) {
         lastBroadcast = at;
         post({ type: 'active', at });
@@ -150,7 +154,7 @@ export function startIdleSession(options: IdleSessionOptions, env: IdleSessionEn
     if (warning?.kind === 'idle') evaluate();
   };
 
-  const onActivity = () => recordActivity(env.now(), true);
+  const onActivity = () => recordActivity(env.now(), 'ambient');
   const onVisibility = () => {
     if (env.document.visibilityState === 'visible') evaluate();
   };
@@ -159,7 +163,7 @@ export function startIdleSession(options: IdleSessionOptions, env: IdleSessionEn
     env.channel.onmessage = (event) => {
       const message = event.data as Message;
       if (!message || typeof message !== 'object') return;
-      if (message.type === 'active' && typeof message.at === 'number') recordActivity(message.at, false);
+      if (message.type === 'active' && typeof message.at === 'number') recordActivity(message.at, 'remote');
       else if (message.type === 'refreshed' && typeof message.at === 'number') refreshedAt = Math.max(refreshedAt, message.at);
       else if (message.type === 'signout' && (message.reason === 'idle' || message.reason === 'expired')) signOut(message.reason, false);
     };
@@ -183,7 +187,7 @@ export function startIdleSession(options: IdleSessionOptions, env: IdleSessionEn
   evaluate();
 
   return {
-    markActive: onActivity,
+    markActive: () => recordActivity(env.now(), 'explicit'),
     markRefreshed(at = env.now()) {
       refreshedAt = Math.max(refreshedAt, at);
       post({ type: 'refreshed', at });

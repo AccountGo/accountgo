@@ -329,10 +329,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // ignore network errors on logout
     } finally {
-      setAccessToken(null);
-      setUser(null);
+      clearSession();
     }
-  }, []);
+  }, [clearSession]);
 
   // Authenticated fetch wrapper with automatic Bearer injection and single-flight silent refresh on 401
   const authFetch = useCallback(
