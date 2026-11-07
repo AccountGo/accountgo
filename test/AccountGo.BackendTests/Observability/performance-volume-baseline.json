@@ -1,0 +1,110 @@
+{
+  "providerNotes": "SQLite and Postgres command counts matched on the baseline.",
+  "counts": {
+    "/api/auth/me": {
+      "1x": 8,
+      "5x": 8
+    },
+    "/api/organizations": {
+      "1x": 16,
+      "5x": 16
+    },
+    "/api/organizations/current": {
+      "1x": 16,
+      "5x": 16
+    },
+    "/api/entitlements": {
+      "1x": 11,
+      "5x": 11
+    },
+    "/api/security/capabilities": {
+      "1x": 5,
+      "5x": 5
+    },
+    "/api/security/policy": {
+      "1x": 5,
+      "5x": 5
+    },
+    "/api/linked-entries": {
+      "1x": 11,
+      "5x": 11
+    },
+    "/api/Dashboard/Summary": {
+      "1x": 87,
+      "5x": 119
+    },
+    "/api/Financials/Accounts": {
+      "1x": 39,
+      "5x": 39
+    },
+    "/api/Banking/Accounts": {
+      "1x": 23,
+      "5x": 23
+    },
+    "/api/Sales/SalesInvoices": {
+      "1x": 14,
+      "5x": 14
+    },
+    "/api/Sales/Customers": {
+      "1x": 22,
+      "5x": 54
+    },
+    "/api/Purchasing/Bills": {
+      "1x": 14,
+      "5x": 14
+    },
+    "/api/Purchasing/Vendors": {
+      "1x": 15,
+      "5x": 15
+    },
+    "/api/Financials/trialbalance": {
+      "1x": 24,
+      "5x": 24
+    },
+    "/api/Financials/BalanceSheet": {
+      "1x": 32,
+      "5x": 32
+    },
+    "/api/Financials/IncomeStatement": {
+      "1x": 21,
+      "5x": 21
+    },
+    "/api/Financials/GeneralLedger": {
+      "1x": 30,
+      "5x": 46
+    },
+    "/api/Financials/CashFlow": {
+      "1x": 38,
+      "5x": 38
+    },
+    "/api/organizations/current/accounting-policy": {
+      "1x": 7,
+      "5x": 7
+    },
+    "/api/organizations/current/operating-settings": {
+      "1x": 14,
+      "5x": 14
+    },
+    "/api/Tax/Taxes": {
+      "1x": 13,
+      "5x": 13
+    },
+    "/api/Common/PaymentTerms": {
+      "1x": 11,
+      "5x": 11
+    },
+    "/api/Administration/financialyears": {
+      "1x": 8,
+      "5x": 8
+    },
+    "/api/Banking/Reconciliations": {
+      "1x": 13,
+      "5x": 13
+    }
+  },
+  "knownGrowingEndpoints": [
+    "/api/Dashboard/Summary",
+    "/api/Sales/Customers",
+    "/api/Financials/GeneralLedger"
+  ]
+}

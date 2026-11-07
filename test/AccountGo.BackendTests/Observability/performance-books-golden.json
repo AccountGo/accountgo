@@ -1,0 +1,1194 @@
+{
+  "trialbalance": [
+    {
+      "accountCode": "10111",
+      "accountName": "Performance operating",
+      "debit": 1270.0,
+      "credit": 90.0
+    },
+    {
+      "accountCode": "10114",
+      "accountName": "Performance reserve",
+      "debit": 10.0,
+      "credit": 0.0
+    },
+    {
+      "accountCode": "10120",
+      "accountName": "Accounts Receivable",
+      "debit": 200.0,
+      "credit": 200.0
+    },
+    {
+      "accountCode": "20110",
+      "accountName": "Accounts Payable",
+      "debit": 80.0,
+      "credit": 80.0
+    },
+    {
+      "accountCode": "30700",
+      "accountName": "Opening Balance Equity",
+      "debit": 0.0,
+      "credit": 1000.0
+    },
+    {
+      "accountCode": "40100",
+      "accountName": "Sales A/C",
+      "debit": 0.0,
+      "credit": 270.0
+    },
+    {
+      "accountCode": "50200",
+      "accountName": "Purchase A/C",
+      "debit": 80.0,
+      "credit": 0.0
+    }
+  ],
+  "BalanceSheet": [
+    {
+      "accountClassId": 1,
+      "accountCode": "10000",
+      "accountName": "Assets",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10100",
+      "accountName": "Current Assets",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10110",
+      "accountName": "Cash in Hand and in Bank",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10111",
+      "accountName": "Performance operating",
+      "amount": 1180.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10112",
+      "accountName": "Savings Account",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10113",
+      "accountName": "Cash in Hand A/C",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10114",
+      "accountName": "Performance reserve",
+      "amount": 10.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10120",
+      "accountName": "Accounts Receivable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10121",
+      "accountName": "Allowance for Doubtful Accounts",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10130",
+      "accountName": "Other Receivables",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10140",
+      "accountName": "Prepaid Expenses",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10150",
+      "accountName": "Employee Advances",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10160",
+      "accountName": "Input Tax Receivable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10200",
+      "accountName": "Noncurrent Assets",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10300",
+      "accountName": "Fixed Assets",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10700",
+      "accountName": "Other Current Assets",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10800",
+      "accountName": "Inventory",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10810",
+      "accountName": "Goods Received Clearing Account",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "13301",
+      "accountName": "Furniture and Fixtures",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "13302",
+      "accountName": "Plants \u0026 Equipments",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "13303",
+      "accountName": "Vehicles",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "13304",
+      "accountName": "Buildings",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "13305",
+      "accountName": "Land",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "14000",
+      "accountName": "Accumulated Depreciations",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "14001",
+      "accountName": "Accumulated Depreciation-Furniture and Fixtures",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "14002",
+      "accountName": "Accumulated Depreciation-Equipment",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "14003",
+      "accountName": "Accumulated Depreciation-Vehicles",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "14004",
+      "accountName": "Accumulated Depreciations-Building",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "14005",
+      "accountName": "Accumulated Depreciation-Building Improvements",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "15000",
+      "accountName": "Other Assets",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20000",
+      "accountName": "Liabilities",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20100",
+      "accountName": "Current Liabilities",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20110",
+      "accountName": "Accounts Payable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20120",
+      "accountName": "Customer Advances",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20201",
+      "accountName": "Accrued Expenses",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20202",
+      "accountName": "Wages Payable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20203",
+      "accountName": "Deductions Payable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20204",
+      "accountName": "Health Insurance Payable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20300",
+      "accountName": "Sales Tax",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20301",
+      "accountName": "Local Payroll Taxes Payable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20302",
+      "accountName": "Income Taxes Payable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20303",
+      "accountName": "Other Taxes Payable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20304",
+      "accountName": "Advances-H.O. Dues",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20400",
+      "accountName": "Other Current Liabilities",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20500",
+      "accountName": "Non-current Liabilities",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20600",
+      "accountName": "Other Long-term Liabilities",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "",
+      "accountName": "Profit for the year",
+      "amount": 95.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "",
+      "accountName": "Retained earnings (opening)",
+      "amount": 95.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30000",
+      "accountName": "Equity",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30100",
+      "accountName": "Owner\u0027s Capital",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30200",
+      "accountName": "Capital Surplus",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30300",
+      "accountName": "Retained Earnings",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30400",
+      "accountName": "Accumulated Profits",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30500",
+      "accountName": "Accumulated Losses",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30600",
+      "accountName": "Other Reserves",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30700",
+      "accountName": "Opening Balance Equity",
+      "amount": 1000.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30800",
+      "accountName": "Owner\u0027s Drawings",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30810",
+      "accountName": "Dividends Declared",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 3,
+      "accountCode": "30820",
+      "accountName": "Prior period adjustments",
+      "amount": 0.0
+    }
+  ],
+  "IncomeStatement": [
+    {
+      "isExpense": false,
+      "accountCode": "40000",
+      "accountName": "Revenues",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "40100",
+      "accountName": "Sales A/C",
+      "amount": 270.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "40200",
+      "accountName": "Home Owners",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "40300",
+      "accountName": "Interest Income",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "40400",
+      "accountName": "Sales Discounts",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "40500",
+      "accountName": "Shipping and Handling",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "40600",
+      "accountName": "Other Income",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "41000",
+      "accountName": "Donations",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "41001",
+      "accountName": "General Purpose",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "41200",
+      "accountName": "Sunday School",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "41250",
+      "accountName": "Brothers In Christ",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50000",
+      "accountName": "Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50100",
+      "accountName": "General and Admin Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50101",
+      "accountName": "Salary Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50102",
+      "accountName": "Wages Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50103",
+      "accountName": "Employee Benefit Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50104",
+      "accountName": "Employee Benefit Expenses-Health Insurance",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50105",
+      "accountName": "Employee Benefit Expenses-Pension Plans",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50106",
+      "accountName": "Employee Benefit Expenses-Profit Sharing Plan",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50107",
+      "accountName": "Employee Benefit Expenses-Other",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50108",
+      "accountName": "Repair and Maintenance Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50109",
+      "accountName": "Repair and Maintenance Expenses-Office Equipment",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50110",
+      "accountName": "Repair and Maintenance Expenses-Vehicle",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50111",
+      "accountName": "Supplies Expenses-Office",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50112",
+      "accountName": "Telephone Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50113",
+      "accountName": "Postage Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50114",
+      "accountName": "Insurance Expenses-Vehicle",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50115",
+      "accountName": "Dues and Subscriptions Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50116",
+      "accountName": "Depreciation Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50117",
+      "accountName": "Meals and Entertainment Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50118",
+      "accountName": "Travel Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50119",
+      "accountName": "Utilities Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50120",
+      "accountName": "Legal and Professional Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50121",
+      "accountName": "Bank Charges",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50200",
+      "accountName": "Purchase A/C",
+      "amount": 80.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50300",
+      "accountName": "Cost of Goods Sold",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50310",
+      "accountName": "Inventory Adjustments",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50400",
+      "accountName": "Purchase Discounts",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50600",
+      "accountName": "Other Expenses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50700",
+      "accountName": "Purchase Tax",
+      "amount": 0.0
+    }
+  ],
+  "CashFlow": {
+    "fromDate": "2026-01-01T00:00:00",
+    "toDate": "2027-12-31T23:59:59",
+    "accountingBasis": 1,
+    "netIncome": 190.0,
+    "operatingCashFlow": 190.0,
+    "investingCashFlow": 0.0,
+    "financingCashFlow": 1000.0,
+    "netChangeInCash": 1190.0,
+    "startingCash": 0.0,
+    "endingCash": 1190.0,
+    "operatingActivities": [],
+    "investingActivities": [],
+    "financingActivities": [
+      {
+        "accountCode": "30700",
+        "accountName": "Opening Balance Equity",
+        "lineType": "Financing",
+        "amount": 1000.0
+      }
+    ],
+    "message": null,
+    "isBalanced": true
+  },
+  "GeneralLedger": {
+    "items": [
+      {
+        "date": "2026-02-01T00:00:00",
+        "documentType": "BankTransaction",
+        "documentTypeLabel": "Bank Transaction",
+        "description": "Money in",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 10.0,
+        "totalCredit": 10.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 10.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "40100",
+            "accountName": "Sales A/C",
+            "debit": 0.0,
+            "credit": 10.0
+          }
+        ]
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "documentType": "BankTransaction",
+        "documentTypeLabel": "Bank Transaction",
+        "description": "Opening balance",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 1000.0,
+        "totalCredit": 1000.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 1000.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "30700",
+            "accountName": "Opening Balance Equity",
+            "debit": 0.0,
+            "credit": 1000.0
+          }
+        ]
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "documentType": "BankTransaction",
+        "documentTypeLabel": "Bank Transaction",
+        "description": "Transfer to Performance reserve",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 5.0,
+        "totalCredit": 5.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 0.0,
+            "credit": 5.0
+          },
+          {
+            "accountCode": "10114",
+            "accountName": "Performance reserve",
+            "debit": 5.0,
+            "credit": 0.0
+          }
+        ]
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "documentType": "JournalEntry",
+        "documentTypeLabel": "Journal Entry",
+        "description": "Performance journal",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 25.0,
+        "totalCredit": 25.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 25.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "40100",
+            "accountName": "Sales A/C",
+            "debit": 0.0,
+            "credit": 25.0
+          }
+        ]
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "documentType": "PurchaseInvoice",
+        "documentTypeLabel": "Purchase Invoice",
+        "description": "Bill from Performance vendor",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 40.0,
+        "totalCredit": 40.0,
+        "lines": [
+          {
+            "accountCode": "20110",
+            "accountName": "Accounts Payable",
+            "debit": 0.0,
+            "credit": 40.0
+          },
+          {
+            "accountCode": "50200",
+            "accountName": "Purchase A/C",
+            "debit": 40.0,
+            "credit": 0.0
+          }
+        ]
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "documentType": "PurchaseInvoicePayment",
+        "documentTypeLabel": "Purchase Invoice Payment",
+        "description": "Payment to Performance vendor",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 40.0,
+        "totalCredit": 40.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 0.0,
+            "credit": 40.0
+          },
+          {
+            "accountCode": "20110",
+            "accountName": "Accounts Payable",
+            "debit": 40.0,
+            "credit": 0.0
+          }
+        ]
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "documentType": "SalesInvoice",
+        "documentTypeLabel": "Sales Invoice",
+        "description": "",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 100.0,
+        "totalCredit": 100.0,
+        "lines": [
+          {
+            "accountCode": "10120",
+            "accountName": "Accounts Receivable",
+            "debit": 100.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "40100",
+            "accountName": "Sales A/C",
+            "debit": 0.0,
+            "credit": 100.0
+          }
+        ]
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "documentType": "SalesReceipt",
+        "documentTypeLabel": "Sales Receipt",
+        "description": "",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 100.0,
+        "totalCredit": 100.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 100.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "10120",
+            "accountName": "Accounts Receivable",
+            "debit": 0.0,
+            "credit": 100.0
+          }
+        ]
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "documentType": "BankTransaction",
+        "documentTypeLabel": "Bank Transaction",
+        "description": "Money in",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 10.0,
+        "totalCredit": 10.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 10.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "40100",
+            "accountName": "Sales A/C",
+            "debit": 0.0,
+            "credit": 10.0
+          }
+        ]
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "documentType": "BankTransaction",
+        "documentTypeLabel": "Bank Transaction",
+        "description": "Transfer to Performance reserve",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 5.0,
+        "totalCredit": 5.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 0.0,
+            "credit": 5.0
+          },
+          {
+            "accountCode": "10114",
+            "accountName": "Performance reserve",
+            "debit": 5.0,
+            "credit": 0.0
+          }
+        ]
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "documentType": "JournalEntry",
+        "documentTypeLabel": "Journal Entry",
+        "description": "Performance journal",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 25.0,
+        "totalCredit": 25.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 25.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "40100",
+            "accountName": "Sales A/C",
+            "debit": 0.0,
+            "credit": 25.0
+          }
+        ]
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "documentType": "PurchaseInvoice",
+        "documentTypeLabel": "Purchase Invoice",
+        "description": "Bill from Performance vendor",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 40.0,
+        "totalCredit": 40.0,
+        "lines": [
+          {
+            "accountCode": "20110",
+            "accountName": "Accounts Payable",
+            "debit": 0.0,
+            "credit": 40.0
+          },
+          {
+            "accountCode": "50200",
+            "accountName": "Purchase A/C",
+            "debit": 40.0,
+            "credit": 0.0
+          }
+        ]
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "documentType": "PurchaseInvoicePayment",
+        "documentTypeLabel": "Purchase Invoice Payment",
+        "description": "Payment to Performance vendor",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 40.0,
+        "totalCredit": 40.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 0.0,
+            "credit": 40.0
+          },
+          {
+            "accountCode": "20110",
+            "accountName": "Accounts Payable",
+            "debit": 40.0,
+            "credit": 0.0
+          }
+        ]
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "documentType": "SalesInvoice",
+        "documentTypeLabel": "Sales Invoice",
+        "description": "",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 100.0,
+        "totalCredit": 100.0,
+        "lines": [
+          {
+            "accountCode": "10120",
+            "accountName": "Accounts Receivable",
+            "debit": 100.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "40100",
+            "accountName": "Sales A/C",
+            "debit": 0.0,
+            "credit": 100.0
+          }
+        ]
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "documentType": "SalesReceipt",
+        "documentTypeLabel": "Sales Receipt",
+        "description": "",
+        "reversedGeneralLedgerHeaderId": null,
+        "totalDebit": 100.0,
+        "totalCredit": 100.0,
+        "lines": [
+          {
+            "accountCode": "10111",
+            "accountName": "Performance operating",
+            "debit": 100.0,
+            "credit": 0.0
+          },
+          {
+            "accountCode": "10120",
+            "accountName": "Accounts Receivable",
+            "debit": 0.0,
+            "credit": 100.0
+          }
+        ]
+      }
+    ],
+    "totalCount": 15,
+    "skip": 0,
+    "take": 100
+  },
+  "dashboard": {
+    "outstandingReceivables": 0.0,
+    "totalPayables": 0.0,
+    "moneyInBank": 1190.0
+  },
+  "bankRegister": {
+    "broughtForward": 0.0,
+    "lines": [
+      {
+        "date": "2026-02-01T00:00:00",
+        "type": "Bill payment",
+        "payee": "Performance vendor",
+        "reference": "1",
+        "sourceDoc": {
+          "type": "PurchaseInvoice",
+          "no": "1"
+        },
+        "in": 0.0,
+        "out": 40.0,
+        "balance": 1060.0
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "type": "Journal",
+        "payee": null,
+        "reference": "Performance journal",
+        "sourceDoc": {
+          "type": "JournalEntry",
+          "no": null
+        },
+        "in": 25.0,
+        "out": 0.0,
+        "balance": 1090.0
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "type": "Money in",
+        "payee": null,
+        "reference": null,
+        "sourceDoc": {
+          "type": "BankTransaction",
+          "no": "1"
+        },
+        "in": 10.0,
+        "out": 0.0,
+        "balance": 1070.0
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "type": "Opening balance",
+        "payee": null,
+        "reference": null,
+        "sourceDoc": {
+          "type": "BankTransaction",
+          "no": null
+        },
+        "in": 1000.0,
+        "out": 0.0,
+        "balance": 1000.0
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "type": "Receipt",
+        "payee": "Performance client",
+        "reference": "1",
+        "sourceDoc": {
+          "type": "SalesReceipt",
+          "no": "1"
+        },
+        "in": 100.0,
+        "out": 0.0,
+        "balance": 1100.0
+      },
+      {
+        "date": "2026-02-01T00:00:00",
+        "type": "Transfer",
+        "payee": null,
+        "reference": null,
+        "sourceDoc": {
+          "type": "BankTransaction",
+          "no": "2"
+        },
+        "in": 0.0,
+        "out": 5.0,
+        "balance": 1065.0
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "type": "Bill payment",
+        "payee": "Performance vendor",
+        "reference": "2",
+        "sourceDoc": {
+          "type": "PurchaseInvoice",
+          "no": "2"
+        },
+        "in": 0.0,
+        "out": 40.0,
+        "balance": 1150.0
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "type": "Journal",
+        "payee": null,
+        "reference": "Performance journal",
+        "sourceDoc": {
+          "type": "JournalEntry",
+          "no": null
+        },
+        "in": 25.0,
+        "out": 0.0,
+        "balance": 1180.0
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "type": "Money in",
+        "payee": null,
+        "reference": null,
+        "sourceDoc": {
+          "type": "BankTransaction",
+          "no": "3"
+        },
+        "in": 10.0,
+        "out": 0.0,
+        "balance": 1160.0
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "type": "Receipt",
+        "payee": "Performance client",
+        "reference": "2",
+        "sourceDoc": {
+          "type": "SalesReceipt",
+          "no": "2"
+        },
+        "in": 100.0,
+        "out": 0.0,
+        "balance": 1190.0
+      },
+      {
+        "date": "2027-02-01T00:00:00",
+        "type": "Transfer",
+        "payee": null,
+        "reference": null,
+        "sourceDoc": {
+          "type": "BankTransaction",
+          "no": "4"
+        },
+        "in": 0.0,
+        "out": 5.0,
+        "balance": 1155.0
+      }
+    ],
+    "page": 1,
+    "pageSize": 100,
+    "totalCount": 11
+  },
+  "bankBalances": [
+    {
+      "name": "Performance operating",
+      "bookBalance": 1180.0
+    },
+    {
+      "name": "Performance reserve",
+      "bookBalance": 10.0
+    }
+  ],
+  "reconciliation": {
+    "beginningBalance": 0.0,
+    "endingBalance": 1090.0,
+    "clearedDeposits": 1135.0,
+    "clearedPayments": 45.0,
+    "clearedBalance": 1090.0,
+    "difference": 0.0
+  }
+}
