@@ -1160,8 +1160,8 @@ namespace Api.Controllers
                 code = ReconciledPeriodConfirmationRequiredException.ErrorCode,
                 message = ex.Message,
                 bankName = ex.BankName,
-                statementEndDate = ex.StatementEndDate.ToString("yyyy-MM-dd"),
-                postingDate = ex.PostingDate.ToString("yyyy-MM-dd")
+                statementEndDate = ex.StatementEndDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                postingDate = ex.PostingDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
             });
 
         private static IActionResult ReconciledConflict(ReconciledTransactionException ex) =>
@@ -1170,7 +1170,7 @@ namespace Api.Controllers
                 code = ReconciledTransactionException.ErrorCode,
                 message = ex.Message,
                 bankName = ex.BankName,
-                statementEndDate = ex.StatementEndDate.ToString("yyyy-MM-dd")
+                statementEndDate = ex.StatementEndDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
             });
 
         private void AuditStatementDecision(int id, string action)

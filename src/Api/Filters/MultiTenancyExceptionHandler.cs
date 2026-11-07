@@ -28,7 +28,7 @@ namespace Api.Filters
                 };
                 problem.Extensions["code"] = ReconciledTransactionException.ErrorCode;
                 problem.Extensions["bankName"] = reconciledEx.BankName;
-                problem.Extensions["statementEndDate"] = reconciledEx.StatementEndDate.ToString("yyyy-MM-dd");
+                problem.Extensions["statementEndDate"] = reconciledEx.StatementEndDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                 await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
                 return true;
             }
@@ -46,8 +46,8 @@ namespace Api.Filters
                 problem.Extensions["code"] = ReconciledPeriodConfirmationRequiredException.ErrorCode;
                 problem.Extensions["message"] = periodEx.Message;
                 problem.Extensions["bankName"] = periodEx.BankName;
-                problem.Extensions["statementEndDate"] = periodEx.StatementEndDate.ToString("yyyy-MM-dd");
-                problem.Extensions["postingDate"] = periodEx.PostingDate.ToString("yyyy-MM-dd");
+                problem.Extensions["statementEndDate"] = periodEx.StatementEndDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                problem.Extensions["postingDate"] = periodEx.PostingDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                 await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
                 return true;
             }
