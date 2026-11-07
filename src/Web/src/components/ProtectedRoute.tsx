@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export const ProtectedRoute: React.FC = () => {
-  const { isAuthenticated, isLoading, isStarting } = useAuth();
+  const { isAuthenticated, isLoading, isStarting, signedOutNotice } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -39,7 +39,7 @@ export const ProtectedRoute: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location, ...(signedOutNotice ? { notice: signedOutNotice } : {}) }} replace />;
   }
 
   return <Outlet />;
