@@ -564,4 +564,31 @@ public class BankStatementImportServiceTests
 
         Assert.Throws<TimeoutException>(() => service.Commit(bank.Id, Csv("2026-10-01,10.00,A,,\n"), "t"));
     }
+
+    [Fact]
+    public void Commit_And_Preview_Ofx_CarriesStatementClosingBalance()
+    {
+        using var harness = NewHarness(out var bank);
+        const string ofx =
+            "<OFX><STMTRS><CURDEF>USD</CURDEF>" +
+            "<BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261005</DTPOSTED>" +
+            "<TRNAMT>-25.00</TRNAMT><FITID>OFX1</FITID><NAME>Store</NAME></STMTTRN></BANKTRANLIST>" +
+            "<LEDGERBAL><BALAMT>4500.00</BALAMT><DTASOF>20261005120000</DTASOF></LEDGERBAL>" +
+            "</STMTRS></OFX>";
+
+        var req = new BankStatementImportRequest
+        {
+            Source = (int)BankStatementSources.Ofx,
+            FileName = "bank.ofx",
+            Content = ofx
+        };
+
+        var preview = harness.Statements.Preview(bank.Id, req);
+        Assert.Equal(4500.00m, preview.StatementClosingBalance);
+        Assert.Equal(new DateTime(2026, 10, 5), preview.StatementClosingBalanceDate);
+
+        var commit = harness.Statements.Commit(bank.Id, req, "tester");
+        Assert.Equal(4500.00m, commit.StatementClosingBalance);
+        Assert.Equal(new DateTime(2026, 10, 5), commit.StatementClosingBalanceDate);
+    }
 }

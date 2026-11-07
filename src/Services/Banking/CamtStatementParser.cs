@@ -15,7 +15,10 @@ namespace Services.Banking
     /// <summary>ISO 20022 CAMT.053 bank-to-customer statement XML reader (#447 Phase C).</summary>
     public static class CamtStatementParser
     {
-        public static IReadOnlyList<ParsedStatementRow> Parse(string content, string? accountCurrencyCode = null)
+        public static IReadOnlyList<ParsedStatementRow> Parse(string content, string? accountCurrencyCode = null) =>
+            ParseFile(content, accountCurrencyCode).Rows;
+
+        public static ParsedStatementFile ParseFile(string content, string? accountCurrencyCode = null)
         {
             content = content.TrimStart('\uFEFF');
             if (string.IsNullOrWhiteSpace(content))
@@ -126,7 +129,66 @@ namespace Services.Banking
                 rows.Add(row);
             }
 
-            return rows;
+            decimal? closingBalance = null;
+            DateTime? closingBalanceDate = null;
+            string? balanceCurrency = null;
+
+            var balElements = doc.Descendants().Where(e => e.Name.LocalName == "Bal").ToList();
+            var clbd = balElements.FirstOrDefault(b =>
+                b.Descendants().Any(e => e.Name.LocalName == "Cd" && string.Equals(e.Value.Trim(), "CLBD", StringComparison.OrdinalIgnoreCase)))
+                ?? balElements.FirstOrDefault(b =>
+                b.Descendants().Any(e => e.Name.LocalName == "Cd" && string.Equals(e.Value.Trim(), "CLAV", StringComparison.OrdinalIgnoreCase)));
+
+            if (clbd != null)
+            {
+                var amtEl = clbd.Elements().FirstOrDefault(e => e.Name.LocalName == "Amt")
+                    ?? clbd.Descendants().FirstOrDefault(e => e.Name.LocalName == "Amt");
+                if (amtEl != null)
+                {
+                    balanceCurrency = amtEl.Attribute("Ccy")?.Value;
+                    bool currencyOk = true;
+                    if (!string.IsNullOrWhiteSpace(balanceCurrency) && accountCurrency != null)
+                    {
+                        currencyOk = string.Equals(balanceCurrency.Trim(), accountCurrency, StringComparison.OrdinalIgnoreCase);
+                    }
+                    if (currencyOk)
+                    {
+                        try
+                        {
+                            var balAmount = BankStatementParser.ParseAmount(amtEl.Value, "Balance");
+                            var cdtDbt = clbd.Elements().FirstOrDefault(e => e.Name.LocalName == "CdtDbtInd")?.Value
+                                ?? clbd.Descendants().FirstOrDefault(e => e.Name.LocalName == "CdtDbtInd")?.Value;
+                            var isDebit = string.Equals(cdtDbt, "DBIT", StringComparison.OrdinalIgnoreCase);
+                            if (isDebit)
+                                balAmount = -Math.Abs(balAmount);
+                            else
+                                balAmount = Math.Abs(balAmount);
+                            closingBalance = Math.Round(balAmount, 2, MidpointRounding.AwayFromZero);
+
+                            var dtEl = clbd.Descendants().FirstOrDefault(e => e.Name.LocalName == "Dt" || e.Name.LocalName == "DtTm");
+                            if (dtEl != null && !string.IsNullOrWhiteSpace(dtEl.Value))
+                            {
+                                var dateStr = dtEl.Value.Trim();
+                                if (DateTimeOffset.TryParse(dateStr, CultureInfo.InvariantCulture,
+                                        DateTimeStyles.RoundtripKind | DateTimeStyles.AllowWhiteSpaces, out var dto))
+                                    closingBalanceDate = DateTime.SpecifyKind(dto.DateTime.Date, DateTimeKind.Utc);
+                                else if (DateTime.TryParseExact(dateStr[..Math.Min(10, dateStr.Length)], "yyyy-MM-dd",
+                                             CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+                                    closingBalanceDate = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
+                            }
+                        }
+                        catch (FormatException) { }
+                    }
+                }
+            }
+
+            return new ParsedStatementFile
+            {
+                Rows = rows,
+                ClosingBalance = closingBalance,
+                ClosingBalanceDate = closingBalanceDate,
+                CurrencyCode = balanceCurrency
+            };
         }
 
         private static string SyntheticId(ParsedStatementRow row, Dictionary<string, int> occurrences)

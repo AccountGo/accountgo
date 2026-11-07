@@ -386,6 +386,8 @@ export interface BankStatementPreview {
   mappingSource?: string | null;
   headerSignature?: string | null;
   presetName?: string | null;
+  statementClosingBalance?: number | null;
+  statementClosingBalanceDate?: string | null;
   rows: BankStatementPreviewRow[];
 }
 
@@ -406,6 +408,8 @@ export interface BankStatementCommitResult {
   skippedRowDetails: BankStatementPreviewRow[];
   /** Imported lines dated before the books start date; they can only be excluded. */
   beforeBooksStart?: number;
+  statementClosingBalance?: number | null;
+  statementClosingBalanceDate?: string | null;
 }
 
 export interface BankStatementMatchCandidate {

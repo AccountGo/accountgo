@@ -62,8 +62,8 @@ public class StatementIncomeRecorderTests
 
         SalesInvoiceHeader? savedInvoice = null;
         var sales = new Mock<ISalesService>(MockBehavior.Strict);
-        sales.Setup(s => s.SaveSalesInvoice(It.IsAny<SalesInvoiceHeader>(), It.IsAny<SalesOrderHeader>()))
-            .Callback<SalesInvoiceHeader, SalesOrderHeader>((inv, _) =>
+        sales.Setup(s => s.SaveSalesInvoice(It.IsAny<SalesInvoiceHeader>(), It.IsAny<SalesOrderHeader>(), It.IsAny<bool>()))
+            .Callback<SalesInvoiceHeader, SalesOrderHeader, bool>((inv, _, _) =>
             {
                 savedInvoice = inv;
                 inv.Id = 33;
@@ -143,7 +143,131 @@ public class StatementIncomeRecorderTests
 
 
     [Fact]
-    public void Record_rejects_non_null_TaxId()
+    public void Record_supports_tax_with_inclusive_split_and_preserves_tax_amounts()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        SeedRevenue(harness);
+        var bank = harness.CreateBank("Checking");
+        // 110 deposit with 10% tax -> Net 100, Tax 10
+        var line = SeedDeposit(harness, bank.Id, 110m, "Client Project", BankingTestHarness.Utc(2026, 9, 2));
+
+        var tax = new Core.Domain.TaxSystem.Tax
+        {
+            Id = 15,
+            CompanyId = 1,
+            TaxName = "VAT 10%",
+            Rate = 10m,
+            IsActive = true,
+            SalesAccountId = 88
+        };
+        harness.Repos.Accounts.Insert(new Account
+        {
+            Id = 88,
+            CompanyId = 1,
+            AccountCode = "20200",
+            AccountName = "Sales Tax Payable",
+            AccountClassId = (int)AccountClasses.Liabilities,
+            DrOrCrSide = DrOrCrSide.Cr
+        });
+        harness.Repos.Accounts.Insert(new Account
+        {
+            Id = 91,
+            CompanyId = 1,
+            AccountCode = "10120",
+            AccountName = "AR",
+            AccountClassId = (int)AccountClasses.Assets,
+            DrOrCrSide = DrOrCrSide.Dr
+        });
+        var customer = new Customer
+        {
+            Id = 8,
+            CompanyId = 1,
+            IsSystem = true,
+            AccountsReceivableAccountId = 91,
+            Party = new Party { Name = StatementIncomeRecorder.OtherIncomeCustomerName }
+        };
+        harness.Repos.Customers.Insert(customer);
+
+        var item = new Item
+        {
+            Id = 5,
+            CompanyId = 1,
+            Description = StatementIncomeRecorder.GeneralItemName,
+            SellMeasurementId = 1,
+            SmallestMeasurementId = 1,
+            SalesAccountId = harness.RequireAccount("40600").Id
+        };
+
+        SalesInvoiceHeader? savedInvoice = null;
+        bool? savedPreserveTaxAmounts = null;
+        var sales = new Mock<ISalesService>(MockBehavior.Strict);
+        sales.Setup(s => s.SaveSalesInvoice(It.IsAny<SalesInvoiceHeader>(), It.IsAny<SalesOrderHeader>(), It.IsAny<bool>()))
+            .Callback<SalesInvoiceHeader, SalesOrderHeader, bool>((inv, _, preserve) =>
+            {
+                savedInvoice = inv;
+                savedPreserveTaxAmounts = preserve;
+                inv.Id = 77;
+                inv.No = "INV-77";
+                inv.CompanyId = 1;
+                harness.Repos.SalesInvoices.Insert(inv);
+            });
+        sales.Setup(s => s.PostSalesInvoice(77));
+        sales.Setup(s => s.GetSalesInvoiceById(77)).Returns(() =>
+        {
+            savedInvoice!.Customer = customer;
+            savedInvoice.GeneralLedgerHeaderId = 1;
+            return savedInvoice;
+        });
+        sales.Setup(s => s.AddSalesReceipt(It.IsAny<SalesReceiptHeader>()))
+            .Callback<SalesReceiptHeader>(r =>
+            {
+                r.Id = 99;
+                r.No = "R-99";
+                var headerId = harness.Repos.NextGlHeaderId();
+                r.GeneralLedgerHeaderId = headerId;
+                harness.Repos.GlLines.Insert(new GeneralLedgerLine
+                {
+                    Id = harness.Repos.NextGlLineId(),
+                    CompanyId = 1,
+                    GeneralLedgerHeaderId = headerId,
+                    AccountId = bank.AccountId!.Value,
+                    DrCr = DrOrCrSide.Dr,
+                    Amount = 110m
+                });
+                harness.Repos.Receipts.Insert(r);
+            });
+        sales.Setup(s => s.UpdateSalesInvoice(It.IsAny<SalesInvoiceHeader>()));
+        sales.Setup(s => s.AddCustomer(It.IsAny<Customer>()));
+
+        var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
+        inventory.Setup(i => i.GetActiveItemByDescription(StatementIncomeRecorder.GeneralItemName)).Returns(item);
+
+        var financial = new Mock<IFinancialService>(MockBehavior.Loose);
+        financial.Setup(f => f.GetAccounts()).Returns(harness.Repos.Accounts.Table.ToList());
+        financial.Setup(f => f.GetTaxes()).Returns(new[] { tax });
+
+        harness.Entitlements.Setup(e => e.Bypass()).Returns(Mock.Of<IDisposable>());
+
+        var recorder = Build(harness, sales, inventory, financial);
+
+        var result = recorder.Record(line.Id, new RecordOtherIncomeFromStatementLineRequest
+        {
+            IncomeAccountId = harness.RequireAccount("40600").Id,
+            TaxId = 15
+        }, "tester");
+
+        Assert.NotNull(savedInvoice);
+        Assert.True(savedPreserveTaxAmounts);
+        var invLine = Assert.Single(savedInvoice!.SalesInvoiceLines);
+        Assert.Equal(100m, invLine.Amount);
+        Assert.Equal(15, invLine.TaxId);
+        Assert.Equal(10m, invLine.TaxAmount);
+        Assert.True(result.Line.IsMatched);
+    }
+
+    [Fact]
+    public void Record_rejects_inactive_or_invalid_tax()
     {
         using var harness = new BankingTestHarness();
         harness.SeedCashTree();
@@ -153,11 +277,32 @@ public class StatementIncomeRecorderTests
         var sales = new Mock<ISalesService>(MockBehavior.Strict);
         var inventory = new Mock<IInventoryService>(MockBehavior.Strict);
         var financial = new Mock<IFinancialService>(MockBehavior.Loose);
+
+        var inactiveTax = new Core.Domain.TaxSystem.Tax { Id = 20, TaxName = "Old", Rate = 5m, IsActive = false, SalesAccountId = 88 };
+        var noAccountTax = new Core.Domain.TaxSystem.Tax { Id = 21, TaxName = "NoAcc", Rate = 5m, IsActive = true, SalesAccountId = null };
+        financial.Setup(f => f.GetTaxes()).Returns(new[] { inactiveTax, noAccountTax });
+
         var recorder = Build(harness, sales, inventory, financial);
+
+        // Unknown tax
+        Assert.Throws<Core.Tenancy.TenantEntityNotFoundException>(() => recorder.Record(line.Id, new RecordOtherIncomeFromStatementLineRequest
+        {
+            IncomeAccountId = harness.RequireAccount("40600").Id,
+            TaxId = 999
+        }, "t"));
+
+        // Inactive tax
         Assert.Throws<InvalidOperationException>(() => recorder.Record(line.Id, new RecordOtherIncomeFromStatementLineRequest
         {
             IncomeAccountId = harness.RequireAccount("40600").Id,
-            TaxId = 1
+            TaxId = 20
+        }, "t"));
+
+        // Tax without sales account
+        Assert.Throws<InvalidOperationException>(() => recorder.Record(line.Id, new RecordOtherIncomeFromStatementLineRequest
+        {
+            IncomeAccountId = harness.RequireAccount("40600").Id,
+            TaxId = 21
         }, "t"));
     }
 
@@ -189,8 +334,8 @@ public class StatementIncomeRecorderTests
 
         SalesInvoiceHeader? saved = null;
         var sales = new Mock<ISalesService>(MockBehavior.Strict);
-        sales.Setup(s => s.SaveSalesInvoice(It.IsAny<SalesInvoiceHeader>(), It.IsAny<SalesOrderHeader>()))
-            .Callback<SalesInvoiceHeader, SalesOrderHeader>((inv, _) =>
+        sales.Setup(s => s.SaveSalesInvoice(It.IsAny<SalesInvoiceHeader>(), It.IsAny<SalesOrderHeader>(), It.IsAny<bool>()))
+            .Callback<SalesInvoiceHeader, SalesOrderHeader, bool>((inv, _, _) =>
             {
                 saved = inv; inv.Id = 50; inv.No = "INV-50"; inv.CompanyId = 1;
                 harness.Repos.SalesInvoices.Insert(inv);

@@ -115,13 +115,21 @@ namespace Services.Banking
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
 
-            if (request.TaxId is > 0)
-                throw new InvalidOperationException("Tax is not supported on Record other income yet.");
-
             var line = RequireUnmatchedDepositLine(lineId);
             var bank = RequireActiveBank(line.BankId);
             var amount = Math.Abs(line.Amount);
             _lineAccounts.EnsureIncomeLineAccount(request.IncomeAccountId);
+
+            var taxId = request.TaxId is > 0 ? request.TaxId : null;
+            var lineAmount = amount;
+            var lineTaxAmount = 0m;
+            var preserveTaxAmounts = false;
+            if (taxId.HasValue)
+            {
+                var tax = RequireActiveTax(taxId.Value);
+                (lineAmount, lineTaxAmount) = Core.Domain.Purchases.PurchaseInvoiceLine.SplitInclusive(amount, tax.Rate);
+                preserveTaxAmounts = true;
+            }
 
             var customer = ResolveCustomer(request.CustomerId);
             var item = StatementGeneralItem.Resolve(_inventory, _financial);
@@ -143,7 +151,7 @@ namespace Services.Banking
                 ItemId = item.Id,
                 MeasurementId = measurementId,
                 Quantity = 1m,
-                Amount = amount
+                Amount = lineAmount
             };
             salesOrder.SalesOrderLines.Add(orderLine);
 
@@ -152,7 +160,9 @@ namespace Services.Banking
                 ItemId = item.Id,
                 MeasurementId = measurementId,
                 Quantity = 1m,
-                Amount = amount,
+                Amount = lineAmount,
+                TaxId = taxId,
+                TaxAmount = lineTaxAmount,
                 Description = description,
                 SalesAccountId = request.IncomeAccountId,
                 SalesOrderLine = orderLine
@@ -172,7 +182,7 @@ namespace Services.Banking
             // Statement other income does not consume the SalesDocuments quota (#436 decision 4).
             using (_entitlements.Bypass())
             {
-                _sales.SaveSalesInvoice(invoice, salesOrder);
+                _sales.SaveSalesInvoice(invoice, salesOrder, preserveTaxAmounts);
                 _sales.PostSalesInvoice(invoice.Id);
             }
 
@@ -312,6 +322,17 @@ namespace Services.Banking
             if (!bank.AccountId.HasValue)
                 throw new InvalidOperationException("That bank account has no posting account.");
             return bank;
+        }
+
+        private Core.Domain.TaxSystem.Tax RequireActiveTax(int taxId)
+        {
+            var tax = _financial.GetTaxes().FirstOrDefault(t => t.Id == taxId)
+                ?? throw new TenantEntityNotFoundException(typeof(Core.Domain.TaxSystem.Tax).Name, taxId);
+            if (!tax.IsActive)
+                throw new InvalidOperationException("That tax rate is inactive.");
+            if (!tax.SalesAccountId.HasValue)
+                throw new InvalidOperationException($"Tax {tax.TaxName} has no sales tax account.");
+            return tax;
         }
 
         private void EnsureCompany()

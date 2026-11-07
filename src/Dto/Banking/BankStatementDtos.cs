@@ -128,6 +128,10 @@ namespace Dto.Banking
         public string? MappingSource { get; set; }
         public string? HeaderSignature { get; set; }
         public string? PresetName { get; set; }
+        /// <summary>Closing balance if provided by statement (OFX, CAMT, MT940).</summary>
+        public decimal? StatementClosingBalance { get; set; }
+        /// <summary>As-of date of the closing balance if provided.</summary>
+        public DateTime? StatementClosingBalanceDate { get; set; }
         /// <summary>First rows for display; counts above cover the whole file.</summary>
         public IReadOnlyList<BankStatementPreviewRowDto> Rows { get; set; } = Array.Empty<BankStatementPreviewRowDto>();
     }
@@ -155,6 +159,10 @@ namespace Dto.Banking
         public int AutoMatched { get; set; }
         /// <summary>Imported lines dated before the books start date: nothing can be posted for them.</summary>
         public int BeforeBooksStart { get; set; }
+        /// <summary>Closing balance if provided by statement (OFX, CAMT, MT940).</summary>
+        public decimal? StatementClosingBalance { get; set; }
+        /// <summary>As-of date of the closing balance if provided.</summary>
+        public DateTime? StatementClosingBalanceDate { get; set; }
     }
 
     public class BankStatementMatchCandidateDto

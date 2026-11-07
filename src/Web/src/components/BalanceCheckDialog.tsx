@@ -15,11 +15,13 @@ export const BalanceCheckDialog: React.FC<{
   bank: BankAccount;
   formatCurrency: (n: number) => string;
   onClose: () => void;
-}> = ({ bank, formatCurrency, onClose }) => {
+  initialBalance?: number | string | null;
+  initialAsOfDate?: string | null;
+}> = ({ bank, formatCurrency, onClose, initialBalance, initialAsOfDate }) => {
   const titleId = useId();
   const { authFetch } = useAuth();
-  const [balance, setBalance] = useState('');
-  const [asOfDate, setAsOfDate] = useState(localToday());
+  const [balance, setBalance] = useState(() => (initialBalance != null ? String(initialBalance) : ''));
+  const [asOfDate, setAsOfDate] = useState(() => (initialAsOfDate ? String(initialAsOfDate).slice(0, 10) : localToday()));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BankBalanceCheck | null>(null);

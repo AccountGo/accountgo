@@ -148,3 +148,18 @@ test('decodeStatementBytes strips UTF-8 BOM and reads UTF-16 LE', () => {
   const utf16 = new Uint8Array([0xff, 0xfe, 0x41, 0x00, 0xf1, 0x00]);
   assert.equal(decodeStatementBytes(utf16), 'Añ');
 });
+
+test('commit and preview result preserves statementClosingBalance and statementClosingBalanceDate', () => {
+  const commitResult = {
+    importId: 42,
+    bankId: 7,
+    imported: 15,
+    duplicates: 0,
+    errors: 0,
+    autoMatched: 3,
+    statementClosingBalance: 5432.10,
+    statementClosingBalanceDate: '2026-07-31T00:00:00Z',
+  };
+  assert.equal(commitResult.statementClosingBalance, 5432.10);
+  assert.equal(commitResult.statementClosingBalanceDate, '2026-07-31T00:00:00Z');
+});
