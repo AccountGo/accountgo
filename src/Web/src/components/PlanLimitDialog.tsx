@@ -130,7 +130,7 @@ const UpgradeOptions: React.FC<{ problem: EntitlementProblem }> = ({ problem }) 
       </div>
       {options.map(plan => <div key={plan.key} className="rounded-xl bg-[var(--bg-subtle)] p-3 flex items-center justify-between gap-3">
         <div><p className="text-sm font-bold text-[var(--text-main)]">{plan.name}</p><p className="text-xs text-[var(--text-secondary)]">{plan.description}</p><p className="text-xs font-semibold text-[var(--text-main)]">{planPriceLabel(plan.monthlyPrice, interval, plan.annualPrice) ?? 'Price shown at checkout'}</p></div>
-        <button type="button" disabled={busy} onClick={() => void selectPlan(plan.key)} className="shrink-0 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Continue</button>
+        <button type="button" disabled={busy} onClick={() => void selectPlan(plan.key)} className="shrink-0 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Upgrade</button>
       </div>)}
     </>}
     {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
@@ -188,7 +188,8 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
       </div>
       {children}
       <div className="flex justify-end gap-2">
-        {!personal && (cta.href ? (
+        {/* Inline plan cards already offer Upgrade; skip the redundant "Upgrade plan" footer CTA. */}
+        {!personal && cta.label !== 'Upgrade plan' && (cta.href ? (
           <a
             href={cta.href}
             className={
@@ -209,12 +210,12 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
           ref={closeRef}
           onClick={onClose}
           className={
-            cta.primary && cta.href
+            cta.primary && cta.href && cta.label !== 'Upgrade plan'
               ? 'h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
               : 'h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)]'
           }
         >
-          OK
+          Continue in this plan
         </button>
       </div>
     </ModalShell>
