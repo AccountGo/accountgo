@@ -79,7 +79,7 @@ export const RecordHistoryPanel: React.FC<RecordHistoryPanelProps> = ({ entityTy
     setLoading(true);
     setError(null);
     try {
-      const response = await authFetch(recordHistoryUrl(entityType, entityId, cursor));
+      const response = await authFetch(recordHistoryUrl(entityType, entityId, cursor), undefined, true);
       const body = await response.json().catch(() => null);
       if (requestId !== requestRef.current) return;
       if (!response.ok) {

@@ -167,7 +167,7 @@ const BankStatementImportPage: React.FC = () => {
         pageSize: String(LIST_PAGE_SIZE),
       });
       if (focusedLineId) q.set('lineId', String(focusedLineId));
-      const res = await authFetch(`/api/Banking/Accounts/${id}/StatementLines?${q}`);
+      const res = await authFetch(`/api/Banking/Accounts/${id}/StatementLines?${q}`, undefined, true);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || 'Could not load statement lines.');
@@ -202,7 +202,7 @@ const BankStatementImportPage: React.FC = () => {
       setList(null);
       setPage(1);
       try {
-        const accRes = await authFetch(`/api/Banking/Accounts/${id}`);
+        const accRes = await authFetch(`/api/Banking/Accounts/${id}`, undefined, true);
         if (!accRes.ok) throw new Error('Bank account not found.');
         const next = (await accRes.json()) as BankAccount;
         if (!cancelled) setAccount(next);

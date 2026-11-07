@@ -1,4 +1,4 @@
-type AuthFetch = (url: string, init?: RequestInit) => Promise<Response>;
+type AuthFetch = (url: string, init?: RequestInit, planDialog?: boolean) => Promise<Response>;
 
 let authFetchImpl: AuthFetch | null = null;
 

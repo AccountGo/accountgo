@@ -116,6 +116,10 @@ export interface SecurityCapabilities {
   methods: string[];
 }
 
+export interface AuthFetchInit extends RequestInit {
+  planDialog?: boolean;
+}
+
 export interface AuthContextType {
   user: UserDto | null;
   accessToken: string | null;
@@ -131,7 +135,7 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   /** Drops the in-memory session. Use after the server has already revoked it. */
   clearSession: () => void;
-  authFetch: (url: string, init?: RequestInit) => Promise<Response>;
+  authFetch: (url: string, init?: RequestInit | AuthFetchInit, planDialog?: boolean) => Promise<Response>;
   refreshUser: () => Promise<void>;
   /** Mints a fresh session token from the refresh cookie, picking up newly granted workspace access. */
   refreshSession: () => Promise<string | null>;
