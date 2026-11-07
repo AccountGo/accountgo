@@ -139,7 +139,7 @@ namespace Api.Authorization
             var userId = actorOverride?.UserId ?? (string.IsNullOrWhiteSpace(_tenantContext.UserId) ? claimUserId : _tenantContext.UserId);
             var companyId = actorOverride?.CompanyId ?? _tenantContext.CompanyId;
             AccessActorContext actor;
-            if (_cachedActor != null && _cachedTenantRevision == revision && _cachedGlobalRevision == globalRevision &&
+            if (_db != null && _cachedActor != null && _cachedTenantRevision == revision && _cachedGlobalRevision == globalRevision &&
                 _cachedCompanyId == companyId && string.Equals(_cachedUserId, userId, StringComparison.Ordinal))
                 actor = _cachedActor;
             else
