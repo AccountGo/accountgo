@@ -74,6 +74,8 @@ namespace AccountGo.BackendTests
                 builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
+                builder.UseSetting("Anter:ApiKey", TestAnterApiKey);
+                builder.UseSetting("ANTER_API_KEY", TestAnterApiKey);
                 builder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<IEmailSender>();

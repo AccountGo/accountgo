@@ -300,7 +300,13 @@ public static class AccountGoApp
             {
                 options.Stateless = true;
             })
-            .WithTools<Api.Mcp.Tools.FinancialMcpTools>();
+            .WithTools<Api.Mcp.Tools.FinancialMcpTools>()
+            .WithTools<Api.Mcp.Tools.WorkspaceMcpTools>()
+            .WithTools<Api.Mcp.Tools.SalesMcpTools>()
+            .WithTools<Api.Mcp.Tools.PurchasingMcpTools>()
+            .WithTools<Api.Mcp.Tools.BankingMcpTools>();
+        // Assistant data tools read through the same GET actions and filters as the pages.
+        builder.Services.AddScoped<Api.Mcp.McpControllerReader>();
 
         // AccountGo Assistant → Anter external agent-runner (API key stays server-side)
         builder.Services.Configure<Api.Options.AnterOptions>(builder.Configuration.GetSection(Api.Options.AnterOptions.SectionName));
