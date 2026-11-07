@@ -80,6 +80,23 @@ public class BankAccountServiceTests
     }
 
     [Fact]
+    public void Create_FirstBank_LeavesMultipleCashHistoriesUnassignedWhenConfirmed()
+    {
+        using var harness = new Harness();
+        harness.SeedCashTree();
+        harness.PostDebit(harness.RequireAccount("10111").Id, 100m);
+        harness.PostDebit(harness.RequireAccount("10113").Id, 50m);
+        var request = System.Text.Json.JsonSerializer.Deserialize<CreateBankAccountRequest>(
+            "{\"Name\":\"New bank\",\"Type\":1,\"LeaveCashHistoryUnassigned\":true}")!;
+        var bank = harness.Service.Create(request, includeFullNumbers: false);
+        Assert.NotEqual(harness.RequireAccount("10111").Id, bank.AccountId);
+        Assert.NotEqual(harness.RequireAccount("10113").Id, bank.AccountId);
+        var unassigned = harness.Service.GetCashHistory(includeCodes: true);
+        Assert.Equal(150m, unassigned.Sum(x => x.Balance));
+        Assert.Equal(2, unassigned.Count);
+    }
+
+    [Fact]
     public void Create_SecondBank_AllocatesPreferredCode()
     {
         using var harness = new Harness();

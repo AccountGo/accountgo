@@ -15,9 +15,10 @@ export const BankAccountFormDialog: React.FC<{
   hasFinancials: boolean;
   /** Pre-selected adopt when taking over a single cash-history group. */
   defaultAdoptAccountId?: number | null;
+  leaveCashHistoryUnassigned?: boolean;
   onSaved: (account: BankAccount, created: boolean) => void;
   onClose: () => void;
-}> = ({ account, hasFinancials, defaultAdoptAccountId = null, onSaved, onClose }) => {
+}> = ({ account, hasFinancials, defaultAdoptAccountId = null, leaveCashHistoryUnassigned = false, onSaved, onClose }) => {
   const { authFetch } = useAuth();
   const titleId = useId();
   const editing = !!account;
@@ -128,6 +129,7 @@ export const BankAccountFormDialog: React.FC<{
         isDefaultForPayments,
         openingBalance,
         openingBalanceDate,
+        leaveCashHistoryUnassigned,
         adoptAccountId:
           postingMode === 'adopt'
             ? defaultAdoptAccountId

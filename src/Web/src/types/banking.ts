@@ -66,6 +66,7 @@ export interface CreateBankAccountPayload {
   adoptAccountId?: number | null;
   postingAccountId?: number | null;
   currencyCode?: string | null;
+  leaveCashHistoryUnassigned?: boolean;
 }
 
 export interface UpdateBankAccountPayload {
