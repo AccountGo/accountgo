@@ -161,7 +161,7 @@ namespace Services.Financial
             return BuildPreview(RequireYear(fiscalYearCode));
         }
 
-        public YearEndPreview Reopen(string fiscalYearCode, string reason, string reopenedBy)
+        public YearEndPreview Reopen(string fiscalYearCode, string reason, string reopenedBy, bool acknowledgeIndependentLock = false, DateTime? expectedLockThrough = null)
         {
             if (string.IsNullOrWhiteSpace(reason))
                 throw new YearEndCloseException("A reason is required to reopen a closed year.");
@@ -176,6 +176,12 @@ namespace Services.Financial
                 .FirstOrDefault();
             if (latestClosed == null || latestClosed.Id != year.Id)
                 throw new YearEndCloseException("Only the latest closed fiscal year can be reopened.");
+
+            var setting = _settings.Table.FirstOrDefault()
+                ?? throw new InvalidOperationException("Company settings were not found.");
+            var (currentLock, nextLock, independentLock) = ReopenLockImpact(year, setting);
+            if (independentLock && (!acknowledgeIndependentLock || expectedLockThrough?.Date != currentLock))
+                throw new YearEndCloseException("Acknowledge the independent lock change and confirm the current lock date before reopening.");
 
             var actor = string.IsNullOrWhiteSpace(reopenedBy) ? "system" : reopenedBy.Trim();
 
@@ -219,14 +225,7 @@ namespace Services.Financial
             year.ClosingGeneralLedgerHeaderId = null;
             _fiscalYears.Update(year);
 
-            var setting = _settings.Table.FirstOrDefault()
-                ?? throw new InvalidOperationException("Company settings were not found.");
-            var previousLock = setting.BooksLockedThrough?.Date;
-            var dayBeforeStart = year.StartDate.Date.AddDays(-1);
-            DateTime? nextLock = null;
-            if (dayBeforeStart >= setting.BooksStartDate.Date)
-                nextLock = dayBeforeStart;
-
+            var previousLock = currentLock;
             setting.BooksLockedThrough = nextLock;
             _settings.Update(setting);
             _lockChanges.Insert(new BooksLockChange
@@ -240,6 +239,26 @@ namespace Services.Financial
             });
 
             return BuildPreview(RequireYear(fiscalYearCode));
+        }
+
+        private (DateTime? Current, DateTime? Proposed, bool RequiresAcknowledgement) ReopenLockImpact(FinancialYear year, CompanySetting setting)
+        {
+            var current = setting.BooksLockedThrough?.Date;
+            var before = year.StartDate.Date.AddDays(-1);
+            DateTime? proposed = before >= setting.BooksStartDate.Date ? before : null;
+            if (!current.HasValue || current.Value < year.StartDate.Date)
+                return (current, current, false);
+
+            var lastChange = _lockChanges.Table
+                .Where(c => c.CompanyId == setting.CompanyId)
+                .OrderByDescending(c => c.Id)
+                .FirstOrDefault();
+            var imposedByClose = lastChange != null
+                && lastChange.Reason == "Closed " + year.FiscalYearCode
+                && lastChange.NewLockedThrough?.Date == current
+                && current == year.EndDate.Date;
+            var priorIndependent = imposedByClose && lastChange!.PreviousLockedThrough?.Date >= year.StartDate.Date;
+            return (current, proposed, !imposedByClose || priorIndependent);
         }
 
         private YearEndPreview BuildPreview(FinancialYear year)
@@ -259,8 +278,18 @@ namespace Services.Financial
                 ? Array.Empty<YearEndClosingLine>()
                 : BuildClosingLines(year);
 
+            var setting = _settings.Table.FirstOrDefault();
+            var impact = setting != null && status == FiscalYearCloseStatus.Closed
+                ? ReopenLockImpact(year, setting)
+                : (Current: (DateTime?)null, Proposed: (DateTime?)null, RequiresAcknowledgement: false);
             return new YearEndPreview
             {
+                CurrentBooksLockedThrough = impact.Current,
+                ProposedBooksLockedThrough = impact.Proposed,
+                RequiresLockAcknowledgement = impact.RequiresAcknowledgement,
+                NewlyUnlockedFrom = impact.Current.HasValue && impact.Current != impact.Proposed
+                    ? impact.Proposed?.AddDays(1) ?? setting?.BooksStartDate.Date : null,
+                NewlyUnlockedThrough = impact.Current.HasValue && impact.Current != impact.Proposed ? impact.Current : null,
                 FiscalYearCode = year.FiscalYearCode,
                 StartDate = year.StartDate.Date,
                 EndDate = year.EndDate.Date,
@@ -288,10 +317,28 @@ namespace Services.Financial
             var setting = _settings.Table.FirstOrDefault();
             if (setting != null)
             {
+                var knownYears = _fiscalYears.Table.Select(fy => fy.FiscalYearCode).ToHashSet();
+                var missingYears = new List<string>();
+                var cursor = FiscalYearCalculator.Containing(setting.BooksStartDate, setting.FiscalYearPattern, setting.FiscalYearStartMonth);
+                while (cursor.Start.Date < year.StartDate.Date)
+                {
+                    if (!knownYears.Contains(cursor.Code)) missingYears.Add(cursor.Code);
+                    cursor = FiscalYearCalculator.Containing(cursor.Start.AddYears(1), setting.FiscalYearPattern, setting.FiscalYearStartMonth);
+                }
+                if (missingYears.Count > 0)
+                {
+                    blocking.Add(new YearEndCheckItem
+                    {
+                        Code = "earlier_year_missing",
+                        Message = "Prepare missing earlier fiscal years first: " + string.Join(", ", missingYears),
+                        Count = missingYears.Count
+                    });
+                }
+
                 var earlierOpen = _fiscalYears.Table
                     .Where(fy => fy.IsActive
                         && fy.ClosedAt == null
-                        && fy.StartDate >= setting.BooksStartDate
+                        && fy.EndDate >= setting.BooksStartDate
                         && fy.EndDate < year.StartDate)
                     .OrderBy(fy => fy.StartDate)
                     .Select(fy => fy.FiscalYearCode)
@@ -413,6 +460,36 @@ namespace Services.Financial
                     Count = unmatched,
                     LinkPath = "/banking"
                 });
+            }
+
+            var companyId = _tenant.RequireCompanyId();
+            var clearingId = _glSettings.Table.Where(s => s.CompanyId == companyId)
+                .Select(s => s.GoodsReceiptNoteClearingAccountId).FirstOrDefault();
+            var accounts = _accounts.Table.Where(a => a.CompanyId == companyId
+                    && (a.IsSuspenseOrClearing || (clearingId.HasValue && a.Id == clearingId.Value)))
+                .OrderBy(a => a.AccountCode).ToList();
+            if (accounts.Count > 0)
+            {
+                var accountIds = accounts.Select(a => a.Id).ToHashSet();
+                var balances = _glLines.GetAllIncluding(l => l.GeneralLedgerHeader)
+                    .Where(l => l.CompanyId == companyId && accountIds.Contains(l.AccountId)
+                        && l.GeneralLedgerHeader.CompanyId == companyId
+                        && l.GeneralLedgerHeader.Date <= InclusiveEnd(fyEnd))
+                    .AsEnumerable().GroupBy(l => l.AccountId)
+                    .ToDictionary(g => g.Key, g => g.Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : -l.Amount));
+                var affected = accounts.Where(a => balances.TryGetValue(a.Id, out var balance) && balance != 0m).ToList();
+                if (affected.Count > 0)
+                {
+                    var details = string.Join("; ", affected.Select(a =>
+                        $"{a.AccountCode} {a.AccountName}: {balances[a.Id].ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}"));
+                    warnings.Add(new YearEndCheckItem
+                    {
+                        Code = "suspense_clearing",
+                        Message = $"Suspense or clearing accounts have balances (debit positive): {details}.",
+                        Count = affected.Count,
+                        LinkPath = "/financials/accounts"
+                    });
+                }
             }
 
             var cutoff = fyEnd.AddDays(-365);

@@ -841,6 +841,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<bool>("IsCash")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsSuspenseOrClearing")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsContraAccount")
                         .HasColumnType("boolean");
 

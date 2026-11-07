@@ -45,6 +45,11 @@ interface YearEndPreview {
   warnings: YearEndCheckItem[];
   closingLines: YearEndClosingLine[];
   canClose: boolean;
+  currentBooksLockedThrough?: string | null;
+  proposedBooksLockedThrough?: string | null;
+  requiresLockAcknowledgement?: boolean;
+  newlyUnlockedFrom?: string | null;
+  newlyUnlockedThrough?: string | null;
 }
 
 const labelClass = 'block text-xs font-semibold text-[var(--text-secondary)] mb-1.5';
@@ -100,7 +105,7 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
     acknowledgeWarnings: boolean;
   } | null>(null);
 
-  const [reopenDialog, setReopenDialog] = useState<{ code: string; reason: string } | null>(null);
+  const [reopenDialog, setReopenDialog] = useState<{ code: string; reason: string; preview: YearEndPreview; acknowledge: boolean } | null>(null);
 
   const loadYears = useCallback(async () => {
     try {
@@ -117,6 +122,22 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
   useEffect(() => {
     void loadYears();
   }, [loadYears]);
+
+  const prepareYears = async () => {
+    setBusyCode('prepare');
+    setMessage(null);
+    try {
+      const res = await authFetch('/api/Financials/YearEnd/EnsureYears', { method: 'POST' });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.message || 'Could not prepare fiscal years.');
+      await loadYears();
+      setMessage({ kind: 'ok', text: 'Fiscal years are available through next year.' });
+    } catch (err) {
+      setMessage({ kind: 'error', text: err instanceof Error ? err.message : 'Could not prepare fiscal years.' });
+    } finally {
+      setBusyCode(null);
+    }
+  };
 
   const openCloseDialog = async (code: string) => {
     setBusyCode(code);
@@ -174,20 +195,36 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
     }
   };
 
+  const openReopenDialog = async (code: string) => {
+    setBusyCode(code);
+    setMessage(null);
+    try {
+      const res = await authFetch(`/api/Financials/YearEnd/${encodeURIComponent(code)}`);
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.message || 'Could not load reopening details.');
+      setReopenDialog({ code, reason: '', preview: body as YearEndPreview, acknowledge: false });
+    } catch (err) {
+      setMessage({ kind: 'error', text: err instanceof Error ? err.message : 'Could not load reopening details.' });
+    } finally {
+      setBusyCode(null);
+    }
+  };
+
   const submitReopen = async () => {
     if (!reopenDialog || !canClose) return;
     if (!reopenDialog.reason.trim()) {
       setMessage({ kind: 'error', text: 'A reason is required to reopen a closed year.' });
       return;
     }
-    const { code, reason } = reopenDialog;
+    const { code, reason, preview, acknowledge } = reopenDialog;
+    if (preview.requiresLockAcknowledgement && !acknowledge) return;
     setBusyCode(code);
     setMessage(null);
     try {
       const res = await authFetch(`/api/Financials/YearEnd/${encodeURIComponent(code)}/Reopen`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason: reason.trim(), acknowledgeIndependentLock: acknowledge, expectedLockThrough: preview.currentBooksLockedThrough ?? null }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -237,6 +274,12 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
             )}
             <span>{message.text}</span>
           </div>
+        )}
+
+        {canClose && (
+          <button type="button" className="btn-secondary !h-9 !text-xs" disabled={busyCode !== null} onClick={() => void prepareYears()}>
+            {busyCode === 'prepare' ? 'Preparing…' : 'Prepare fiscal years through next year'}
+          </button>
         )}
 
         <ul className="space-y-2">
@@ -290,7 +333,7 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
                       type="button"
                       className="btn-secondary !h-9 !text-xs"
                       disabled={busyCode === year.fiscalYearCode}
-                      onClick={() => setReopenDialog({ code: year.fiscalYearCode, reason: '' })}
+                      onClick={() => void openReopenDialog(year.fiscalYearCode)}
                     >
                       <RotateCcw className="w-4 h-4" aria-hidden="true" /> Reopen
                     </button>
@@ -399,6 +442,20 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
           <h2 id="year-end-reopen-title" className="text-base font-bold text-[var(--text-main)]">
             Reopen fiscal year {reopenDialog.code}
           </h2>
+          <p className="text-sm text-[var(--text-secondary)]">
+            Current lock: {reopenDialog.preview.currentBooksLockedThrough ?? 'no lock'}. After reopening: {reopenDialog.preview.proposedBooksLockedThrough ?? 'no lock'}. A later lock will not be restored automatically.
+          </p>
+          {reopenDialog.preview.newlyUnlockedFrom && reopenDialog.preview.newlyUnlockedThrough && (
+            <p className="text-sm text-[var(--text-secondary)]">
+              Newly unlocked: {reopenDialog.preview.newlyUnlockedFrom} through {reopenDialog.preview.newlyUnlockedThrough}, inclusive.
+            </p>
+          )}
+          {reopenDialog.preview.requiresLockAcknowledgement && (
+            <label className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+              <input type="checkbox" checked={reopenDialog.acknowledge} onChange={(e) => setReopenDialog({ ...reopenDialog, acknowledge: e.target.checked })} />
+              I acknowledge that reopening moves an independent lock backward or clears it.
+            </label>
+          )}
           <div>
             <label htmlFor="year-end-reopen-reason" className={labelClass}>
               Reason (required)
@@ -419,7 +476,7 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
             <button
               type="button"
               className="btn-primary"
-              disabled={!reopenDialog.reason.trim() || busyCode === reopenDialog.code}
+              disabled={!reopenDialog.reason.trim() || (reopenDialog.preview.requiresLockAcknowledgement && !reopenDialog.acknowledge) || busyCode === reopenDialog.code}
               onClick={() => void submitReopen()}
             >
               {busyCode === reopenDialog.code ? 'Reopening…' : 'Reopen year'}

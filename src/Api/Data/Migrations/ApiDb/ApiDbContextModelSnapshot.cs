@@ -886,6 +886,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool>("IsCash")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsSuspenseOrClearing")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsContraAccount")
                         .HasColumnType("bit");
 
