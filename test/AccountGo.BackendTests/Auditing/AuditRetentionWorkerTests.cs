@@ -196,6 +196,7 @@ public sealed class AuditRetentionWorkerTests
                     """CREATE TABLE IF NOT EXISTS "RecordChanges" ("Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "CompanyId" INTEGER NOT NULL, "EntityType" TEXT NOT NULL, "EntityId" INTEGER NOT NULL, "Action" TEXT NOT NULL, "ChangesJson" TEXT NOT NULL, "ActorUserId" TEXT NULL, "ActorKind" TEXT NOT NULL, "CorrelationId" TEXT NOT NULL, "IpAddress" TEXT NULL, "OccurredAt" TEXT NOT NULL);""",
                     """CREATE TABLE IF NOT EXISTS "AuditLog" ("Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "CompanyId" INTEGER NOT NULL, "UserName" TEXT NULL, "AuditEventDateUTC" TEXT NOT NULL, "AuditEventType" INTEGER NOT NULL, "TableName" TEXT NULL, "RecordId" TEXT NULL, "FieldName" TEXT NULL, "OriginalValue" TEXT NULL, "NewValue" TEXT NULL);""",
                     """CREATE TABLE IF NOT EXISTS "SecurityAuditEvents" ("Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "UserId" TEXT NULL, "CompanyId" INTEGER NULL, "EventType" TEXT NOT NULL, "IpAddress" TEXT NULL, "UserAgent" TEXT NULL, "MetadataJson" TEXT NULL, "CorrelationId" TEXT NULL, "Outcome" TEXT NULL, "CreatedAt" TEXT NOT NULL);""",
+                    """CREATE TABLE IF NOT EXISTS "ExternalTokenRedemptions" ("Provider" TEXT NOT NULL, "TokenId" TEXT NOT NULL, "ExpiresAtUtc" TEXT NOT NULL, "RedeemedAtUtc" TEXT NOT NULL, CONSTRAINT "PK_ExternalTokenRedemptions" PRIMARY KEY ("Provider", "TokenId"));""",
                     SqliteSecurityAuditEventsSql.UpdateTrigger,
                     SqliteSecurityAuditEventsSql.DeleteTrigger
                 })
