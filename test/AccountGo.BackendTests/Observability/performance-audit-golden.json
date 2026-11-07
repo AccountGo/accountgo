@@ -1,0 +1,113 @@
+{
+  "security": [
+    {
+      "type": "auth.signin.success",
+      "outcome": "success",
+      "company": null,
+      "user": "owner"
+    },
+    {
+      "type": "data.export",
+      "outcome": "success",
+      "company": "workspace",
+      "user": "owner"
+    },
+    {
+      "type": "data.report.view",
+      "outcome": "success",
+      "company": "workspace",
+      "user": "owner"
+    },
+    {
+      "type": "member.role.change",
+      "outcome": "success",
+      "company": "workspace",
+      "user": "owner"
+    }
+  ],
+  "records": [
+    {
+      "table": "CompanyMember",
+      "operation": "Added",
+      "keys": [
+        "CompanyId",
+        "Id",
+        "InvitedByUserId",
+        "JoinedAt",
+        "Role",
+        "Status",
+        "UserId"
+      ]
+    },
+    {
+      "table": "CompanyMemberSecurityRole",
+      "operation": "Added",
+      "keys": [
+        "AccessProfileVersion",
+        "CompanyMemberId",
+        "GrantedAtUtc",
+        "GrantedByUserId",
+        "GrantOrigin",
+        "Id",
+        "SecurityRoleId"
+      ]
+    },
+    {
+      "table": "JournalEntryHeader",
+      "operation": "Added",
+      "keys": [
+        "AdjustsFiscalYearId",
+        "CompanyId",
+        "Date",
+        "GeneralLedgerHeaderId",
+        "Id",
+        "Memo",
+        "PartyId",
+        "Posted",
+        "ReferenceNo",
+        "VoucherType"
+      ]
+    },
+    {
+      "table": "JournalEntryHeader",
+      "operation": "Modified",
+      "keys": [
+        "GeneralLedgerHeaderId",
+        "Posted"
+      ]
+    },
+    {
+      "table": "JournalEntryLine",
+      "operation": "Added",
+      "keys": [
+        "AccountId",
+        "Amount",
+        "CompanyId",
+        "DrCr",
+        "Id",
+        "JournalEntryHeaderId",
+        "Memo"
+      ]
+    },
+    {
+      "table": "JournalEntryLine",
+      "operation": "Added",
+      "keys": [
+        "AccountId",
+        "Amount",
+        "CompanyId",
+        "DrCr",
+        "Id",
+        "JournalEntryHeaderId",
+        "Memo"
+      ]
+    },
+    {
+      "table": "WorkspaceOperatingSettings",
+      "operation": "Modified",
+      "keys": [
+        "PolicyRevision"
+      ]
+    }
+  ]
+}
