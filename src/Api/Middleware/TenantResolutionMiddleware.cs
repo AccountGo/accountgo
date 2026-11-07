@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Api.Data;
+using Api.Authorization;
 using Api.Options;
 using Api.Service.Ai;
 using Api.Tenancy;
@@ -84,22 +85,22 @@ namespace Api.Middleware
             }
 
             // Read on every request so revocations also take effect across concurrent requests.
-            var company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Slug == slug);
+            var resolved = await LoadCompanyAndSettingsAsync(db, slug, null);
+            var company = resolved?.Company;
             if (company == null)
             {
                 await WriteNotFoundAsync(context);
                 return;
             }
 
-            var operatingSettings = await db.WorkspaceOperatingSettings.IgnoreQueryFilters().AsNoTracking()
-                .FirstOrDefaultAsync(s => s.CompanyId == company.Id);
+            var operatingSettings = resolved!.Settings;
             if (operatingSettings != null && operatingSettings.PolicySchemaVersion > WorkspaceOperatingPolicySchema.CurrentVersion)
             {
                 await WriteIncompatibleSchemaAsync(context, WorkspaceOperatingPolicySchema.CurrentVersion, operatingSettings.PolicySchemaVersion);
                 return;
             }
 
-            if (!await TryPopulateTenantMembershipAsync(db, tenantContext, company, userId, slug))
+            if (!await TryPopulateTenantMembershipAsync(context, tenantContext, db, company, userId, slug))
             {
                 await WriteNotFoundAsync(context);
                 return;
@@ -158,23 +159,22 @@ namespace Api.Middleware
                 }
             }
 
-            var company = await db.Companies.AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Id == payload.CompanyId && c.Slug == payload.CompanySlug);
+            var resolved = await LoadCompanyAndSettingsAsync(db, payload.CompanySlug, payload.CompanyId);
+            var company = resolved?.Company;
             if (company == null)
             {
                 await WriteNotFoundAsync(context);
                 return;
             }
 
-            var operatingSettings = await db.WorkspaceOperatingSettings.IgnoreQueryFilters().AsNoTracking()
-                .FirstOrDefaultAsync(s => s.CompanyId == company.Id);
+            var operatingSettings = resolved!.Settings;
             if (operatingSettings != null && operatingSettings.PolicySchemaVersion > WorkspaceOperatingPolicySchema.CurrentVersion)
             {
                 await WriteIncompatibleSchemaAsync(context, WorkspaceOperatingPolicySchema.CurrentVersion, operatingSettings.PolicySchemaVersion);
                 return;
             }
 
-            if (!await TryPopulateTenantMembershipAsync(db, tenantContext, company, payload.UserId, payload.CompanySlug))
+            if (!await TryPopulateTenantMembershipAsync(context, tenantContext, db, company, payload.UserId, payload.CompanySlug))
             {
                 await WriteNotFoundAsync(context);
                 return;
@@ -183,55 +183,29 @@ namespace Api.Middleware
             await _next(context);
         }
 
+        private sealed record CompanyWithSettings(Company Company, WorkspaceOperatingSettings? Settings);
+
+        private static Task<CompanyWithSettings?> LoadCompanyAndSettingsAsync(ApiDbContext db, string slug, int? companyId) =>
+            (from company in db.Companies.AsNoTracking()
+             join settings in db.WorkspaceOperatingSettings.IgnoreQueryFilters().AsNoTracking()
+                 on company.Id equals settings.CompanyId into matches
+             from settings in matches.DefaultIfEmpty()
+             where company.DeletedAt == null && company.Slug == slug && (!companyId.HasValue || company.Id == companyId.Value)
+             select new CompanyWithSettings(company, settings)).FirstOrDefaultAsync();
+
         private static async Task<bool> TryPopulateTenantMembershipAsync(
-            ApiDbContext db,
-            ITenantContext tenantContext,
-            Core.Domain.Company company,
-            string userId,
-            string fallbackSlug)
+            HttpContext context, ITenantContext tenantContext, ApiDbContext db, Company company, string userId, string fallbackSlug)
         {
-            var member = await db.CompanyMembers.AsNoTracking()
-                .Include(m => m.SecurityRoles)
-                .FirstOrDefaultAsync(m =>
-                    m.CompanyId == company.Id &&
-                    m.UserId == userId &&
-                    m.Status == CompanyMemberStatus.Active);
-
-            if (member == null)
+            var globalRevision = AccessAuthorizationService.GlobalSecurityRevision;
+            var loader = context.RequestServices.GetService<IRequestAccessLoader>() ?? new RequestAccessLoader(db);
+            var access = await loader.LoadAsync(company.Id, userId, context.RequestAborted);
+            if (access == null || access.Status != CompanyMemberStatus.Active) return false;
+            if (tenantContext is TenantContext tenant)
             {
-                return false;
+                tenant.SetTenant(company.Id, company.Slug ?? fallbackSlug, access.Role, access.Permissions,
+                    userId, access.MemberId, Core.Authorization.ActorTrustDomain.WorkspaceUser);
+                tenant.SetResolvedData(company, access, globalRevision);
             }
-
-            // Resolve functional permissions strictly from assigned CompanyMemberSecurityRoles.
-            // Workspace governance roles (Owner, Admin, Member) never automatically confer business permissions.
-            var roleIds = member.SecurityRoles.Select(r => r.SecurityRoleId).ToList();
-            HashSet<string> permissions;
-            if (roleIds.Count > 0)
-            {
-                var memberPerms = await db.Set<SecurityRolePermission>()
-                    .Where(srp => roleIds.Contains(srp.SecurityRoleId))
-                    .Select(srp => srp.SecurityPermission.Name)
-                    .Distinct()
-                    .ToListAsync();
-                permissions = new HashSet<string>(memberPerms, StringComparer.OrdinalIgnoreCase);
-            }
-            else
-            {
-                permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            }
-
-            if (tenantContext is TenantContext tc)
-            {
-                tc.SetTenant(
-                    company.Id,
-                    company.Slug ?? fallbackSlug,
-                    member.Role,
-                    permissions,
-                    userId,
-                    member.Id,
-                    Core.Authorization.ActorTrustDomain.WorkspaceUser);
-            }
-
             return true;
         }
 

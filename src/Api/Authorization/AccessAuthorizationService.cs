@@ -19,6 +19,7 @@ using Core.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Authorization
 {
@@ -82,6 +83,7 @@ namespace Api.Authorization
 
         private AccessActorContext? _cachedActor;
         private long _cachedTenantRevision = -1;
+        private long _cachedGlobalRevision = -1;
         private int? _cachedCompanyId;
         private string? _cachedUserId;
 
@@ -111,6 +113,7 @@ namespace Api.Authorization
         {
             _cachedActor = null;
             _cachedTenantRevision = -1;
+            _cachedGlobalRevision = -1;
             _cachedCompanyId = null;
             _cachedUserId = null;
             BumpGlobalSecurityRevision();
@@ -120,46 +123,52 @@ namespace Api.Authorization
             }
         }
 
-        public AccessActorContext ResolveActorContext(AccessActorContext? actorOverride = null)
+        public AccessActorContext ResolveActorContext(AccessActorContext? actorOverride = null) =>
+            ResolveActorContextAsync(actorOverride, CancellationToken.None).GetAwaiter().GetResult();
+
+        private async Task<AccessActorContext> ResolveActorContextAsync(AccessActorContext? actorOverride, CancellationToken cancellationToken)
         {
-            if (actorOverride != null)
-            {
-                if (actorOverride.TrustDomain == ActorTrustDomain.WorkspaceUser &&
-                    !actorOverride.MembershipStatus.HasValue &&
-                    !string.IsNullOrWhiteSpace(actorOverride.UserId) &&
-                    _db != null)
-                {
-                    var targetCompanyId = actorOverride.CompanyId ?? _tenantContext.CompanyId;
-                    var resolvedOverride = BuildActorContextFromCurrentState(
-                        _httpContextAccessor?.HttpContext?.User,
-                        actorOverride.UserId,
-                        targetCompanyId,
-                        _tenantContext.Revision);
-                    if (resolvedOverride.FunctionalPermissions.Count == 0 && actorOverride.FunctionalPermissions.Count > 0)
-                    {
-                        return resolvedOverride with { FunctionalPermissions = actorOverride.FunctionalPermissions };
-                    }
-                    return resolvedOverride;
-                }
-
+            if (actorOverride != null && (actorOverride.TrustDomain != ActorTrustDomain.WorkspaceUser ||
+                string.IsNullOrWhiteSpace(actorOverride.UserId) || _db == null || !(actorOverride.CompanyId ?? _tenantContext.CompanyId).HasValue))
                 return actorOverride;
-            }
 
-            var currentRevision = _tenantContext.Revision;
-            var currentCompanyId = _tenantContext.CompanyId;
-            var httpContext = _httpContextAccessor?.HttpContext;
-            var principal = httpContext?.User;
+            var revision = _tenantContext.Revision;
+            var globalRevision = GlobalSecurityRevision;
+            var principal = _httpContextAccessor?.HttpContext?.User;
             var claimUserId = principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal?.FindFirstValue("sub");
-            var effectiveUserId = string.IsNullOrWhiteSpace(_tenantContext.UserId) ? claimUserId : _tenantContext.UserId;
+            var userId = actorOverride?.UserId ?? (string.IsNullOrWhiteSpace(_tenantContext.UserId) ? claimUserId : _tenantContext.UserId);
+            var companyId = actorOverride?.CompanyId ?? _tenantContext.CompanyId;
+            AccessActorContext actor;
+            if (_cachedActor != null && _cachedTenantRevision == revision && _cachedGlobalRevision == globalRevision &&
+                _cachedCompanyId == companyId && string.Equals(_cachedUserId, userId, StringComparison.Ordinal))
+                actor = _cachedActor;
+            else
+            {
+                actor = await BuildActorContextFromCurrentStateAsync(principal, userId, companyId, revision, globalRevision, cancellationToken);
+                _cachedActor = actor;
+                _cachedTenantRevision = revision;
+                _cachedGlobalRevision = globalRevision;
+                _cachedCompanyId = companyId;
+                _cachedUserId = userId;
+            }
+            actor = RefreshMfa(actor, principal);
+            if (actorOverride?.MembershipStatus.HasValue == true)
+                actor = actor with { IsMfaStepUpVerified = actorOverride.IsMfaStepUpVerified, MfaVerifiedAt = actorOverride.MfaVerifiedAt };
+            return actor;
+        }
 
-            // Always resolve live membership and functional grants from the database when available so
-            // external revocations in another scope or request take effect immediately without stale cache reuse.
-            var resolved = BuildActorContextFromCurrentState(principal, effectiveUserId, currentCompanyId, currentRevision);
-            _cachedActor = resolved;
-            _cachedTenantRevision = currentRevision;
-            _cachedCompanyId = currentCompanyId;
-            _cachedUserId = effectiveUserId;
-            return resolved;
+        private static AccessActorContext RefreshMfa(AccessActorContext actor, ClaimsPrincipal? principal)
+        {
+            if (actor.TrustDomain is ActorTrustDomain.ScopedService or ActorTrustDomain.PendingAuthentication or ActorTrustDomain.StaffOperator or ActorTrustDomain.TransportGate)
+                return actor;
+            var verified = string.Equals(principal?.FindFirstValue("step_up"), "true", StringComparison.OrdinalIgnoreCase);
+            DateTimeOffset? at = null;
+            if (long.TryParse(principal?.FindFirstValue("mfa_verified_at"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds))
+            {
+                at = DateTimeOffset.FromUnixTimeSeconds(seconds);
+                if (DateTimeOffset.UtcNow - at.Value <= TimeSpan.FromSeconds(900)) verified = true;
+            }
+            return actor with { IsMfaStepUpVerified = verified, MfaVerifiedAt = at };
         }
 
         public AccessDecision Authorize(
@@ -208,7 +217,7 @@ namespace Api.Authorization
 
             try
             {
-                var actor = ResolveActorContext(actorOverride);
+                var actor = await ResolveActorContextAsync(actorOverride, cancellationToken);
                 return await EvaluatePolicyAsync(policy, resource, actor, cancellationToken);
             }
             catch (Exception ex)
@@ -402,11 +411,13 @@ namespace Api.Authorization
             return domains;
         }
 
-        private AccessActorContext BuildActorContextFromCurrentState(
+        private async Task<AccessActorContext> BuildActorContextFromCurrentStateAsync(
             ClaimsPrincipal? principal,
             string? effectiveUserId,
             int? companyId,
-            long revision)
+            long revision,
+            long globalRevision,
+            CancellationToken cancellationToken)
         {
             var isAuthenticated = principal?.Identity?.IsAuthenticated == true;
             var authType = principal?.Identity?.AuthenticationType;
@@ -465,7 +476,7 @@ namespace Api.Authorization
 
             // If tenant context is resolved, verify live membership when DbContext + UserId are available.
             var resolvedCompanyId = companyId ?? (_tenantContext.IsResolved && _db == null ? 1 : null);
-            if (_tenantContext.IsResolved && resolvedCompanyId.HasValue)
+            if ((_tenantContext.IsResolved || companyId.HasValue) && resolvedCompanyId.HasValue)
             {
                 if (_tenantContext.ActorDomain == ActorTrustDomain.ScopedService)
                 {
@@ -491,26 +502,16 @@ namespace Api.Authorization
 
                 if (_db != null && !string.IsNullOrWhiteSpace(effectiveUserId))
                 {
-                    var isCompanyDeleted = _db.Companies.AsNoTracking()
-                        .Any(c => c.Id == resolvedCompanyId.Value && c.DeletedAt != null);
-                    if (isCompanyDeleted)
+                    RequestAccessSnapshot? member = null;
+                    if (_tenantContext is TenantContext tenant && tenant.AccessTenantRevision == revision &&
+                        tenant.AccessGlobalRevision == globalRevision && tenant.AccessSnapshot is { } snapshot &&
+                        snapshot.CompanyId == resolvedCompanyId.Value && string.Equals(snapshot.UserId, effectiveUserId, StringComparison.Ordinal))
+                        member = snapshot;
+                    else
                     {
-                        return new AccessActorContext
-                        {
-                            TrustDomain = isAuthenticated ? ActorTrustDomain.WorkspaceUser : ActorTrustDomain.Unauthenticated,
-                            UserId = effectiveUserId,
-                            CompanyId = null,
-                            MembershipStatus = null,
-                            IsPlatformAdministrator = isPlatformAdmin,
-                            IsMfaStepUpVerified = isMfaStepUpVerified,
-                            MfaVerifiedAt = mfaVerifiedAt,
-                            MembershipRevision = revision
-                        };
+                        var loader = _httpContextAccessor?.HttpContext?.RequestServices?.GetService<IRequestAccessLoader>() ?? new RequestAccessLoader(_db);
+                        member = await loader.LoadAsync(resolvedCompanyId.Value, effectiveUserId, cancellationToken);
                     }
-
-                    var member = _db.CompanyMembers.AsNoTracking()
-                        .Include(m => m.SecurityRoles)
-                        .FirstOrDefault(m => m.CompanyId == resolvedCompanyId.Value && m.UserId == effectiveUserId);
 
                     if (member == null || member.Status != CompanyMemberStatus.Active)
                     {
@@ -520,7 +521,7 @@ namespace Api.Authorization
                             UserId = effectiveUserId,
                             CompanyId = resolvedCompanyId.Value,
                             CompanySlug = _tenantContext.CompanySlug,
-                            MemberId = member?.Id,
+                            MemberId = member?.MemberId,
                             WorkspaceRole = null,
                             MembershipStatus = member?.Status,
                             FunctionalPermissions = EmptyStringSet,
@@ -531,42 +532,17 @@ namespace Api.Authorization
                         };
                     }
 
-                    // Resolve functional permissions strictly from CompanyMemberSecurityRoles (never from Owner/Admin).
-                    var roleIds = member.SecurityRoles.Select(r => r.SecurityRoleId).ToList();
-                    HashSet<string> livePermissions;
-                    List<string> roleNames;
-                    if (roleIds.Count > 0)
-                    {
-                        var perms = _db.Set<SecurityRolePermission>()
-                            .AsNoTracking()
-                            .Where(srp => roleIds.Contains(srp.SecurityRoleId) && srp.SecurityPermission != null)
-                            .Select(srp => srp.SecurityPermission!.Name)
-                            .Distinct()
-                            .ToList();
-                        livePermissions = new HashSet<string>(perms, StringComparer.OrdinalIgnoreCase);
-
-                        roleNames = _db.SecurityRoles.AsNoTracking()
-                            .Where(r => roleIds.Contains(r.Id))
-                            .Select(r => r.Name)
-                            .ToList();
-                    }
-                    else
-                    {
-                        livePermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                        roleNames = new List<string>();
-                    }
-
                     return new AccessActorContext
                     {
                         TrustDomain = ActorTrustDomain.WorkspaceUser,
                         UserId = effectiveUserId,
                         CompanyId = resolvedCompanyId.Value,
                         CompanySlug = _tenantContext.CompanySlug,
-                        MemberId = member.Id,
+                        MemberId = member.MemberId,
                         WorkspaceRole = member.Role,
                         MembershipStatus = member.Status,
-                        FunctionalPermissions = livePermissions,
-                        AssignedFunctionalRoles = roleNames,
+                        FunctionalPermissions = member.Permissions,
+                        AssignedFunctionalRoles = member.RoleNames.ToList(),
                         IsPlatformAdministrator = isPlatformAdmin,
                         IsMfaStepUpVerified = isMfaStepUpVerified,
                         MfaVerifiedAt = mfaVerifiedAt,
@@ -773,23 +749,6 @@ namespace Api.Authorization
                         StatusCodes.Status404NotFound,
                         "Workspace not found",
                         "The requested workspace does not exist or you do not have access to it.");
-                }
-
-                if (_db != null)
-                {
-                    var isCompanyDeleted = await _db.Companies.AsNoTracking()
-                        .AnyAsync(c => c.Id == targetCompanyId.Value && c.DeletedAt != null, cancellationToken);
-                    if (isCompanyDeleted)
-                    {
-                        return AccessDecision.Deny(
-                            AccessReasonCode.TenantNotResolved,
-                            policy.OperationKey,
-                            policy.PolicyId,
-                            policy.PolicyVersion,
-                            StatusCodes.Status404NotFound,
-                            "Workspace not found",
-                            "The requested workspace does not exist or you do not have access to it.");
-                    }
                 }
 
                 if (policy.Domain is AccessPolicyDomain.WorkspaceFunctional or AccessPolicyDomain.WorkspaceGovernance or AccessPolicyDomain.WorkspaceComposite)

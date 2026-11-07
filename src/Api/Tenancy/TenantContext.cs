@@ -2,18 +2,23 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using Api.Authorization;
 using Core.Authorization;
 using Core.Domain;
 using Core.Tenancy;
 
 namespace Api.Tenancy
 {
-    public class TenantContext : ITenantContext
+    public class TenantContext : ITenantContext, IResolvedCompanyContext
     {
         private class TenantState
         {
             public int? CompanyId { get; set; }
             public string? CompanySlug { get; set; }
+            public Company? Company { get; set; }
+            public RequestAccessSnapshot? Access { get; set; }
+            public long AccessGlobalRevision { get; set; }
+            public long AccessTenantRevision { get; set; }
             public CompanyMemberRole? Role { get; set; }
             public IReadOnlySet<string> Permissions { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             public string? UserId { get; set; }
@@ -27,6 +32,10 @@ namespace Api.Tenancy
 
         public int? CompanyId => CurrentState.CompanyId;
         public string? CompanySlug => CurrentState.CompanySlug;
+        public Company? ResolvedCompany => CurrentState.Company;
+        internal RequestAccessSnapshot? AccessSnapshot => CurrentState.Access;
+        internal long AccessGlobalRevision => CurrentState.AccessGlobalRevision;
+        internal long AccessTenantRevision => CurrentState.AccessTenantRevision;
         public CompanyMemberRole? Role => CurrentState.Role;
         public IReadOnlySet<string> Permissions => CurrentState.Permissions;
         public bool IsResolved => CurrentState.CompanyId.HasValue;
@@ -57,8 +66,18 @@ namespace Api.Tenancy
             Interlocked.Increment(ref _revision);
         }
 
+        internal void SetResolvedData(Company company, RequestAccessSnapshot access, long globalRevision)
+        {
+            _resolvedState.Company = company;
+            _resolvedState.Access = access;
+            _resolvedState.AccessGlobalRevision = globalRevision;
+            _resolvedState.AccessTenantRevision = Revision;
+        }
+
         public void Clear()
         {
+            _resolvedState.Company = null;
+            _resolvedState.Access = null;
             _resolvedState.CompanyId = null;
             _resolvedState.CompanySlug = null;
             _resolvedState.Role = null;
@@ -107,6 +126,7 @@ namespace Api.Tenancy
             var state = new TenantState
             {
                 CompanyId = companyId,
+                Company = companyId == current.CompanyId ? current.Company : null,
                 CompanySlug = slug ?? (companyId == current.CompanyId ? current.CompanySlug : null) ?? $"org-{companyId}",
                 Role = role ?? (companyId == current.CompanyId ? current.Role : null) ?? CompanyMemberRole.Owner,
                 Permissions = permissions ?? (companyId == current.CompanyId ? current.Permissions : new HashSet<string>(StringComparer.OrdinalIgnoreCase)),

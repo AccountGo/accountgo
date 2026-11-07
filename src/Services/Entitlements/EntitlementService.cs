@@ -279,7 +279,7 @@ namespace Services.Entitlements
         }
 
         private Company LoadCompany(int companyId) =>
-            _companies.Table.FirstOrDefault(c => c.Id == companyId)
+            (_tenant is IResolvedCompanyContext { ResolvedCompany: { } company } && company.Id == companyId ? company : null) ?? _companies.Table.FirstOrDefault(c => c.Id == companyId)
             ?? throw new TenantEntityNotFoundException(nameof(Company), companyId);
 
         private sealed class PolicyMemo
