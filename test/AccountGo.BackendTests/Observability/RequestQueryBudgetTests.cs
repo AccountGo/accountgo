@@ -82,6 +82,7 @@ public sealed class RequestQueryBudgetTests
             using (var scope = factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                collector.Database = RequestCommandCollector.ConnectionKey(db.Database.GetDbConnection());
                 var member = db.CompanyMembers.IgnoreQueryFilters().Include(m => m.SecurityRoles).Single(m => m.Company.Slug == "budget-co");
                 var assigned = member.SecurityRoles.Select(r => r.SecurityRoleId).ToHashSet();
                 foreach (var roleId in db.SecurityRoles.Where(r => r.Name != "SystemAdministrators").Select(r => r.Id).ToList())
@@ -147,6 +148,13 @@ public sealed class RequestQueryBudgetTests
         private readonly IDisposable _all;
         private readonly List<IDisposable> _subscriptions = [];
         public List<string>? Current { get; set; }
+        /// <summary>
+        /// Only commands sent to this database are counted. EF's diagnostic events are process-wide, so tests
+        /// running in parallel would otherwise add their own commands to the count.
+        /// </summary>
+        public string? Database { get; set; }
+        public static string ConnectionKey(System.Data.Common.DbConnection connection) =>
+            System.IO.Path.GetFileName(connection.DataSource) + "|" + connection.Database;
         public RequestCommandCollector() => _all = DiagnosticListener.AllListeners.Subscribe(this);
         public void OnNext(DiagnosticListener listener)
         {
@@ -154,8 +162,13 @@ public sealed class RequestQueryBudgetTests
         }
         public void OnNext(KeyValuePair<string, object?> value)
         {
-            if (value.Key == RelationalEventId.CommandExecuted.Name && value.Value is CommandExecutedEventData data && Current is { } commands)
-                lock (commands) commands.Add(data.Command.CommandText);
+            if (value.Key != RelationalEventId.CommandExecuted.Name || value.Value is not CommandExecutedEventData data || Current is not { } commands)
+                return;
+            if (Database is null)
+                throw new InvalidOperationException("Set Database before collecting commands.");
+            if (data.Connection is null || ConnectionKey(data.Connection) != Database)
+                return;
+            lock (commands) commands.Add(data.Command.CommandText);
         }
         public void OnCompleted() { }
         public void OnError(Exception error) { }

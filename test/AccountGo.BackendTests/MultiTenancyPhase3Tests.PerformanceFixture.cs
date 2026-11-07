@@ -11,6 +11,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Dto.Banking;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace AccountGo.BackendTests;
@@ -143,6 +144,7 @@ public partial class MultiTenancyPhase3Tests
         var snapshotPath = Path.Combine(Path.GetDirectoryName(PerformanceFixtureSource())!, "Observability", "performance-books-golden.json");
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(File.ReadAllText(snapshotPath)), normalized), "Golden report output changed");
         using var collector = new RequestQueryBudgetTests.RequestCommandCollector();
+        WithDb(db => collector.Database = RequestQueryBudgetTests.RequestCommandCollector.ConnectionKey(db.Database.GetDbConnection()));
         var counts = new Dictionary<string, Dictionary<string, int>>();
         async Task Measure(string scale)
         {
