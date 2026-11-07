@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
-import { derivePlanCards, planPriceLabel, plansForProduct } from '../lib/planCards';
+import { currentPlanDisplayName, derivePlanCards, planPriceLabel, plansForProduct } from '../lib/planCards';
 import { useCapabilities } from '../lib/entitlements';
 import { useBilling } from '../lib/useBilling';
 import { UsageHint } from './UsageHint';
@@ -146,6 +146,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   // Only self-service plans can be picked; an operator-assigned current plan stays visible.
   const visiblePlans = (catalog.plans || []).filter((plan) => plan.selfService || plan.key === currentPlan);
   const personalBooks = Boolean(tenantContext.currentOrg?.isPersonalBooks);
+  const planHeading = currentPlanDisplayName(String(currentPlan), catalog.plans || []);
   const planModules = tenantContext.currentOrg?.includedModules ?? catalog.includedModules(currentPlan);
   const isIncluded = (module: ModuleKey) => planModules.includes(module);
   const isRequired = (module: ModuleKey) => tenantContext.currentOrg?.requiredModules?.includes(module) ?? catalog.isRequired(currentPlan, module);
@@ -292,7 +293,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-[var(--text-main)]">
-                  {personalBooks ? 'Personal books' : `${subscription?.planName || 'Accounting'} Plan`}
+                  {planHeading}
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
                   {tierBadge}
