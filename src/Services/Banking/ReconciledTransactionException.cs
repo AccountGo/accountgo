@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using System.Globalization;
 
 namespace Services.Banking
 {
@@ -15,7 +16,7 @@ namespace Services.Banking
         public const string ErrorCode = "RECONCILED";
 
         public ReconciledTransactionException(string bankName, DateTime statementEndDate)
-            : base($"This transaction is reconciled. Undo the reconciliation for {bankName} to {statementEndDate:yyyy-MM-dd} first.")
+            : base($"This transaction is reconciled. Undo the reconciliation for {bankName} to {statementEndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} first.")
         {
             BankName = bankName;
             StatementEndDate = statementEndDate.Date;

@@ -269,6 +269,10 @@ export function describeChange(row: AuditChangeRow, personal: boolean): string[]
     const deleted = row.action === 'Deleted';
     const sentences = [`${deleted ? 'Deleted' : 'Created'} ${withArticle(entityName)}`];
     for (const change of parsed) {
+      if (row.entityType === 'BankTransaction' && change.field === 'BankId' && !isEmptyValue(change.newValue)) {
+        sentences.push(`Bank account #${change.newValue}`);
+        continue;
+      }
       if (!auditFieldLabel(row.entityType, change.field)) continue;
       const value = deleted ? change.oldValue : change.newValue;
       if (isEmptyValue(value)) continue;
