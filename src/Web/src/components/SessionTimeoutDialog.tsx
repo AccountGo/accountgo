@@ -38,6 +38,8 @@ export const SessionTimeoutDialog: React.FC<SessionTimeoutDialogProps> = ({ warn
     <ModalShell
       open
       onClose={close}
+      // A stray click outside must not answer a security prompt; Escape still works as the keyboard "stay".
+      closeOnBackdrop={false}
       maxWidthClassName="max-w-md"
       role="alertdialog"
       aria-labelledby="session-timeout-title"

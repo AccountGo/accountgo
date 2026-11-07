@@ -123,6 +123,18 @@ namespace AccountGo.BackendTests
 
             Assert.Equal(30 * 60, await RefreshIdleSeconds());
 
+            // A workspace without a settings row still counts, at the default (60), not as "no limit".
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>().Impersonate(strictCompanyId, "strict-client", CompanyMemberRole.Owner))
+                {
+                    db.CompanySettings.RemoveRange(db.CompanySettings.Where(s => s.CompanyId == strictCompanyId));
+                    await db.SaveChangesAsync();
+                }
+            }
+            Assert.Equal(SessionTimeoutPolicy.DefaultIdleMinutes * 60, await RefreshIdleSeconds());
+
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -195,12 +207,32 @@ namespace AccountGo.BackendTests
             }
 
             Assert.Empty(ActiveTokens(familyId));
+
+            // A second tab (or a replayed cookie) signing out the same, already-ended sign-in records nothing,
+            // even when it still holds a valid access token.
+            using (var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout?reason=idle"))
+            {
+                request.Headers.Add("Cookie", "accountgo_refresh_token=" + Uri.EscapeDataString(current));
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
+                Assert.Equal(HttpStatusCode.OK, (await browser.SendAsync(request)).StatusCode);
+            }
+
             using var scope = _factory.Services.CreateScope();
             var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
             var audit = identity.SecurityAuditEvents.Where(e => e.EventType == "auth.session.timeout").ToList();
             Assert.Single(audit);
             Assert.Equal(_ownerId, audit[0].UserId);
             Assert.Contains("idle", audit[0].MetadataJson);
+            Assert.Empty(identity.SecurityAuditEvents.Where(e => e.EventType == "auth.logout" && e.UserId == _ownerId));
+        }
+
+        [Fact]
+        public async Task Logout_SignedInWithoutCookie_StillRecordsTheSignOut()
+        {
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/auth/logout", scoped: false)).StatusCode);
+            using var scope = _factory.Services.CreateScope();
+            var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+            Assert.Single(identity.SecurityAuditEvents.Where(e => e.EventType == "auth.logout" && e.UserId == _ownerId));
         }
 
         private async Task<int> RefreshIdleSeconds()

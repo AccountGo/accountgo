@@ -458,16 +458,17 @@ public class SessionService : ISessionService
         var minutes = SessionTimeoutPolicy.DefaultIdleMinutes;
         if (_apiDb != null)
         {
+            // Left join: a workspace without a settings row still counts, at the default. IgnoreQueryFilters applies to
+            // the whole query, including the correlated settings lookup.
             var strictest = await _apiDb.CompanyMembers
                 .IgnoreQueryFilters()
                 .Where(m => m.UserId == userId
                     && m.Status == CompanyMemberStatus.Active
                     && m.Company.DeletedAt == null)
-                .Join(
-                    _apiDb.CompanySettings.IgnoreQueryFilters(),
-                    m => m.CompanyId,
-                    s => s.CompanyId,
-                    (m, s) => (int?)s.IdleTimeoutMinutes)
+                .Select(m => (int?)(_apiDb.CompanySettings
+                    .Where(s => s.CompanyId == m.CompanyId)
+                    .Select(s => (int?)s.IdleTimeoutMinutes)
+                    .FirstOrDefault() ?? SessionTimeoutPolicy.DefaultIdleMinutes))
                 .MinAsync();
             if (strictest.HasValue)
                 minutes = SessionTimeoutPolicy.Normalize(strictest.Value);
