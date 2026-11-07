@@ -24,8 +24,7 @@ const SEVERITY_ICON = {
   info: Info,
 } as const;
 
-function usePastDueAnnouncement(): AnnouncementItem | null {
-  const { billingEnabled, isPastDue, portalAvailable } = useBilling();
+function pastDueAnnouncement({ billingEnabled, isPastDue, portalAvailable }: ReturnType<typeof useBilling>): AnnouncementItem | null {
   if (!billingEnabled || !isPastDue) return null;
   return {
     id: 'client:past-due',
@@ -84,7 +83,7 @@ export const AnnouncementBar: React.FC = () => {
   const billing = useBilling();
   const navigate = useNavigate();
   const { orgSlug } = useParams<{ orgSlug: string }>();
-  const pastDue = usePastDueAnnouncement();
+  const pastDue = pastDueAnnouncement(billing);
   const [remote, setRemote] = useState<AnnouncementItem[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
   const [mobileExpanded, setMobileExpanded] = useState(false);

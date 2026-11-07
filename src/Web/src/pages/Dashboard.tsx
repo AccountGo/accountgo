@@ -281,6 +281,7 @@ export const Dashboard: React.FC = () => {
         orgSlug={currentOrg.slug}
         hasFinancialsModule={hasFinancialsModule}
         canManage={currentOrg.role === 'Owner' || currentOrg.role === 'Admin'}
+        collaborationState={currentOrg.operatingPolicy?.collaborationState ?? null}
       />
 
       {linkedWorkspace && (

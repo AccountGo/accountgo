@@ -8,10 +8,12 @@ interface Props {
   orgSlug: string;
   hasFinancialsModule: boolean;
   canManage: boolean;
+  /** From the workspace the layout already loaded, so the card does not fetch it again. */
+  collaborationState?: string | null;
 }
 
 /** "Get books ready" card shown on the dashboard until an admin dismisses it. */
-export const OnboardingChecklist: React.FC<Props> = ({ orgSlug, hasFinancialsModule, canManage }) => {
+export const OnboardingChecklist: React.FC<Props> = ({ orgSlug, hasFinancialsModule, canManage, collaborationState }) => {
   const { authFetch } = useAuth();
   const [items, setItems] = useState<ChecklistItem[] | null>(null);
 
@@ -23,17 +25,15 @@ export const OnboardingChecklist: React.FC<Props> = ({ orgSlug, hasFinancialsMod
         const requests: Promise<Response>[] = [
           authFetch('/api/organizations/current/accounting-policy'),
           authFetch('/api/organizations/current/business-profile'),
-          authFetch('/api/organizations/current'),
         ];
         if (hasFinancialsModule) {
           requests.push(authFetch('/api/Banking/Accounts'));
         }
-        const [policyRes, profileRes, orgRes, banksRes] = await Promise.all(requests);
+        const [policyRes, profileRes, banksRes] = await Promise.all(requests);
         if (!policyRes.ok || cancelled) return;
         const policy = await policyRes.json();
         if (policy.onboardingChecklistDismissedAt) return;
         const profile = profileRes.ok ? await profileRes.json() : null;
-        const org = orgRes.ok ? await orgRes.json() : null;
         let hasBankAccount = false;
         if (banksRes?.ok) {
           const banks = await banksRes.json();
@@ -45,14 +45,14 @@ export const OnboardingChecklist: React.FC<Props> = ({ orgSlug, hasFinancialsMod
           taxRegime: policy.taxRegime,
           hasLegalName: Boolean(profile?.legalName),
           hasBankAccount,
-          collaborationState: org?.operatingPolicy?.collaborationState ?? null,
+          collaborationState: collaborationState ?? null,
         }));
       } catch (err) {
         console.error('Failed to load onboarding checklist:', err);
       }
     })();
     return () => { cancelled = true; };
-  }, [authFetch, canManage, hasFinancialsModule]);
+  }, [authFetch, canManage, hasFinancialsModule, collaborationState]);
 
   const dismiss = useCallback(async () => {
     setItems(null);
