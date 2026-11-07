@@ -63,9 +63,10 @@ namespace Services.Dashboard
                     ? _financialService.GetAccountsWithoutLedgerLines()?.ToList()
                     : _financialService.GetAccounts()?.ToList()) ?? new List<Account>()
                 : new List<Account>();
-            // Totals summed in the database over the same lines MasterGeneralLedger returns (all dates).
+            // Period figures (freelance income, drawings, cash flow, monthly trends) use the dashboard range and
+            // leave out year-end closing journals, like the income statement behind the sales and expense totals.
             var ledger = canViewFinancials
-                ? (_financialService.LedgerMonthlyTotals()?.ToList() ?? new List<LedgerMonthlyTotal>())
+                ? (_financialService.LedgerMonthlyTotals(rangeStart, rangeEnd)?.ToList() ?? new List<LedgerMonthlyTotal>())
                 : new List<LedgerMonthlyTotal>();
             var balanceSheet = canViewFinancials
                 ? (_financialService.BalanceSheet()?.ToList() ?? new List<BalanceSheet>())

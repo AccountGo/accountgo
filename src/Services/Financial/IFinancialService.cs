@@ -41,10 +41,11 @@ namespace Services.Financial
         CashFlowStatement CashFlow(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null);
         /// <summary>
-        /// Debit and credit totals per account and calendar month over every ledger line, summed in the
-        /// database. Same lines and authorization as <see cref="MasterGeneralLedger"/> without date filters.
+        /// Debit and credit totals per account and calendar month for ledger lines dated from <paramref name="periodStart"/>
+        /// through <paramref name="periodEnd"/>, excluding year-end closing journals: the same lines the income statement
+        /// for that period uses. Summed in the database; requires the journal view permission.
         /// </summary>
-        IReadOnlyList<LedgerMonthlyTotal> LedgerMonthlyTotals();
+        IReadOnlyList<LedgerMonthlyTotal> LedgerMonthlyTotals(DateTime periodStart, DateTime periodEnd);
         /// <summary>Chart of accounts with parent and child accounts but without ledger lines, so <see cref="Account.Balance"/> is not available.</summary>
         IReadOnlyList<Account> GetAccountsWithoutLedgerLines();
         /// <summary>Lists tenant-scoped posted journals, retaining complete entries for account filters.</summary>

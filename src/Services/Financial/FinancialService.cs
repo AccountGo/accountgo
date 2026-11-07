@@ -801,16 +801,7 @@ namespace Services.Financial
             if (basis == AccountingBasis.Cash)
                 return CashBasisTrialBalance(from, to, excludeClosingEntries);
 
-            var closingIds = excludeClosingEntries ? ClosingGeneralLedgerHeaderIds() : null;
-            var lines = _generalLedgerLineRepository.Table;
-            if (from.HasValue)
-                lines = lines.Where(l => l.GeneralLedgerHeader.Date >= from.Value);
-            if (to.HasValue)
-                lines = lines.Where(l => l.GeneralLedgerHeader.Date <= to.Value);
-            if (closingIds != null && closingIds.Count > 0)
-                lines = lines.Where(l => !closingIds.Contains(l.GeneralLedgerHeaderId));
-
-            return lines
+            return PeriodLines(from, to, excludeClosingEntries)
                 .GroupBy(l => new { l.AccountId, l.Account.AccountCode, l.Account.AccountName })
                 .Select(g => new TrialBalance
                 {
@@ -822,6 +813,23 @@ namespace Services.Financial
                 })
                 .OrderBy(a => a.AccountCode)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Ledger lines dated within the bounds, optionally without year-end closing journals. The accrual trial
+        /// balance (and so the income statement) and the dashboard period figures share this one filter.
+        /// </summary>
+        private IQueryable<GeneralLedgerLine> PeriodLines(DateTime? from, DateTime? to, bool excludeClosingEntries)
+        {
+            var closingIds = excludeClosingEntries ? ClosingGeneralLedgerHeaderIds() : null;
+            var lines = _generalLedgerLineRepository.Table;
+            if (from.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date >= from.Value);
+            if (to.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date <= to.Value);
+            if (closingIds != null && closingIds.Count > 0)
+                lines = lines.Where(l => !closingIds.Contains(l.GeneralLedgerHeaderId));
+            return lines;
         }
 
         private HashSet<int> ClosingGeneralLedgerHeaderIds()
@@ -2000,13 +2008,13 @@ namespace Services.Financial
             return sortedList.ToList();
         }
 
-        public IReadOnlyList<LedgerMonthlyTotal> LedgerMonthlyTotals()
+        public IReadOnlyList<LedgerMonthlyTotal> LedgerMonthlyTotals(DateTime periodStart, DateTime periodEnd)
         {
             if (_auth == null || !_auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView).Allowed)
                 return new List<LedgerMonthlyTotal>();
 
-            // Joins the account and header like MasterGeneralLedger's includes, so the same lines count.
-            return (from line in _generalLedgerLineRepository.Table
+            // Same period and closing-entry rule as the income statement for [periodStart, periodEnd].
+            return (from line in PeriodLines(periodStart, periodEnd, excludeClosingEntries: true)
                     join account in _accountRepo.Table on line.AccountId equals account.Id
                     let date = line.GeneralLedgerHeader.Date
                     group line by new { line.AccountId, date.Year, date.Month } into g
