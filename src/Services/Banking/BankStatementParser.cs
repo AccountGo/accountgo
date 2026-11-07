@@ -15,6 +15,15 @@ using Dto.Banking;
 
 namespace Services.Banking
 {
+    /// <summary>Result of parsing a statement file, including parsed rows and optional statement balance.</summary>
+    public sealed class ParsedStatementFile
+    {
+        public IReadOnlyList<ParsedStatementRow> Rows { get; init; } = Array.Empty<ParsedStatementRow>();
+        public decimal? ClosingBalance { get; init; }
+        public DateTime? ClosingBalanceDate { get; init; }
+        public string? CurrencyCode { get; init; }
+    }
+
     /// <summary>One row read from a statement file, before it is checked against the database.</summary>
     public sealed class ParsedStatementRow
     {
@@ -71,6 +80,13 @@ namespace Services.Banking
             BankStatementSources source,
             string content,
             BankStatementColumnMap? map,
+            string? accountCurrencyCode = null) =>
+            ParseFile(source, content, map, accountCurrencyCode).Rows;
+
+        public static ParsedStatementFile ParseFile(
+            BankStatementSources source,
+            string content,
+            BankStatementColumnMap? map,
             string? accountCurrencyCode = null)
         {
             if (string.IsNullOrWhiteSpace(content))
@@ -80,14 +96,20 @@ namespace Services.Banking
 
             return source switch
             {
-                BankStatementSources.Csv or BankStatementSources.Xlsx => ParseCsv(
-                    content,
-                    map ?? throw new InvalidOperationException("Map the CSV columns first."),
-                    accountCurrencyCode),
-                BankStatementSources.Ofx => ParseOfx(content),
-                BankStatementSources.Camt => CamtStatementParser.Parse(content, accountCurrencyCode),
-                BankStatementSources.Mt940 => Mt940StatementParser.Parse(content),
-                BankStatementSources.Qif => QifStatementParser.Parse(content, map?.DateFormat),
+                BankStatementSources.Csv or BankStatementSources.Xlsx => new ParsedStatementFile
+                {
+                    Rows = ParseCsv(
+                        content,
+                        map ?? throw new InvalidOperationException("Map the CSV columns first."),
+                        accountCurrencyCode)
+                },
+                BankStatementSources.Ofx => ParseOfxFile(content, accountCurrencyCode),
+                BankStatementSources.Camt => CamtStatementParser.ParseFile(content, accountCurrencyCode),
+                BankStatementSources.Mt940 => Mt940StatementParser.ParseFile(content, accountCurrencyCode),
+                BankStatementSources.Qif => new ParsedStatementFile
+                {
+                    Rows = QifStatementParser.Parse(content, map?.DateFormat)
+                },
                 _ => throw new InvalidOperationException("Pick a supported statement file.")
             };
         }
@@ -667,7 +689,10 @@ namespace Services.Banking
             RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
             TimeSpan.FromSeconds(2));
 
-        public static IReadOnlyList<ParsedStatementRow> ParseOfx(string content)
+        public static IReadOnlyList<ParsedStatementRow> ParseOfx(string content) =>
+            ParseOfxFile(content).Rows;
+
+        public static ParsedStatementFile ParseOfxFile(string content, string? accountCurrencyCode = null)
         {
             content = content.TrimStart('\uFEFF');
             var rows = new List<ParsedStatementRow>();
@@ -701,7 +726,64 @@ namespace Services.Banking
 
             if (rows.Count == 0)
                 throw new InvalidOperationException("No transactions were found in the OFX file.");
-            return rows;
+
+            decimal? closingBalance = null;
+            DateTime? closingBalanceDate = null;
+            var fileCurrency = OfxField(content, "CURDEF");
+
+            bool currencyOk = true;
+            if (!string.IsNullOrWhiteSpace(fileCurrency) && !string.IsNullOrWhiteSpace(accountCurrencyCode))
+            {
+                currencyOk = string.Equals(fileCurrency.Trim(), accountCurrencyCode.Trim(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (currencyOk)
+            {
+                var ledgerMatch = Regex.Match(
+                    content,
+                    @"<LEDGERBAL>(?<body>.*?)(?=</LEDGERBAL>|<LEDGERBAL>|</STMTRS>|</CCSTMTRS>|<AVAILBAL>|\z)",
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
+                    TimeSpan.FromSeconds(2));
+
+                var availMatch = Regex.Match(
+                    content,
+                    @"<AVAILBAL>(?<body>.*?)(?=</AVAILBAL>|<AVAILBAL>|</STMTRS>|</CCSTMTRS>|<LEDGERBAL>|\z)",
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
+                    TimeSpan.FromSeconds(2));
+
+                var blockToUse = ledgerMatch.Success ? ledgerMatch.Groups["body"].Value
+                    : (availMatch.Success ? availMatch.Groups["body"].Value : null);
+
+                if (blockToUse != null)
+                {
+                    var balAmtStr = OfxField(blockToUse, "BALAMT");
+                    var dtAsOfStr = OfxField(blockToUse, "DTASOF");
+                    if (!string.IsNullOrWhiteSpace(balAmtStr))
+                    {
+                        try
+                        {
+                            closingBalance = Math.Round(ParseAmount(balAmtStr, "Balance"), 2, MidpointRounding.AwayFromZero);
+                        }
+                        catch (FormatException) { }
+                    }
+                    if (!string.IsNullOrWhiteSpace(dtAsOfStr))
+                    {
+                        try
+                        {
+                            closingBalanceDate = ParseOfxDate(dtAsOfStr);
+                        }
+                        catch (FormatException) { }
+                    }
+                }
+            }
+
+            return new ParsedStatementFile
+            {
+                Rows = rows,
+                ClosingBalance = closingBalance,
+                ClosingBalanceDate = closingBalanceDate,
+                CurrencyCode = fileCurrency
+            };
         }
 
         private static string? OfxField(string block, string tag)

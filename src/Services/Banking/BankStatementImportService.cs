@@ -82,7 +82,9 @@ namespace Services.Banking
                 detection = ToDetectionDto(resolved.Summary);
                 rows = BankStatementParser.ParseCsv(content, resolved.Map, resolved.Records);
             }
-            else if (source == BankStatementSources.Qif)
+            decimal? statementClosingBalance = null;
+            DateTime? statementClosingBalanceDate = null;
+            if (source == BankStatementSources.Qif)
             {
                 var userFormat = request.ColumnMap?.DateFormat;
                 var dateDetection = QifStatementParser.DetectDates(content);
@@ -96,9 +98,16 @@ namespace Services.Banking
                 };
                 rows = QifStatementParser.Parse(content, userFormat);
             }
-            else
+            else if (source is BankStatementSources.Csv or BankStatementSources.Xlsx)
             {
                 rows = BankStatementParser.Parse(source, content, request.ColumnMap, bank.CurrencyCode);
+            }
+            else
+            {
+                var parsedFile = BankStatementParser.ParseFile(source, content, request.ColumnMap, bank.CurrencyCode);
+                rows = parsedFile.Rows;
+                statementClosingBalance = parsedFile.ClosingBalance;
+                statementClosingBalanceDate = parsedFile.ClosingBalanceDate;
             }
             var existing = ExistingExternalIds(bank.Id, source);
             var classified = Classify(rows, existing);
@@ -126,6 +135,8 @@ namespace Services.Banking
                 MappingSource = mappingSource,
                 HeaderSignature = headerSignature,
                 PresetName = presetName,
+                StatementClosingBalance = statementClosingBalance,
+                StatementClosingBalanceDate = statementClosingBalanceDate,
                 Rows = classified.Take(PreviewRowLimit).Select(ToPreviewRow).ToList()
             };
         }
@@ -229,7 +240,20 @@ namespace Services.Banking
             var bank = RequireActiveBank(bankId);
             var source = ParseSource(request);
             var content = ResolveContent(request);
-            var rows = BankStatementParser.Parse(source, content, request.ColumnMap, bank.CurrencyCode);
+            decimal? statementClosingBalance = null;
+            DateTime? statementClosingBalanceDate = null;
+            IReadOnlyList<ParsedStatementRow> rows;
+            if (source is BankStatementSources.Csv or BankStatementSources.Xlsx or BankStatementSources.Qif)
+            {
+                rows = BankStatementParser.Parse(source, content, request.ColumnMap, bank.CurrencyCode);
+            }
+            else
+            {
+                var parsedFile = BankStatementParser.ParseFile(source, content, request.ColumnMap, bank.CurrencyCode);
+                rows = parsedFile.Rows;
+                statementClosingBalance = parsedFile.ClosingBalance;
+                statementClosingBalanceDate = parsedFile.ClosingBalanceDate;
+            }
             var existing = ExistingExternalIds(bank.Id, source);
             var classified = Classify(rows, existing);
 
@@ -238,7 +262,9 @@ namespace Services.Banking
                 Duplicates = classified.Count(c => c.Status == RowStatus.Duplicate),
                 Errors = classified.Count(c => c.Status == RowStatus.Error),
                 Skipped = classified.Count(c => c.Status == RowStatus.Skipped),
-                SkippedRowDetails = classified.Where(c => c.Status == RowStatus.Skipped).Select(ToPreviewRow).ToList()
+                SkippedRowDetails = classified.Where(c => c.Status == RowStatus.Skipped).Select(ToPreviewRow).ToList(),
+                StatementClosingBalance = statementClosingBalance,
+                StatementClosingBalanceDate = statementClosingBalanceDate
             };
 
             var ready = classified.Where(c => c.Status == RowStatus.Ready).Select(c => c.Row).ToList();
