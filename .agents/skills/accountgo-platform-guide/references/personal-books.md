@@ -2,7 +2,7 @@
 
 ## What personal books are
 
-Personal books are a separate workspace for household money. Use this section when someone asks "how do I track my personal money", "do I have personal books", or "can my freelance workspace be my personal one".
+Personal books are a separate workspace for household money. Use this section when someone asks "how do I track my personal money", "do I have personal books", "can my freelance workspace be my personal one", "why do these books have accounting", or "why can't I invoice from here".
 
 **Identify them without plan keys.** A personal-books workspace shows **· Personal** next to its name in the workspace switcher and the dashboard, and the app treats it as `isPersonalBooks` (the `currentOrg` flag). Do not infer it from the plan name, and do not state plan prices or limits from memory; read `/api/entitlements` when exact limits matter.
 
@@ -30,6 +30,20 @@ Personal books are a separate workspace for household money. Use this section wh
 | Reports | **Net worth (book value)** (Assets, Debts, Net worth), **Money in and out** (Earned income and **Money from my freelance work** on separate lines, spending by category, **Net**), **Cash movement** (one list of cash in and out with opening and closing cash), and **Trial balance** under **Advanced**. |
 
 Wording to use and avoid: say net worth, book value, money in and out. Do not call these "personal financial statements", and do not say profit, revenue or deductible for personal books; they are historical-cost household records, not current-value statements or tax advice.
+
+## Why these books have a ledger, and why they do not invoice
+
+These answers are for the customer. Use the words they see on screen. Do not mention account codes, module names, plan names, prices, API paths, source files, or error codes. Do not suggest an upgrade. Do not tell them they need to learn bookkeeping. If **Invoices & Sales** is on the sidebar, explain the household rule, then say this workspace still has invoicing because it already did when it became personal books.
+
+**Why Transactions is here.** Personal books are the household's own books. **Transactions** is where those books are kept. **Net worth (book value)**, **Money in and out**, **Cash movement**, and **Trial balance** are the same books with household titles. A salary is money in. Groceries and other ordinary spending are money out. Moving money between the household's own accounts is a transfer, not spending. Money borrowed is a debt, and paying it back is partly paying down that debt and partly a cost. Paying a credit card clears the card. At the end of the year, what came in and what was spent updates **Accumulated net worth**. Money the household started with is included there too.
+
+Day to day they use **Bank accounts** and **Bills**. **You owe** and **Bills coming due** stay accurate because each bill is recorded in the books. Imported statement lines are matched into the same books. **Settings** does not include journal approval, taxes, invoices, or branding. The chart and manual entries are there for a correction or for closing the year. They are not the everyday task.
+
+**Why there is no invoice.** An invoice says a client owes the business for work, and that income belongs to the work workspace. Personal books are the household, separate from the work workspace. There is no **Invoices & Sales**, no client list, and no **Products & services**. **Settings** has no place to set up invoices or taxes.
+
+Record client bills in the work workspace. When money actually moves home, open the work workspace, go to **Bank statement import**, and use **Link this bank line**. Personal books then show **Money from my freelance work** on its own line, separate from **Earned income**, so the same fee is not counted twice. Use **Link this bank line** only for money that moves.
+
+Give this answer in either workspace. If **Invoices & Sales** is visible, this workspace can still invoice. Say so, and do not tell them invoicing is unavailable.
 
 ## Account names and codes are defaults, not constants
 
