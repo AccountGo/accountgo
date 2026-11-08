@@ -219,6 +219,7 @@ exclude
 /src/Api/appsettings.Development.json
 
 .env
+.dev.env
 *.db
 *.db-shm
 *.db-wal
