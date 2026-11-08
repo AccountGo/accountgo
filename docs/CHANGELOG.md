@@ -9,32 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Company onboarding: a multi-step `/create-org` wizard that captures reporting framework, fiscal year, books start date, tax regime, industry and inventory costing; the API derives the fiscal year and chart-of-accounts template from those choices. Signup no longer creates a workspace.
-- Accounting policy lock: framework, basis, fiscal year and books start freeze after the first journal entry; postings dated before the books start date are rejected.
-- Dashboard "Get books ready" checklist and a Settings accounting policy card.
-- Standard Open Source community health files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1), `SECURITY.md`.
-- GitHub issue templates for bug reports and feature requests, plus pull request template with comprehensive verification checklist.
-- Technical documentation in `docs/`: `ARCHITECTURE.md`, `DEVELOPMENT.md`, `DEPLOYMENT.md`.
-- Live database persistence and bi-directional editing for Organization Settings (`/org/:orgSlug/settings`).
-- Complete Role-Based Access Control (RBAC) permission matrices and subscription tier management UI.
+---
+
+## [0.1.0] - 2026-11-08
+
+First release of the rebuilt AccountGo. Release notes: https://github.com/AccountGo/accountgo/releases/tag/v0.1.0
+
+### Platform
+- .NET 10 API and a React 19 / TypeScript / Vite / Tailwind CSS v4 web app, installable as a mobile home-screen app (PWA) with safe-area layouts.
+- Multi-tenant workspaces with slug routing (`/org/:orgSlug/*`), one login across several businesses, and a base currency per workspace (16 supported).
+- SQLite or PostgreSQL storage; the hosted service runs on Cloudflare Workers and Containers.
+
+### Sales and purchases
+- Clients, quotes, sales invoices, payments received, and a products & services catalog.
+- Invoice numbers assigned at issue, stored due dates, business-day and custom payment terms, duplicate and void with frozen history.
+- Branded PDF invoices, invoice email with PDF attachment or secure link, and reminders.
+- Vendors, bills with per-line expense accounts and tax, and bill payments.
+
+### Accounting
+- Chart of accounts (with CSV import/export), double-entry journal entries, and the general ledger.
+- Trial balance, profit and loss, balance sheet, and cash flow on an accrual or cash basis, with CSV downloads.
+- Company onboarding wizard (reporting framework, fiscal year, books start date, tax regime) and an accounting policy lock after the first journal.
+- Bank accounts, bank statement import, matching, and reconciliation.
+
+### Security and teams
+- Passwordless email one-time-code sign-in, Google sign-in, refresh-token sessions, rate limiting, and per-workspace idle timeout.
+- Team invitations with role-based permissions, and an audit trail of changes.
+
+### Project
+- AGPL-3.0-only license, trademark policy, Contributor License Agreement, contributing guide, code of conduct, security policy, and issue/PR templates.
 
 ---
 
-## [1.0.0] - 2026-10-20
+## Legacy (2015–2020)
 
-### Modernization & Architecture Overhaul
-- **Upgraded Runtime**: Upgraded backend architecture to **.NET 10** with .NET Aspire orchestration and OpenTelemetry observability.
-- **Frontend Rewrite**: Modernized web client to **React 19**, **TypeScript 5.9**, **Vite 8**, and **Tailwind CSS v4** with custom glassmorphism design tokens.
-- **Passwordless Authentication**: Implemented 6-digit OTP verification code flow with rate-limiting and HTTP-only session cookies.
-- **Multi-Tenancy Engine**: Dynamic organization slug routing (`/org/:orgSlug/*`), tenant header resolution, and isolated company databases.
-- **Cloudflare Edge Deployment**: Added Cloudflare Workers deployment for frontend SPA and Cloudflare Containers runtime for backend API.
-- **Database Support**: Zero-config SQLite database matching Cloudflare D1 schema with multi-engine support for Microsoft SQL Server.
-- **Automated CI/CD**: Added GitHub Actions workflows for continuous compilation, container packaging, and automated deployment.
-
----
-
-## [0.9.0] - Legacy Release
+The original ASP.NET AccountGo (last tagged `0.0.1-alpha`). Kept for history; v0.1.0 is a ground-up rebuild.
 
 ### Added
 - Core double-entry accounting ledger and journal entry recording.
