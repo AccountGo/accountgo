@@ -1035,7 +1035,7 @@ namespace Services.Sales
             return Result<Dto.Sales.SalesInvoice>.Success(null);
         }
 
-        public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
+        public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder, bool preserveTaxAmounts = false)
         {
             if (salesInvoice.Id != 0)
                 salesInvoice.EnsureEditable();
@@ -1054,7 +1054,8 @@ namespace Services.Sales
                     : null;
                 if (tax != null && !tax.IsActive)
                     throw new InvalidOperationException($"{tax.TaxName} is archived. Pick another tax for this line.");
-                line.TaxAmount = Core.Domain.Purchases.PurchaseInvoiceLine.TaxOf(line.Subtotal, tax?.Rate);
+                if (!preserveTaxAmounts)
+                    line.TaxAmount = Core.Domain.Purchases.PurchaseInvoiceLine.TaxOf(line.Subtotal, tax?.Rate);
             }
 
             // This method should be in a single transaction. when one fails, roll back all changes.

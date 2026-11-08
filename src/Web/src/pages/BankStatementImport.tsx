@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, Link2Off, Loader2, Plus, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Link2Off, Loader2, Plus, Scale, Upload } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { StatementLineApplyInvoiceDialog } from '../components/StatementLineApplyInvoiceDialog';
 import { StatementLineExcludeDialog } from '../components/StatementLineExcludeDialog';
@@ -8,6 +8,7 @@ import { StatementLineExpenseDialog } from '../components/StatementLineExpenseDi
 import { StatementLineOtherIncomeDialog } from '../components/StatementLineOtherIncomeDialog';
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
 import { LinkedEntryDialog } from '../components/LinkedEntryDialog';
+import { BalanceCheckDialog } from '../components/BalanceCheckDialog';
 import { STATEMENT_EXCLUSION_REASONS } from '../types/banking';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
@@ -150,6 +151,11 @@ const BankStatementImportPage: React.FC = () => {
   const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
   const [pickedCandidate, setPickedCandidate] = useState<Record<number, string>>({});
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [closingBalanceOffer, setClosingBalanceOffer] = useState<{
+    balance: number;
+    asOfDate?: string | null;
+  } | null>(null);
+  const [balanceCheckOpen, setBalanceCheckOpen] = useState(false);
 
   const formatCurrency = useCallback(
     (n: number) =>
@@ -250,6 +256,7 @@ const BankStatementImportPage: React.FC = () => {
   const onFile = async (file: File | null) => {
     setPreview(null);
     setNotice(null);
+    setClosingBalanceOffer(null);
     setSkippedDetails([]);
     setError(null);
     if (!file) return;
@@ -381,6 +388,14 @@ const BankStatementImportPage: React.FC = () => {
       const result: BankStatementCommitResult = await res.json();
       setNotice(importSummary(result));
       setSkippedDetails(result.skippedRowDetails ?? []);
+      if (result.statementClosingBalance != null) {
+        setClosingBalanceOffer({
+          balance: result.statementClosingBalance,
+          asOfDate: result.statementClosingBalanceDate,
+        });
+      } else {
+        setClosingBalanceOffer(null);
+      }
       setPreview(null);
       setContent('');
       setContentBase64(null);
@@ -504,6 +519,29 @@ const BankStatementImportPage: React.FC = () => {
         <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 text-sm flex gap-2">
           <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
           {notice}
+        </div>
+      )}
+
+      {closingBalanceOffer && account && (
+        <div
+          data-testid="statement-closing-balance-offer"
+          className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-700 text-sm flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-2">
+            <Scale className="w-4 h-4 shrink-0" />
+            <span>
+              Statement closing balance: <strong>{formatCurrency(closingBalanceOffer.balance)}</strong>
+              {closingBalanceOffer.asOfDate ? ` as of ${String(closingBalanceOffer.asOfDate).slice(0, 10)}` : ''}.
+              Compare with your books?
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBalanceCheckOpen(true)}
+            className="h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] whitespace-nowrap hover:opacity-95"
+          >
+            Check balance
+          </button>
         </div>
       )}
 
@@ -1144,6 +1182,16 @@ const BankStatementImportPage: React.FC = () => {
             setCreateFor(null);
             await loadLines(status, page);
           }}
+        />
+      )}
+
+      {balanceCheckOpen && account && (
+        <BalanceCheckDialog
+          bank={account}
+          formatCurrency={formatCurrency}
+          initialBalance={closingBalanceOffer?.balance}
+          initialAsOfDate={closingBalanceOffer?.asOfDate}
+          onClose={() => setBalanceCheckOpen(false)}
         />
       )}
     </div>

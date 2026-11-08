@@ -51,7 +51,7 @@ namespace Services.Sales
         IEnumerable<SalesQuoteHeader> GetSalesQuotes();
         IEnumerable<SalesInvoiceHeader> GetCustomerInvoices(int customerId);
         SalesQuoteHeader GetSalesQuotationById(int id);
-        void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder);
+        void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder, bool preserveTaxAmounts = false);
         Result<Dto.Sales.SalesInvoice> CreateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id);

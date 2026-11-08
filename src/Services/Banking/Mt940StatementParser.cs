@@ -19,7 +19,15 @@ namespace Services.Banking
             RegexOptions.CultureInvariant | RegexOptions.Compiled,
             TimeSpan.FromSeconds(1));
 
-        public static IReadOnlyList<ParsedStatementRow> Parse(string content)
+        private static readonly Regex Tag62 = new(
+            @"^:62[FM]:(?<dc>[CD])(?<yy>\d{2})(?<mm>\d{2})(?<dd>\d{2})(?<ccy>[A-Z]{3})(?<amount>[\d,\.]+)",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled,
+            TimeSpan.FromSeconds(1));
+
+        public static IReadOnlyList<ParsedStatementRow> Parse(string content) =>
+            ParseFile(content).Rows;
+
+        public static ParsedStatementFile ParseFile(string content, string? accountCurrencyCode = null)
         {
             content = content.TrimStart('\uFEFF');
             if (string.IsNullOrWhiteSpace(content))
@@ -99,7 +107,58 @@ namespace Services.Banking
 
             if (rows.Count == 0)
                 throw new InvalidOperationException("No transactions were found in the MT940 file.");
-            return rows;
+
+            decimal? closingBalance = null;
+            DateTime? closingBalanceDate = null;
+            string? balanceCurrency = null;
+
+            foreach (var l in lines)
+            {
+                var trimmed = l.Trim();
+                if (trimmed.StartsWith(":62F:", StringComparison.Ordinal) || (closingBalance == null && trimmed.StartsWith(":62M:", StringComparison.Ordinal)))
+                {
+                    var match62 = Tag62.Match(trimmed);
+                    if (match62.Success)
+                    {
+                        var ccy = match62.Groups["ccy"].Value;
+                        bool currencyOk = true;
+                        if (!string.IsNullOrWhiteSpace(accountCurrencyCode))
+                        {
+                            currencyOk = string.Equals(ccy, accountCurrencyCode.Trim(), StringComparison.OrdinalIgnoreCase);
+                        }
+                        if (currencyOk)
+                        {
+                            try
+                            {
+                                var year = 2000 + int.Parse(match62.Groups["yy"].Value, CultureInfo.InvariantCulture);
+                                var month = int.Parse(match62.Groups["mm"].Value, CultureInfo.InvariantCulture);
+                                var day = int.Parse(match62.Groups["dd"].Value, CultureInfo.InvariantCulture);
+                                var dc = match62.Groups["dc"].Value;
+                                var amountRaw = match62.Groups["amount"].Value.Replace(',', '.');
+                                var amount = BankStatementParser.ParseAmount(amountRaw, "Balance");
+                                if (dc is "D")
+                                    amount = -Math.Abs(amount);
+                                else
+                                    amount = Math.Abs(amount);
+                                closingBalance = Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+                                closingBalanceDate = DateTime.SpecifyKind(new DateTime(year, month, day), DateTimeKind.Utc);
+                                balanceCurrency = ccy;
+                                if (trimmed.StartsWith(":62F:", StringComparison.Ordinal))
+                                    break;
+                            }
+                            catch (Exception) { }
+                        }
+                    }
+                }
+            }
+
+            return new ParsedStatementFile
+            {
+                Rows = rows,
+                ClosingBalance = closingBalance,
+                ClosingBalanceDate = closingBalanceDate,
+                CurrencyCode = balanceCurrency
+            };
         }
 
         private static string? ExtractReference(string rest)
