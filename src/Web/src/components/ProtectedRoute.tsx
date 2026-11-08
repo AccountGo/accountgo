@@ -9,7 +9,7 @@ export const ProtectedRoute: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
+      <div className="flex h-dvh w-screen items-center justify-center bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <div className="w-16 h-16 rounded-2xl bg-[var(--brand-primary)]/10 ring-1 ring-[var(--brand-ring)] flex items-center justify-center shadow-2xl shadow-[var(--brand-primary)]/20 animate-pulse">

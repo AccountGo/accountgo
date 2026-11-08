@@ -55,7 +55,7 @@ const RootRedirect: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[var(--bg-canvas)]">
+      <div className="flex h-dvh w-screen items-center justify-center bg-[var(--bg-canvas)]">
         <Loader2 className="w-6 h-6 text-[var(--brand-primary)] animate-spin" />
       </div>
     );

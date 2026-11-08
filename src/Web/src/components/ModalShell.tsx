@@ -174,8 +174,8 @@ export const ModalShell: React.FC<ModalShellProps> = ({
 
   const overlayAlign =
     align === 'bottom-sheet'
-      ? 'items-end sm:items-start justify-center sm:pt-[12vh]'
-      : 'items-center justify-center p-4';
+      ? 'items-end sm:items-start justify-center safe-x pt-[var(--sat)] sm:pt-[12vh]'
+      : 'items-center justify-center p-safe-4';
 
   const panel = bare ? (
     <div
@@ -198,7 +198,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       aria-labelledby={ariaLabelledBy}
       aria-describedby={ariaDescribedBy}
       tabIndex={-1}
-      className={`w-full ${maxWidthClassName} max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] shadow-2xl p-6 sm:p-8 focus:outline-none ${panelClassName}`}
+      className={`w-full ${maxWidthClassName} max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] shadow-2xl p-6 sm:p-8 focus:outline-none ${panelClassName}`}
       onMouseDown={(event) => event.stopPropagation()}
     >
       {children}

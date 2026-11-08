@@ -307,7 +307,7 @@ export const OrgLayout: React.FC = () => {
   // 1. Loading Skeleton State (Border-Less)
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-slate-400 p-4 safe-area-all">
+      <div className="flex h-dvh w-screen items-center justify-center bg-slate-950 text-slate-400 p-4 safe-area-all">
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center shadow-lg shadow-emerald-500/10 animate-pulse">
@@ -327,7 +327,7 @@ export const OrgLayout: React.FC = () => {
   // 2. Organization Not Found State (Border-Less Surface)
   if (!currentOrg) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 p-4 sm:p-6 text-slate-200 safe-area-all">
+      <div className="flex h-dvh w-screen items-center justify-center bg-slate-950 p-4 sm:p-6 text-slate-200 safe-area-all">
         <div className="max-w-md w-full bg-slate-900/90 backdrop-blur-2xl rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/80 text-center">
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto mb-4 shadow-sm">
             <AlertCircle className="w-7 h-7" />
@@ -468,7 +468,11 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
       companyId={currentOrg.id} canView={hasPermission('banking.accounts.view')}
       canManage={hasPermission('banking.accounts.manage')}>
     <AssistantProvider sidebarMode={sidebarMode} setSidebarMode={setSidebarMode}>
-      <div className="app-shell flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200 flex-col">
+      <div className="app-shell flex h-dvh w-screen overflow-hidden safe-x bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200 flex-col">
+        {/* Status bar / notch strip (0px outside an iOS home-screen app). It sits above
+            the announcement bar and header so neither renders under the clock. */}
+        <div aria-hidden="true" className="no-print shrink-0 h-[var(--sat)] bg-[var(--bg-header)]" />
+
         {/* Skip to Main Content Link for Keyboard Users (WCAG 2.4.1) */}
         <a href="#main-content" className="skip-link">
           Skip to main content
@@ -509,7 +513,7 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
               <main
                 id="main-content"
                 tabIndex={-1}
-                className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-20 md:pb-8 bg-[var(--bg-canvas)] smooth-scroll transition-all duration-300 ease-in-out focus:outline-none ${
+                className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-mobile-nav md:pb-8 bg-[var(--bg-canvas)] smooth-scroll transition-all duration-300 ease-in-out focus:outline-none ${
                   sidebarMode === 'collapsed' ? 'md:pr-20' : sidebarMode === 'closed' ? 'pr-0' : ''
                 }`}
               >

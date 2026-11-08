@@ -1,19 +1,16 @@
 /*
  * ChatProvider renders <div data-chat-provider="ai-chat-sdk"> with no className prop.
- * That node is the flex child of the AccountGo content column and must fill the row
- * with a definite height so the SDK's height:100% chain resolves to the viewport.
+ * That node is the flex child of the AccountGo content row and must fill it with a
+ * definite height so the SDK's height:100% chain resolves. Stretching inside the
+ * fixed-height app shell gives that height without a viewport unit, so the row
+ * stays below the notch strip and announcement bar instead of overflowing by them.
  */
 [data-chat-provider="ai-chat-sdk"] {
   flex: 1 1 0%;
   min-width: 0;
-  height: 100vh;
+  min-height: 0;
+  align-self: stretch;
   isolation: isolate;
-}
-
-@supports (height: 100dvh) {
-  [data-chat-provider="ai-chat-sdk"] {
-    height: 100dvh;
-  }
 }
 
 .accountgo-assistant-layout.ais-desktop.ais-panel-open .ais-sidepanel-host-pane {

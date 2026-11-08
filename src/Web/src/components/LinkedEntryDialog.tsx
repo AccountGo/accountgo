@@ -72,7 +72,7 @@ export const LinkedEntryDialog: React.FC<{
   };
 
   const inputClass = 'w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] px-3 py-2 text-sm';
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-safe-4" role="presentation">
     <section role="dialog" aria-modal="true" aria-labelledby="linked-entry-title" className="w-full max-w-lg space-y-4 rounded-2xl bg-[var(--bg-surface)] p-5 shadow-xl">
       <div><h2 id="linked-entry-title" className="text-lg font-semibold">Link this bank line</h2><p className="text-sm text-[var(--text-secondary)]">This creates a balanced journal in each workspace.</p></div>
       <form className="space-y-4" onSubmit={event => void submit(event)}>
