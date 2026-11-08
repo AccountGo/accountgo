@@ -100,7 +100,7 @@ export function PickerDialog<T extends { id: number }>({
       bare
       align="bottom-sheet"
       aria-labelledby={titleId}
-      panelClassName="flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl sm:max-h-[70vh] sm:max-w-xl sm:rounded-2xl"
+      panelClassName="flex max-h-[85dvh] w-full flex-col rounded-t-2xl pb-[var(--sab)] sm:pb-0 border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl sm:max-h-[70vh] sm:max-w-xl sm:rounded-2xl"
     >
       <div ref={dialogRef} onKeyDown={onKeyDown} className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">

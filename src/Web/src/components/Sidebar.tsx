@@ -135,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const renderContent = (isMobile: boolean = false) => (
     <aside
       className={`no-print h-full flex flex-col bg-[var(--bg-sidebar)] backdrop-blur-2xl transition-[width] duration-300 ease-in-out select-none text-[var(--text-main)] ${
-        isMobile ? 'w-72 safe-top safe-bottom shadow-2xl shadow-black/80' : isCollapsed ? 'w-20' : 'w-64'
+        isMobile ? 'w-72 safe-top safe-bottom pl-[var(--sal)] shadow-2xl shadow-black/80' : isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
       {/* Brand Header */}

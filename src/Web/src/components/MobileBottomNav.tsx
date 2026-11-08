@@ -97,9 +97,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
   return (
     <nav
-      className="no-print md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--bg-header)] backdrop-blur-2xl px-2 safe-bottom flex items-center justify-around h-16 shadow-[0_-8px_30px_rgba(0,0,0,0.4)] transition-colors duration-200"
+      className="no-print md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--bg-header)] backdrop-blur-2xl safe-x safe-bottom shadow-[0_-8px_30px_rgba(0,0,0,0.4)] transition-colors duration-200"
       aria-label="Mobile Bottom Navigation"
     >
+      <div className="flex h-16 items-center justify-around px-2">
       {navItems.map((item) => {
         const Icon = item.icon;
         return (
@@ -142,6 +143,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         </div>
         <span className="truncate mt-0.5">More</span>
       </button>
+      </div>
     </nav>
   );
 };

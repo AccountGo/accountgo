@@ -290,6 +290,26 @@ html, body {
   padding-right: var(--sar);
 }
 
+/*
+ * Safe-area rules for the app chrome. Insets are added OUTSIDE fixed-height
+ * bars (a 64px header stays 64px of content plus the notch), never inside them:
+ * padding inside an h-16 box eats the row and pushes content out of the bar.
+ */
+@utility safe-x {
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+/* Centered overlays: at least 1rem from every edge, more where the device needs it. */
+@utility p-safe-4 {
+  padding: max(1rem, var(--sat)) max(1rem, var(--sar)) max(1rem, var(--sab)) max(1rem, var(--sal));
+}
+
+/* Scrolling page content clears the fixed mobile bottom bar (64px + home indicator). */
+@utility pb-mobile-nav {
+  padding-bottom: calc(5rem + var(--sab));
+}
+
 /* Smooth Touch Scrolling */
 .smooth-scroll {
   -webkit-overflow-scrolling: touch;
