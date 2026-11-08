@@ -267,6 +267,19 @@ html, body {
   transition: background-color 200ms ease, color 200ms ease;
 }
 
+/*
+ * iOS 26 Home Screen apps (viewport-fit=cover + black-translucent status bar) give
+ * a page shorter than the screen a viewport that is short by the top inset, so
+ * fixed bottom bars float above a gap (62pt on a 17 Pro Max). Making the document
+ * at least screen-height restores the full viewport. The 100lvh cap keeps devices
+ * without a top inset from gaining a scroll. WebKit bug 301994.
+ */
+@media (display-mode: standalone) {
+  html {
+    min-height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px)));
+  }
+}
+
 /* iOS Safe Area Padding variables */
 :root {
   --sat: env(safe-area-inset-top, 0px);
