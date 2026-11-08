@@ -88,6 +88,19 @@ User profile management, credential administration, active device/session monito
 
 ---
 
+### 8. Mobile & Installable App (PWA)
+Add AccountGo to your phone's home screen and it runs full-screen like a native app, with a bottom tab bar, a slide-out menu, and layouts that respect the iPhone notch and home indicator.
+
+<p align="center">
+  <img src="docs/screenshots/08-mobile-dashboard.png" alt="Mobile dashboard" width="240" />
+  &nbsp;
+  <img src="docs/screenshots/09-mobile-navigation.png" alt="Mobile navigation menu" width="240" />
+  &nbsp;
+  <img src="docs/screenshots/10-mobile-chart-of-accounts.png" alt="Mobile chart of accounts" width="240" />
+</p>
+
+---
+
 ## Core Capabilities & Features
 
 - **Multi-Tenancy & Workspace Switching**: Complete tenant isolation, custom branding, localized currencies (PHP, USD, CAD, EUR, etc.), and independent fiscal years.
