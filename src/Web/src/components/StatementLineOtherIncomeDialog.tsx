@@ -2,6 +2,7 @@ import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Coins, X } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { useAuth } from '../auth/AuthContext';
+import { isSelectableTax, taxChoiceLabel, type WorkspaceTax } from '../lib/invoiceTax';
 import type { BankStatementLine } from '../types/banking';
 
 interface IncomeCategory {
@@ -42,8 +43,10 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
   const titleId = useId();
   const [categories, setCategories] = useState<IncomeCategories | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
+  const [taxes, setTaxes] = useState<WorkspaceTax[]>([]);
   const [customerId, setCustomerId] = useState('');
   const [incomeAccountId, setIncomeAccountId] = useState('');
+  const [taxId, setTaxId] = useState('');
   const [memo, setMemo] = useState(line.memo || '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -54,9 +57,10 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
     void (async () => {
       setLoading(true);
       try {
-        const [catRes, clientRes] = await Promise.all([
+        const [catRes, clientRes, taxRes] = await Promise.all([
           authFetch('/api/Banking/StatementIncomeCategories'),
           authFetch('/api/Sales/Customers'),
+          authFetch('/api/Tax/Taxes'),
         ]);
         if (cancelled) return;
         if (catRes.ok) {
@@ -66,6 +70,11 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
           if (first) setIncomeAccountId(String(first.accountId));
         }
         if (clientRes.ok) setClients((await clientRes.json()) as ClientOption[]);
+        if (taxRes.ok) {
+          const data = await taxRes.json();
+          const list = ((data?.taxes ?? []) as WorkspaceTax[]).filter(isSelectableTax);
+          setTaxes(list);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -92,6 +101,7 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
         body: JSON.stringify({
           customerId: customerId ? Number(customerId) : null,
           incomeAccountId: Number(incomeAccountId),
+          taxId: taxId ? Number(taxId) : null,
           description: line.payee || line.memo || null,
           memo: memo.trim() || null,
         }),
@@ -211,6 +221,32 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
                   ))}
               </select>
             </div>
+
+            {taxes.length > 0 && (
+              <div>
+                <label htmlFor={`${titleId}-tax`} className={labelClass}>
+                  Tax (optional)
+                </label>
+                <select
+                  id={`${titleId}-tax`}
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">No tax</option>
+                  {taxes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {taxChoiceLabel(t)}
+                    </option>
+                  ))}
+                </select>
+                {taxId && (
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    The selected tax is included in the bank gross amount.
+                  </p>
+                )}
+              </div>
+            )}
           </>
         )}
 

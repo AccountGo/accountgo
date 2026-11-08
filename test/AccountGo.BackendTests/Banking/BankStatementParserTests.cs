@@ -324,4 +324,111 @@ public class BankStatementParserTests
         Assert.True(row.IsValid, row.Error);
         Assert.Equal((decimal)expected, row.Amount);
     }
+
+    [Fact]
+    public void Ofx_ExtractsClosingBalance_FromLedgerBal()
+    {
+        const string ofx =
+            "OFXHEADER:100\nDATA:OFXSGML\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS>" +
+            "<CURDEF>USD\n" +
+            "<BANKTRANLIST>\n" +
+            "<STMTTRN>\n<TRNTYPE>DEBIT\n<DTPOSTED>20261002\n<TRNAMT>-40.00\n<FITID>F2\n<NAME>Coffee\n</STMTTRN>\n" +
+            "</BANKTRANLIST>\n" +
+            "<LEDGERBAL>\n<BALAMT>5432.10\n<DTASOF>20261002120000[0:GMT]\n</LEDGERBAL>\n" +
+            "</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>";
+
+        var parsed = BankStatementParser.ParseOfxFile(ofx, "USD");
+
+        Assert.Single(parsed.Rows);
+        Assert.Equal(5432.10m, parsed.ClosingBalance);
+        Assert.Equal(new DateTime(2026, 10, 2), parsed.ClosingBalanceDate);
+        Assert.Equal("USD", parsed.CurrencyCode);
+    }
+
+    [Fact]
+    public void Ofx_ExtractsClosingBalance_FromAvailBal_WhenLedgerBalMissing()
+    {
+        const string xml =
+            "<?xml version=\"1.0\"?><OFX><STMTRS><CURDEF>EUR</CURDEF>" +
+            "<BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261005</DTPOSTED>" +
+            "<TRNAMT>-9.99</TRNAMT><FITID>X1</FITID><NAME>Shop</NAME></STMTTRN></BANKTRANLIST>" +
+            "<AVAILBAL><BALAMT>1200.50</BALAMT><DTASOF>20261005</DTASOF></AVAILBAL>" +
+            "</STMTRS></OFX>";
+
+        var parsed = BankStatementParser.ParseOfxFile(xml, "EUR");
+
+        Assert.Single(parsed.Rows);
+        Assert.Equal(1200.50m, parsed.ClosingBalance);
+        Assert.Equal(new DateTime(2026, 10, 5), parsed.ClosingBalanceDate);
+    }
+
+    [Fact]
+    public void Ofx_LeavesBalanceBlank_WhenCurrencyMismatchesAccount()
+    {
+        const string xml =
+            "<?xml version=\"1.0\"?><OFX><STMTRS><CURDEF>USD</CURDEF>" +
+            "<BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261005</DTPOSTED>" +
+            "<TRNAMT>-9.99</TRNAMT><FITID>X1</FITID><NAME>Shop</NAME></STMTTRN></BANKTRANLIST>" +
+            "<LEDGERBAL><BALAMT>1200.50</BALAMT><DTASOF>20261005</DTASOF></LEDGERBAL>" +
+            "</STMTRS></OFX>";
+
+        // Account is EUR, but statement is USD -> leave blank for user to enter
+        var parsed = BankStatementParser.ParseOfxFile(xml, "EUR");
+
+        Assert.Single(parsed.Rows);
+        Assert.Null(parsed.ClosingBalance);
+        Assert.Null(parsed.ClosingBalanceDate);
+    }
+
+    [Fact]
+    public void Ofx_ReturnsNullBalance_WhenBalanceTagsMissing()
+    {
+        const string xml =
+            "<?xml version=\"1.0\"?><OFX><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261005</DTPOSTED>" +
+            "<TRNAMT>-9.99</TRNAMT><FITID>X1</FITID><NAME>Shop</NAME></STMTTRN></BANKTRANLIST></OFX>";
+
+        var parsed = BankStatementParser.ParseOfxFile(xml, "USD");
+
+        Assert.Single(parsed.Rows);
+        Assert.Null(parsed.ClosingBalance);
+        Assert.Null(parsed.ClosingBalanceDate);
+    }
+
+    [Fact]
+    public void Camt_ExtractsClosingBalance_FromClbd()
+    {
+        const string xml =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+            "<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:camt.053.001.02\">" +
+            "<BkToCstmrStmt><Stmt>" +
+            "<Bal><Tp><CdOrPrt><Cd>CLBD</Cd></CdOrPrt></Tp><Amt Ccy=\"EUR\">3500.75</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-15</Dt></Dt></Bal>" +
+            "<Ntry><Sts>BOOK</Sts><Amt Ccy=\"EUR\">100.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-10-14</Dt></BookgDt></Ntry>" +
+            "</Stmt></BkToCstmrStmt></Document>";
+
+        var parsed = CamtStatementParser.ParseFile(xml, "EUR");
+
+        Assert.Single(parsed.Rows);
+        Assert.Equal(3500.75m, parsed.ClosingBalance);
+        Assert.Equal(new DateTime(2026, 10, 15), parsed.ClosingBalanceDate);
+    }
+
+    [Fact]
+    public void Mt940_ExtractsClosingBalance_FromTag62F()
+    {
+        const string mt940 =
+            ":20:STMT202610\n" +
+            ":25:123456789\n" +
+            ":28C:1\n" +
+            ":60F:C261001EUR1000,00\n" +
+            ":61:2610021002CR250,00NTRFREF123//456\n" +
+            ":86:Customer payment\n" +
+            ":62F:C261002EUR1250,00\n" +
+            "-";
+
+        var parsed = Mt940StatementParser.ParseFile(mt940, "EUR");
+
+        Assert.Single(parsed.Rows);
+        Assert.Equal(1250.00m, parsed.ClosingBalance);
+        Assert.Equal(new DateTime(2026, 10, 2), parsed.ClosingBalanceDate);
+    }
 }

@@ -22,3 +22,12 @@ test('the balance check is hidden when Accounting is on, without permission, or 
   assert.equal(canShowBalanceCheck({ hasFinancials: false, canView: false, archived: false }), false);
   assert.equal(canShowBalanceCheck({ hasFinancials: false, canView: true, archived: true }), false);
 });
+
+test('parseBalanceInput formats and parses statement closing balance handoff values', () => {
+  const closingBalance = 2450.75;
+  const asInputString = closingBalance.toFixed(2);
+  assert.equal(parseBalanceInput(asInputString), 2450.75);
+
+  const negativeClosingBalance = -150.20;
+  assert.equal(parseBalanceInput(negativeClosingBalance.toFixed(2)), -150.20);
+});
