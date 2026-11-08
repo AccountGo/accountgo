@@ -137,7 +137,7 @@ User profile management, credential administration, active device/session monito
           ┌───────────────────────┐                     ┌───────────────────────┐
           │     Entity Framework  │                     │    ASP.NET Identity   │
           │   Core (Domain Data)  │                     │   (Auth, RBAC, Tokens)│
-          │     accountgo.db      │                     │     accountgo.db      │
+          │  SQLite / PostgreSQL  │                     │  SQLite / PostgreSQL  │
           └───────────────────────┘                     └───────────────────────┘
 ```
 
@@ -145,7 +145,7 @@ User profile management, credential administration, active device/session monito
 | :--- | :--- |
 | **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS v4, Lucide React, React Router 7 |
 | **Backend API** | .NET 10, ASP.NET Core Web API, C# 14 |
-| **Data Access** | Entity Framework Core 10, SQLite (edge-optimized), SQL Server support |
+| **Data Access** | Entity Framework Core 10, SQLite, PostgreSQL, SQL Server support |
 | **Security & Auth**| ASP.NET Core Identity, JWT Bearer, HTTP-only Refresh Cookies, Rate Limiting |
 | **Orchestration** | .NET Aspire (`src.AppHost`, `src.ServiceDefaults`) |
 | **Edge Compute** | Cloudflare Workers, Cloudflare Containers, Durable Objects |
@@ -194,125 +194,132 @@ Comprehensive architecture, development, and operational guides are available in
 
 ---
 
-## Installation
+## Run locally: API, web, and database
 
-### Prerequisites
+These steps start the community edition on your own machine. Commands use a POSIX shell (macOS or Linux); on Windows use WSL. Starting the API initializes the selected database and seeds a new one. Use a disposable local database: the examples are not production settings. Package restore downloads dependencies; local authentication uses a console email sender when no Resend key is configured. External email, payment checkout, Google sign-in, and the assistant need their own service configuration.
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (`net10.0`)
-- [Node.js 22+](https://nodejs.org/)
-- [pnpm 9+](https://pnpm.io/) (`npm install -g pnpm`)
-- [Git](https://git-scm.com/)
+### 1. Install prerequisites and clone
 
-### Clone & Install
+Install Git, the .NET 10 SDK, Node.js 22.22.2+, 24.15.0+, or 26+, pnpm 12, and OpenSSL. SQLite is built into the API; the `sqlite3` command-line tool is optional. For PostgreSQL, install PostgreSQL and its client tools, or run a local PostgreSQL server with Docker. Verify:
 
 ```bash
-# Clone the repository
+git --version
+dotnet --version
+node --version
+pnpm --version
+openssl version
+```
+
+```bash
 git clone https://github.com/AccountGo/accountgo.git
 cd accountgo
-
-# Restore .NET packages
 dotnet restore
-
-# Install Web frontend dependencies
-cd src/Web && pnpm install && cd ../..
+cd src/Web
+pnpm install --frozen-lockfile
+cd ../..
 ```
 
----
+### 2. Configure the API
 
-## Usage & Getting Started
+Create `src/Api/.env` from the repository root. This file is local and must not be committed. Generate separate keys and keep them across API restarts; changing `SECRET_KEY` invalidates existing sessions. The API's `.env` loader overrides values with the same names from the shell, so edit this file when changing providers. Set `ASPNETCORE_ENVIRONMENT` in the shell command below: the hosting environment is selected before `.env` is loaded.
 
-### 1. Running API and Web Independently (Recommended)
-
-#### Start Backend API:
 ```bash
-dotnet run --project src/Api/Api.csproj --urls "http://localhost:8001"
+umask 077
+printf 'SECRET_KEY=%s\nINTERNAL_SYNC_KEY=%s\nPUBLIC_WEB_URL=http://localhost:3000\nPUBLIC_API_URL=http://localhost:8001\n' \
+  "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > src/Api/.env
 ```
-The API boots on `http://localhost:8001` with automated SQLite initialization and schema seeding.
 
-#### Start Frontend Web SPA:
-In a separate terminal:
+The local settings in this file are:
+
+| Setting | Purpose |
+| --- | --- |
+| `SECRET_KEY` | Signs authentication tokens and codes; required and at least 32 bytes. |
+| `INTERNAL_SYNC_KEY` | Separate key for internal sync endpoints. |
+| `PUBLIC_WEB_URL`, `PUBLIC_API_URL` | Local origins used in invitation and signed invoice links. |
+| `DBPROVIDER` | Selects `Sqlite` or `Postgres`. |
+| `ConnectionStrings:SqliteConnection`, `ConnectionStrings:PostgresConnection` | Connection string for the chosen provider. |
+| `SEED_DEMO_DATA` | Optional PostgreSQL first-start seed control; defaults to enabled. |
+| `ASPNETCORE_ENVIRONMENT` | Set to `Development` in the API process environment, before startup. |
+
+Do not copy the placeholder Resend key from `.env.example`: an absent `RESEND_API_KEY` selects the development console sender. The sample file documents optional email and assistant settings. `.env` is parsed as simple `KEY=value` lines, not executed as shell code; do not put command substitutions in it. Use colon-separated configuration keys in this file (for example `ConnectionStrings:PostgresConnection`). When exporting configuration directly in the shell, use double underscores instead (for example `ConnectionStrings__PostgresConnection`).
+
+Choose **one** database below. Both the application data and identity data use the selected database.
+
+#### SQLite
+
+```bash
+printf '\nDBPROVIDER=Sqlite\nConnectionStrings:SqliteConnection=Data Source=accountgo.db;Foreign Keys=True\n' >> src/Api/.env
+```
+
+The relative database path is resolved from the API content root, `src/Api`. On its first start the API creates and seeds `src/Api/accountgo.db`; startup upgrades existing SQLite schema. For an isolated file, supply an absolute path in the connection string. Back up local data before deleting or replacing it.
+
+#### PostgreSQL
+
+Start a PostgreSQL server and create an empty database and a login with permission to create tables, indexes, and run migrations. For example, on a workstation with Docker:
+
+```bash
+docker run --name accountgo-postgres -e POSTGRES_USER=accountgo \
+  -e POSTGRES_PASSWORD=localdevpassword -e POSTGRES_DB=accountgo_local \
+  -p 127.0.0.1:5432:5432 -v accountgo-postgres-data:/var/lib/postgresql/data \
+  -d postgres:17
+```
+
+Wait for PostgreSQL to accept connections (`docker logs accountgo-postgres`). If port 5432 is in use, choose another host port and update the connection string. The credentials below are local examples; replace them if you use an existing server.
+
+```bash
+printf '\nDBPROVIDER=Postgres\nConnectionStrings:PostgresConnection=Host=localhost;Port=5432;Database=accountgo_local;Username=accountgo;Password=localdevpassword\n' >> src/Api/.env
+```
+
+If switching from SQLite, **replace** its `DBPROVIDER` line rather than leaving duplicate provider settings. The API applies PostgreSQL migrations on startup and seeds demo data into a new database. Set `SEED_DEMO_DATA=false` before first startup to omit demo books. Never point this local example at a production database.
+
+### 3. Start both processes
+
+From the repository root, start the API in terminal 1 and leave it running:
+
+```bash
+ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile --project src/Api/Api.csproj --urls http://localhost:8001
+```
+
+Wait for `Now listening on: http://localhost:8001`. In terminal 2, from the repository root:
+
 ```bash
 cd src/Web
-pnpm dev
-```
-Navigate to `http://localhost:3000` (or `http://localhost:5173`).
-
-### 2. Running with .NET Aspire
-
-```bash
-dotnet run --project src/Aspire/AccountGo.AppHost/AccountGo.AppHost.csproj
-```
-Access the Aspire Dashboard at `http://localhost:15888` for unified telemetry, logs, and service orchestration.
-
-### 3. Signing In & Workflows
-- **Authentication**: Enter `admin@accountgo.org` on the login screen.
-- **Verification Code**: Retrieve the 6-digit dev verification code logged in the API terminal (or returned in the development response `devCode`).
-- **Organization Dashboard**: Access executive metrics, manage customers and sales invoices (`/org/ph-financials/sales`), track purchase bills (`/org/ph-financials/purchases`), and configure company profile and financial rules (`/org/ph-financials/settings`).
-
----
-
-## Database Setup (SQLite & Multi-Engine)
-
-### Zero-Configuration SQLite (Default)
-
-AccountGo comes pre-configured with **SQLite** as the primary, zero-configuration database engine. You do not need to install SQL Server, MySQL, or run heavy Docker database containers to get started.
-
-- **Configuration**: Set in [`src/Api/appsettings.json`](src/Api/appsettings.json):
-  ```json
-  "DatabaseProvider": "Sqlite",
-  "ConnectionStrings": {
-    "SqliteConnection": "Data Source=accountgo.db"
-  }
-  ```
-- **Automated Lifecycle on API Startup**:
-  1. **Automatic Database Creation**: If `accountgo.db` does not exist, EF Core automatically creates the file on startup.
-  2. **Schema Generation**: Automatically executes table creation for both `ApiDbContext` (business domains) and `ApplicationIdentityDbContext` (ASP.NET Identity auth, users, and refresh tokens).
-  3. **Initial Data Seeding**: Populates initial chart of accounts, company setup ("Financial Solutions Inc."), tax configurations, default vendors, customers, items, banks, and RBAC roles (`SystemAdministrators`, `GeneralUsers`).
-  4. **Admin User Provisioning**: Guarantees `admin@accountgo.ph` is seeded and initialized with master administrative permissions.
-
-### Resetting or Re-seeding the Database
-To reset the database back to clean seeded defaults at any time:
-```bash
-# Remove local SQLite database and write-ahead logs
-rm -f src/Api/accountgo.db*
-
-# Start the API - it will automatically recreate and reseed
-cd src/Api && dotnet run
+pnpm dev --host 127.0.0.1
 ```
 
-### Inspecting the SQLite Database
-You can query and explore the database directly using the SQLite CLI or visual tools:
-```bash
-sqlite3 src/Api/accountgo.db ".tables"
-sqlite3 src/Api/accountgo.db "SELECT Name, ShortName, Slug FROM Company;"
-sqlite3 src/Api/accountgo.db "SELECT UserName, Email FROM AspNetUsers;"
-```
-Visual tools supported:
-- **VS Code**: SQLite Viewer or SQLite Explorer extension
-- **GUI**: [DB Browser for SQLite](https://sqlitebrowser.org/)
+Open **http://localhost:3000**. Vite proxies `/api` to `http://localhost:8001`; changing the API port requires updating the proxy in `src/Web/vite.config.ts`. Use the same `localhost` hostname for browser and API. Stop either process with Ctrl+C.
 
-### Switching to Microsoft SQL Server (Optional)
-If you prefer running against Microsoft SQL Server for enterprise deployments:
-1. Set the environment variable `DBPROVIDER=SqlServer` (or edit `DatabaseProvider` in [`src/Api/appsettings.json`](src/Api/appsettings.json)).
-2. Configure your connection string in `ConnectionStrings:DefaultConnection`.
-3. Start the API — EF Core will automatically target your SQL Server instance.
+### 4. Sign in and enable your workspace screens
 
----
+1. On the sign-in page choose **Sign up**, enter a local test email, accept the terms, and choose **Create Account & Send Code**.
+2. With `ASPNETCORE_ENVIRONMENT=Development` set in the API command and no Resend key, the development code appears on the verification screen and is auto-filled. Choose **Complete Sign-Up & Enter**. For a later login, request a new code and choose **Verify & Enter AccountGo**. This account exists only in your selected local database.
+3. Choose **New Organization**, select **Community**, and complete the workspace name, currency, books-start date, fiscal-year and reporting screens. Choose **Create workspace**. For test transactions dated in the past, choose a books-start date no later than those transactions.
+4. Open **Team & Members → Set up my access**. For a disposable development workspace, select **Full workspace access** and choose **Save and activate roles**. An Owner workspace role grants administration; functional roles grant access to banking, sales, purchasing, reports, and other operational screens. Assign only the roles appropriate to the user in a real workspace. Journal posting can still require independent review.
+5. Open **Banking → Add bank account**, provide a name and currency, and save. Open the account and choose **Import statement** to test file preview and import. The sidebar exposes the modules granted by the functional role and the workspace's enabled modules.
 
-## Running Automated Tests
+The local console sender does not send real email. If the code does not appear, check that the API is in Development and no `RESEND_API_KEY` is configured, then inspect its terminal output. Paid hosted plans, hosted plan gates and external integrations cannot all be reproduced by the community configuration alone.
 
-AccountGo includes a comprehensive automated test suite covering domain entities, accounting algorithms, RBAC security, and service boundaries:
+### Database and startup troubleshooting
 
-```bash
-# Run all 99 automated tests across the solution
-dotnet test
-```
+- **Signing-key error:** ensure `SECRET_KEY` in `src/Api/.env` is at least 32 bytes, then restart the API.
+- **Connection refused or migrations fail:** check the selected provider, PostgreSQL server, credentials, database privileges, and API log. A second API process cannot bind the same port.
+- **Screens missing or 403:** check the active workspace, **Team & Members** functional roles, and enabled modules. Owner alone does not grant all operational permissions.
+- **Vite shows a proxy error:** confirm the API is listening on port 8001 and Vite on port 3000.
+- **Switch databases:** stop the API, update `.env` to one provider and its connection string, and restart. Each database has separate users and workspaces.
+- **Reset a disposable SQLite database:** stop the API, back up anything needed, and remove the selected SQLite file and its matching `-wal` and `-shm` files. Restart to create a new database. For PostgreSQL, create a separate empty database; do not drop a database containing data you need.
+
+### Tests
+
+From the repository root:
 
 ```bash
-# Test frontend compilation and type-safety
+dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj
 cd src/Web
-pnpm run build
+pnpm test
+pnpm build
 ```
+
+The focused statement-import suite can be run with `dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj --filter 'FullyQualifiedName~BankStatementParserTests|FullyQualifiedName~BankStatementImportServiceTests|FullyQualifiedName~StatementIncomeRecorderTests|FullyQualifiedName~MultiTenancyPhase3Tests.Acceptance_'`. Automated tests do not replace checking the full browser flow and external service integrations.
 
 ---
 
@@ -320,7 +327,7 @@ pnpm run build
 
 **AccountGo Cloud** (`*.accountgo.dev`) is deployed from a private ops repository. This public repo runs CI only; hosted deploys are triggered manually (ops SHA deploy or Actions → Notify ops to deploy).
 
-**Self-host:** copy `src/*/wrangler.example.jsonc` → `wrangler.jsonc`, set your domains, then add the `ConnectionStrings__PostgresConnection` secret and:
+**Self-host:** copy `src/*/wrangler.example.jsonc` → `wrangler.jsonc`, set your domains, then add the `ConnectionStrings:PostgresConnection` secret and:
 
 ```bash
 cd src/Api && pnpm install && npx wrangler deploy

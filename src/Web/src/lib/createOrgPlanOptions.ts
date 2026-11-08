@@ -38,6 +38,12 @@ export function buildIntentPlanOptions(
 ): IntentPlanOption[] {
   if (!catalog) return [];
 
+  // Community is the only plan in the self-hosted catalog; it has no checkout.
+  if (catalog.length === 1 && catalog[0].key === 'community') {
+    const plan = catalog[0];
+    return [{ value: plan.key, title: plan.name, description: plan.description || '', free: true,
+      product: 'community', monthlyPrice: null, disabled: false }];
+  }
   const selfService = catalog.filter((p) => p.selfService);
   const free = selfService.filter(isFreePlan);
   const paid = selfService.filter((p) => !isFreePlan(p));
@@ -101,13 +107,13 @@ export function freeSlotBlockedMessage(name: string | null, hasUpgradeLink = fal
 
 /** Plan-step error when the free slot is used and a free choice is still selected; null when the choice is fine. */
 export function freeSlotPlanError(plan: string, catalog: PlanCatalogEntry[] | null, freeSlot: FreeSlotState): string | null {
-  if (!freeSlot.used || !catalog) return null;
+  if (!freeSlot.used || !catalog || (catalog.length === 1 && catalog[0].key === 'community')) return null;
   return isPaidWizardPlan(plan, catalog) ? null : 'Choose a paid plan to continue.';
 }
 
 export function isPaidWizardPlan(plan: string, catalog: PlanCatalogEntry[] | null): boolean {
   if (!catalog) return false;
-  if (plan === 'invoicing' || plan === 'accounting') return false;
+  if (plan === 'invoicing' || plan === 'accounting' || (plan === 'community' && catalog.length === 1)) return false;
   const entry = catalog.find((p) => p.key === plan);
   return !!entry && !isFreePlan(entry);
 }
