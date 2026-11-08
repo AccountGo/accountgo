@@ -54,26 +54,9 @@ src/Web/
 
 ---
 
-## 🚀 Running Locally
+## Running locally
 
-```bash
-# Navigate to the Web frontend directory
-cd src/Web
-
-# Install dependencies
-pnpm install
-
-# Start Vite dev server on http://localhost:3000
-pnpm dev
-
-# Build for production
-pnpm build
-
-# Preview production build
-pnpm preview
-```
-
-The dev server proxies `/api` requests directly to the ASP.NET Core backend running on `http://localhost:8001`.
+Follow the [root setup guide](../../README.md#run-locally-api-web-and-database) to configure the API, choose SQLite or PostgreSQL, sign in, and activate workspace roles. From this directory, `pnpm install --frozen-lockfile` installs dependencies and `pnpm dev` starts Vite on port 3000. Vite proxies `/api` to the API on port 8001. Run `pnpm build` for a production build.
 
 ---
 

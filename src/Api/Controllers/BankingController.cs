@@ -925,9 +925,11 @@ namespace Api.Controllers
                 return Ok(result);
             }
 
-            catch (TenantEntityNotFoundException)
+            catch (TenantEntityNotFoundException ex)
             {
                 scope?.RolledBack();
+                if (ex.EntityType != nameof(Core.Domain.Financials.BankStatementLine))
+                    throw;
                 return NotFound(new { message = "Statement line not found" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
