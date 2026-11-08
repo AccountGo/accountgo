@@ -17,6 +17,7 @@
   <img src="https://img.shields.io/badge/TailwindCSS-v4-06B6D4?logo=tailwindcss" alt="Tailwind CSS v4" />
   <img src="https://img.shields.io/badge/Cloudflare-Workers_%26_Containers-F38020?logo=cloudflare" alt="Cloudflare" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-emerald.svg" alt="License: AGPL-3.0" /></a>
+  <a href="https://buymeacoffee.com/marvinperez"><img src="https://img.shields.io/badge/Buy_me_a_coffee-support-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy me a coffee" /></a>
 </p>
 
 ---
@@ -335,6 +336,20 @@ cd src/Web && pnpm install && pnpm build && pnpm run deploy
 ```
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+---
+
+## Support AccountGo
+
+AccountGo's open-source core is built and maintained by one person. If it's useful to you, these all help:
+
+- ⭐ **Star the repository** so more people find it.
+- 🐛 **Report bugs and suggest features** on [GitHub Issues](https://github.com/AccountGo/accountgo/issues).
+- 🛠️ **Contribute** code, docs, or translations (see [Contributing](#contributing)).
+- ☁️ **Use [AccountGo Cloud](https://accountgo.dev/pricing/)** if you'd rather not self-host. Paid plans fund development directly.
+- ☕ **[Buy me a coffee](https://buymeacoffee.com/marvinperez)** if you'd like to say thanks.
+
+A coffee is a personal thank-you to the maintainer. It isn't a tax-deductible donation, and it doesn't buy features, priority support, roadmap influence, or any licence or trademark rights. For support or commercial terms, email [support@accountgo.dev](mailto:support@accountgo.dev).
 
 ---
 
