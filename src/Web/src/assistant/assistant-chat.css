@@ -62,3 +62,50 @@
 .accountgo-assistant-compact .sm\:grid-cols-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
+
+/* Starter Prompts in Empty State */
+.accountgo-starter-prompt-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.accountgo-starter-prompt-btn:hover {
+  border-color: var(--brand-primary);
+  background: var(--bg-subtle);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.accountgo-starter-prompt-btn:active {
+  transform: translateY(0);
+}
+
+.accountgo-starter-prompt-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--brand-primary);
+  flex-shrink: 0;
+}
+
+.accountgo-starter-prompt-text {
+  flex: 1 1 auto;
+  font-weight: 500;
+  min-width: 0;
+}

@@ -118,6 +118,8 @@ export function AssistantMount({
         enableFileUpload: false,
         enableSlashFocusShortcut: false,
         enableArtifacts: true,
+        enableTools: false,
+        enableVoiceInput: false,
       }}
       strings={{
         composerPlaceholder: 'Ask AccountGo Assistant...',
