@@ -52,7 +52,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
   const [mfaEnrollData, setMfaEnrollData] = useState<MfaEnrollmentRequiredResponse | null>(null);
 
   // Form fields
-  const [email, setEmail] = useState<string>(() => (import.meta.env.DEV ? 'admin@accountgo.ph' : ''));
+  const [email, setEmail] = useState<string>('');
   const [targetOrgSlug, setTargetOrgSlug] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState<boolean>(false);
 
@@ -566,7 +566,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                 <button type="button" className="font-semibold text-[var(--text-main)] underline underline-offset-2" onClick={() => {
                   setMode(mode === 'signin' ? 'signup' : 'signin');
                   setErrorMessage(null);
-                  if (email === 'admin@accountgo.ph') setEmail('');
                 }}>{mode === 'signin' ? 'Sign up' : 'Sign in'}</button>
               </p>
               {invitationToken && (
@@ -681,20 +680,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                     />
                   </div>
                 </div>
-
-                {/* Dev Quick Test Credential Chip */}
-                {import.meta.env.DEV && (
-                  <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-1">
-                    <span>Default Admin:</span>
-                    <button
-                      type="button"
-                      onClick={() => setEmail('admin@accountgo.ph')}
-                      className="font-mono text-[11px] text-[var(--brand-primary)] hover:underline cursor-pointer"
-                    >
-                      admin@accountgo.ph
-                    </button>
-                  </div>
-                )}
 
                 {/* Turnstile Bot Protection */}
                 <div className="flex justify-center pt-1">

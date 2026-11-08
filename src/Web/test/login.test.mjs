@@ -30,6 +30,7 @@ test('Login page includes privacy and terms acceptance checkbox and excludes edg
       )
     );
 
+    assert.doesNotMatch(signinHtml, /admin@accountgo\.ph|Default Admin:/i);
     assert.ok(signinHtml.includes('signin-accept-terms'));
     assert.match(signinHtml, /By signing in, you accept the.*Privacy Policy.*Terms of Use/i);
     assert.ok(!signinHtml.includes('Enterprise Multi-Tenant Isolation & Cloudflare Edge Resilience.'));

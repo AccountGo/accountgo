@@ -153,3 +153,13 @@ test('create returnUrl carries the billing interval and leaves the checkout resu
   const url = buildCreateReturnUrl('https://app.example', 'acme-studio', 'year');
   assert.equal(url, 'https://app.example/org/acme-studio?interval=year');
 });
+
+test('community-only catalog allows local workspace creation without checkout', () => {
+  const community = [{ key: 'community', name: 'Community', product: null, description: 'Every module', monthlyPrice: null, annualPrice: null, selfService: false }];
+  const options = buildIntentPlanOptions(community);
+  assert.equal(options.length, 1);
+  assert.equal(options[0].value, 'community');
+  assert.equal(options[0].disabled, false);
+  assert.equal(isPaidWizardPlan('community', community), false);
+  assert.equal(freeSlotPlanError('community', community, { used: true, freeWorkspaceName: null, freeWorkspaceSlug: null }), null);
+});

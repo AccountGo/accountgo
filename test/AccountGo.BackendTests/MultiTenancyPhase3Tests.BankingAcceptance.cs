@@ -43,7 +43,8 @@ namespace AccountGo.BackendTests
             {
                 Source = (int)BankStatementSources.Csv,
                 FileName = "transactions-dayfirst.csv",
-                Content = sb.ToString()
+                Content = sb.ToString(),
+                ColumnMap = new BankStatementColumnMap { DateColumn = 0, PayeeColumn = 1, AmountColumn = 2, MemoColumn = 3, ReferenceColumn = 4, DateFormat = "dd/MM/yyyy" }
             };
 
             // 1. First import: all 200 lines imported
@@ -115,21 +116,21 @@ namespace AccountGo.BackendTests
                 });
             Assert.True(recRes.IsSuccessStatusCode, await recRes.Content.ReadAsStringAsync());
 
-            int billId = 0;
-            int? matchedGlLineId = null;
+            int paymentId = 0;
             WithDb(db =>
             {
                 var line = db.BankStatementLines.Single(l => l.Id == lineId);
                 Assert.NotNull(line.MatchedGeneralLedgerLineId);
-                matchedGlLineId = line.MatchedGeneralLedgerLineId;
 
-                var bill = db.PurchaseInvoiceHeaders.Single(b => b.Vendor.Party.Name == "Hosting Provider");
-                Assert.Equal(75.00m, bill.TotalAmount);
-                billId = bill.Id;
+
+                var bill = db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Vendor.Party.Name == "Hosting Provider");
+                Assert.Equal(75.00m, bill.Total());
+                paymentId = db.VendorPayments.Single(p => p.PurchaseInvoiceHeaderId == bill.Id).Id;
             });
 
-            // 3. Voiding the bill reverses GL and returns statement line to Unmatched
-            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={billId}&date={IsoDate(DateTime.UtcNow)}&reason=duplicate");
+            // 3. Voiding the payment returns the statement line to Unmatched.
+            var voidRes = await Send(HttpMethod.Post, "/api/Purchasing/VoidPayment", new Dto.Purchasing.VoidPaymentDto
+            { Id = paymentId, Date = DateTime.UtcNow, Reason = "Payment returned" });
             Assert.True(voidRes.IsSuccessStatusCode, await voidRes.Content.ReadAsStringAsync());
 
             WithDb(db =>
@@ -143,40 +144,29 @@ namespace AccountGo.BackendTests
         public async Task Acceptance_InvoiceMatching_AutoMatchesWithinThreeDays()
         {
             var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Matching Bank", Type = 1 });
-            var customer = await SaveCustomer(new CustomerDto { Name = "Match Client Inc" });
-
-            // Post customer invoice on 2026-07-10
-            var invoiceDate = new DateTime(2026, 7, 10, 0, 0, 0, DateTimeKind.Utc);
-            var inv = await SaveInvoice(new SalesInvoiceDto
+            var invoiceDate = DateTime.UtcNow.Date.AddDays(-2);
+            var invoice = await NewInvoice();
+            invoice.Status = "Open";
+            invoice.InvoiceDate = invoiceDate;
+            invoice.SalesInvoiceLines.Single().Amount = 320m;
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
+            var receiptRes = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", new RecordInvoicePaymentDto
             {
-                CustomerId = customer.Id,
-                Date = invoiceDate,
-                Lines = new List<SalesInvoiceLineDto>
-                {
-                    new SalesInvoiceLineDto { Description = "Consulting", Quantity = 1, UnitPrice = 320m, Amount = 320m }
-                }
-            });
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/PostSalesInvoice?id={inv.Id}")).IsSuccessStatusCode);
-
-            // Apply a receipt deposited to the bank GL account on 2026-07-10
-            var receiptRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesReceipt", new SalesReceiptHeaderDto
-            {
-                CustomerId = customer.Id,
-                BankAccountId = bank.Id,
-                Date = invoiceDate,
-                Amount = 320m,
-                SalesInvoiceId = inv.Id
+                InvoiceId = invoiceId, BankAccountId = bank.Id, PaymentDate = invoiceDate, Amount = 320m
             });
             Assert.True(receiptRes.IsSuccessStatusCode, await receiptRes.Content.ReadAsStringAsync());
 
-            // Statement line arrives with date 2026-07-12 (2 days later, within the 3-day match window)
-            var csv = $"Date,Payee,Amount,Memo\n12/07/2026,Match Client Inc,320.00,INV-{inv.Id} Payment\n";
+            // The statement date is two days after the receipt, within the match window.
+            var csv = $"Date,Payee,Amount,Memo\n{DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)},Match Client Inc,320.00,INV-{invoiceId} Payment\n";
             var importRes = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{bank.Id}/StatementImports",
                 new BankStatementImportRequest
                 {
                     Source = (int)BankStatementSources.Csv,
                     FileName = "deposit.csv",
-                    Content = csv
+                    Content = csv,
+                    ColumnMap = new BankStatementColumnMap { DateColumn = 0, PayeeColumn = 1, AmountColumn = 2, MemoColumn = 3, DateFormat = "yyyy-MM-dd" }
                 });
             Assert.True(importRes.IsSuccessStatusCode, await importRes.Content.ReadAsStringAsync());
             var commit = await importRes.Content.ReadFromJsonAsync<BankStatementCommitResultDto>();
@@ -246,7 +236,13 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                company2AccountId = db.Accounts.First(a => a.CompanyId == company2Id && a.AccountClassId == (int)AccountClasses.Expense).Id;
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(company2Id, "tenant-two-co", CompanyMemberRole.Owner))
+                {
+                    var foreign = new Core.Domain.Financials.Account { CompanyId = company2Id, AccountClassId = (int)AccountClasses.Expense, AccountCode = "59998", AccountName = "Foreign expense", DrOrCrSide = DrOrCrSide.Dr };
+                    db.Accounts.Add(foreign);
+                    db.SaveChanges();
+                    company2AccountId = foreign.Id;
+                }
             }
 
             // Tenant 1 attempts to record expense using Tenant 2's account
@@ -276,17 +272,11 @@ namespace AccountGo.BackendTests
             Assert.NotNull(categories);
             var category = categories.Curated.Concat(categories.More).First();
 
-            // Find active tax
-            int? taxId = null;
-            WithDb(db =>
-            {
-                var tax = db.Taxes.FirstOrDefault(t => t.CompanyId == _companyId && t.IsActive && t.SalesAccountId != null);
-                if (tax != null) taxId = tax.Id;
-            });
+            var taxId = AddSalesTax(12m);
 
             // Record other income with tax
             var recRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{lineId}/RecordOtherIncome",
-                new RecordOtherIncomeRequestDto
+                new RecordOtherIncomeFromStatementLineRequest
                 {
                     IncomeAccountId = category.AccountId,
                     TaxId = taxId,
@@ -303,11 +293,8 @@ namespace AccountGo.BackendTests
                 // Sales invoice was issued, approved, and paid
                 var inv = db.SalesInvoiceHeaders.Include(i => i.SalesInvoiceLines)
                     .Single(i => i.GeneralLedgerHeaderId != null && i.CustomerAllocations.Any());
-                Assert.Equal(120.00m, inv.TotalAmount);
-                if (taxId.HasValue)
-                {
-                    Assert.True(inv.SalesInvoiceLines.First().TaxAmount > 0m);
-                }
+                Assert.Equal(120.00m, inv.GrandTotal());
+                Assert.True(inv.SalesInvoiceLines.First().TaxAmount > 0m);
             });
 
             // Financial reports generate cleanly
