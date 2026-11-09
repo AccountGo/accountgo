@@ -202,7 +202,7 @@ export const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({
 };
 
 export const ServiceStatusOverlay: React.FC = () => {
-  const { isStarting } = useAuth();
+  const { isLoading, isStarting } = useAuth();
   const [status, setStatus] = useState<ServiceStatusState>(getServiceStatus);
   const [secondsUntilProbe, setSecondsUntilProbe] = useState<number>(5);
   const [takingLong, setTakingLong] = useState<boolean>(false);
@@ -260,7 +260,7 @@ export const ServiceStatusOverlay: React.FC = () => {
 
   // Accessibility: focus title and inert #root when full overlay is open
   useEffect(() => {
-    const isFullOverlayOpen = status.state === 'unavailable' && !status.collapsed && !isStarting;
+    const isFullOverlayOpen = status.state === 'unavailable' && !status.collapsed && !(isLoading && isStarting);
     const rootEl = typeof document !== 'undefined' ? document.getElementById('root') : null;
 
     if (isFullOverlayOpen) {
@@ -289,12 +289,12 @@ export const ServiceStatusOverlay: React.FC = () => {
         previousFocusRef.current = null;
       }
     }
-  }, [status.state, status.collapsed, isStarting]);
+  }, [status.state, status.collapsed, isLoading, isStarting]);
 
   if (typeof document === 'undefined') return null;
 
-  // Single status UI during boot: overlay renders nothing while isStarting is true
-  if (isStarting) {
+  // Single status UI during boot: overlay renders nothing while the boot card is on screen (isLoading && isStarting)
+  if (isLoading && isStarting) {
     return null;
   }
 
@@ -303,9 +303,9 @@ export const ServiceStatusOverlay: React.FC = () => {
       {status.state === 'unavailable' && (
         status.collapsed ? (
           <aside
-            role="banner"
+            role="status"
             aria-label="Service unavailable notice"
-            className="fixed top-16 inset-x-0 z-40 flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs text-[var(--text-main)] shadow-md pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
+            className="fixed top-[calc(4rem+env(safe-area-inset-top))] inset-x-0 z-40 flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs text-[var(--text-main)] shadow-md pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
           >
             <div className="flex items-center gap-2 min-w-0">
               <AlertCircle className="w-4 h-4 shrink-0 text-[var(--brand-primary)]" />

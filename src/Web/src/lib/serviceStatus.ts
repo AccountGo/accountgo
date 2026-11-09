@@ -25,6 +25,10 @@ export const SAFE_NON_GET_RETRY_CODES = new Set<ServiceUnavailableCode>([
   'SERVICE_MISCONFIGURED',
 ]);
 
+export function shouldSuppressOverlay(auth: { isLoading: boolean; isStarting: boolean }): boolean {
+  return Boolean(auth.isLoading && auth.isStarting);
+}
+
 export interface ServiceProblem {
   code: ServiceUnavailableCode;
   retryAfterSeconds?: number;

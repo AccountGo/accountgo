@@ -15,6 +15,7 @@ import {
   resetServiceStatusForTesting,
   setServiceStatusCollapsed,
   shouldRetry503,
+  shouldSuppressOverlay,
   startServiceStatusProbe,
   subscribeServiceStatus,
 } from '../src/lib/serviceStatus.ts';
@@ -391,3 +392,18 @@ test('startServiceStatusProbe controller: 4xx counts as restored, 5xx without pr
   assert.equal(scheduledTasks.length, 1); // Keeps scheduling
   controller.stop();
 });
+
+test('shouldSuppressOverlay: boot (true, true) suppressed; mid-session refresh (false, true) shows overlay', () => {
+  // Boot: isLoading && isStarting -> suppressed (boot card handles it)
+  assert.equal(shouldSuppressOverlay({ isLoading: true, isStarting: true }), true);
+
+  // Mid-session refresh during an outage: isLoading: false, isStarting: true -> overlay shows (not suppressed)
+  assert.equal(shouldSuppressOverlay({ isLoading: false, isStarting: true }), false);
+
+  // Loaded and running: normal operations -> not suppressed
+  assert.equal(shouldSuppressOverlay({ isLoading: false, isStarting: false }), false);
+
+  // Loading without starting flag -> not suppressed
+  assert.equal(shouldSuppressOverlay({ isLoading: true, isStarting: false }), false);
+});
+
