@@ -14,6 +14,8 @@ import {
   reportServiceRestored,
   resetServiceStatusForTesting,
   setServiceStatusCollapsed,
+  shouldRetry503,
+  startServiceStatusProbe,
   subscribeServiceStatus,
 } from '../src/lib/serviceStatus.ts';
 
@@ -77,19 +79,19 @@ test('problem parsing: invalid until date dropped', () => {
   assert.equal(result?.until, undefined);
 });
 
-test('GET vs write trigger rules: GET does not set writeFailed', () => {
-  reportServiceProblem({ code: 'SERVICE_STARTING' }, { method: 'GET' });
-  const status = getServiceStatus();
+test('userWrite flag: only userWrite: true sets writeFailed', () => {
+  // Non-GET without userWrite (e.g. performRefresh, sendOtp) does NOT set writeFailed
+  reportServiceProblem({ code: 'SERVICE_STARTING' }, { method: 'POST' });
+  let status = getServiceStatus();
   assert.equal(status.state, 'unavailable');
-  assert.equal(status.code, 'SERVICE_STARTING');
   assert.equal(status.writeFailed, false);
-});
 
-test('GET vs write trigger rules: write immediately sets writeFailed', () => {
-  reportServiceProblem({ code: 'SERVICE_UPDATING' }, { method: 'POST' });
-  const status = getServiceStatus();
+  resetServiceStatusForTesting();
+
+  // User write (e.g. authFetch non-GET outside /api/auth/) sets writeFailed
+  reportServiceProblem({ code: 'SERVICE_UPDATING' }, { method: 'POST', userWrite: true });
+  status = getServiceStatus();
   assert.equal(status.state, 'unavailable');
-  assert.equal(status.code, 'SERVICE_UPDATING');
   assert.equal(status.writeFailed, true);
 });
 
@@ -121,10 +123,17 @@ test('the 2-failures-in-15s rule: failures older than 15s do not trigger', () =>
   assert.equal(getServiceStatus().state, 'unavailable');
 });
 
-test('write failure during network errors sets writeFailed flag', () => {
+test('network failure with userWrite sets writeFailed flag', () => {
+  // Without userWrite: writeFailed is false
   reportNetworkFailure({ method: 'POST', now: 1000 });
-  assert.equal(getServiceStatus().state, 'ok');
+  reportNetworkFailure({ method: 'POST', now: 5000 });
+  assert.equal(getServiceStatus().state, 'unavailable');
+  assert.equal(getServiceStatus().writeFailed, false);
 
+  resetServiceStatusForTesting();
+
+  // With userWrite: writeFailed is true
+  reportNetworkFailure({ method: 'POST', userWrite: true, now: 1000 });
   reportNetworkFailure({ method: 'GET', now: 5000 });
   const status = getServiceStatus();
   assert.equal(status.state, 'unavailable');
@@ -138,13 +147,13 @@ test('offline suppression: does not report when navigator.onLine is false', () =
   );
   assert.equal(getServiceStatus().state, 'ok');
 
-  reportNetworkFailure({ method: 'POST', isOnline: false, now: 1000 });
-  reportNetworkFailure({ method: 'POST', isOnline: false, now: 2000 });
+  reportNetworkFailure({ method: 'POST', userWrite: true, isOnline: false, now: 1000 });
+  reportNetworkFailure({ method: 'POST', userWrite: true, isOnline: false, now: 2000 });
   assert.equal(getServiceStatus().state, 'ok');
 });
 
 test('writeFailed persists after service is restored and can be dismissed', () => {
-  reportServiceProblem({ code: 'SERVICE_INTERRUPTED' }, { method: 'PUT' });
+  reportServiceProblem({ code: 'SERVICE_INTERRUPTED' }, { method: 'PUT', userWrite: true });
   assert.equal(getServiceStatus().state, 'unavailable');
   assert.equal(getServiceStatus().writeFailed, true);
 
@@ -198,4 +207,187 @@ test('subscribers receive updates on state changes', () => {
   unsubscribe();
   setServiceStatusCollapsed(false);
   assert.equal(callCount, 2); // No new calls after unsubscribe
+});
+
+test('shouldRetry503: GET retries on any 503; non-GET retries only on safe startup/deploy codes', () => {
+  // GET always retries
+  assert.equal(shouldRetry503('GET', { code: 'SERVICE_STARTING' }), true);
+  assert.equal(shouldRetry503('GET', { code: 'SERVICE_INTERRUPTED' }), true);
+  assert.equal(shouldRetry503('GET', null), true);
+  assert.equal(shouldRetry503('HEAD', null), true);
+
+  // Safe non-GET retry codes (request never reached app)
+  assert.equal(shouldRetry503('POST', { code: 'SERVICE_STARTING' }), true);
+  assert.equal(shouldRetry503('POST', { code: 'SERVICE_UPDATING' }), true);
+  assert.equal(shouldRetry503('PUT', { code: 'SERVICE_MAINTENANCE' }), true);
+  assert.equal(shouldRetry503('DELETE', { code: 'SERVICE_MISCONFIGURED' }), true);
+
+  // Unsafe non-GET codes: NEVER retry
+  assert.equal(shouldRetry503('POST', { code: 'SERVICE_INTERRUPTED' }), false);
+  assert.equal(shouldRetry503('POST', { code: 'SERVICE_UNREACHABLE' }), false);
+  assert.equal(shouldRetry503('POST', null), false);
+});
+
+test('startServiceStatusProbe controller: three 503s keep scheduling, backoff moves 15s then 30s, 200 stops', async () => {
+  let currentTime = 1000;
+  let scheduledTasks = [];
+  let timerCounter = 1;
+
+  const fakeSetTimeout = (fn, ms) => {
+    const id = timerCounter++;
+    scheduledTasks.push({ id, fn, dueAt: currentTime + ms, delay: ms });
+    return id;
+  };
+
+  const fakeClearTimeout = (id) => {
+    scheduledTasks = scheduledTasks.filter((t) => t.id !== id);
+  };
+
+  const triggerNext = async (advanceTo) => {
+    scheduledTasks.sort((a, b) => a.dueAt - b.dueAt);
+    const task = scheduledTasks.shift();
+    if (!task) return null;
+    currentTime = advanceTo !== undefined ? advanceTo : task.dueAt;
+    await task.fn();
+    return task;
+  };
+
+  // Start in unavailable state
+  reportServiceProblem({ code: 'SERVICE_STARTING', retryAfterSeconds: 5 }, { now: currentTime });
+
+  let fetchCount = 0;
+  let probeStatusToReturn = 503;
+  const mockFetch = async () => {
+    fetchCount++;
+    if (probeStatusToReturn === 200) {
+      return new Response(JSON.stringify({ status: 'ok', version: 'abc' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        title: 'Service Unavailable',
+        status: 503,
+        code: 'SERVICE_STARTING',
+        retryAfterSeconds: 5,
+      }),
+      {
+        status: 503,
+        headers: {
+          'content-type': 'application/problem+json',
+          'Retry-After': '5',
+        },
+      }
+    );
+  };
+
+  const controller = startServiceStatusProbe({
+    fetchImpl: mockFetch,
+    setTimeout: fakeSetTimeout,
+    clearTimeout: fakeClearTimeout,
+    now: () => currentTime,
+  });
+
+  // Initial schedule was created: 5s delay
+  assert.equal(scheduledTasks.length, 1);
+  assert.equal(scheduledTasks[0].delay, 5000);
+
+  // Check 1: fires 503 -> schedules next check in 5s
+  const task1 = await triggerNext();
+  assert.equal(task1.delay, 5000);
+  assert.equal(fetchCount, 1);
+  assert.equal(getServiceStatus().state, 'unavailable');
+  assert.equal(scheduledTasks.length, 1);
+  assert.equal(scheduledTasks[0].delay, 5000);
+
+  // Check 2: fires 503 -> schedules next check in 5s
+  const task2 = await triggerNext();
+  assert.equal(task2.delay, 5000);
+  assert.equal(fetchCount, 2);
+  assert.equal(getServiceStatus().state, 'unavailable');
+  assert.equal(scheduledTasks.length, 1);
+  assert.equal(scheduledTasks[0].delay, 5000);
+
+  // Check 3: fires 503 -> three consecutive 503 checks keep scheduling!
+  const task3 = await triggerNext();
+  assert.equal(task3.delay, 5000);
+  assert.equal(fetchCount, 3);
+  assert.equal(getServiceStatus().state, 'unavailable');
+
+  // Advance clock past 2 minutes (120_000ms): delay moves to 15s
+  const task4 = await triggerNext(1000 + 125_000);
+  assert.equal(fetchCount, 4);
+  assert.equal(scheduledTasks.length, 1);
+  assert.equal(scheduledTasks[0].delay, 15000);
+
+  // Advance clock past 5 minutes (300_000ms): delay moves to 30s
+  const task5 = await triggerNext(1000 + 305_000);
+  assert.equal(fetchCount, 5);
+  assert.equal(scheduledTasks.length, 1);
+  assert.equal(scheduledTasks[0].delay, 30000);
+
+  // Next check returns 200 -> stops probe loop
+  probeStatusToReturn = 200;
+  await triggerNext();
+  assert.equal(fetchCount, 6);
+  assert.equal(getServiceStatus().state, 'ok');
+  assert.equal(scheduledTasks.length, 0); // No more tasks scheduled
+
+  controller.stop();
+});
+
+test('startServiceStatusProbe controller: 4xx counts as restored, 5xx without problem body counts as failure', async () => {
+  let currentTime = 1000;
+  let scheduledTasks = [];
+  let timerCounter = 1;
+
+  const fakeSetTimeout = (fn, ms) => {
+    const id = timerCounter++;
+    scheduledTasks.push({ id, fn, dueAt: currentTime + ms, delay: ms });
+    return id;
+  };
+  const fakeClearTimeout = (id) => {
+    scheduledTasks = scheduledTasks.filter((t) => t.id !== id);
+  };
+  const triggerNext = async () => {
+    scheduledTasks.sort((a, b) => a.dueAt - b.dueAt);
+    const task = scheduledTasks.shift();
+    if (!task) return null;
+    currentTime = task.dueAt;
+    await task.fn();
+    return task;
+  };
+
+  // 1. Test that 4xx counts as restored
+  reportServiceProblem({ code: 'SERVICE_STARTING' }, { now: currentTime });
+  assert.equal(getServiceStatus().state, 'unavailable');
+
+  let controller = startServiceStatusProbe({
+    fetchImpl: async () => new Response('Not Found', { status: 404 }),
+    setTimeout: fakeSetTimeout,
+    clearTimeout: fakeClearTimeout,
+    now: () => currentTime,
+  });
+
+  await triggerNext();
+  assert.equal(getServiceStatus().state, 'ok');
+  assert.equal(scheduledTasks.length, 0);
+  controller.stop();
+
+  // 2. Test that 5xx without known problem body counts as failure
+  reportServiceProblem({ code: 'SERVICE_STARTING' }, { now: currentTime });
+  assert.equal(getServiceStatus().state, 'unavailable');
+
+  controller = startServiceStatusProbe({
+    fetchImpl: async () => new Response('Internal Server Error', { status: 500 }),
+    setTimeout: fakeSetTimeout,
+    clearTimeout: fakeClearTimeout,
+    now: () => currentTime,
+  });
+
+  await triggerNext();
+  assert.equal(getServiceStatus().state, 'unavailable');
+  assert.equal(scheduledTasks.length, 1); // Keeps scheduling
+  controller.stop();
 });

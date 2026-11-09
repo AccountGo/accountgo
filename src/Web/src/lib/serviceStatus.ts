@@ -18,6 +18,13 @@ export const KNOWN_SERVICE_CODES: readonly ServiceUnavailableCode[] = [
   'SERVICE_MISCONFIGURED',
 ] as const;
 
+export const SAFE_NON_GET_RETRY_CODES = new Set<ServiceUnavailableCode>([
+  'SERVICE_STARTING',
+  'SERVICE_UPDATING',
+  'SERVICE_MAINTENANCE',
+  'SERVICE_MISCONFIGURED',
+]);
+
 export interface ServiceProblem {
   code: ServiceUnavailableCode;
   retryAfterSeconds?: number;
@@ -83,6 +90,20 @@ export async function parseResponseServiceProblem(res: Response): Promise<Servic
   return parseServiceProblem(res.status, contentType, body);
 }
 
+export function shouldRetry503(
+  method: string,
+  problem: ServiceProblem | null
+): boolean {
+  const m = method.toUpperCase();
+  if (m === 'GET' || m === 'HEAD') {
+    return true;
+  }
+  if (problem && SAFE_NON_GET_RETRY_CODES.has(problem.code)) {
+    return true;
+  }
+  return false;
+}
+
 export function nextProbeDelayMs(elapsedMs: number, retryAfterSeconds?: number): number {
   if (elapsedMs < 2 * 60_000) {
     const s =
@@ -113,7 +134,7 @@ let state: ServiceStatusState = {
 };
 
 let networkFailureTimestamps: number[] = [];
-let pendingWriteFailed = false;
+let pendingUserWrite = false;
 const subscribers = new Set<(s: ServiceStatusState) => void>();
 
 function notify(): void {
@@ -158,16 +179,22 @@ function checkIsOnline(explicit?: boolean): boolean {
   return true;
 }
 
+export interface ReportServiceProblemOptions {
+  method?: string;
+  now?: number;
+  isOnline?: boolean;
+  userWrite?: boolean;
+}
+
 export function reportServiceProblem(
   problem: ServiceProblem,
-  options: { method?: string; now?: number; isOnline?: boolean } = {}
+  options: ReportServiceProblemOptions = {}
 ): void {
   const isOnline = checkIsOnline(options.isOnline);
   if (!isOnline) return;
 
   const now = options.now ?? Date.now();
-  const method = (options.method || 'GET').toUpperCase();
-  const isWrite = method !== 'GET' && method !== 'HEAD';
+  const isUserWrite = Boolean(options.userWrite);
 
   state = {
     ...state,
@@ -175,7 +202,7 @@ export function reportServiceProblem(
     code: problem.code,
     since: state.state === 'unavailable' && state.since ? state.since : now,
     lastRetryAfter: problem.retryAfterSeconds ?? state.lastRetryAfter ?? 5,
-    writeFailed: isWrite || state.writeFailed || pendingWriteFailed,
+    writeFailed: isUserWrite || state.writeFailed || pendingUserWrite,
     message: problem.message ?? (state.code === problem.code ? state.message : undefined),
     until: problem.until ?? (state.code === problem.code ? state.until : undefined),
   };
@@ -183,18 +210,25 @@ export function reportServiceProblem(
   notify();
 }
 
+export interface ReportNetworkFailureOptions {
+  status?: number;
+  method?: string;
+  now?: number;
+  isOnline?: boolean;
+  userWrite?: boolean;
+}
+
 export function reportNetworkFailure(
-  options: { status?: number; method?: string; now?: number; isOnline?: boolean } = {}
+  options: ReportNetworkFailureOptions = {}
 ): void {
   const isOnline = checkIsOnline(options.isOnline);
   if (!isOnline) return;
 
   const now = options.now ?? Date.now();
-  const method = (options.method || 'GET').toUpperCase();
-  const isWrite = method !== 'GET' && method !== 'HEAD';
+  const isUserWrite = Boolean(options.userWrite);
 
-  if (isWrite) {
-    pendingWriteFailed = true;
+  if (isUserWrite) {
+    pendingUserWrite = true;
     if (state.state === 'unavailable') {
       state = { ...state, writeFailed: true };
       notify();
@@ -212,7 +246,7 @@ export function reportNetworkFailure(
       code: 'SERVICE_UNREACHABLE',
       since: state.state === 'unavailable' && state.since ? state.since : now,
       lastRetryAfter: state.lastRetryAfter ?? 5,
-      writeFailed: pendingWriteFailed || state.writeFailed,
+      writeFailed: pendingUserWrite || state.writeFailed,
     };
     notify();
   }
@@ -220,7 +254,7 @@ export function reportNetworkFailure(
 
 export function reportServiceRestored(_options: { now?: number } = {}): void {
   networkFailureTimestamps = [];
-  pendingWriteFailed = false;
+  pendingUserWrite = false;
 
   if (state.state === 'unavailable') {
     state = {
@@ -244,7 +278,7 @@ export function reportServiceRestored(_options: { now?: number } = {}): void {
 
 export function resetServiceStatusForTesting(): void {
   networkFailureTimestamps = [];
-  pendingWriteFailed = false;
+  pendingUserWrite = false;
   state = {
     state: 'ok',
     code: undefined,
@@ -256,4 +290,136 @@ export function resetServiceStatusForTesting(): void {
     until: undefined,
   };
   subscribers.clear();
+}
+
+export interface ServiceStatusProbeEnv {
+  fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
+  setTimeout?: (fn: () => void, ms: number) => any;
+  clearTimeout?: (id: any) => void;
+  now?: () => number;
+  document?: {
+    visibilityState: string;
+    addEventListener: (type: string, listener: () => void) => void;
+    removeEventListener: (type: string, listener: () => void) => void;
+  };
+  window?: {
+    addEventListener: (type: string, listener: () => void) => void;
+    removeEventListener: (type: string, listener: () => void) => void;
+  };
+  onSchedule?: (delayMs: number) => void;
+}
+
+export function startServiceStatusProbe(env: ServiceStatusProbeEnv = {}): {
+  stop: () => void;
+  checkNow: () => Promise<void>;
+  getNextCheckAt: () => number;
+} {
+  const fetchImpl = env.fetchImpl ?? fetch;
+  const setTimeoutFn = env.setTimeout ?? setTimeout;
+  const clearTimeoutFn = env.clearTimeout ?? ((id: any) => {
+    if (typeof clearTimeout !== 'undefined') {
+      clearTimeout(id);
+    }
+  });
+  const nowFn = env.now ?? Date.now;
+  const doc = env.document ?? (typeof document !== 'undefined' ? document : undefined);
+  const win = env.window ?? (typeof window !== 'undefined' ? window : undefined);
+  const onSchedule = env.onSchedule;
+
+  let stopped = false;
+  let timerId: any = null;
+  let nextCheckAt = 0;
+
+  function scheduleNext(delayMs: number): void {
+    if (stopped) return;
+    if (timerId !== null) {
+      clearTimeoutFn(timerId);
+      timerId = null;
+    }
+
+    nextCheckAt = nowFn() + delayMs;
+    onSchedule?.(delayMs);
+
+    timerId = setTimeoutFn(async () => {
+      timerId = null;
+      await runCheck();
+    }, delayMs);
+  }
+
+  async function runCheck(): Promise<void> {
+    if (stopped) return;
+
+    try {
+      const res = await fetchImpl('/api/status', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+
+      // 2xx or 4xx counts as restored
+      if (res.status >= 200 && res.status < 500) {
+        reportServiceRestored({ now: nowFn() });
+        return; // Stops loop because state became ok
+      }
+
+      // 503 with known problem body
+      if (res.status === 503) {
+        const problem = await parseResponseServiceProblem(res);
+        if (problem) {
+          reportServiceProblem(problem, { now: nowFn() });
+        } else {
+          // 5xx without known problem body counts as failure
+          reportNetworkFailure({ status: res.status, now: nowFn() });
+        }
+      } else {
+        // Other 5xx count as failure
+        reportNetworkFailure({ status: res.status, now: nowFn() });
+      }
+    } catch {
+      // Network error counts as failure
+      reportNetworkFailure({ now: nowFn() });
+    }
+
+    // After every check, schedule next probe unless state became ok
+    const current = getServiceStatus();
+    if (current.state === 'unavailable' && !stopped) {
+      const elapsed = current.since ? nowFn() - current.since : 0;
+      const delay = nextProbeDelayMs(elapsed, current.lastRetryAfter);
+      scheduleNext(delay);
+    }
+  }
+
+  // Initial schedule if unavailable
+  const current = getServiceStatus();
+  if (current.state === 'unavailable') {
+    const elapsed = current.since ? nowFn() - current.since : 0;
+    scheduleNext(nextProbeDelayMs(elapsed, current.lastRetryAfter));
+  }
+
+  const handleVisibilityOrOnline = () => {
+    if (stopped) return;
+    if (!doc || doc.visibilityState === 'visible') {
+      void runCheck();
+    }
+  };
+
+  doc?.addEventListener('visibilitychange', handleVisibilityOrOnline);
+  win?.addEventListener('online', handleVisibilityOrOnline);
+
+  return {
+    stop() {
+      stopped = true;
+      if (timerId !== null) {
+        clearTimeoutFn(timerId);
+        timerId = null;
+      }
+      doc?.removeEventListener('visibilitychange', handleVisibilityOrOnline);
+      win?.removeEventListener('online', handleVisibilityOrOnline);
+    },
+    async checkNow() {
+      await runCheck();
+    },
+    getNextCheckAt() {
+      return nextCheckAt;
+    },
+  };
 }
