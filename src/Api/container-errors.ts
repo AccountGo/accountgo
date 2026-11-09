@@ -89,12 +89,49 @@ export function isStartupTransient(err: unknown): boolean {
   return err instanceof StartupInterruptedError || isTransientContainerError(err);
 }
 
-export function serviceUnavailable(detail: string, retryAfterSec = 5): Response {
+export type ServiceUnavailableCode =
+  | "SERVICE_UPDATING"
+  | "SERVICE_STARTING"
+  | "SERVICE_MAINTENANCE"
+  | "SERVICE_INTERRUPTED"
+  | "SERVICE_UNREACHABLE"
+  | "SERVICE_MISCONFIGURED";
+
+export function startupCode({
+  versionTimestamp,
+  now = Date.now(),
+  windowMs = 20 * 60_000,
+}: {
+  versionTimestamp?: string;
+  now?: number;
+  windowMs?: number;
+} = {}): "SERVICE_UPDATING" | "SERVICE_STARTING" {
+  if (!versionTimestamp || typeof versionTimestamp !== "string") {
+    return "SERVICE_STARTING";
+  }
+  const ts = Date.parse(versionTimestamp);
+  if (Number.isNaN(ts) || ts <= 0) {
+    return "SERVICE_STARTING";
+  }
+  const age = now - ts;
+  if (age >= -60_000 && age <= windowMs) {
+    return "SERVICE_UPDATING";
+  }
+  return "SERVICE_STARTING";
+}
+
+export function serviceUnavailable(
+  code: ServiceUnavailableCode,
+  detail: string,
+  retryAfterSec = 5
+): Response {
   return new Response(
     JSON.stringify({
       title: "Service Unavailable",
       status: 503,
+      code,
       detail,
+      retryAfterSeconds: retryAfterSec,
     }),
     {
       status: 503,

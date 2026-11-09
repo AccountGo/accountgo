@@ -42,39 +42,89 @@ export default {
     // Forward API requests to the backend worker or API host
     if (url.pathname.startsWith('/api/')) {
       if (env.API) {
-        const started = Date.now();
-        const res = await env.API.fetch(request);
-        return appendProxyTiming(res, Date.now() - started, timingEnabled);
+        try {
+          const started = Date.now();
+          const res = await env.API.fetch(request);
+          return appendProxyTiming(res, Date.now() - started, timingEnabled);
+        } catch {
+          return new Response(
+            JSON.stringify({
+              title: "Service Unavailable",
+              status: 503,
+              code: "SERVICE_UNREACHABLE",
+              detail: "Unable to reach API service",
+              retryAfterSeconds: 5,
+            }),
+            {
+              status: 503,
+              headers: {
+                "Content-Type": "application/problem+json",
+                "Retry-After": "5",
+              },
+            }
+          );
+        }
       }
       if (env.API_HOST) {
-        const proxyUrl = new URL(request.url);
-        const [host, port] = env.API_HOST.split(':');
-        proxyUrl.host = host;
-        if (port) {
-          proxyUrl.port = port;
-        } else {
-          proxyUrl.port = '';
+        try {
+          const proxyUrl = new URL(request.url);
+          const [host, port] = env.API_HOST.split(':');
+          proxyUrl.host = host;
+          if (port) {
+            proxyUrl.port = port;
+          } else {
+            proxyUrl.port = '';
+          }
+          proxyUrl.protocol = env.API_HOST.startsWith('localhost') || env.API_HOST.startsWith('127.0.0.1') ? 'http:' : 'https:';
+
+          const proxyHeaders = new Headers(request.headers);
+          proxyHeaders.set('X-Forwarded-Host', url.host);
+          proxyHeaders.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
+
+          const started = Date.now();
+          const res = await fetch(new Request(proxyUrl, {
+            method: request.method,
+            headers: proxyHeaders,
+            body: request.body,
+            redirect: 'manual',
+          }));
+          return appendProxyTiming(res, Date.now() - started, timingEnabled);
+        } catch {
+          return new Response(
+            JSON.stringify({
+              title: "Service Unavailable",
+              status: 503,
+              code: "SERVICE_UNREACHABLE",
+              detail: "Unable to reach API host",
+              retryAfterSeconds: 5,
+            }),
+            {
+              status: 503,
+              headers: {
+                "Content-Type": "application/problem+json",
+                "Retry-After": "5",
+              },
+            }
+          );
         }
-        proxyUrl.protocol = env.API_HOST.startsWith('localhost') || env.API_HOST.startsWith('127.0.0.1') ? 'http:' : 'https:';
-
-        const proxyHeaders = new Headers(request.headers);
-        proxyHeaders.set('X-Forwarded-Host', url.host);
-        proxyHeaders.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
-
-        const started = Date.now();
-        const res = await fetch(new Request(proxyUrl, {
-          method: request.method,
-          headers: proxyHeaders,
-          body: request.body,
-          redirect: 'manual',
-        }));
-        return appendProxyTiming(res, Date.now() - started, timingEnabled);
       }
 
-      return new Response(JSON.stringify({ error: 'API service binding not configured' }), {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          title: "Service Unavailable",
+          status: 503,
+          code: "SERVICE_MISCONFIGURED",
+          detail: "API service binding not configured",
+          retryAfterSeconds: 60,
+        }),
+        {
+          status: 503,
+          headers: {
+            "Content-Type": "application/problem+json",
+            "Retry-After": "60",
+          },
+        }
+      );
     }
 
     // Marketing/search indexing lives on accountgo.dev. Keep the app shell out of SERPs
