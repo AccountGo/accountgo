@@ -64,6 +64,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Version checks must bypass service worker cache so open tabs always see live builds
+  if (url.pathname === '/version.json') return;
+
   // Let API and WebSocket endpoints pass straight to network
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/hub/')) return;
 

@@ -42,6 +42,8 @@ pnpm wrangler deploy
 
 Use your own Cloudflare account. Do not reuse AccountGo Cloud resource IDs.
 
+If serving the built SPA from a custom static web server or reverse proxy, serve `/version.json` with `Cache-Control: no-store` so open tabs learn about new versions.
+
 ---
 
 ## 3. Self-host: Backend API (.NET 10)
