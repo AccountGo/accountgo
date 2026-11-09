@@ -9,6 +9,7 @@ import {
   reportNetworkFailure,
   reportServiceProblem,
   reportServiceRestored,
+  shouldRetry503,
 } from '../lib/serviceStatus';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,29 +27,30 @@ export function getOrgSlugFromLocation(pathname: string = window.location.pathna
   }
 }
 
-async function fetchWith503Retry(
+export async function fetchWith503Retry(
   input: RequestInfo | URL,
   init?: RequestInit,
-  maxRetries = 3
+  maxRetries = 3,
+  options?: { userWrite?: boolean }
 ): Promise<Response> {
   const method = (init?.method || 'GET').toUpperCase();
-  const allowRetry = method === 'GET';
   let attempt = 0;
   while (true) {
     const res = await fetch(input, init);
-    if (allowRetry && res.status === 503 && attempt < maxRetries) {
-      attempt++;
-      const retryAfterHeader = res.headers.get('Retry-After');
-      let delaySec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
-      if (isNaN(delaySec) || delaySec <= 0) delaySec = 5;
-      delaySec = Math.min(delaySec, 10);
-      await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
-      continue;
-    }
     if (res.status === 503) {
       const problem = await parseResponseServiceProblem(res.clone());
+      const canRetry = shouldRetry503(method, problem);
+      if (canRetry && attempt < maxRetries) {
+        attempt++;
+        const retryAfterHeader = res.headers.get('Retry-After');
+        let delaySec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
+        if (isNaN(delaySec) || delaySec <= 0) delaySec = 5;
+        delaySec = Math.min(delaySec, 10);
+        await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
+        continue;
+      }
       if (problem) {
-        reportServiceProblem(problem, { method });
+        reportServiceProblem(problem, { method, userWrite: options?.userWrite });
       }
     }
     return res;
@@ -380,7 +382,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const method = (init?.method || 'GET').toUpperCase();
-      const shouldRetry503 = method === 'GET';
+      const isNonGet = method !== 'GET' && method !== 'HEAD';
+      const isAuthRoute = requestPath.startsWith('/api/auth/');
+      const userWrite = isNonGet && !isAuthRoute;
 
       const effectivePlanDialog = planDialog !== undefined
         ? planDialog
@@ -388,30 +392,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const shouldAnnounce = effectivePlanDialog !== undefined
         ? effectivePlanDialog
-        : method !== 'GET' && method !== 'HEAD';
+        : isNonGet;
 
       const { planDialog: _, ...fetchInit } = (init as { planDialog?: boolean } & RequestInit) || {};
 
       let res: Response;
       try {
-        res = shouldRetry503
-          ? await fetchWith503Retry(url, { ...fetchInit, headers, credentials: 'include' })
-          : await fetch(url, { ...fetchInit, headers, credentials: 'include' });
+        res = await fetchWith503Retry(
+          url,
+          { ...fetchInit, headers, credentials: 'include' },
+          3,
+          { userWrite }
+        );
       } catch (networkErr) {
         if (requestPath.startsWith('/api/')) {
-          reportNetworkFailure({ method });
+          reportNetworkFailure({ method, userWrite });
         }
         throw networkErr;
       }
 
       if (requestPath.startsWith('/api/')) {
         if (res.status === 502 || res.status === 504) {
-          reportNetworkFailure({ status: res.status, method });
-        } else if (!shouldRetry503 && res.status === 503) {
-          const problem = await parseResponseServiceProblem(res.clone());
-          if (problem) {
-            reportServiceProblem(problem, { method });
-          }
+          reportNetworkFailure({ status: res.status, method, userWrite });
         } else if (res.ok) {
           reportServiceRestored();
         }
@@ -440,24 +442,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             retryHeaders.set(ORG_HEADER, orgSlug);
           }
           try {
-            res = shouldRetry503
-              ? await fetchWith503Retry(url, { ...fetchInit, headers: retryHeaders, credentials: 'include' })
-              : await fetch(url, { ...fetchInit, headers: retryHeaders, credentials: 'include' });
+            res = await fetchWith503Retry(
+              url,
+              { ...fetchInit, headers: retryHeaders, credentials: 'include' },
+              3,
+              { userWrite }
+            );
           } catch (retryNetworkErr) {
             if (requestPath.startsWith('/api/')) {
-              reportNetworkFailure({ method });
+              reportNetworkFailure({ method, userWrite });
             }
             throw retryNetworkErr;
           }
 
           if (requestPath.startsWith('/api/')) {
             if (res.status === 502 || res.status === 504) {
-              reportNetworkFailure({ status: res.status, method });
-            } else if (!shouldRetry503 && res.status === 503) {
-              const problem = await parseResponseServiceProblem(res.clone());
-              if (problem) {
-                reportServiceProblem(problem, { method });
-              }
+              reportNetworkFailure({ status: res.status, method, userWrite });
             } else if (res.ok) {
               reportServiceRestored();
             }

@@ -1,21 +1,18 @@
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
 import {
   type ServiceUnavailableCode,
   type ServiceStatusState,
   dismissWriteFailedNotice,
   getServiceStatus,
   isTakingLong,
-  nextProbeDelayMs,
-  parseResponseServiceProblem,
-  reportNetworkFailure,
-  reportServiceProblem,
-  reportServiceRestored,
   setServiceStatusCollapsed,
+  startServiceStatusProbe,
   subscribeServiceStatus,
 } from '../lib/serviceStatus';
 
@@ -71,12 +68,14 @@ export function getServiceStatusCopy(
 }
 
 export interface ServiceStatusCardProps {
+  idPrefix?: string;
   code?: ServiceUnavailableCode;
   message?: string;
   until?: string;
   since?: number;
   secondsUntilProbe?: number;
   isTakingLongTime?: boolean;
+  titleRef?: React.Ref<HTMLHeadingElement>;
   onCheckNow?: () => void;
   onHide?: () => void;
   onReload?: () => void;
@@ -84,12 +83,14 @@ export interface ServiceStatusCardProps {
 }
 
 export const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({
+  idPrefix = 'service-status',
   code,
   message,
   until,
   since,
   secondsUntilProbe,
   isTakingLongTime,
+  titleRef,
   onCheckNow,
   onHide,
   onReload,
@@ -98,13 +99,15 @@ export const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({
   const { title, body, expectedUntil } = getServiceStatusCopy(code, message, until);
   const now = Date.now();
   const elapsedMinutes = since ? Math.floor(Math.max(0, now - since) / 60_000) : 0;
+  const titleId = `${idPrefix}-title`;
+  const bodyId = `${idPrefix}-body`;
 
   return (
     <div
       role="alertdialog"
       aria-modal="true"
-      aria-labelledby="service-status-title"
-      aria-describedby="service-status-body"
+      aria-labelledby={titleId}
+      aria-describedby={bodyId}
       className="relative w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl flex flex-col items-center gap-4 text-center transition-all duration-200"
     >
       <div className="relative">
@@ -122,13 +125,15 @@ export const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({
 
       <div className="flex flex-col items-center gap-1.5 w-full">
         <h2
-          id="service-status-title"
-          className="text-base font-semibold text-[var(--text-main)]"
+          id={titleId}
+          ref={titleRef}
+          tabIndex={-1}
+          className="text-base font-semibold text-[var(--text-main)] outline-none"
         >
           {title}
         </h2>
         <p
-          id="service-status-body"
+          id={bodyId}
           className="text-xs text-[var(--text-muted)] leading-relaxed max-w-sm"
         >
           {body}
@@ -197,65 +202,25 @@ export const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({
 };
 
 export const ServiceStatusOverlay: React.FC = () => {
+  const { isStarting } = useAuth();
   const [status, setStatus] = useState<ServiceStatusState>(getServiceStatus);
   const [secondsUntilProbe, setSecondsUntilProbe] = useState<number>(5);
   const [takingLong, setTakingLong] = useState<boolean>(false);
-  const probeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const nextProbeTimeRef = useRef<number>(0);
+  const probeControllerRef = useRef<{ stop: () => void; checkNow: () => Promise<void> } | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     return subscribeServiceStatus(setStatus);
   }, []);
 
-  const probe = useCallback(async () => {
-    try {
-      const res = await fetch('/api/status', {
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (res.status === 200) {
-        reportServiceRestored();
-        return;
-      }
-      if (res.status === 503) {
-        const problem = await parseResponseServiceProblem(res);
-        if (problem) {
-          reportServiceProblem(problem);
-          return;
-        }
-      }
-      reportNetworkFailure({ status: res.status });
-    } catch {
-      reportNetworkFailure();
-    }
-  }, []);
-
-  const scheduleNextProbe = useCallback(
-    (delayMs: number) => {
-      if (probeTimerRef.current) clearTimeout(probeTimerRef.current);
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-
-      nextProbeTimeRef.current = Date.now() + delayMs;
-      setSecondsUntilProbe(Math.max(1, Math.round(delayMs / 1000)));
-
-      countdownIntervalRef.current = setInterval(() => {
-        const remaining = Math.max(0, Math.round((nextProbeTimeRef.current - Date.now()) / 1000));
-        setSecondsUntilProbe(remaining);
-      }, 1000);
-
-      probeTimerRef.current = setTimeout(async () => {
-        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-        await probe();
-      }, delayMs);
-    },
-    [probe]
-  );
-
+  // Controller loop for probing while unavailable
   useEffect(() => {
     if (status.state !== 'unavailable') {
-      if (probeTimerRef.current) clearTimeout(probeTimerRef.current);
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (probeControllerRef.current) {
+        probeControllerRef.current.stop();
+        probeControllerRef.current = null;
+      }
       setTakingLong(false);
       return;
     }
@@ -263,27 +228,27 @@ export const ServiceStatusOverlay: React.FC = () => {
     const elapsed = status.since ? Date.now() - status.since : 0;
     setTakingLong(isTakingLong(elapsed));
 
-    const delay = nextProbeDelayMs(elapsed, status.lastRetryAfter);
-    scheduleNextProbe(delay);
+    const controller = startServiceStatusProbe({
+      onSchedule: (delayMs) => setSecondsUntilProbe(Math.max(1, Math.round(delayMs / 1000))),
+    });
+    probeControllerRef.current = controller;
 
-    const handleVisibilityOrOnline = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine) {
-        void probe();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityOrOnline);
-    window.addEventListener('online', handleVisibilityOrOnline);
+    // Countdown interval for UI display
+    const countdownInterval = setInterval(() => {
+      const remaining = Math.max(0, Math.round((controller.getNextCheckAt() - Date.now()) / 1000));
+      setSecondsUntilProbe(remaining);
+    }, 1000);
 
     return () => {
-      if (probeTimerRef.current) clearTimeout(probeTimerRef.current);
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-      document.removeEventListener('visibilitychange', handleVisibilityOrOnline);
-      window.removeEventListener('online', handleVisibilityOrOnline);
+      clearInterval(countdownInterval);
+      controller.stop();
+      if (probeControllerRef.current === controller) {
+        probeControllerRef.current = null;
+      }
     };
-  }, [status.state, status.since, status.lastRetryAfter, probe, scheduleNextProbe]);
+  }, [status.state, status.since]);
 
-  // Keep takingLong up to date periodically
+  // Keep takingLong flag up to date
   useEffect(() => {
     if (status.state !== 'unavailable' || !status.since) return;
     const interval = setInterval(() => {
@@ -293,15 +258,54 @@ export const ServiceStatusOverlay: React.FC = () => {
     return () => clearInterval(interval);
   }, [status.state, status.since]);
 
+  // Accessibility: focus title and inert #root when full overlay is open
+  useEffect(() => {
+    const isFullOverlayOpen = status.state === 'unavailable' && !status.collapsed && !isStarting;
+    const rootEl = typeof document !== 'undefined' ? document.getElementById('root') : null;
+
+    if (isFullOverlayOpen) {
+      if (!previousFocusRef.current) {
+        previousFocusRef.current = (document.activeElement as HTMLElement) || null;
+      }
+      if (rootEl) {
+        rootEl.setAttribute('inert', '');
+      }
+      // Move focus to title
+      const focusTimer = setTimeout(() => {
+        titleRef.current?.focus();
+      }, 0);
+      return () => {
+        clearTimeout(focusTimer);
+        if (rootEl) {
+          rootEl.removeAttribute('inert');
+        }
+      };
+    } else {
+      if (rootEl) {
+        rootEl.removeAttribute('inert');
+      }
+      if (previousFocusRef.current && typeof document !== 'undefined' && document.contains(previousFocusRef.current)) {
+        previousFocusRef.current.focus();
+        previousFocusRef.current = null;
+      }
+    }
+  }, [status.state, status.collapsed, isStarting]);
+
   if (typeof document === 'undefined') return null;
+
+  // Single status UI during boot: overlay renders nothing while isStarting is true
+  if (isStarting) {
+    return null;
+  }
 
   const content = (
     <>
       {status.state === 'unavailable' && (
         status.collapsed ? (
           <aside
+            role="banner"
             aria-label="Service unavailable notice"
-            className="fixed top-0 inset-x-0 z-[100] flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs text-[var(--text-main)] shadow-sm pt-[max(0.625rem,env(safe-area-inset-top))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
+            className="fixed top-16 inset-x-0 z-40 flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs text-[var(--text-main)] shadow-md pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
           >
             <div className="flex items-center gap-2 min-w-0">
               <AlertCircle className="w-4 h-4 shrink-0 text-[var(--brand-primary)]" />
@@ -320,13 +324,15 @@ export const ServiceStatusOverlay: React.FC = () => {
         ) : (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--bg-canvas)]/80 backdrop-blur-sm p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
             <ServiceStatusCard
+              idPrefix="overlay-status"
               code={status.code}
               message={status.message}
               until={status.until}
               since={status.since}
               secondsUntilProbe={secondsUntilProbe}
               isTakingLongTime={takingLong}
-              onCheckNow={probe}
+              titleRef={titleRef}
+              onCheckNow={() => void probeControllerRef.current?.checkNow()}
               onHide={() => setServiceStatusCollapsed(true)}
               onReload={() => window.location.reload()}
             />
@@ -338,7 +344,7 @@ export const ServiceStatusOverlay: React.FC = () => {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-4 right-4 z-[90] max-w-sm rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-xl flex items-start gap-3 text-xs text-[var(--text-main)] transition-all animate-in fade-in"
+          className="fixed bottom-[calc(max(1rem,env(safe-area-inset-bottom,0px))+4.5rem)] md:bottom-4 right-4 z-[90] max-w-sm rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-xl flex items-start gap-3 text-xs text-[var(--text-main)] transition-all animate-in fade-in"
         >
           <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
           <div className="flex-1 leading-relaxed">

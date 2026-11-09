@@ -1,24 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { ServiceStatusCard } from './ServiceStatusOverlay';
-import { getServiceStatus } from '../lib/serviceStatus';
+import { getServiceStatus, subscribeServiceStatus, type ServiceStatusState } from '../lib/serviceStatus';
 
 export const ProtectedRoute: React.FC = () => {
   const { isAuthenticated, isLoading, isStarting, signedOutNotice } = useAuth();
   const location = useLocation();
+  const [serviceStatus, setServiceStatus] = useState<ServiceStatusState>(getServiceStatus);
+
+  useEffect(() => {
+    if (!isStarting) return;
+    return subscribeServiceStatus(setServiceStatus);
+  }, [isStarting]);
 
   if (isLoading) {
     if (isStarting) {
-      const status = getServiceStatus();
       return (
         <div className="flex min-h-dvh w-screen items-center justify-center bg-[var(--bg-canvas)] p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] transition-colors duration-200">
           <ServiceStatusCard
-            code={status.code || 'SERVICE_STARTING'}
-            message={status.message}
-            until={status.until}
-            since={status.since}
+            idPrefix="boot-status"
+            code={serviceStatus.code || 'SERVICE_STARTING'}
+            message={serviceStatus.message}
+            until={serviceStatus.until}
+            since={serviceStatus.since}
             hideControls
           />
         </div>
