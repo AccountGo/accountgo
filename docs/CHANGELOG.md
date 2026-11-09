@@ -12,6 +12,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 ## [Unreleased]
 
 ### Added
+- AccountGo now tells you when a new version is available, so you can reload when it suits you.
 - A clear status screen now appears while AccountGo is being updated, starting up or under maintenance. It continues on its own when AccountGo is back and keeps what you were working on.
 
 ---

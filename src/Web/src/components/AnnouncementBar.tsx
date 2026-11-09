@@ -11,6 +11,7 @@ import {
   readDismissedIds,
   writeDismissal,
 } from '../lib/announcementBarLogic';
+import { getDeferredUpdate, subscribeDeferredUpdate } from '../lib/appVersion';
 
 const SEVERITY_STYLES: Record<AnnouncementItem['severity'], string> = {
   critical: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
@@ -84,10 +85,15 @@ export const AnnouncementBar: React.FC = () => {
   const navigate = useNavigate();
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const pastDue = pastDueAnnouncement(billing);
+  const [deferredUpdateId, setDeferredUpdateId] = useState<string | null>(getDeferredUpdate);
   const [remote, setRemote] = useState<AnnouncementItem[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const userId = user?.id || '';
+
+  useEffect(() => {
+    return subscribeDeferredUpdate(setDeferredUpdateId);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -113,9 +119,25 @@ export const AnnouncementBar: React.FC = () => {
     };
   }, [authFetch, userId, orgSlug]);
 
+  const updateAnnouncement: AnnouncementItem | null = deferredUpdateId
+    ? {
+        id: 'client:update-available',
+        severity: 'info',
+        message: 'A new version of AccountGo is available.',
+        action: { label: 'Reload', href: '__reload__' },
+        dismissible: false,
+        clientOnly: true,
+      }
+    : null;
+
+  const clientItems = useMemo(
+    () => [pastDue, updateAnnouncement].filter(Boolean) as AnnouncementItem[],
+    [pastDue, updateAnnouncement],
+  );
+
   const combined = useMemo(
-    () => filterVisibleAnnouncements(mergeAnnouncementItems(remote, pastDue), dismissed),
-    [remote, pastDue, dismissed],
+    () => filterVisibleAnnouncements(mergeAnnouncementItems(remote, clientItems), dismissed),
+    [remote, clientItems, dismissed],
   );
 
   const onDismiss = useCallback(
@@ -130,6 +152,10 @@ export const AnnouncementBar: React.FC = () => {
     (item: AnnouncementItem) => {
       const href = item.action?.href;
       if (!href) return;
+      if (href === '__reload__') {
+        window.location.reload();
+        return;
+      }
       if (href === '__portal__') {
         void billing.openPortal().catch(() => undefined);
         return;

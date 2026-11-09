@@ -8,6 +8,7 @@ import { ThemeProvider } from './themes/ThemeContext';
 import { AuthProvider } from './auth/AuthContext';
 import { PlanLimitDialog } from './components/PlanLimitDialog';
 import { ServiceStatusOverlay } from './components/ServiceStatusOverlay';
+import { UpdateAvailableDialog } from './components/UpdateAvailableDialog';
 
 // Register PWA service worker (production shell caching + offline fallback)
 registerServiceWorker();
@@ -22,6 +23,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         <App />
         <PlanLimitDialog />
         <ServiceStatusOverlay />
+        <UpdateAvailableDialog />
       </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>
