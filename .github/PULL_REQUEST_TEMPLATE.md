@@ -37,6 +37,7 @@ Attach before/after screenshots or logs demonstrating the change.
 
 ## Checklist
 
+- [ ] User-visible changes are listed under `[Unreleased]` in `docs/CHANGELOG.md` (or this change is internal-only)
 - [ ] My code follows the style guidelines of this project
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code, particularly in hard-to-understand areas

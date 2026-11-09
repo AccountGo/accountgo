@@ -205,6 +205,7 @@ Comprehensive architecture, development, and operational guides are available in
 - 🧾 [General Ledger Redesign](docs/accounting/general-ledger-redesign.md) — Financials page as posted journal register (implementation brief).
 - 🧪 [Double-Entry Accounting Tests](docs/accounting/double-entry-tests.md) — 7 Accuracy Guarantees and automated ledger verification suite.
 - 📋 [Changelog](docs/CHANGELOG.md) — Version history and release notes.
+- 🏷️ [Releasing](docs/RELEASING.md) — How changes are recorded and releases are cut.
 
 ---
 
