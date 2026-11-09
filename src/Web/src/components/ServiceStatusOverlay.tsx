@@ -12,6 +12,7 @@ import {
   getServiceStatus,
   isTakingLong,
   setServiceStatusCollapsed,
+  shouldSuppressOverlay,
   startServiceStatusProbe,
   subscribeServiceStatus,
 } from '../lib/serviceStatus';
@@ -203,6 +204,7 @@ export const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({
 
 export const ServiceStatusOverlay: React.FC = () => {
   const { isLoading, isStarting } = useAuth();
+  const isSuppressed = shouldSuppressOverlay({ isLoading, isStarting });
   const [status, setStatus] = useState<ServiceStatusState>(getServiceStatus);
   const [secondsUntilProbe, setSecondsUntilProbe] = useState<number>(5);
   const [takingLong, setTakingLong] = useState<boolean>(false);
@@ -260,7 +262,7 @@ export const ServiceStatusOverlay: React.FC = () => {
 
   // Accessibility: focus title and inert #root when full overlay is open
   useEffect(() => {
-    const isFullOverlayOpen = status.state === 'unavailable' && !status.collapsed && !(isLoading && isStarting);
+    const isFullOverlayOpen = status.state === 'unavailable' && !status.collapsed && !isSuppressed;
     const rootEl = typeof document !== 'undefined' ? document.getElementById('root') : null;
 
     if (isFullOverlayOpen) {
@@ -289,12 +291,12 @@ export const ServiceStatusOverlay: React.FC = () => {
         previousFocusRef.current = null;
       }
     }
-  }, [status.state, status.collapsed, isLoading, isStarting]);
+  }, [status.state, status.collapsed, isSuppressed]);
 
   if (typeof document === 'undefined') return null;
 
-  // Single status UI during boot: overlay renders nothing while the boot card is on screen (isLoading && isStarting)
-  if (isLoading && isStarting) {
+  // Single status UI during boot: overlay renders nothing while the boot card is on screen
+  if (isSuppressed) {
     return null;
   }
 
