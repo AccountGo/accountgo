@@ -36,3 +36,25 @@ test('API proxy preserves backend indexing policy and response body', async () =
   assert.equal(response.headers.get('X-Robots-Tag'), 'noindex');
   assert.deepEqual(await response.json(), { ok: true });
 });
+
+test('API proxy returns SERVICE_UNREACHABLE 503 when API fetch throws', async () => {
+  const response = await worker.fetch(appRequest('/api/example'), {
+    API: { fetch: async () => { throw new Error('API down'); } },
+  }, {});
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('content-type'), 'application/problem+json');
+  assert.equal(response.headers.get('Retry-After'), '5');
+  const body = await response.json();
+  assert.equal(body.code, 'SERVICE_UNREACHABLE');
+  assert.equal(body.status, 503);
+});
+
+test('API proxy returns SERVICE_MISCONFIGURED 503 when API binding is not configured', async () => {
+  const response = await worker.fetch(appRequest('/api/example'), {}, {});
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('content-type'), 'application/problem+json');
+  assert.equal(response.headers.get('Retry-After'), '60');
+  const body = await response.json();
+  assert.equal(body.code, 'SERVICE_MISCONFIGURED');
+  assert.equal(body.status, 503);
+});

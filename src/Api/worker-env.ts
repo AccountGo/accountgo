@@ -28,5 +28,6 @@ export interface Env {
   CF_VERSION_METADATA?: {
     id: string;
     tag: string;
+    timestamp?: string;
   };
 }

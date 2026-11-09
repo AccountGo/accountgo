@@ -18,6 +18,7 @@ import {
   resolveInternalSyncKey,
   serviceUnavailable,
   sleep,
+  startupCode,
 } from "./container-shared";
 import { shouldSkipPortsReady, type ReadyTiming } from "./ports-ready";
 import {
@@ -378,7 +379,13 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
         readyTiming.readyMs += Date.now() - readyStarted;
       } catch (err) {
         console.error("[worker-v2] Container startup timed out or failed:", err);
-        return finish(serviceUnavailable("Service is starting up, please retry in a few seconds", 5));
+        return finish(
+          serviceUnavailable(
+            startupCode({ versionTimestamp: this.env.CF_VERSION_METADATA?.timestamp }),
+            "Service is starting up, please retry in a few seconds",
+            5
+          )
+        );
       }
     }
 
@@ -387,16 +394,28 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
         await this.ensureInitialized(readyTiming);
       } catch (prepErr: unknown) {
         if (prepErr instanceof BuildMismatchError) {
-          return finish(serviceUnavailable(prepErr.message, 5));
+          return finish(serviceUnavailable("SERVICE_UPDATING", prepErr.message, 5));
         }
 
         if (prepErr instanceof ContainerConfigError) {
           console.error(`[worker-v2] ${prepErr.message}`);
-          return finish(serviceUnavailable("Service is not configured, please try again later", 60));
+          return finish(
+            serviceUnavailable(
+              "SERVICE_MISCONFIGURED",
+              "Service is not configured, please try again later",
+              60
+            )
+          );
         }
 
         console.error("[worker-v2] Container initialization failed:", prepErr);
-        return finish(serviceUnavailable("Service is starting up, please retry in a few seconds", 5));
+        return finish(
+          serviceUnavailable(
+            startupCode({ versionTimestamp: this.env.CF_VERSION_METADATA?.timestamp }),
+            "Service is starting up, please retry in a few seconds",
+            5
+          )
+        );
       }
     }
 
@@ -438,14 +457,17 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
         return finish(payloadTooLargeResponse(err));
       }
       if (err instanceof ContainerUnavailableError) {
-        return finish(unavailableResponse(err));
+        return finish(unavailableResponse(err, this.env.CF_VERSION_METADATA?.timestamp));
       }
       if (err instanceof BuildMismatchError) {
-        return finish(serviceUnavailable(err.message, 5));
+        return finish(serviceUnavailable("SERVICE_UPDATING", err.message, 5));
       }
       this.invalidate("proxy failed");
       return finish(
         serviceUnavailable(
+          isTransientContainerError(err)
+            ? startupCode({ versionTimestamp: this.env.CF_VERSION_METADATA?.timestamp })
+            : "SERVICE_INTERRUPTED",
           isTransientContainerError(err)
             ? "Service is starting up, please retry in a few seconds"
             : "Upstream container error, please retry",

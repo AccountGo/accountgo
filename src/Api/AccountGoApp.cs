@@ -672,6 +672,7 @@ public static class AccountGoApp
             });
         }).AllowAnonymous();
 
+        app.MapGet("/api/status", () => Results.Ok(new { status = "ok", version = Api.Service.BuildMetadata.GetBuildSha() })).AllowAnonymous();
         app.MapGet("/healthz", () => Results.Ok(new { status = "alive", version = Api.Service.BuildMetadata.GetBuildSha() })).AllowAnonymous();
         app.MapGet("/readyz", async (IServiceProvider sp) =>
         {

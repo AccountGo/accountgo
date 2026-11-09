@@ -11,6 +11,9 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
+### Added
+- A clear status screen now appears while AccountGo is being updated, starting up or under maintenance. It continues on its own when AccountGo is back and keeps what you were working on.
+
 ---
 
 ## [0.1.0] - 2026-11-08

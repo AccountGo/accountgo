@@ -7,6 +7,7 @@ import { initScrollWatcher } from './lib/scrollWatcher';
 import { ThemeProvider } from './themes/ThemeContext';
 import { AuthProvider } from './auth/AuthContext';
 import { PlanLimitDialog } from './components/PlanLimitDialog';
+import { ServiceStatusOverlay } from './components/ServiceStatusOverlay';
 
 // Register PWA service worker (production shell caching + offline fallback)
 registerServiceWorker();
@@ -20,6 +21,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <AuthProvider>
         <App />
         <PlanLimitDialog />
+        <ServiceStatusOverlay />
       </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>
