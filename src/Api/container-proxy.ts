@@ -22,6 +22,7 @@ import {
   isTransientContainerError,
   libraryFailureText,
   serviceUnavailable,
+  startupCode,
   type FailureReach,
 } from "./container-errors.ts";
 import { shouldEnsurePortsReadyOnAttempt, type ReadyTiming } from "./ports-ready.ts";
@@ -125,8 +126,14 @@ export class PayloadTooLargeError extends Error {
   }
 }
 
-export function unavailableResponse(err: ContainerUnavailableError): Response {
+export function unavailableResponse(
+  err: ContainerUnavailableError,
+  versionTimestamp?: string
+): Response {
   return serviceUnavailable(
+    err.reach === "not-reached"
+      ? startupCode({ versionTimestamp })
+      : "SERVICE_INTERRUPTED",
     err.reach === "not-reached"
       ? "Service is starting up, please retry in a few seconds"
       : "The service restarted while handling this request, please retry",
