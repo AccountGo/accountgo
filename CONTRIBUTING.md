@@ -46,7 +46,7 @@ Have an idea for AccountGo?
      - `docs/doc-updates` (e.g., `docs/api-reference`)
      - `refactor/clean-architecture`
 3. **Set up local development**: See [Development Setup](#development-setup) below and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
-4. **Follow commit conventions**: Follow [Conventional Commits](https://www.conventionalcommits.org/).
+4. **Write clear commits and update the changelog**: See [Commit Messages and the Changelog](#commit-messages-and-the-changelog).
 5. **Open a Pull Request**: Submit your pull request against the `main` branch using the [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md).
 
 ---
@@ -103,36 +103,16 @@ For more in-depth development setup and debugging guidance, see [docs/DEVELOPMEN
 
 ---
 
-## Commit Message Conventions
+## Commit Messages and the Changelog
 
-We adhere to the [Conventional Commits v1.0.0](https://www.conventionalcommits.org/) specification:
+Write the commit subject as a short sentence that says what changed, in the imperative mood, for example:
 
-```
-<type>(<scope>): <short description>
+- `Add Google sign-in alongside email OTP`
+- `Fix cash history assignment and banking activity details`
 
-[optional body]
+Use the body to explain why, when it isn't obvious.
 
-[optional footer(s)]
-```
-
-### Allowed Types
-
-- `feat`: A new feature for the user or system
-- `fix`: A bug fix
-- `docs`: Documentation changes only
-- `style`: Formatting, missing semicolons, etc. (no production code changes)
-- `refactor`: Code change that neither fixes a bug nor adds a feature
-- `perf`: Code change that improves performance
-- `test`: Adding missing tests or correcting existing tests
-- `build`: Changes that affect the build system or external dependencies
-- `ci`: Changes to CI/CD configuration files and scripts
-- `chore`: Other non-src or non-test changes
-
-### Examples
-
-- `feat(sales): add recurring invoice scheduling support`
-- `fix(auth): resolve token refresh loop on mobile browsers`
-- `docs(api): document multi-tenancy header resolution`
+If your change is user-visible, add a line under `## [Unreleased]` in [docs/CHANGELOG.md](docs/CHANGELOG.md) in the same pull request. Put it under Added, Changed, Fixed, Removed, Security or Self-hosting, and write it for users, not for the code. Internal-only changes, such as tests, CI and refactors, don't need an entry. See [docs/RELEASING.md](docs/RELEASING.md) for how releases are cut.
 
 ---
 
