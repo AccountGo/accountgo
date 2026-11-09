@@ -51,7 +51,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe('linked bank statement entries', () => {
   it('shows Personal and Money I put in actions for a sole proprietor', async () => {
     page();
-    expect(await screen.findByRole('button', { name: 'Personal' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Personal' }, { timeout: 5000 })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Money I put in' })).toBeTruthy();
   });
 

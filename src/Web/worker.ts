@@ -149,6 +149,24 @@ export default {
       );
     }
 
+    // Version checks must never be cached by browsers, CDNs, or service workers.
+    if (url.pathname === "/version.json") {
+      const strippedRequest = new Request(new URL("/version.json", url.origin), request);
+      const assetResponse = await env.ASSETS.fetch(strippedRequest);
+      const headers = new Headers(assetResponse.headers);
+      headers.set("Cache-Control", "no-store");
+      headers.set("CDN-Cache-Control", "no-store");
+      headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+      if (!headers.has("X-Robots-Tag")) {
+        headers.set("X-Robots-Tag", "noindex, nofollow");
+      }
+      return new Response(assetResponse.body, {
+        status: assetResponse.status,
+        statusText: assetResponse.statusText,
+        headers,
+      });
+    }
+
     // Fall back to static assets (SPA router fallback handles client routes)
     const assetResponse = await env.ASSETS.fetch(request);
     const headers = new Headers(assetResponse.headers);

@@ -85,17 +85,28 @@ export function hasServerBillingAnnouncement(items: readonly AnnouncementItem[])
 }
 
 /**
- * Merge remote announcements with an optional client past-due item.
+ * Merge remote announcements with client items (e.g. past-due, update-available).
  * When any remote id starts with `billing:`, skip the client past-due item so the
  * server notice (with the exact date) is the only one shown.
  */
 export function mergeAnnouncementItems(
   remote: readonly AnnouncementItem[],
-  clientPastDue: AnnouncementItem | null,
+  clientItems?: readonly (AnnouncementItem | null | undefined)[] | AnnouncementItem | null,
 ): AnnouncementItem[] {
   const items = [...remote];
-  if (clientPastDue && !hasServerBillingAnnouncement(remote)) {
-    items.push(clientPastDue);
+  if (!clientItems) return items;
+
+  const list: (AnnouncementItem | null | undefined)[] = Array.isArray(clientItems)
+    ? clientItems
+    : [clientItems];
+
+  const hasServerBilling = hasServerBillingAnnouncement(remote);
+  for (const clientItem of list) {
+    if (!clientItem) continue;
+    if (clientItem.id === 'client:past-due' && hasServerBilling) {
+      continue;
+    }
+    items.push(clientItem);
   }
   return items;
 }

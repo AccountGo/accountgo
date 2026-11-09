@@ -58,3 +58,31 @@ test('API proxy returns SERVICE_MISCONFIGURED 503 when API binding is not config
   assert.equal(body.code, 'SERVICE_MISCONFIGURED');
   assert.equal(body.status, 503);
 });
+
+test('version.json strips query string and enforces no-store caching headers', async () => {
+  let requestedUrl = null;
+  const response = await worker.fetch(
+    appRequest('/version.json?t=1731168000000'),
+    {
+      ASSETS: {
+        fetch: async (req) => {
+          requestedUrl = req.url;
+          return new Response(JSON.stringify({ buildId: 'build-123' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        },
+      },
+    },
+    {}
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(requestedUrl, 'https://app.accountgo.dev/version.json');
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  assert.equal(response.headers.get('CDN-Cache-Control'), 'no-store');
+  assert.equal(response.headers.get('Cloudflare-CDN-Cache-Control'), 'no-store');
+  assert.equal(response.headers.get('X-Robots-Tag'), 'noindex, nofollow');
+  assert.deepEqual(await response.json(), { buildId: 'build-123' });
+});
+

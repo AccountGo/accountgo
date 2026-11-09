@@ -70,18 +70,50 @@ test('mergeAnnouncementItems skips client past-due when server sends billing: no
   };
   const withoutBilling = mergeAnnouncementItems(
     [{ id: 'info-1', severity: 'info', message: 'Hello', dismissible: true }],
-    clientPastDue,
+    [clientPastDue],
   );
   assert.deepEqual(withoutBilling.map((a) => a.id), ['info-1', 'client:past-due']);
   assert.equal(hasServerBillingAnnouncement(withoutBilling), false);
 
   const withBilling = mergeAnnouncementItems(
     [{ id: 'billing:past-due:42', severity: 'warning', message: 'Update by Nov 5, 2026', dismissible: false }],
-    clientPastDue,
+    [clientPastDue],
   );
   assert.deepEqual(withBilling.map((a) => a.id), ['billing:past-due:42']);
   assert.equal(hasServerBillingAnnouncement(withBilling), true);
 
-  assert.deepEqual(mergeAnnouncementItems([], clientPastDue).map((a) => a.id), ['client:past-due']);
+  assert.deepEqual(mergeAnnouncementItems([], [clientPastDue]).map((a) => a.id), ['client:past-due']);
+  assert.deepEqual(mergeAnnouncementItems([], []), []);
   assert.deepEqual(mergeAnnouncementItems([], null), []);
+});
+
+test('mergeAnnouncementItems includes client:update-available even when billing notices exist', () => {
+  const clientPastDue = {
+    id: 'client:past-due',
+    severity: 'warning',
+    message: 'Payment past due.',
+    dismissible: false,
+    clientOnly: true,
+  };
+  const updateAvailable = {
+    id: 'client:update-available',
+    severity: 'info',
+    message: 'A new version of AccountGo is available.',
+    action: { label: 'Reload', href: '__reload__' },
+    dismissible: false,
+    clientOnly: true,
+  };
+
+  const mergedWithBilling = mergeAnnouncementItems(
+    [{ id: 'billing:past-due:99', severity: 'warning', message: 'Past due notice', dismissible: false }],
+    [clientPastDue, updateAvailable],
+  );
+  // client:past-due is dropped due to billing: item, but client:update-available is retained
+  assert.deepEqual(mergedWithBilling.map((a) => a.id), ['billing:past-due:99', 'client:update-available']);
+
+  const mergedWithoutBilling = mergeAnnouncementItems(
+    [{ id: 'msg-1', severity: 'info', message: 'Welcome', dismissible: true }],
+    [clientPastDue, updateAvailable],
+  );
+  assert.deepEqual(mergedWithoutBilling.map((a) => a.id), ['msg-1', 'client:past-due', 'client:update-available']);
 });
