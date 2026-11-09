@@ -15,6 +15,9 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - AccountGo now tells you when a new version is available, so you can reload when it suits you.
 - A clear status screen now appears while AccountGo is being updated, starting up or under maintenance. It continues on its own when AccountGo is back and keeps what you were working on.
 
+### Changed
+- Free plans now enforce monthly document allowances: free invoicing includes up to 5 invoices or quotes and 20 bills per month, and free accounting includes up to 10 invoices or quotes and 10 bills per month.
+
 ---
 
 ## [0.1.0] - 2026-11-08

@@ -73,25 +73,30 @@ namespace Services.Entitlements
         public EntitlementSnapshot Get(int companyId)
         {
             var policy = ResolvePolicy(companyId);
+            var company = LoadCompany(companyId);
             var usage = WorkspaceResources
                 .Select(r =>
                 {
+                    var limit = GetQuota(company, r);
                     var used = CountUsed(companyId, r);
-                    return new ResourceUsage(r, Limit: null, used, MeteredResources.IsMonthly(r), OverLimit: false);
+                    return new ResourceUsage(r, limit, used, MeteredResources.IsMonthly(r), OverLimit: limit.HasValue && used > limit.Value);
                 })
                 .ToList();
 
+            var limited = usage.Any(u => u.Limit.HasValue);
+            var planKey = NormalizePlanKey(company.Plan);
+
             return new EntitlementSnapshot(
-                Enabled: false,
-                Plan: CommunityPlanCatalog.PlanKey,
+                Enabled: limited,
+                Plan: planKey,
                 Tier: policy.Tier,
-                Limited: false,
+                Limited: limited,
                 Modules: policy.Modules.ToList(),
                 SelfServicePlans: new List<string> { CommunityPlanCatalog.PlanKey },
                 Usage: usage,
                 SupportEmail: _options.SupportEmail,
                 Features: NoFeatures,
-                EffectivePlan: CommunityPlanCatalog.PlanKey,
+                EffectivePlan: planKey,
                 ReadOnlyModules: Array.Empty<string>(),
                 Lifecycle: null,
                 AllowedTransitions: Array.Empty<string>(),
@@ -128,7 +133,7 @@ namespace Services.Entitlements
         {
             EntitlementAction.Module module => EvaluateModule(companyId, module),
             EntitlementAction.Feature feature => EvaluateFeature(feature),
-            EntitlementAction.Create create => EvaluateCreate(create),
+            EntitlementAction.Create create => EvaluateCreate(companyId, create),
             _ => new EntitlementDecision(true, null, null, UpgradeAvailable: false)
         };
 
@@ -229,8 +234,80 @@ namespace Services.Entitlements
                 UpgradeAvailable: false);
         }
 
-        private static EntitlementDecision EvaluateCreate(EntitlementAction.Create create) =>
-            new(true, null, null, Resource: create.Resource, UpgradeAvailable: false);
+        private EntitlementDecision EvaluateCreate(int companyId, EntitlementAction.Create create)
+        {
+            if (_bypassDepth > 0)
+                return new EntitlementDecision(true, null, null, Resource: create.Resource, UpgradeAvailable: false);
+
+            var company = LoadCompany(companyId);
+            var limit = GetQuota(company, create.Resource);
+            var used = CountUsed(companyId, create.Resource);
+            var effectivePlan = NormalizePlanKey(company.Plan);
+
+            if (limit is { } max && used + create.Count > max)
+            {
+                return new EntitlementDecision(
+                    false, "QUOTA_EXCEEDED",
+                    QuotaDescription(create.Resource, max),
+                    Resource: create.Resource,
+                    Limit: max,
+                    Used: used,
+                    Period: MeteredResources.PeriodOf(create.Resource),
+                    EffectivePlan: effectivePlan,
+                    UpgradeAvailable: true);
+            }
+
+            return new EntitlementDecision(
+                true, null, null,
+                Resource: create.Resource,
+                Limit: limit,
+                Used: used,
+                Period: MeteredResources.PeriodOf(create.Resource),
+                EffectivePlan: effectivePlan,
+                UpgradeAvailable: false);
+        }
+
+        private static int? GetQuota(Company company, MeteredResource resource)
+        {
+            if (string.Equals(company.Tier, CompanyTiers.Comp, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return (company.Plan?.Trim().ToLowerInvariant(), resource) switch
+            {
+                ("invoicing_free" or "invoicing", MeteredResource.SalesDocuments) => 5,
+                ("invoicing_free" or "invoicing", MeteredResource.Bills) => 20,
+                ("invoicing_free" or "invoicing", MeteredResource.Seats) => 1,
+
+                ("accounting_free" or "accounting", MeteredResource.SalesDocuments) => 10,
+                ("accounting_free" or "accounting", MeteredResource.Bills) => 10,
+                ("accounting_free" or "accounting", MeteredResource.Seats) => 1,
+                ("accounting_free" or "accounting", MeteredResource.BankAccounts) => 2,
+
+                _ => null
+            };
+        }
+
+        private static string QuotaDescription(MeteredResource resource, int limit) => resource switch
+        {
+            MeteredResource.SalesDocuments => $"The plan includes {limit} invoices and quotes per month.",
+            MeteredResource.Bills => $"The plan includes {limit} bills per month.",
+            MeteredResource.Seats => limit == 1
+                ? "The plan includes 1 user per workspace."
+                : $"The plan includes {limit} users per workspace.",
+            MeteredResource.BankAccounts => $"The plan includes {limit} bank and cash accounts.",
+            _ => "This workspace has reached a plan limit."
+        };
+
+        private static string NormalizePlanKey(string? plan) => plan?.Trim().ToLowerInvariant() switch
+        {
+            "invoicing" or "invoicing_free" => "invoicing_free",
+            "accounting" or "accounting_free" => "accounting_free",
+            "invoicing_solo" => "invoicing_solo",
+            "invoicing_pro" => "invoicing_pro",
+            "accounting_pro" => "accounting_pro",
+            "enterprise" => "enterprise",
+            _ => CommunityPlanCatalog.PlanKey
+        };
 
         private PolicyMemo ResolvePolicy(int companyId)
         {
@@ -239,17 +316,17 @@ namespace Services.Entitlements
 
             var company = LoadCompany(companyId);
             var modules = PlanModuleResolver.ResolveActiveModules(_plans, company);
-            var tier = CompanyTiers.Derive(company.Tier, CommunityPlanCatalog.PlanKey);
-            var version = HashPolicy(modules);
+            var tier = CompanyTiers.Derive(company.Tier, company.Plan ?? CommunityPlanCatalog.PlanKey);
+            var version = HashPolicy(company.Plan, modules);
             var memo = new PolicyMemo(modules, tier, version);
             _policyMemo[companyId] = memo;
             return memo;
         }
 
-        private static string HashPolicy(IReadOnlyList<string> modules)
+        private static string HashPolicy(string? plan, IReadOnlyList<string> modules)
         {
             var payload = string.Join('|',
-                CommunityPlanCatalog.PlanKey,
+                NormalizePlanKey(plan),
                 string.Join(',', modules.OrderBy(m => m, StringComparer.Ordinal)));
             var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
             return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
