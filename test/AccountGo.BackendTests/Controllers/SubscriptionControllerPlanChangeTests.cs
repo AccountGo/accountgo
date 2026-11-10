@@ -136,6 +136,64 @@ public sealed class SubscriptionControllerPlanChangeTests
         admin.Verify(a => a.UpdateSubscription(It.IsAny<UpdateSubscriptionDto>()), Times.Never);
     }
 
+    private static PlanChangePreview SamplePreview() =>
+        new("Plan B", 79.43m, "usd", 99m, "month", new System.DateTime(2026, 12, 10), "Visa ending 4242");
+
+    [Fact]
+    public async Task UpdateSubscription_Unconfirmed_ReturnsPreview_AndNeverCharges()
+    {
+        var billing = new Mock<IBillingProvider>();
+        billing.SetupGet(b => b.RequiresProviderCheckout).Returns(true);
+        billing.Setup(b => b.PreviewPlanChangeAsync(1, "plan_b", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(SamplePreview());
+        var admin = new Mock<IAdministrationService>();
+        admin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto { Plan = "plan_a", CompanyId = 1 });
+
+        var result = await Create(admin.Object, billing.Object).UpdateSubscription(
+            new UpdateSubscriptionDto { Plan = "plan_b", ReturnUrl = "https://app.example/settings" }, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Contains("confirmationRequired = True", ok.Value!.ToString(), System.StringComparison.Ordinal);
+        billing.Verify(b => b.RequestPlanChangeAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        admin.Verify(a => a.UpdateSubscription(It.IsAny<UpdateSubscriptionDto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateSubscription_Confirmed_SkipsPreview_AndRequestsChange()
+    {
+        var billing = new Mock<IBillingProvider>();
+        billing.SetupGet(b => b.RequiresProviderCheckout).Returns(true);
+        billing.Setup(b => b.RequestPlanChangeAsync(1, "plan_b", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PlanChangeResult(false, null, null));
+        var admin = new Mock<IAdministrationService>();
+        admin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto { Plan = "plan_a", CompanyId = 1 });
+
+        var result = await Create(admin.Object, billing.Object).UpdateSubscription(
+            new UpdateSubscriptionDto { Plan = "plan_b", ReturnUrl = "https://app.example/settings", Confirmed = true }, CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        billing.Verify(b => b.PreviewPlanChangeAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        billing.Verify(b => b.RequestPlanChangeAsync(1, "plan_b", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateSubscription_PreviewFails_ReturnsBadRequest_AndNeverCharges()
+    {
+        var billing = new Mock<IBillingProvider>();
+        billing.SetupGet(b => b.RequiresProviderCheckout).Returns(true);
+        billing.Setup(b => b.PreviewPlanChangeAsync(1, "plan_b", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new System.InvalidOperationException("provider down"));
+        var admin = new Mock<IAdministrationService>();
+        admin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto { Plan = "plan_a", CompanyId = 1 });
+
+        var result = await Create(admin.Object, billing.Object).UpdateSubscription(
+            new UpdateSubscriptionDto { Plan = "plan_b", ReturnUrl = "https://app.example/settings" }, CancellationToken.None);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Nothing was charged", bad.Value!.ToString(), System.StringComparison.Ordinal);
+        billing.Verify(b => b.RequestPlanChangeAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private static Services.Financial.IBooksReadinessService ReadyBooks()
     {
         var books = new Mock<Services.Financial.IBooksReadinessService>();

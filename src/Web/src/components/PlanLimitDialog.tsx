@@ -3,7 +3,8 @@ import { Sparkles } from 'lucide-react';
 import { getOrgSlugFromLocation, useAuth } from '../auth/AuthContext';
 import { ENTITLEMENT_DENIED_EVENT, isActivePersonalBooks, type EntitlementCode, type EntitlementProblem } from '../lib/entitlementEvents';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
-import { useBilling } from '../lib/useBilling';
+import { useBilling, type UpgradeOutcome } from '../lib/useBilling';
+import { UpgradeConfirmDialog } from './UpgradeConfirmDialog';
 import { eligibleUpgradePlans, planPriceLabel } from '../lib/planCards';
 import { ModalShell } from './ModalShell';
 
@@ -96,6 +97,7 @@ const UpgradeOptions: React.FC<{ problem: EntitlementProblem }> = ({ problem }) 
   const { authFetch } = useAuth();
   const catalog = usePlanCatalog();
   const billing = useBilling();
+  const [pendingConfirm, setPendingConfirm] = useState<Extract<UpgradeOutcome, { kind: 'confirm' }> | null>(null);
   const [allowed, setAllowed] = useState<string[]>([]);
   const [interval, setInterval] = useState<'month' | 'year'>('month');
   const [busy, setBusy] = useState(false);
@@ -116,10 +118,34 @@ const UpgradeOptions: React.FC<{ problem: EntitlementProblem }> = ({ problem }) 
   const selectPlan = async (key: string) => {
     setBusy(true);
     setError(null);
-    try { await billing.upgradePlan(key, interval); }
+    try {
+      const outcome = await billing.upgradePlan(key, interval);
+      if (outcome.kind === 'confirm') setPendingConfirm(outcome);
+      else if (outcome.kind === 'applied') window.location.reload();
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to start checkout.'); }
     finally { setBusy(false); }
   };
+  const confirmPlan = async () => {
+    if (!pendingConfirm) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const outcome = await billing.upgradePlan(pendingConfirm.planKey, pendingConfirm.billingInterval, { confirmed: true });
+      if (outcome.kind === 'applied') window.location.reload();
+    }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to change plan.'); }
+    finally { setBusy(false); }
+  };
+  if (pendingConfirm) {
+    return <UpgradeConfirmDialog
+      preview={pendingConfirm.preview}
+      busy={busy}
+      error={error}
+      onConfirm={() => void confirmPlan()}
+      onCancel={() => { setPendingConfirm(null); setError(null); }}
+    />;
+  }
   return <div className="space-y-3">
     {options.length > 0 && <>
       <div className="flex items-center justify-between gap-2">
