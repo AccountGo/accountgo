@@ -28,6 +28,13 @@ function readCheckoutParam(): string | null {
   return new URLSearchParams(window.location.search).get('checkout');
 }
 
+/** Plan picked before signing up (?upgrade=<key>), highlighted on the matching card. */
+function readUpgradeParam(): string | null {
+  if (typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get('upgrade')?.trim().toLowerCase();
+  return value && /^[a-z][a-z0-9_]{1,40}$/.test(value) ? value : null;
+}
+
 function clearCheckoutParam(): void {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
@@ -160,6 +167,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
+  const [highlightPlan] = useState<string | null>(readUpgradeParam);
   const [checkoutProcessing, setCheckoutProcessing] = useState(false);
   const planBeforeCheckoutRef = React.useRef<string | null>(null);
   const versionBeforeCheckoutRef = React.useRef<string | null>(null);
@@ -377,7 +385,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
       {billing.billingEnabled && !personalBooks && (() => {
         const allPlans = catalog.plans || [];
         const grouped = allPlans.some(plan => plan.product === 'invoicing') && allPlans.some(plan => plan.product === 'accounting');
-        const product = selectedProduct ?? allPlans.find(plan => plan.key === currentPlan)?.product ?? 'invoicing';
+        const currentProduct = allPlans.find(plan => plan.key === currentPlan)?.product ?? 'invoicing';
+        const highlightProduct = highlightPlan ? allPlans.find(plan => plan.key === highlightPlan)?.product : undefined;
+        const product = selectedProduct ?? highlightProduct ?? currentProduct;
         const planKeys = new Set(plansForProduct(allPlans, product).map(plan => plan.key));
         const cards = derivePlanCards(String(currentPlan), allowedTransitions, allPlans)
           .filter(card => !grouped || planKeys.has(card.key as PlanKey));
@@ -427,9 +437,15 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
               </div>
             )}
             {cards.length === 0 && <p className="text-sm text-[var(--text-muted)]">No plan changes are available for this product.</p>}
+            {product === 'accounting' && currentProduct === 'invoicing' && showInterval && (
+              <p className="text-xs text-[var(--text-secondary)]">
+                Your invoices, bills and payments carry over. We check that every issued document is posted before switching.
+              </p>
+            )}
             <div className={`grid grid-cols-1 ${cards.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
               {cards.map((card) => {
                 const isCurrent = card.role === 'current';
+                const isPick = !isCurrent && card.key === highlightPlan;
                 const priceLabel = planPriceLabel(card.monthlyPrice, billingInterval, card.annualPrice);
 
                 return (
@@ -438,10 +454,15 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                     className={`p-5 rounded-2xl flex flex-col justify-between transition-all ${
                       isCurrent
                         ? 'bg-[var(--brand-subtle)] border-2 border-[var(--brand-primary)] shadow-lg'
-                        : 'bg-[var(--bg-subtle)] border border-transparent'
+                        : isPick
+                          ? 'bg-[var(--bg-subtle)] border-2 border-[var(--brand-primary)]'
+                          : 'bg-[var(--bg-subtle)] border border-transparent'
                     }`}
                   >
                     <div>
+                      {isPick && (
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--brand-primary)] mb-1">Your pick</p>
+                      )}
                       <div className="flex items-baseline justify-between mb-2 gap-2">
                         <h4 className="text-sm font-bold text-[var(--text-main)]">{card.name}</h4>
                         {priceLabel != null && (
@@ -477,7 +498,11 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                         type="button"
                         disabled={saving || checkoutProcessing}
                         onClick={() => void handlePlanChange(card.key)}
-                        className="w-full h-10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] hover:text-[var(--brand-primary)]"
+                        className={`w-full h-10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                          isPick
+                            ? 'bg-[var(--brand-primary)] text-white hover:opacity-90'
+                            : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-main)] hover:text-[var(--brand-primary)]'
+                        }`}
                       >
                         <span>{card.actionLabel}</span>
                         <ArrowRight className="w-3.5 h-3.5" />

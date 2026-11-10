@@ -56,7 +56,8 @@ test('plan limit dialog explains the denial and offers support when manager cann
   assert.match(html, /role="dialog"[^>]*aria-modal="true"/);
   assert.ok(html.includes('Free plan limit reached'));
   assert.ok(html.includes('5 of 5 used this month.'));
-  assert.ok(html.includes('Paid plans are coming soon.'));
+  assert.ok(html.includes('Need more?'));
+  assert.ok(!html.includes('coming soon'));
   assert.ok(html.includes('href="mailto:support@example.com"'));
   assert.ok(html.includes('View plan usage'));
 });
@@ -92,7 +93,7 @@ test('subscription inactive dialog uses update billing CTA for billing managers'
   }));
   assert.ok(html.includes('Subscription inactive'));
   assert.ok(html.includes('Update billing'));
-  assert.ok(!html.includes('Paid plans are coming soon.'));
+  assert.ok(!html.includes('Need more?'));
 });
 
 test('only plan denials are announced, without consuming the response', async () => {
