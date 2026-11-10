@@ -86,3 +86,18 @@ test('signup plan intent keeps only plain plan keys for a day and is read once',
   assert.equal(postSetupPath('acme co', 'team_plan'), '/org/acme%20co/settings?tab=subscription&upgrade=team_plan');
   assert.equal(postSetupPath('acme', null), '/org/acme/dashboard');
 });
+
+test('upgrade confirmation shows the exact charge before anything is paid', async () => {
+  const { UpgradeConfirmDialogView } = { UpgradeConfirmDialogView: (await server.ssrLoadModule('/src/components/UpgradeConfirmDialog.tsx')).UpgradeConfirmDialog };
+  const html = renderToStaticMarkup(createElement(UpgradeConfirmDialogView, {
+    preview: { planName: 'Team Plan', amountDueNow: 79.43, currency: 'usd', recurringAmount: 99, interval: 'month', nextBillingDate: '2026-12-10T00:00:00Z', paymentMethod: 'Visa ending 4242' },
+    busy: false, onConfirm: () => {}, onCancel: () => {},
+  }));
+  assert.match(html, /role="dialog"[^>]*aria-modal="true"/);
+  assert.ok(html.includes('Upgrade to Team Plan?'));
+  assert.ok(html.includes('79.43'));
+  assert.ok(html.includes('99.00'));
+  assert.ok(html.includes('Visa ending 4242'));
+  assert.ok(html.includes('Confirm and pay'));
+  assert.ok(html.includes('Cancel'));
+});

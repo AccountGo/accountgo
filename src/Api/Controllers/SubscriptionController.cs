@@ -92,6 +92,23 @@ namespace Api.Controllers
                             returnUrl = $"{returnUrl}{sep}interval={Uri.EscapeDataString(dto.BillingInterval.Trim())}";
                         }
 
+                        if (!dto.Confirmed)
+                        {
+                            PlanChangePreview? preview;
+                            try
+                            {
+                                preview = await _billing.PreviewPlanChangeAsync(
+                                    _tenant.RequireCompanyId(), targetPlan, returnUrl, ct);
+                            }
+                            catch (Exception ex) when (ex is not OperationCanceledException)
+                            {
+                                // Never fall through to charging when the price could not be shown.
+                                return BadRequest(new { message = "We couldn't get the price for this change. Nothing was charged. Try again." });
+                            }
+                            if (preview != null)
+                                return Ok(new { confirmationRequired = true, preview });
+                        }
+
                         var result = await _billing.RequestPlanChangeAsync(
                             _tenant.RequireCompanyId(),
                             targetPlan,
