@@ -19,7 +19,8 @@ import { ModuleKey, PlanKey, TenantContextType } from '../types';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
 import { currentPlanDisplayName, derivePlanCards, planPriceLabel, plansForProduct } from '../lib/planCards';
 import { useCapabilities } from '../lib/entitlements';
-import { useBilling } from '../lib/useBilling';
+import { useBilling, type UpgradeOutcome } from '../lib/useBilling';
+import { UpgradeConfirmDialog } from './UpgradeConfirmDialog';
 import { UsageHint } from './UsageHint';
 
 /** Safe outside <Router> (unit tests / SSR) — reads checkout return flag from the location bar. */
@@ -34,6 +35,9 @@ function readUpgradeParam(): string | null {
   const value = new URLSearchParams(window.location.search).get('upgrade')?.trim().toLowerCase();
   return value && /^[a-z][a-z0-9_]{1,40}$/.test(value) ? value : null;
 }
+
+/** Matches the capabilities poll window (2 min) plus a little slack. */
+const CHECKOUT_POLL_GIVE_UP_MS = 130_000;
 
 function clearCheckoutParam(): void {
   if (typeof window === 'undefined') return;
@@ -169,6 +173,8 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [highlightPlan] = useState<string | null>(readUpgradeParam);
   const [checkoutProcessing, setCheckoutProcessing] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<Extract<UpgradeOutcome, { kind: 'confirm' }> | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const planBeforeCheckoutRef = React.useRef<string | null>(null);
   const versionBeforeCheckoutRef = React.useRef<string | null>(null);
 
@@ -183,6 +189,14 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     versionBeforeCheckoutRef.current = entitlementsVersion;
     startBillingReturnPoll();
     void billing.reload();
+    // The plan may already have changed before this page loaded, or the webhook may be slow: never spin forever.
+    const giveUp = window.setTimeout(() => {
+      setCheckoutProcessing(false);
+      clearCheckoutParam();
+      void billing.reload();
+      void reloadEntitlements();
+    }, CHECKOUT_POLL_GIVE_UP_MS);
+    return () => window.clearTimeout(giveUp);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- poll once when checkout=success is present
   }, [billing.billingEnabled]);
 
@@ -243,13 +257,44 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     }
   };
 
+  const afterApplied = () => {
+    void reloadEntitlements();
+    setSuccessMessage('Your plan has been updated.');
+    setTimeout(() => setSuccessMessage(null), 4000);
+  };
+
   const handlePlanChange = async (planKey: string) => {
     setSaving(true);
     setErrorMessage(null);
     try {
-      await billing.upgradePlan(planKey, billingInterval);
+      const outcome = await billing.upgradePlan(planKey, billingInterval);
+      if (outcome.kind === 'confirm') {
+        setConfirmError(null);
+        setPendingConfirm(outcome);
+        setSaving(false);
+      } else if (outcome.kind === 'applied') {
+        afterApplied();
+        setSaving(false);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to change plan.');
+      setSaving(false);
+    }
+  };
+
+  const handleConfirmPlanChange = async () => {
+    if (!pendingConfirm) return;
+    setSaving(true);
+    setConfirmError(null);
+    try {
+      const outcome = await billing.upgradePlan(pendingConfirm.planKey, pendingConfirm.billingInterval, { confirmed: true });
+      if (outcome.kind === 'applied') {
+        setPendingConfirm(null);
+        afterApplied();
+      }
+      setSaving(false);
+    } catch (error) {
+      setConfirmError(error instanceof Error ? error.message : 'Unable to change plan.');
       setSaving(false);
     }
   };
@@ -292,6 +337,15 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
 
   return (
     <div className="space-y-6">
+      {pendingConfirm && (
+        <UpgradeConfirmDialog
+          preview={pendingConfirm.preview}
+          busy={saving}
+          error={confirmError}
+          onConfirm={() => void handleConfirmPlanChange()}
+          onCancel={() => { setPendingConfirm(null); setConfirmError(null); }}
+        />
+      )}
       <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">

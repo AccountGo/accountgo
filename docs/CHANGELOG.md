@@ -16,9 +16,13 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - A clear status screen now appears while AccountGo is being updated, starting up or under maintenance. It continues on its own when AccountGo is back and keeps what you were working on.
 - Before the Financials module turns on, AccountGo checks that every issued invoice and bill has its ledger entry. It lists any that don't and can post them for you on their own dates, so your reports agree with what customers and vendors owe.
 - A plan picked before signing up is highlighted on the subscription settings once your workspace is set up.
+- A plan change that would charge your saved card now shows the exact amount (today's prorated charge, then the regular price and date) and waits for you to confirm before anything is charged.
 
 ### Changed
 - The plan limit message no longer says paid plans are coming soon. It offers a contact link when no upgrade covers what you need.
+
+### Fixed
+- After a plan change, the plan shown in the workspace header, switcher and subscription settings now updates right away instead of after a reload, and the payment-confirming message no longer stays on screen indefinitely.
 
 ---
 

@@ -27,6 +27,11 @@ namespace Dto.Subscription
         /// Preferred over the Referer header (cross-origin calls often omit or strip path).
         /// </summary>
         public string? ReturnUrl { get; set; }
+        /// <summary>
+        /// True once the owner has seen and accepted the charge preview. Until then, a change that would charge
+        /// a saved payment method answers with that preview instead of charging.
+        /// </summary>
+        public bool Confirmed { get; set; }
     }
 
     public class PlanDefinitionDto

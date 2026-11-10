@@ -436,6 +436,25 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
   const caps = useCapabilities();
   const hasModule = caps.canModule;
   const canWrite = caps.canWrite;
+
+  // The workspace row is loaded once; the entitlements snapshot follows billing changes (webhook, upgrade).
+  // Keep the header, switcher and subscription settings on the plan the server now reports.
+  const livePlan = caps.entitlements?.plan;
+  const liveModules = caps.entitlements?.modules;
+  useEffect(() => {
+    if (!livePlan || livePlan === currentOrg.plan) return;
+    const plan = livePlan as PlanKey;
+    updateCurrentOrg({
+      plan,
+      subscription: {
+        ...currentOrg.subscription,
+        planId: plan,
+        planName: plan.charAt(0).toUpperCase() + plan.slice(1),
+        status: currentOrg.subscription?.status ?? 'active',
+        activeModules: liveModules ?? currentOrg.subscription?.activeModules ?? [],
+      },
+    });
+  }, [livePlan, liveModules, currentOrg.plan, currentOrg.subscription, updateCurrentOrg]);
   const canAccess = useCallback(
     (moduleKey: ModuleKey, permission?: string): boolean => {
       if (!hasModule(moduleKey)) return false;

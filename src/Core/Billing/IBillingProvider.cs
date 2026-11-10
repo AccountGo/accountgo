@@ -16,6 +16,19 @@ namespace Core.Billing
     public sealed record PlanChangeResult(bool AppliedImmediately, string? RedirectUrl, string? ErrorReason);
 
     /// <summary>
+    /// What a plan change will charge, shown to the owner before anything is charged.
+    /// Amounts are in major units of <see cref="Currency"/> (e.g. 79.43 USD).
+    /// </summary>
+    public sealed record PlanChangePreview(
+        string PlanName,
+        decimal AmountDueNow,
+        string Currency,
+        decimal RecurringAmount,
+        string Interval,
+        DateTime? NextBillingDate,
+        string? PaymentMethod);
+
+    /// <summary>
     /// Workspace billing snapshot returned by <c>GET /api/billing/state</c>.
     /// Limit values and feature lists come from the entitlement service; this DTO is the UI contract.
     /// </summary>
@@ -54,6 +67,17 @@ namespace Core.Billing
             string planKey,
             string returnUrl,
             CancellationToken ct);
+
+        /// <summary>
+        /// When a change would charge a saved payment method without the customer seeing a payment page,
+        /// returns what it will charge so the owner can confirm first. Null when no confirmation is needed
+        /// (e.g. a hosted payment page will be shown, or nothing is charged).
+        /// </summary>
+        Task<PlanChangePreview?> PreviewPlanChangeAsync(
+            int companyId,
+            string planKey,
+            string returnUrl,
+            CancellationToken ct) => Task.FromResult<PlanChangePreview?>(null);
 
         Task<string?> GetPortalUrlAsync(int companyId, string returnUrl, CancellationToken ct);
 
