@@ -123,6 +123,13 @@ namespace AccountGo.BackendTests
 
             Assert.Equal(30 * 60, await RefreshIdleSeconds());
 
+            // The owner's own settings show 120 here, but their sessions use 30 and name the workspace that sets it.
+            var mine = await Json(await Send(HttpMethod.Get, SessionPolicy));
+            Assert.Equal(120, mine.GetProperty("idleTimeoutMinutes").GetInt32());
+            var yours = mine.GetProperty("yourSessions");
+            Assert.Equal(30, yours.GetProperty("idleTimeoutMinutes").GetInt32());
+            Assert.Equal(new[] { "Strict Client" }, yours.GetProperty("setBy").EnumerateArray().Select(e => e.GetString()).ToArray());
+
             // A workspace without a settings row still counts, at the default (60), not as "no limit".
             using (var scope = _factory.Services.CreateScope())
             {

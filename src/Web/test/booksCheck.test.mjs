@@ -101,3 +101,11 @@ test('upgrade confirmation shows the exact charge before anything is paid', asyn
   assert.ok(html.includes('Confirm and pay'));
   assert.ok(html.includes('Cancel'));
 });
+
+test('sign-out card names the stricter workspace that sets the session timeout', async () => {
+  const { stricterWorkspaceNotice } = await server.ssrLoadModule('/src/components/AutomaticSignOutCard.tsx');
+  assert.equal(stricterWorkspaceNotice({ idleTimeoutMinutes: 240, yourSessions: { idleTimeoutMinutes: 240, setBy: ['Personal'] } }), null);
+  assert.equal(stricterWorkspaceNotice({ idleTimeoutMinutes: 240, yourSessions: null }), null);
+  const notice = stricterWorkspaceNotice({ idleTimeoutMinutes: 240, yourSessions: { idleTimeoutMinutes: 15, setBy: ['WS One'] } });
+  assert.ok(notice.includes('15 minutes, because WS One uses 15 minutes'));
+});

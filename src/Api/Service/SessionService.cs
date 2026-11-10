@@ -455,25 +455,44 @@ public class SessionService : ISessionService
     /// <summary>Strictest idle timeout across the user's active, non-deleted workspaces.</summary>
     private async Task<TimeSpan> ResolveIdleTimeoutAsync(string userId)
     {
-        var minutes = SessionTimeoutPolicy.DefaultIdleMinutes;
-        if (_apiDb != null)
-        {
-            // Left join: a workspace without a settings row still counts, at the default. IgnoreQueryFilters applies to
-            // the whole query, including the correlated settings lookup.
-            var strictest = await _apiDb.CompanyMembers
-                .IgnoreQueryFilters()
-                .Where(m => m.UserId == userId
-                    && m.Status == CompanyMemberStatus.Active
-                    && m.Company.DeletedAt == null)
-                .Select(m => (int?)(_apiDb.CompanySettings
+        var effective = _apiDb == null ? null : await GetEffectiveIdleTimeoutAsync(_apiDb, userId);
+        return TimeSpan.FromMinutes(effective?.IdleTimeoutMinutes ?? SessionTimeoutPolicy.DefaultIdleMinutes);
+    }
+
+    /// <summary>
+    /// Strictest idle timeout across the user's active, non-deleted workspaces, and which of them set it; null when
+    /// they have none. Static (not on <see cref="ISessionService"/>) so decorators of the interface are unaffected.
+    /// </summary>
+    public static async Task<EffectiveIdleTimeout?> GetEffectiveIdleTimeoutAsync(ApiDbContext apiDb, string userId)
+    {
+        if (string.IsNullOrEmpty(userId))
+            return null;
+
+        // Left join: a workspace without a settings row still counts, at the default. IgnoreQueryFilters applies to
+        // the whole query, including the correlated settings lookup. Only the user's own memberships are read.
+        var rows = await apiDb.CompanyMembers
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(m => m.UserId == userId
+                && m.Status == CompanyMemberStatus.Active
+                && m.Company.DeletedAt == null)
+            .Select(m => new
+            {
+                m.Company.Name,
+                Minutes = apiDb.CompanySettings
                     .Where(s => s.CompanyId == m.CompanyId)
                     .Select(s => (int?)s.IdleTimeoutMinutes)
-                    .FirstOrDefault() ?? SessionTimeoutPolicy.DefaultIdleMinutes))
-                .MinAsync();
-            if (strictest.HasValue)
-                minutes = SessionTimeoutPolicy.Normalize(strictest.Value);
-        }
-        return TimeSpan.FromMinutes(minutes);
+                    .FirstOrDefault() ?? SessionTimeoutPolicy.DefaultIdleMinutes,
+            })
+            .ToListAsync();
+        if (rows.Count == 0)
+            return null;
+
+        var normalized = rows.Select(r => (r.Name, Minutes: SessionTimeoutPolicy.Normalize(r.Minutes))).ToList();
+        var strictest = normalized.Min(r => r.Minutes);
+        return new EffectiveIdleTimeout(
+            strictest,
+            normalized.Where(r => r.Minutes == strictest).Select(r => r.Name).OrderBy(n => n, StringComparer.Ordinal).ToList());
     }
 
     private TimeSpan AbsoluteLifetime() => TimeSpan.FromHours(AbsoluteHours(_configuration));
