@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 using System.Linq;
+using System.Threading.Tasks;
+using System.Security.Claims;
 using Api.Data;
 using Api.Filters;
 using Api.Service;
@@ -41,16 +43,16 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        public IActionResult Get()
+        public async Task<IActionResult> Get()
         {
             var companyId = _tenant.RequireCompanyId();
             var setting = _db.CompanySettings.AsNoTracking().FirstOrDefault(s => s.CompanyId == companyId);
-            return Ok(Describe(setting?.IdleTimeoutMinutes ?? SessionTimeoutPolicy.DefaultIdleMinutes));
+            return Ok(await DescribeAsync(setting?.IdleTimeoutMinutes ?? SessionTimeoutPolicy.DefaultIdleMinutes));
         }
 
         [RequireWorkspaceRole(CompanyMemberRole.Admin)]
         [HttpPut]
-        public IActionResult Update([FromBody] UpdateSessionPolicyRequest request)
+        public async Task<IActionResult> Update([FromBody] UpdateSessionPolicyRequest request)
         {
             if (request == null || !SessionTimeoutPolicy.IsAllowed(request.IdleTimeoutMinutes))
             {
@@ -69,14 +71,21 @@ namespace Api.Controllers
             }
             setting.IdleTimeoutMinutes = request.IdleTimeoutMinutes;
             _db.SaveChanges();
-            return Ok(Describe(setting.IdleTimeoutMinutes));
+            return Ok(await DescribeAsync(setting.IdleTimeoutMinutes));
         }
 
-        private object Describe(int idleTimeoutMinutes) => new
+        private async Task<object> DescribeAsync(int idleTimeoutMinutes)
         {
-            idleTimeoutMinutes,
-            allowedIdleTimeoutMinutes = SessionTimeoutPolicy.AllowedIdleMinutes,
-            absoluteSessionHours = SessionService.AbsoluteHours(_configuration),
-        };
+            // The caller's own sessions use the strictest timeout across all their workspaces (same rule as refresh).
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            var yours = string.IsNullOrEmpty(userId) ? null : await SessionService.GetEffectiveIdleTimeoutAsync(_db, userId);
+            return new
+            {
+                idleTimeoutMinutes,
+                allowedIdleTimeoutMinutes = SessionTimeoutPolicy.AllowedIdleMinutes,
+                absoluteSessionHours = SessionService.AbsoluteHours(_configuration),
+                yourSessions = yours == null ? null : new { idleTimeoutMinutes = yours.IdleTimeoutMinutes, setBy = yours.SetBy },
+            };
+        }
     }
 }
