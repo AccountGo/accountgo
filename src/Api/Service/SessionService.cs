@@ -455,19 +455,22 @@ public class SessionService : ISessionService
     /// <summary>Strictest idle timeout across the user's active, non-deleted workspaces.</summary>
     private async Task<TimeSpan> ResolveIdleTimeoutAsync(string userId)
     {
-        var effective = await GetEffectiveIdleTimeoutAsync(userId);
+        var effective = _apiDb == null ? null : await GetEffectiveIdleTimeoutAsync(_apiDb, userId);
         return TimeSpan.FromMinutes(effective?.IdleTimeoutMinutes ?? SessionTimeoutPolicy.DefaultIdleMinutes);
     }
 
-    /// <inheritdoc />
-    public async Task<EffectiveIdleTimeout?> GetEffectiveIdleTimeoutAsync(string userId)
+    /// <summary>
+    /// Strictest idle timeout across the user's active, non-deleted workspaces, and which of them set it; null when
+    /// they have none. Static (not on <see cref="ISessionService"/>) so decorators of the interface are unaffected.
+    /// </summary>
+    public static async Task<EffectiveIdleTimeout?> GetEffectiveIdleTimeoutAsync(ApiDbContext apiDb, string userId)
     {
-        if (_apiDb == null || string.IsNullOrEmpty(userId))
+        if (string.IsNullOrEmpty(userId))
             return null;
 
         // Left join: a workspace without a settings row still counts, at the default. IgnoreQueryFilters applies to
         // the whole query, including the correlated settings lookup. Only the user's own memberships are read.
-        var rows = await _apiDb.CompanyMembers
+        var rows = await apiDb.CompanyMembers
             .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(m => m.UserId == userId
@@ -476,7 +479,7 @@ public class SessionService : ISessionService
             .Select(m => new
             {
                 m.Company.Name,
-                Minutes = _apiDb.CompanySettings
+                Minutes = apiDb.CompanySettings
                     .Where(s => s.CompanyId == m.CompanyId)
                     .Select(s => (int?)s.IdleTimeoutMinutes)
                     .FirstOrDefault() ?? SessionTimeoutPolicy.DefaultIdleMinutes,

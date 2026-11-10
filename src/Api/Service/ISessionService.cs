@@ -13,9 +13,6 @@ public sealed record EffectiveIdleTimeout(int IdleTimeoutMinutes, IReadOnlyList<
 
 public interface ISessionService
 {
-    /// <summary>Strictest idle timeout across the user's active workspaces; null when they have none.</summary>
-    Task<EffectiveIdleTimeout?> GetEffectiveIdleTimeoutAsync(string userId);
-
     Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionAsync(
         ApplicationUser user,
         string? ipAddress,
