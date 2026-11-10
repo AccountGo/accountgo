@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 using System.Linq;
+using System.Security.Claims;
 using Api.Data;
 using Api.Filters;
 using Api.Service;
@@ -48,6 +49,44 @@ namespace Api.Controllers
             return Ok(Describe(setting?.IdleTimeoutMinutes ?? SessionTimeoutPolicy.DefaultIdleMinutes));
         }
 
+        /// <summary>
+        /// The caller's own sessions use the strictest timeout across every workspace they belong to. Same rule as
+        /// session refresh; lists only the caller's memberships, so it shows which of their workspaces sets it.
+        /// </summary>
+        private object? DescribeCaller()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            if (string.IsNullOrEmpty(userId))
+                return null;
+
+            var rows = _db.CompanyMembers
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(m => m.UserId == userId
+                    && m.Status == CompanyMemberStatus.Active
+                    && m.Company.DeletedAt == null)
+                .Select(m => new
+                {
+                    m.Company.Name,
+                    Minutes = _db.CompanySettings
+                        .Where(s => s.CompanyId == m.CompanyId)
+                        .Select(s => (int?)s.IdleTimeoutMinutes)
+                        .FirstOrDefault() ?? SessionTimeoutPolicy.DefaultIdleMinutes,
+                })
+                .ToList()
+                .Select(r => new { r.Name, Minutes = SessionTimeoutPolicy.Normalize(r.Minutes) })
+                .ToList();
+            if (rows.Count == 0)
+                return null;
+
+            var strictest = rows.Min(r => r.Minutes);
+            return new
+            {
+                idleTimeoutMinutes = strictest,
+                setBy = rows.Where(r => r.Minutes == strictest).Select(r => r.Name).OrderBy(n => n).ToList(),
+            };
+        }
+
         [RequireWorkspaceRole(CompanyMemberRole.Admin)]
         [HttpPut]
         public IActionResult Update([FromBody] UpdateSessionPolicyRequest request)
@@ -77,6 +116,7 @@ namespace Api.Controllers
             idleTimeoutMinutes,
             allowedIdleTimeoutMinutes = SessionTimeoutPolicy.AllowedIdleMinutes,
             absoluteSessionHours = SessionService.AbsoluteHours(_configuration),
+            yourSessions = DescribeCaller(),
         };
     }
 }
