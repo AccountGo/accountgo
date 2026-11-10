@@ -34,14 +34,12 @@ namespace Api.Controllers
         private readonly ApiDbContext _db;
         private readonly ITenantContext _tenant;
         private readonly IConfiguration _configuration;
-        private readonly ISessionService _sessions;
 
-        public SessionPolicyController(ApiDbContext db, ITenantContext tenant, IConfiguration configuration, ISessionService sessions)
+        public SessionPolicyController(ApiDbContext db, ITenantContext tenant, IConfiguration configuration)
         {
             _db = db;
             _tenant = tenant;
             _configuration = configuration;
-            _sessions = sessions;
         }
 
         [HttpGet]
@@ -80,7 +78,7 @@ namespace Api.Controllers
         {
             // The caller's own sessions use the strictest timeout across all their workspaces (same rule as refresh).
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-            var yours = string.IsNullOrEmpty(userId) ? null : await _sessions.GetEffectiveIdleTimeoutAsync(userId);
+            var yours = string.IsNullOrEmpty(userId) ? null : await SessionService.GetEffectiveIdleTimeoutAsync(_db, userId);
             return new
             {
                 idleTimeoutMinutes,
