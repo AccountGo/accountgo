@@ -13,6 +13,22 @@ export interface BillingState {
   portalAvailable: boolean;
 }
 
+/** What a paid-to-paid change will charge; shown before the owner confirms. Amounts in major units. */
+export interface PlanChangePreview {
+  planName: string;
+  amountDueNow: number;
+  currency: string;
+  recurringAmount: number;
+  interval: string;
+  nextBillingDate: string | null;
+  paymentMethod: string | null;
+}
+
+export type UpgradeOutcome =
+  | { kind: 'confirm'; planKey: string; billingInterval: 'month' | 'year'; preview: PlanChangePreview }
+  | { kind: 'redirected' }
+  | { kind: 'applied' };
+
 export function useBilling() {
   const { authFetch } = useAuth();
   const [billing, setBilling] = useState<BillingState | null>(null);
@@ -65,12 +81,16 @@ export function useBilling() {
     window.location.assign(body.url);
   }, [authFetch]);
 
-  const upgradePlan = useCallback(async (planKey: string, billingInterval: 'month' | 'year' = 'month') => {
+  const upgradePlan = useCallback(async (
+    planKey: string,
+    billingInterval: 'month' | 'year' = 'month',
+    options?: { confirmed?: boolean },
+  ): Promise<UpgradeOutcome> => {
     const returnUrl = window.location.href;
     const response = await authFetch('/api/Subscription/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: planKey, billingInterval, returnUrl }),
+      body: JSON.stringify({ plan: planKey, billingInterval, returnUrl, confirmed: options?.confirmed === true }),
     });
     if (!response.ok) {
       let message = `Unable to start upgrade (HTTP ${response.status}).`;
@@ -82,13 +102,17 @@ export function useBilling() {
       } catch { /* keep default */ }
       throw new Error(message);
     }
-    const body = await response.json() as { redirectUrl?: string };
+    const body = await response.json() as { redirectUrl?: string | null; confirmationRequired?: boolean; preview?: PlanChangePreview };
+    // A change that would charge a saved card answers with the charge first; nothing is charged yet.
+    if (body.confirmationRequired && body.preview) {
+      return { kind: 'confirm', planKey, billingInterval, preview: body.preview };
+    }
     if (body.redirectUrl) {
       window.location.assign(body.redirectUrl);
-      return { redirected: true as const };
+      return { kind: 'redirected' };
     }
     await reload();
-    return { redirected: false as const };
+    return { kind: 'applied' };
   }, [authFetch, reload]);
 
   const isPastDue = billing?.status === 'past_due';
