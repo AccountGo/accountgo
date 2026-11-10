@@ -1,15 +1,20 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Api.Filters;
 using Core.Billing;
 using Core.Domain;
+using Core.Domain.Security;
 using Core.Tenancy;
 using Dto.Subscription;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Billing;
+using Services.Financial;
 
 namespace Api.Controllers
 {
@@ -21,18 +26,23 @@ namespace Api.Controllers
         private readonly IPlanCatalog _plans;
         private readonly IBillingProvider _billing;
         private readonly ITenantContext _tenant;
+        private readonly IBooksReadinessService _books;
 
         public SubscriptionController(
             IAdministrationService adminService,
             IPlanCatalog plans,
             IBillingProvider billing,
-            ITenantContext tenant)
+            ITenantContext tenant,
+            IBooksReadinessService books)
         {
             _adminService = adminService;
             _plans = plans;
             _billing = billing;
             _tenant = tenant;
+            _books = books;
         }
+
+        internal const string BooksNotReadyCode = "BOOKS_NOT_READY";
 
         // GET /api/Subscription/companies was removed in Phase 2: it listed every workspace.
         // Use GET /api/organizations (caller's own memberships only).
@@ -58,9 +68,19 @@ namespace Api.Controllers
 
             try
             {
+                var current = _adminService.GetCurrentSubscription();
+
+                // Turning on Financials shows the general ledger. Every issued invoice and bill must already
+                // have its ledger entry, or the reports would disagree with receivables and payables.
+                if (GainsFinancials(current, dto))
+                {
+                    var readiness = _books.Check();
+                    if (!readiness.IsReady)
+                        return BooksNotReady(readiness);
+                }
+
                 if (!string.IsNullOrWhiteSpace(dto.Plan) && _billing.RequiresProviderCheckout)
                 {
-                    var current = _adminService.GetCurrentSubscription();
                     var targetPlan = dto.Plan.Trim().ToLowerInvariant();
                     if (!string.Equals(current.Plan, targetPlan, StringComparison.OrdinalIgnoreCase))
                     {
@@ -91,6 +111,38 @@ namespace Api.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        private bool GainsFinancials(TenantSubscriptionDto current, UpdateSubscriptionDto dto)
+        {
+            if (current.ActiveModules.Contains(SystemModules.Financials, StringComparer.OrdinalIgnoreCase))
+                return false;
+
+            List<string>? target = dto.ActiveModules;
+            if (target == null)
+            {
+                if (string.IsNullOrWhiteSpace(dto.Plan) || !_plans.TryResolvePlan(dto.Plan, out var plan))
+                    return false;
+                target = plan.IncludedModules;
+            }
+            return target.Contains(SystemModules.Financials, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private ObjectResult BooksNotReady(BooksReadiness readiness)
+        {
+            var count = readiness.UnpostedInvoices.Count + readiness.UnpostedBills.Count;
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Books need posting first",
+                Detail = count == 1
+                    ? "1 issued document has no ledger entry yet. Post it before turning on accounting."
+                    : $"{count} issued documents have no ledger entry yet. Post them before turning on accounting.",
+            };
+            problem.Extensions["code"] = BooksNotReadyCode;
+            problem.Extensions["unpostedInvoices"] = readiness.UnpostedInvoices;
+            problem.Extensions["unpostedBills"] = readiness.UnpostedBills;
+            return new ObjectResult(problem) { StatusCode = StatusCodes.Status409Conflict };
         }
 
         [TenantFree]
