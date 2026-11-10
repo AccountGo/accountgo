@@ -9,6 +9,7 @@ import { MfaChallenge } from '../components/mfa/MfaChallenge';
 import { MfaEnrollWizard } from '../components/mfa/MfaEnrollWizard';
 import { TurnstileWidget, TurnstileWidgetHandle } from '../components/TurnstileWidget';
 import { MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
+import { rememberSignupPlan } from '../lib/signupPlanIntent';
 import {
   Mail,
   ArrowRight,
@@ -45,6 +46,11 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
     if (params.get('mode') === 'signup') return 'signup';
     return 'signin';
   });
+
+  // A plan picked on the pricing page (/signup?plan=<key>) is offered again after workspace setup.
+  useEffect(() => {
+    rememberSignupPlan(location.search);
+  }, [location.search]);
 
   // Step state: 1 = Credentials request, 2 = 6-digit OTP verification, 'mfa_challenge' = Factor B challenge, 'mfa_enroll' = Factor B enrollment
   const [step, setStep] = useState<1 | 2 | 'mfa_challenge' | 'mfa_enroll'>(1);

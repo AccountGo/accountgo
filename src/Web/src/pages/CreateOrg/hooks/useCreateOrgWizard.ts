@@ -6,6 +6,7 @@ import { withSuppressedEntitlementDenial } from '../../../lib/entitlementEvents'
 import { freeSlotPlanError, isFreePlan, isFreeSlotUsed, type FreeSlotState } from '../../../lib/createOrgPlanOptions';
 import { buildCreateReturnUrl, interpretCreateOrgResponse } from '../../../lib/createOrgSubmit';
 import { usePlanCatalog } from '../../../lib/usePlanCatalog';
+import { postSetupPath, takeSignupPlan } from '../../../lib/signupPlanIntent';
 import type { Organization } from '../../../types';
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft';
 import {
@@ -319,7 +320,13 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
         setPersistedOrgSlug(pendingSlug);
         clearDraft();
         setStatus('success');
-        redirectTimer.current = window.setTimeout(() => navigate(`/org/${encodeURIComponent(pendingSlug)}/dashboard`, { replace: true }), 900);
+        // A paid plan picked before signing up (pricing page) is offered next; free choices go to the dashboard.
+        const intended = takeSignupPlan();
+        const intendedPaid = intended
+          ? catalog.plans?.find((plan) => plan.key === intended && plan.selfService && !isFreePlan(plan))
+          : undefined;
+        const destination = postSetupPath(pendingSlug, intendedPaid ? intendedPaid.key : null);
+        redirectTimer.current = window.setTimeout(() => navigate(destination, { replace: true }), 900);
         return;
       }
 
@@ -400,7 +407,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
       setSubmitError('We could not reach the server. Check your connection and try again.');
       setStatus('idle');
     }
-  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession, isContinuation, steps, billingInterval, user, existingSettings]);
+  }, [state, capabilities, authFetch, navigate, pendingSlug, refreshSession, isContinuation, steps, billingInterval, user, existingSettings, catalog.plans]);
 
   return {
     state, update, step, stepIndex, stepCount: steps.length, errors, status, submitError, personalBooksFailed, businessTypeFailed, next, back, submit,

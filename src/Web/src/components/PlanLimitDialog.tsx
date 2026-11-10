@@ -69,7 +69,7 @@ export function planLimitSupportCopy(problem: EntitlementProblem): string | null
   if (problem.contact) {
     return null; // contact link rendered separately
   }
-  return 'Paid plans are coming soon.';
+  return 'Contact support if you need more.';
 }
 
 /**
@@ -178,7 +178,7 @@ export const PlanLimitDialogView: React.FC<{ problem: EntitlementProblem; onClos
         {supportCopy && <p>{supportCopy}</p>}
         {!personal && !supportCopy && problem.canManageBilling && !problem.upgradeAvailable && problem.contact ? (
           <p>
-            Paid plans are coming soon. Need more now?{' '}
+            Need more?{' '}
             <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${problem.contact}`}>
               Contact support
             </a>

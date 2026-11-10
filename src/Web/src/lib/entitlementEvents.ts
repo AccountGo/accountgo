@@ -28,6 +28,29 @@ export interface EntitlementProblem {
 
 export const ENTITLEMENT_DENIED_EVENT = 'accountgo:entitlement-denied';
 
+/** Issued invoices or bills with no ledger entry block turning on accounting (409 BOOKS_NOT_READY). */
+export const BOOKS_NOT_READY_EVENT = 'accountgo:books-not-ready';
+
+export interface UnpostedDocument {
+  type: 'invoice' | 'bill';
+  id: number;
+  number?: string | null;
+  date: string;
+}
+
+export interface BooksNotReadyProblem {
+  code: 'BOOKS_NOT_READY';
+  title?: string;
+  detail?: string;
+  unpostedInvoices: UnpostedDocument[];
+  unpostedBills: UnpostedDocument[];
+}
+
+export function isBooksNotReadyProblem(body: unknown): body is BooksNotReadyProblem {
+  const value = body as Partial<BooksNotReadyProblem> | null;
+  return value?.code === 'BOOKS_NOT_READY' && Array.isArray(value.unpostedInvoices) && Array.isArray(value.unpostedBills);
+}
+
 let activeWorkspace: { slug: string; personal: boolean } | null = null;
 export function setEntitlementWorkspace(slug: string, personal: boolean): () => void {
   const workspace = { slug, personal };
@@ -62,11 +85,17 @@ export function isEntitlementProblem(body: unknown): body is EntitlementProblem 
  */
 export async function announceEntitlementDenial(response: Response): Promise<void> {
   if (suppressDenialDepth > 0) return;
-  if (response.status !== 403 || typeof window === 'undefined') return;
+  if ((response.status !== 403 && response.status !== 409) || typeof window === 'undefined') return;
   const type = response.headers.get('content-type') || '';
   if (!type.includes('json')) return;
   try {
     const body = await response.clone().json();
+    if (response.status === 409) {
+      if (isBooksNotReadyProblem(body)) {
+        window.dispatchEvent(new CustomEvent<BooksNotReadyProblem>(BOOKS_NOT_READY_EVENT, { detail: body }));
+      }
+      return;
+    }
     if (isEntitlementProblem(body)) {
       window.dispatchEvent(new CustomEvent<EntitlementProblem>(ENTITLEMENT_DENIED_EVENT, { detail: body }));
     }

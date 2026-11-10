@@ -1656,6 +1656,31 @@ namespace Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Posts every issued invoice that has no ledger entry yet (e.g. a posting that failed when it was issued).
+        /// Each invoice posts on its own date in its own transaction; failures are reported per invoice and never skipped.
+        /// </summary>
+        [HttpPost]
+        [Route("PostUnpostedInvoices")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
+        public IActionResult PostUnpostedInvoices([FromServices] Services.Financial.IBooksReadinessService books)
+        {
+            var results = new List<object>();
+            foreach (var invoice in books.Check().UnpostedInvoices)
+            {
+                var error = TryPostSalesInvoice(invoice.Id);
+                results.Add(new { invoice.Id, invoice.Number, posted = error == null, error });
+            }
+            var remaining = books.Check();
+            return Ok(new
+            {
+                results,
+                unpostedInvoices = remaining.UnpostedInvoices,
+                unpostedBills = remaining.UnpostedBills,
+                isReady = remaining.IsReady,
+            });
+        }
+
         [HttpPost]
         [Route("PostSalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
