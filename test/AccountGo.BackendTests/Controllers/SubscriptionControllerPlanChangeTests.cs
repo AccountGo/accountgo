@@ -101,11 +101,54 @@ public sealed class SubscriptionControllerPlanChangeTests
             Times.Never);
     }
 
+    [Fact]
+    public async Task UpdateSubscription_PlanGainingFinancials_WithUnpostedInvoice_Returns409_AndNeverCallsBilling()
+    {
+        var billing = new Mock<IBillingProvider>();
+        billing.SetupGet(b => b.RequiresProviderCheckout).Returns(true);
+        var admin = new Mock<IAdministrationService>();
+        admin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto
+        {
+            Plan = "plan_a", CompanyId = 1, ActiveModules = new List<string> { "sales", "purchases" },
+        });
+        var books = new Mock<Services.Financial.IBooksReadinessService>();
+        books.Setup(b => b.Check()).Returns(new Services.Financial.BooksReadiness(
+            new[] { new Services.Financial.UnpostedDocument("invoice", 7, "INV-0007", new System.DateTime(2026, 10, 1)) },
+            System.Array.Empty<Services.Financial.UnpostedDocument>()));
+
+        var tenant = new Mock<ITenantContext>();
+        tenant.Setup(t => t.RequireCompanyId()).Returns(1);
+        var controller = new SubscriptionController(admin.Object, new CommunityPlanCatalog(), billing.Object, tenant.Object, books.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+
+        var result = await controller.UpdateSubscription(
+            new UpdateSubscriptionDto { Plan = "community", ReturnUrl = "https://app.example/settings" }, CancellationToken.None);
+
+        var conflict = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(conflict.Value);
+        Assert.Equal("BOOKS_NOT_READY", problem.Extensions["code"]);
+        billing.Verify(
+            b => b.RequestPlanChangeAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        admin.Verify(a => a.UpdateSubscription(It.IsAny<UpdateSubscriptionDto>()), Times.Never);
+    }
+
+    private static Services.Financial.IBooksReadinessService ReadyBooks()
+    {
+        var books = new Mock<Services.Financial.IBooksReadinessService>();
+        books.Setup(b => b.Check()).Returns(new Services.Financial.BooksReadiness(
+            System.Array.Empty<Services.Financial.UnpostedDocument>(), System.Array.Empty<Services.Financial.UnpostedDocument>()));
+        return books.Object;
+    }
+
     private static SubscriptionController Create(IAdministrationService admin, IBillingProvider billing)
     {
         var tenant = new Mock<ITenantContext>();
         tenant.Setup(t => t.RequireCompanyId()).Returns(1);
-        var controller = new SubscriptionController(admin, new CommunityPlanCatalog(), billing, tenant.Object)
+        var controller = new SubscriptionController(admin, new CommunityPlanCatalog(), billing, tenant.Object, ReadyBooks())
         {
             ControllerContext = new ControllerContext
             {

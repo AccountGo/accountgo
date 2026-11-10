@@ -7,6 +7,7 @@ import { initScrollWatcher } from './lib/scrollWatcher';
 import { ThemeProvider } from './themes/ThemeContext';
 import { AuthProvider } from './auth/AuthContext';
 import { PlanLimitDialog } from './components/PlanLimitDialog';
+import { BooksCheckDialog } from './components/BooksCheckDialog';
 import { ServiceStatusOverlay } from './components/ServiceStatusOverlay';
 import { UpdateAvailableDialog } from './components/UpdateAvailableDialog';
 
@@ -22,6 +23,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <AuthProvider>
         <App />
         <PlanLimitDialog />
+        <BooksCheckDialog />
         <ServiceStatusOverlay />
         <UpdateAvailableDialog />
       </AuthProvider>

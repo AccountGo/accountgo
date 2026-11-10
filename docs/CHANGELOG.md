@@ -14,6 +14,11 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 ### Added
 - AccountGo now tells you when a new version is available, so you can reload when it suits you.
 - A clear status screen now appears while AccountGo is being updated, starting up or under maintenance. It continues on its own when AccountGo is back and keeps what you were working on.
+- Before the Financials module turns on, AccountGo checks that every issued invoice and bill has its ledger entry. It lists any that don't and can post them for you on their own dates, so your reports agree with what customers and vendors owe.
+- A plan picked before signing up is highlighted on the subscription settings once your workspace is set up.
+
+### Changed
+- The plan limit message no longer says paid plans are coming soon. It offers a contact link when no upgrade covers what you need.
 
 ---
 
