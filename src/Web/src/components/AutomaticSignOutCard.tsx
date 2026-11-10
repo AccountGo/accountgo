@@ -6,6 +6,17 @@ interface SessionPolicy {
   idleTimeoutMinutes: number;
   allowedIdleTimeoutMinutes: number[];
   absoluteSessionHours: number;
+  /** The caller's own sessions: strictest timeout across their workspaces, and which workspaces set it. */
+  yourSessions?: { idleTimeoutMinutes: number; setBy: string[] } | null;
+}
+
+/** Explains when another of the user's workspaces signs them out sooner than this one; null when it doesn't. */
+export function stricterWorkspaceNotice(policy: Pick<SessionPolicy, 'idleTimeoutMinutes' | 'yourSessions'>): string | null {
+  const yours = policy.yourSessions;
+  if (!yours || yours.idleTimeoutMinutes >= policy.idleTimeoutMinutes) return null;
+  const names = yours.setBy.length > 0 ? yours.setBy.join(', ') : 'another workspace';
+  const verb = yours.setBy.length > 1 ? 'use' : 'uses';
+  return `You are signed out after ${idleOptionLabel(yours.idleTimeoutMinutes)}, because ${names} ${verb} ${idleOptionLabel(yours.idleTimeoutMinutes)}. One sign-in covers all your workspaces, so the shortest setting applies. Change it there to stay signed in longer.`;
 }
 
 const ENDPOINT = '/api/organizations/current/session-policy';
@@ -89,6 +100,13 @@ export const AutomaticSignOutCard: React.FC<{ canEdit: boolean }> = ({ canEdit }
           ))}
         </select>
       </div>
+
+      {stricterWorkspaceNotice(policy) && (
+        <div role="status" className="flex items-start gap-2 p-3 rounded-xl text-xs font-medium bg-amber-500/10 text-amber-500">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{stricterWorkspaceNotice(policy)}</span>
+        </div>
+      )}
 
       <p className="text-[11px] text-[var(--text-muted)]">
         Members see a one-minute warning first. Every session also ends {policy.absoluteSessionHours} hours after
