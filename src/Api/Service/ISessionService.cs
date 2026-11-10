@@ -8,8 +8,14 @@ using Dto.Security;
 
 namespace Api.Service;
 
+/// <summary>The user's session idle timeout and the names of their workspaces that set it.</summary>
+public sealed record EffectiveIdleTimeout(int IdleTimeoutMinutes, IReadOnlyList<string> SetBy);
+
 public interface ISessionService
 {
+    /// <summary>Strictest idle timeout across the user's active workspaces; null when they have none.</summary>
+    Task<EffectiveIdleTimeout?> GetEffectiveIdleTimeoutAsync(string userId);
+
     Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionAsync(
         ApplicationUser user,
         string? ipAddress,
