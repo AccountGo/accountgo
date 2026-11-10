@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 using System.Linq;
+using System.Threading.Tasks;
 using System.Security.Claims;
 using Api.Data;
 using Api.Filters;
@@ -33,63 +34,27 @@ namespace Api.Controllers
         private readonly ApiDbContext _db;
         private readonly ITenantContext _tenant;
         private readonly IConfiguration _configuration;
+        private readonly ISessionService _sessions;
 
-        public SessionPolicyController(ApiDbContext db, ITenantContext tenant, IConfiguration configuration)
+        public SessionPolicyController(ApiDbContext db, ITenantContext tenant, IConfiguration configuration, ISessionService sessions)
         {
             _db = db;
             _tenant = tenant;
             _configuration = configuration;
+            _sessions = sessions;
         }
 
         [HttpGet]
-        public IActionResult Get()
+        public async Task<IActionResult> Get()
         {
             var companyId = _tenant.RequireCompanyId();
             var setting = _db.CompanySettings.AsNoTracking().FirstOrDefault(s => s.CompanyId == companyId);
-            return Ok(Describe(setting?.IdleTimeoutMinutes ?? SessionTimeoutPolicy.DefaultIdleMinutes));
-        }
-
-        /// <summary>
-        /// The caller's own sessions use the strictest timeout across every workspace they belong to. Same rule as
-        /// session refresh; lists only the caller's memberships, so it shows which of their workspaces sets it.
-        /// </summary>
-        private object? DescribeCaller()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-            if (string.IsNullOrEmpty(userId))
-                return null;
-
-            var rows = _db.CompanyMembers
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Where(m => m.UserId == userId
-                    && m.Status == CompanyMemberStatus.Active
-                    && m.Company.DeletedAt == null)
-                .Select(m => new
-                {
-                    m.Company.Name,
-                    Minutes = _db.CompanySettings
-                        .Where(s => s.CompanyId == m.CompanyId)
-                        .Select(s => (int?)s.IdleTimeoutMinutes)
-                        .FirstOrDefault() ?? SessionTimeoutPolicy.DefaultIdleMinutes,
-                })
-                .ToList()
-                .Select(r => new { r.Name, Minutes = SessionTimeoutPolicy.Normalize(r.Minutes) })
-                .ToList();
-            if (rows.Count == 0)
-                return null;
-
-            var strictest = rows.Min(r => r.Minutes);
-            return new
-            {
-                idleTimeoutMinutes = strictest,
-                setBy = rows.Where(r => r.Minutes == strictest).Select(r => r.Name).OrderBy(n => n).ToList(),
-            };
+            return Ok(await DescribeAsync(setting?.IdleTimeoutMinutes ?? SessionTimeoutPolicy.DefaultIdleMinutes));
         }
 
         [RequireWorkspaceRole(CompanyMemberRole.Admin)]
         [HttpPut]
-        public IActionResult Update([FromBody] UpdateSessionPolicyRequest request)
+        public async Task<IActionResult> Update([FromBody] UpdateSessionPolicyRequest request)
         {
             if (request == null || !SessionTimeoutPolicy.IsAllowed(request.IdleTimeoutMinutes))
             {
@@ -108,15 +73,21 @@ namespace Api.Controllers
             }
             setting.IdleTimeoutMinutes = request.IdleTimeoutMinutes;
             _db.SaveChanges();
-            return Ok(Describe(setting.IdleTimeoutMinutes));
+            return Ok(await DescribeAsync(setting.IdleTimeoutMinutes));
         }
 
-        private object Describe(int idleTimeoutMinutes) => new
+        private async Task<object> DescribeAsync(int idleTimeoutMinutes)
         {
-            idleTimeoutMinutes,
-            allowedIdleTimeoutMinutes = SessionTimeoutPolicy.AllowedIdleMinutes,
-            absoluteSessionHours = SessionService.AbsoluteHours(_configuration),
-            yourSessions = DescribeCaller(),
-        };
+            // The caller's own sessions use the strictest timeout across all their workspaces (same rule as refresh).
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            var yours = string.IsNullOrEmpty(userId) ? null : await _sessions.GetEffectiveIdleTimeoutAsync(userId);
+            return new
+            {
+                idleTimeoutMinutes,
+                allowedIdleTimeoutMinutes = SessionTimeoutPolicy.AllowedIdleMinutes,
+                absoluteSessionHours = SessionService.AbsoluteHours(_configuration),
+                yourSessions = yours == null ? null : new { idleTimeoutMinutes = yours.IdleTimeoutMinutes, setBy = yours.SetBy },
+            };
+        }
     }
 }
