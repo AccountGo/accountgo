@@ -18,8 +18,12 @@ namespace Services.Banking
         public static IReadOnlyList<ParsedStatementRow> Parse(string content, string? accountCurrencyCode = null) =>
             ParseFile(content, accountCurrencyCode).Rows;
 
-        public static ParsedStatementFile ParseFile(string content, string? accountCurrencyCode = null)
+        public static ParsedStatementFile ParseFile(string content, string? accountCurrencyCode = null) =>
+            ParseFile(content, new StatementAccountContext(accountCurrencyCode));
+
+        public static ParsedStatementFile ParseFile(string content, StatementAccountContext account)
         {
+            var accountCurrencyCode = account.CurrencyCode;
             content = content.TrimStart('\uFEFF');
             if (string.IsNullOrWhiteSpace(content))
                 throw new InvalidOperationException("The statement file is empty.");
@@ -129,65 +133,75 @@ namespace Services.Banking
                 rows.Add(row);
             }
 
-            decimal? closingBalance = null;
-            DateTime? closingBalanceDate = null;
-            string? balanceCurrency = null;
-
-            var balElements = doc.Descendants().Where(e => e.Name.LocalName == "Bal").ToList();
-            var clbd = balElements.FirstOrDefault(b =>
-                b.Descendants().Any(e => e.Name.LocalName == "Cd" && string.Equals(e.Value.Trim(), "CLBD", StringComparison.OrdinalIgnoreCase)))
-                ?? balElements.FirstOrDefault(b =>
-                b.Descendants().Any(e => e.Name.LocalName == "Cd" && string.Equals(e.Value.Trim(), "CLAV", StringComparison.OrdinalIgnoreCase)));
-
-            if (clbd != null)
-            {
-                var amtEl = clbd.Elements().FirstOrDefault(e => e.Name.LocalName == "Amt")
-                    ?? clbd.Descendants().FirstOrDefault(e => e.Name.LocalName == "Amt");
-                if (amtEl != null)
-                {
-                    balanceCurrency = amtEl.Attribute("Ccy")?.Value;
-                    bool currencyOk = true;
-                    if (!string.IsNullOrWhiteSpace(balanceCurrency) && accountCurrency != null)
-                    {
-                        currencyOk = string.Equals(balanceCurrency.Trim(), accountCurrency, StringComparison.OrdinalIgnoreCase);
-                    }
-                    if (currencyOk)
-                    {
-                        try
-                        {
-                            var balAmount = BankStatementParser.ParseAmount(amtEl.Value, "Balance");
-                            var cdtDbt = clbd.Elements().FirstOrDefault(e => e.Name.LocalName == "CdtDbtInd")?.Value
-                                ?? clbd.Descendants().FirstOrDefault(e => e.Name.LocalName == "CdtDbtInd")?.Value;
-                            var isDebit = string.Equals(cdtDbt, "DBIT", StringComparison.OrdinalIgnoreCase);
-                            if (isDebit)
-                                balAmount = -Math.Abs(balAmount);
-                            else
-                                balAmount = Math.Abs(balAmount);
-                            closingBalance = Math.Round(balAmount, 2, MidpointRounding.AwayFromZero);
-
-                            var dtEl = clbd.Descendants().FirstOrDefault(e => e.Name.LocalName == "Dt" || e.Name.LocalName == "DtTm");
-                            if (dtEl != null && !string.IsNullOrWhiteSpace(dtEl.Value))
-                            {
-                                var dateStr = dtEl.Value.Trim();
-                                if (DateTimeOffset.TryParse(dateStr, CultureInfo.InvariantCulture,
-                                        DateTimeStyles.RoundtripKind | DateTimeStyles.AllowWhiteSpaces, out var dto))
-                                    closingBalanceDate = DateTime.SpecifyKind(dto.DateTime.Date, DateTimeKind.Utc);
-                                else if (DateTime.TryParseExact(dateStr[..Math.Min(10, dateStr.Length)], "yyyy-MM-dd",
-                                             CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-                                    closingBalanceDate = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
-                            }
-                        }
-                        catch (FormatException) { }
-                    }
-                }
-            }
+            var blocks = doc.Descendants().Where(e => e.Name.LocalName == "Stmt")
+                .Select(ReadBalanceBlock).ToList();
+            var (closing, reason) = StatementBalanceSelector.Select(blocks, account);
 
             return new ParsedStatementFile
             {
                 Rows = rows,
-                ClosingBalance = closingBalance,
-                ClosingBalanceDate = closingBalanceDate,
-                CurrencyCode = balanceCurrency
+                ClosingBalance = closing,
+                ClosingBalanceUnavailableReason = reason
+            };
+        }
+
+        private static IEnumerable<XElement> Kids(XElement? parent, string name) =>
+            parent?.Elements().Where(e => e.Name.LocalName == name) ?? Enumerable.Empty<XElement>();
+
+        private static XElement? Kid(XElement? parent, string name) => Kids(parent, name).FirstOrDefault();
+
+        /// <summary>Reads one &lt;Stmt&gt;: its account, and its booked closing balance (<c>Bal/Tp/CdOrPrtry/Cd</c> = CLBD) only.</summary>
+        private static StatementBalanceBlock ReadBalanceBlock(XElement stmt)
+        {
+            var acct = Kid(stmt, "Acct");
+            var id = Kid(acct, "Id");
+            var iban = Kid(id, "IBAN")?.Value.Trim();
+            var other = Kid(Kid(id, "Othr"), "Id")?.Value.Trim();
+            var acctCcy = Kid(acct, "Ccy")?.Value.Trim();
+
+            var keys = new List<string>();
+            foreach (var raw in new[] { iban, other })
+            {
+                var n = StatementBalanceSelector.Normalize(raw);
+                if (n != null && !keys.Contains(n))
+                    keys.Add(n);
+            }
+
+            StatementBalanceCandidate? booked = null;
+            var nonBooked = false;
+            foreach (var bal in Kids(stmt, "Bal"))
+            {
+                var code = Kid(Kid(Kid(bal, "Tp"), "CdOrPrtry"), "Cd")?.Value.Trim();
+                if (!string.Equals(code, "CLBD", StringComparison.OrdinalIgnoreCase))
+                {
+                    nonBooked = true;
+                    continue;
+                }
+
+                var amtEl = Kid(bal, "Amt");
+                if (amtEl == null)
+                    continue;
+                try
+                {
+                    var amount = BankStatementParser.ParseAmount(amtEl.Value, "Balance");
+                    var isDebit = string.Equals(Kid(bal, "CdtDbtInd")?.Value.Trim(), "DBIT", StringComparison.OrdinalIgnoreCase);
+                    amount = isDebit ? -Math.Abs(amount) : Math.Abs(amount);
+                    amount = Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+                    var dt = Kid(bal, "Dt");
+                    var dateText = Kid(dt, "Dt")?.Value ?? Kid(dt, "DtTm")?.Value;
+                    var currency = amtEl.Attribute("Ccy")?.Value ?? acctCcy;
+                    booked = new StatementBalanceCandidate(
+                        amount, StatementBalanceSelector.ParseCalendarDate(dateText, "yyyy-MM-dd"), currency);
+                }
+                catch (FormatException) { }
+            }
+
+            return new StatementBalanceBlock
+            {
+                AccountIdentifier = iban ?? other,
+                AccountKeys = keys,
+                Booked = booked,
+                HasNonBookedBalance = nonBooked
             };
         }
 

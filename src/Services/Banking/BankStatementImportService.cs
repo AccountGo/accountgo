@@ -67,6 +67,14 @@ namespace Services.Banking
             _tenant = tenant;
         }
 
+        private static string? LastFour(string? identifier)
+        {
+            var trimmed = identifier?.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+                return null;
+            return trimmed.Length <= 4 ? trimmed : trimmed[^4..];
+        }
+
         public BankStatementPreviewDto Preview(int bankId, BankStatementImportRequest request)
         {
             EnsureCompany();
@@ -82,8 +90,7 @@ namespace Services.Banking
                 detection = ToDetectionDto(resolved.Summary);
                 rows = BankStatementParser.ParseCsv(content, resolved.Map, resolved.Records);
             }
-            decimal? statementClosingBalance = null;
-            DateTime? statementClosingBalanceDate = null;
+            ParsedStatementFile? statementFile = null;
             if (source == BankStatementSources.Qif)
             {
                 var userFormat = request.ColumnMap?.DateFormat;
@@ -104,10 +111,11 @@ namespace Services.Banking
             }
             else
             {
-                var parsedFile = BankStatementParser.ParseFile(source, content, request.ColumnMap, bank.CurrencyCode);
+                var parsedFile = BankStatementParser.ParseFile(
+                    source, content, request.ColumnMap,
+                    new StatementAccountContext(bank.CurrencyCode, bank.Iban, bank.Number));
                 rows = parsedFile.Rows;
-                statementClosingBalance = parsedFile.ClosingBalance;
-                statementClosingBalanceDate = parsedFile.ClosingBalanceDate;
+                statementFile = parsedFile;
             }
             var existing = ExistingExternalIds(bank.Id, source);
             var classified = Classify(rows, existing);
@@ -135,8 +143,11 @@ namespace Services.Banking
                 MappingSource = mappingSource,
                 HeaderSignature = headerSignature,
                 PresetName = presetName,
-                StatementClosingBalance = statementClosingBalance,
-                StatementClosingBalanceDate = statementClosingBalanceDate,
+                StatementClosingBalance = statementFile?.ClosingBalance?.Amount,
+                StatementClosingBalanceDate = statementFile?.ClosingBalance?.AsOfDate,
+                StatementClosingBalanceCurrency = statementFile?.ClosingBalance?.CurrencyCode,
+                StatementClosingBalanceAccount = LastFour(statementFile?.ClosingBalance?.AccountIdentifier),
+                StatementClosingBalanceNotice = statementFile?.ClosingBalanceUnavailableReason,
                 Rows = classified.Take(PreviewRowLimit).Select(ToPreviewRow).ToList()
             };
         }
@@ -240,8 +251,7 @@ namespace Services.Banking
             var bank = RequireActiveBank(bankId);
             var source = ParseSource(request);
             var content = ResolveContent(request);
-            decimal? statementClosingBalance = null;
-            DateTime? statementClosingBalanceDate = null;
+            ParsedStatementFile? statementFile = null;
             IReadOnlyList<ParsedStatementRow> rows;
             if (source is BankStatementSources.Csv or BankStatementSources.Xlsx or BankStatementSources.Qif)
             {
@@ -249,10 +259,11 @@ namespace Services.Banking
             }
             else
             {
-                var parsedFile = BankStatementParser.ParseFile(source, content, request.ColumnMap, bank.CurrencyCode);
+                var parsedFile = BankStatementParser.ParseFile(
+                    source, content, request.ColumnMap,
+                    new StatementAccountContext(bank.CurrencyCode, bank.Iban, bank.Number));
                 rows = parsedFile.Rows;
-                statementClosingBalance = parsedFile.ClosingBalance;
-                statementClosingBalanceDate = parsedFile.ClosingBalanceDate;
+                statementFile = parsedFile;
             }
             var existing = ExistingExternalIds(bank.Id, source);
             var classified = Classify(rows, existing);
@@ -263,8 +274,11 @@ namespace Services.Banking
                 Errors = classified.Count(c => c.Status == RowStatus.Error),
                 Skipped = classified.Count(c => c.Status == RowStatus.Skipped),
                 SkippedRowDetails = classified.Where(c => c.Status == RowStatus.Skipped).Select(ToPreviewRow).ToList(),
-                StatementClosingBalance = statementClosingBalance,
-                StatementClosingBalanceDate = statementClosingBalanceDate
+                StatementClosingBalance = statementFile?.ClosingBalance?.Amount,
+                StatementClosingBalanceDate = statementFile?.ClosingBalance?.AsOfDate,
+                StatementClosingBalanceCurrency = statementFile?.ClosingBalance?.CurrencyCode,
+                StatementClosingBalanceAccount = LastFour(statementFile?.ClosingBalance?.AccountIdentifier),
+                StatementClosingBalanceNotice = statementFile?.ClosingBalanceUnavailableReason
             };
 
             var ready = classified.Where(c => c.Status == RowStatus.Ready).Select(c => c.Row).ToList();

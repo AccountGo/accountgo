@@ -31,8 +31,11 @@ namespace Services.Banking
             if (Math.Abs(request.AsOfBalance) > BalanceCheckMaxMagnitude)
                 throw new InvalidOperationException("Enter a smaller balance.");
 
+            if (!request.AsOfDate.HasValue)
+                throw new InvalidOperationException("Enter the date of the balance.");
+
             var latestAllowed = DateTime.UtcNow.Date.AddDays(BalanceCheckFutureToleranceDays);
-            var asOfDate = (request.AsOfDate ?? DateTime.UtcNow).Date;
+            var asOfDate = request.AsOfDate.Value.Date;
             if (asOfDate > latestAllowed)
                 throw new InvalidOperationException("The as-of date cannot be in the future.");
 

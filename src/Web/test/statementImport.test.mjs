@@ -149,7 +149,7 @@ test('decodeStatementBytes strips UTF-8 BOM and reads UTF-16 LE', () => {
   assert.equal(decodeStatementBytes(utf16), 'Añ');
 });
 
-test('commit and preview result preserves statementClosingBalance and statementClosingBalanceDate', () => {
+test('commit and preview result preserves statement closing balance fields', () => {
   const commitResult = {
     importId: 42,
     bankId: 7,
@@ -159,7 +159,14 @@ test('commit and preview result preserves statementClosingBalance and statementC
     autoMatched: 3,
     statementClosingBalance: 5432.10,
     statementClosingBalanceDate: '2026-07-31T00:00:00Z',
+    statementClosingBalanceCurrency: 'USD',
+    statementClosingBalanceAccount: '0000',
+    statementClosingBalanceNotice: null,
   };
   assert.equal(commitResult.statementClosingBalance, 5432.10);
   assert.equal(commitResult.statementClosingBalanceDate, '2026-07-31T00:00:00Z');
+  assert.equal(commitResult.statementClosingBalanceCurrency, 'USD');
+  assert.equal(commitResult.statementClosingBalanceAccount, '0000');
+  assert.equal(commitResult.statementClosingBalanceNotice, null);
 });
+
