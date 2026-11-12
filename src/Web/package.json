@@ -34,14 +34,14 @@
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.4",
+    "react-router-dom": "^7.18.5",
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261019.1",
+    "@cloudflare/workers-types": "^5.20261029.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "16.3.3",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -50,9 +50,9 @@
     "jsqr": "^1.4.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4",
+    "vite": "^8.3.5",
     "vitest": "5.0.5",
-    "wrangler": "^4.151.2"
+    "wrangler": "^4.152.0"
   },
   "overrides": {
     "undici": "^7.30.1"
