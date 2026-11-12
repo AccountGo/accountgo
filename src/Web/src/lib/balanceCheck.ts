@@ -15,3 +15,16 @@ export function canShowBalanceCheck(options: {
 }): boolean {
   return !options.hasFinancials && options.canView && !options.archived;
 }
+
+/**
+ * The date the balance dialog opens with. A balance handed over from a statement keeps the statement's date, or
+ * stays empty when the file gave none (never today). A manual check starts at today.
+ */
+export function initialBalanceCheckDate(
+  initialBalance: number | string | null | undefined,
+  initialAsOfDate: string | null | undefined,
+  today: string,
+): string {
+  if (initialAsOfDate) return String(initialAsOfDate).slice(0, 10);
+  return initialBalance != null ? '' : today;
+}

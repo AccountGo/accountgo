@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -20,14 +21,17 @@ namespace Services.Banking
             TimeSpan.FromSeconds(1));
 
         private static readonly Regex Tag62 = new(
-            @"^:62[FM]:(?<dc>[CD])(?<yy>\d{2})(?<mm>\d{2})(?<dd>\d{2})(?<ccy>[A-Z]{3})(?<amount>[\d,\.]+)",
+            @"^:62F:(?<dc>[CD])(?<yy>\d{2})(?<mm>\d{2})(?<dd>\d{2})(?<ccy>[A-Z]{3})(?<amount>[\d,\.]+)",
             RegexOptions.CultureInvariant | RegexOptions.Compiled,
             TimeSpan.FromSeconds(1));
 
         public static IReadOnlyList<ParsedStatementRow> Parse(string content) =>
             ParseFile(content).Rows;
 
-        public static ParsedStatementFile ParseFile(string content, string? accountCurrencyCode = null)
+        public static ParsedStatementFile ParseFile(string content, string? accountCurrencyCode = null) =>
+            ParseFile(content, new StatementAccountContext(accountCurrencyCode));
+
+        public static ParsedStatementFile ParseFile(string content, StatementAccountContext account)
         {
             content = content.TrimStart('\uFEFF');
             if (string.IsNullOrWhiteSpace(content))
@@ -108,57 +112,106 @@ namespace Services.Banking
             if (rows.Count == 0)
                 throw new InvalidOperationException("No transactions were found in the MT940 file.");
 
-            decimal? closingBalance = null;
-            DateTime? closingBalanceDate = null;
-            string? balanceCurrency = null;
-
-            foreach (var l in lines)
-            {
-                var trimmed = l.Trim();
-                if (trimmed.StartsWith(":62F:", StringComparison.Ordinal) || (closingBalance == null && trimmed.StartsWith(":62M:", StringComparison.Ordinal)))
-                {
-                    var match62 = Tag62.Match(trimmed);
-                    if (match62.Success)
-                    {
-                        var ccy = match62.Groups["ccy"].Value;
-                        bool currencyOk = true;
-                        if (!string.IsNullOrWhiteSpace(accountCurrencyCode))
-                        {
-                            currencyOk = string.Equals(ccy, accountCurrencyCode.Trim(), StringComparison.OrdinalIgnoreCase);
-                        }
-                        if (currencyOk)
-                        {
-                            try
-                            {
-                                var year = 2000 + int.Parse(match62.Groups["yy"].Value, CultureInfo.InvariantCulture);
-                                var month = int.Parse(match62.Groups["mm"].Value, CultureInfo.InvariantCulture);
-                                var day = int.Parse(match62.Groups["dd"].Value, CultureInfo.InvariantCulture);
-                                var dc = match62.Groups["dc"].Value;
-                                var amountRaw = match62.Groups["amount"].Value.Replace(',', '.');
-                                var amount = BankStatementParser.ParseAmount(amountRaw, "Balance");
-                                if (dc is "D")
-                                    amount = -Math.Abs(amount);
-                                else
-                                    amount = Math.Abs(amount);
-                                closingBalance = Math.Round(amount, 2, MidpointRounding.AwayFromZero);
-                                closingBalanceDate = DateTime.SpecifyKind(new DateTime(year, month, day), DateTimeKind.Utc);
-                                balanceCurrency = ccy;
-                                if (trimmed.StartsWith(":62F:", StringComparison.Ordinal))
-                                    break;
-                            }
-                            catch (Exception) { }
-                        }
-                    }
-                }
-            }
+            var (closing, reason) = StatementBalanceSelector.Select(ReadBalanceBlocks(lines), account);
 
             return new ParsedStatementFile
             {
                 Rows = rows,
-                ClosingBalance = closingBalance,
-                ClosingBalanceDate = closingBalanceDate,
-                CurrencyCode = balanceCurrency
+                ClosingBalance = closing,
+                ClosingBalanceUnavailableReason = reason
             };
+        }
+
+        private sealed class BlockBuilder
+        {
+            public string? Account;
+            public StatementBalanceCandidate? Booked;
+            public bool NonBooked;
+        }
+
+        /// <summary>
+        /// One block per statement (:20: up to the next :20: or the "-" terminator). Only :62F: is a booked closing
+        /// balance; :62M: (intermediate), :64: (available) and :65: (forward) are not.
+        /// </summary>
+        private static List<StatementBalanceBlock> ReadBalanceBlocks(string[] lines)
+        {
+            var builders = new List<BlockBuilder>();
+            BlockBuilder? current = null;
+            foreach (var raw in lines)
+            {
+                var line = raw.Trim();
+                if (line == "-")
+                {
+                    current = null;
+                    continue;
+                }
+                if (line.StartsWith(":20:", StringComparison.Ordinal))
+                {
+                    current = new BlockBuilder();
+                    builders.Add(current);
+                    continue;
+                }
+
+                var isBalanceTag = line.StartsWith(":62F:", StringComparison.Ordinal)
+                    || line.StartsWith(":62M:", StringComparison.Ordinal)
+                    || line.StartsWith(":64:", StringComparison.Ordinal)
+                    || line.StartsWith(":65:", StringComparison.Ordinal);
+                var isAccount = line.StartsWith(":25:", StringComparison.Ordinal)
+                    || line.StartsWith(":25P:", StringComparison.Ordinal);
+                if (!isBalanceTag && !isAccount)
+                    continue;
+
+                if (current == null || (isAccount && current.Account != null))
+                {
+                    current = new BlockBuilder();
+                    builders.Add(current);
+                }
+
+                if (isAccount)
+                {
+                    current.Account = line[(line.IndexOf(':', 1) + 1)..].Trim();
+                }
+                else if (line.StartsWith(":62F:", StringComparison.Ordinal))
+                {
+                    var m = Tag62.Match(line);
+                    if (!m.Success)
+                        continue;
+                    try
+                    {
+                        var amount = BankStatementParser.ParseAmount(m.Groups["amount"].Value.Replace(',', '.'), "Balance");
+                        amount = m.Groups["dc"].Value == "D" ? -Math.Abs(amount) : Math.Abs(amount);
+                        amount = Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+                        var date = StatementBalanceSelector.ParseCalendarDate(
+                            "20" + m.Groups["yy"].Value + m.Groups["mm"].Value + m.Groups["dd"].Value, "yyyyMMdd");
+                        current.Booked = new StatementBalanceCandidate(amount, date, m.Groups["ccy"].Value);
+                    }
+                    catch (FormatException) { }
+                }
+                else
+                {
+                    current.NonBooked = true;
+                }
+            }
+
+            return builders.Select(b =>
+            {
+                var segments = (b.Account ?? string.Empty).Split('/', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(StatementBalanceSelector.Normalize).Where(k => k != null).Select(k => k!).ToList();
+                var whole = StatementBalanceSelector.Normalize(b.Account);
+                var keys = new List<string>();
+                if (whole != null)
+                    keys.Add(whole);
+                keys.AddRange(segments.Where(k => !keys.Contains(k)));
+                var display = (b.Account ?? string.Empty).Split('/', StringSplitOptions.RemoveEmptyEntries)
+                    .OrderByDescending(x => x.Length).FirstOrDefault()?.Trim();
+                return new StatementBalanceBlock
+                {
+                    AccountIdentifier = string.IsNullOrEmpty(display) ? null : display,
+                    AccountKeys = keys,
+                    Booked = b.Booked,
+                    HasNonBookedBalance = b.NonBooked
+                };
+            }).Where(b => b.Booked != null || b.HasNonBookedBalance || b.AccountKeys.Count > 0).ToList();
         }
 
         private static string? ExtractReference(string rest)

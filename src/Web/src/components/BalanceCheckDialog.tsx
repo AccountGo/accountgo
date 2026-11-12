@@ -3,7 +3,7 @@ import { Scale, X } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
-import { parseBalanceInput } from '../lib/balanceCheck';
+import { initialBalanceCheckDate, parseBalanceInput } from '../lib/balanceCheck';
 import type { BankAccount, BankBalanceCheck } from '../types/banking';
 
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
@@ -17,11 +17,12 @@ export const BalanceCheckDialog: React.FC<{
   onClose: () => void;
   initialBalance?: number | string | null;
   initialAsOfDate?: string | null;
-}> = ({ bank, formatCurrency, onClose, initialBalance, initialAsOfDate }) => {
+  currencyCode?: string | null;
+}> = ({ bank, formatCurrency, onClose, initialBalance, initialAsOfDate, currencyCode }) => {
   const titleId = useId();
   const { authFetch } = useAuth();
   const [balance, setBalance] = useState(() => (initialBalance != null ? String(initialBalance) : ''));
-  const [asOfDate, setAsOfDate] = useState(() => (initialAsOfDate ? String(initialAsOfDate).slice(0, 10) : localToday()));
+  const [asOfDate, setAsOfDate] = useState(() => initialBalanceCheckDate(initialBalance, initialAsOfDate, localToday()));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BankBalanceCheck | null>(null);
@@ -31,6 +32,10 @@ export const BalanceCheckDialog: React.FC<{
     const parsed = parseBalanceInput(balance);
     if (parsed === null) {
       setError('Enter the balance the bank shows.');
+      return;
+    }
+    if (!asOfDate) {
+      setError('Enter the date of the balance.');
       return;
     }
     setBusy(true);
@@ -91,7 +96,7 @@ export const BalanceCheckDialog: React.FC<{
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor={`${titleId}-balance`} className={labelClass}>
-              Bank balance
+              Bank balance{currencyCode ? ` (${currencyCode})` : ''}
             </label>
             <input
               id={`${titleId}-balance`}
@@ -111,9 +116,16 @@ export const BalanceCheckDialog: React.FC<{
               type="date"
               value={asOfDate}
               max={localToday()}
+              required
+              aria-describedby={!asOfDate ? `${titleId}-date-help` : undefined}
               onChange={(e) => setAsOfDate(e.target.value)}
               className={inputClass}
             />
+            {!asOfDate && (
+              <p id={`${titleId}-date-help`} className="mt-1 text-xs text-[var(--text-muted)]">
+                Enter the date shown on your statement for this balance.
+              </p>
+            )}
           </div>
         </div>
 
