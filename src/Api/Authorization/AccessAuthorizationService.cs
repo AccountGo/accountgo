@@ -478,7 +478,8 @@ namespace Api.Authorization
             var resolvedCompanyId = companyId ?? (_tenantContext.IsResolved && _db == null ? 1 : null);
             if ((_tenantContext.IsResolved || companyId.HasValue) && resolvedCompanyId.HasValue)
             {
-                if (_tenantContext.ActorDomain == ActorTrustDomain.ScopedService)
+                if (_tenantContext.ActorDomain == ActorTrustDomain.ScopedService &&
+                    (string.IsNullOrWhiteSpace(effectiveUserId) || effectiveUserId == "system:scoped-service"))
                 {
                     var scopedPermissions = _tenantContext.Permissions != null
                         ? new HashSet<string>(_tenantContext.Permissions, StringComparer.OrdinalIgnoreCase)

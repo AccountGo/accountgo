@@ -374,36 +374,6 @@ namespace AccountGo.BackendTests.Architecture
             ["src/Api/Controllers/SubscriptionController.cs"] = "governance: subscription administration",
             ["src/Api/Controllers/WorkspaceInvitationsController.cs"] = "governance: workspace invitation authorization",
             ["src/Api/Controllers/WorkspaceMembersController.cs"] = "governance: member management, roles, and ownership transfer",
-
-            // Commercial Modules (if present)
-            ["modules/Billing/Announcements/HostedAnnouncementSource.cs"] = "governance: hosted announcement visibility",
-            ["modules/Billing/Services/HostedEntitlementService.cs"] = "governance: hosted entitlement role check",
-            ["modules/Billing/Webhooks/BillingWebhooksController.cs"] = "governance: webhook subscription provisioning",
-            ["modules/Branding/Controllers/InvoiceBrandingSettingsController.cs"] = "governance: invoice branding settings administration",
-            ["modules/Branding/Controllers/InvoiceLogoController.cs"] = "governance: invoice logo administration",
-            ["modules/Branding/Services/BrandingAuthorization.cs"] = "governance: branding authorization role check",
-            ["modules/Branding/Services/InvoiceLogoUploadAdmissionAttribute.cs"] = "governance: logo upload admission check",
-            ["modules/Email/Controllers/EmailSettingsController.cs"] = "governance: email settings administration",
-            ["modules/Email/Services/EmailAuthorization.cs"] = "governance: email configuration authorization",
-            ["modules/Email/Services/HostedEmailCapabilities.cs"] = "governance: email capabilities role check",
-            ["modules/Security/Controllers/SecurityPolicyController.cs"] = "governance: security policy administration",
-            ["modules/Security/Entitlements/MfaEntitlements.cs"] = "governance: MFA policy enforcement",
-
-            // Commercial Module Tests (if present)
-            ["modules/Billing.Tests/HostedAnnouncementSourceTests.cs"] = "test: announcement test fixture",
-            ["modules/Billing.Tests/HostedCreateReceiveWorkspaceTests.cs"] = "test: workspace creation fixture",
-            ["modules/Billing.Tests/HostedEntitlementServiceContractTests.cs"] = "test: entitlement contract fixture",
-            ["modules/Billing.Tests/HostedFreeWorkspaceSlotTests.cs"] = "test: workspace slot fixture",
-            ["modules/Billing.Tests/PersonalFreePlanTests.cs"] = "test: personal free plan fixture",
-            ["modules/Branding.Tests/BrandingApiFixture.cs"] = "test: branding test fixture",
-            ["modules/Branding.Tests/InvoiceBrandingPolicyTests.cs"] = "test: branding policy fixture",
-            ["modules/Branding.Tests/InvoiceLogoTests.cs"] = "test: invoice logo fixture",
-            ["modules/Email.Tests/EmailAccessControlConformanceTests.cs"] = "test: email access control fixture",
-            ["modules/Email.Tests/EmailFixture.cs"] = "test: email fixture",
-            ["modules/Integrations.Tests/IntegrationsFixture.cs"] = "test: integrations fixture",
-            ["modules/Integrations.Tests/RelationalDatabaseTests.cs"] = "test: relational database fixture",
-            ["modules/Security.Tests/HostedMfaGateAndPolicyTests.cs"] = "test: MFA gate fixture",
-            ["modules/Security.Tests/TotpAndRecoveryTests.cs"] = "test: recovery codes fixture",
         };
 
         private static readonly IReadOnlyDictionary<string, string> AllowedWebFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -435,8 +405,8 @@ namespace AccountGo.BackendTests.Architecture
             Assert.DoesNotContain("currentOrg?.role === 'Owner' || currentOrg?.role === 'Admin'", orgLayoutSource);
             Assert.DoesNotContain("role === 'Owner' || role === 'Admin'", orgLayoutSource);
 
-            // 1. Scan C# files under src/ and modules/ (excluding bin, obj, .build)
-            var csharpScanDirs = new[] { Path.Combine(RepoRoot, "src"), Path.Combine(RepoRoot, "modules") };
+            // 1. Scan C# files under src/ (excluding bin, obj, .build)
+            var csharpScanDirs = new[] { Path.Combine(RepoRoot, "src") };
             var unapprovedCSharp = new List<string>();
 
             foreach (var dir in csharpScanDirs)
@@ -470,13 +440,16 @@ namespace AccountGo.BackendTests.Architecture
             foreach (var kvp in AllowedCSharpFiles)
             {
                 var full = Path.Combine(RepoRoot, kvp.Key);
-                if (File.Exists(full))
+                if (!File.Exists(full))
                 {
-                    var content = File.ReadAllText(full);
-                    if (!content.Contains("CompanyMemberRole.Owner") && !content.Contains("CompanyMemberRole.Admin"))
-                    {
-                        staleCSharp.Add(kvp.Key);
-                    }
+                    staleCSharp.Add($"{kvp.Key} (file does not exist)");
+                    continue;
+                }
+
+                var content = File.ReadAllText(full);
+                if (!content.Contains("CompanyMemberRole.Owner") && !content.Contains("CompanyMemberRole.Admin"))
+                {
+                    staleCSharp.Add(kvp.Key);
                 }
             }
 
@@ -520,13 +493,16 @@ namespace AccountGo.BackendTests.Architecture
             foreach (var kvp in AllowedWebFiles)
             {
                 var full = Path.Combine(RepoRoot, kvp.Key);
-                if (File.Exists(full))
+                if (!File.Exists(full))
                 {
-                    var content = File.ReadAllText(full);
-                    if (!webRoleRegex.IsMatch(content))
-                    {
-                        staleWeb.Add(kvp.Key);
-                    }
+                    staleWeb.Add($"{kvp.Key} (file does not exist)");
+                    continue;
+                }
+
+                var content = File.ReadAllText(full);
+                if (!webRoleRegex.IsMatch(content))
+                {
+                    staleWeb.Add(kvp.Key);
                 }
             }
 

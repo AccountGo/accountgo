@@ -36,9 +36,9 @@ namespace Services.Recurring
         private readonly IRepository<Customer> _customerRepo;
         private readonly IRepository<CompanySetting> _companySettingRepo;
         private readonly IRepository<Tax> _taxRepo;
+        private readonly Core.Authorization.IAccessAuthorizationService _authorization;
         private readonly ILogger<RecurringInvoiceGenerationService> _logger;
         private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
-        private readonly Core.Authorization.IAccessAuthorizationService? _authorization;
 
         public RecurringInvoiceGenerationService(
             ITenantContext tenant,
@@ -51,25 +51,23 @@ namespace Services.Recurring
             IRepository<Customer> customerRepo,
             IRepository<CompanySetting> companySettingRepo,
             IRepository<Tax> taxRepo,
-            IRepository<CompanyMember>? memberRepo = null,
-            IRepository<SecurityRolePermission>? rolePermissionRepo = null,
+            Core.Authorization.IAccessAuthorizationService authorization,
             ILogger<RecurringInvoiceGenerationService>? logger = null,
-            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
-            Core.Authorization.IAccessAuthorizationService? authorization = null)
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
-            _tenant = tenant;
-            _unitOfWork = unitOfWork;
-            _salesService = salesService;
-            _inventoryService = inventoryService;
-            _occurrenceRepo = occurrenceRepo;
-            _scheduleRepo = scheduleRepo;
-            _lineRepo = lineRepo;
-            _customerRepo = customerRepo;
-            _companySettingRepo = companySettingRepo;
-            _taxRepo = taxRepo;
+            _tenant = tenant ?? throw new ArgumentNullException(nameof(tenant));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+            _salesService = salesService ?? throw new ArgumentNullException(nameof(salesService));
+            _inventoryService = inventoryService ?? throw new ArgumentNullException(nameof(inventoryService));
+            _occurrenceRepo = occurrenceRepo ?? throw new ArgumentNullException(nameof(occurrenceRepo));
+            _scheduleRepo = scheduleRepo ?? throw new ArgumentNullException(nameof(scheduleRepo));
+            _lineRepo = lineRepo ?? throw new ArgumentNullException(nameof(lineRepo));
+            _customerRepo = customerRepo ?? throw new ArgumentNullException(nameof(customerRepo));
+            _companySettingRepo = companySettingRepo ?? throw new ArgumentNullException(nameof(companySettingRepo));
+            _taxRepo = taxRepo ?? throw new ArgumentNullException(nameof(taxRepo));
+            _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
             _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RecurringInvoiceGenerationService>.Instance;
             _policyTransaction = policyTransaction;
-            _authorization = authorization;
         }
 
         public int EnsureOccurrence(int scheduleId, DateTime scheduledRunDate, string leaseOwner, DateTime leaseUntil)
@@ -981,12 +979,6 @@ namespace Services.Recurring
             var userId = schedule.AutomationEnabledBy;
             if (string.IsNullOrWhiteSpace(userId))
                 return false;
-
-            if (_authorization == null)
-            {
-                _logger.LogWarning("Authorization service is not available; failing closed for auto-issue schedule {ScheduleId}.", schedule.Id);
-                return false;
-            }
 
             try
             {
