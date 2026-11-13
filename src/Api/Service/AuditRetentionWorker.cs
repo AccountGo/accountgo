@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Api.Data;
 using Api.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,7 +18,7 @@ namespace Api.Service;
 
 /// <summary>
 /// Daily purge of expired <c>SecurityAuditEvents</c> only. Never touches change or evidence tables.
-/// Runs off the request path with a short start delay; Postgres instances coordinate via advisory lock.
+/// Runs off the request path with a short start delay; Postgres instances coordinate via a transaction-scoped advisory lock.
 /// </summary>
 public sealed class AuditRetentionWorker : BackgroundService
 {
@@ -104,66 +105,64 @@ public sealed class AuditRetentionWorker : BackgroundService
 
         using var scope = _scopes.CreateScope();
         var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
-        if (!await TryAcquirePostgresLockAsync(identity, cancellationToken))
+        // Postgres: the whole pass runs in one transaction that holds a transaction-scoped advisory lock, so it also
+        // works behind a transaction-mode connection pooler (a session lock could be released on another connection).
+        await using var lockTransaction = await TryBeginLockedTransactionAsync(identity, cancellationToken);
+        if (IsNpgsql(identity) && lockTransaction == null)
         {
             _logger.LogInformation("Audit retention skipped (another instance holds the advisory lock)");
             return AuditRetentionRunResult.SkippedLocked;
         }
 
-        try
+        var now = DateTime.UtcNow;
+        var securityCutoff = now.AddDays(-securityDays);
+        var dataAccessCutoff = now.AddDays(-dataAccessDays);
+
+        var dataAccessDeleted = await DeleteExpiredAsync(
+            identity,
+            dataAccess: true,
+            dataAccessCutoff,
+            cancellationToken);
+        var securityDeleted = await DeleteExpiredAsync(
+            identity,
+            dataAccess: false,
+            securityCutoff,
+            cancellationToken);
+
+        var redemptionsCutoff = now.AddMinutes(-10);
+        await identity.ExternalTokenRedemptions.Where(r => r.ExpiresAtUtc < redemptionsCutoff).ExecuteDeleteAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Audit retention complete: dataAccessDeleted={DataAccessDeleted} securityDeleted={SecurityDeleted} dataAccessCutoff={DataAccessCutoff:o} securityCutoff={SecurityCutoff:o}",
+            dataAccessDeleted, securityDeleted, dataAccessCutoff, securityCutoff);
+
+        if (dataAccessDeleted + securityDeleted > 0)
         {
-            var now = DateTime.UtcNow;
-            var securityCutoff = now.AddDays(-securityDays);
-            var dataAccessCutoff = now.AddDays(-dataAccessDays);
-
-            var dataAccessDeleted = await DeleteExpiredAsync(
-                identity,
-                dataAccess: true,
-                dataAccessCutoff,
-                cancellationToken);
-            var securityDeleted = await DeleteExpiredAsync(
-                identity,
-                dataAccess: false,
-                securityCutoff,
-                cancellationToken);
-
-            var redemptionsCutoff = now.AddMinutes(-10);
-            await identity.ExternalTokenRedemptions.Where(r => r.ExpiresAtUtc < redemptionsCutoff).ExecuteDeleteAsync(cancellationToken);
-
-            _logger.LogInformation(
-                "Audit retention complete: dataAccessDeleted={DataAccessDeleted} securityDeleted={SecurityDeleted} dataAccessCutoff={DataAccessCutoff:o} securityCutoff={SecurityCutoff:o}",
-                dataAccessDeleted, securityDeleted, dataAccessCutoff, securityCutoff);
-
-            if (dataAccessDeleted + securityDeleted > 0)
+            identity.SecurityAuditEvents.Add(new SecurityAuditEvent
             {
-                identity.SecurityAuditEvents.Add(new SecurityAuditEvent
+                EventType = "audit.retention.purge",
+                Outcome = "success",
+                CompanyId = null,
+                UserId = null,
+                CorrelationId = null,
+                MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
                 {
-                    EventType = "audit.retention.purge",
-                    Outcome = "success",
-                    CompanyId = null,
-                    UserId = null,
-                    CorrelationId = null,
-                    MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        dataAccessDeleted,
-                        securityDeleted,
-                        dataAccessCutoff,
-                        securityCutoff,
-                        dataAccessDays,
-                        securityDays
-                    }),
-                    CreatedAt = DateTime.UtcNow
-                });
-                await identity.SaveChangesAsync(cancellationToken);
-            }
+                    dataAccessDeleted,
+                    securityDeleted,
+                    dataAccessCutoff,
+                    securityCutoff,
+                    dataAccessDays,
+                    securityDays
+                }),
+                CreatedAt = DateTime.UtcNow
+            });
+            await identity.SaveChangesAsync(cancellationToken);
+        }
 
-            return new AuditRetentionRunResult(dataAccessDeleted, securityDeleted, securityCutoff, dataAccessCutoff);
-        }
-        finally
-        {
-            // Release even when shutdown cancels the run, so the session lock never outlives the pass.
-            await ReleasePostgresLockAsync(identity);
-        }
+        if (lockTransaction != null)
+            await lockTransaction.CommitAsync(cancellationToken);
+
+        return new AuditRetentionRunResult(dataAccessDeleted, securityDeleted, securityCutoff, dataAccessCutoff);
     }
 
     private static async Task<int> DeleteExpiredAsync(
@@ -197,47 +196,37 @@ public sealed class AuditRetentionWorker : BackgroundService
         return total;
     }
 
-    private static async Task<bool> TryAcquirePostgresLockAsync(
+    /// <summary>
+    /// Postgres only: begins a transaction and takes the retention advisory lock for its lifetime. Returns null when
+    /// another instance holds the lock (the transaction is rolled back) and on other providers.
+    /// </summary>
+    private static async Task<IDbContextTransaction?> TryBeginLockedTransactionAsync(
         ApplicationIdentityDbContext identity,
         CancellationToken cancellationToken)
     {
-        if (!IsNpgsql(identity)) return true;
-        await identity.Database.OpenConnectionAsync(cancellationToken);
-        await using var command = identity.Database.GetDbConnection().CreateCommand();
-        command.CommandText = "SELECT pg_try_advisory_lock(@key)";
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = "key";
-        parameter.Value = AuditRetentionOptions.PostgresAdvisoryLockKey;
-        command.Parameters.Add(parameter);
-        var result = await command.ExecuteScalarAsync(cancellationToken);
-        return result switch
-        {
-            true => true,
-            false => false,
-            int i => i != 0,
-            long l => l != 0,
-            null => false,
-            _ => Convert.ToBoolean(result)
-        };
-    }
-
-    private static async Task ReleasePostgresLockAsync(ApplicationIdentityDbContext identity)
-    {
-        if (!IsNpgsql(identity)) return;
+        if (!IsNpgsql(identity)) return null;
+        var transaction = await identity.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             await using var command = identity.Database.GetDbConnection().CreateCommand();
-            command.CommandText = "SELECT pg_advisory_unlock(@key)";
+            command.Transaction = transaction.GetDbTransaction();
+            command.CommandText = "SELECT pg_try_advisory_xact_lock(@key)";
             var parameter = command.CreateParameter();
             parameter.ParameterName = "key";
             parameter.Value = AuditRetentionOptions.PostgresAdvisoryLockKey;
             command.Parameters.Add(parameter);
-            await command.ExecuteScalarAsync(CancellationToken.None);
+            if (await command.ExecuteScalarAsync(cancellationToken) is true)
+                return transaction;
         }
         catch
         {
-            // Best effort on shutdown.
+            await transaction.DisposeAsync();
+            throw;
         }
+
+        await transaction.RollbackAsync(CancellationToken.None);
+        await transaction.DisposeAsync();
+        return null;
     }
 
     private static bool IsNpgsql(ApplicationIdentityDbContext identity) =>

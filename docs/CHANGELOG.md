@@ -11,6 +11,9 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
+### Self-hosting
+- PostgreSQL deployments can run behind a transaction-mode connection pooler (such as Supabase's on port 6543), which lets more API instances share one database. The deployment guide lists the connection settings.
+
 ## [0.2.0] - 2026-11-13
 
 Release notes: https://github.com/AccountGo/accountgo/releases/tag/v0.2.0

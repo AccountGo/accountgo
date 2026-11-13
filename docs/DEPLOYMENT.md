@@ -65,7 +65,23 @@ npx wrangler deploy
 
 The container's disk is not persistent, so the Worker only starts it with `DatabaseProvider = "Postgres"`. The
 connection string is a `postgresql://user:password@host:5432/database` URI or an Npgsql `Host=...;Database=...` string;
-it must be reachable over IPv4 (on Supabase, use the session pooler). The API applies its migrations on start.
+it must be reachable over IPv4. The API applies its migrations on start.
+
+**Connection pooling.** Each API container keeps its own pool of database connections, and every request can use
+two of them. A session-mode pooler (Supabase's on port 5432) holds a server connection for every open client
+connection, so a few busy containers can use up its limit and requests then fail. Use a transaction-mode pooler
+(Supabase's on port 6543) and cap the pool in each container:
+
+```
+Host=<pooler host>;Port=6543;Database=postgres;Username=<user>;Password=<password>;SSL Mode=Require;No Reset On Close=true;Maximum Pool Size=15;Timeout=30
+```
+
+- `No Reset On Close=true`: a transaction pooler hands each transaction to any server connection, so resetting
+  session state on close does nothing useful.
+- `Maximum Pool Size`: connections one container may open. Keep the total over all containers within the pooler's
+  client limit.
+- AccountGo keeps no session state between transactions (no session advisory locks, no server-prepared
+  statements), and migrations take their lock inside a transaction, so both pooler modes work.
 
 ### 3.2 Docker (any host)
 
