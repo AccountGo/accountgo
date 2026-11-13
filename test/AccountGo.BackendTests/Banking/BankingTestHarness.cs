@@ -165,7 +165,12 @@ internal sealed class BankingTestHarness : IDisposable
         Repos.Accounts.Table.Single(a => a.AccountCode == code);
 
     public BankAccountDto CreateBank(string name) =>
-        Banks.Create(new CreateBankAccountRequest { Name = name, Type = 1 }, includeFullNumbers: false);
+        Banks.Create(new CreateBankAccountRequest { Name = name, Type = 1, CurrencyCode = "USD" }, includeFullNumbers: false);
+
+    public BankAccountDto CreateBank(string name, string? iban, string? accountNumber, string? currencyCode = "USD") =>
+        Banks.Create(
+            new CreateBankAccountRequest { Name = name, Type = 1, Iban = iban, AccountNumber = accountNumber, CurrencyCode = currencyCode },
+            includeFullNumbers: false);
 
     /// <summary>Posts a single-sided GL line on <paramref name="accountId"/> dated <paramref name="date"/>.</summary>
     public GeneralLedgerLine Post(int accountId, DrOrCrSide side, decimal amount, DateTime date, string description = "seed")

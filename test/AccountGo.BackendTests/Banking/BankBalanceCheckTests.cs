@@ -47,7 +47,7 @@ public class BankBalanceCheckTests
         var headersBefore = harness.Repos.GlHeaders.Table.Count();
         var linesBefore = harness.Repos.GlLines.Table.Count();
 
-        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 379.50m });
+        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 379.50m, AsOfDate = Today });
 
         Assert.True(result.IsMatch);
         Assert.Equal(0m, result.Difference);
@@ -64,8 +64,8 @@ public class BankBalanceCheckTests
         harness.Post(accountId, DrOrCrSide.Dr, 500m, Today.AddDays(-5));
         var suspect = harness.Post(accountId, DrOrCrSide.Dr, 75m, Today.AddDays(-1));
 
-        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 500m });
-
+        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 500m, AsOfDate = Today });
+ 
         Assert.False(result.IsMatch);
         Assert.Equal(-75m, result.Difference);
         Assert.Contains("less than your books", result.Message);
@@ -79,7 +79,7 @@ public class BankBalanceCheckTests
         using var harness = NewInvoicingHarness(out var bankId, out var accountId);
         harness.Post(accountId, DrOrCrSide.Dr, 100m, Today.AddDays(-3));
 
-        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 130.255m });
+        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 130.255m, AsOfDate = Today });
 
         Assert.Equal(30.26m, result.Difference);
         Assert.Contains("more than your books", result.Message);
@@ -110,7 +110,7 @@ public class BankBalanceCheckTests
         for (var day = 1; day <= BankAccountService.BalanceCheckRecentLineCount + 5; day++)
             harness.Post(accountId, DrOrCrSide.Dr, 1m, Today.AddDays(-day));
 
-        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 0m });
+        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 0m, AsOfDate = Today });
 
         Assert.Equal(BankAccountService.BalanceCheckRecentLineCount, result.RecentLines.Count);
         Assert.Equal(Today.AddDays(-1), result.RecentLines[0].Date);
@@ -122,7 +122,7 @@ public class BankBalanceCheckTests
     {
         using var harness = NewInvoicingHarness(out var bankId, out _);
 
-        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 25m });
+        var result = harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 25m, AsOfDate = Today });
 
         Assert.Equal(0m, result.BookBalance);
         Assert.Equal(25m, result.Difference);
@@ -135,7 +135,7 @@ public class BankBalanceCheckTests
         using var harness = NewInvoicingHarness(out var bankId, out _, financialsOn: true);
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 1m }));
+            harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 1m, AsOfDate = Today }));
 
         Assert.Contains("reconciliation", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -147,6 +147,17 @@ public class BankBalanceCheckTests
 
         Assert.Throws<InvalidOperationException>(() =>
             harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 1m, AsOfDate = Today.AddDays(30) }));
+    }
+
+    [Fact]
+    public void MissingAsOfDate_IsRefused_NotDefaultedToToday()
+    {
+        using var harness = NewInvoicingHarness(out var bankId, out _);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            harness.Banks.CheckBalance(bankId, new BankBalanceCheckRequest { AsOfBalance = 1m, AsOfDate = null }));
+
+        Assert.Equal("Enter the date of the balance.", ex.Message);
     }
 
     [Fact]

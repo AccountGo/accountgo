@@ -128,10 +128,16 @@ namespace Dto.Banking
         public string? MappingSource { get; set; }
         public string? HeaderSignature { get; set; }
         public string? PresetName { get; set; }
-        /// <summary>Closing balance if provided by statement (OFX, CAMT, MT940).</summary>
+        /// <summary>Booked closing balance of the selected account, when the statement (OFX, CAMT, MT940) gives one.</summary>
         public decimal? StatementClosingBalance { get; set; }
         /// <summary>As-of date of the closing balance if provided.</summary>
         public DateTime? StatementClosingBalanceDate { get; set; }
+        /// <summary>Currency of the closing balance (always the bank account's currency when a balance is offered).</summary>
+        public string? StatementClosingBalanceCurrency { get; set; }
+        /// <summary>Last four characters of the account the balance belongs to, when the file names one.</summary>
+        public string? StatementClosingBalanceAccount { get; set; }
+        /// <summary>Stable code: why no balance is offered, or date_missing when the amount has no date.</summary>
+        public string? StatementClosingBalanceNotice { get; set; }
         /// <summary>First rows for display; counts above cover the whole file.</summary>
         public IReadOnlyList<BankStatementPreviewRowDto> Rows { get; set; } = Array.Empty<BankStatementPreviewRowDto>();
     }
@@ -159,10 +165,16 @@ namespace Dto.Banking
         public int AutoMatched { get; set; }
         /// <summary>Imported lines dated before the books start date: nothing can be posted for them.</summary>
         public int BeforeBooksStart { get; set; }
-        /// <summary>Closing balance if provided by statement (OFX, CAMT, MT940).</summary>
+        /// <summary>Booked closing balance of the selected account, when the statement (OFX, CAMT, MT940) gives one.</summary>
         public decimal? StatementClosingBalance { get; set; }
         /// <summary>As-of date of the closing balance if provided.</summary>
         public DateTime? StatementClosingBalanceDate { get; set; }
+        /// <summary>Currency of the closing balance (always the bank account's currency when a balance is offered).</summary>
+        public string? StatementClosingBalanceCurrency { get; set; }
+        /// <summary>Last four characters of the account the balance belongs to, when the file names one.</summary>
+        public string? StatementClosingBalanceAccount { get; set; }
+        /// <summary>Stable code: why no balance is offered, or date_missing when the amount has no date.</summary>
+        public string? StatementClosingBalanceNotice { get; set; }
     }
 
     public class BankStatementMatchCandidateDto
