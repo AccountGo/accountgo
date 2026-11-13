@@ -181,7 +181,7 @@ namespace Dto.Banking
     {
         /// <summary>The balance the bank shows (statement, app, or online banking).</summary>
         public decimal AsOfBalance { get; set; }
-        /// <summary>Defaults to today.</summary>
+        /// <summary>Required: the date the balance is as of. It is never assumed.</summary>
         public DateTime? AsOfDate { get; set; }
     }
 

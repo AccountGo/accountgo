@@ -22,6 +22,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - The plan limit message no longer says paid plans are coming soon. It offers a contact link when no upgrade covers what you need.
 
 ### Fixed
+- Statement import no longer offers an available or interim balance, or a balance for another account, as the statement closing balance, and no longer assumes today's date when the file gives none.
 - The automatic sign-out setting now tells you when another of your workspaces signs you out sooner, and names it. One sign-in covers all your workspaces, so the shortest setting applies.
 - After a plan change, the plan shown in the workspace header, switcher and subscription settings now updates right away instead of after a reload, and the payment-confirming message no longer stays on screen indefinitely.
 

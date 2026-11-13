@@ -388,6 +388,11 @@ export interface BankStatementPreview {
   presetName?: string | null;
   statementClosingBalance?: number | null;
   statementClosingBalanceDate?: string | null;
+  statementClosingBalanceCurrency?: string | null;
+  /** Last four characters of the account the balance belongs to. */
+  statementClosingBalanceAccount?: string | null;
+  /** Reason code: why no balance is offered, or date_missing when the amount has no date. */
+  statementClosingBalanceNotice?: string | null;
   rows: BankStatementPreviewRow[];
 }
 
@@ -410,6 +415,11 @@ export interface BankStatementCommitResult {
   beforeBooksStart?: number;
   statementClosingBalance?: number | null;
   statementClosingBalanceDate?: string | null;
+  statementClosingBalanceCurrency?: string | null;
+  /** Last four characters of the account the balance belongs to. */
+  statementClosingBalanceAccount?: string | null;
+  /** Reason code: why no balance is offered, or date_missing when the amount has no date. */
+  statementClosingBalanceNotice?: string | null;
 }
 
 export interface BankStatementMatchCandidate {

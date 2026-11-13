@@ -19,9 +19,21 @@ namespace Services.Banking
     public sealed class ParsedStatementFile
     {
         public IReadOnlyList<ParsedStatementRow> Rows { get; init; } = Array.Empty<ParsedStatementRow>();
-        public decimal? ClosingBalance { get; init; }
-        public DateTime? ClosingBalanceDate { get; init; }
-        public string? CurrencyCode { get; init; }
+        /// <summary>The selected account's booked closing balance, or null when none can be offered.</summary>
+        public StatementClosingBalance? ClosingBalance { get; init; }
+        /// <summary>Why no closing balance (or no date) is offered, when the file had balance data. Stable codes, see <see cref="StatementBalanceReasons"/>.</summary>
+        public string? ClosingBalanceUnavailableReason { get; init; }
+    }
+
+    /// <summary>A booked closing balance read from a statement file.</summary>
+    public sealed class StatementClosingBalance
+    {
+        public decimal Amount { get; init; }
+        /// <summary>Calendar date as written in the file (Kind=Utc, date only). Null when the file gave none.</summary>
+        public DateTime? AsOfDate { get; init; }
+        public string CurrencyCode { get; init; } = "";
+        /// <summary>Account identifier as written in the file, for display (mask it in the UI).</summary>
+        public string? AccountIdentifier { get; init; }
     }
 
     /// <summary>One row read from a statement file, before it is checked against the database.</summary>
@@ -87,8 +99,16 @@ namespace Services.Banking
             BankStatementSources source,
             string content,
             BankStatementColumnMap? map,
-            string? accountCurrencyCode = null)
+            string? accountCurrencyCode = null) =>
+            ParseFile(source, content, map, new StatementAccountContext(accountCurrencyCode));
+
+        public static ParsedStatementFile ParseFile(
+            BankStatementSources source,
+            string content,
+            BankStatementColumnMap? map,
+            StatementAccountContext account)
         {
+            var accountCurrencyCode = account.CurrencyCode;
             if (string.IsNullOrWhiteSpace(content))
                 throw new InvalidOperationException("The statement file is empty.");
             if (content.Length > MaxContentChars)
@@ -103,9 +123,9 @@ namespace Services.Banking
                         map ?? throw new InvalidOperationException("Map the CSV columns first."),
                         accountCurrencyCode)
                 },
-                BankStatementSources.Ofx => ParseOfxFile(content, accountCurrencyCode),
-                BankStatementSources.Camt => CamtStatementParser.ParseFile(content, accountCurrencyCode),
-                BankStatementSources.Mt940 => Mt940StatementParser.ParseFile(content, accountCurrencyCode),
+                BankStatementSources.Ofx => ParseOfxFile(content, account),
+                BankStatementSources.Camt => CamtStatementParser.ParseFile(content, account),
+                BankStatementSources.Mt940 => Mt940StatementParser.ParseFile(content, account),
                 BankStatementSources.Qif => new ParsedStatementFile
                 {
                     Rows = QifStatementParser.Parse(content, map?.DateFormat)
@@ -692,7 +712,20 @@ namespace Services.Banking
         public static IReadOnlyList<ParsedStatementRow> ParseOfx(string content) =>
             ParseOfxFile(content).Rows;
 
-        public static ParsedStatementFile ParseOfxFile(string content, string? accountCurrencyCode = null)
+        public static ParsedStatementFile ParseOfxFile(string content, string? accountCurrencyCode = null) =>
+            ParseOfxFile(content, new StatementAccountContext(accountCurrencyCode));
+
+        private static readonly Regex OfxStatementBlock = new(
+            @"<(?<tag>STMTRS|CCSTMTRS)>(?<body>.*?)(?=</(?:STMTRS|CCSTMTRS)>|<STMTRS>|<CCSTMTRS>|\z)",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(2));
+
+        private static readonly Regex OfxLedgerBal = new(
+            @"<LEDGERBAL>(?<body>.*?)(?=</LEDGERBAL>|<LEDGERBAL>|<AVAILBAL>|\z)",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(2));
+
+        public static ParsedStatementFile ParseOfxFile(string content, StatementAccountContext account)
         {
             content = content.TrimStart('\uFEFF');
             var rows = new List<ParsedStatementRow>();
@@ -727,62 +760,51 @@ namespace Services.Banking
             if (rows.Count == 0)
                 throw new InvalidOperationException("No transactions were found in the OFX file.");
 
-            decimal? closingBalance = null;
-            DateTime? closingBalanceDate = null;
-            var fileCurrency = OfxField(content, "CURDEF");
+            // One block per <STMTRS>/<CCSTMTRS>; a file without them is read as a single block.
+            var statementBodies = OfxStatementBlock.Matches(content)
+                .Select(m => m.Groups["body"].Value).ToList();
+            if (statementBodies.Count == 0)
+                statementBodies.Add(content);
 
-            bool currencyOk = true;
-            if (!string.IsNullOrWhiteSpace(fileCurrency) && !string.IsNullOrWhiteSpace(accountCurrencyCode))
+            var blocks = new List<StatementBalanceBlock>();
+            foreach (var statement in statementBodies)
             {
-                currencyOk = string.Equals(fileCurrency.Trim(), accountCurrencyCode.Trim(), StringComparison.OrdinalIgnoreCase);
-            }
-
-            if (currencyOk)
-            {
-                var ledgerMatch = Regex.Match(
-                    content,
-                    @"<LEDGERBAL>(?<body>.*?)(?=</LEDGERBAL>|<LEDGERBAL>|</STMTRS>|</CCSTMTRS>|<AVAILBAL>|\z)",
-                    RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
-                    TimeSpan.FromSeconds(2));
-
-                var availMatch = Regex.Match(
-                    content,
-                    @"<AVAILBAL>(?<body>.*?)(?=</AVAILBAL>|<AVAILBAL>|</STMTRS>|</CCSTMTRS>|<LEDGERBAL>|\z)",
-                    RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
-                    TimeSpan.FromSeconds(2));
-
-                var blockToUse = ledgerMatch.Success ? ledgerMatch.Groups["body"].Value
-                    : (availMatch.Success ? availMatch.Groups["body"].Value : null);
-
-                if (blockToUse != null)
+                var accountId = OfxField(statement, "ACCTID");
+                var currency = OfxField(statement, "CURDEF");
+                var normalized = StatementBalanceSelector.Normalize(accountId);
+                StatementBalanceCandidate? booked = null;
+                var ledger = OfxLedgerBal.Match(statement);
+                if (ledger.Success)
                 {
-                    var balAmtStr = OfxField(blockToUse, "BALAMT");
-                    var dtAsOfStr = OfxField(blockToUse, "DTASOF");
-                    if (!string.IsNullOrWhiteSpace(balAmtStr))
+                    var balAmt = OfxField(ledger.Groups["body"].Value, "BALAMT");
+                    if (!string.IsNullOrWhiteSpace(balAmt))
                     {
                         try
                         {
-                            closingBalance = Math.Round(ParseAmount(balAmtStr, "Balance"), 2, MidpointRounding.AwayFromZero);
-                        }
-                        catch (FormatException) { }
-                    }
-                    if (!string.IsNullOrWhiteSpace(dtAsOfStr))
-                    {
-                        try
-                        {
-                            closingBalanceDate = ParseOfxDate(dtAsOfStr);
+                            var amount = Math.Round(ParseAmount(balAmt, "Balance"), 2, MidpointRounding.AwayFromZero);
+                            var asOf = StatementBalanceSelector.ParseCalendarDate(
+                                OfxField(ledger.Groups["body"].Value, "DTASOF"), "yyyyMMdd");
+                            booked = new StatementBalanceCandidate(amount, asOf, currency);
                         }
                         catch (FormatException) { }
                     }
                 }
+
+                blocks.Add(new StatementBalanceBlock
+                {
+                    AccountIdentifier = accountId,
+                    AccountKeys = normalized == null ? Array.Empty<string>() : new[] { normalized },
+                    Booked = booked,
+                    HasNonBookedBalance = statement.Contains("<AVAILBAL>", StringComparison.OrdinalIgnoreCase)
+                });
             }
 
+            var (closing, reason) = StatementBalanceSelector.Select(blocks, account);
             return new ParsedStatementFile
             {
                 Rows = rows,
-                ClosingBalance = closingBalance,
-                ClosingBalanceDate = closingBalanceDate,
-                CurrencyCode = fileCurrency
+                ClosingBalance = closing,
+                ClosingBalanceUnavailableReason = reason
             };
         }
 
