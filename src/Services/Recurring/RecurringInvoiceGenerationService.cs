@@ -36,10 +36,9 @@ namespace Services.Recurring
         private readonly IRepository<Customer> _customerRepo;
         private readonly IRepository<CompanySetting> _companySettingRepo;
         private readonly IRepository<Tax> _taxRepo;
-        private readonly IRepository<CompanyMember> _memberRepo;
-        private readonly IRepository<SecurityRolePermission> _rolePermissionRepo;
         private readonly ILogger<RecurringInvoiceGenerationService> _logger;
         private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
+        private readonly Core.Authorization.IAccessAuthorizationService? _authorization;
 
         public RecurringInvoiceGenerationService(
             ITenantContext tenant,
@@ -52,10 +51,11 @@ namespace Services.Recurring
             IRepository<Customer> customerRepo,
             IRepository<CompanySetting> companySettingRepo,
             IRepository<Tax> taxRepo,
-            IRepository<CompanyMember> memberRepo,
-            IRepository<SecurityRolePermission> rolePermissionRepo,
-            ILogger<RecurringInvoiceGenerationService> logger,
-            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
+            IRepository<CompanyMember>? memberRepo = null,
+            IRepository<SecurityRolePermission>? rolePermissionRepo = null,
+            ILogger<RecurringInvoiceGenerationService>? logger = null,
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
+            Core.Authorization.IAccessAuthorizationService? authorization = null)
         {
             _tenant = tenant;
             _unitOfWork = unitOfWork;
@@ -67,10 +67,9 @@ namespace Services.Recurring
             _customerRepo = customerRepo;
             _companySettingRepo = companySettingRepo;
             _taxRepo = taxRepo;
-            _memberRepo = memberRepo;
-            _rolePermissionRepo = rolePermissionRepo;
-            _logger = logger;
+            _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RecurringInvoiceGenerationService>.Instance;
             _policyTransaction = policyTransaction;
+            _authorization = authorization;
         }
 
         public int EnsureOccurrence(int scheduleId, DateTime scheduledRunDate, string leaseOwner, DateTime leaseUntil)
@@ -974,8 +973,8 @@ namespace Services.Recurring
         }
 
         /// <summary>
-        /// Resolves the permissions of the user who enabled auto-issue (stored on the schedule) in this company,
-        /// mirroring how the request pipeline resolves a member's permissions, and confirms they may post invoices.
+        /// Resolves the permissions of the user who enabled auto-issue (stored on the schedule) live in this company
+        /// via the shared authorization service, and confirms they hold the invoice-post permission.
         /// </summary>
         private bool AutomationActorCanPost(RecurringSchedule schedule)
         {
@@ -983,29 +982,39 @@ namespace Services.Recurring
             if (string.IsNullOrWhiteSpace(userId))
                 return false;
 
-            var member = _memberRepo.Table
-                .Where(m => m.CompanyId == schedule.CompanyId
-                    && m.UserId == userId
-                    && m.Status == CompanyMemberStatus.Active)
-                .Select(m => new { m.Id, m.Role })
-                .FirstOrDefault();
-            if (member == null)
+            if (_authorization == null)
+            {
+                _logger.LogWarning("Authorization service is not available; failing closed for auto-issue schedule {ScheduleId}.", schedule.Id);
                 return false;
+            }
 
-            // Owners and admins hold every permission, exactly as the request pipeline grants them.
-            if (member.Role == CompanyMemberRole.Owner || member.Role == CompanyMemberRole.Admin)
-                return true;
+            try
+            {
+                var actor = new Core.Authorization.AccessActorContext
+                {
+                    TrustDomain = Core.Authorization.ActorTrustDomain.WorkspaceUser,
+                    UserId = userId,
+                    CompanyId = schedule.CompanyId
+                };
+                var resource = Core.Authorization.AccessResourceContext.ForWorkspaceResource(schedule.CompanyId, schedule.CompanyId);
+                var decision = _authorization.Authorize(
+                    Core.Authorization.AccessOperationCatalog.SalesInvoicesPost,
+                    resource,
+                    actor);
 
-            var roleIds = _memberRepo.Table
-                .Where(m => m.Id == member.Id)
-                .SelectMany(m => m.SecurityRoles.Select(r => r.SecurityRoleId))
-                .ToList();
-            if (roleIds.Count == 0)
+                if (!decision.Allowed)
+                {
+                    _logger.LogWarning("Automation actor {UserId} denied for {OperationKey}: {ReasonCode} - {SafeMessage} (missing: {Missing})",
+                        userId, Core.Authorization.AccessOperationCatalog.SalesInvoicesPost, decision.ReasonCode, decision.SafeMessage, decision.MissingPermission);
+                }
+
+                return decision.Allowed;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to evaluate authorization for automation actor {UserId} on schedule {ScheduleId}; failing closed.", userId, schedule.Id);
                 return false;
-
-            return _rolePermissionRepo.Table
-                .Any(srp => roleIds.Contains(srp.SecurityRoleId)
-                    && srp.SecurityPermission.Name == SystemPermissions.SalesInvoicesPost);
+            }
         }
 
         // ----- helpers -----

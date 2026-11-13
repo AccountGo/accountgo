@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 using Moq;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace AccountGo.BackendTests.Architecture
@@ -334,6 +335,90 @@ namespace AccountGo.BackendTests.Architecture
             }
         }
 
+        private static readonly IReadOnlyDictionary<string, string> AllowedCSharpFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Core
+            ["src/Core/Authorization/AccessOperationCatalog.cs"] = "governance: policy definitions and governance role requirements",
+
+            // Api Tenancy & Auth
+            ["src/Api/AccountGoApp.cs"] = "governance: tenant middleware and authentication setup",
+            ["src/Api/Authorization/AccessAuthorizationService.cs"] = "governance: workspace role authorization and delegation evaluation",
+            ["src/Api/Filters/AuthorizationFilters.cs"] = "governance: RequireWorkspaceRoleAttribute authorization filter",
+            ["src/Api/Tenancy/TenantContext.cs"] = "governance: tenant context user impersonation and role tracking",
+
+            // Api Data & Seeder
+            ["src/Api/Data/ApiDbContext.cs"] = "governance: workspace member entity configuration and access bootstrap lifecycle",
+            ["src/Api/Data/Seed/DatabaseSeeder.cs"] = "governance: seeding workspace impersonation",
+
+            // Api Services
+            ["src/Api/Service/AccountDeletionService.cs"] = "governance: workspace owner deletion authorization",
+            ["src/Api/Service/CompanyProvisioningService.cs"] = "governance: initial workspace owner assignment",
+            ["src/Api/Service/ContractAVerifier.cs"] = "governance: contract verification workspace role check",
+            ["src/Api/Service/LinkedEntryService.cs"] = "governance: personal books link and cross-workspace access control",
+            ["src/Api/Service/StartupWarmup.cs"] = "governance: warmup impersonation",
+            ["src/Api/Service/WorkspaceOperatingPolicyService.cs"] = "governance: workspace administration and operating policies",
+            ["src/Api/Service/WorkspacePolicyTransaction.cs"] = "governance: policy transaction authorization",
+            ["src/Api/Service/WorkspaceReviewerEligibility.cs"] = "governance: independent journal reviewer eligibility requires Owner or Admin",
+            ["src/Api/Service/WorkspaceService.cs"] = "governance: workspace ownership and role assignment",
+            ["src/Api/Service/WorkspaceSetupCorrectionService.cs"] = "governance: setup correction role checks",
+
+            // Api Controllers
+            ["src/Api/Controllers/AdministrationController.cs"] = "governance: workspace administrative endpoints",
+            ["src/Api/Controllers/BillingController.cs"] = "governance: workspace billing administration",
+            ["src/Api/Controllers/FinancialsController.cs"] = "governance: chart of accounts replace requires Owner role in addition to permission",
+            ["src/Api/Controllers/InvitationsController.cs"] = "governance: invitation role assignment",
+            ["src/Api/Controllers/LinkedEntriesController.cs"] = "governance: linked entries management",
+            ["src/Api/Controllers/OrganizationsController.PersonalBooks.cs"] = "governance: personal books ownership and link management",
+            ["src/Api/Controllers/OrganizationsController.cs"] = "governance: organization administration and ownership transfer",
+            ["src/Api/Controllers/SessionPolicyController.cs"] = "governance: session policy administration",
+            ["src/Api/Controllers/SubscriptionController.cs"] = "governance: subscription administration",
+            ["src/Api/Controllers/WorkspaceInvitationsController.cs"] = "governance: workspace invitation authorization",
+            ["src/Api/Controllers/WorkspaceMembersController.cs"] = "governance: member management, roles, and ownership transfer",
+
+            // Commercial Modules (if present)
+            ["modules/Billing/Announcements/HostedAnnouncementSource.cs"] = "governance: hosted announcement visibility",
+            ["modules/Billing/Services/HostedEntitlementService.cs"] = "governance: hosted entitlement role check",
+            ["modules/Billing/Webhooks/BillingWebhooksController.cs"] = "governance: webhook subscription provisioning",
+            ["modules/Branding/Controllers/InvoiceBrandingSettingsController.cs"] = "governance: invoice branding settings administration",
+            ["modules/Branding/Controllers/InvoiceLogoController.cs"] = "governance: invoice logo administration",
+            ["modules/Branding/Services/BrandingAuthorization.cs"] = "governance: branding authorization role check",
+            ["modules/Branding/Services/InvoiceLogoUploadAdmissionAttribute.cs"] = "governance: logo upload admission check",
+            ["modules/Email/Controllers/EmailSettingsController.cs"] = "governance: email settings administration",
+            ["modules/Email/Services/EmailAuthorization.cs"] = "governance: email configuration authorization",
+            ["modules/Email/Services/HostedEmailCapabilities.cs"] = "governance: email capabilities role check",
+            ["modules/Security/Controllers/SecurityPolicyController.cs"] = "governance: security policy administration",
+            ["modules/Security/Entitlements/MfaEntitlements.cs"] = "governance: MFA policy enforcement",
+
+            // Commercial Module Tests (if present)
+            ["modules/Billing.Tests/HostedAnnouncementSourceTests.cs"] = "test: announcement test fixture",
+            ["modules/Billing.Tests/HostedCreateReceiveWorkspaceTests.cs"] = "test: workspace creation fixture",
+            ["modules/Billing.Tests/HostedEntitlementServiceContractTests.cs"] = "test: entitlement contract fixture",
+            ["modules/Billing.Tests/HostedFreeWorkspaceSlotTests.cs"] = "test: workspace slot fixture",
+            ["modules/Billing.Tests/PersonalFreePlanTests.cs"] = "test: personal free plan fixture",
+            ["modules/Branding.Tests/BrandingApiFixture.cs"] = "test: branding test fixture",
+            ["modules/Branding.Tests/InvoiceBrandingPolicyTests.cs"] = "test: branding policy fixture",
+            ["modules/Branding.Tests/InvoiceLogoTests.cs"] = "test: invoice logo fixture",
+            ["modules/Email.Tests/EmailAccessControlConformanceTests.cs"] = "test: email access control fixture",
+            ["modules/Email.Tests/EmailFixture.cs"] = "test: email fixture",
+            ["modules/Integrations.Tests/IntegrationsFixture.cs"] = "test: integrations fixture",
+            ["modules/Integrations.Tests/RelationalDatabaseTests.cs"] = "test: relational database fixture",
+            ["modules/Security.Tests/HostedMfaGateAndPolicyTests.cs"] = "test: MFA gate fixture",
+            ["modules/Security.Tests/TotpAndRecoveryTests.cs"] = "test: recovery codes fixture",
+        };
+
+        private static readonly IReadOnlyDictionary<string, string> AllowedWebFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["src/Web/src/App.tsx"] = "governance: settings page route protection",
+            ["src/Web/src/components/MobileBottomNav.tsx"] = "governance: mobile admin navigation visibility",
+            ["src/Web/src/components/PersonalBooksDialog.tsx"] = "governance: personal books link authorization",
+            ["src/Web/src/components/Sidebar.tsx"] = "governance: sidebar admin navigation visibility",
+            ["src/Web/src/pages/CreateOrg/hooks/useCreateOrgWizard.ts"] = "governance: organization creation owner verification",
+            ["src/Web/src/pages/Dashboard.tsx"] = "governance: workspace management widget visibility",
+            ["src/Web/src/pages/JournalEntries.tsx"] = "governance: independent journal review requires Owner or Admin in addition to post permission",
+            ["src/Web/src/pages/Members.tsx"] = "governance: workspace member management and ownership transfer",
+            ["src/Web/src/pages/Settings.tsx"] = "governance: workspace administration settings tabs",
+        };
+
         [Fact]
         public void SourceCode_ContainsNoOwnerOrAdminPermissionBypassShortcuts()
         {
@@ -349,6 +434,117 @@ namespace AccountGo.BackendTests.Architecture
             var orgLayoutSource = File.ReadAllText(Path.Combine(RepoRoot, "src/Web/src/layouts/OrgLayout.tsx"));
             Assert.DoesNotContain("currentOrg?.role === 'Owner' || currentOrg?.role === 'Admin'", orgLayoutSource);
             Assert.DoesNotContain("role === 'Owner' || role === 'Admin'", orgLayoutSource);
+
+            // 1. Scan C# files under src/ and modules/ (excluding bin, obj, .build)
+            var csharpScanDirs = new[] { Path.Combine(RepoRoot, "src"), Path.Combine(RepoRoot, "modules") };
+            var unapprovedCSharp = new List<string>();
+
+            foreach (var dir in csharpScanDirs)
+            {
+                if (!Directory.Exists(dir)) continue;
+
+                foreach (var file in Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories))
+                {
+                    var rel = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
+                    var parts = rel.Split('/');
+                    if (parts.Any(p => p.Equals("bin", StringComparison.OrdinalIgnoreCase)
+                                    || p.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                                    || p.Equals(".build", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+
+                    var content = File.ReadAllText(file);
+                    if (content.Contains("CompanyMemberRole.Owner") || content.Contains("CompanyMemberRole.Admin"))
+                    {
+                        if (!AllowedCSharpFiles.ContainsKey(rel))
+                        {
+                            unapprovedCSharp.Add(rel);
+                        }
+                    }
+                }
+            }
+
+            // Check for stale C# allowlist entries
+            var staleCSharp = new List<string>();
+            foreach (var kvp in AllowedCSharpFiles)
+            {
+                var full = Path.Combine(RepoRoot, kvp.Key);
+                if (File.Exists(full))
+                {
+                    var content = File.ReadAllText(full);
+                    if (!content.Contains("CompanyMemberRole.Owner") && !content.Contains("CompanyMemberRole.Admin"))
+                    {
+                        staleCSharp.Add(kvp.Key);
+                    }
+                }
+            }
+
+            // 2. Scan Web TS/TSX files under src/Web/src
+            var webScanDir = Path.Combine(RepoRoot, "src", "Web", "src");
+            var webRoleRegex = new Regex(@"\brole\s*(===|!==|==|!=)\s*['""](Owner|Admin)['""]", RegexOptions.Compiled);
+            var unapprovedWeb = new List<string>();
+
+            if (Directory.Exists(webScanDir))
+            {
+                foreach (var file in Directory.EnumerateFiles(webScanDir, "*.*", SearchOption.AllDirectories))
+                {
+                    var ext = Path.GetExtension(file);
+                    if (!ext.Equals(".ts", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".tsx", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var rel = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
+                    var parts = rel.Split('/');
+                    if (parts.Any(p => p.Equals("node_modules", StringComparison.OrdinalIgnoreCase)
+                                    || p.Equals("dist", StringComparison.OrdinalIgnoreCase)
+                                    || p.Equals(".build", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+
+                    var content = File.ReadAllText(file);
+                    if (webRoleRegex.IsMatch(content))
+                    {
+                        if (!AllowedWebFiles.ContainsKey(rel))
+                        {
+                            unapprovedWeb.Add(rel);
+                        }
+                    }
+                }
+            }
+
+            // Check for stale Web allowlist entries
+            var staleWeb = new List<string>();
+            foreach (var kvp in AllowedWebFiles)
+            {
+                var full = Path.Combine(RepoRoot, kvp.Key);
+                if (File.Exists(full))
+                {
+                    var content = File.ReadAllText(full);
+                    if (!webRoleRegex.IsMatch(content))
+                    {
+                        staleWeb.Add(kvp.Key);
+                    }
+                }
+            }
+
+            Assert.True(
+                unapprovedCSharp.Count == 0,
+                $"Unapproved C# files containing CompanyMemberRole.Owner or CompanyMemberRole.Admin shortcuts:\n{string.Join("\n", unapprovedCSharp)}");
+
+            Assert.True(
+                staleCSharp.Count == 0,
+                $"Stale C# allowlist entries (no longer match Owner/Admin pattern):\n{string.Join("\n", staleCSharp)}");
+
+            Assert.True(
+                unapprovedWeb.Count == 0,
+                $"Unapproved Web files containing role === 'Owner' / 'Admin' shortcuts:\n{string.Join("\n", unapprovedWeb)}");
+
+            Assert.True(
+                staleWeb.Count == 0,
+                $"Stale Web allowlist entries (no longer match role === 'Owner' / 'Admin'):\n{string.Join("\n", staleWeb)}");
         }
     }
 }
