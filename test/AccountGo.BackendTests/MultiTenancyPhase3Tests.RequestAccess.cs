@@ -143,4 +143,55 @@ public partial class MultiTenancyPhase3Tests
         Assert.Equal(AccessReasonCode.StepUpRequired, decision.ReasonCode);
     }
 
+    [Fact]
+    public async Task ActorOverride_ForWorkspaceUser_UnderAmbientScopedContext_ReturnsUsersLivePermissions()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+
+        // Create a separate user with no functional roles
+        var zeroUser = await CreateUser("zero-role-actor@example.test");
+        db.CompanyMembers.Add(new CompanyMember
+        {
+            CompanyId = _companyId,
+            UserId = zeroUser.Item2,
+            Role = CompanyMemberRole.Owner,
+            Status = CompanyMemberStatus.Active
+        });
+        await db.SaveChangesAsync();
+
+        // Ambient context is a scoped service holding FinancialsAccountsView
+        using var scoped = tenant.Impersonate(
+            _companyId,
+            _slug,
+            permissions: new HashSet<string> { SystemPermissions.FinancialsAccountsView });
+
+        var authorization = new AccessAuthorizationService(
+            tenant,
+            scope.ServiceProvider.GetRequiredService<IEntitlementService>(),
+            db);
+
+        var actorOverride = new AccessActorContext
+        {
+            TrustDomain = ActorTrustDomain.WorkspaceUser,
+            UserId = zeroUser.Item2,
+            CompanyId = _companyId
+        };
+
+        var resolved = authorization.ResolveActorContext(actorOverride);
+
+        // Must resolve the user's live membership and empty functional permissions,
+        // ignoring ambient scoped-service permissions and ambient domain
+        Assert.Equal(ActorTrustDomain.WorkspaceUser, resolved.TrustDomain);
+        Assert.Equal(zeroUser.Item2, resolved.UserId);
+        Assert.Equal(CompanyMemberStatus.Active, resolved.MembershipStatus);
+        Assert.Empty(resolved.FunctionalPermissions);
+
+        var decision = await authorization.AuthorizeAsync(
+            AccessOperationCatalog.ForPermission(SystemPermissions.FinancialsAccountsView),
+            actorOverride: actorOverride);
+
+        Assert.False(decision.Allowed);
+    }
 }

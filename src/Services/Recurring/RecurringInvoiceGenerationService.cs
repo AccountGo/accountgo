@@ -36,8 +36,7 @@ namespace Services.Recurring
         private readonly IRepository<Customer> _customerRepo;
         private readonly IRepository<CompanySetting> _companySettingRepo;
         private readonly IRepository<Tax> _taxRepo;
-        private readonly IRepository<CompanyMember> _memberRepo;
-        private readonly IRepository<SecurityRolePermission> _rolePermissionRepo;
+        private readonly Core.Authorization.IAccessAuthorizationService _authorization;
         private readonly ILogger<RecurringInvoiceGenerationService> _logger;
         private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
 
@@ -52,24 +51,22 @@ namespace Services.Recurring
             IRepository<Customer> customerRepo,
             IRepository<CompanySetting> companySettingRepo,
             IRepository<Tax> taxRepo,
-            IRepository<CompanyMember> memberRepo,
-            IRepository<SecurityRolePermission> rolePermissionRepo,
-            ILogger<RecurringInvoiceGenerationService> logger,
+            Core.Authorization.IAccessAuthorizationService authorization,
+            ILogger<RecurringInvoiceGenerationService>? logger = null,
             Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
-            _tenant = tenant;
-            _unitOfWork = unitOfWork;
-            _salesService = salesService;
-            _inventoryService = inventoryService;
-            _occurrenceRepo = occurrenceRepo;
-            _scheduleRepo = scheduleRepo;
-            _lineRepo = lineRepo;
-            _customerRepo = customerRepo;
-            _companySettingRepo = companySettingRepo;
-            _taxRepo = taxRepo;
-            _memberRepo = memberRepo;
-            _rolePermissionRepo = rolePermissionRepo;
-            _logger = logger;
+            _tenant = tenant ?? throw new ArgumentNullException(nameof(tenant));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+            _salesService = salesService ?? throw new ArgumentNullException(nameof(salesService));
+            _inventoryService = inventoryService ?? throw new ArgumentNullException(nameof(inventoryService));
+            _occurrenceRepo = occurrenceRepo ?? throw new ArgumentNullException(nameof(occurrenceRepo));
+            _scheduleRepo = scheduleRepo ?? throw new ArgumentNullException(nameof(scheduleRepo));
+            _lineRepo = lineRepo ?? throw new ArgumentNullException(nameof(lineRepo));
+            _customerRepo = customerRepo ?? throw new ArgumentNullException(nameof(customerRepo));
+            _companySettingRepo = companySettingRepo ?? throw new ArgumentNullException(nameof(companySettingRepo));
+            _taxRepo = taxRepo ?? throw new ArgumentNullException(nameof(taxRepo));
+            _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
+            _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RecurringInvoiceGenerationService>.Instance;
             _policyTransaction = policyTransaction;
         }
 
@@ -974,8 +971,8 @@ namespace Services.Recurring
         }
 
         /// <summary>
-        /// Resolves the permissions of the user who enabled auto-issue (stored on the schedule) in this company,
-        /// mirroring how the request pipeline resolves a member's permissions, and confirms they may post invoices.
+        /// Resolves the permissions of the user who enabled auto-issue (stored on the schedule) live in this company
+        /// via the shared authorization service, and confirms they hold the invoice-post permission.
         /// </summary>
         private bool AutomationActorCanPost(RecurringSchedule schedule)
         {
@@ -983,29 +980,33 @@ namespace Services.Recurring
             if (string.IsNullOrWhiteSpace(userId))
                 return false;
 
-            var member = _memberRepo.Table
-                .Where(m => m.CompanyId == schedule.CompanyId
-                    && m.UserId == userId
-                    && m.Status == CompanyMemberStatus.Active)
-                .Select(m => new { m.Id, m.Role })
-                .FirstOrDefault();
-            if (member == null)
+            try
+            {
+                var actor = new Core.Authorization.AccessActorContext
+                {
+                    TrustDomain = Core.Authorization.ActorTrustDomain.WorkspaceUser,
+                    UserId = userId,
+                    CompanyId = schedule.CompanyId
+                };
+                var resource = Core.Authorization.AccessResourceContext.ForWorkspaceResource(schedule.CompanyId, schedule.CompanyId);
+                var decision = _authorization.Authorize(
+                    Core.Authorization.AccessOperationCatalog.SalesInvoicesPost,
+                    resource,
+                    actor);
+
+                if (!decision.Allowed)
+                {
+                    _logger.LogWarning("Automation actor {UserId} denied for {OperationKey}: {ReasonCode} - {SafeMessage} (missing: {Missing})",
+                        userId, Core.Authorization.AccessOperationCatalog.SalesInvoicesPost, decision.ReasonCode, decision.SafeMessage, decision.MissingPermission);
+                }
+
+                return decision.Allowed;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to evaluate authorization for automation actor {UserId} on schedule {ScheduleId}; failing closed.", userId, schedule.Id);
                 return false;
-
-            // Owners and admins hold every permission, exactly as the request pipeline grants them.
-            if (member.Role == CompanyMemberRole.Owner || member.Role == CompanyMemberRole.Admin)
-                return true;
-
-            var roleIds = _memberRepo.Table
-                .Where(m => m.Id == member.Id)
-                .SelectMany(m => m.SecurityRoles.Select(r => r.SecurityRoleId))
-                .ToList();
-            if (roleIds.Count == 0)
-                return false;
-
-            return _rolePermissionRepo.Table
-                .Any(srp => roleIds.Contains(srp.SecurityRoleId)
-                    && srp.SecurityPermission.Name == SystemPermissions.SalesInvoicesPost);
+            }
         }
 
         // ----- helpers -----

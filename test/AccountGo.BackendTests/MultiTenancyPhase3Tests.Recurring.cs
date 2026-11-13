@@ -75,7 +75,7 @@ namespace AccountGo.BackendTests
                         StartDate = documentDate,
                         Action = RecurringAction.AutoIssue,
                         ServicePeriodMode = RecurringServicePeriodMode.CurrentMonth,
-                        AutomationEnabledBy = _ownerId,   // the workspace owner holds every permission
+                        AutomationEnabledBy = _ownerId,   // the fixture owner holds functional roles ("Accountant", "Sales Representative") assigned during setup
                     };
                     db.RecurringSchedules.Add(schedule);
                     db.SaveChanges();

@@ -128,16 +128,30 @@ namespace Api.Authorization
 
         private async Task<AccessActorContext> ResolveActorContextAsync(AccessActorContext? actorOverride, CancellationToken cancellationToken)
         {
-            if (actorOverride != null && (actorOverride.TrustDomain != ActorTrustDomain.WorkspaceUser ||
-                string.IsNullOrWhiteSpace(actorOverride.UserId) || _db == null || !(actorOverride.CompanyId ?? _tenantContext.CompanyId).HasValue))
-                return actorOverride;
+            if (actorOverride != null)
+            {
+                if (actorOverride.TrustDomain != ActorTrustDomain.WorkspaceUser ||
+                    string.IsNullOrWhiteSpace(actorOverride.UserId) ||
+                    _db == null ||
+                    !(actorOverride.CompanyId ?? _tenantContext.CompanyId).HasValue)
+                {
+                    return actorOverride;
+                }
+
+                var targetUserId = actorOverride.UserId;
+                var targetCompanyId = (actorOverride.CompanyId ?? _tenantContext.CompanyId)!.Value;
+                var resolved = await ResolveWorkspaceUserActorAsync(targetCompanyId, targetUserId, cancellationToken);
+                if (actorOverride.MembershipStatus.HasValue)
+                    resolved = resolved with { IsMfaStepUpVerified = actorOverride.IsMfaStepUpVerified, MfaVerifiedAt = actorOverride.MfaVerifiedAt };
+                return resolved;
+            }
 
             var revision = _tenantContext.Revision;
             var globalRevision = GlobalSecurityRevision;
             var principal = _httpContextAccessor?.HttpContext?.User;
             var claimUserId = principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal?.FindFirstValue("sub");
-            var userId = actorOverride?.UserId ?? (string.IsNullOrWhiteSpace(_tenantContext.UserId) ? claimUserId : _tenantContext.UserId);
-            var companyId = actorOverride?.CompanyId ?? _tenantContext.CompanyId;
+            var userId = string.IsNullOrWhiteSpace(_tenantContext.UserId) ? claimUserId : _tenantContext.UserId;
+            var companyId = _tenantContext.CompanyId;
             AccessActorContext actor;
             if (_db != null && _cachedActor != null && _cachedTenantRevision == revision && _cachedGlobalRevision == globalRevision &&
                 _cachedCompanyId == companyId && string.Equals(_cachedUserId, userId, StringComparison.Ordinal))
@@ -152,9 +166,65 @@ namespace Api.Authorization
                 _cachedUserId = userId;
             }
             actor = RefreshMfa(actor, principal);
-            if (actorOverride?.MembershipStatus.HasValue == true)
-                actor = actor with { IsMfaStepUpVerified = actorOverride.IsMfaStepUpVerified, MfaVerifiedAt = actorOverride.MfaVerifiedAt };
             return actor;
+        }
+
+        private async Task<AccessActorContext> ResolveWorkspaceUserActorAsync(
+            int companyId,
+            string userId,
+            CancellationToken cancellationToken)
+        {
+            var revision = _tenantContext.Revision;
+            var globalRevision = GlobalSecurityRevision;
+
+            RequestAccessSnapshot? member = null;
+            if (_tenantContext is TenantContext tenant && tenant.AccessTenantRevision == revision &&
+                tenant.AccessGlobalRevision == globalRevision && tenant.AccessSnapshot is { } snapshot &&
+                snapshot.CompanyId == companyId && string.Equals(snapshot.UserId, userId, StringComparison.Ordinal))
+            {
+                member = snapshot;
+            }
+            else
+            {
+                var loader = _httpContextAccessor?.HttpContext?.RequestServices?.GetService<IRequestAccessLoader>() ?? new RequestAccessLoader(_db!);
+                member = await loader.LoadAsync(companyId, userId, cancellationToken);
+            }
+
+            if (member == null || member.Status != CompanyMemberStatus.Active)
+            {
+                return new AccessActorContext
+                {
+                    TrustDomain = ActorTrustDomain.WorkspaceUser,
+                    UserId = userId,
+                    CompanyId = companyId,
+                    CompanySlug = _tenantContext.CompanySlug,
+                    MemberId = member?.MemberId,
+                    WorkspaceRole = null,
+                    MembershipStatus = member?.Status,
+                    FunctionalPermissions = EmptyStringSet,
+                    IsPlatformAdministrator = false,
+                    IsMfaStepUpVerified = false,
+                    MfaVerifiedAt = null,
+                    MembershipRevision = revision
+                };
+            }
+
+            return new AccessActorContext
+            {
+                TrustDomain = ActorTrustDomain.WorkspaceUser,
+                UserId = userId,
+                CompanyId = companyId,
+                CompanySlug = _tenantContext.CompanySlug,
+                MemberId = member.MemberId,
+                WorkspaceRole = member.Role,
+                MembershipStatus = member.Status,
+                FunctionalPermissions = member.Permissions,
+                AssignedFunctionalRoles = member.RoleNames.ToList(),
+                IsPlatformAdministrator = false,
+                IsMfaStepUpVerified = false,
+                MfaVerifiedAt = null,
+                MembershipRevision = revision
+            };
         }
 
         private static AccessActorContext RefreshMfa(AccessActorContext actor, ClaimsPrincipal? principal)
@@ -478,7 +548,8 @@ namespace Api.Authorization
             var resolvedCompanyId = companyId ?? (_tenantContext.IsResolved && _db == null ? 1 : null);
             if ((_tenantContext.IsResolved || companyId.HasValue) && resolvedCompanyId.HasValue)
             {
-                if (_tenantContext.ActorDomain == ActorTrustDomain.ScopedService)
+                if (_tenantContext.ActorDomain == ActorTrustDomain.ScopedService &&
+                    (string.IsNullOrWhiteSpace(effectiveUserId) || effectiveUserId == "system:scoped-service"))
                 {
                     var scopedPermissions = _tenantContext.Permissions != null
                         ? new HashSet<string>(_tenantContext.Permissions, StringComparer.OrdinalIgnoreCase)

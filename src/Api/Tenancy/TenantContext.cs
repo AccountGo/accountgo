@@ -121,7 +121,9 @@ namespace Api.Tenancy
             var isScoped = permissions != null && permissions.Count > 0 && string.IsNullOrWhiteSpace(effectiveUser);
             var domain = isScoped
                 ? ActorTrustDomain.ScopedService
-                : (!string.IsNullOrWhiteSpace(effectiveUser) ? (current.ActorDomain != ActorTrustDomain.Unauthenticated ? current.ActorDomain : ActorTrustDomain.WorkspaceUser) : ActorTrustDomain.Unauthenticated);
+                : (!string.IsNullOrWhiteSpace(effectiveUser)
+                    ? (current.ActorDomain != ActorTrustDomain.Unauthenticated && current.ActorDomain != ActorTrustDomain.ScopedService ? current.ActorDomain : ActorTrustDomain.WorkspaceUser)
+                    : ActorTrustDomain.Unauthenticated);
 
             var state = new TenantState
             {
