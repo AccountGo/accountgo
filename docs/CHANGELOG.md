@@ -25,6 +25,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Statement import no longer offers an available or interim balance, or a balance for another account, as the statement closing balance, and no longer assumes today's date when the file gives none.
 - The automatic sign-out setting now tells you when another of your workspaces signs you out sooner, and names it. One sign-in covers all your workspaces, so the shortest setting applies.
 - After a plan change, the plan shown in the workspace header, switcher and subscription settings now updates right away instead of after a reload, and the payment-confirming message no longer stays on screen indefinitely.
+- The profile page no longer tells workspace Owners and Admins they have every permission; it now lists the permissions their security roles actually grant.
+
+### Security
+- Recurring invoices set to issue automatically are now posted only if the person who turned on auto-issue still holds the invoice posting permission; a workspace Owner or Admin role alone is no longer enough.
 
 ### Self-hosting
 - A new installation no longer creates a built-in platform administrator account for the project maintainer. To have start-up create a platform owner, set `PLATFORM_OWNER_EMAIL`; that user gets the SystemAdministrators role and owns the demo workspace. Existing databases are unchanged.
