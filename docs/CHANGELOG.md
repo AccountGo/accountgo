@@ -23,6 +23,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - The statement import upgrade screen now names the plans that include statement import from your server's plan list, instead of fixed plan names. The sign-in screen and loading message now say AccountGo.
 
 ### Fixed
+- On invoices and bills, the income and expense account choice on each line and the Account column now appear whenever the General Ledger module is on. Before, most workspaces never saw them and every line went to the default account.
 - Statement import no longer offers an available or interim balance, or a balance for another account, as the statement closing balance, and no longer assumes today's date when the file gives none.
 - The automatic sign-out setting now tells you when another of your workspaces signs you out sooner, and names it. One sign-in covers all your workspaces, so the shortest setting applies.
 - After a plan change, the plan shown in the workspace header, switcher and subscription settings now updates right away instead of after a reload, and the payment-confirming message no longer stays on screen indefinitely.
