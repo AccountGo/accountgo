@@ -98,8 +98,8 @@ namespace AccountGo.BackendTests.Recurring
                 new EfRepository<Customer>(NullLogger<Customer>.Instance, db),
                 new EfRepository<CompanySetting>(NullLogger<CompanySetting>.Instance, db),
                 new EfRepository<Tax>(NullLogger<Tax>.Instance, db),
-                logger: NullLogger<RecurringInvoiceGenerationService>.Instance,
-                authorization: authorization ?? new AccessAuthorizationService(_tenant, CreatePermissiveEntitlements(), db));
+                authorization ?? new AccessAuthorizationService(_tenant, CreatePermissiveEntitlements(), db),
+                NullLogger<RecurringInvoiceGenerationService>.Instance);
 
         private ApiDbContext CreateSiblingContext() =>
             new ApiDbContext(
@@ -533,7 +533,7 @@ namespace AccountGo.BackendTests.Recurring
         }
 
         [Fact]
-        public void ProcessOccurrence_AutoIssue_MemberSuspendedOrRemoved_DowngradesToDraft()
+        public void ProcessOccurrence_AutoIssue_MemberSuspended_DowngradesToDraft()
         {
             AddCompanySetting(new DateTime(2026, 1, 1));
             var member = AddMember("suspended-user", CompanyMemberRole.Member, grantPostPermission: true);
@@ -548,6 +548,59 @@ namespace AccountGo.BackendTests.Recurring
             // Suspend member after schedule was configured
             member.Status = CompanyMemberStatus.Suspended;
             _db.SaveChanges();
+
+            var result = _service.ProcessOccurrence(occ.Id, "lease-1");
+
+            Assert.Equal(RecurringGenerationOutcome.DraftCreatedGuardFailed, result.Outcome);
+            var reloaded = Reload(occ.Id);
+            Assert.Equal(RecurringOccurrenceStatus.DraftCreated, reloaded.Status);
+            Assert.Equal(RecurringGuardReasons.AutomationActorNotAuthorized, reloaded.GuardFailureReason);
+            _sales.Verify(s => s.PostSalesInvoice(It.IsAny<int>()), Times.Never);
+        }
+
+        [Fact]
+        public void ProcessOccurrence_AutoIssue_MemberRemoved_DowngradesToDraftWithoutPosting()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var member = AddMember("removed-user", CompanyMemberRole.Member, grantPostPermission: true);
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var tax = AddTax(12m);
+            var schedule = AddSchedule(customer.Id, RecurringAction.AutoIssue, automationEnabledBy: member.UserId);
+            AddLine(schedule.Id, item.Id, taxId: tax.Id);
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "lease-1");
+
+            // Remove member from workspace after schedule was configured
+            var roles = _db.CompanyMemberSecurityRoles.Where(r => r.CompanyMemberId == member.Id).ToList();
+            _db.CompanyMemberSecurityRoles.RemoveRange(roles);
+            _db.CompanyMembers.Remove(member);
+            _db.SaveChanges();
+
+            var result = _service.ProcessOccurrence(occ.Id, "lease-1");
+
+            Assert.Equal(RecurringGenerationOutcome.DraftCreatedGuardFailed, result.Outcome);
+            var reloaded = Reload(occ.Id);
+            Assert.Equal(RecurringOccurrenceStatus.DraftCreated, reloaded.Status);
+            Assert.Equal(RecurringGuardReasons.AutomationActorNotAuthorized, reloaded.GuardFailureReason);
+            _sales.Verify(s => s.PostSalesInvoice(It.IsAny<int>()), Times.Never);
+        }
+
+        [Fact]
+        public void ProcessOccurrence_AutoIssue_AmbientScopedServiceWithPostPermission_OwnerZeroFunctionalRoles_DowngradesToDraftWithoutPosting()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var owner = AddMember("zero-role-owner-scoped", CompanyMemberRole.Owner, grantPostPermission: false);
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var tax = AddTax(12m);
+            var schedule = AddSchedule(customer.Id, RecurringAction.AutoIssue, automationEnabledBy: owner.UserId);
+            AddLine(schedule.Id, item.Id, taxId: tax.Id);
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "lease-1");
+
+            // Ambient context is an internal scoped-service worker with invoice-post permission and no user
+            using var scopedImpersonation = _tenant.Impersonate(_company.Id, _company.Slug, permissions: new HashSet<string> { SystemPermissions.SalesInvoicesPost });
 
             var result = _service.ProcessOccurrence(occ.Id, "lease-1");
 

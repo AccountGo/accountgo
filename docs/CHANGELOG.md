@@ -24,6 +24,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 ### Fixed
 - The automatic sign-out setting now tells you when another of your workspaces signs you out sooner, and names it. One sign-in covers all your workspaces, so the shortest setting applies.
 - After a plan change, the plan shown in the workspace header, switcher and subscription settings now updates right away instead of after a reload, and the payment-confirming message no longer stays on screen indefinitely.
+- The Profile screen no longer displays a "Full workspace access" panel to Owners and Admins; functional permissions are determined by assigned security roles.
 
 ### Security
 - Recurring invoices set to issue automatically are now posted only if the person who turned on auto-issue still holds the invoice posting permission; a workspace Owner or Admin role alone is no longer enough.
