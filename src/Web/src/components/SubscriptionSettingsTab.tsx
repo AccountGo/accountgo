@@ -383,12 +383,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             {(['salesDocuments', 'bills', 'seats', 'bankAccounts'] as const).filter(resource => resource !== 'salesDocuments' || isIncluded('sales')).map((resource) => (
               <UsageHint key={resource} entitlements={entitlements} resource={resource} />
             ))}
-            {!billing.billingEnabled && !personalBooks && (
+            {!billing.billingEnabled && !personalBooks && entitlements.upgrade.contact && (
               <p className="text-xs text-[var(--text-muted)]">
-                Paid plans are coming soon.
-                {entitlements.upgrade.contact && (
-                  <> Need more now? <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${entitlements.upgrade.contact}`}>Contact support</a>.</>
-                )}
+                Need more? <a className="font-semibold text-[var(--brand-primary)] hover:underline" href={`mailto:${entitlements.upgrade.contact}`}>Contact support</a>.
               </p>
             )}
           </div>

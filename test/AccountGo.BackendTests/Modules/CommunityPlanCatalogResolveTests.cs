@@ -32,7 +32,7 @@ public sealed class CommunityPlanCatalogResolveTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("weird")]
-    [InlineData("accounting_pro")]
+    [InlineData("fixture_paid")]
     public void ResolveStoredPlan_NeverThrows_AndIsCommunity(string? key)
     {
         var plan = _catalog.ResolveStoredPlan(key);

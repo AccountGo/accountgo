@@ -20,6 +20,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Changed
 - The plan limit message no longer says paid plans are coming soon. It offers a contact link when no upgrade covers what you need.
+- The statement import upgrade screen now names the plans that include statement import from your server's plan list, instead of fixed plan names. The sign-in screen and loading message now say AccountGo.
 
 ### Fixed
 - Statement import no longer offers an available or interim balance, or a balance for another account, as the statement closing balance, and no longer assumes today's date when the file gives none.

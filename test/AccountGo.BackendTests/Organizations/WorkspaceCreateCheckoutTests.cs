@@ -48,7 +48,7 @@ public sealed class WorkspaceCreateCheckoutTests
             .Returns(new EntitlementDecision(true, null, null, RequiresCheckout: true));
 
         var billing = new Mock<IBillingProvider>();
-        billing.Setup(b => b.RequestPlanChangeAsync(It.IsAny<int>(), "accounting_pro", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        billing.Setup(b => b.RequestPlanChangeAsync(It.IsAny<int>(), "fixture_paid", It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PlanChangeResult(false, "https://billing.test/checkout", null));
 
         var workspaces = new WorkspaceService(db, new CompanyProvisioningService(db, tenant.Object), tenant.Object, entitlements.Object);
@@ -78,7 +78,7 @@ public sealed class WorkspaceCreateCheckoutTests
         {
             Name = "Paid Co",
             Slug = "paid-co",
-            Plan = "accounting_pro",
+            Plan = "fixture_paid",
             Currency = "USD",
             ReturnUrl = "https://app.test/org/paid-co"
         }, CancellationToken.None);
@@ -90,28 +90,28 @@ public sealed class WorkspaceCreateCheckoutTests
         var plan = payload.GetType().GetProperty("plan")!.GetValue(payload)?.ToString();
         var checkoutUrl = payload.GetType().GetProperty("checkoutUrl")!.GetValue(payload)?.ToString();
         Assert.Equal(CompanyActivationStates.PendingCheckout, activation);
-        Assert.Equal("accounting_free", plan);
+        Assert.Equal("fixture_free", plan);
         Assert.Equal("https://billing.test/checkout", checkoutUrl);
 
         var company = await db.Companies.IgnoreQueryFilters().SingleAsync(c => c.Slug == "paid-co");
         Assert.Equal(CompanyActivationStates.PendingCheckout, company.ActivationState);
-        Assert.Equal("accounting_free", company.Plan);
+        Assert.Equal("fixture_free", company.Plan);
     }
 
     private sealed class FakePaidPlanCatalog : IPlanCatalog
     {
-        public string DefaultPlanKey => "accounting_free";
+        public string DefaultPlanKey => "fixture_free";
 
         public IReadOnlyList<PlanDefinitionDto> GetPlans() => new[]
         {
             new PlanDefinitionDto
             {
-                Key = "accounting_free", Name = "Accounting Free", SelfService = true, MonthlyPrice = 0, Product = "accounting",
+                Key = "fixture_free", Name = "Fixture Free", SelfService = true, MonthlyPrice = 0, Product = "accounting",
                 IncludedModules = new List<string> { "sales", "financials" }, RequiredModules = new List<string> { "sales" }
             },
             new PlanDefinitionDto
             {
-                Key = "accounting_pro", Name = "Accounting Pro", SelfService = true, MonthlyPrice = 99, Product = "accounting",
+                Key = "fixture_paid", Name = "Fixture Paid", SelfService = true, MonthlyPrice = 20, Product = "accounting",
                 IncludedModules = new List<string> { "sales", "financials" }, RequiredModules = new List<string> { "sales" }
             }
         };
