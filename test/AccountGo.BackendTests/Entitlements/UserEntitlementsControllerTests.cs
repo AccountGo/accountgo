@@ -30,7 +30,7 @@ public sealed class UserEntitlementsControllerTests
                 Used: 0));
 
         var plans = new Mock<IPlanCatalog>();
-        plans.SetupGet(p => p.DefaultPlanKey).Returns("accounting_free");
+        plans.SetupGet(p => p.DefaultPlanKey).Returns("fixture_free");
 
         var controller = new UserEntitlementsController(entitlements.Object, plans.Object)
         {

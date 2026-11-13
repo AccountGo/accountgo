@@ -92,7 +92,7 @@ namespace AccountGo.BackendTests
             var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Pro Freelancer Bank", Type = 1 });
             var lineId = AddStatementPayment(bank.Id, -75.00m, "Hosting Provider", DateTime.UtcNow.Date);
 
-            // Simulate Invoicing Pro with Financials module turned off
+            // Simulate an invoicing plan that includes statement import, with the Financials module turned off
             WithDb(db =>
             {
                 var c = db.Companies.Single(c => c.Id == _companyId);

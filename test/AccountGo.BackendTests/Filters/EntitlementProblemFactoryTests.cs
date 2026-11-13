@@ -29,15 +29,15 @@ public class EntitlementProblemFactoryTests
             "QUOTA_EXCEEDED" => new EntitlementDecision(
                 false, "QUOTA_EXCEEDED", "quota",
                 Resource: MeteredResource.SalesDocuments, Limit: 1, Used: 1,
-                SubscriptionStatus: "active", EffectivePlan: "accounting_free"),
+                SubscriptionStatus: "active", EffectivePlan: "fixture_free"),
             "MODULE_NOT_SUBSCRIBED" => new EntitlementDecision(
                 false, "MODULE_NOT_SUBSCRIBED", "module",
                 RequiredModule: "inventory", SubscriptionStatus: "active",
-                EffectivePlan: "accounting_free"),
+                EffectivePlan: "fixture_free"),
             "FEATURE_NOT_ENTITLED" => new EntitlementDecision(
                 false, "FEATURE_NOT_ENTITLED", "feature",
                 RequiredFeature: "mfa", SubscriptionStatus: "active",
-                EffectivePlan: "accounting_free"),
+                EffectivePlan: "fixture_free"),
             _ => throw new InvalidOperationException(code)
         };
 
@@ -59,7 +59,7 @@ public class EntitlementProblemFactoryTests
         var decision = new EntitlementDecision(
             false, "SUBSCRIPTION_INACTIVE", "inactive",
             RequiredModule: "inventory", SubscriptionStatus: "canceled",
-            EffectivePlan: "accounting_free", UpgradeAvailable: true);
+            EffectivePlan: "fixture_free", UpgradeAvailable: true);
         var problem = EntitlementProblemFactory.FromDecision(decision, tenant: null);
         Assert.Equal("canceled", problem.Extensions["status"]);
         Assert.Equal("canceled", problem.Extensions["subscriptionStatus"]);
@@ -76,7 +76,7 @@ public class EntitlementProblemFactoryTests
         var ex = new QuotaExceededException(MeteredResource.SalesDocuments, 1, 1, "detail")
         {
             SubscriptionStatus = "active",
-            EffectivePlan = "accounting_free"
+            EffectivePlan = "fixture_free"
         };
         var problem = EntitlementProblemFactory.FromException(ex, tenant: null);
         var json = SerializeLikeAspNetProblemDetails(problem);

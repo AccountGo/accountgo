@@ -29,20 +29,20 @@ public class RequireStatementImportAttributeTests
             .Returns((int _, EntitlementAction action) => action switch
             {
                 EntitlementAction.Module => new EntitlementDecision(false, "MODULE_NOT_SUBSCRIBED", "no financials",
-                    RequiredModule: "financials", EffectivePlan: "invoicing_free", UpgradeAvailable: true),
+                    RequiredModule: "financials", EffectivePlan: "fixture_free", UpgradeAvailable: true),
                 EntitlementAction.Feature => new EntitlementDecision(
                     false, "FEATURE_NOT_ENTITLED", "Statement import is not on this plan.",
                     RequiredFeature: FeatureKeys.BankingStatementImport,
-                    EffectivePlan: "invoicing_free",
+                    EffectivePlan: "fixture_free",
                     UpgradeAvailable: true),
                 _ => new EntitlementDecision(false, "DENIED", "unexpected")
             });
         entitlements.Setup(e => e.Get(1)).Returns(new EntitlementSnapshot(
-            Enabled: true, Plan: "invoicing_free", Tier: "free", Limited: true,
-            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_pro" },
+            Enabled: true, Plan: "fixture_free", Tier: "free", Limited: true,
+            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "fixture_paid" },
             Usage: System.Array.Empty<ResourceUsage>(), SupportEmail: "s@x.test",
             Features: System.Collections.Immutable.ImmutableHashSet<string>.Empty,
-            EffectivePlan: "invoicing_free"));
+            EffectivePlan: "fixture_free"));
 
         var tenant = new Mock<ITenantContext>();
         tenant.SetupGet(t => t.IsResolved).Returns(true);

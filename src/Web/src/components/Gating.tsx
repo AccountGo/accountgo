@@ -10,6 +10,8 @@ import {
   ENTITLEMENT_DENIED_EVENT,
   type EntitlementProblem,
 } from '../lib/entitlementEvents';
+import { peekPlanCatalog, usePlanCatalog } from '../lib/usePlanCatalog';
+import { featureAvailabilityText } from '../lib/planFeatures';
 
 export function useTenantContext(): TenantContextType {
   return useOutletContext<TenantContextType>();
@@ -114,7 +116,7 @@ export function announceStatementImportUpgrade(options?: {
   const detail: EntitlementProblem = {
     code: 'FEATURE_NOT_ENTITLED',
     title: 'Feature not included in your plan',
-    detail: 'Statement import is available on Invoicing Pro and Accounting plans.',
+    detail: `Statement import is not included in your plan. ${featureAvailabilityText(peekPlanCatalog(), FEATURE_BANKING_STATEMENT_IMPORT)}`,
     requiredFeature: FEATURE_BANKING_STATEMENT_IMPORT,
     effectivePlan: options?.effectivePlan ?? undefined,
     upgradeAvailable: !!options?.upgradeAvailable,
@@ -220,6 +222,8 @@ export const StatementImportUpgradeCard: React.FC<{ orgSlug?: string }> = ({ org
   const { entitlements, canManageBilling } = useCapabilities();
   const upgradeAvailable = shouldShowUpgradeAvailableBadge(entitlements);
   const billingManage = canManageBilling || hasPermission('admin.subscription.manage');
+  const { plans } = usePlanCatalog();
+  const availability = featureAvailabilityText(plans, FEATURE_BANKING_STATEMENT_IMPORT);
 
   return (
     <div className="space-y-6 w-full animate-in fade-in duration-200 text-[var(--text-main)]">
@@ -235,7 +239,7 @@ export const StatementImportUpgradeCard: React.FC<{ orgSlug?: string }> = ({ org
             Statement import
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            Available on <strong className="text-[var(--text-main)]">Invoicing Pro</strong> and Accounting.
+            {availability}
           </p>
         </div>
         {orgSlug && upgradeAvailable && (
@@ -251,7 +255,7 @@ export const StatementImportUpgradeCard: React.FC<{ orgSlug?: string }> = ({ org
         </div>
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--bg-subtle)] text-[var(--brand-primary)] text-xs font-semibold uppercase tracking-wider mb-3">
           <Sparkles className="w-3.5 h-3.5" />
-          Invoicing Pro Feature
+          Plan feature
         </div>
         <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)] mb-2">
           Statement import is locked

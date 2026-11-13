@@ -51,7 +51,7 @@ export const ProtectedRoute: React.FC = () => {
               Verifying Session
             </span>
             <span className="text-xs text-[var(--text-muted)] text-center max-w-xs" role="status">
-              Authenticating with AccountGo Cloud...
+              Signing you in to AccountGo...
             </span>
           </div>
         </div>

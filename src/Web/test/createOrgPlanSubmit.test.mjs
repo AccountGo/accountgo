@@ -16,7 +16,7 @@ import {
 const catalog = [
   {
     key: 'invoicing',
-    name: 'Invoicing Free',
+    name: 'Invoicing Basic',
     product: 'invoicing',
     description: 'Free invoicing',
     monthlyPrice: 0,
@@ -25,7 +25,7 @@ const catalog = [
   },
   {
     key: 'accounting',
-    name: 'Accounting Free',
+    name: 'Accounting Basic',
     product: 'accounting',
     description: 'Free accounting',
     monthlyPrice: 0,
