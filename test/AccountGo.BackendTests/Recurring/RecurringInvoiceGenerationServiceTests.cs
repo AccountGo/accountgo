@@ -612,6 +612,33 @@ namespace AccountGo.BackendTests.Recurring
         }
 
         [Fact]
+        public void ProcessOccurrence_AutoIssue_AmbientScopedServiceWithoutPostPermission_MemberWithPostPermission_PostsSuccessfully()
+        {
+            AddCompanySetting(new DateTime(2026, 1, 1));
+            var member = AddMember("authorized-member-scoped", CompanyMemberRole.Member, grantPostPermission: true);
+            var customer = AddCustomer();
+            var item = ServiceItem();
+            SetupItem(item);
+            var tax = AddTax(12m);
+            var schedule = AddSchedule(customer.Id, RecurringAction.AutoIssue, automationEnabledBy: member.UserId);
+            AddLine(schedule.Id, item.Id, taxId: tax.Id);
+            var occ = AddClaimedOccurrence(schedule.Id, new DateTime(2026, 6, 1), "lease-1");
+
+            // Ambient context is an internal scoped-service worker holding only accounts-view permission (no invoice-post)
+            using var scopedImpersonation = _tenant.Impersonate(_company.Id, _company.Slug, permissions: new HashSet<string> { SystemPermissions.FinancialsAccountsView });
+
+            _sales.Setup(s => s.PostSalesInvoice(It.IsAny<int>()));
+
+            var result = _service.ProcessOccurrence(occ.Id, "lease-1");
+
+            Assert.Equal(RecurringGenerationOutcome.Issued, result.Outcome);
+            var reloaded = Reload(occ.Id);
+            Assert.Equal(RecurringOccurrenceStatus.Issued, reloaded.Status);
+            Assert.Null(reloaded.GuardFailureReason);
+            _sales.Verify(s => s.PostSalesInvoice(result.SalesInvoiceId!.Value), Times.Once);
+        }
+
+        [Fact]
         public void ProcessOccurrence_AutoIssue_StockTrackedLine_DowngradesToDraft()
         {
             AddCompanySetting(new DateTime(2026, 1, 1));
