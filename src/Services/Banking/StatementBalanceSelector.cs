@@ -37,6 +37,8 @@ namespace Services.Banking
         public StatementBalanceCandidate? Booked { get; init; }
         /// <summary>True when the block carried a balance that is not the booked closing balance.</summary>
         public bool HasNonBookedBalance { get; init; }
+        /// <summary>True when the block carries multiple conflicting booked closing balances.</summary>
+        public bool IsAmbiguous { get; init; }
     }
 
     internal static class StatementBalanceSelector
@@ -64,6 +66,23 @@ namespace Services.Banking
                 : null;
         }
 
+        /// <summary>
+        /// Two normalised identifiers match when they are equal, or when the longer identifier
+        /// ends with the shorter identifier and the shorter identifier has at least 4 characters.
+        /// A domestic number is the trailing BBAN part of an IBAN in GB, DE, NL, BE and similar
+        /// countries; users also often record only the trailing digits of a bank account.
+        /// Matching is strictly exact or suffix-based; arbitrary middle-of-string substrings are rejected.
+        /// Both inputs are expected to be normalised (uppercase, no whitespace or punctuation).
+        /// </summary>
+        internal static bool IsAccountMatch(string a, string b)
+        {
+            if (string.Equals(a, b, StringComparison.Ordinal))
+                return true;
+
+            var (longer, shorter) = a.Length >= b.Length ? (a, b) : (b, a);
+            return shorter.Length >= 4 && longer.EndsWith(shorter, StringComparison.Ordinal);
+        }
+
         internal static (StatementClosingBalance? Balance, string? Reason) Select(
             IReadOnlyList<StatementBalanceBlock> blocks,
             StatementAccountContext? context)
@@ -81,6 +100,10 @@ namespace Services.Banking
             if (groups.Count == 1)
             {
                 var key = groups[0].Key;
+                // If there are multiple blocks and none carry an account identifier, do not assume they belong to the same account.
+                if (key == null && blocks.Count > 1)
+                    return (null, StatementBalanceReasons.MultipleAccounts);
+
                 if (key != null && bankKnown && !groups[0].Any(b => Matches(b, bankKeys)))
                     return (null, StatementBalanceReasons.OtherAccount);
                 chosen = blocks;
@@ -99,17 +122,36 @@ namespace Services.Banking
             if (candidates.Count == 0)
                 return (null, chosen.Any(b => b.HasNonBookedBalance) ? StatementBalanceReasons.NotBooked : null);
 
-            StatementBalanceBlock winner;
-            if (candidates.Count == 1)
+            // A single statement block with conflicting booked closing balances is ambiguous.
+            if (chosen.Any(b => b.IsAmbiguous))
+                return (null, StatementBalanceReasons.AmbiguousLatest);
+
+            // Keep only candidates whose currency equals the bank's currency.
+            var bankCurrency = context?.CurrencyCode?.Trim().ToUpperInvariant();
+            var currencyMatched = candidates.Where(c =>
             {
-                winner = candidates[0];
+                var ccy = c.Booked!.CurrencyCode?.Trim().ToUpperInvariant();
+                return !string.IsNullOrEmpty(ccy) && string.Equals(ccy, bankCurrency, StringComparison.Ordinal);
+            }).ToList();
+
+            if (currencyMatched.Count == 0)
+            {
+                if (candidates.Any(c => !string.IsNullOrWhiteSpace(c.Booked!.CurrencyCode)))
+                    return (null, StatementBalanceReasons.CurrencyMismatch);
+                return (null, StatementBalanceReasons.CurrencyMissing);
+            }
+
+            StatementBalanceBlock winner;
+            if (currencyMatched.Count == 1)
+            {
+                winner = currencyMatched[0];
             }
             else
             {
-                if (candidates.Any(c => c.Booked!.AsOfDate == null))
+                if (currencyMatched.Any(c => c.Booked!.AsOfDate == null))
                     return (null, StatementBalanceReasons.AmbiguousLatest);
-                var latest = candidates.Max(c => c.Booked!.AsOfDate!.Value);
-                var onLatest = candidates.Where(c => c.Booked!.AsOfDate == latest).ToList();
+                var latest = currencyMatched.Max(c => c.Booked!.AsOfDate!.Value);
+                var onLatest = currencyMatched.Where(c => c.Booked!.AsOfDate == latest).ToList();
                 var distinct = onLatest
                     .Select(c => (c.Booked!.Amount, Ccy: c.Booked.CurrencyCode?.Trim().ToUpperInvariant()))
                     .Distinct().Count();
@@ -119,12 +161,7 @@ namespace Services.Banking
             }
 
             var booked = winner.Booked!;
-            var currency = booked.CurrencyCode?.Trim().ToUpperInvariant();
-            if (string.IsNullOrEmpty(currency))
-                return (null, StatementBalanceReasons.CurrencyMissing);
-            var bankCurrency = context?.CurrencyCode?.Trim().ToUpperInvariant();
-            if (!string.Equals(currency, bankCurrency, StringComparison.Ordinal))
-                return (null, StatementBalanceReasons.CurrencyMismatch);
+            var currency = booked.CurrencyCode!.Trim().ToUpperInvariant();
 
             var result = new StatementClosingBalance
             {
@@ -136,7 +173,11 @@ namespace Services.Banking
             return (result, booked.AsOfDate == null ? StatementBalanceReasons.DateMissing : null);
         }
 
+        /// <summary>
+        /// Checks whether any normalised account key on the block matches any of the bank's account keys.
+        /// Two identifiers match when equal, or when the longer ends with the shorter (minimum 4 characters).
+        /// </summary>
         private static bool Matches(StatementBalanceBlock block, List<string> bankKeys) =>
-            block.AccountKeys.Any(k => bankKeys.Contains(k, StringComparer.Ordinal));
+            block.AccountKeys.Any(k => bankKeys.Any(bk => IsAccountMatch(k, bk)));
     }
 }

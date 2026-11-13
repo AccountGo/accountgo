@@ -67,12 +67,12 @@ namespace Services.Banking
             _tenant = tenant;
         }
 
-        private static string? LastFour(string? identifier)
+        public static string? LastFour(string? identifier)
         {
-            var trimmed = identifier?.Trim();
-            if (string.IsNullOrEmpty(trimmed))
+            var normalized = StatementBalanceSelector.Normalize(identifier);
+            if (string.IsNullOrEmpty(normalized))
                 return null;
-            return trimmed.Length <= 4 ? trimmed : trimmed[^4..];
+            return normalized.Length <= 4 ? normalized : normalized[^4..];
         }
 
         public BankStatementPreviewDto Preview(int bankId, BankStatementImportRequest request)

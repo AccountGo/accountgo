@@ -439,6 +439,42 @@ public class BankStatementParserTests
     }
 
     [Fact]
+    public void Ofx_MatchesPartialAccountNumberAtTheEnd()
+    {
+        var ofx = OfxDoc(OfxStmt("000123456789", "USD", Ledger("4500.00")));
+
+        var matched = BankStatementParser.ParseOfxFile(
+            ofx, new StatementAccountContext("USD", null, "6789"));
+        Assert.NotNull(matched.ClosingBalance);
+        Assert.Equal(4500.00m, matched.ClosingBalance!.Amount);
+        Assert.Null(matched.ClosingBalanceUnavailableReason);
+
+        var tooShort = BankStatementParser.ParseOfxFile(
+            ofx, new StatementAccountContext("USD", null, "678"));
+        Assert.Null(tooShort.ClosingBalance);
+        Assert.Equal("other_account", tooShort.ClosingBalanceUnavailableReason);
+
+        var notSuffix = BankStatementParser.ParseOfxFile(
+            ofx, new StatementAccountContext("USD", null, "1234"));
+        Assert.Null(notSuffix.ClosingBalance);
+        Assert.Equal("other_account", notSuffix.ClosingBalanceUnavailableReason);
+    }
+
+    [Fact]
+    public void Ofx_OffersNoBalance_WhenSeveralStatementsHaveNoAccountId()
+    {
+        var ofx = OfxDoc(
+            OfxStmt("", "USD", Ledger("100.00", "20261001"), fitid: "F1"),
+            OfxStmt("", "USD", Ledger("999.00", "20261002"), fitid: "F2"));
+
+        var parsed = BankStatementParser.ParseOfxFile(
+            ofx, new StatementAccountContext("USD", null, "123456"));
+
+        Assert.Null(parsed.ClosingBalance);
+        Assert.Equal("multiple_accounts", parsed.ClosingBalanceUnavailableReason);
+    }
+
+    [Fact]
     public void Ofx_TrustsTheSelectedBank_WhenSingleStatementHasNoAccountId()
     {
         var parsed = BankStatementParser.ParseOfxFile(
@@ -630,6 +666,53 @@ public class BankStatementParserTests
 
         Assert.Null(parsed.ClosingBalance);
         Assert.Equal("currency_mismatch", parsed.ClosingBalanceUnavailableReason);
+    }
+
+    [Fact]
+    public void Camt_PicksTheBankCurrency_WhenOneIbanHasStatementsPerCurrency()
+    {
+        var doc = CamtDoc(
+            CamtStmt("GB29NWBK60161331926819", CamtBal("CLBD", "900.00", ccy: "EUR", date: "2026-10-15")),
+            CamtStmt("GB29NWBK60161331926819", CamtBal("CLBD", "1500.00", ccy: "USD", date: "2026-10-15")));
+
+        var usdBank = CamtStatementParser.ParseFile(
+            doc, new StatementAccountContext("USD", "GB29NWBK60161331926819"));
+        Assert.NotNull(usdBank.ClosingBalance);
+        Assert.Equal(1500.00m, usdBank.ClosingBalance!.Amount);
+        Assert.Equal("USD", usdBank.ClosingBalance.CurrencyCode);
+        Assert.Null(usdBank.ClosingBalanceUnavailableReason);
+
+        var gbpBank = CamtStatementParser.ParseFile(
+            doc, new StatementAccountContext("GBP", "GB29NWBK60161331926819"));
+        Assert.Null(gbpBank.ClosingBalance);
+        Assert.Equal("currency_mismatch", gbpBank.ClosingBalanceUnavailableReason);
+    }
+
+    [Fact]
+    public void Camt_MatchesDomesticNumberAtTheEndOfTheIban()
+    {
+        var doc = CamtDoc(
+            CamtStmt("GB29NWBK60161331926819", CamtBal("CLBD", "1500.00", ccy: "EUR")));
+
+        var parsed = CamtStatementParser.ParseFile(
+            doc, new StatementAccountContext("EUR", null, "31926819"));
+
+        Assert.NotNull(parsed.ClosingBalance);
+        Assert.Equal(1500.00m, parsed.ClosingBalance!.Amount);
+        Assert.Equal("EUR", parsed.ClosingBalance.CurrencyCode);
+        Assert.Null(parsed.ClosingBalanceUnavailableReason);
+    }
+
+    [Fact]
+    public void Camt_OffersNoBalance_WhenOneStatementHasTwoDifferentClosingBalances()
+    {
+        var doc = CamtDoc(
+            CamtStmt(null, CamtBal("CLBD", "100.00", date: "2026-10-15") + CamtBal("CLBD", "200.00", date: "2026-10-15")));
+
+        var parsed = CamtStatementParser.ParseFile(doc, Eur);
+
+        Assert.Null(parsed.ClosingBalance);
+        Assert.Equal("ambiguous_latest", parsed.ClosingBalanceUnavailableReason);
     }
 
     [Fact]
