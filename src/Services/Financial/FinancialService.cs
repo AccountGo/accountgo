@@ -1290,7 +1290,11 @@ namespace Services.Financial
                 throw new ArgumentException("The start date must not be after the end date.");
 
             // A position statement includes opening balances, not just movement since 'from'.
-            var balances = TrialBalance(null, to, basis).ToDictionary(a => a.AccountId);
+            return BuildBalanceSheet(to, basis, TrialBalance(null, to, basis).ToDictionary(a => a.AccountId));
+        }
+
+        private ICollection<BalanceSheet> BuildBalanceSheet(DateTime? to, AccountingBasis basis, Dictionary<int, TrialBalance> balances)
+        {
             var accounts = _accountRepo.Table.Where(a => a.AccountClassId >= 1 && a.AccountClassId <= 5)
                 .Select(a => new { a.Id, a.AccountClassId, a.AccountCode, a.AccountName }).ToList();
             var balanceSheet = accounts.Where(a => a.AccountClassId <= 3)

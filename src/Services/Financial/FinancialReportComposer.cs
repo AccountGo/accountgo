@@ -17,6 +17,7 @@ namespace Services.Financial
         IncomeStatement,
         BalanceSheet,
         CashFlow,
+        EquityStatement,
     }
 
     public enum FinancialReportLineKind
@@ -85,6 +86,7 @@ namespace Services.Financial
         public string? EmptyNote { get; init; }
         public IReadOnlyList<FinancialReportLine> Lines { get; init; } = Array.Empty<FinancialReportLine>();
         public FinancialReportCashMovement? CashMovement { get; init; }
+        public Dto.Financial.EquityStatementDto? EquityStatement { get; init; }
         public string FileStem { get; init; } = "report";
         public string GeneratedLabel { get; init; } = "";
     }
@@ -113,6 +115,7 @@ namespace Services.Financial
         public IReadOnlyList<IncomeStatement>? ComparativeIncome { get; init; }
         public IReadOnlyList<BalanceSheet>? ComparativeBalanceSheet { get; init; }
         public FinancialReportCashMovement? CashMovement { get; init; }
+        public Dto.Financial.EquityStatementDto? EquityStatement { get; init; }
     }
 
     /// <summary>
@@ -168,9 +171,10 @@ namespace Services.Financial
                 Footnote = Footnote(request.Kind, personal, movement != null),
                 Notice = movement == null ? request.CashFlow?.Message : null,
                 BalanceStatus = balanceStatus,
-                EmptyNote = hasAccounts || personalRegister ? null : "No ledger activity for the selected dates and filters.",
+                EmptyNote = hasAccounts || personalRegister || request.EquityStatement != null ? null : "No ledger activity for the selected dates and filters.",
                 Lines = lines,
                 CashMovement = movement,
+                EquityStatement = request.EquityStatement,
                 FileStem = FileStem(request, personal),
                 GeneratedLabel = FormatGenerated(request.GeneratedAtUtc, request.TimeZoneId),
             };
@@ -503,6 +507,7 @@ namespace Services.Financial
 
         private static (string Title, string? Subtitle) Titles(FinancialReportKind kind, bool personal) => kind switch
         {
+            FinancialReportKind.EquityStatement => ("Statement of Changes in Equity", null),
             FinancialReportKind.TrialBalance => ("Trial Balance", "Accounts at net debit or credit"),
             FinancialReportKind.IncomeStatement => personal
                 ? ("Money in and out", null)
@@ -593,6 +598,7 @@ namespace Services.Financial
                 FinancialReportKind.IncomeStatement => personal ? "money-in-and-out" : "profit-and-loss",
                 FinancialReportKind.BalanceSheet => personal ? "net-worth" : "balance-sheet",
                 FinancialReportKind.CashFlow => personal ? "cash-movement" : "cash-flow",
+                FinancialReportKind.EquityStatement => "changes-in-equity",
                 _ => "report",
             };
             var basis = request.Basis == AccountingBasis.Cash ? "cash" : "accrual";
