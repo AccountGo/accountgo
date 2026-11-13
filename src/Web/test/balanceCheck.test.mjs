@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShowBalanceCheck, initialBalanceCheckDate, parseBalanceInput } from '../src/lib/balanceCheck.ts';
+import { canShowBalanceCheck, formatBalanceCheckMessage, initialBalanceCheckDate, parseBalanceInput } from '../src/lib/balanceCheck.ts';
 
 test('parseBalanceInput accepts plain, grouped, negative, and bracketed numbers', () => {
   assert.equal(parseBalanceInput('1250.50'), 1250.5);
@@ -47,5 +47,39 @@ test('initialBalanceCheckDate keeps the statement date, empties missing statemen
   // Manual check without initial balance: defaults to today
   assert.equal(initialBalanceCheckDate(null, null, today), today);
   assert.equal(initialBalanceCheckDate(undefined, undefined, today), today);
+});
+
+test('formatBalanceCheckMessage formats raw numeric difference with localized currency', () => {
+  const formatUsd = (n) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // When bank shows less
+  const lessResult = {
+    isMatch: false,
+    difference: -1234.56,
+    message: 'The bank shows 1234.56 less than your books. Look for a payment you have not recorded or a deposit that has not arrived yet.',
+  };
+  assert.equal(
+    formatBalanceCheckMessage(lessResult, formatUsd),
+    'The bank shows $1,234.56 less than your books. Look for a payment you have not recorded or a deposit that has not arrived yet.',
+  );
+
+  // When bank shows more
+  const moreResult = {
+    isMatch: false,
+    difference: 1234.56,
+    message: 'The bank shows 1234.56 more than your books. Look for a deposit you have not recorded or a payment recorded twice.',
+  };
+  assert.equal(
+    formatBalanceCheckMessage(moreResult, formatUsd),
+    'The bank shows $1,234.56 more than your books. Look for a deposit you have not recorded or a payment recorded twice.',
+  );
+
+  // When balances match
+  const matchResult = {
+    isMatch: true,
+    difference: 0,
+    message: 'Your books match the bank.',
+  };
+  assert.equal(formatBalanceCheckMessage(matchResult, formatUsd), 'Your books match the bank.');
 });
 
