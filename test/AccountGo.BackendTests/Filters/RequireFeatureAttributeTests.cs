@@ -57,7 +57,7 @@ public class RequireFeatureAttributeTests
         entitlements.Setup(e => e.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
             .Returns(new EntitlementDecision(
                 false, "FEATURE_NOT_ENTITLED", "denied",
-                RequiredFeature: "mfa", EffectivePlan: "accounting_free", UpgradeAvailable: false));
+                RequiredFeature: "mfa", EffectivePlan: "fixture_free", UpgradeAvailable: false));
 
         var tenant = new Mock<ITenantContext>();
         tenant.SetupGet(t => t.IsResolved).Returns(true);
@@ -92,7 +92,7 @@ public class RequireFeatureAttributeTests
         {
             Id = 1,
             Name = "Co",
-            Plan = "accounting_free",
+            Plan = "fixture_free",
             SubscriptionStatus = "active",
             DisabledModulesJson = "[]"
         };

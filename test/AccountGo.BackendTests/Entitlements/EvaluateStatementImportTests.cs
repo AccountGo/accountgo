@@ -51,17 +51,17 @@ public class EvaluateStatementImportTests
             .Returns((int _, EntitlementAction action) => action switch
             {
                 EntitlementAction.Module => new EntitlementDecision(false, "MODULE_NOT_SUBSCRIBED", "no financials",
-                    RequiredModule: "financials", EffectivePlan: "invoicing_free", UpgradeAvailable: true),
+                    RequiredModule: "financials", EffectivePlan: "fixture_free", UpgradeAvailable: true),
                 EntitlementAction.Feature => new EntitlementDecision(false, "FEATURE_NOT_ENTITLED", "no import",
-                    RequiredFeature: FeatureKeys.BankingStatementImport, EffectivePlan: "invoicing_free",
+                    RequiredFeature: FeatureKeys.BankingStatementImport, EffectivePlan: "fixture_free",
                     UpgradeAvailable: true),
                 _ => new EntitlementDecision(false, "DENIED", "unexpected")
             });
         entitlements.Setup(e => e.Get(1)).Returns(new EntitlementSnapshot(
-            Enabled: true, Plan: "invoicing_free", Tier: "free", Limited: true,
-            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_pro" },
+            Enabled: true, Plan: "fixture_free", Tier: "free", Limited: true,
+            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "fixture_paid" },
             Usage: System.Array.Empty<ResourceUsage>(), SupportEmail: null,
-            Features: ImmutableHashSet<string>.Empty, EffectivePlan: "invoicing_free"));
+            Features: ImmutableHashSet<string>.Empty, EffectivePlan: "fixture_free"));
 
         var decision = StatementImportAccess.Evaluate(entitlements.Object, 1);
 
@@ -79,17 +79,17 @@ public class EvaluateStatementImportTests
             .Returns((int _, EntitlementAction action) => action switch
             {
                 EntitlementAction.Module => new EntitlementDecision(false, "MODULE_NOT_SUBSCRIBED", "no financials",
-                    RequiredModule: "financials", EffectivePlan: "invoicing_pro"),
+                    RequiredModule: "financials", EffectivePlan: "fixture_paid"),
                 EntitlementAction.Feature => new EntitlementDecision(true, null, null,
-                    RequiredFeature: FeatureKeys.BankingStatementImport, EffectivePlan: "invoicing_pro"),
+                    RequiredFeature: FeatureKeys.BankingStatementImport, EffectivePlan: "fixture_paid"),
                 _ => new EntitlementDecision(false, "DENIED", "unexpected")
             });
         entitlements.Setup(e => e.Get(1)).Returns(new EntitlementSnapshot(
-            Enabled: true, Plan: "invoicing_pro", Tier: "pro", Limited: true,
-            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "invoicing_pro" },
+            Enabled: true, Plan: "fixture_paid", Tier: "pro", Limited: true,
+            Modules: new[] { "sales", "purchases" }, SelfServicePlans: new[] { "fixture_paid" },
             Usage: System.Array.Empty<ResourceUsage>(), SupportEmail: null,
             Features: ImmutableHashSet.Create(FeatureKeys.BankingStatementImport),
-            EffectivePlan: "invoicing_pro"));
+            EffectivePlan: "fixture_paid"));
 
         Assert.True(StatementImportAccess.Evaluate(entitlements.Object, 1).Allowed);
     }

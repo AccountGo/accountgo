@@ -22,6 +22,11 @@ export interface PlanCatalogEntry {
 let cached: PlanCatalogEntry[] | null = null;
 let inflight: Promise<PlanCatalogEntry[]> | null = null;
 
+/** The catalog loaded so far this page load, or null. For code outside React (event dispatchers). */
+export function peekPlanCatalog(): PlanCatalogEntry[] | null {
+  return cached;
+}
+
 /** Seeds the shared catalog (tests and server rendering, where effects don't run). */
 export function primePlanCatalog(plans: PlanCatalogEntry[] | null) {
   cached = plans;
