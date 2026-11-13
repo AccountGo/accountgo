@@ -44,6 +44,8 @@ namespace Services.Banking
         private readonly IRepository<CompanySetting> _settings;
         private readonly IBankTransactionService _transactions;
         private readonly ITenantContext _tenant;
+        private readonly IRepository<Account> _accounts;
+        private readonly IRepository<BankStatementDescriptionRule> _rules;
 
         public BankStatementImportService(
             IRepository<BankStatementImport> imports,
@@ -54,7 +56,9 @@ namespace Services.Banking
             IRepository<GeneralLedgerHeader> glHeaders,
             IRepository<CompanySetting> settings,
             IBankTransactionService transactions,
-            ITenantContext tenant)
+            ITenantContext tenant,
+            IRepository<Account> accounts,
+            IRepository<BankStatementDescriptionRule> rules)
         {
             _imports = imports;
             _lines = lines;
@@ -65,6 +69,8 @@ namespace Services.Banking
             _settings = settings;
             _transactions = transactions;
             _tenant = tenant;
+            _accounts = accounts;
+            _rules = rules;
         }
 
         public static string? LastFour(string? identifier)
@@ -394,9 +400,9 @@ namespace Services.Banking
                 PageSize = pageSize,
                 BooksStartDate = booksStart,
                 BeforeBooksStartCount = beforeBooksStartCount,
-                Lines = pageRows.Select(l => ToDto(l, l.MatchedGeneralLedgerLineId.HasValue || l.ExcludedAt.HasValue
+                Lines = WithOwnerSuggestions(pageRows.Select(l => ToDto(l, l.MatchedGeneralLedgerLineId.HasValue || l.ExcludedAt.HasValue
                     ? Array.Empty<PoolEntry>()
-                    : CandidatesFor(l, candidatePool))).ToList()
+                    : CandidatesFor(l, candidatePool))).ToList())
             };
         }
 
@@ -569,6 +575,127 @@ namespace Services.Banking
             line.MatchedGeneralLedgerLineId = glLine.Id;
             _lines.Update(line);
             return ToDto(line, Array.Empty<PoolEntry>());
+        }
+
+        public StatementOwnerActionsDto GetOwnerActions()
+        {
+            EnsureCompany();
+            var type = WorkspaceEntityType();
+            return new(ResolveOwnerAction(OwnerMovementPolicy.Drawing(type)),
+                ResolveOwnerAction(OwnerMovementPolicy.Contribution(type)));
+        }
+
+        private EntityType WorkspaceEntityType() => _settings.Table
+            .Where(s => s.CompanyId == _tenant.RequireCompanyId())
+            .Select(s => s.EntityType).FirstOrDefault();
+
+        private StatementOwnerActionDto? ResolveOwnerAction(OwnerMovementDirection? direction)
+        {
+            if (direction == null) return null;
+            var companyId = _tenant.RequireCompanyId();
+            var account = _accounts.Table.FirstOrDefault(a => a.CompanyId == companyId && a.AccountCode == direction.AccountCode);
+            if (account == null || account.ArchivedAt != null || !account.CanPost()
+                || account.AccountClassId != (int)AccountClasses.Equity
+                || _accounts.Table.Any(a => a.CompanyId == companyId && a.ParentAccountId == account.Id))
+                return null;
+            return new(account.Id, account.AccountCode, account.AccountName, direction.Label);
+        }
+
+        public IReadOnlyList<BankStatementLineDto> RecordOwnerMovement(IReadOnlyList<int> lineIds, string? memo, bool rememberRule)
+        {
+            EnsureCompany();
+            if (lineIds == null || lineIds.Count == 0)
+                throw new ArgumentException("Select at least one statement line.");
+            if (lineIds.Distinct().Count() != lineIds.Count)
+                throw new ArgumentException("Select each statement line only once.");
+            var lines = lineIds.Select(RequireLine).ToList();
+            var drawing = lines[0].Amount < 0;
+            if (lines.Any(l => drawing ? l.Amount >= 0 : l.Amount <= 0))
+                throw new InvalidOperationException(drawing
+                    ? "All selected lines must be money out." : "All selected lines must be money in.");
+
+            var type = WorkspaceEntityType();
+            var direction = (drawing ? OwnerMovementPolicy.Drawing(type) : OwnerMovementPolicy.Contribution(type))
+                ?? throw new InvalidOperationException(drawing
+                    ? "Owner drawings aren't available for this workspace's entity type."
+                    : "Owner contributions aren't available for this workspace's entity type.");
+            var action = ResolveOwnerAction(direction);
+            if (action == null)
+            {
+                var companyId = _tenant.RequireCompanyId();
+                var name = _accounts.Table.Where(a => a.CompanyId == companyId && a.AccountCode == direction.AccountCode)
+                    .Select(a => a.AccountName).FirstOrDefault() ?? direction.Label;
+                throw new InvalidOperationException($"{name} ({direction.AccountCode}) is missing, archived or can't be posted to.");
+            }
+            // Validate the entire selection before the first transaction or rule write.
+            foreach (var line in lines)
+            {
+                EnsureNotExcluded(line);
+                if (line.MatchedGeneralLedgerLineId.HasValue)
+                    throw new InvalidOperationException("That statement line is already matched.");
+                var bank = RequireActiveBank(line.BankId);
+                if (!bank.IsActive)
+                    throw new InvalidOperationException("That bank account is inactive.");
+                if (!bank.AccountId.HasValue)
+                    throw new InvalidOperationException("That bank account has no posting account.");
+                var bankAccount = _accounts.GetById(bank.AccountId.Value);
+                if (bankAccount == null || bankAccount.CompanyId != _tenant.CompanyId || bankAccount.ArchivedAt != null
+                    || !bankAccount.CanPost() || _accounts.Table.Any(a => a.CompanyId == _tenant.CompanyId && a.ParentAccountId == bankAccount.Id))
+                    throw new InvalidOperationException("That bank account's posting account can't be posted to.");
+            }
+            var result = new List<BankStatementLineDto>(lines.Count);
+            foreach (var line in lines)
+            {
+                result.Add(CreateTransaction(line.Id, new CreateTransactionFromStatementLineRequest
+                {
+                    Kind = (int)(drawing ? BankTransactionKinds.MoneyOut : BankTransactionKinds.MoneyIn),
+                    ContraAccountId = action.AccountId,
+                    Memo = FirstNonBlank(memo, line.Memo, line.Payee, action.Label)
+                }));
+                if (rememberRule)
+                    RememberOwnerRule(line, drawing ? BankStatementRuleAction.OwnerDrawing : BankStatementRuleAction.OwnerContribution);
+            }
+            return result;
+        }
+
+        private void RememberOwnerRule(BankStatementLine line, BankStatementRuleAction action)
+        {
+            var key = StatementDescriptionKey.Normalize(FirstNonBlank(line.Payee, line.Memo));
+            if (key == null) return;
+            var companyId = _tenant.RequireCompanyId();
+            var rule = _rules.Table.FirstOrDefault(r => r.CompanyId == companyId && r.DescriptionKey == key);
+            var isNew = rule == null;
+            rule ??= new BankStatementDescriptionRule { CompanyId = companyId, DescriptionKey = key, CreatedAt = DateTime.UtcNow };
+            rule.Action = (int)action;
+            rule.VendorId = null;
+            rule.ExpenseAccountId = null;
+            rule.LastUsedAt = DateTime.UtcNow;
+            if (isNew) _rules.Insert(rule); else _rules.Update(rule);
+        }
+
+        private IReadOnlyList<BankStatementLineDto> WithOwnerSuggestions(IReadOnlyList<BankStatementLineDto> lines)
+        {
+            var eligible = lines.Where(l => !l.IsMatched && !l.IsExcluded).ToList();
+            if (eligible.Count == 0) return lines;
+            var actions = GetOwnerActions();
+            if (actions.Drawing == null && actions.Contribution == null) return lines;
+            var keys = eligible.Select(l => StatementDescriptionKey.Normalize(FirstNonBlank(l.Payee, l.Memo)))
+                .Where(k => k != null).Distinct().ToList();
+            var companyId = _tenant.RequireCompanyId();
+            // One rule query for the page, regardless of line count.
+            var rules = _rules.Table.Where(r => r.CompanyId == companyId && keys.Contains(r.DescriptionKey)
+                && (r.Action == (int)BankStatementRuleAction.OwnerDrawing || r.Action == (int)BankStatementRuleAction.OwnerContribution))
+                .ToDictionary(r => r.DescriptionKey, r => r.Action);
+            foreach (var line in eligible)
+            {
+                var key = StatementDescriptionKey.Normalize(FirstNonBlank(line.Payee, line.Memo));
+                if (key == null || !rules.TryGetValue(key, out var action)) continue;
+                if (line.Amount < 0 && actions.Drawing != null && action == (int)BankStatementRuleAction.OwnerDrawing)
+                    line.SuggestedOwnerAction = "drawing";
+                if (line.Amount > 0 && actions.Contribution != null && action == (int)BankStatementRuleAction.OwnerContribution)
+                    line.SuggestedOwnerAction = "contribution";
+            }
+            return lines;
         }
 
         // ------------------------------------------------------------ matching

@@ -1066,6 +1066,7 @@ namespace Api.Data
 
             builder.Entity<BankStatementDescriptionRule>(entity =>
             {
+                entity.Property(e => e.Action).HasDefaultValue(0);
                 entity.Property(e => e.DescriptionKey).HasMaxLength(200).IsRequired();
                 entity.HasIndex(e => e.CompanyId);
                 entity.HasIndex(e => new { e.CompanyId, e.DescriptionKey }, "UX_BankStatementDescriptionRule_Company_DescriptionKey")

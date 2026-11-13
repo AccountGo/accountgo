@@ -137,7 +137,9 @@ internal sealed class BankingTestHarness : IDisposable
             Repos.GlHeaders,
             Repos.Settings,
             transactions,
-            tenant);
+            tenant,
+            Repos.Accounts,
+            Repos.StatementDescriptionRules);
 
         return new ServiceSet(banks, transactions, reconciliations, statements);
     }

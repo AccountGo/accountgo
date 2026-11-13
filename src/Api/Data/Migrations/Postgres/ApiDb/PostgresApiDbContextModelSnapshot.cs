@@ -17,7 +17,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -138,25 +138,69 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<int>("CompanyId").HasColumnType("integer");
-                    b.Property<string>("EntityType").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)");
-                    b.Property<int>("EntityId").HasColumnType("integer");
-                    b.Property<string>("ParentEntityType").HasMaxLength(120).HasColumnType("character varying(120)");
-                    b.Property<int?>("ParentEntityId").HasColumnType("integer");
-                    b.Property<string>("Action").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)");
-                    b.Property<string>("ChangesJson").IsRequired().HasColumnType("text");
-                    b.Property<string>("ActorUserId").HasColumnType("text");
-                    b.Property<string>("ActorKind").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)");
-                    b.Property<string>("CorrelationId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
-                    b.Property<string>("IpAddress").HasColumnType("text");
-                    b.Property<DateTime>("OccurredAt").HasColumnType("timestamp without time zone");
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ActorKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ActorUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ChangesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("EntityId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("ParentEntityId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ParentEntityType")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
 
                     b.HasKey("Id");
-                    b.HasIndex("CompanyId", "OccurredAt").IsDescending(false, true).HasDatabaseName("IX_RecordChanges_Company_OccurredAt");
-                    b.HasIndex("CompanyId", "EntityType", "EntityId").HasDatabaseName("IX_RecordChanges_Company_Entity");
-                    b.HasIndex("CompanyId", "ParentEntityType", "ParentEntityId").HasDatabaseName("IX_RecordChanges_Company_Parent");
-                    b.HasIndex("CompanyId", "ActorUserId", "OccurredAt").IsDescending(false, false, true).HasDatabaseName("IX_RecordChanges_Company_Actor_OccurredAt");
-                    b.ToTable("RecordChanges");
+
+                    b.HasIndex("CompanyId", "OccurredAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_RecordChanges_Company_OccurredAt");
+
+                    b.HasIndex("CompanyId", "ActorUserId", "OccurredAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("IX_RecordChanges_Company_Actor_OccurredAt");
+
+                    b.HasIndex("CompanyId", "EntityType", "EntityId")
+                        .HasDatabaseName("IX_RecordChanges_Company_Entity");
+
+                    b.HasIndex("CompanyId", "ParentEntityType", "ParentEntityId")
+                        .HasDatabaseName("IX_RecordChanges_Company_Parent");
+
+                    b.ToTable("RecordChanges", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Company", b =>
@@ -846,10 +890,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<bool>("IsCash")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsSuspenseOrClearing")
+                    b.Property<bool>("IsContraAccount")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsContraAccount")
+                    b.Property<bool>("IsSuspenseOrClearing")
                         .HasColumnType("boolean");
 
                     b.Property<int?>("ParentAccountId")
@@ -1142,6 +1186,11 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Action")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");

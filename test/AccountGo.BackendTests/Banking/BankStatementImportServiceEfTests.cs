@@ -49,7 +49,9 @@ public class BankStatementImportServiceEfTests : IDisposable
             new EfRepository<GeneralLedgerHeader>(NullLogger<GeneralLedgerHeader>.Instance, _db),
             new EfRepository<CompanySetting>(NullLogger<CompanySetting>.Instance, _db),
             new Mock<IBankTransactionService>().Object,
-            _tenant);
+            _tenant,
+            new EfRepository<Account>(NullLogger<Account>.Instance, _db),
+            new EfRepository<BankStatementDescriptionRule>(NullLogger<BankStatementDescriptionRule>.Instance, _db));
 
         _companyId = _db.Companies.Select(c => c.Id).Single();
         (_bankId, _bankAccountId) = SeedBank();

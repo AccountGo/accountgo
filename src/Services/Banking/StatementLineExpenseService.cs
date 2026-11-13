@@ -5,7 +5,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
@@ -133,7 +132,7 @@ namespace Services.Banking
                 return null;
 
             var companyId = _tenant.RequireCompanyId();
-            var rule = _rules.Table.FirstOrDefault(r => r.CompanyId == companyId && r.DescriptionKey == key);
+            var rule = _rules.Table.FirstOrDefault(r => r.CompanyId == companyId && r.DescriptionKey == key && r.Action == (int)BankStatementRuleAction.Expense);
             if (rule == null || IsRuleTargetArchived(rule))
                 return null;
             return ToRuleDto(rule);
@@ -528,6 +527,7 @@ namespace Services.Banking
                 {
                     CompanyId = companyId,
                     DescriptionKey = key,
+                    Action = (int)BankStatementRuleAction.Expense,
                     VendorId = vendorId,
                     ExpenseAccountId = expenseAccountId,
                     CreatedAt = now,
@@ -537,6 +537,7 @@ namespace Services.Banking
             }
             else
             {
+                rule.Action = (int)BankStatementRuleAction.Expense;
                 rule.VendorId = vendorId;
                 rule.ExpenseAccountId = expenseAccountId;
                 rule.LastUsedAt = now;
@@ -589,21 +590,7 @@ namespace Services.Banking
         /// <summary>
         /// Stable key for remembered rules: lowercased words with digits, dates, and ref tokens removed.
         /// </summary>
-        public static string? NormalizeDescriptionKey(string? value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-            var lower = value.Trim().ToLowerInvariant();
-            lower = Regex.Replace(lower, @"\b\d{4}-\d{2}-\d{2}\b", " ");
-            lower = Regex.Replace(lower, @"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", " ");
-            lower = Regex.Replace(lower, @"\b(?:ref|reference|inv|invoice|txn|trx|id)[:#-]?\s*\S+\b", " ");
-            lower = Regex.Replace(lower, @"\d+", " ");
-            lower = Regex.Replace(lower, @"[^a-z\s]+", " ");
-            var normalized = string.Join(' ', lower.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-            if (normalized.Length == 0)
-                return null;
-            return normalized.Length <= 200 ? normalized : normalized[..200];
-        }
+        public static string? NormalizeDescriptionKey(string? value) => StatementDescriptionKey.Normalize(value);
 
         private static string? FirstNonBlank(params string?[] values)
         {

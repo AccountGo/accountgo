@@ -3,6 +3,7 @@
 
 #nullable enable
 using Dto.Banking;
+using System.Collections.Generic;
 
 namespace Services.Banking
 {
@@ -42,6 +43,12 @@ namespace Services.Banking
         BankStatementLineDto Include(int lineId);
 
         /// <summary>Post a bank transaction for an unmatched line and link the new ledger line to it.</summary>
+        /// <summary>Available owner actions using current, postable workspace equity accounts.</summary>
+        StatementOwnerActionsDto GetOwnerActions();
+
+        /// <summary>Validate a same-direction selection, post each line and optionally remember its description.</summary>
+        IReadOnlyList<BankStatementLineDto> RecordOwnerMovement(IReadOnlyList<int> lineIds, string? memo, bool rememberRule);
+
         BankStatementLineDto CreateTransaction(int lineId, CreateTransactionFromStatementLineRequest request);
     }
 }
