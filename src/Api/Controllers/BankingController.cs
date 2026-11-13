@@ -999,6 +999,85 @@ namespace Api.Controllers
             }
         }
 
+        [HttpGet("StatementOwnerActions")]
+        [RequireStatementImport(ReadOnly = true)]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        public IActionResult StatementOwnerActions() => Ok(_statements.GetOwnerActions());
+
+        [HttpPost("StatementLines/{id:int}/UndoOwnerMovement")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
+        public IActionResult UndoOwnerMovement(int id, [FromBody] UndoOwnerMovementRequest? request)
+        {
+            if (RefuseIfBooksLocked(id) is { } locked) return locked;
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var line = _statements.UndoOwnerMovement(id, request?.Reason);
+                AuditStatementDecision(id, line.Amount < 0 ? "undo_owner_drawing" : "undo_owner_contribution");
+                tx.Commit();
+                return Ok(line);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (ReconciledPeriodConfirmationRequiredException ex)
+            {
+                return ReconciledPeriodConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("StatementLines/{id:int}/RecordOwnerMovement")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
+        public IActionResult RecordOwnerMovement(int id, [FromBody] RecordOwnerMovementRequest? request) =>
+            RecordOwnerMovements(new[] { id }, request ?? new RecordOwnerMovementRequest(), bulk: false);
+
+        [HttpPost("StatementLines/BulkRecordOwnerMovement")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
+        public IActionResult BulkRecordOwnerMovement([FromBody] BulkRecordOwnerMovementRequest? request) =>
+            request == null
+                ? BadRequest(new { message = "Select at least one statement line." })
+                : RecordOwnerMovements(request.LineIds, request, bulk: true);
+
+        private IActionResult RecordOwnerMovements(IReadOnlyList<int> ids, RecordOwnerMovementRequest request, bool bulk)
+        {
+            if (ids == null || ids.Count == 0)
+                return BadRequest(new { message = "Select at least one statement line." });
+            if (RefuseBeforeBooksStart(ids.ToArray()) is { } refused) return refused;
+            if (RefuseIfBooksLocked(ids.ToArray()) is { } locked) return locked;
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var lines = _statements.RecordOwnerMovement(ids, request.Memo, request.RememberRule);
+                foreach (var line in lines)
+                    AuditStatementDecision(line.Id, line.Amount < 0 ? "record_owner_drawing" : "record_owner_contribution");
+                tx.Commit();
+                return bulk ? Ok(new { recorded = lines.Count, lines }) : Ok(lines[0]);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (ReconciledPeriodConfirmationRequiredException ex)
+            {
+                return ReconciledPeriodConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpGet("StatementIncomeCategories")]
         [RequireStatementImport]
         [RequireModule(SystemModules.Sales)]

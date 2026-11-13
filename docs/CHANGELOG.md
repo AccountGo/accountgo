@@ -11,6 +11,14 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
+### Added
+
+- You can undo an owner drawing or contribution from the matched statement line.
+- Bank statement lines that move money between you and your business can be recorded as an owner drawing or owner contribution wherever statement import is available, so they no longer count as expenses or income. Partnerships use partner wording.
+
+### Fixed
+- Bank statement Personal actions appear only when Personal books are linked, and each workspace shows one set of owner money-movement actions.
+
 ### Removed
 - The unused audit settings API (`/api/Audit/Entity` and `/api/Audit/Attribute`) is gone. Its settings applied to every workspace on a server and never changed what the audit trail records.
 

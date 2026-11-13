@@ -3,6 +3,7 @@
 
 #nullable enable
 using Dto.Banking;
+using System.Collections.Generic;
 
 namespace Services.Banking
 {
@@ -31,6 +32,8 @@ namespace Services.Banking
 
         BankStatementLineDto Match(int lineId, MatchBankStatementLineRequest request);
         BankStatementLineDto Unmatch(int lineId);
+        /// <summary>Reverse a matched owner drawing or contribution and clear the statement match.</summary>
+        BankStatementLineDto UndoOwnerMovement(int lineId, string? reason);
 
         /// <summary>Mark a line excluded (posts nothing). Matched lines must be unmatched first.</summary>
         BankStatementLineDto Exclude(int lineId, ExcludeBankStatementLineRequest request, string actor);
@@ -40,6 +43,12 @@ namespace Services.Banking
         ExcludeBankStatementLineResultDto ExcludeBeforeBooksStart(int bankId, string actor);
 
         BankStatementLineDto Include(int lineId);
+
+        /// <summary>Available owner actions using current, postable workspace equity accounts.</summary>
+        StatementOwnerActionsDto GetOwnerActions();
+
+        /// <summary>Validate a same-direction selection, post each line and optionally remember its description.</summary>
+        IReadOnlyList<BankStatementLineDto> RecordOwnerMovement(IReadOnlyList<int> lineIds, string? memo, bool rememberRule);
 
         /// <summary>Post a bank transaction for an unmatched line and link the new ledger line to it.</summary>
         BankStatementLineDto CreateTransaction(int lineId, CreateTransactionFromStatementLineRequest request);

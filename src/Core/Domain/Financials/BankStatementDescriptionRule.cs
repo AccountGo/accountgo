@@ -10,7 +10,7 @@ using Core.Domain.Purchases;
 namespace Core.Domain.Financials
 {
     /// <summary>
-    /// Remembers vendor + expense category for a normalized bank description (#436 I4).
+    /// Remembers a recording action for a normalized bank description.
     /// </summary>
     [Table("BankStatementDescriptionRule")]
     public partial class BankStatementDescriptionRule : BaseEntity, ICompanyOwned
@@ -20,6 +20,8 @@ namespace Core.Domain.Financials
         /// <summary>Normalized payee/memo key (lowercase, collapsed whitespace).</summary>
         [Required, StringLength(200)]
         public string DescriptionKey { get; set; } = string.Empty;
+
+        public int Action { get; set; }
 
         public int? VendorId { get; set; }
         public int? ExpenseAccountId { get; set; }

@@ -17,7 +17,7 @@ namespace Api.Data.Migrations.ApiDb
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -891,10 +891,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool>("IsCash")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsSuspenseOrClearing")
+                    b.Property<bool>("IsContraAccount")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsContraAccount")
+                    b.Property<bool>("IsSuspenseOrClearing")
                         .HasColumnType("bit");
 
                     b.Property<int?>("ParentAccountId")
@@ -1187,6 +1187,11 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Action")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
