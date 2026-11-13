@@ -66,7 +66,7 @@ interface SalesAccountOption {
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
-  const { currentOrg, hasModule, subscription, canWrite } = useOutletContext<TenantContextType>();
+  const { currentOrg, hasModule, canWrite } = useOutletContext<TenantContextType>();
   const caps = useOptionalCapabilities();
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
@@ -78,8 +78,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const duplicateOf = isEdit ? null : searchParams.get('from');
   const [duplicatedTitle, setDuplicatedTitle] = useState<string | null>(null);
 
-  const planKey = (currentOrg.plan || subscription?.planId || 'accounting').toLowerCase();
-  const isAccountingPlan = planKey === 'accounting' || planKey === 'enterprise';
+  // Ledger accounts on lines follow the Financials module, whatever the plan is called.
+  const showLedgerAccounts = hasModule('financials');
 
   // Reference data
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
@@ -1037,7 +1037,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                             Only {linked.quantityOnHand?.toLocaleString(undefined, { maximumFractionDigits: 4 })} in stock. You can still issue this invoice.
                           </p>
                         )}
-                        {isAccountingPlan && (
+                        {showLedgerAccounts && (
                           isCatalogLinked ? (
                             <p className="mt-1 text-[11px] text-[var(--text-muted)] truncate" title={linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}>
                               Books to {linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}

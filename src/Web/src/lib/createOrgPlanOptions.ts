@@ -28,9 +28,8 @@ export function isFreeSlotUsed(used: number | null | undefined, limit: number | 
 }
 
 /**
- * Build IntentStep options from the plan catalog.
- * Returns [] until the catalog has loaded (caller shows a skeleton).
- * Free choices keep product aliases ("invoicing" / "accounting"); paid choices use catalog keys.
+ * Build IntentStep options from the plan catalog: free choices first, then paid, each in catalog order.
+ * Returns [] until the catalog has loaded (caller shows a skeleton). Values are catalog plan keys.
  */
 export function buildIntentPlanOptions(
   catalog: PlanCatalogEntry[] | null,
@@ -45,57 +44,39 @@ export function buildIntentPlanOptions(
       product: 'community', monthlyPrice: null, disabled: false }];
   }
   const selfService = catalog.filter((p) => p.selfService);
-  const free = selfService.filter(isFreePlan);
-  const paid = selfService.filter((p) => !isFreePlan(p));
   const slotUsed = !!freeSlot?.used;
 
-  const freeOptions: IntentPlanOption[] = free.map((plan) => {
-    const product = (plan.product || '').toLowerCase();
-    const alias = product === 'invoicing' ? 'invoicing' : product === 'accounting' ? 'accounting' : plan.key;
-    return {
-      value: alias,
-      title: plan.name,
-      description: plan.description || '',
-      free: true,
-      product: product || alias,
-      monthlyPrice: plan.monthlyPrice,
-      disabled: slotUsed,
-      badge: alias === 'accounting' ? 'Most popular' : undefined,
-    };
-  });
+  const freeOptions: IntentPlanOption[] = selfService.filter(isFreePlan).map((plan) => ({
+    value: plan.key,
+    title: plan.name,
+    description: plan.description || '',
+    free: true,
+    product: (plan.product || '').toLowerCase(),
+    monthlyPrice: plan.monthlyPrice,
+    disabled: slotUsed,
+    badge: plan.badge || undefined,
+  }));
 
-  // Deduplicate free aliases (catalog may list both product free keys).
-  const seenFree = new Set<string>();
-  const uniqueFree = freeOptions.filter((opt) => {
-    if (seenFree.has(opt.value)) return false;
-    seenFree.add(opt.value);
-    return true;
-  });
+  const paidOptions: IntentPlanOption[] = selfService.filter((p) => !isFreePlan(p)).map((plan) => ({
+    value: plan.key,
+    title: plan.name,
+    description:
+      plan.description ||
+      (plan.monthlyPrice != null ? `$${plan.monthlyPrice}/mo` : 'Paid plan'),
+    badge: plan.badge || (plan.monthlyPrice != null ? `$${plan.monthlyPrice}/mo` : undefined),
+    free: false,
+    product: (plan.product || '').toLowerCase(),
+    monthlyPrice: plan.monthlyPrice,
+    disabled: false,
+  }));
 
-  const paidOptions: IntentPlanOption[] = paid
-    .slice()
-    .sort((a, b) => (a.monthlyPrice ?? 0) - (b.monthlyPrice ?? 0))
-    .map((plan) => ({
-      value: plan.key,
-      title: plan.name,
-      description:
-        plan.description ||
-        (plan.monthlyPrice != null ? `$${plan.monthlyPrice}/mo` : 'Paid plan'),
-      badge: plan.monthlyPrice != null ? `$${plan.monthlyPrice}/mo` : undefined,
-      free: false,
-      product: (plan.product || '').toLowerCase(),
-      monthlyPrice: plan.monthlyPrice,
-      disabled: false,
-    }));
+  return [...freeOptions, ...paidOptions];
+}
 
-  // Free first, then paid; keep product grouping (invoicing then accounting) via stable sort.
-  const productOrder = (p: string) => (p === 'invoicing' ? 0 : p === 'accounting' ? 1 : 2);
-  uniqueFree.sort((a, b) => productOrder(a.product) - productOrder(b.product));
-  paidOptions.sort(
-    (a, b) => productOrder(a.product) - productOrder(b.product) || (a.monthlyPrice ?? 0) - (b.monthlyPrice ?? 0),
-  );
-
-  return [...uniqueFree, ...paidOptions];
+/** The choice to preselect: the highlighted free option, else the first free one; null when none is available. */
+export function defaultIntentPlan(options: readonly IntentPlanOption[]): string | null {
+  const free = options.filter((option) => option.free && !option.disabled);
+  return (free.find((option) => option.badge) ?? free[0])?.value ?? null;
 }
 
 export function freeSlotBlockedMessage(name: string | null, hasUpgradeLink = false): string {
@@ -113,7 +94,7 @@ export function freeSlotPlanError(plan: string, catalog: PlanCatalogEntry[] | nu
 
 export function isPaidWizardPlan(plan: string, catalog: PlanCatalogEntry[] | null): boolean {
   if (!catalog) return false;
-  if (plan === 'invoicing' || plan === 'accounting' || (plan === 'community' && catalog.length === 1)) return false;
+  if (plan === 'community' && catalog.length === 1) return false;
   const entry = catalog.find((p) => p.key === plan);
   return !!entry && !isFreePlan(entry);
 }

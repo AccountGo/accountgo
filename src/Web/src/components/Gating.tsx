@@ -11,7 +11,7 @@ import {
   type EntitlementProblem,
 } from '../lib/entitlementEvents';
 import { peekPlanCatalog, usePlanCatalog } from '../lib/usePlanCatalog';
-import { featureAvailabilityText } from '../lib/planFeatures';
+import { featureAvailabilityText, firstPlanWithModule } from '../lib/planFeatures';
 
 export function useTenantContext(): TenantContextType {
   return useOutletContext<TenantContextType>();
@@ -24,7 +24,7 @@ export function useSubscription() {
     hasModule,
     updateSubscription,
     activeModules: subscription?.activeModules || [],
-    planId: subscription?.planId || 'accounting',
+    planId: subscription?.planId || '',
   };
 }
 
@@ -171,41 +171,34 @@ export const Gate: React.FC<GateProps> = ({
   return <ModuleLockedCard module={module} orgSlug={currentOrg.slug} />;
 };
 
-const MODULE_METADATA: Record<ModuleKey, { title: string; desc: string; requiredPlan: string }> = {
+const MODULE_METADATA: Record<ModuleKey, { title: string; desc: string }> = {
   sales: {
     title: 'Invoicing & Sales',
     desc: 'Create professional invoices, quotes, customer accounts, and record receipts.',
-    requiredPlan: 'Invoicing',
   },
   financials: {
     title: 'General Ledger & Banking',
     desc: 'Full double-entry bookkeeping, chart of accounts, bank feeds, and journal entries.',
-    requiredPlan: 'Accounting',
   },
   purchases: {
     title: 'Purchases & Bills',
     desc: 'Track vendors, purchase orders, incoming bills, and outgoing expense payments.',
-    requiredPlan: 'Invoicing',
   },
   inventory: {
     title: 'Inventory & Items',
     desc: 'Track stock on hand and its cost: bills add stock, invoices use it up, adjustments record counts and write-offs.',
-    requiredPlan: 'Enterprise',
   },
   reports: {
     title: 'Financial Reports',
     desc: 'Real-time Profit & Loss, Balance Sheets, Trial Balance, Aging, and Tax Reports.',
-    requiredPlan: 'Accounting',
   },
   donations: {
     title: 'Donations & Non-Profit',
     desc: 'Manage charitable donors, donor receipts, fund allocations, and tax summaries.',
-    requiredPlan: 'Enterprise',
   },
   audit: {
     title: 'Audit Trail & Compliance',
     desc: 'Field-level mutation tracking, compliance audit logs, and security event history.',
-    requiredPlan: 'Enterprise',
   },
 };
 
@@ -295,10 +288,11 @@ export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }>
   const { hasModule } = useTenantContext();
   const { entitlements } = useCapabilities();
   const upgradeAvailable = shouldShowUpgradeAvailableBadge(entitlements);
+  const { plans } = usePlanCatalog();
+  const includedIn = firstPlanWithModule(plans, module)?.name ?? null;
   const info = MODULE_METADATA[module] || {
     title: module,
     desc: 'This module is not active in your current subscription plan.',
-    requiredPlan: 'Accounting',
   };
 
   return (
@@ -316,7 +310,9 @@ export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }>
             {info.title}
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            This module requires the <strong className="text-[var(--text-main)]">{info.requiredPlan}</strong> tier.
+            {includedIn
+              ? <>Included in <strong className="text-[var(--text-main)]">{includedIn}</strong>.</>
+              : 'Not included in your current plan.'}
           </p>
         </div>
 
@@ -343,7 +339,7 @@ export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }>
 
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--bg-subtle)] text-[var(--brand-primary)] text-xs font-semibold uppercase tracking-wider mb-3">
           <Sparkles className="w-3.5 h-3.5" />
-          {info.requiredPlan} Tier Feature
+          Plan feature
         </div>
 
         <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)] mb-2">

@@ -93,7 +93,7 @@ export function normalizeEntitlementsPayload(raw: unknown): Entitlements {
 
   return {
     enabled: !!body.enabled,
-    plan: (typeof body.plan === 'string' ? body.plan : 'accounting') as PlanKey,
+    plan: (typeof body.plan === 'string' ? body.plan : '') as PlanKey,
     effectivePlan: typeof body.effectivePlan === 'string' ? body.effectivePlan : undefined,
     tier: typeof body.tier === 'string' ? body.tier : 'free',
     limited: !!body.limited,

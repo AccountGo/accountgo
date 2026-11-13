@@ -21,7 +21,7 @@ jobs:
       # Every branch must descend from the 2026-10-29 history root.
       - name: Check ancestry
         env:
-          ROOT: 12eb65e56ca97881bf913dea5f139773811cd01b
+          ROOT: e3faff0dbf705088e83660af8acad1a61576f71d
         run: |
           if ! git merge-base --is-ancestor "$ROOT" HEAD; then
             echo "::error::This branch is not based on $ROOT. Rebase it onto the current main."

@@ -148,13 +148,9 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
           const ownedFree = (orgs as Organization[]).find((org) => {
             if (org.role !== 'Owner') return false;
             if ((org.activationState || 'active') !== 'active') return false;
-            const entry = catalog.plans!.find((p) => p.key === org.plan)
-              || catalog.plans!.find((p) => (p.product || '').toLowerCase() === (org.plan || '').toLowerCase() && isFreePlan(p));
-            // Legacy create payload still uses product aliases ("invoicing" / "accounting") for free plans.
-            if (!entry) {
-              return org.plan === 'accounting' || org.plan === 'invoicing';
-            }
-            return isFreePlan(entry);
+            // Workspace lists carry the stored catalog key.
+            const entry = catalog.plans!.find((p) => p.key === org.plan);
+            return !!entry && isFreePlan(entry);
           });
           if (ownedFree) {
             freeWorkspaceName = ownedFree.name;

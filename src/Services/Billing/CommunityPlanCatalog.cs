@@ -58,6 +58,8 @@ public sealed class CommunityPlanCatalog : IPlanCatalog
         MonthlyPrice = source.MonthlyPrice,
         AnnualPrice = source.AnnualPrice,
         Product = source.Product,
+        ProductLabel = source.ProductLabel,
+        Badge = source.Badge,
         Features = source.Features?.ToList(),
         Limits = source.Limits?.ToDictionary(pair => pair.Key, pair => pair.Value)
     };

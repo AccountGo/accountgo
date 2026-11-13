@@ -11,13 +11,6 @@ namespace Core.Domain.Security
         public const string Audit = "audit";
     }
 
-    public static class SystemPlans
-    {
-        public const string Invoicing = "invoicing";
-        public const string Accounting = "accounting";
-        public const string Enterprise = "enterprise";
-    }
-
     public static class SystemPermissions
     {
         // Sales

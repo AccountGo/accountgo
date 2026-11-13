@@ -12,6 +12,8 @@ import { AssistantMount, AssistantProvider } from '../assistant';
 import { AnnouncementBar } from '../components/AnnouncementBar';
 import { PendingCheckoutScreen } from '../components/PendingCheckoutScreen';
 import { CapabilitiesProvider, useCapabilities } from '../lib/entitlements';
+import { usePlanCatalog } from '../lib/usePlanCatalog';
+import { firstPlanWithModule } from '../lib/planFeatures';
 import { IntegrationsProvider } from '../lib/integrations';
 import { setEntitlementWorkspace } from '../lib/entitlementEvents';
 
@@ -200,7 +202,7 @@ export const OrgLayout: React.FC = () => {
 
   const subscription: SubscriptionInfo = useMemo(() => {
     if (currentOrg?.subscription) return currentOrg.subscription;
-    const plan: PlanKey = currentOrg?.plan || 'accounting';
+    const plan: PlanKey = currentOrg?.plan || '';
     return {
       planId: plan,
       planName: plan.charAt(0).toUpperCase() + plan.slice(1),
@@ -436,6 +438,12 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
   const caps = useCapabilities();
   const hasModule = caps.canModule;
   const canWrite = caps.canWrite;
+  const { plans: catalogPlans } = usePlanCatalog();
+  const currentPlanEntry = catalogPlans?.find((plan) => plan.key === currentOrg.plan);
+  const showLedgerUpsell = caps.canManageBilling
+    && !!currentPlanEntry
+    && !currentPlanEntry.includedModules.includes('financials')
+    && !!firstPlanWithModule(catalogPlans, 'financials');
 
   // The workspace row is loaded once; the entitlements snapshot follows billing changes (webhook, upgrade).
   // Keep the header, switcher and subscription settings on the plan the server now reports.
@@ -512,6 +520,7 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
             subscription={subscription}
             hasModule={hasModule}
             hasPermission={hasPermission}
+            showLedgerUpsell={showLedgerUpsell}
           />
 
           <AssistantMount

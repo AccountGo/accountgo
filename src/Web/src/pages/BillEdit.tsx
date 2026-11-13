@@ -45,7 +45,7 @@ let nextKey = 1;
  * can't be changed, only voided. Lines are booked to an expense or asset account each.
  */
 export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => {
-  const { currentOrg, hasModule, subscription, canWrite } = useOutletContext<TenantContextType>();
+  const { currentOrg, hasModule, canWrite } = useOutletContext<TenantContextType>();
   const { billId } = useParams<{ billId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -60,8 +60,8 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const duplicateOf = isEdit ? null : searchParams.get('from');
   const presetVendor = isEdit ? null : Number(searchParams.get('vendor')) || null;
 
-  const planKey = (currentOrg.plan || subscription?.planId || 'accounting').toLowerCase();
-  const isAccountingPlan = planKey === 'accounting' || planKey === 'enterprise';
+  // Ledger accounts on lines follow the Financials module, whatever the plan is called.
+  const showLedgerAccounts = hasModule('financials');
 
   const [vendors, setVendors] = useState<CustomerOption[]>([]);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
@@ -576,7 +576,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                             </div>
                           )}
                         </div>
-                        {isAccountingPlan && (
+                        {showLedgerAccounts && (
                           line.isStockItem ? (
                             <p className="mt-1 text-[11px] text-[var(--text-muted)] truncate">
                               Stock is booked to Inventory

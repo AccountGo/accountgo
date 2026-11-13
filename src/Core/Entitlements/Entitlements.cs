@@ -48,22 +48,21 @@ namespace Core.Entitlements
 
     public static class CompanyTiers
     {
-        public const string Free = "free";   // derived from a free plan key
-        public const string Pro = "pro";     // derived from a paid plan key
+        public const string Free = "free";
+        public const string Pro = "pro";     // a paid tier, set by a billing provider that sells plans
         public const string Comp = "comp";   // ops override on Company.Tier
 
         public static string Normalize(string? tier) =>
             string.IsNullOrWhiteSpace(tier) ? Free : tier.Trim().ToLowerInvariant();
 
-        /// <summary>Derive the API tier from effective plan, honouring an explicit <c>comp</c> override.</summary>
+        /// <summary>
+        /// Tier when no billing provider decides it: an explicit <c>comp</c> override, otherwise free. Plan keys carry
+        /// no meaning here; a provider that sells plans resolves its own paid tier from its catalog.
+        /// </summary>
         public static string Derive(string? companyTier, string effectivePlan)
         {
-            if (string.Equals(Normalize(companyTier), Comp, StringComparison.Ordinal))
-                return Comp;
-            var key = effectivePlan.Trim().ToLowerInvariant();
-            if (key is "enterprise" || key.EndsWith("_pro", StringComparison.Ordinal))
-                return Pro;
-            return Free;
+            _ = effectivePlan;
+            return string.Equals(Normalize(companyTier), Comp, StringComparison.Ordinal) ? Comp : Free;
         }
     }
 
