@@ -619,6 +619,30 @@ public class BankStatementImportServiceTests
     }
 
     [Fact]
+    public void LastFour_NormalisesIdentifier_StrippingSpacesAndPunctuation()
+    {
+        Assert.Equal("6819", BankStatementImportService.LastFour("GB29 NWBK 6016 1331 9268 19"));
+        Assert.Equal("6819", BankStatementImportService.LastFour("60-16-13-31-92-68-19"));
+        Assert.Equal("123", BankStatementImportService.LastFour(" 123 "));
+        Assert.Null(BankStatementImportService.LastFour("   "));
+    }
+
+    [Fact]
+    public void Preview_NormalisesAccountSuffix_StrippingSpacesAndPunctuation()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        harness.SeedFeeAndInterestAccounts();
+        var bank = harness.CreateBank("Checking", "GB29 NWBK 6016 1331 9268 19", null);
+        var req = OfxRequest(OfxFile("GB29 NWBK 6016 1331 9268 19", "USD", Ledger4500));
+
+        var preview = harness.Statements.Preview(bank.Id, req);
+
+        Assert.Equal("6819", preview.StatementClosingBalanceAccount);
+    }
+
+    [Fact]
     public void Preview_And_Commit_CarryNotice_WhenFileIsForAnotherAccount()
     {
         using var harness = new BankingTestHarness();

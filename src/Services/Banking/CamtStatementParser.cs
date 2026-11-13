@@ -169,6 +169,7 @@ namespace Services.Banking
 
             StatementBalanceCandidate? booked = null;
             var nonBooked = false;
+            var isAmbiguous = false;
             foreach (var bal in Kids(stmt, "Bal"))
             {
                 var code = Kid(Kid(Kid(bal, "Tp"), "CdOrPrtry"), "Cd")?.Value.Trim();
@@ -190,8 +191,21 @@ namespace Services.Banking
                     var dt = Kid(bal, "Dt");
                     var dateText = Kid(dt, "Dt")?.Value ?? Kid(dt, "DtTm")?.Value;
                     var currency = amtEl.Attribute("Ccy")?.Value ?? acctCcy;
-                    booked = new StatementBalanceCandidate(
+                    var candidate = new StatementBalanceCandidate(
                         amount, StatementBalanceSelector.ParseCalendarDate(dateText, "yyyy-MM-dd"), currency);
+                    if (booked != null)
+                    {
+                        if (booked.Amount != candidate.Amount ||
+                            booked.AsOfDate != candidate.AsOfDate ||
+                            !string.Equals(booked.CurrencyCode, candidate.CurrencyCode, StringComparison.OrdinalIgnoreCase))
+                        {
+                            isAmbiguous = true;
+                        }
+                    }
+                    else
+                    {
+                        booked = candidate;
+                    }
                 }
                 catch (FormatException) { }
             }
@@ -201,7 +215,8 @@ namespace Services.Banking
                 AccountIdentifier = iban ?? other,
                 AccountKeys = keys,
                 Booked = booked,
-                HasNonBookedBalance = nonBooked
+                HasNonBookedBalance = nonBooked,
+                IsAmbiguous = isAmbiguous
             };
         }
 
