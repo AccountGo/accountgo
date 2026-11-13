@@ -1008,15 +1008,17 @@ namespace Api.Controllers
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
-        public IActionResult RecordOwnerMovement(int id, [FromBody] RecordOwnerMovementRequest request) =>
-            RecordOwnerMovements(new[] { id }, request, bulk: false);
+        public IActionResult RecordOwnerMovement(int id, [FromBody] RecordOwnerMovementRequest? request) =>
+            RecordOwnerMovements(new[] { id }, request ?? new RecordOwnerMovementRequest(), bulk: false);
 
         [HttpPost("StatementLines/BulkRecordOwnerMovement")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
-        public IActionResult BulkRecordOwnerMovement([FromBody] BulkRecordOwnerMovementRequest request) =>
-            RecordOwnerMovements(request.LineIds, request, bulk: true);
+        public IActionResult BulkRecordOwnerMovement([FromBody] BulkRecordOwnerMovementRequest? request) =>
+            request == null
+                ? BadRequest(new { message = "Select at least one statement line." })
+                : RecordOwnerMovements(request.LineIds, request, bulk: true);
 
         private IActionResult RecordOwnerMovements(IReadOnlyList<int> ids, RecordOwnerMovementRequest request, bool bulk)
         {

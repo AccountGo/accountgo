@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ownerActionForLines, ownerSuggestionLabel } from '../src/lib/statementOwnerMovement.ts';
+import { ownerActionForLines, ownerSuggestionLabel, ownerButtonSet } from '../src/lib/statementOwnerMovement.ts';
 
 const drawing = { accountId: 1, accountCode: '30800', accountName: 'Drawings', label: 'Owner drawing' };
 const contribution = { accountId: 2, accountCode: '30100', accountName: 'Capital', label: 'Owner contribution' };
@@ -36,4 +36,20 @@ test('suggestion chip uses the available label only for the matching direction',
   assert.equal(ownerSuggestionLabel(line(10, { suggestedOwnerAction: 'drawing' }), contribution), null);
   assert.equal(ownerSuggestionLabel(line(-10, { suggestedOwnerAction: 'drawing' }), null), null);
   assert.equal(ownerSuggestionLabel(line(-10), drawing), null);
+});
+
+test('linked Personal books take precedence when the user can create linked entries', () => {
+  assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: true, ownerActionsAvailable: true }), 'linked');
+  assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: true, ownerActionsAvailable: false }), 'linked');
+});
+test('linked workspaces fall back to owner actions without journal permissions', () => {
+  assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: false, ownerActionsAvailable: true }), 'owner');
+});
+test('workspaces without linked Personal books use only owner actions', () => {
+  for (const linkedPersonalCompanyId of [null, undefined])
+    assert.equal(ownerButtonSet({ linkedPersonalCompanyId, canCreateLinkedEntry: true, ownerActionsAvailable: true }), 'owner');
+});
+test('no available action set renders nothing', () => {
+  assert.equal(ownerButtonSet({ linkedPersonalCompanyId: null, canCreateLinkedEntry: true, ownerActionsAvailable: false }), 'none');
+  assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: false, ownerActionsAvailable: false }), 'none');
 });

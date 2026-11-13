@@ -2,6 +2,16 @@ import type { BankStatementLine, StatementOwnerAction, StatementOwnerActions } f
 
 type OwnerLine = Pick<BankStatementLine, 'amount' | 'postedDate' | 'isMatched' | 'isExcluded' | 'suggestedOwnerAction'>;
 
+/** Prefer the linked Personal books workflow when the workspace and user can use it. */
+export function ownerButtonSet({ linkedPersonalCompanyId, canCreateLinkedEntry, ownerActionsAvailable }: {
+  linkedPersonalCompanyId?: number | null;
+  canCreateLinkedEntry: boolean;
+  ownerActionsAvailable: boolean;
+}): 'linked' | 'owner' | 'none' {
+  if (linkedPersonalCompanyId && canCreateLinkedEntry) return 'linked';
+  return ownerActionsAvailable ? 'owner' : 'none';
+}
+
 /** A selection must contain eligible lines in one direction and the user must have both permissions. */
 export function ownerActionForLines(
   lines: OwnerLine[], actions: StatementOwnerActions | null, canManage: boolean, canCreate: boolean,

@@ -7,6 +7,8 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AccountGo.BackendTests.Auditing;
@@ -94,6 +96,41 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         Assert.All(db.BankStatementLines.Where(l => ids.Contains(l.Id)), l => Assert.Null(l.MatchedGeneralLedgerLineId));
     });
     private static async Task AssertOk(HttpResponseMessage response) => Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task MissingBody_UsesSingleDefaultsOrRefusesBulkWithoutPosting(bool bulk, bool jsonNull)
+    {
+        var id = Line(-25);
+        var route = bulk ? "StatementLines/BulkRecordOwnerMovement" : $"StatementLines/{id}/RecordOwnerMovement";
+        using var client = _host.Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/Banking/" + route);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _user.Token);
+        request.Headers.Add("X-AccountGo-Org", Org);
+        if (jsonNull) request.Content = JsonContent.Create<object?>(null);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(bulk ? HttpStatusCode.BadRequest : HttpStatusCode.OK, response.StatusCode);
+        if (bulk)
+        {
+            Assert.Equal("Select at least one statement line.", (await AuditTestHost.Json(response)).GetProperty("message").GetString());
+            AssertNothingPosted(id);
+            WithDb(db => { Assert.Empty(db.GeneralLedgerHeaders); Assert.Empty(db.BankStatementDescriptionRules); });
+        }
+        else
+        {
+            Assert.True((await AuditTestHost.Json(response)).GetProperty("isMatched").GetBoolean());
+            WithDb(db =>
+            {
+                var transaction = Assert.Single(db.BankTransactions);
+                Assert.Equal(25m, transaction.Amount);
+                Assert.Equal("Personal transfer", transaction.Memo);
+                Assert.Empty(db.BankStatementDescriptionRules);
+            });
+        }
+    }
 
     [Theory]
     [InlineData(-40, "30800", DrOrCrSide.Dr, DrOrCrSide.Cr)]

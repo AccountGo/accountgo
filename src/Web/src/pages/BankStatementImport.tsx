@@ -6,7 +6,7 @@ import { StatementLineApplyInvoiceDialog } from '../components/StatementLineAppl
 import { StatementLineExcludeDialog } from '../components/StatementLineExcludeDialog';
 import { StatementLineExpenseDialog } from '../components/StatementLineExpenseDialog';
 import { StatementLineOwnerMovementDialog } from '../components/StatementLineOwnerMovementDialog';
-import { ownerActionForLines, ownerSuggestionLabel } from '../lib/statementOwnerMovement';
+import { ownerActionForLines, ownerSuggestionLabel, ownerButtonSet } from '../lib/statementOwnerMovement';
 import type { StatementOwnerActions, StatementOwnerAction } from '../types/banking';
 import { StatementLineOtherIncomeDialog } from '../components/StatementLineOtherIncomeDialog';
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
@@ -449,8 +449,13 @@ const BankStatementImportPage: React.FC = () => {
   };
 
   const booksStart = list?.booksStartDate ? String(list.booksStartDate).slice(0, 10) : null;
+  const ownerButtons = ownerButtonSet({
+    linkedPersonalCompanyId: currentOrg.linkedPersonalCompanyId,
+    canCreateLinkedEntry,
+    ownerActionsAvailable: canManage && canCreateTx && !!(ownerActions?.drawing || ownerActions?.contribution),
+  });
   const selectedLines = (list?.lines ?? []).filter(l => selectedIds.includes(l.id));
-  const bulkOwnerAction = selectedLines.length === selectedIds.length
+  const bulkOwnerAction = ownerButtons === 'owner' && selectedLines.length === selectedIds.length
     ? ownerActionForLines(selectedLines, ownerActions, canManage, canCreateTx, booksStart) : null;
   const bulkExpenseAvailable = selectedLines.length > 0 && selectedLines.length === selectedIds.length && selectedLines.every(l => l.amount < 0);
   const beforeBooksStartCount = list?.beforeBooksStartCount ?? 0;
@@ -964,7 +969,8 @@ const BankStatementImportPage: React.FC = () => {
             <tbody className="divide-y divide-[var(--border-subtle)]">
               {(list?.lines ?? []).map((line) => {
                 const early = !line.isMatched && !line.isExcluded && isBeforeBooksStart(line.postedDate, booksStart);
-                const ownerAction = ownerActionForLines([line], ownerActions, canManage, canCreateTx, booksStart);
+                const ownerAction = ownerButtons === 'owner'
+                  ? ownerActionForLines([line], ownerActions, canManage, canCreateTx, booksStart) : null;
                 const ownerSuggestion = ownerSuggestionLabel(line, ownerAction);
                 return (
                 <tr key={line.id} className="text-[var(--text-main)] align-top">
@@ -1073,7 +1079,7 @@ const BankStatementImportPage: React.FC = () => {
                             {ownerAction.label}
                           </button>
                         )}
-                        {!early && line.amount < 0 && !line.draftBillId && canCreateLinkedEntry && (
+                        {!early && line.amount < 0 && !line.draftBillId && ownerButtons === 'linked' && (
                           <button type="button" disabled={busy} onClick={() => setLinkedEntryFor({ line, kind: 'Personal' })}
                             className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-hover)]">Personal</button>
                         )}
@@ -1112,7 +1118,7 @@ const BankStatementImportPage: React.FC = () => {
                             {ownerAction.label}
                           </button>
                         )}
-                        {!early && line.amount > 0 && !line.draftBillId && canCreateLinkedEntry && (
+                        {!early && line.amount > 0 && !line.draftBillId && ownerButtons === 'linked' && (
                           <button type="button" disabled={busy} onClick={() => setLinkedEntryFor({ line, kind: 'MoneyIn' })}
                             className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-hover)]">Money I put in</button>
                         )}
