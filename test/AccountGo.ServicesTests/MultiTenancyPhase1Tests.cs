@@ -147,21 +147,27 @@ public class MultiTenancyPhase1Tests
 
         using var connection = new SqliteConnection($"Data Source={dbPath}");
         // Test calling on a closed connection
+        // The platform owner comes from configuration, never from code.
+        var ownerEmail = Environment.GetEnvironmentVariable("PLATFORM_OWNER_EMAIL")?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(ownerEmail)) ownerEmail = null;
+
         SqliteSchemaUpgrader.Upgrade(connection);
-        SqliteSchemaUpgrader.UpgradePostSeed(connection);
+        SqliteSchemaUpgrader.UpgradePostSeed(connection, platformOwnerEmail: ownerEmail);
 
         connection.Open();
 
-        // Verify platform-owner@example.invalid is Owner (Role = 1)
-        using (var cmd = connection.CreateCommand())
+        // Verify the configured platform owner is Owner (Role = 1)
+        if (ownerEmail != null)
         {
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = @"
                 SELECT cm.Role, cm.Status
                 FROM CompanyMember cm
                 JOIN AspNetUsers u ON u.Id = cm.UserId
-                WHERE cm.CompanyId = 1 AND LOWER(u.Email) = 'platform-owner@example.invalid';";
+                WHERE cm.CompanyId = 1 AND LOWER(u.Email) = $ownerEmail;";
+            cmd.Parameters.AddWithValue("$ownerEmail", ownerEmail);
             using var reader = cmd.ExecuteReader();
-            Assert.True(reader.Read(), "platform-owner@example.invalid should be a member of Company 1");
+            Assert.True(reader.Read(), "The platform owner should be a member of Company 1");
             Assert.Equal(1, reader.GetInt32(0)); // Owner
             Assert.Equal(1, reader.GetInt32(1)); // Active
         }
@@ -197,7 +203,7 @@ public class MultiTenancyPhase1Tests
             Assert.Equal("Auditor / Viewer", reader.GetString(2));
         }
 
-        // Verify only platform-owner@example.invalid retains SystemAdministrators
+        // Verify the built-in demo and support accounts never hold SystemAdministrators
         using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = @"
@@ -212,8 +218,8 @@ public class MultiTenancyPhase1Tests
             {
                 sysAdmins.Add(reader.GetString(0));
             }
-            Assert.Single(sysAdmins);
-            Assert.Equal("platform-owner@example.invalid", sysAdmins[0], ignoreCase: true);
+            Assert.DoesNotContain(sysAdmins, u => u.Equals("admin@accountgo.ph", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(sysAdmins, u => u.Equals("support@accountgo.dev", StringComparison.OrdinalIgnoreCase));
         }
     }
 

@@ -1606,7 +1606,11 @@ WHERE NOT EXISTS (
             cmd.ExecuteNonQuery();
         }
 
-        public static void UpgradePostSeed(DbConnection connection, ILogger? logger = null)
+        /// <param name="platformOwnerEmail">
+        /// Optional email of the platform owner (the <c>PLATFORM_OWNER_EMAIL</c> setting). When set, that user becomes
+        /// Owner of Company 1. When empty, no owner membership is backfilled.
+        /// </param>
+        public static void UpgradePostSeed(DbConnection connection, ILogger? logger = null, string? platformOwnerEmail = null)
         {
             bool wasClosed = connection.State == ConnectionState.Closed;
             if (wasClosed)
@@ -1638,7 +1642,7 @@ WHERE NOT EXISTS (
                     using var tx = connection.BeginTransaction();
                     try
                     {
-                        ApplyVersion2(connection, tx, logger);
+                        ApplyVersion2(connection, tx, logger, platformOwnerEmail);
 
                         using (var cmd = connection.CreateCommand())
                         {
@@ -1664,7 +1668,7 @@ WHERE NOT EXISTS (
                     using var tx = connection.BeginTransaction();
                     try
                     {
-                        ApplyVersion2(connection, tx, logger);
+                        ApplyVersion2(connection, tx, logger, platformOwnerEmail);
                         tx.Commit();
                     }
                     catch (Exception ex)
@@ -1910,7 +1914,7 @@ WHERE NOT EXISTS (
             UPDATE ""SalesInvoiceHeader"" SET ""No"" = NULL WHERE ""No"" IS NOT NULL AND TRIM(""No"") = '';
             CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SalesInvoiceHeader_CompanyId_No"" ON ""SalesInvoiceHeader"" (""CompanyId"", ""No"");";
 
-        private static void ApplyVersion2(DbConnection connection, DbTransaction tx, ILogger? logger)
+        private static void ApplyVersion2(DbConnection connection, DbTransaction tx, ILogger? logger, string? platformOwnerEmail)
         {
             if (!TableExists(connection, "AspNetUsers", tx) || !TableExists(connection, "CompanyMember", tx))
             {
@@ -1919,15 +1923,17 @@ WHERE NOT EXISTS (
 
             string now = DateTime.UtcNow.ToString("o");
 
-            // D1: platform-owner@example.invalid = Owner (1)
-            using (var cmd = connection.CreateCommand())
+            // D1: the configured platform owner (PLATFORM_OWNER_EMAIL) = Owner (1). Skipped when not configured.
+            var ownerEmail = platformOwnerEmail?.Trim().ToLowerInvariant();
+            if (!string.IsNullOrEmpty(ownerEmail))
             {
+                using var cmd = connection.CreateCommand();
                 cmd.Transaction = tx;
                 cmd.CommandText = @"
                     INSERT INTO ""CompanyMember"" (""CompanyId"", ""UserId"", ""Role"", ""Status"", ""JoinedAt"")
                     SELECT 1, ""Id"", 1, 1, $now
                     FROM ""AspNetUsers""
-                    WHERE LOWER(""Email"") = 'platform-owner@example.invalid'
+                    WHERE LOWER(""Email"") = $ownerEmail
                       AND NOT EXISTS (
                           SELECT 1 FROM ""CompanyMember""
                           WHERE ""CompanyId"" = 1 AND ""UserId"" = ""AspNetUsers"".""Id""
@@ -1936,10 +1942,14 @@ WHERE NOT EXISTS (
                 p.ParameterName = "$now";
                 p.Value = now;
                 cmd.Parameters.Add(p);
+                var e = cmd.CreateParameter();
+                e.ParameterName = "$ownerEmail";
+                e.Value = ownerEmail;
+                cmd.Parameters.Add(e);
                 int inserted = cmd.ExecuteNonQuery();
                 if (inserted > 0)
                 {
-                    logger?.LogInformation("✓ Backfilled Owner membership for platform-owner@example.invalid in Company 1.");
+                    logger?.LogInformation("✓ Backfilled Owner membership for the platform owner in Company 1.");
                 }
             }
 
@@ -2014,7 +2024,7 @@ WHERE NOT EXISTS (
                 }
             }
 
-            // D2: Remove SystemAdministrators from SecurityUserRole for users other than platform-owner@example.invalid
+            // D2: the built-in demo and support accounts are not platform staff, so they never hold SystemAdministrators.
             if (TableExists(connection, "SecurityUserRole", tx) && TableExists(connection, "SecurityRole", tx) && TableExists(connection, "User", tx))
             {
                 using var cmd = connection.CreateCommand();
@@ -2022,14 +2032,15 @@ WHERE NOT EXISTS (
                 cmd.CommandText = @"
                     DELETE FROM ""SecurityUserRole""
                     WHERE ""SecurityRoleId"" IN (SELECT ""Id"" FROM ""SecurityRole"" WHERE ""Name"" = 'SystemAdministrators')
-                      AND ""UserId"" NOT IN (
+                      AND ""UserId"" IN (
                           SELECT ""Id"" FROM ""User""
-                          WHERE LOWER(""UserName"") = 'platform-owner@example.invalid' OR LOWER(""EmailAddress"") = 'platform-owner@example.invalid'
+                          WHERE LOWER(""UserName"") IN ('admin@accountgo.ph', 'support@accountgo.dev')
+                             OR LOWER(""EmailAddress"") IN ('admin@accountgo.ph', 'support@accountgo.dev')
                       );";
                 int removed = cmd.ExecuteNonQuery();
                 if (removed > 0)
                 {
-                    logger?.LogInformation("✓ Removed SystemAdministrators role from non-platform staff ({Count} records).", removed);
+                    logger?.LogInformation("✓ Removed SystemAdministrators role from the built-in demo and support accounts ({Count} records).", removed);
                 }
             }
         }
