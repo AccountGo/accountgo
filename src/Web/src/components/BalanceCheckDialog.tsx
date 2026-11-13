@@ -103,9 +103,8 @@ export const BalanceCheckDialog: React.FC<{
               inputMode="decimal"
               value={balance}
               onChange={(e) => {
-                const next = e.target.value;
-                setBalance(next);
-                if (!next.trim()) setResult(null);
+                setBalance(e.target.value);
+                setResult(null);
               }}
               className={inputClass}
               autoFocus
@@ -123,9 +122,8 @@ export const BalanceCheckDialog: React.FC<{
               required
               aria-describedby={!asOfDate ? `${titleId}-date-help` : undefined}
               onChange={(e) => {
-                const next = e.target.value;
-                setAsOfDate(next);
-                if (!next) setResult(null);
+                setAsOfDate(e.target.value);
+                setResult(null);
               }}
               className={inputClass}
             />
