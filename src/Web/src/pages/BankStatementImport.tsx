@@ -9,6 +9,12 @@ import { StatementLineOtherIncomeDialog } from '../components/StatementLineOther
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
 import { LinkedEntryDialog } from '../components/LinkedEntryDialog';
 import { BalanceCheckDialog } from '../components/BalanceCheckDialog';
+import { canShowBalanceCheck } from '../lib/balanceCheck';
+import {
+  formatStatementBalanceBanner,
+  statementBalanceNotice,
+  type StatementBalanceOffer,
+} from '../lib/statementBalance';
 import { STATEMENT_EXCLUSION_REASONS } from '../types/banking';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
@@ -122,6 +128,11 @@ const BankStatementImportPage: React.FC = () => {
     hasPermission('sales.receipts.create');
 
   const [account, setAccount] = useState<BankAccount | null>(null);
+  const showBalanceCheck = canShowBalanceCheck({
+    hasFinancials,
+    canView: hasPermission('banking.accounts.view'),
+    archived: !!account?.archivedAt,
+  });
   const [list, setList] = useState<BankStatementLineList | null>(null);
   const [status, setStatus] = useState<StatementLineStatus>(focusedLineId ? 'all' : 'unmatched');
   const [page, setPage] = useState(1);
@@ -151,17 +162,15 @@ const BankStatementImportPage: React.FC = () => {
   const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
   const [pickedCandidate, setPickedCandidate] = useState<Record<number, string>>({});
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [closingBalanceOffer, setClosingBalanceOffer] = useState<{
-    balance: number;
-    asOfDate?: string | null;
-  } | null>(null);
+  const [closingBalanceOffer, setClosingBalanceOffer] = useState<StatementBalanceOffer | null>(null);
+  const [closingBalanceNotice, setClosingBalanceNotice] = useState<string | null>(null);
   const [balanceCheckOpen, setBalanceCheckOpen] = useState(false);
 
   const formatCurrency = useCallback(
-    (n: number) =>
+    (n: number, currency?: string | null) =>
       new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: account?.currencyCode || currentOrg.currency || 'USD',
+        currency: currency || account?.currencyCode || currentOrg.currency || 'USD',
       }).format(n),
     [account?.currencyCode, currentOrg.currency],
   );
@@ -257,6 +266,7 @@ const BankStatementImportPage: React.FC = () => {
     setPreview(null);
     setNotice(null);
     setClosingBalanceOffer(null);
+    setClosingBalanceNotice(null);
     setSkippedDetails([]);
     setError(null);
     if (!file) return;
@@ -388,10 +398,13 @@ const BankStatementImportPage: React.FC = () => {
       const result: BankStatementCommitResult = await res.json();
       setNotice(importSummary(result));
       setSkippedDetails(result.skippedRowDetails ?? []);
+      setClosingBalanceNotice(result.statementClosingBalanceNotice ?? null);
       if (result.statementClosingBalance != null) {
         setClosingBalanceOffer({
           balance: result.statementClosingBalance,
           asOfDate: result.statementClosingBalanceDate,
+          currency: result.statementClosingBalanceCurrency,
+          account: result.statementClosingBalanceAccount,
         });
       } else {
         setClosingBalanceOffer(null);
@@ -522,7 +535,16 @@ const BankStatementImportPage: React.FC = () => {
         </div>
       )}
 
-      {closingBalanceOffer && account && (
+      {showBalanceCheck && !closingBalanceOffer && closingBalanceNotice && statementBalanceNotice(closingBalanceNotice) && (
+        <div
+          data-testid="statement-closing-balance-notice"
+          className="p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--text-muted)] text-sm"
+        >
+          {statementBalanceNotice(closingBalanceNotice)}
+        </div>
+      )}
+
+      {showBalanceCheck && closingBalanceOffer && account && (
         <div
           data-testid="statement-closing-balance-offer"
           className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-700 text-sm flex items-center justify-between gap-3"
@@ -530,9 +552,9 @@ const BankStatementImportPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Scale className="w-4 h-4 shrink-0" />
             <span>
-              Statement closing balance: <strong>{formatCurrency(closingBalanceOffer.balance)}</strong>
-              {closingBalanceOffer.asOfDate ? ` as of ${String(closingBalanceOffer.asOfDate).slice(0, 10)}` : ''}.
-              Compare with your books?
+              {formatStatementBalanceBanner(closingBalanceOffer, formatCurrency)}
+              {closingBalanceNotice === 'date_missing' ? ` ${statementBalanceNotice('date_missing')}` : ''}
+              {' '}Compare with your books?
             </span>
           </div>
           <button
@@ -1185,12 +1207,13 @@ const BankStatementImportPage: React.FC = () => {
         />
       )}
 
-      {balanceCheckOpen && account && (
+      {balanceCheckOpen && showBalanceCheck && account && (
         <BalanceCheckDialog
           bank={account}
           formatCurrency={formatCurrency}
           initialBalance={closingBalanceOffer?.balance}
           initialAsOfDate={closingBalanceOffer?.asOfDate}
+          currencyCode={closingBalanceOffer?.currency}
           onClose={() => setBalanceCheckOpen(false)}
         />
       )}
