@@ -760,7 +760,8 @@ public static class AccountGoApp
                     EnsureSecurityDefaultsAndAdminUsers(services);
 
                     // Run one-time post-seed membership and role backfill -> Version 2
-                    Api.Data.Schema.SqliteSchemaUpgrader.UpgradePostSeed(apiDbContext.Database.GetDbConnection());
+                    Api.Data.Schema.SqliteSchemaUpgrader.UpgradePostSeed(
+                        apiDbContext.Database.GetDbConnection(), platformOwnerEmail: PlatformOwnerEmail(services));
                 }
                 else if (apiDbContext.Database.IsNpgsql())
                 {
@@ -868,7 +869,7 @@ public static class AccountGoApp
             }
 
             EnsureSecurityDefaultsAndAdminUsers(services);
-            EnsureDemoMemberships(apiDbContext, identityDbContext);
+            EnsureDemoMemberships(apiDbContext, identityDbContext, PlatformOwnerEmail(services));
         }
         else
         {
@@ -881,14 +882,16 @@ public static class AccountGoApp
     /// The demo workspace memberships that SQLite gets from <c>SqliteSchemaUpgrader.UpgradePostSeed</c> (version 2), so
     /// the built-in users can sign in to a new Postgres database.
     /// </summary>
-    private static void EnsureDemoMemberships(ApiDbContext apiDbContext, ApplicationIdentityDbContext identityDbContext)
+    private static void EnsureDemoMemberships(ApiDbContext apiDbContext, ApplicationIdentityDbContext identityDbContext,
+        string? platformOwnerEmail)
     {
-        var members = new[]
+        var members = new List<(string Email, Core.Domain.CompanyMemberRole Role)>
         {
-            (Email: "marvinperez@gmail.com", Role: Core.Domain.CompanyMemberRole.Owner),
             (Email: "support@accountgo.dev", Role: Core.Domain.CompanyMemberRole.Admin),
             (Email: "admin@accountgo.ph", Role: Core.Domain.CompanyMemberRole.Member),
         };
+        if (platformOwnerEmail != null)
+            members.Insert(0, (Email: platformOwnerEmail, Role: Core.Domain.CompanyMemberRole.Owner));
 
         foreach (var (email, role) in members)
         {
@@ -920,6 +923,17 @@ public static class AccountGoApp
         Console.WriteLine("✓ Demo workspace memberships verified.");
     }
 
+    /// <summary>
+    /// The optional platform owner account (the <c>PLATFORM_OWNER_EMAIL</c> setting). When set, start-up creates this
+    /// user with the SystemAdministrators role and makes them Owner of the demo workspace. When empty, no owner
+    /// account is created; nothing about a particular person is built into the code.
+    /// </summary>
+    private static string? PlatformOwnerEmail(IServiceProvider services)
+    {
+        var value = services.GetRequiredService<IConfiguration>()["PLATFORM_OWNER_EMAIL"]?.Trim();
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
+
     /// <summary>Default permissions and roles, plus the built-in admin users in Identity and the domain.</summary>
     private static void EnsureSecurityDefaultsAndAdminUsers(IServiceProvider services)
     {
@@ -934,12 +948,14 @@ public static class AccountGoApp
         var secService = services.GetRequiredService<Services.Security.ISecurityService>();
         var adminRole = secService.GetRole("SystemAdministrators") ?? secService.GetRole("Administrator");
 
-        var adminEmails = new[]
+        var platformOwnerEmail = PlatformOwnerEmail(services);
+        var adminEmails = new List<(string Email, string First, string Last)>
         {
             (Email: "admin@accountgo.ph", First: "Admin", Last: "User"),
-            (Email: "marvinperez@gmail.com", First: "Marvin", Last: "Perez"),
-            (Email: "support@accountgo.dev", First: "Marvin", Last: "Perez")
+            (Email: "support@accountgo.dev", First: "AccountGo", Last: "Support")
         };
+        if (platformOwnerEmail != null)
+            adminEmails.Insert(1, (Email: platformOwnerEmail, First: "Platform", Last: "Owner"));
 
         foreach (var (email, first, last) in adminEmails)
         {
@@ -970,7 +986,7 @@ public static class AccountGoApp
                     Lastname = last
                 };
                 adminService.SaveUser(newDomainUser);
-                if (adminRole != null && email.Equals("marvinperez@gmail.com", StringComparison.OrdinalIgnoreCase))
+                if (adminRole != null && platformOwnerEmail != null && email.Equals(platformOwnerEmail, StringComparison.OrdinalIgnoreCase))
                 {
                     var freshUser = secService.GetUser(email);
                     if (freshUser != null)

@@ -26,6 +26,9 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - The automatic sign-out setting now tells you when another of your workspaces signs you out sooner, and names it. One sign-in covers all your workspaces, so the shortest setting applies.
 - After a plan change, the plan shown in the workspace header, switcher and subscription settings now updates right away instead of after a reload, and the payment-confirming message no longer stays on screen indefinitely.
 
+### Self-hosting
+- A new installation no longer creates a built-in platform administrator account for the project maintainer. To have start-up create a platform owner, set `PLATFORM_OWNER_EMAIL`; that user gets the SystemAdministrators role and owns the demo workspace. Existing databases are unchanged.
+
 ---
 
 ## [0.1.0] - 2026-11-08

@@ -632,16 +632,7 @@ namespace Api.Data.Migrations.ApiDb
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.Sql(@"
-                -- Backfill Company 1 memberships (D1)
-                INSERT INTO CompanyMember (CompanyId, UserId, Role, Status, JoinedAt)
-                SELECT 1, Id, 1, 1, SYSUTCDATETIME()
-                FROM AspNetUsers
-                WHERE LOWER(Email) = 'marvinperez@gmail.com'
-                  AND NOT EXISTS (
-                      SELECT 1 FROM CompanyMember
-                      WHERE CompanyId = 1 AND UserId = AspNetUsers.Id
-                  );
-
+                -- Backfill Company 1 memberships (D1). The platform owner is assigned at start-up from configuration.
                 INSERT INTO CompanyMember (CompanyId, UserId, Role, Status, JoinedAt)
                 SELECT 1, Id, 2, 1, SYSUTCDATETIME()
                 FROM AspNetUsers
@@ -672,12 +663,13 @@ namespace Api.Data.Migrations.ApiDb
                       WHERE cmsr.CompanyMemberId = cm.Id AND cmsr.SecurityRoleId = sr.Id
                   );
 
-                -- Remove SystemAdministrators from non-platform staff (D2)
+                -- The built-in demo and support accounts are not platform staff (D2)
                 DELETE FROM dbo.SecurityUserRole
                 WHERE SecurityRoleId IN (SELECT Id FROM dbo.SecurityRole WHERE Name = 'SystemAdministrators')
-                  AND UserId NOT IN (
+                  AND UserId IN (
                       SELECT Id FROM dbo.[User]
-                      WHERE LOWER(UserName) = 'marvinperez@gmail.com' OR LOWER(EmailAddress) = 'marvinperez@gmail.com'
+                      WHERE LOWER(UserName) IN ('admin@accountgo.ph', 'support@accountgo.dev')
+                         OR LOWER(EmailAddress) IN ('admin@accountgo.ph', 'support@accountgo.dev')
                   );
             ");
 
