@@ -565,30 +565,112 @@ public class BankStatementImportServiceTests
         Assert.Throws<TimeoutException>(() => service.Commit(bank.Id, Csv("2026-10-01,10.00,A,,\n"), "t"));
     }
 
+    private static string OfxFile(string acctId, string curdef, string ledger) =>
+        "<OFX><STMTRS>" + (curdef.Length > 0 ? $"<CURDEF>{curdef}</CURDEF>" : "") +
+        (acctId.Length > 0 ? $"<BANKACCTFROM><ACCTID>{acctId}</ACCTID></BANKACCTFROM>" : "") +
+        "<BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261005</DTPOSTED>" +
+        "<TRNAMT>-25.00</TRNAMT><FITID>OFX1</FITID><NAME>Store</NAME></STMTTRN></BANKTRANLIST>" +
+        ledger + "</STMTRS></OFX>";
+
+    private const string Ledger4500 =
+        "<LEDGERBAL><BALAMT>-4500.00</BALAMT><DTASOF>20261005120000</DTASOF></LEDGERBAL>";
+
+    private static BankStatementImportRequest OfxRequest(string content) => new()
+    {
+        Source = (int)BankStatementSources.Ofx,
+        FileName = "bank.ofx",
+        Content = content
+    };
+
     [Fact]
     public void Commit_And_Preview_Ofx_CarriesStatementClosingBalance()
     {
         using var harness = NewHarness(out var bank);
-        const string ofx =
-            "<OFX><STMTRS><CURDEF>USD</CURDEF>" +
-            "<BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261005</DTPOSTED>" +
-            "<TRNAMT>-25.00</TRNAMT><FITID>OFX1</FITID><NAME>Store</NAME></STMTTRN></BANKTRANLIST>" +
-            "<LEDGERBAL><BALAMT>4500.00</BALAMT><DTASOF>20261005120000</DTASOF></LEDGERBAL>" +
-            "</STMTRS></OFX>";
-
-        var req = new BankStatementImportRequest
-        {
-            Source = (int)BankStatementSources.Ofx,
-            FileName = "bank.ofx",
-            Content = ofx
-        };
+        var req = OfxRequest(OfxFile("", "USD", Ledger4500));
 
         var preview = harness.Statements.Preview(bank.Id, req);
-        Assert.Equal(4500.00m, preview.StatementClosingBalance);
+        Assert.Equal(-4500.00m, preview.StatementClosingBalance);
         Assert.Equal(new DateTime(2026, 10, 5), preview.StatementClosingBalanceDate);
+        Assert.Equal("USD", preview.StatementClosingBalanceCurrency);
+        Assert.Null(preview.StatementClosingBalanceNotice);
 
         var commit = harness.Statements.Commit(bank.Id, req, "tester");
-        Assert.Equal(4500.00m, commit.StatementClosingBalance);
+        Assert.Equal(-4500.00m, commit.StatementClosingBalance);
         Assert.Equal(new DateTime(2026, 10, 5), commit.StatementClosingBalanceDate);
+        Assert.Equal("USD", commit.StatementClosingBalanceCurrency);
+    }
+
+    [Fact]
+    public void Preview_And_Commit_CarryAccountSuffix_WhenBankIdentifiersMatch()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        harness.SeedFeeAndInterestAccounts();
+        var bank = harness.CreateBank("Checking", "DE89 3704 0044 0532 0130 00", "0532013000");
+        var req = OfxRequest(OfxFile("0532013000", "USD", Ledger4500));
+
+        var preview = harness.Statements.Preview(bank.Id, req);
+        var commit = harness.Statements.Commit(bank.Id, req, "tester");
+
+        Assert.Equal("3000", preview.StatementClosingBalanceAccount);
+        Assert.Equal("3000", commit.StatementClosingBalanceAccount);
+        Assert.Equal(-4500.00m, commit.StatementClosingBalance);
+    }
+
+    [Fact]
+    public void LastFour_NormalisesIdentifier_StrippingSpacesAndPunctuation()
+    {
+        Assert.Equal("6819", BankStatementImportService.LastFour("GB29 NWBK 6016 1331 9268 19"));
+        Assert.Equal("6819", BankStatementImportService.LastFour("60-16-13-31-92-68-19"));
+        Assert.Equal("123", BankStatementImportService.LastFour(" 123 "));
+        Assert.Null(BankStatementImportService.LastFour("   "));
+    }
+
+    [Fact]
+    public void Preview_NormalisesAccountSuffix_StrippingSpacesAndPunctuation()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        harness.SeedFeeAndInterestAccounts();
+        var bank = harness.CreateBank("Checking", "GB29 NWBK 6016 1331 9268 19", null);
+        var req = OfxRequest(OfxFile("GB29 NWBK 6016 1331 9268 19", "USD", Ledger4500));
+
+        var preview = harness.Statements.Preview(bank.Id, req);
+
+        Assert.Equal("6819", preview.StatementClosingBalanceAccount);
+    }
+
+    [Fact]
+    public void Preview_And_Commit_CarryNotice_WhenFileIsForAnotherAccount()
+    {
+        using var harness = new BankingTestHarness();
+        harness.SeedCashTree();
+        harness.SeedExpenseAccount();
+        harness.SeedFeeAndInterestAccounts();
+        var bank = harness.CreateBank("Checking", null, "0532013000");
+        var req = OfxRequest(OfxFile("999888777", "USD", Ledger4500));
+
+        var preview = harness.Statements.Preview(bank.Id, req);
+        var commit = harness.Statements.Commit(bank.Id, req, "tester");
+
+        Assert.Null(preview.StatementClosingBalance);
+        Assert.Equal("other_account", preview.StatementClosingBalanceNotice);
+        Assert.Null(commit.StatementClosingBalance);
+        Assert.Equal("other_account", commit.StatementClosingBalanceNotice);
+    }
+
+    [Fact]
+    public void Preview_CarriesDateMissingNotice_ButKeepsTheAmount()
+    {
+        using var harness = NewHarness(out var bank);
+        var req = OfxRequest(OfxFile("", "USD", "<LEDGERBAL><BALAMT>10.00</BALAMT></LEDGERBAL>"));
+
+        var preview = harness.Statements.Preview(bank.Id, req);
+
+        Assert.Equal(10.00m, preview.StatementClosingBalance);
+        Assert.Null(preview.StatementClosingBalanceDate);
+        Assert.Equal("date_missing", preview.StatementClosingBalanceNotice);
     }
 }

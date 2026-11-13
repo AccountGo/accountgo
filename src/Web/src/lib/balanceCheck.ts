@@ -1,3 +1,5 @@
+import type { BankBalanceCheck } from '../types/banking';
+
 /** Parses what the user typed into the balance box; null when it is not a usable number. */
 export function parseBalanceInput(raw: string): number | null {
   const cleaned = raw.trim().replace(/[,\s]/g, '');
@@ -14,4 +16,33 @@ export function canShowBalanceCheck(options: {
   archived: boolean;
 }): boolean {
   return !options.hasFinancials && options.canView && !options.archived;
+}
+
+/**
+ * The date the balance dialog opens with. A balance handed over from a statement keeps the statement's date, or
+ * stays empty when the file gave none (never today). A manual check starts at today.
+ */
+export function initialBalanceCheckDate(
+  initialBalance: number | string | null | undefined,
+  initialAsOfDate: string | null | undefined,
+  today: string,
+): string {
+  if (initialAsOfDate) return String(initialAsOfDate).slice(0, 10);
+  return initialBalance != null ? '' : today;
+}
+
+/**
+ * Formats the balance check result message with the localized currency.
+ */
+export function formatBalanceCheckMessage(
+  result: Pick<BankBalanceCheck, 'isMatch' | 'difference'>,
+  formatCurrency: (n: number) => string,
+): string {
+  if (result.isMatch || result.difference === 0) {
+    return 'Your books match the bank.';
+  }
+  const formatted = formatCurrency(Math.abs(result.difference));
+  return result.difference > 0
+    ? `The bank shows ${formatted} more than your books. Look for a deposit you have not recorded or a payment recorded twice.`
+    : `The bank shows ${formatted} less than your books. Look for a payment you have not recorded or a deposit that has not arrived yet.`;
 }
