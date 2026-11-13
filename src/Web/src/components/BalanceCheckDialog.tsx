@@ -3,7 +3,7 @@ import { Scale, X } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
-import { initialBalanceCheckDate, parseBalanceInput } from '../lib/balanceCheck';
+import { formatBalanceCheckMessage, initialBalanceCheckDate, parseBalanceInput } from '../lib/balanceCheck';
 import type { BankAccount, BankBalanceCheck } from '../types/banking';
 
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
@@ -102,7 +102,11 @@ export const BalanceCheckDialog: React.FC<{
               id={`${titleId}-balance`}
               inputMode="decimal"
               value={balance}
-              onChange={(e) => setBalance(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setBalance(next);
+                if (!next.trim()) setResult(null);
+              }}
               className={inputClass}
               autoFocus
             />
@@ -118,7 +122,11 @@ export const BalanceCheckDialog: React.FC<{
               max={localToday()}
               required
               aria-describedby={!asOfDate ? `${titleId}-date-help` : undefined}
-              onChange={(e) => setAsOfDate(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setAsOfDate(next);
+                if (!next) setResult(null);
+              }}
               className={inputClass}
             />
             {!asOfDate && (
@@ -134,7 +142,7 @@ export const BalanceCheckDialog: React.FC<{
             <div
               className={`p-3 rounded-xl text-sm ${result.isMatch ? 'bg-emerald-500/10 text-emerald-700' : 'bg-amber-500/10 text-amber-700'}`}
             >
-              <p className="font-semibold">{result.message}</p>
+              <p className="font-semibold">{formatBalanceCheckMessage(result, formatCurrency)}</p>
               <p className="text-xs mt-1 font-mono">
                 Bank {formatCurrency(result.bankBalance)} · Books {formatCurrency(result.bookBalance)}
                 {!result.isMatch ? ` · Difference ${formatCurrency(result.difference)}` : ''}
