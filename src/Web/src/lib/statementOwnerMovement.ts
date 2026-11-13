@@ -28,3 +28,12 @@ export function ownerSuggestionLabel(line: OwnerLine, action: StatementOwnerActi
   const direction = line.amount < 0 ? 'drawing' : line.amount > 0 ? 'contribution' : null;
   return action && direction && line.suggestedOwnerAction === direction ? `Suggested: ${action.label}` : null;
 }
+
+/** Matched owner movements use a reversal so their original posting cannot be duplicated. */
+export function matchedLineAction(
+  line: Pick<BankStatementLine, 'isMatched' | 'isExcluded' | 'matchedOwnerAction'>,
+  canManage: boolean, canCreate: boolean, buttons: 'owner' | 'linked' | 'none',
+): 'undo' | 'unmatch' | null {
+  if (!canManage || !line.isMatched || line.isExcluded) return null;
+  return line.matchedOwnerAction && canCreate && buttons === 'owner' ? 'undo' : 'unmatch';
+}

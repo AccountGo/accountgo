@@ -431,6 +431,7 @@ export interface BankStatementMatchCandidate {
 }
 
 export interface BankStatementLine {
+  matchedOwnerAction?: 'drawing' | 'contribution' | null;
   suggestedOwnerAction?: 'drawing' | 'contribution' | null;
   draftBillId?: number | null;
   id: number;

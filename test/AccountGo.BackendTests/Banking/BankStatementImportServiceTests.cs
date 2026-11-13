@@ -501,7 +501,7 @@ public class BankStatementImportServiceTests
             harness.Transactions,
             new BankingTestHarness.FakeTenant(1),
             harness.Repos.Accounts,
-            harness.Repos.StatementDescriptionRules);
+            harness.Repos.StatementDescriptionRules, harness.Repos.BankTransactions, harness.Guard);
 
     [Fact]
     public void Commit_AutoMatchedCount_OnlyIncludesThisImport()

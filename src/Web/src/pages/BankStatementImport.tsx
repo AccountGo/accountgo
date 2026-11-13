@@ -6,7 +6,7 @@ import { StatementLineApplyInvoiceDialog } from '../components/StatementLineAppl
 import { StatementLineExcludeDialog } from '../components/StatementLineExcludeDialog';
 import { StatementLineExpenseDialog } from '../components/StatementLineExpenseDialog';
 import { StatementLineOwnerMovementDialog } from '../components/StatementLineOwnerMovementDialog';
-import { ownerActionForLines, ownerSuggestionLabel, ownerButtonSet } from '../lib/statementOwnerMovement';
+import { ownerActionForLines, ownerSuggestionLabel, ownerButtonSet, matchedLineAction } from '../lib/statementOwnerMovement';
 import type { StatementOwnerActions, StatementOwnerAction } from '../types/banking';
 import { StatementLineOtherIncomeDialog } from '../components/StatementLineOtherIncomeDialog';
 import { StatementLineTransactionDialog } from '../components/StatementLineTransactionDialog';
@@ -161,7 +161,7 @@ const BankStatementImportPage: React.FC = () => {
   const [matchConfirm, setMatchConfirm] = useState<{ line: BankStatementLine; ledgerId: number } | null>(null);
   const [applyFor, setApplyFor] = useState<BankStatementLine | null>(null);
   const [ownerActions, setOwnerActions] = useState<StatementOwnerActions | null>(null);
-  const [ownerFor, setOwnerFor] = useState<{ lines: BankStatementLine[]; action: StatementOwnerAction } | null>(null);
+  const [ownerFor, setOwnerFor] = useState<{ lines: BankStatementLine[]; action: StatementOwnerAction; undo?: boolean } | null>(null);
   const [incomeFor, setIncomeFor] = useState<BankStatementLine | null>(null);
   const [linkedEntryFor, setLinkedEntryFor] = useState<{ line: BankStatementLine; kind: 'Personal' | 'MoneyIn' } | null>(null);
   const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
@@ -1025,14 +1025,19 @@ const BankStatementImportPage: React.FC = () => {
                         Include
                       </button>
                     )}
-                    {canManage && line.isMatched && !line.isExcluded && (
+                    {matchedLineAction(line, canManage, canCreateTx, ownerButtons) && (
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => void lineAction(line, 'Unmatch')}
+                        onClick={() => {
+                          if (matchedLineAction(line, canManage, canCreateTx, ownerButtons) === 'undo') {
+                            const action = line.matchedOwnerAction === 'drawing' ? ownerActions?.drawing : ownerActions?.contribution;
+                            if (action) setOwnerFor({ lines: [line], action, undo: true });
+                          } else void lineAction(line, 'Unmatch');
+                        }}
                         className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]"
                       >
-                        <Link2Off className="w-3.5 h-3.5" /> Unmatch
+                        <Link2Off className="w-3.5 h-3.5" /> {matchedLineAction(line, canManage, canCreateTx, ownerButtons) === 'undo' ? 'Undo' : 'Unmatch'}
                       </button>
                     )}
                     {canManage && !line.isMatched && !line.isExcluded && (
@@ -1184,7 +1189,7 @@ const BankStatementImportPage: React.FC = () => {
           }}
         />
       )}
-      {ownerFor && <StatementLineOwnerMovementDialog lines={ownerFor.lines} action={ownerFor.action}
+      {ownerFor && <StatementLineOwnerMovementDialog lines={ownerFor.lines} action={ownerFor.action} undo={ownerFor.undo}
         formatCurrency={formatCurrency} onClose={() => setOwnerFor(null)} onSaved={async () => {
           setOwnerFor(null);
           setSelectedIds([]);

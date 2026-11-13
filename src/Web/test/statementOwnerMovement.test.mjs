@@ -1,3 +1,4 @@
+import * as ownerMovement from '../src/lib/statementOwnerMovement.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ownerActionForLines, ownerSuggestionLabel, ownerButtonSet } from '../src/lib/statementOwnerMovement.ts';
@@ -52,4 +53,16 @@ test('workspaces without linked Personal books use only owner actions', () => {
 test('no available action set renders nothing', () => {
   assert.equal(ownerButtonSet({ linkedPersonalCompanyId: null, canCreateLinkedEntry: true, ownerActionsAvailable: false }), 'none');
   assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: false, ownerActionsAvailable: false }), 'none');
+});
+
+test('matched owner lines offer Undo instead of Unmatch only with both permissions and the owner button set', () => {
+  const matched = line(-10, { isMatched: true, matchedOwnerAction: 'drawing' });
+  assert.equal(ownerMovement.matchedLineAction(matched, true, true, 'owner'), 'undo');
+  assert.equal(ownerMovement.matchedLineAction({ ...matched, matchedOwnerAction: 'contribution' }, true, true, 'owner'), 'undo');
+  assert.equal(ownerMovement.matchedLineAction(matched, true, false, 'owner'), 'unmatch');
+  assert.equal(ownerMovement.matchedLineAction(matched, false, true, 'owner'), null);
+  assert.equal(ownerMovement.matchedLineAction(matched, true, true, 'linked'), 'unmatch');
+  assert.equal(ownerMovement.matchedLineAction({ ...matched, matchedOwnerAction: null }, true, true, 'owner'), 'unmatch');
+  assert.equal(ownerMovement.matchedLineAction({ ...matched, isMatched: false }, true, true, 'owner'), null);
+  assert.equal(ownerMovement.matchedLineAction({ ...matched, isExcluded: true }, true, true, 'owner'), null);
 });

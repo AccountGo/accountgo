@@ -37,3 +37,17 @@ it('confirms a reconciled period and retries the entire bulk selection', async (
   expect(fetcher.mock.calls[1][0]).toBe('/api/Banking/StatementLines/BulkRecordOwnerMovement?confirmReconciledPeriod=true');
   expect(JSON.parse(fetcher.mock.calls[1][1].body).lineIds).toEqual([42, 43]);
 });
+
+it('undo confirms the reversal, sends the optional reason and retries after period confirmation', async () => {
+  fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ code: 'RECONCILED_PERIOD_CONFIRM_REQUIRED', message: 'Already reconciled. Continue?' }), { status: 409 }))
+    .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+  const saved = vi.fn();
+  render(<StatementLineOwnerMovementDialog lines={[{ ...line, isMatched: true, matchedOwnerAction: 'drawing' }]} action={action} undo formatCurrency={String} onClose={vi.fn()} onSaved={saved} />);
+  expect(screen.getByText(/A reversing entry is posted and the line goes back to unmatched/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Reason (optional)'), { target: { value: 'Correction' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Post anyway' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(fetcher.mock.calls[1][0]).toBe('/api/Banking/StatementLines/42/UndoOwnerMovement?confirmReconciledPeriod=true');
+  expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ reason: 'Correction' });
+});

@@ -12,6 +12,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 ## [Unreleased]
 
 ### Added
+
+- You can undo an owner drawing or contribution from the matched statement line.
 - Bank statement lines that move money between you and your business can be recorded as an owner drawing or owner contribution wherever statement import is available, so they no longer count as expenses or income. Partnerships use partner wording.
 
 ### Fixed

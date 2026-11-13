@@ -32,6 +32,8 @@ namespace Services.Banking
 
         BankStatementLineDto Match(int lineId, MatchBankStatementLineRequest request);
         BankStatementLineDto Unmatch(int lineId);
+        /// <summary>Reverse a matched owner drawing or contribution and clear the statement match.</summary>
+        BankStatementLineDto UndoOwnerMovement(int lineId, string? reason);
 
         /// <summary>Mark a line excluded (posts nothing). Matched lines must be unmatched first.</summary>
         BankStatementLineDto Exclude(int lineId, ExcludeBankStatementLineRequest request, string actor);

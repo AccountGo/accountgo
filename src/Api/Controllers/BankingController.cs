@@ -1004,6 +1004,35 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult StatementOwnerActions() => Ok(_statements.GetOwnerActions());
 
+        [HttpPost("StatementLines/{id:int}/UndoOwnerMovement")]
+        [RequireStatementImport]
+        [RequirePermission(SystemPermissions.BankingAccountsManage)]
+        [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
+        public IActionResult UndoOwnerMovement(int id, [FromBody] UndoOwnerMovementRequest? request)
+        {
+            if (RefuseIfBooksLocked(id) is { } locked) return locked;
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var line = _statements.UndoOwnerMovement(id, request?.Reason);
+                AuditStatementDecision(id, line.Amount < 0 ? "undo_owner_drawing" : "undo_owner_contribution");
+                tx.Commit();
+                return Ok(line);
+            }
+            catch (TenantEntityNotFoundException)
+            {
+                return NotFound(new { message = "Statement line not found" });
+            }
+            catch (ReconciledPeriodConfirmationRequiredException ex)
+            {
+                return ReconciledPeriodConflict(ex);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost("StatementLines/{id:int}/RecordOwnerMovement")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]

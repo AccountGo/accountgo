@@ -43,6 +43,8 @@ namespace Services.Banking
         private readonly IRepository<GeneralLedgerHeader> _glHeaders;
         private readonly IRepository<CompanySetting> _settings;
         private readonly IBankTransactionService _transactions;
+        private readonly IRepository<BankTransaction> _bankTransactions;
+        private readonly IReconciledPeriodGuard _reconciledPeriodGuard;
         private readonly ITenantContext _tenant;
         private readonly IRepository<Account> _accounts;
         private readonly IRepository<BankStatementDescriptionRule> _rules;
@@ -58,7 +60,9 @@ namespace Services.Banking
             IBankTransactionService transactions,
             ITenantContext tenant,
             IRepository<Account> accounts,
-            IRepository<BankStatementDescriptionRule> rules)
+            IRepository<BankStatementDescriptionRule> rules,
+            IRepository<BankTransaction> bankTransactions,
+            IReconciledPeriodGuard reconciledPeriodGuard)
         {
             _imports = imports;
             _lines = lines;
@@ -71,6 +75,8 @@ namespace Services.Banking
             _tenant = tenant;
             _accounts = accounts;
             _rules = rules;
+            _bankTransactions = bankTransactions;
+            _reconciledPeriodGuard = reconciledPeriodGuard;
         }
 
         public static string? LastFour(string? identifier)
@@ -658,6 +664,60 @@ namespace Services.Banking
             return result;
         }
 
+        /// <summary>Reverse the owner movement matched to a statement line and clear its match.</summary>
+        public BankStatementLineDto UndoOwnerMovement(int lineId, string? reason)
+        {
+            EnsureCompany();
+            var line = RequireLine(lineId);
+            var actions = GetOwnerActions();
+            var matches = OwnerMovementMatches(new[] { ToDto(line, Array.Empty<PoolEntry>()) }, actions);
+            if (!line.MatchedGeneralLedgerLineId.HasValue
+                || !matches.TryGetValue(line.MatchedGeneralLedgerLineId.Value, out var match))
+                throw new InvalidOperationException("This line wasn't recorded as an owner drawing or contribution.");
+            var voidDate = line.PostedDate.Date > DateTime.UtcNow.Date ? line.PostedDate.Date : DateTime.UtcNow.Date;
+            // The general posting guard exempts reversal journals. This workflow explicitly asks
+            // for confirmation when changing a statement line in a reconciled period.
+            _reconciledPeriodGuard.EnsurePostingAllowed(new GeneralLedgerHeader
+            {
+                CompanyId = _tenant.RequireCompanyId(), Date = line.PostedDate.Date,
+                GeneralLedgerLines = { new GeneralLedgerLine { AccountId = match.BankAccountId } }
+            });
+            _transactions.Void(match.TransactionId, new VoidBankTransactionRequest
+            {
+                VoidDate = voidDate,
+                Reason = string.IsNullOrWhiteSpace(reason) ? $"Undo owner {match.Action}" : reason.Trim()
+            });
+            return ToDto(line, Array.Empty<PoolEntry>());
+        }
+
+        private sealed record OwnerMatch(int TransactionId, int BankAccountId, string Action);
+
+        // One joined query for all matched lines on the page, including only the bank side
+        // of a live transaction using the current workspace's available owner accounts.
+        private Dictionary<int, OwnerMatch> OwnerMovementMatches(IReadOnlyList<BankStatementLineDto> lines, StatementOwnerActionsDto actions)
+        {
+            var ids = lines.Where(l => l.IsMatched).Select(l => l.MatchedGeneralLedgerLineId!.Value).ToList();
+            if (ids.Count == 0) return new();
+            var companyId = _tenant.RequireCompanyId();
+            var drawingId = actions.Drawing?.AccountId;
+            var contributionId = actions.Contribution?.AccountId;
+            var matches = (from gl in _glLines.Table
+                join tx in _bankTransactions.Table on gl.GeneralLedgerHeaderId equals tx.GeneralLedgerHeaderId
+                join bank in _banks.Table on tx.BankId equals bank.Id
+                join header in _glHeaders.Table on gl.GeneralLedgerHeaderId equals header.Id
+                where ids.Contains(gl.Id) && gl.CompanyId == companyId && tx.CompanyId == companyId
+                    && bank.CompanyId == companyId && header.CompanyId == companyId
+                    && header.DocumentType == DocumentTypes.BankTransaction
+                    && !header.ReversedGeneralLedgerHeaderId.HasValue
+                    && tx.VoidGeneralLedgerHeaderId == null && gl.AccountId == bank.AccountId
+                    && ((tx.Kind == BankTransactionKinds.MoneyOut && drawingId.HasValue && tx.ContraAccountId == drawingId)
+                        || (tx.Kind == BankTransactionKinds.MoneyIn && contributionId.HasValue && tx.ContraAccountId == contributionId))
+                select new { gl.Id, tx.BankId, TransactionId = tx.Id, gl.AccountId, tx.Kind }).ToList();
+            var lineBanks = lines.Where(l => l.IsMatched).ToDictionary(l => l.MatchedGeneralLedgerLineId!.Value, l => l.BankId);
+            return matches.Where(m => lineBanks[m.Id] == m.BankId).ToDictionary(m => m.Id,
+                m => new OwnerMatch(m.TransactionId, m.AccountId, m.Kind == BankTransactionKinds.MoneyOut ? "drawing" : "contribution"));
+        }
+
         private void RememberOwnerRule(BankStatementLine line, BankStatementRuleAction action)
         {
             var key = StatementDescriptionKey.Normalize(FirstNonBlank(line.Payee, line.Memo));
@@ -676,7 +736,6 @@ namespace Services.Banking
         private IReadOnlyList<BankStatementLineDto> WithOwnerSuggestions(IReadOnlyList<BankStatementLineDto> lines)
         {
             var eligible = lines.Where(l => !l.IsMatched && !l.IsExcluded).ToList();
-            if (eligible.Count == 0) return lines;
             var actions = GetOwnerActions();
             if (actions.Drawing == null && actions.Contribution == null) return lines;
             var keys = eligible.Select(l => StatementDescriptionKey.Normalize(FirstNonBlank(l.Payee, l.Memo)))
@@ -686,8 +745,12 @@ namespace Services.Banking
             var rules = _rules.Table.Where(r => r.CompanyId == companyId && keys.Contains(r.DescriptionKey)
                 && (r.Action == (int)BankStatementRuleAction.OwnerDrawing || r.Action == (int)BankStatementRuleAction.OwnerContribution))
                 .ToDictionary(r => r.DescriptionKey, r => r.Action);
-            foreach (var line in eligible)
+            var matches = OwnerMovementMatches(lines, actions);
+            foreach (var line in lines)
             {
+                if (line.MatchedGeneralLedgerLineId.HasValue && matches.TryGetValue(line.MatchedGeneralLedgerLineId.Value, out var match))
+                    line.MatchedOwnerAction = match.Action;
+                if (line.IsMatched || line.IsExcluded) continue;
                 var key = StatementDescriptionKey.Normalize(FirstNonBlank(line.Payee, line.Memo));
                 if (key == null || !rules.TryGetValue(key, out var action)) continue;
                 if (line.Amount < 0 && actions.Drawing != null && action == (int)BankStatementRuleAction.OwnerDrawing)

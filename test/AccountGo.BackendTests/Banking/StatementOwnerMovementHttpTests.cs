@@ -349,6 +349,119 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         });
     }
 
+    private Task<HttpResponseMessage> Undo(int id, string suffix = "") =>
+        Send(HttpMethod.Post, $"StatementLines/{id}/UndoOwnerMovement{suffix}");
+
+    private async Task<string?> MatchedAction(int id)
+    {
+        var json = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=all"));
+        return json.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetInt32() == id)
+            .GetProperty("matchedOwnerAction").GetString();
+    }
+
+    [Theory]
+    [InlineData(-40, "drawing")]
+    [InlineData(100, "contribution")]
+    public async Task UndoOwnerMovement_WithoutFinancials_ReversesAndAllowsRecordingAgain(decimal amount, string action)
+    {
+        WithDb(db => db.Companies.Single(c => c.Id == _companyId).DisabledModulesJson = "[\"financials\"]");
+        var id = Line(amount);
+        await AssertOk(await Record(id));
+        Assert.Equal(action, await MatchedAction(id));
+        await AssertOk(await Undo(id));
+        Assert.Null(await MatchedAction(id));
+        WithDb(db =>
+        {
+            var transaction = Assert.Single(db.BankTransactions);
+            Assert.True(transaction.IsVoid);
+            var reversal = db.GeneralLedgerHeaders.Single(h => h.Id == transaction.VoidGeneralLedgerHeaderId);
+            Assert.Equal(transaction.GeneralLedgerHeaderId, reversal.ReversedGeneralLedgerHeaderId);
+            Assert.Null(db.BankStatementLines.Single(l => l.Id == id).MatchedGeneralLedgerLineId);
+            Assert.Equal(0m, db.GeneralLedgerLines.Where(l => l.AccountId == _cashId).ToList()
+                .Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : -l.Amount));
+        });
+        await AssertOk(await Record(id));
+        WithDb(db => Assert.Single(db.BankTransactions.ToList(), t => !t.IsVoid));
+    }
+
+    [Theory]
+    [InlineData("unmatched")]
+    [InlineData("void")]
+    [InlineData("non-owner")]
+    [InlineData("unsupported-entity")]
+    [InlineData("changed-account")]
+    [InlineData("contra-side")]
+    public async Task UndoOwnerMovement_RejectsNonqualifyingMatches(string kind)
+    {
+        var id = Line(-10);
+        if (kind == "non-owner")
+        {
+            var contra = 0;
+            WithDb(db => contra = db.Accounts.First(a => a.AccountClassId == (int)AccountClasses.Expense
+                && !db.Accounts.Any(c => c.ParentAccountId == a.Id)).Id);
+            await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{id}/CreateTransaction", new { kind = (int)BankTransactionKinds.MoneyOut, contraAccountId = contra }));
+        }
+        else if (kind != "unmatched") await AssertOk(await Record(id));
+        WithDb(db =>
+        {
+            if (kind == "void") db.BankTransactions.Single().VoidGeneralLedgerHeaderId = db.BankTransactions.Single().GeneralLedgerHeaderId;
+            if (kind == "unsupported-entity") db.CompanySettings.Single().EntityType = EntityType.Corporation;
+            if (kind == "changed-account") db.Accounts.Single(a => a.AccountCode == "30800").AccountCode = "OLD30800";
+            if (kind == "contra-side") db.BankStatementLines.Single(l => l.Id == id).MatchedGeneralLedgerLineId =
+                db.GeneralLedgerLines.Single(l => l.AccountId != _cashId).Id;
+        });
+        Assert.Null(await MatchedAction(id));
+        var headers = 0;
+        WithDb(db => headers = db.GeneralLedgerHeaders.Count());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Undo(id)).StatusCode);
+        WithDb(db => Assert.Equal(headers, db.GeneralLedgerHeaders.Count()));
+    }
+
+    [Fact]
+    public async Task UndoOwnerMovement_LockedOriginalDate_LeavesMatchAndEntryIntact()
+    {
+        var id = Line(-10);
+        await AssertOk(await Record(id));
+        WithDb(db => db.CompanySettings.Single().BooksLockedThrough = Date);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Undo(id)).StatusCode);
+        WithDb(db => { Assert.False(db.BankTransactions.Single().IsVoid); Assert.Single(db.GeneralLedgerHeaders); Assert.NotNull(db.BankStatementLines.Single().MatchedGeneralLedgerLineId); });
+    }
+
+    [Fact]
+    public async Task UndoOwnerMovement_ReconciledPeriod_RequiresConfirmation()
+    {
+        var id = Line(-10);
+        await AssertOk(await Record(id));
+        WithDb(db => db.BankReconciliations.Add(new BankReconciliation { CompanyId = _companyId, BankId = _bankId, StatementEndDate = DateTime.UtcNow.Date.AddDays(1), Status = BankReconciliationStatuses.Finished, CreatedAt = DateTime.UtcNow }));
+        Assert.Equal(HttpStatusCode.Conflict, (await Undo(id)).StatusCode);
+        WithDb(db => { Assert.False(db.BankTransactions.Single().IsVoid); Assert.Single(db.GeneralLedgerHeaders); });
+        await AssertOk(await Undo(id, "?confirmReconciledPeriod=true"));
+    }
+
+    [Fact]
+    public async Task UndoOwnerMovement_MissingLine_ReturnsNotFound()
+    {
+        Assert.Equal(HttpStatusCode.NotFound, (await Undo(int.MaxValue)).StatusCode);
+    }
+
+    [Fact]
+    public async Task UndoOwnerMovement_RequiresCreatePermission()
+    {
+        var id = Line(-10);
+        await AssertOk(await Record(id));
+        var member = await _host.CreateUser("undo-manage-only@example.test");
+        await _host.AddMember(_companyId, member.Id, CompanyMemberRole.Member);
+        WithDb(db =>
+        {
+            var role = new SecurityRole { Name = "undo-manage-only", DisplayName = "Manage only" };
+            db.SecurityRoles.Add(role); db.SaveChanges();
+            db.SecurityRolePermissions.Add(new SecurityRolePermission { SecurityRoleId = role.Id, SecurityPermissionId = db.SecurityPermissions.Single(p => p.Name == SystemPermissions.BankingAccountsManage).Id });
+            db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = db.CompanyMembers.Single(m => m.UserId == member.Id).Id, SecurityRoleId = role.Id });
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"StatementLines/{id}/UndoOwnerMovement", null, member.Token)).StatusCode);
+        WithDb(db => { Assert.False(db.BankTransactions.Single().IsVoid); Assert.NotNull(db.BankStatementLines.Single().MatchedGeneralLedgerLineId); });
+    }
+
     [Fact]
     public async Task YearEndClose_ClosesDrawingsIntoCapital()
     {
