@@ -648,7 +648,6 @@ export const Profile: React.FC = () => {
   const initial = displayName.charAt(0).toUpperCase();
   // Platform staff role (global); workspace access comes from the tenant context below.
   const isSysAdmin = (user?.roles || []).includes('SystemAdministrators');
-  const hasFullWorkspaceAccess = currentOrg?.role === 'Owner' || currentOrg?.role === 'Admin';
 
   return (
     <div className="space-y-6 w-full animate-in fade-in duration-200 text-[var(--text-main)]">
@@ -1395,14 +1394,7 @@ export const Profile: React.FC = () => {
                 </span>
               </div>
 
-              {hasFullWorkspaceAccess ? (
-                <div className="p-3 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] text-xs">
-                  <div className="font-semibold">Full workspace access</div>
-                  <p className="text-[10px] opacity-80 mt-0.5">
-                    As {currentOrg.role} of {currentOrg.name}, you have every permission in this workspace.
-                  </p>
-                </div>
-              ) : userPermissions.length === 0 ? (
+              {userPermissions.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)] italic">
                   No permissions in this workspace yet. Ask an Owner or Admin to assign a security role.
                 </p>
