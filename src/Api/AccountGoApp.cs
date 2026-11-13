@@ -288,8 +288,6 @@ public static class AccountGoApp
         builder.Services.AddScoped(typeof(Services.Administration.IAdministrationService), typeof(Services.Administration.AdministrationService));
         builder.Services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));
         builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Services.TaxSystem.TaxService));
-        builder.Services.AddScoped(typeof(Services.Auditing.IAuditableEntityService), typeof(Services.Auditing.AuditableEntityService));
-        builder.Services.AddScoped(typeof(Services.Auditing.IAuditableAttributeService), typeof(Services.Auditing.AuditableAttributeService));
 
         //seed the database
         builder.Services.AddScoped<DatabaseSeeder>();

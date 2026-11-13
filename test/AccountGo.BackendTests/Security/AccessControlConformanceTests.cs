@@ -869,16 +869,14 @@ namespace AccountGo.BackendTests.Security
 
             // Zero-role Owner is denied on AuditLogs, Donors, Donations, and Tax mutations
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Get, "/api/Administration/AuditLogs", token: owner.Token, org: slug)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Get, "/api/Audit/Entities", token: owner.Token, org: slug)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Get, "/api/Donors", token: owner.Token, org: slug)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Get, "/api/Donations/DonationInvoices", token: owner.Token, org: slug)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "VAT", taxCode = "VAT", rate = 12 }, token: owner.Token, org: slug)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/deletetaxgroup?id=1", token: owner.Token, org: slug)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/deleteitemtaxgroup?id=1", token: owner.Token, org: slug)).StatusCode);
 
-            // Auditor / Viewer has audit.logs.view, so GET /api/Administration/AuditLogs and GET /api/Audit/Entities succeed
+            // Auditor / Viewer has audit.logs.view, so GET /api/Administration/AuditLogs succeeds
             Assert.Equal(HttpStatusCode.OK, (await _fixture.Send(HttpMethod.Get, "/api/Administration/AuditLogs", token: viewer.Token, org: slug)).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await _fixture.Send(HttpMethod.Get, "/api/Audit/Entities", token: viewer.Token, org: slug)).StatusCode);
         }
 
         // =====================================================================
