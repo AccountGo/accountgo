@@ -11,6 +11,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-13
+
+Release notes: https://github.com/AccountGo/accountgo/releases/tag/v0.2.0
+
 ### Added
 - AccountGo now tells you when a new version is available, so you can reload when it suits you.
 - A clear status screen now appears while AccountGo is being updated, starting up or under maintenance. It continues on its own when AccountGo is back and keeps what you were working on.
