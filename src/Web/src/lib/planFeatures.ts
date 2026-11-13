@@ -5,6 +5,16 @@ export interface PlanFeatureSource {
   features?: string[];
 }
 
+/** Plan shape for module and product-group lookups; PlanCatalogEntry satisfies it. */
+export interface PlanModuleSource {
+  key: string;
+  name: string;
+  selfService: boolean;
+  includedModules?: readonly string[];
+  product?: string | null;
+  productLabel?: string | null;
+}
+
 /** Names of the self-service plans whose catalog features include the feature, in catalog order. */
 export function planNamesWithFeature(plans: readonly PlanFeatureSource[] | null | undefined, feature: string): string[] {
   return (plans ?? [])
@@ -22,4 +32,30 @@ export function formatPlanList(names: readonly string[]): string {
 export function featureAvailabilityText(plans: readonly PlanFeatureSource[] | null | undefined, feature: string): string {
   const names = planNamesWithFeature(plans, feature);
   return names.length > 0 ? `Available on ${formatPlanList(names)}.` : 'Available on a higher plan.';
+}
+
+/** First self-service plan, in catalog order, that includes the module; null when none does. */
+export function firstPlanWithModule<T extends PlanModuleSource>(plans: readonly T[] | null | undefined, moduleKey: string): T | null {
+  return (plans ?? []).find((plan) => plan.selfService && (plan.includedModules ?? []).includes(moduleKey)) ?? null;
+}
+
+/** True when some plan in the list includes the module. */
+export function anyPlanIncludesModule(plans: readonly PlanModuleSource[], moduleKey: string): boolean {
+  return plans.some((plan) => (plan.includedModules ?? []).includes(moduleKey));
+}
+
+export interface ProductGroup {
+  product: string;
+  label: string;
+}
+
+/** Distinct product groups in catalog order, labelled by the catalog (falls back to the group key). */
+export function productGroups(plans: readonly PlanModuleSource[] | null | undefined): ProductGroup[] {
+  const groups: ProductGroup[] = [];
+  for (const plan of plans ?? []) {
+    const product = plan.product?.trim();
+    if (!product || groups.some((group) => group.product === product)) continue;
+    groups.push({ product, label: plan.productLabel?.trim() || product });
+  }
+  return groups;
 }

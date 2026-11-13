@@ -49,11 +49,11 @@ test('cash basis framework forces cash basis; every other framework is accrual',
   for (const framework of ['IfrsForSmes', 'UsGaapPrivate', 'Ifrs']) assert.equal(basisForFramework(framework), 'Accrual');
 });
 
-test('inventory costing only applies to product, mixed or enterprise workspaces and never offers LIFO', () => {
+test('inventory costing only applies to product or mixed workspaces and never offers LIFO', () => {
   const state = defaultState(today, { name: 'Acme' });
   assert.equal(effectiveInventoryMethod(state), 'None');
   assert.equal(effectiveInventoryMethod({ ...state, industryTemplate: 'ProductRetail' }), 'WeightedAverage');
-  assert.equal(effectiveInventoryMethod({ ...state, plan: 'enterprise' }), 'WeightedAverage');
+  assert.equal(effectiveInventoryMethod({ ...state, plan: 'any_plan' }), 'None');
   assert.equal(effectiveInventoryMethod({ ...state, industryTemplate: 'Mixed', inventoryCostingMethod: 'Fifo' }), 'Fifo');
   assert.deepEqual(inventoryOptions(), ['WeightedAverage', 'Fifo']);
 });
@@ -89,7 +89,7 @@ test('payload carries the full hard-gate DTO the API expects', () => {
     currency: 'php',
   });
   assert.deepEqual(payload, {
-    name: 'Acme Studio', slug: 'acme-studio', plan: 'accounting', currency: 'PHP', legalName: 'Acme Studio LLC',
+    name: 'Acme Studio', slug: 'acme-studio', plan: '', currency: 'PHP', legalName: 'Acme Studio LLC',
     reportingFramework: 'CashBasis', accountingBasis: 'Cash', fiscalYearPattern: 'Custom', fiscalYearStartMonth: 10,
     booksStartDate: '2026-10-24', taxRegime: 'VatGst', industryTemplate: 'ProductRetail', inventoryCostingMethod: 'WeightedAverage',
     workspacePurpose: 'Business', collaborationIntent: 'JustMe', entityType: 'SoleProprietor',

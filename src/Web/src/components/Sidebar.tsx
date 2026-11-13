@@ -27,6 +27,8 @@ interface SidebarProps {
   subscription?: SubscriptionInfo;
   hasModule?: (module: ModuleKey) => boolean;
   hasPermission?: (permission: string | string[]) => boolean;
+  /** Offer plans with the general ledger: the current plan lacks it and a self-service plan has it. */
+  showLedgerUpsell?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -36,9 +38,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   sidebarMode = 'expanded',
   isMobileOpen = false,
   onMobileClose,
-  subscription,
   hasModule,
   hasPermission,
+  showLedgerUpsell = false,
 }) => {
   const isCollapsed = sidebarMode === 'collapsed';
 
@@ -239,22 +241,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
           </nav>
 
-          {/* Invoicing Plan Upgrade Teaser */}
-          {!currentOrg.isPersonalBooks && (!isCollapsed || isMobile) && subscription?.planId === 'invoicing' && (
+          {/* Plans with the general ledger, when the current plan has none */}
+          {!currentOrg.isPersonalBooks && (!isCollapsed || isMobile) && showLedgerUpsell && (
             <div className="mt-4 p-3 rounded-2xl bg-[var(--brand-subtle)] text-[var(--text-main)] border border-transparent">
               <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--brand-primary)] mb-1">
                 <Sparkles className="w-3.5 h-3.5" />
-                Invoicing Plan
+                Your plan
               </div>
               <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-2">
-                Need general ledger, bank feeds, or financial reports?
+                Need a general ledger, bank feeds or financial reports?
               </p>
               <Link
                 to={`/org/${currentOrg.slug}/settings?tab=subscription`}
                 onClick={isMobile ? onMobileClose : undefined}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-primary)] hover:underline"
               >
-                Upgrade to Accounting &rarr;
+                See plans &rarr;
               </Link>
             </div>
           )}

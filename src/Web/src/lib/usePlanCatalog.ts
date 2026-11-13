@@ -15,6 +15,10 @@ export interface PlanCatalogEntry {
   monthlyPrice: number | null;
   annualPrice?: number | null;
   product?: string | null;
+  /** Display name of the product group, when the catalog sets one. */
+  productLabel?: string | null;
+  /** Short display highlight such as "Most popular", when the catalog sets one. */
+  badge?: string | null;
   features?: string[];
   limits?: Record<string, number | null>;
 }

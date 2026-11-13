@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { Plan } from '../lib/policyDefaults';
 import { usePlanCatalog } from '../../../lib/usePlanCatalog';
 import {
   buildIntentPlanOptions,
+  defaultIntentPlan,
   freeSlotBlockedMessage,
   type FreeSlotState,
 } from '../../../lib/createOrgPlanOptions';
@@ -38,6 +39,10 @@ export const IntentStep: React.FC<{
     disabled: opt.disabled,
   }));
   const selectedPaid = built.find((o) => o.value === plan && !o.free);
+  const preselect = plan === '' ? defaultIntentPlan(built) : null;
+  useEffect(() => {
+    if (preselect) onChange(preselect);
+  }, [preselect, onChange]);
 
   if (loading || !plans) {
     return (

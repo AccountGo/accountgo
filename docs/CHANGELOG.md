@@ -19,6 +19,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - A plan change that would charge your saved card now shows the exact amount (today's prorated charge, then the regular price and date) and waits for you to confirm before anything is charged.
 
 ### Changed
+- Plan screens take plan names, groups and highlights from your server's plan list. A locked module now says which plan includes it, and the sidebar suggestion to get a general ledger links to your plans instead of naming one.
 - The plan limit message no longer says paid plans are coming soon. It offers a contact link when no upgrade covers what you need.
 - The statement import upgrade screen now names the plans that include statement import from your server's plan list, instead of fixed plan names. The sign-in screen and loading message now say AccountGo.
 

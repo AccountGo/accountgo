@@ -18,6 +18,7 @@ import {
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
 import { usePlanCatalog } from '../lib/usePlanCatalog';
 import { currentPlanDisplayName, derivePlanCards, planPriceLabel, plansForProduct } from '../lib/planCards';
+import { anyPlanIncludesModule, firstPlanWithModule, productGroups } from '../lib/planFeatures';
 import { useCapabilities } from '../lib/entitlements';
 import { useBilling, type UpgradeOutcome } from '../lib/useBilling';
 import { UpgradeConfirmDialog } from './UpgradeConfirmDialog';
@@ -52,22 +53,11 @@ interface SubscriptionSettingsTabProps {
   tenantContext: TenantContextType;
 }
 
-/** First subscription tier that includes the module (Invoicing → Accounting → Enterprise). */
-export type ModuleTier = 'invoicing' | 'accounting' | 'enterprise';
-
-const TIER_LABEL: Record<ModuleTier, string> = {
-  invoicing: 'Invoicing',
-  accounting: 'Accounting',
-  enterprise: 'Enterprise',
-};
-
 const MODULES_CATALOG: Array<{
   key: ModuleKey;
   name: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
-  /** Lowest plan that includes this module. */
-  minPlan: ModuleTier;
   isCore?: boolean;
 }> = [
   {
@@ -75,7 +65,6 @@ const MODULES_CATALOG: Array<{
     name: 'Invoicing & Sales',
     description: 'Customers, quotations, sales orders, invoices, and payment receipts.',
     icon: Receipt,
-    minPlan: 'invoicing',
     isCore: true,
   },
   {
@@ -83,49 +72,38 @@ const MODULES_CATALOG: Array<{
     name: 'General Ledger & Banking',
     description: 'Chart of accounts, cash & bank accounts, journal entries, and trial balance.',
     icon: BookOpen,
-    minPlan: 'accounting',
   },
   {
     key: 'purchases',
     name: 'Purchases & Bills',
     description: 'Vendors, purchase orders, vendor invoices, and bill payments.',
     icon: ShoppingBag,
-    minPlan: 'invoicing',
   },
   {
     key: 'reports',
     name: 'Financial Reports',
     description: 'Income statements, balance sheets, customer/vendor aging, and tax summaries.',
     icon: BarChart3,
-    minPlan: 'accounting',
   },
   {
     key: 'inventory',
     name: 'Inventory & Items',
     description: 'Track stock on hand and its cost: bills add stock, invoices use it up, adjustments record counts and write-offs.',
     icon: Boxes,
-    minPlan: 'enterprise',
   },
   {
     key: 'donations',
     name: 'Donations & Non-Profit',
     description: 'Donor management, donation invoices, pledges, and tax receipts.',
     icon: HeartHandshake,
-    minPlan: 'enterprise',
   },
   {
     key: 'audit',
     name: 'Audit Trail & Compliance',
     description: 'Comprehensive mutation auditing, field-level diffs, and security events.',
     icon: ShieldCheck,
-    minPlan: 'enterprise',
   },
 ];
-
-/** Display-only extras; names, descriptions, modules and prices come from the server catalog. */
-const PLAN_BADGES: Partial<Record<PlanKey, string>> = {
-  accounting: 'Most Popular',
-};
 
 export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = ({
   tenantContext,
@@ -140,9 +118,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     version: entitlementsVersion,
   } = useCapabilities();
   const billing = useBilling();
-  const currentPlan = (billing.plan || entitlements?.effectivePlan || entitlements?.plan || subscription?.planId || 'accounting') as PlanKey;
+  const currentPlan = (billing.plan || entitlements?.effectivePlan || entitlements?.plan || subscription?.planId || '') as PlanKey;
   const effectiveTier = entitlements?.tier || billing.billing?.tier;
-  const isProTier = effectiveTier === 'pro' || effectiveTier === 'enterprise';
+  const isProTier = effectiveTier === 'pro';
   const tierBadge = billing.billingEnabled
     ? (billing.status === 'past_due'
       ? 'Past due'
@@ -435,8 +413,10 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
 
       {billing.billingEnabled && !personalBooks && (() => {
         const allPlans = catalog.plans || [];
-        const grouped = allPlans.some(plan => plan.product === 'invoicing') && allPlans.some(plan => plan.product === 'accounting');
-        const currentProduct = allPlans.find(plan => plan.key === currentPlan)?.product ?? 'invoicing';
+        const groups = productGroups(allPlans);
+        const grouped = groups.length >= 2;
+        const currentPlanEntry = allPlans.find(plan => plan.key === currentPlan);
+        const currentProduct = currentPlanEntry?.product ?? groups[0]?.product ?? '';
         const highlightProduct = highlightPlan ? allPlans.find(plan => plan.key === highlightPlan)?.product : undefined;
         const product = selectedProduct ?? highlightProduct ?? currentProduct;
         const planKeys = new Set(plansForProduct(allPlans, product).map(plan => plan.key));
@@ -479,16 +459,19 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
 
             {grouped && (
               <div role="group" aria-label="Product" className="inline-flex rounded-xl bg-[var(--bg-subtle)] p-1">
-                {(['invoicing', 'accounting'] as const).map(option => (
-                  <button key={option} type="button" aria-pressed={product === option} onClick={() => setSelectedProduct(option)}
-                    className={`h-9 px-4 rounded-lg text-xs font-bold ${product === option ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'}`}>
-                    {option === 'invoicing' ? 'Invoicing & Bills' : 'Accounting'}
+                {groups.map(group => (
+                  <button key={group.product} type="button" aria-pressed={product === group.product} onClick={() => setSelectedProduct(group.product)}
+                    className={`h-9 px-4 rounded-lg text-xs font-bold ${product === group.product ? 'bg-[var(--brand-primary)] text-white' : 'text-[var(--text-secondary)]'}`}>
+                    {group.label}
                   </button>
                 ))}
               </div>
             )}
             {cards.length === 0 && <p className="text-sm text-[var(--text-muted)]">No plan changes are available for this product.</p>}
-            {product === 'accounting' && currentProduct === 'invoicing' && showInterval && (
+            {product !== currentProduct
+              && anyPlanIncludesModule(plansForProduct(allPlans, product), 'financials')
+              && !(currentPlanEntry?.includedModules ?? []).includes('financials')
+              && showInterval && (
               <p className="text-xs text-[var(--text-secondary)]">
                 Your invoices, bills and payments carry over. We check that every issued document is posted before switching.
               </p>
@@ -571,7 +554,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         <div>
           <h3 className="text-base font-bold text-[var(--text-main)]">Subscribed Modules &amp; Add-ons</h3>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            {personalBooks ? 'Choose which areas to use in your personal books.' : 'Modules are listed by plan tier. Only modules included in your current plan can be toggled; others stay locked until you upgrade.'}
+            {personalBooks ? 'Choose which areas to use in your personal books.' : 'Only modules included in your current plan can be toggled; others stay locked until you upgrade.'}
           </p>
         </div>
 
@@ -583,6 +566,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             const required = isRequired(mod.key);
             const isEnabled = inPlan && (activeModules.includes(mod.key) || required);
             const toggleDisabled = locked || mod.isCore || required || saving;
+            const includedIn = locked ? firstPlanWithModule(catalog.plans, mod.key)?.name ?? null : null;
 
             return (
               <div
@@ -615,9 +599,11 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                           Core
                         </span>
                       )}
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--bg-surface-hover)] text-[var(--text-muted)] font-mono font-bold uppercase">
-                        {TIER_LABEL[mod.minPlan]}+
-                      </span>
+                      {locked && includedIn && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--bg-surface-hover)] text-[var(--text-muted)] font-mono font-bold uppercase">
+                          {includedIn}
+                        </span>
+                      )}
                       {locked && (
                         <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-mono font-bold uppercase">
                           <Lock className="w-2.5 h-2.5" aria-hidden="true" />
@@ -638,7 +624,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                   aria-disabled={toggleDisabled}
                   aria-label={
                     locked
-                      ? `${mod.name} requires the ${TIER_LABEL[mod.minPlan]} plan or higher`
+                      ? (includedIn ? `${mod.name} is included in ${includedIn}` : `${mod.name} is not included in your current plan`)
                       : mod.isCore || required
                         ? `${mod.name} is always on`
                         : `Toggle ${mod.name} module`
@@ -650,7 +636,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                   } ${isEnabled ? 'bg-[var(--brand-primary)]' : 'bg-slate-700'}`}
                   title={
                     locked
-                      ? `Included from ${TIER_LABEL[mod.minPlan]} plan — upgrade to enable`
+                      ? (includedIn ? `Included in ${includedIn}. Upgrade to enable` : 'Not included in your current plan')
                       : mod.isCore || required
                         ? 'Core feature cannot be disabled'
                         : `Toggle ${mod.name}`
@@ -686,7 +672,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             {visiblePlans.map((plan) => {
               const isCurrent = currentPlan === plan.key;
               const includedModules = plan.includedModules;
-              const badge = PLAN_BADGES[plan.key];
+              const badge = plan.badge;
 
               return (
                 <div

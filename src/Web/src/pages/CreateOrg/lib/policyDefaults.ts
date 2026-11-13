@@ -68,7 +68,8 @@ export const defaultState = (today: Date = new Date(), prefill: { name?: string;
     addPersonalBooks: null,
     workspacePurpose: '',
     collaborationIntent: '',
-    plan: 'accounting',
+    // Empty until the plan step preselects a catalog plan; an empty plan creates the server's default plan.
+    plan: '',
     name,
     slug: slugify(prefill.slug || name),
     slugTouched: Boolean(prefill.slug),
@@ -130,8 +131,8 @@ export const firstIncompleteStepIndex = (
 export const basisForFramework = (framework: ReportingFramework): AccountingBasis =>
   framework === 'CashBasis' ? 'Cash' : 'Accrual';
 
-export const inventoryRelevant = (state: Pick<WizardState, 'plan' | 'industryTemplate'>): boolean =>
-  state.industryTemplate !== 'Services' || state.plan === 'enterprise';
+export const inventoryRelevant = (state: Pick<WizardState, 'industryTemplate'>): boolean =>
+  state.industryTemplate !== 'Services';
 
 // Inventory choices never include LIFO, which IFRS and IFRS for SMEs do not permit.
 export const inventoryOptions = (): InventoryCostingMethod[] => ['WeightedAverage', 'Fifo'];

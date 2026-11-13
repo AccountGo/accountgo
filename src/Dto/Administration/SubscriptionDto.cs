@@ -50,6 +50,10 @@ namespace Dto.Subscription
         public decimal? AnnualPrice { get; set; }
         /// <summary>Product group used to organize plans, when applicable.</summary>
         public string? Product { get; set; }
+        /// <summary>Display name of the product group (for example on a group switcher), when the catalog sets one.</summary>
+        public string? ProductLabel { get; set; }
+        /// <summary>Short display highlight for the plan (for example "Most popular"), when the catalog sets one.</summary>
+        public string? Badge { get; set; }
         /// <summary>Features included in this plan, when advertised by the catalog.</summary>
         public List<string>? Features { get; set; }
         /// <summary>Plan limits; null values represent unlimited resources.</summary>

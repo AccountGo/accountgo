@@ -3,7 +3,6 @@ import type { PlanCatalogEntry } from '../../../lib/usePlanCatalog';
 import { fiscalYearPreview } from '../lib/fyPreview';
 import { basisForFramework, effectiveInventoryMethod, inventoryRelevant, type WizardState } from '../lib/policyDefaults';
 
-const PLAN_LABEL: Record<string, string> = { invoicing: 'Invoicing', accounting: 'Full accounting', enterprise: 'Enterprise' };
 const FRAMEWORK_LABEL = { IfrsForSmes: 'IFRS for SMEs', UsGaapPrivate: 'US GAAP (private)', Ifrs: 'Full IFRS', CashBasis: 'Cash basis' } as const;
 const TAX_LABEL = { None: 'No tax', SalesTax: 'Sales tax', VatGst: 'VAT / GST' } as const;
 const INDUSTRY_LABEL = { Services: 'Services', ProductRetail: 'Products / retail', Mixed: 'Mixed' } as const;
@@ -18,9 +17,7 @@ export const ReviewStep: React.FC<{
   existingSettings?: { name?: string; slug?: string; plan?: string; currency?: string; fiscalYearEnd?: string } | null;
   catalog?: PlanCatalogEntry[] | null;
 }> = ({ state, capabilities, isContinuation, existingSettings, catalog }) => {
-  const planLabel = PLAN_LABEL[state.plan]
-    || catalog?.find((p) => p.key === state.plan)?.name
-    || state.plan;
+  const planLabel = catalog?.find((p) => p.key === state.plan)?.name || state.plan || 'Default plan';
   const preview = fiscalYearPreview(state.booksStartDate, state.fiscalYearPattern, state.fiscalYearStartMonth);
   const justMe = state.collaborationIntent === 'JustMe';
   const withOthers = state.collaborationIntent === 'WithOthers';

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildIntentPlanOptions,
+  defaultIntentPlan,
   freeSlotBlockedMessage,
   freeSlotPlanError,
   isFreeSlotUsed,
@@ -162,4 +163,19 @@ test('community-only catalog allows local workspace creation without checkout', 
   assert.equal(options[0].disabled, false);
   assert.equal(isPaidWizardPlan('community', community), false);
   assert.equal(freeSlotPlanError('community', community, { used: true, freeWorkspaceName: null, freeWorkspaceSlug: null }), null);
+});
+
+test('plan-step values are catalog keys, badges come from the catalog, and the badged free plan is preselected', () => {
+  const badged = catalog.map((plan) => (plan.key === 'accounting' ? { ...plan, badge: 'Highlighted' } : plan));
+  const options = buildIntentPlanOptions(badged);
+  assert.deepEqual(options.map((o) => o.value), ['invoicing', 'accounting', 'fixture_paid_a', 'fixture_paid_b']);
+  assert.equal(options.find((o) => o.value === 'accounting').badge, 'Highlighted');
+  assert.equal(options.find((o) => o.value === 'invoicing').badge, undefined);
+  assert.equal(defaultIntentPlan(options), 'accounting');
+  assert.equal(defaultIntentPlan(buildIntentPlanOptions(catalog)), 'invoicing');
+});
+
+test('no free plan is preselected once the free slot is used', () => {
+  const options = buildIntentPlanOptions(catalog, { used: true, freeWorkspaceName: 'Mine', freeWorkspaceSlug: 'mine' });
+  assert.equal(defaultIntentPlan(options), null);
 });
