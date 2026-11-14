@@ -1,4 +1,4 @@
-import React, { Fragment, useCallback, useEffect, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -15,6 +15,8 @@ import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { DEFAULT_CURRENCY } from '../lib/currency';
 import {
   buildTaxReportCsv,
+  createLatestRequestGuard,
+  isValidTaxDateRange,
   type TaxPeriodItem,
   type TaxPeriodReport,
   type TaxPeriodSideSummary,
@@ -47,6 +49,8 @@ export const Tax: React.FC = () => {
 
   const [docsOpen, setDocsOpen] = useState(false);
   const [expandedLedgerAccounts, setExpandedLedgerAccounts] = useState<Record<number, boolean>>({});
+  const requestGuardRef = useRef(createLatestRequestGuard());
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!canView) return;
@@ -69,8 +73,11 @@ export const Tax: React.FC = () => {
           setError('Tax periods could not be loaded.');
         }
         if (taxRes.ok) {
-          const taxes = (await taxRes.json()) as unknown[];
-          setHasConfiguredTaxes(Array.isArray(taxes) && taxes.length > 0);
+          const taxes = (await taxRes.json()) as Array<{ isActive?: boolean; rate?: number }>;
+          setHasConfiguredTaxes(
+            Array.isArray(taxes) &&
+              taxes.some((t) => Boolean(t?.isActive) && Number(t?.rate ?? 0) > 0),
+          );
         }
       })
       .catch(() => {
@@ -97,16 +104,25 @@ export const Tax: React.FC = () => {
 
   const loadReport = useCallback(
     async (from: string, to: string) => {
-      if (!from || !to) return;
+      if (!isValidTaxDateRange(from, to)) return;
+      const rangeKey = `${from}..${to}`;
+      const requestId = requestGuardRef.current.next(rangeKey);
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setLoadingReport(true);
       setError(null);
       setCashBasisNotice(null);
       try {
         const res = await authFetch(
           `/api/tax/report?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+          { signal: controller.signal },
         );
+        if (!requestGuardRef.current.isCurrent(requestId, rangeKey)) return;
         if (res.status === 409) {
           const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
+          if (!requestGuardRef.current.isCurrent(requestId, rangeKey)) return;
           if (body?.code === 'tax_cash_basis_pending') {
             setReport(null);
             setCashBasisNotice(
@@ -121,12 +137,17 @@ export const Tax: React.FC = () => {
           throw new Error(body?.message || body?.detail || 'Tax report could not be loaded.');
         }
         const data = (await res.json()) as TaxPeriodReport;
+        if (!requestGuardRef.current.isCurrent(requestId, rangeKey)) return;
         setReport(data);
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (!requestGuardRef.current.isCurrent(requestId, rangeKey)) return;
         setReport(null);
         setError(err instanceof Error ? err.message : 'Tax report could not be loaded.');
       } finally {
-        setLoadingReport(false);
+        if (requestGuardRef.current.isCurrent(requestId, rangeKey)) {
+          setLoadingReport(false);
+        }
       }
     },
     [authFetch],
@@ -134,8 +155,16 @@ export const Tax: React.FC = () => {
 
   useEffect(() => {
     if (!canView || !activeRange) return;
+    if (!isValidTaxDateRange(activeRange.from, activeRange.to)) return;
     void loadReport(activeRange.from, activeRange.to);
   }, [canView, activeRange?.from, activeRange?.to, loadReport]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      requestGuardRef.current.invalidate();
+    };
+  }, []);
 
   if (!canView) {
     return <PermissionDeniedCard permission="reports.view" />;

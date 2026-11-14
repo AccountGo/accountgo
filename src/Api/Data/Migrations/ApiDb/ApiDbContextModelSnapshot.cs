@@ -44,7 +44,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("Address");
+                    b.ToTable("Address", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Auditing.AuditLog", b =>
@@ -298,7 +298,7 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique()
                         .HasFilter("[Slug] IS NOT NULL");
 
-                    b.ToTable("Company");
+                    b.ToTable("Company", (string)null);
 
                     b.HasData(
                         new
@@ -377,7 +377,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId", "Email");
 
-                    b.ToTable("CompanyInvitation");
+                    b.ToTable("CompanyInvitation", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.CompanyMember", b =>
@@ -414,7 +414,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("CompanyMember");
+                    b.ToTable("CompanyMember", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.CompanyMemberSecurityRole", b =>
@@ -453,7 +453,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyMemberId", "SecurityRoleId")
                         .IsUnique();
 
-                    b.ToTable("CompanyMemberSecurityRole");
+                    b.ToTable("CompanyMemberSecurityRole", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.CompanySetting", b =>
@@ -539,6 +539,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int")
                         .HasDefaultValue(0);
 
+                    b.Property<int?>("PartnerSetupJournalEntryId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("OnboardingChecklistDismissedAt")
                         .HasColumnType("datetime2");
 
@@ -547,9 +550,6 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<DateTime?>("PartnerAccountsFrom")
                         .HasColumnType("date");
-
-                    b.Property<int?>("PartnerSetupJournalEntryId")
-                        .HasColumnType("int");
 
                     b.Property<string>("RegistrationNumber")
                         .HasMaxLength(100)
@@ -574,7 +574,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("TaxPeriodFrequency")
-                        .HasColumnType("int");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(2);
 
                     b.Property<int?>("TaxQuarterCycleStartMonth")
                         .HasColumnType("int");
@@ -595,7 +597,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId");
 
-                    b.ToTable("CompanySetting");
+                    b.ToTable("CompanySetting", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Contact", b =>
@@ -628,7 +630,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("PartyId");
 
-                    b.ToTable("Contact");
+                    b.ToTable("Contact", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.CustomerContact", b =>
@@ -654,7 +656,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("CustomerContact");
+                    b.ToTable("CustomerContact", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>
@@ -708,7 +710,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("GlAccountId");
 
-                    b.ToTable("DonationInvoiceHeader");
+                    b.ToTable("DonationInvoiceHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceLine", b =>
@@ -750,7 +752,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("MeasurementId");
 
-                    b.ToTable("DonationInvoiceLine");
+                    b.ToTable("DonationInvoiceLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Donations.Donor", b =>
@@ -808,7 +810,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("Donors");
+                    b.ToTable("Donors", (string)null);
 
                     b.HasData(
                         new
@@ -867,7 +869,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId", "Resource", "OccurredAt");
 
-                    b.ToTable("EntitlementUsage");
+                    b.ToTable("EntitlementUsage", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.Account", b =>
@@ -930,7 +932,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyId", "AccountCode")
                         .IsUnique();
 
-                    b.ToTable("Account");
+                    b.ToTable("Account", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.AccountClass", b =>
@@ -949,7 +951,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("AccountClass");
+                    b.ToTable("AccountClass", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.Bank", b =>
@@ -1039,7 +1041,7 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique()
                         .HasFilter("[IsDefaultForReceipts] = 1");
 
-                    b.ToTable("Bank");
+                    b.ToTable("Bank", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankReconciliation", b =>
@@ -1118,7 +1120,7 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique()
                         .HasFilter("[Status] = 1");
 
-                    b.ToTable("BankReconciliation");
+                    b.ToTable("BankReconciliation", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankReconciliationItem", b =>
@@ -1155,7 +1157,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex(new[] { "BankReconciliationId", "GeneralLedgerLineId" }, "UX_BankReconciliationItem_Recon_Line")
                         .IsUnique();
 
-                    b.ToTable("BankReconciliationItem");
+                    b.ToTable("BankReconciliationItem", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankStatementColumnMapping", b =>
@@ -1193,7 +1195,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex(new[] { "CompanyId", "BankId", "HeaderSignature" }, "UX_BankStatementColumnMapping_Company_Bank_Header")
                         .IsUnique();
 
-                    b.ToTable("BankStatementColumnMapping");
+                    b.ToTable("BankStatementColumnMapping", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankStatementDescriptionRule", b =>
@@ -1223,11 +1225,11 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("ExpenseAccountId")
                         .HasColumnType("int");
 
-                    b.Property<DateTime>("LastUsedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<int?>("PartnerId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime>("LastUsedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int?>("VendorId")
                         .HasColumnType("int");
@@ -1245,7 +1247,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex(new[] { "CompanyId", "DescriptionKey" }, "UX_BankStatementDescriptionRule_Company_DescriptionKey")
                         .IsUnique();
 
-                    b.ToTable("BankStatementDescriptionRule");
+                    b.ToTable("BankStatementDescriptionRule", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankStatementImport", b =>
@@ -1287,7 +1289,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex(new[] { "CompanyId", "BankId" }, "IX_BankStatementImport_Company_Bank");
 
-                    b.ToTable("BankStatementImport");
+                    b.ToTable("BankStatementImport", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankStatementLine", b =>
@@ -1373,7 +1375,7 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique()
                         .HasFilter("[ExternalId] IS NOT NULL");
 
-                    b.ToTable("BankStatementLine");
+                    b.ToTable("BankStatementLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BankTransaction", b =>
@@ -1448,7 +1450,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex(new[] { "CompanyId", "No" }, "UX_BankTransaction_Company_No")
                         .IsUnique();
 
-                    b.ToTable("BankTransaction");
+                    b.ToTable("BankTransaction", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.BooksLockChange", b =>
@@ -1484,7 +1486,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId");
 
-                    b.ToTable("BooksLockChange");
+                    b.ToTable("BooksLockChange", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.FinancialYear", b =>
@@ -1529,7 +1531,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("FinancialYear");
+                    b.ToTable("FinancialYear", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerHeader", b =>
@@ -1560,7 +1562,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("GeneralLedgerHeader");
+                    b.ToTable("GeneralLedgerHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerLine", b =>
@@ -1599,7 +1601,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex(new[] { "CompanyId", "BankReconciliationId" }, "IX_GeneralLedgerLine_Company_BankReconciliationId");
 
-                    b.ToTable("GeneralLedgerLine");
+                    b.ToTable("GeneralLedgerLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerSetting", b =>
@@ -1652,7 +1654,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("ShippingChargeAccountId");
 
-                    b.ToTable("GeneralLedgerSetting");
+                    b.ToTable("GeneralLedgerSetting", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.JournalEntryHeader", b =>
@@ -1698,7 +1700,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("PartyId");
 
-                    b.ToTable("JournalEntryHeader");
+                    b.ToTable("JournalEntryHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.JournalEntryLine", b =>
@@ -1733,7 +1735,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("JournalEntryHeaderId");
 
-                    b.ToTable("JournalEntryLine");
+                    b.ToTable("JournalEntryLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.MainContraAccount", b =>
@@ -1760,7 +1762,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("RelatedContraAccountId");
 
-                    b.ToTable("MainContraAccount");
+                    b.ToTable("MainContraAccount", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.Partner", b =>
@@ -1799,6 +1801,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
+                        .ValueGeneratedNever()
                         .HasColumnType("varbinary(max)");
 
                     b.HasKey("Id");
@@ -1885,7 +1888,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("ItemId");
 
-                    b.ToTable("InventoryAdjustment");
+                    b.ToTable("InventoryAdjustment", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Items.InventoryControlJournal", b =>
@@ -1941,7 +1944,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("MeasurementId");
 
-                    b.ToTable("InventoryControlJournal");
+                    b.ToTable("InventoryControlJournal", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Items.Item", b =>
@@ -2050,7 +2053,7 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique()
                         .HasFilter("[No] IS NOT NULL");
 
-                    b.ToTable("Item");
+                    b.ToTable("Item", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Items.ItemCategory", b =>
@@ -2102,7 +2105,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SalesAccountId");
 
-                    b.ToTable("ItemCategory");
+                    b.ToTable("ItemCategory", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Items.Measurement", b =>
@@ -2124,7 +2127,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("Measurement");
+                    b.ToTable("Measurement", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.LinkedEntryPair", b =>
@@ -2255,7 +2258,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("Log");
+                    b.ToTable("Log", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Party", b =>
@@ -2316,7 +2319,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("Party");
+                    b.ToTable("Party", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.PaymentTerm", b =>
@@ -2344,7 +2347,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("PaymentTerm");
+                    b.ToTable("PaymentTerm", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.PersonalWorkspace", b =>
@@ -2456,7 +2459,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("VoidGeneralLedgerHeaderId");
 
-                    b.ToTable("PurchaseInvoiceHeader");
+                    b.ToTable("PurchaseInvoiceHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseInvoiceLine", b =>
@@ -2526,7 +2529,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("TaxId");
 
-                    b.ToTable("PurchaseInvoiceLine");
+                    b.ToTable("PurchaseInvoiceLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseOrderHeader", b =>
@@ -2570,7 +2573,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("VendorId");
 
-                    b.ToTable("PurchaseOrderHeader");
+                    b.ToTable("PurchaseOrderHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseOrderLine", b =>
@@ -2611,7 +2614,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("PurchaseOrderHeaderId");
 
-                    b.ToTable("PurchaseOrderLine");
+                    b.ToTable("PurchaseOrderLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseReceiptHeader", b =>
@@ -2643,7 +2646,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("VendorId");
 
-                    b.ToTable("PurchaseReceiptHeader");
+                    b.ToTable("PurchaseReceiptHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseReceiptLine", b =>
@@ -2699,7 +2702,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("PurchaseReceiptHeaderId");
 
-                    b.ToTable("PurchaseReceiptLine");
+                    b.ToTable("PurchaseReceiptLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.Vendor", b =>
@@ -2789,7 +2792,7 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique()
                         .HasFilter("[No] IS NOT NULL");
 
-                    b.ToTable("Vendor");
+                    b.ToTable("Vendor", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.VendorPayment", b =>
@@ -2857,7 +2860,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("VoidGeneralLedgerHeaderId");
 
-                    b.ToTable("VendorPayment");
+                    b.ToTable("VendorPayment", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Recurring.RecurringOccurrence", b =>
@@ -2959,7 +2962,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex(new[] { "CompanyId", "RecurringScheduleId", "ScheduledRunDate" }, "UX_RecurringOccurrence_Company_Schedule_RunDate")
                         .IsUnique();
 
-                    b.ToTable("RecurringOccurrences");
+                    b.ToTable("RecurringOccurrences", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Recurring.RecurringSchedule", b =>
@@ -3059,7 +3062,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex(new[] { "CompanyId", "Status" }, "IX_RecurringSchedule_Company_Status");
 
-                    b.ToTable("RecurringSchedules");
+                    b.ToTable("RecurringSchedules", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Recurring.RecurringScheduleLine", b =>
@@ -3122,7 +3125,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("TaxId");
 
-                    b.ToTable("RecurringScheduleLines");
+                    b.ToTable("RecurringScheduleLines", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.Customer", b =>
@@ -3201,7 +3204,7 @@ namespace Api.Data.Migrations.ApiDb
                         .IsUnique()
                         .HasFilter("[No] IS NOT NULL");
 
-                    b.ToTable("Customer");
+                    b.ToTable("Customer", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.CustomerAllocation", b =>
@@ -3241,7 +3244,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SalesReceiptHeaderId");
 
-                    b.ToTable("CustomerAllocation");
+                    b.ToTable("CustomerAllocation", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesDeliveryHeader", b =>
@@ -3281,7 +3284,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("PaymentTermId");
 
-                    b.ToTable("SalesDeliveryHeader");
+                    b.ToTable("SalesDeliveryHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesDeliveryLine", b =>
@@ -3326,7 +3329,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SalesInvoiceLineId");
 
-                    b.ToTable("SalesDeliveryLine");
+                    b.ToTable("SalesDeliveryLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceEmail", b =>
@@ -3395,7 +3398,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId", "SentAt");
 
-                    b.ToTable("SalesInvoiceEmail");
+                    b.ToTable("SalesInvoiceEmail", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceHeader", b =>
@@ -3469,7 +3472,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex(new[] { "CompanyId", "Origin" }, "IX_SalesInvoiceHeader_Company_Origin");
 
-                    b.ToTable("SalesInvoiceHeader");
+                    b.ToTable("SalesInvoiceHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceLine", b =>
@@ -3537,7 +3540,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("TaxId");
 
-                    b.ToTable("SalesInvoiceLine");
+                    b.ToTable("SalesInvoiceLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesOrderHeader", b =>
@@ -3575,7 +3578,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("PaymentTermId");
 
-                    b.ToTable("SalesOrderHeader");
+                    b.ToTable("SalesOrderHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesOrderLine", b =>
@@ -3615,7 +3618,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SalesOrderHeaderId");
 
-                    b.ToTable("SalesOrderLine");
+                    b.ToTable("SalesOrderLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesQuoteHeader", b =>
@@ -3651,7 +3654,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("SalesQuoteHeader");
+                    b.ToTable("SalesQuoteHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesQuoteLine", b =>
@@ -3691,7 +3694,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SalesQuoteHeaderId");
 
-                    b.ToTable("SalesQuoteLine");
+                    b.ToTable("SalesQuoteLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesReceiptHeader", b =>
@@ -3743,7 +3746,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
-                    b.ToTable("SalesReceiptHeader");
+                    b.ToTable("SalesReceiptHeader", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesReceiptLine", b =>
@@ -3796,7 +3799,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SalesReceiptHeaderId");
 
-                    b.ToTable("SalesReceiptLine");
+                    b.ToTable("SalesReceiptLine", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityGroup", b =>
@@ -3969,7 +3972,7 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyId", "SequenceNumberType")
                         .IsUnique();
 
-                    b.ToTable("SequenceNumber");
+                    b.ToTable("SequenceNumber", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.ItemTaxGroup", b =>
@@ -3991,7 +3994,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("ItemTaxGroup");
+                    b.ToTable("ItemTaxGroup", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.ItemTaxGroupTax", b =>
@@ -4020,7 +4023,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("TaxId");
 
-                    b.ToTable("ItemTaxGroupTax");
+                    b.ToTable("ItemTaxGroupTax", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.Tax", b =>
@@ -4062,7 +4065,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SalesAccountId");
 
-                    b.ToTable("Tax");
+                    b.ToTable("Tax", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.TaxGroup", b =>
@@ -4087,7 +4090,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("TaxGroup");
+                    b.ToTable("TaxGroup", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.TaxGroupTax", b =>
@@ -4113,7 +4116,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("TaxId");
 
-                    b.ToTable("TaxGroupTax");
+                    b.ToTable("TaxGroupTax", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.VendorContact", b =>
@@ -4139,7 +4142,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("VendorId");
 
-                    b.ToTable("VendorContact");
+                    b.ToTable("VendorContact", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.WorkspaceAccessRequest", b =>
@@ -4474,7 +4477,7 @@ namespace Api.Data.Migrations.ApiDb
 
                             b1.HasKey("CompanySettingId");
 
-                            b1.ToTable("CompanySetting");
+                            b1.ToTable("CompanySetting", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("CompanySettingId");

@@ -89,9 +89,14 @@ namespace Services.TaxSystem
                 .ToList();
             var taxById = taxCatalog.ToDictionary(t => t.Id);
 
-            // 1. Sales invoices dated in range (Status != Draft, Void included)
+            // 1. Sales invoices dated in range (posted/issued; exclude Draft, unposted Void, and unposted null-Status rows)
             var salesDocs = _salesInvoices.Table
-                .Where(h => h.Status != null && h.Status != SalesInvoiceStatus.Draft && h.Date >= startDate && h.Date < endExclusive)
+                .Where(h => h.Date >= startDate
+                            && h.Date < endExclusive
+                            && (h.Status == null
+                                ? h.GeneralLedgerHeaderId != null
+                                : h.Status != SalesInvoiceStatus.Draft
+                                  && !(h.Status == SalesInvoiceStatus.Void && h.GeneralLedgerHeaderId == null)))
                 .Select(h => new
                 {
                     h.Id,
@@ -124,9 +129,14 @@ namespace Services.TaxSystem
                 })
                 .ToList();
 
-            // 3. Purchase bills dated in range (Status != Draft, Void included)
+            // 3. Purchase bills dated in range (posted/issued; exclude Draft, unposted Void, and unposted null-Status rows)
             var billDocs = _purchaseInvoices.Table
-                .Where(h => h.Status != null && h.Status != PurchaseInvoiceStatus.Draft && h.Date >= startDate && h.Date < endExclusive)
+                .Where(h => h.Date >= startDate
+                            && h.Date < endExclusive
+                            && (h.Status == null
+                                ? h.GeneralLedgerHeaderId != null
+                                : h.Status != PurchaseInvoiceStatus.Draft
+                                  && !(h.Status == PurchaseInvoiceStatus.Void && h.GeneralLedgerHeaderId == null)))
                 .Select(h => new
                 {
                     h.Id,

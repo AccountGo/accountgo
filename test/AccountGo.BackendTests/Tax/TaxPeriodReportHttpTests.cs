@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AccountGo.BackendTests.Auditing;
@@ -20,8 +21,14 @@ using Core.Domain.Sales;
 using Core.Domain.TaxSystem;
 using Core.Tenancy;
 using Dto.Banking;
+using Dto.Subscription;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Services.Billing;
 using Xunit;
 
 namespace AccountGo.BackendTests.TaxSystem;
@@ -705,5 +712,244 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
         Assert.Equal("RED5", row.GetProperty("taxCode").GetString());
         Assert.Equal(400m, row.GetProperty("taxable").GetDecimal());
         Assert.Equal(20m, row.GetProperty("tax").GetDecimal());
+    }
+
+    [Fact]
+    public async Task UnpostedVoidedDocuments_AreExcludedWithoutWarnings()
+    {
+        WithDb(db =>
+        {
+            var inv = new SalesInvoiceHeader
+            {
+                CompanyId = _companyId,
+                CustomerId = _customerId,
+                No = "INV-UNPOSTED-VOID",
+                Date = new DateTime(2026, 10, 12),
+                Status = SalesInvoiceStatus.Void,
+                GeneralLedgerHeaderId = null,
+                VoidGeneralLedgerHeaderId = null,
+                SalesInvoiceLines = new List<SalesInvoiceLine>
+                {
+                    new()
+                    {
+                        CompanyId = _companyId,
+                        ItemId = _itemId,
+                        MeasurementId = _measurementId,
+                        TaxId = _vat12Id,
+                        Quantity = 1m,
+                        Amount = 1000m,
+                        TaxAmount = 120m
+                    }
+                }
+            };
+            var bill = new PurchaseInvoiceHeader
+            {
+                CompanyId = _companyId,
+                VendorId = _vendorId,
+                No = "BILL-UNPOSTED-VOID",
+                VendorInvoiceNo = "V-UNPOSTED-VOID",
+                Date = new DateTime(2026, 10, 13),
+                Status = PurchaseInvoiceStatus.Void,
+                GeneralLedgerHeaderId = null,
+                VoidGeneralLedgerHeaderId = null,
+                PurchaseInvoiceLines = new List<PurchaseInvoiceLine>
+                {
+                    new()
+                    {
+                        CompanyId = _companyId,
+                        ItemId = _itemId,
+                        AccountId = _expenseAccountId,
+                        TaxId = _vat12Id,
+                        Quantity = 1m,
+                        Amount = 500m,
+                        TaxAmount = 60m
+                    }
+                }
+            };
+            db.SalesInvoiceHeaders.Add(inv);
+            db.PurchaseInvoiceHeaders.Add(bill);
+        });
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(0m, json.GetProperty("output").GetProperty("tax").GetDecimal());
+        Assert.Equal(0m, json.GetProperty("input").GetProperty("tax").GetDecimal());
+        Assert.Empty(json.GetProperty("documents").EnumerateArray());
+        Assert.Empty(json.GetProperty("warnings").GetProperty("unposted").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task PostedDocumentsWithNullStatus_AreIncluded()
+    {
+        WithDb(db =>
+        {
+            var glInv = new GeneralLedgerHeader
+            {
+                CompanyId = _companyId,
+                Date = new DateTime(2026, 10, 12),
+                DocumentType = DocumentTypes.SalesInvoice,
+                Description = "Legacy posted invoice"
+            };
+            var glBill = new GeneralLedgerHeader
+            {
+                CompanyId = _companyId,
+                Date = new DateTime(2026, 10, 13),
+                DocumentType = DocumentTypes.PurchaseInvoice,
+                Description = "Legacy posted bill"
+            };
+            db.GeneralLedgerHeaders.AddRange(glInv, glBill);
+            db.SaveChanges();
+
+            db.SalesInvoiceHeaders.Add(new SalesInvoiceHeader
+            {
+                CompanyId = _companyId,
+                CustomerId = _customerId,
+                No = "INV-NULL-STATUS",
+                Date = new DateTime(2026, 10, 12),
+                Status = null,
+                GeneralLedgerHeaderId = glInv.Id,
+                SalesInvoiceLines = new List<SalesInvoiceLine>
+                {
+                    new()
+                    {
+                        CompanyId = _companyId,
+                        ItemId = _itemId,
+                        MeasurementId = _measurementId,
+                        TaxId = _vat12Id,
+                        Quantity = 1m,
+                        Amount = 1000m,
+                        TaxAmount = 120m
+                    }
+                }
+            });
+
+            db.PurchaseInvoiceHeaders.Add(new PurchaseInvoiceHeader
+            {
+                CompanyId = _companyId,
+                VendorId = _vendorId,
+                No = "BILL-NULL-STATUS",
+                VendorInvoiceNo = "V-NULL-STATUS",
+                Date = new DateTime(2026, 10, 13),
+                Status = null,
+                GeneralLedgerHeaderId = glBill.Id,
+                PurchaseInvoiceLines = new List<PurchaseInvoiceLine>
+                {
+                    new()
+                    {
+                        CompanyId = _companyId,
+                        ItemId = _itemId,
+                        AccountId = _expenseAccountId,
+                        TaxId = _vat12Id,
+                        Quantity = 1m,
+                        Amount = 500m,
+                        TaxAmount = 60m
+                    }
+                }
+            });
+        });
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(120m, json.GetProperty("output").GetProperty("tax").GetDecimal());
+        Assert.Equal(60m, json.GetProperty("input").GetProperty("tax").GetDecimal());
+        Assert.Equal(2, json.GetProperty("documents").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Access_MissingModules_Returns403()
+    {
+        var dbPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"accountgo_taxmod_{Guid.NewGuid():N}.db");
+        try
+        {
+            await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.UseSetting("DatabaseProvider", "Sqlite");
+                builder.UseSetting("ConnectionStrings:SqliteConnection", $"Data Source={dbPath}");
+                builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+                builder.ConfigureTestServices(services =>
+                {
+                    services.RemoveAll<IPlanCatalog>();
+                    services.AddSingleton<IPlanCatalog, InventoryOnlyPlanCatalog>();
+                });
+            });
+
+            var client = factory.CreateClient();
+            using var scope = factory.Services.CreateScope();
+            var sp = scope.ServiceProvider;
+            var userManager = sp.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            var user = new ApplicationUser
+            {
+                UserName = "tax-nomod@example.test",
+                Email = "tax-nomod@example.test",
+                EmailConfirmed = true
+            };
+            Assert.True((await userManager.CreateAsync(user)).Succeeded);
+
+            var security = sp.GetRequiredService<Services.Security.ISecurityService>();
+            security.EnsureDefaultPermissionsAndRoles();
+            security.AddUser(user.Email, user.Email, "No", "Mod", new List<int>());
+            var token = (await sp.GetRequiredService<Api.Service.IAuthenticationService>().CreateToken(user, true)).AccessToken;
+
+            using var createReq = new HttpRequestMessage(HttpMethod.Post, "/api/organizations")
+            {
+                Content = new StringContent("{\"name\":\"Inventory Only Co\",\"slug\":\"inv-only\"}", System.Text.Encoding.UTF8, "application/json")
+            };
+            createReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var createRes = await client.SendAsync(createReq);
+            Assert.Equal(HttpStatusCode.Created, createRes.StatusCode);
+            var companyId = int.Parse((await AuditTestHost.Json(createRes)).GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+
+            var tenant = sp.GetRequiredService<ITenantContext>();
+            using (var imp = tenant.Impersonate(companyId, role: CompanyMemberRole.Owner))
+            {
+                var db = sp.GetRequiredService<ApiDbContext>();
+                var member = db.CompanyMembers.Single(m => m.CompanyId == companyId && m.UserId == user.Id);
+                db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole
+                {
+                    CompanyMemberId = member.Id,
+                    SecurityRoleId = db.SecurityRoles.Single(r => r.Name == "Accountant").Id
+                });
+                db.SaveChanges();
+            }
+
+            using var reportReq = new HttpRequestMessage(HttpMethod.Get, "/api/tax/report?from=2026-10-01&to=2026-10-31");
+            reportReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            reportReq.Headers.Add("X-AccountGo-Org", "inv-only");
+            var reportRes = await client.SendAsync(reportReq);
+            Assert.Equal(HttpStatusCode.Forbidden, reportRes.StatusCode);
+
+            using var periodsReq = new HttpRequestMessage(HttpMethod.Get, "/api/tax/periods");
+            periodsReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            periodsReq.Headers.Add("X-AccountGo-Org", "inv-only");
+            var periodsRes = await client.SendAsync(periodsReq);
+            Assert.Equal(HttpStatusCode.Forbidden, periodsRes.StatusCode);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(dbPath))
+                System.IO.File.Delete(dbPath);
+        }
+    }
+
+    private sealed class InventoryOnlyPlanCatalog : IPlanCatalog
+    {
+        private static readonly PlanDefinitionDto InventoryOnlyPlan = new()
+        {
+            Key = "inventory-only",
+            Name = "Inventory Only",
+            Description = "Test plan without sales, purchases, financials, or reports.",
+            IncludedModules = new List<string> { "inventory" },
+            RequiredModules = new List<string>(),
+            SelfService = false,
+            MonthlyPrice = null
+        };
+
+        public string DefaultPlanKey => InventoryOnlyPlan.Key;
+        public IReadOnlyList<PlanDefinitionDto> GetPlans() => new[] { InventoryOnlyPlan };
+        public bool TryResolvePlan(string? key, out PlanDefinitionDto plan)
+        {
+            plan = InventoryOnlyPlan;
+            return true;
+        }
+        public PlanDefinitionDto ResolveStoredPlan(string? key) => InventoryOnlyPlan;
     }
 }

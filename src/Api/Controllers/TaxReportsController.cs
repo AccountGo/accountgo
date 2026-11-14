@@ -4,12 +4,13 @@
 #nullable enable
 using System;
 using System.Globalization;
-using System.Text.Json;
 using Api.Filters;
 using Core.Authorization;
 using Core.Domain;
 using Core.Domain.Security;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Services.TaxSystem;
 
 namespace Api.Controllers
@@ -38,8 +39,12 @@ namespace Api.Controllers
         [RequireOperation(AccessOperationCatalog.TaxPeriodsManage)]
         public IActionResult UpdateSettings([FromBody] UpdateTaxPeriodSettingsRequest? request)
         {
-            if (request == null || !TryParseFrequency(request.Frequency, out var frequency))
+            if (!ModelState.IsValid
+                || request?.Frequency is not { } frequency
+                || !Enum.IsDefined(typeof(TaxPeriodFrequency), frequency))
+            {
                 return BadRequest(new { code = "invalid_settings", message = InvalidSettingsMessage });
+            }
 
             if (request.QuarterCycleStartMonth is int month && (month < 1 || month > 3))
                 return BadRequest(new { code = "invalid_settings", message = InvalidSettingsMessage });
@@ -96,66 +101,10 @@ namespace Api.Controllers
             }
         }
 
-        private static bool TryParseFrequency(object? value, out TaxPeriodFrequency frequency)
-        {
-            frequency = default;
-            if (value == null)
-                return false;
-
-            if (value is TaxPeriodFrequency direct)
-            {
-                if (!Enum.IsDefined(typeof(TaxPeriodFrequency), direct))
-                    return false;
-                frequency = direct;
-                return true;
-            }
-
-            if (value is int intVal)
-            {
-                if (!Enum.IsDefined(typeof(TaxPeriodFrequency), intVal))
-                    return false;
-                frequency = (TaxPeriodFrequency)intVal;
-                return true;
-            }
-
-            if (value is long longVal && longVal is >= int.MinValue and <= int.MaxValue)
-            {
-                var asInt = (int)longVal;
-                if (!Enum.IsDefined(typeof(TaxPeriodFrequency), asInt))
-                    return false;
-                frequency = (TaxPeriodFrequency)asInt;
-                return true;
-            }
-
-            if (value is JsonElement element)
-            {
-                if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var num))
-                    return TryParseFrequency(num, out frequency);
-                if (element.ValueKind == JsonValueKind.String)
-                    return TryParseFrequency(element.GetString(), out frequency);
-                return false;
-            }
-
-            if (value is string raw)
-            {
-                if (string.IsNullOrWhiteSpace(raw))
-                    return false;
-                if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedNum))
-                    return TryParseFrequency(parsedNum, out frequency);
-                if (Enum.TryParse<TaxPeriodFrequency>(raw, ignoreCase: true, out var parsedEnum)
-                    && Enum.IsDefined(typeof(TaxPeriodFrequency), parsedEnum))
-                {
-                    frequency = parsedEnum;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         public sealed class UpdateTaxPeriodSettingsRequest
         {
-            public object? Frequency { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))]
+            public TaxPeriodFrequency? Frequency { get; set; }
             public int? QuarterCycleStartMonth { get; set; }
         }
     }

@@ -5,7 +5,12 @@ import { createServer } from 'vite';
 const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' });
 after(() => server.close());
 
-const { buildTaxReportCsv, canShowTaxNav } = await server.ssrLoadModule('/src/lib/taxReport.ts');
+const {
+  buildTaxReportCsv,
+  canShowTaxNav,
+  createLatestRequestGuard,
+  isValidTaxDateRange,
+} = await server.ssrLoadModule('/src/lib/taxReport.ts');
 
 test('canShowTaxNav enforces personal, no-tax, regime, positive-rate, and invoicing-only rules', () => {
   // Personal books -> false
@@ -85,6 +90,18 @@ test('buildTaxReportCsv includes metadata, formula guard, and Net refundable lab
         tax: 120,
         posted: true,
       },
+      {
+        side: 'output',
+        kind: 'invoice',
+        id: 2,
+        no: 'INV-2',
+        date: '2026-08-16',
+        party: 'Untaxed Co',
+        taxId: null,
+        taxable: 500,
+        tax: 0,
+        posted: true,
+      },
     ],
     documentsTruncated: false,
     warnings: { unposted: [] },
@@ -95,9 +112,37 @@ test('buildTaxReportCsv includes metadata, formula guard, and Net refundable lab
   const csv = buildTaxReportCsv(report, 'Acme Corp', '2026-11-14T15:00:00.000Z');
   assert.match(csv, /"Workspace","Acme Corp"/);
   assert.match(csv, /"Period","Aug\u2013Oct 2026"/);
-  assert.match(csv, /"Basis","Accrual"/);
+  assert.match(csv, /"Basis","Accrual \(by invoice and bill date\)"/);
   assert.match(csv, /"Currency","PHP"/);
   assert.match(csv, /"Generated at","2026-11-14T15:00:00\.000Z"/);
   assert.match(csv, /"Net refundable","120\.00"/);
-  assert.match(csv, /"'=CMD\(\)"/);
+  assert.match(csv, /"Tax code"/);
+  assert.doesNotMatch(csv, /"Tax ID"/);
+  assert.match(csv, /"'=CMD\(\)","VAT12"/);
+  assert.match(csv, /"Untaxed Co","No tax"/);
+});
+
+test('isValidTaxDateRange validates ISO dates and ordering', () => {
+  assert.equal(isValidTaxDateRange('2026-10-01', '2026-10-31'), true);
+  assert.equal(isValidTaxDateRange('2026-10-31', '2026-10-01'), false);
+  assert.equal(isValidTaxDateRange('2026-10-', '2026-10-31'), false);
+  assert.equal(isValidTaxDateRange('2026-02-30', '2026-03-01'), false);
+});
+
+test('createLatestRequestGuard ignores stale responses from an earlier request', async () => {
+  const guard = createLatestRequestGuard();
+  let applied = null;
+
+  const firstKey = '2026-09-01..2026-09-30';
+  const secondKey = '2026-10-01..2026-10-31';
+
+  const firstId = guard.next(firstKey);
+  const secondId = guard.next(secondKey);
+
+  // Second (faster) resolves first
+  if (guard.isCurrent(secondId, secondKey)) applied = secondKey;
+  // First (slower) resolves later and must be ignored
+  if (guard.isCurrent(firstId, firstKey)) applied = firstKey;
+
+  assert.equal(applied, secondKey);
 });

@@ -118,6 +118,46 @@ export function canShowTaxNav(input: TaxNavVisibilityInput): boolean {
   return (input.taxRegime != null && input.taxRegime !== 'None') || Boolean(input.hasPositiveTaxRate);
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function isValidTaxDateRange(from: string, to: string): boolean {
+  if (!ISO_DATE_RE.test(from) || !ISO_DATE_RE.test(to)) return false;
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  const fDate = new Date(Date.UTC(fy, fm - 1, fd));
+  const tDate = new Date(Date.UTC(ty, tm - 1, td));
+  if (
+    fDate.getUTCFullYear() !== fy ||
+    fDate.getUTCMonth() !== fm - 1 ||
+    fDate.getUTCDate() !== fd ||
+    tDate.getUTCFullYear() !== ty ||
+    tDate.getUTCMonth() !== tm - 1 ||
+    tDate.getUTCDate() !== td
+  ) {
+    return false;
+  }
+  return from <= to;
+}
+
+export function createLatestRequestGuard() {
+  let seq = 0;
+  let activeKey = '';
+  return {
+    next(key: string): number {
+      seq += 1;
+      activeKey = key;
+      return seq;
+    },
+    isCurrent(id: number, key: string): boolean {
+      return id === seq && key === activeKey;
+    },
+    invalidate(): void {
+      seq += 1;
+      activeKey = '';
+    },
+  };
+}
+
 export function buildTaxReportCsv(
   report: TaxPeriodReport,
   workspaceName: string,
@@ -127,6 +167,18 @@ export function buildTaxReportCsv(
   const periodText = report.periodLabel ? report.periodLabel : `${report.from} to ${report.to}`;
   const netLabel = report.netTax < 0 ? 'Net refundable' : 'Net payable';
   const netValue = money(Math.abs(report.netTax));
+  const basisLabel =
+    report.basis === 'Accrual' ? 'Accrual (by invoice and bill date)' : report.basis;
+
+  const taxCodeById = new Map<number, string>();
+  for (const row of report.output.rows) {
+    if (row.taxId !== null) taxCodeById.set(row.taxId, row.taxCode);
+  }
+  for (const row of report.input.rows) {
+    if (row.taxId !== null && !taxCodeById.has(row.taxId)) {
+      taxCodeById.set(row.taxId, row.taxCode);
+    }
+  }
 
   const sideRows = (title: string, side: TaxPeriodSideSummary): string[][] => [
     [title],
@@ -144,7 +196,7 @@ export function buildTaxReportCsv(
   const rows: string[][] = [
     ['Workspace', workspaceName],
     ['Period', periodText],
-    ['Basis', report.basis],
+    ['Basis', basisLabel],
     ['Currency', report.currency],
     ['Generated at', generatedAtIso],
     [],
@@ -155,14 +207,14 @@ export function buildTaxReportCsv(
     [netLabel, netValue],
     [],
     ['Documents'],
-    ['Side', 'Kind', 'No', 'Date', 'Party', 'Tax ID', 'Taxable', 'Tax', 'Posted'],
+    ['Side', 'Kind', 'No', 'Date', 'Party', 'Tax code', 'Taxable', 'Tax', 'Posted'],
     ...report.documents.map((d) => [
       d.side,
       d.kind,
       d.no,
       d.date,
       d.party,
-      d.taxId === null ? '' : String(d.taxId),
+      d.taxId === null ? 'No tax' : (taxCodeById.get(d.taxId) ?? 'No tax'),
       money(d.taxable),
       money(d.tax),
       d.posted ? 'Yes' : 'No',

@@ -15,7 +15,7 @@ namespace Api.Data.Migrations.ApiDb
                 table: "CompanySetting",
                 type: "int",
                 nullable: false,
-                defaultValue: 0);
+                defaultValue: 2);
 
             migrationBuilder.AddColumn<int>(
                 name: "TaxQuarterCycleStartMonth",
