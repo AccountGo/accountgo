@@ -10,6 +10,8 @@ const {
   canShowTaxNav,
   createLatestRequestGuard,
   documentKindLabel,
+  formatTaxDifference,
+  getPeriodChipStatus,
   isValidTaxDateRange,
 } = await server.ssrLoadModule('/src/lib/taxReport.ts');
 
@@ -172,4 +174,123 @@ test('buildTaxReportCsv labels Cash basis by payment date and documentKindLabel 
   assert.equal(documentKindLabel('billPayment'), 'Payment made');
   assert.equal(documentKindLabel('invoiceVoid'), 'Void');
   assert.equal(documentKindLabel('invoice'), null);
+});
+
+test('getPeriodChipStatus covers open, ready, filed, changed, and locked states', () => {
+  assert.deepEqual(
+    getPeriodChipStatus({
+      start: '2026-11-01',
+      end: '2026-11-30',
+      label: 'Nov 2026',
+      state: 'open',
+      lock: 'none',
+      filing: null,
+    }),
+    { label: 'Open', tone: 'open', locked: false },
+  );
+
+  assert.deepEqual(
+    getPeriodChipStatus({
+      start: '2026-10-01',
+      end: '2026-10-31',
+      label: 'Oct 2026',
+      state: 'ended',
+      lock: 'none',
+      filing: null,
+    }),
+    { label: 'Ready to file', tone: 'ready', locked: false },
+  );
+
+  assert.deepEqual(
+    getPeriodChipStatus({
+      start: '2026-09-01',
+      end: '2026-09-30',
+      label: 'Sep 2026',
+      state: 'ended',
+      lock: 'full',
+      filing: {
+        id: 1,
+        sequence: 0,
+        filedOn: '2026-10-15',
+        reference: 'VAT-09',
+        netTax: 500,
+        changedSinceFiling: { rows: [], netDifference: 0, changed: false },
+      },
+    }),
+    { label: 'Filed 2026-10-15', tone: 'filed', locked: true },
+  );
+
+  assert.deepEqual(
+    getPeriodChipStatus({
+      start: '2026-08-01',
+      end: '2026-08-31',
+      label: 'Aug 2026',
+      state: 'ended',
+      lock: 'none',
+      filing: {
+        id: 2,
+        sequence: 0,
+        filedOn: '2026-09-10',
+        reference: null,
+        netTax: 300,
+        changedSinceFiling: {
+          rows: [{ side: 'output', taxId: 1, taxCode: 'VAT', filed: 300, current: 420, difference: 120 }],
+          netDifference: 120,
+          changed: true,
+        },
+      },
+    }),
+    { label: 'Changed since filing', tone: 'changed', locked: false },
+  );
+});
+
+test('buildTaxReportCsv includes filing metadata and formatTaxDifference formats signed values', () => {
+  const filedReport = {
+    from: '2026-07-01',
+    to: '2026-09-30',
+    basis: 'Accrual',
+    currency: 'USD',
+    isWholePeriod: true,
+    periodLabel: 'Jul\u2013Sep 2026',
+    output: { rows: [], taxable: 0, tax: 0 },
+    input: { rows: [], taxable: 0, tax: 0 },
+    netTax: 150,
+    documents: [],
+    documentsTruncated: false,
+    warnings: { unposted: [] },
+    ledger: null,
+    lock: null,
+    filings: [
+      {
+        id: 7,
+        periodStart: '2026-07-01',
+        periodEnd: '2026-09-30',
+        periodLabel: 'Jul\u2013Sep 2026',
+        frequency: 'Quarterly',
+        basis: 'Accrual',
+        sequence: 0,
+        amendsFilingId: null,
+        amendmentReason: null,
+        filedOn: '2026-10-12',
+        reference: 'RET-Q3',
+        notes: null,
+        outputTax: 200,
+        inputTax: 50,
+        netTax: 150,
+        createdBy: 'owner@example.com',
+        createdAt: '2026-10-12T10:00:00Z',
+      },
+    ],
+    changedSinceFiling: { rows: [], netDifference: 0, changed: false },
+  };
+
+  const csv = buildTaxReportCsv(filedReport, 'Acme Corp', '2026-11-14T15:00:00.000Z');
+  assert.match(csv, /"Filed on","2026-10-12"/);
+  assert.match(csv, /"Reference","RET-Q3"/);
+  assert.match(csv, /"Filed net","150\.00"/);
+  assert.match(csv, /"Changed since filing","No"/);
+
+  assert.equal(formatTaxDifference(120, 'USD'), '+USD 120.00');
+  assert.equal(formatTaxDifference(-45.5, 'PHP'), '-PHP 45.50');
+  assert.equal(formatTaxDifference(0, 'USD'), 'USD 0.00');
 });

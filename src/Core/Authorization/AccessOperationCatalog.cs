@@ -80,6 +80,7 @@ namespace Core.Authorization
         public const string AdminTaxesManage = SystemPermissions.AdminTaxesManage;
         public const string TaxReportsView = "tax.reports.view";
         public const string TaxPeriodsManage = "tax.periods.manage";
+        public const string TaxFilingsRecord = "tax.filings.record";
         public const string AdminMembersManage = SystemPermissions.AdminMembersManage;
         public const string AdminRolesManage = SystemPermissions.AdminRolesManage;
         public const string AdminSubscriptionManage = SystemPermissions.AdminSubscriptionManage;
@@ -514,6 +515,12 @@ namespace Core.Authorization
                     permissionsAll: new[] { SystemPermissions.AdminTaxesManage },
                     modulesAny: new[] { SystemModules.Sales, SystemModules.Purchases, SystemModules.Financials, SystemModules.Reports },
                     description: "Configure tax period frequency and quarter cycle."),
+                Functional(
+                    TaxFilingsRecord,
+                    "POL-TAX-FILINGS-RECORD",
+                    permissionsAll: new[] { SystemPermissions.AdminTaxesManage },
+                    modulesAny: new[] { SystemModules.Sales, SystemModules.Purchases, SystemModules.Financials, SystemModules.Reports },
+                    description: "Record tax filings and amendments for completed tax periods."),
                 Functional(
                     AdminMembersManage,
                     "POL-ADM-MEM-MANAGE",

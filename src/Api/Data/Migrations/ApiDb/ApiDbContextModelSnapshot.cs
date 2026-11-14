@@ -4068,6 +4068,81 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("Tax", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.TaxSystem.TaxFiling", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AmendmentReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("AmendsFilingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Basis")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("FiledOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("InputTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("NetTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("OutputTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("PeriodEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AmendsFilingId");
+
+                    b.HasIndex("CompanyId", "PeriodStart", "PeriodEnd", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("TaxFiling", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.TaxSystem.TaxGroup", b =>
                 {
                     b.Property<int>("Id")
@@ -5809,6 +5884,16 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("PurchasingAccount");
 
                     b.Navigation("SalesAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.TaxSystem.TaxFiling", b =>
+                {
+                    b.HasOne("Core.Domain.TaxSystem.TaxFiling", "AmendsFiling")
+                        .WithMany()
+                        .HasForeignKey("AmendsFilingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AmendsFiling");
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.TaxGroupTax", b =>

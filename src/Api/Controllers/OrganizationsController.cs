@@ -45,6 +45,7 @@ namespace Api.Controllers
         private readonly IEntitlementService _entitlements;
         private readonly IBillingProvider _billing;
         private readonly ISecurityAuditService _securityAudit;
+        private readonly Services.Financial.IBooksLockService _booksLock;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         public OrganizationsController(
@@ -61,7 +62,8 @@ namespace Api.Controllers
             IWorkspaceReviewerEligibility reviewerEligibility = null,
             IEntitlementService entitlements = null,
             IBillingProvider billing = null,
-            ISecurityAuditService securityAudit = null)
+            ISecurityAuditService securityAudit = null,
+            Services.Financial.IBooksLockService booksLock = null)
         {
             _tenant = tenant;
             _db = db;
@@ -76,6 +78,7 @@ namespace Api.Controllers
             _entitlements = entitlements;
             _billing = billing;
             _securityAudit = securityAudit;
+            _booksLock = booksLock;
             _experience = experienceOptions?.Value != null
                 ? Api.Options.WorkspaceExperienceOptions.FromEnvironment(experienceOptions.Value)
                 : (workspaceInit?.Experience ?? new Api.Options.WorkspaceExperienceOptions());
@@ -1068,6 +1071,22 @@ namespace Api.Controllers
 
             if (previous == next)
                 return GetBooksLock();
+
+            if (!isReopen && next.HasValue)
+            {
+                var booksLock = _booksLock
+                    ?? HttpContext?.RequestServices.GetRequiredService<Services.Financial.IBooksLockService>();
+                try
+                {
+                    var actor = GetUserNameFromRequestHeader() ?? UserId ?? "unknown";
+                    booksLock.Advance(next.Value, request.Reason, actor);
+                    return GetBooksLock();
+                }
+                catch (Services.Financial.BooksLockValidationException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
+            }
 
             setting.BooksLockedThrough = next;
             _db.BooksLockChanges.Add(new BooksLockChange
