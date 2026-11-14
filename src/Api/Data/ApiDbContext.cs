@@ -485,7 +485,7 @@ namespace Api.Data
                 entity.Property(p => p.RowVersion).IsConcurrencyToken().ValueGeneratedNever();
                 entity.HasIndex(p => new { p.CompanyId, p.CapitalAccountId }).IsUnique();
                 entity.HasIndex(p => new { p.CompanyId, p.DrawingsAccountId }).IsUnique();
-                entity.HasIndex(p => new { p.CompanyId, p.Name }).IsUnique().HasFilter("ArchivedAt IS NULL");
+                entity.HasIndex(p => new { p.CompanyId, p.Name }).IsUnique().HasFilter("[ArchivedAt] IS NULL");
             });
             builder.Entity<PartnerShare>(entity =>
             {

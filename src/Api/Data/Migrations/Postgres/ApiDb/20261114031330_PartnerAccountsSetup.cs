@@ -81,7 +81,7 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                 table: "Partners",
                 columns: new[] { "CompanyId", "Name" },
                 unique: true,
-                filter: "ArchivedAt IS NULL");
+                filter: "\"ArchivedAt\" IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_PartnerShares_PartnerId",

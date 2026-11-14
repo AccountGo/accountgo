@@ -1797,7 +1797,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId", "Name")
                         .IsUnique()
-                        .HasFilter("ArchivedAt IS NULL");
+                        .HasFilter("[ArchivedAt] IS NULL");
 
                     b.ToTable("Partners", (string)null);
                 });
