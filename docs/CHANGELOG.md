@@ -17,6 +17,9 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - You can undo an owner drawing or contribution from the matched statement line.
 - Bank statement lines that move money between you and your business can be recorded as an owner drawing or owner contribution wherever statement import is available, so they no longer count as expenses or income. Partnerships use partner wording.
 
+### Changed
+- Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
+
 ### Fixed
 - Bank statement Personal actions appear only when Personal books are linked, and each workspace shows one set of owner money-movement actions.
 

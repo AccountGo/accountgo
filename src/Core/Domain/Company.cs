@@ -24,6 +24,10 @@ namespace Core.Domain
 
         public string? Plan { get; set; }
         /// <summary>
+        /// Requested paid plan key while <see cref="ActivationState"/> is <c>pending_checkout</c>; null once activated or on free plans.
+        /// </summary>
+        public string? PendingPlan { get; set; }
+        /// <summary>
         /// Workspace activation: <c>active</c> (default) or <c>pending_checkout</c> (awaiting billing provider confirmation).
         /// </summary>
         public string ActivationState { get; set; } = CompanyActivationStates.Active;

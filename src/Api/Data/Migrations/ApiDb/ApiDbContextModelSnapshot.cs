@@ -269,6 +269,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime?>("PaidAccessEndedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PendingPlan")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("Plan")
                         .HasColumnType("nvarchar(max)");
 
