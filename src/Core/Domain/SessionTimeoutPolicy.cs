@@ -30,8 +30,14 @@ namespace Core.Domain
 
         public static bool IsAllowed(int minutes) => AllowedIdleMinutes.Contains(minutes);
 
-        /// <summary>Unknown stored values fall back to the nearest allowed bound.</summary>
-        public static int Normalize(int minutes) =>
-            Math.Clamp(minutes, AllowedIdleMinutes[0], AllowedIdleMinutes[AllowedIdleMinutes.Count - 1]);
+        /// <summary>Unknown stored values fall back to the default or nearest allowed bound.</summary>
+        public static int Normalize(int minutes)
+        {
+            if (minutes <= 0)
+                return DefaultIdleMinutes;
+            if (IsAllowed(minutes))
+                return minutes;
+            return Math.Clamp(minutes, AllowedIdleMinutes[0], AllowedIdleMinutes[^1]);
+        }
     }
 }

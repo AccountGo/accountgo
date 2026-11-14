@@ -514,7 +514,10 @@ namespace Api.Data
                 .HasDefaultValue("legacy-default");
             builder.Entity<CompanySetting>().Property(s => s.MfaPolicy).HasDefaultValue(MfaPolicy.Optional);
             builder.Entity<CompanySetting>().Property(s => s.RequireMfaEveryLogin).HasDefaultValue(false);
-            builder.Entity<CompanySetting>().Property(s => s.IdleTimeoutMinutes).HasDefaultValue(SessionTimeoutPolicy.DefaultIdleMinutes);
+            builder.Entity<CompanySetting>()
+                .Property(s => s.IdleTimeoutMinutes)
+                .HasDefaultValue(SessionTimeoutPolicy.DefaultIdleMinutes)
+                .HasSentinel(0);
             builder.Entity<CompanySetting>().Property(s => s.Timezone).IsRequired().HasMaxLength(50).HasDefaultValue("UTC");
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.

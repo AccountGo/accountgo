@@ -19,7 +19,7 @@ export type SessionWarning = { kind: 'idle' | 'expiry'; deadline: number } | nul
 
 type Message =
   | { type: 'active'; at: number }
-  | { type: 'refreshed'; at: number }
+  | { type: 'refreshed'; at: number; idleMs?: number }
   | { type: 'signout'; reason: SignOutReason };
 
 interface Channel {
@@ -53,13 +53,15 @@ export interface IdleSessionOptions {
   onRefreshDue(): void;
   /** `origin` is true in the tab that detected it; other tabs only drop their in-memory session. */
   onSignOut(reason: SignOutReason, origin: boolean): void;
+  /** Invoked when another tab broadcasts an updated idle timeout. */
+  onRemoteIdleMs?(idleMs: number, refreshedAt: number): void;
 }
 
 export interface IdleSession {
   /** Explicit "Stay signed in": the only local activity that closes an open idle warning. */
   markActive(): void;
   /** Record a completed session refresh, here or in another tab. */
-  markRefreshed(at?: number): void;
+  markRefreshed(at?: number, idleMs?: number): void;
   /** Hide the 12-hour notice until sign-out. */
   dismissExpiryWarning(): void;
   stop(): void;
@@ -78,7 +80,8 @@ function browserEnv(): IdleSessionEnv {
 }
 
 export function startIdleSession(options: IdleSessionOptions, env: IdleSessionEnv = browserEnv()): IdleSession {
-  const { idleMs, sessionExpiresAt, onWarning, onRefreshDue, onSignOut } = options;
+  const { sessionExpiresAt, onWarning, onRefreshDue, onSignOut, onRemoteIdleMs } = options;
+  let idleMs = options.idleMs;
   const expiry = sessionExpiresAt ?? Number.POSITIVE_INFINITY;
   let lastActivity = env.now();
   let refreshedAt = options.refreshedAt;
@@ -164,7 +167,14 @@ export function startIdleSession(options: IdleSessionOptions, env: IdleSessionEn
       const message = event.data as Message;
       if (!message || typeof message !== 'object') return;
       if (message.type === 'active' && typeof message.at === 'number') recordActivity(message.at, 'remote');
-      else if (message.type === 'refreshed' && typeof message.at === 'number') refreshedAt = Math.max(refreshedAt, message.at);
+      else if (message.type === 'refreshed' && typeof message.at === 'number') {
+        refreshedAt = Math.max(refreshedAt, message.at);
+        if (typeof message.idleMs === 'number' && Number.isFinite(message.idleMs) && message.idleMs > 0) {
+          idleMs = message.idleMs;
+          onRemoteIdleMs?.(message.idleMs, message.at);
+          evaluate();
+        }
+      }
       else if (message.type === 'signout' && (message.reason === 'idle' || message.reason === 'expired')) signOut(message.reason, false);
     };
   }
@@ -188,9 +198,15 @@ export function startIdleSession(options: IdleSessionOptions, env: IdleSessionEn
 
   return {
     markActive: () => recordActivity(env.now(), 'explicit'),
-    markRefreshed(at = env.now()) {
+    markRefreshed(at = env.now(), nextIdleMs?: number) {
       refreshedAt = Math.max(refreshedAt, at);
-      post({ type: 'refreshed', at });
+      if (typeof nextIdleMs === 'number' && Number.isFinite(nextIdleMs) && nextIdleMs > 0) {
+        idleMs = nextIdleMs;
+        post({ type: 'refreshed', at, idleMs: nextIdleMs });
+        evaluate();
+      } else {
+        post({ type: 'refreshed', at });
+      }
     },
     dismissExpiryWarning() {
       expiryDismissed = true;

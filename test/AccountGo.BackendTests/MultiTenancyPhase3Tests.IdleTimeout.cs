@@ -15,7 +15,7 @@ using Xunit;
 
 namespace AccountGo.BackendTests
 {
-    // Automatic sign-out: idle limit = strictest workspace setting, 12-hour hard limit from sign-in.
+    // Automatic sign-out: idle limit = active workspace setting, 12-hour hard limit from sign-in.
     public partial class MultiTenancyPhase3Tests
     {
         private const string SessionPolicy = "/api/organizations/current/session-policy";
@@ -97,7 +97,17 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task IdleTimeout_IsTheStrictestOfTheUsersWorkspaces_IgnoringDeletedOnes()
+        public void SessionTimeoutPolicy_Normalize_NonPositiveFallsBackToDefault()
+        {
+            Assert.Equal(SessionTimeoutPolicy.DefaultIdleMinutes, SessionTimeoutPolicy.Normalize(0));
+            Assert.Equal(SessionTimeoutPolicy.DefaultIdleMinutes, SessionTimeoutPolicy.Normalize(-15));
+            Assert.Equal(15, SessionTimeoutPolicy.Normalize(15));
+            Assert.Equal(240, SessionTimeoutPolicy.Normalize(240));
+            Assert.Equal(240, SessionTimeoutPolicy.Normalize(999));
+        }
+
+        [Fact]
+        public async Task IdleTimeout_UsesActiveWorkspaceSetting_IgnoringDeletedOnes()
         {
             var created = await Send(HttpMethod.Post, "/api/organizations", new { name = "Strict Client", slug = "strict-client" }, token: _otherToken, scoped: false);
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
@@ -121,16 +131,32 @@ namespace AccountGo.BackendTests
                 extraHeaders: new System.Collections.Generic.Dictionary<string, string> { ["X-AccountGo-Org"] = "strict-client" });
             Assert.Equal(HttpStatusCode.OK, strict.StatusCode);
 
-            Assert.Equal(30 * 60, await RefreshIdleSeconds());
+            // Refreshing in strict-client uses 30m for the client, while the server-side sliding window covers 120m.
+            var strictRefreshBefore = DateTime.UtcNow;
+            var strictRaw = "test-refresh-" + Guid.NewGuid().ToString("N");
+            var strictFamilyId = AddSession(strictRaw);
+            using (var browser = _factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false }))
+            using (var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh") { Content = JsonContent.Create(new { refreshToken = strictRaw }) })
+            {
+                req.Headers.Add("X-AccountGo-Org", "strict-client");
+                var resp = await browser.SendAsync(req);
+                Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+                Assert.Equal(30 * 60, (await Json(resp)).GetProperty("idleTimeoutSeconds").GetInt32());
+            }
+            AssertNear(strictRefreshBefore + TimeSpan.FromMinutes(120) + SessionTimeoutPolicy.ServerSlack, ActiveToken(strictFamilyId).ExpiresAt);
 
-            // The owner's own settings show 120 here, but their sessions use 30 and name the workspace that sets it.
+            Assert.Equal(120 * 60, await RefreshIdleSeconds(_slug));
+            // Multi-workspace user without an active workspace slug falls back to default (60m).
+            Assert.Equal(SessionTimeoutPolicy.DefaultIdleMinutes * 60, await RefreshIdleSeconds());
+
+            // Session policy reports the active workspace's setting with no cross-workspace override.
             var mine = await Json(await Send(HttpMethod.Get, SessionPolicy));
             Assert.Equal(120, mine.GetProperty("idleTimeoutMinutes").GetInt32());
             var yours = mine.GetProperty("yourSessions");
-            Assert.Equal(30, yours.GetProperty("idleTimeoutMinutes").GetInt32());
-            Assert.Equal(new[] { "Strict Client" }, yours.GetProperty("setBy").EnumerateArray().Select(e => e.GetString()).ToArray());
+            Assert.Equal(120, yours.GetProperty("idleTimeoutMinutes").GetInt32());
+            Assert.Empty(yours.GetProperty("setBy").EnumerateArray());
 
-            // A workspace without a settings row still counts, at the default (60), not as "no limit".
+            // A workspace without a settings row falls back to the default (60) when active.
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -140,7 +166,8 @@ namespace AccountGo.BackendTests
                     await db.SaveChangesAsync();
                 }
             }
-            Assert.Equal(SessionTimeoutPolicy.DefaultIdleMinutes * 60, await RefreshIdleSeconds());
+            Assert.Equal(SessionTimeoutPolicy.DefaultIdleMinutes * 60, await RefreshIdleSeconds("strict-client"));
+            Assert.Equal(120 * 60, await RefreshIdleSeconds(_slug));
 
             using (var scope = _factory.Services.CreateScope())
             {
@@ -148,6 +175,7 @@ namespace AccountGo.BackendTests
                 db.Companies.Single(c => c.Id == strictCompanyId).DeletedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync();
             }
+            // Only one active workspace remains, so even an unscoped refresh uses its 120m setting.
             Assert.Equal(120 * 60, await RefreshIdleSeconds());
         }
 
@@ -242,12 +270,20 @@ namespace AccountGo.BackendTests
             Assert.Single(identity.SecurityAuditEvents.Where(e => e.EventType == "auth.logout" && e.UserId == _ownerId));
         }
 
-        private async Task<int> RefreshIdleSeconds()
+        private async Task<int> RefreshIdleSeconds(string orgSlug = null)
         {
             var raw = "test-refresh-" + Guid.NewGuid().ToString("N");
             AddSession(raw);
             using var browser = _factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
-            var response = await browser.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = raw });
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh")
+            {
+                Content = JsonContent.Create(new { refreshToken = raw }),
+            };
+            if (!string.IsNullOrEmpty(orgSlug))
+            {
+                request.Headers.Add("X-AccountGo-Org", orgSlug);
+            }
+            var response = await browser.SendAsync(request);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             return (await Json(response)).GetProperty("idleTimeoutSeconds").GetInt32();
         }

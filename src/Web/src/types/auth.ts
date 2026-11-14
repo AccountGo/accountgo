@@ -143,7 +143,7 @@ export interface AuthContextType {
   authFetch: (url: string, init?: RequestInit | AuthFetchInit, planDialog?: boolean) => Promise<Response>;
   refreshUser: () => Promise<void>;
   /** Mints a fresh session token from the refresh cookie, picking up newly granted workspace access. */
-  refreshSession: () => Promise<string | null>;
+  refreshSession: (orgSlugIfChanged?: string) => Promise<string | null>;
   /** Why the user was signed out automatically, for the sign-in page. Cleared by the next sign-in. */
   signedOutNotice: string | null;
 }

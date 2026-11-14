@@ -62,6 +62,12 @@ namespace Api.Middleware
                 return;
             }
 
+            if (context.Request.Path.Equals("/api/auth/refresh", StringComparison.OrdinalIgnoreCase))
+            {
+                await _next(context);
+                return;
+            }
+
             if (!context.Request.Headers.TryGetValue(HeaderName, out var slugValues) ||
                 string.IsNullOrWhiteSpace(slugValues.FirstOrDefault()))
             {

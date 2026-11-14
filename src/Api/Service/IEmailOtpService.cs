@@ -21,7 +21,7 @@ namespace Api.Service
         Task<(bool Success, string Message, int ExpiresInSeconds, string? Error, string? DevCode)> SendWelcomeOtpAsync(ApplicationUser user, string firstName, string? organizationName, string? ipAddress);
         Task<OtpVerificationResult> VerifyOtpAsync(string email, string code, string? ipAddress, string? userAgent, string? agTdRawToken = null);
         Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionForUserAsync(ApplicationUser user, string? ipAddress, string? userAgent);
-        Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RefreshSessionAsync(string rawRefreshToken, string? ipAddress, string? userAgent);
+        Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RefreshSessionAsync(string rawRefreshToken, string? ipAddress, string? userAgent, string? orgSlug = null);
         Task<bool> RevokeSessionAsync(string rawRefreshToken);
     }
 }

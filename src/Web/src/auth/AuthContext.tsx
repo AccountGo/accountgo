@@ -98,7 +98,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [sessionWarning, setSessionWarning] = useState<SessionWarning>(null);
   const [signedOutNoticeText, setSignedOutNoticeText] = useState<string | null>(null);
   const idleSessionRef = useRef<IdleSession | null>(null);
+  const idleMsRef = useRef<number | null>(null);
+  idleMsRef.current = idleMs;
   const refreshedAtRef = useRef<number>(0);
+  const lastRefreshedOrgSlugRef = useRef<string | null>(null);
 
   // Ref to hold current token synchronously for fetch interceptor & refresh loops
   const tokenRef = useRef<string | null>(null);
@@ -109,16 +112,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Adopt the server's sign-out limits from any sign-in or refresh response.
   const applySessionLimits = useCallback((data: AuthResponse) => {
+    const nextIdleMs =
+      typeof data.idleTimeoutSeconds === 'number' && data.idleTimeoutSeconds > 0
+        ? data.idleTimeoutSeconds * 1000
+        : null;
     refreshedAtRef.current = Date.now();
-    idleSessionRef.current?.markRefreshed(refreshedAtRef.current);
-    setIdleMs(typeof data.idleTimeoutSeconds === 'number' && data.idleTimeoutSeconds > 0 ? data.idleTimeoutSeconds * 1000 : null);
+    idleSessionRef.current?.markRefreshed(refreshedAtRef.current, nextIdleMs ?? undefined);
+    setIdleMs(nextIdleMs);
     const expires = data.sessionExpiresAt ? Date.parse(data.sessionExpiresAt) : NaN;
     setSessionExpiresAt(Number.isFinite(expires) ? expires : null);
     setSignedOutNoticeText(null);
   }, []);
 
   // Silent refresh helper
-  const performRefresh = useCallback(async (): Promise<string | null> => {
+  const performRefresh = useCallback(async (orgSlugIfChanged?: string): Promise<string | null> => {
+    const normalizedIfChanged = typeof orgSlugIfChanged === 'string' ? orgSlugIfChanged.trim().toLowerCase() : null;
+    if (normalizedIfChanged && lastRefreshedOrgSlugRef.current === normalizedIfChanged) {
+      return tokenRef.current;
+    }
+
     if (refreshPromiseRef.current) {
       return refreshPromiseRef.current;
     }
@@ -130,10 +142,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         while (true) {
           let res: Response | null = null;
+          const orgSlug = getOrgSlugFromLocation();
           try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (orgSlug) {
+              headers[ORG_HEADER] = orgSlug;
+            }
             res = await fetch('/api/auth/refresh', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               credentials: 'include',
             });
           } catch {
@@ -144,6 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (res?.ok) {
             reportServiceRestored();
             const data: AuthResponse = await res.json();
+            lastRefreshedOrgSlugRef.current = orgSlug?.toLowerCase() ?? null;
             setAccessToken(data.accessToken);
             setUser(data.user);
             applySessionLimits(data);
@@ -320,6 +338,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const authData = data as AuthResponse;
+    lastRefreshedOrgSlugRef.current = null;
     tokenRef.current = authData.accessToken;
     setAccessToken(authData.accessToken);
     setUser(authData.user);
@@ -328,6 +347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [applySessionLimits]);
 
   const completeSession = useCallback((authData: AuthResponse) => {
+    lastRefreshedOrgSlugRef.current = null;
     tokenRef.current = authData.accessToken;
     setAccessToken(authData.accessToken);
     setUser(authData.user);
@@ -335,12 +355,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [applySessionLimits]);
 
   const completeStepUp = useCallback((newToken: string) => {
+    lastRefreshedOrgSlugRef.current = null;
     tokenRef.current = newToken;
     setAccessToken(newToken);
   }, []);
 
   // Logout session
   const clearSession = useCallback(() => {
+    lastRefreshedOrgSlugRef.current = null;
     tokenRef.current = null;
     setAccessToken(null);
     setUser(null);
@@ -492,19 +514,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [authFetch]);
 
   const isAuthenticated = !!user && !!accessToken;
+  const hasIdleLimit = idleMs !== null;
 
   useEffect(() => {
-    if (!isAuthenticated || idleMs === null) return;
+    if (!isAuthenticated || !hasIdleLimit || idleMsRef.current === null) return;
     const session = startIdleSession({
-      idleMs,
+      idleMs: idleMsRef.current,
       sessionExpiresAt,
       refreshedAt: refreshedAtRef.current,
       onWarning: setSessionWarning,
       onRefreshDue: () => {
         void performRefresh();
       },
+      onRemoteIdleMs: (ms, at) => {
+        refreshedAtRef.current = Math.max(refreshedAtRef.current, at);
+        setIdleMs(ms);
+      },
       onSignOut: (reason, origin) => {
-        setSignedOutNoticeText(signedOutNotice(reason, idleMs));
+        setSignedOutNoticeText(signedOutNotice(reason, idleMsRef.current ?? 0));
         if (origin) void logout(reason);
         else clearSession();
       },
@@ -515,7 +542,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       idleSessionRef.current = null;
       setSessionWarning(null);
     };
-  }, [isAuthenticated, idleMs, sessionExpiresAt, performRefresh, logout, clearSession]);
+  }, [isAuthenticated, hasIdleLimit, sessionExpiresAt, performRefresh, logout, clearSession]);
 
   const value: AuthContextType = {
     user,

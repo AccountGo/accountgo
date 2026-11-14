@@ -22,6 +22,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
 
 ### Fixed
+- Workspace automatic sign-out settings now apply per active workspace and no longer fall back to 15 minutes when unconfigured or when a member belongs to another workspace with a shorter timeout.
 - Bank statement Personal actions appear only when Personal books are linked, and each workspace shows one set of owner money-movement actions.
 
 ### Removed

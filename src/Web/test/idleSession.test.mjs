@@ -264,6 +264,23 @@ test('a sign-out heard from another tab is not re-broadcast', () => {
   assert.equal(b.channel.sent.length, 0);
 });
 
+test('cross-tab markRefreshed propagates updated idleMs and invokes onRemoteIdleMs', () => {
+  const world = createWorld();
+  const a = world.tab();
+  const b = world.tab();
+  const remoteUpdates = [];
+  const sessionA = a.start({ idleMs: 15 * MIN });
+  b.start({ idleMs: 15 * MIN, onRemoteIdleMs: (ms, at) => remoteUpdates.push({ ms, at }) });
+
+  sessionA.markRefreshed(world.now, 120 * MIN);
+  assert.deepEqual(remoteUpdates, [{ ms: 120 * MIN, at: world.now }]);
+
+  // Advancing past the old 15m limit should not warn or sign out Tab B now that idleMs is 120m.
+  world.advance(20 * MIN);
+  assert.equal(b.events.signOuts.length, 0);
+  assert.equal(lastWarning(b), null);
+});
+
 test('AuthContext uses the idle engine but keeps tokens out of shared channels', () => {
   const engine = readFileSync(resolve(__dirname, '../src/lib/idleSession.ts'), 'utf-8');
   // Messages carry timestamps and reasons only.

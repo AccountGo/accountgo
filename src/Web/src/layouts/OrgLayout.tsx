@@ -33,7 +33,7 @@ export const OrgLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { setTenantWhitelabel } = useTheme();
-  const { user: authUser, authFetch } = useAuth();
+  const { user: authUser, authFetch, refreshSession } = useAuth();
 
   const [availableOrgs, setAvailableOrgs] = useState<OrgDetails[]>([]);
   const [currentOrg, setCurrentOrg] = useState<OrgDetails | null>(null);
@@ -185,6 +185,7 @@ export const OrgLayout: React.FC = () => {
           ));
           setPersistedOrgSlug(resolvedOrg.slug);
           setTenantWhitelabel(resolvedOrg.whitelabel || null);
+          void refreshSession(resolvedOrg.slug);
         }
         if (mounted) {
           setLoading(false);

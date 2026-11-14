@@ -724,8 +724,9 @@ namespace Api.Controllers
 
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
             var userAgent = Request.Headers.UserAgent.ToString();
+            var orgSlug = Request.Headers["X-AccountGo-Org"].FirstOrDefault()?.Trim();
 
-            var result = await _otpService.RefreshSessionAsync(rawRefreshToken, ipAddress, userAgent);
+            var result = await _otpService.RefreshSessionAsync(rawRefreshToken, ipAddress, userAgent, orgSlug);
 
             if (!result.Success || result.Response == null)
             {

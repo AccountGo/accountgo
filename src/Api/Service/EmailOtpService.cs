@@ -363,9 +363,9 @@ namespace Api.Service
         }
 
         public Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RefreshSessionAsync(
-            string rawRefreshToken, string? ipAddress, string? userAgent)
+            string rawRefreshToken, string? ipAddress, string? userAgent, string? orgSlug = null)
         {
-            return _sessionService.RefreshSessionAsync(rawRefreshToken, ipAddress, userAgent);
+            return _sessionService.RefreshSessionAsync(rawRefreshToken, ipAddress, userAgent, orgSlug);
         }
 
         public Task<bool> RevokeSessionAsync(string rawRefreshToken)

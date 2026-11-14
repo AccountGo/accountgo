@@ -456,6 +456,14 @@ namespace Api.Data.Schema
                 BackfillDisabledModules(connection, tx);
                 NormalizeCompanyTier(connection, tx);
 
+                if (TableExists(connection, "CompanySetting", tx) && ColumnExists(connection, "CompanySetting", "IdleTimeoutMinutes", tx))
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"UPDATE ""CompanySetting"" SET ""IdleTimeoutMinutes"" = 60 WHERE ""IdleTimeoutMinutes"" <= 0;";
+                    cmd.ExecuteNonQuery();
+                }
+
                 // #413 / D1 0032: bank columns → clean-up → indexes/triggers (idempotent).
                 if (TableExists(connection, "Bank", tx) && ColumnExists(connection, "Bank", "IsDefaultForReceipts", tx))
                 {

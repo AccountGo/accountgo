@@ -76,13 +76,14 @@ public class SessionService : ISessionService
         ApplicationUser user,
         string? ipAddress,
         string? userAgent,
-        string? amr = null)
+        string? amr = null,
+        string? orgSlug = null)
     {
         var amrList = !string.IsNullOrEmpty(amr) ? new[] { amr } : null;
-        return CreateSessionAsync(user, ipAddress, userAgent, amr: amrList);
+        return CreateSessionCoreAsync(user, ipAddress, userAgent, amr: amrList, orgSlug: orgSlug);
     }
 
-    public async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionAsync(
+    public Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionAsync(
         ApplicationUser user,
         string? ipAddress,
         string? userAgent,
@@ -90,6 +91,17 @@ public class SessionService : ISessionService
         int? trustedDeviceId = null,
         IEnumerable<string>? amr = null,
         bool mfaSatisfied = false)
+        => CreateSessionCoreAsync(user, ipAddress, userAgent, mfaMethod, trustedDeviceId, amr, mfaSatisfied, orgSlug: null);
+
+    private async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionCoreAsync(
+        ApplicationUser user,
+        string? ipAddress,
+        string? userAgent,
+        string? mfaMethod = null,
+        int? trustedDeviceId = null,
+        IEnumerable<string>? amr = null,
+        bool mfaSatisfied = false,
+        string? orgSlug = null)
     {
         if (user.DeletedAt != null)
             return (false, null, null, "User account no longer exists.");
@@ -115,7 +127,7 @@ public class SessionService : ISessionService
         var rawRefreshToken = GenerateSecureToken();
         var tokenHash = ComputeSha256(rawRefreshToken);
         var now = DateTime.UtcNow;
-        var idle = await ResolveIdleTimeoutAsync(user.Id);
+        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id, orgSlug);
         var absoluteExpiresAt = now + AbsoluteLifetime();
 
         var session = new RefreshTokenSession
@@ -124,7 +136,7 @@ public class SessionService : ISessionService
             FamilyId = NewFamilyId(),
             TokenHash = tokenHash,
             CreatedAt = now,
-            ExpiresAt = IdleExpiry(now, idle, absoluteExpiresAt),
+            ExpiresAt = IdleExpiry(now, serverIdle, absoluteExpiresAt),
             AbsoluteExpiresAt = absoluteExpiresAt,
             CreatedByIp = ipAddress,
             UserAgent = userAgent,
@@ -146,7 +158,7 @@ public class SessionService : ISessionService
             expiresInSeconds,
             userDto)
         {
-            IdleTimeoutSeconds = (int)idle.TotalSeconds,
+            IdleTimeoutSeconds = (int)clientIdle.TotalSeconds,
             SessionExpiresAt = absoluteExpiresAt
         };
 
@@ -156,7 +168,8 @@ public class SessionService : ISessionService
     public async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RefreshSessionAsync(
         string rawRefreshToken,
         string? ipAddress,
-        string? userAgent)
+        string? userAgent,
+        string? orgSlug = null)
     {
         if (string.IsNullOrWhiteSpace(rawRefreshToken))
             return (false, null, null, "Missing refresh token.");
@@ -201,7 +214,7 @@ public class SessionService : ISessionService
 
                 // Issue a sibling; keep the existing replacement active (concurrent tabs / lost response).
                 session.GraceReuseCount++;
-                return await IssueSiblingAsync(session, ipAddress, userAgent, now);
+                return await IssueSiblingAsync(session, ipAddress, userAgent, now, orgSlug);
             }
 
             await RevokeFamilyAsync(
@@ -218,11 +231,11 @@ public class SessionService : ISessionService
             return (false, null, null, "Session has expired. Please sign in again.");
         }
 
-        return await RotateAsync(session, ipAddress, userAgent, now);
+        return await RotateAsync(session, ipAddress, userAgent, now, orgSlug);
     }
 
     private async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RotateAsync(
-        RefreshTokenSession session, string? ipAddress, string? userAgent, DateTime now)
+        RefreshTokenSession session, string? ipAddress, string? userAgent, DateTime now, string? orgSlug = null)
     {
         if (session.IsExpired)
             return (false, null, null, "Session has expired. Please sign in again.");
@@ -239,7 +252,7 @@ public class SessionService : ISessionService
         session.RevokedAt ??= now;
         session.ReplacedByTokenHash = newTokenHash;
 
-        var idle = await ResolveIdleTimeoutAsync(user.Id);
+        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id, orgSlug);
         // Rows from before the 12-hour limit get one from now.
         var absoluteExpiresAt = session.AbsoluteExpiresAt ?? now + AbsoluteLifetime();
 
@@ -249,7 +262,7 @@ public class SessionService : ISessionService
             FamilyId = session.FamilyId,
             TokenHash = newTokenHash,
             CreatedAt = now,
-            ExpiresAt = IdleExpiry(now, idle, absoluteExpiresAt),
+            ExpiresAt = IdleExpiry(now, serverIdle, absoluteExpiresAt),
             AbsoluteExpiresAt = absoluteExpiresAt,
             CreatedByIp = ipAddress,
             UserAgent = userAgent,
@@ -262,14 +275,14 @@ public class SessionService : ISessionService
         _identityContext.RefreshTokens.Add(newSession);
         await _identityContext.SaveChangesAsync();
 
-        return await BuildRefreshResponseAsync(user, newRawToken, idle, absoluteExpiresAt);
+        return await BuildRefreshResponseAsync(user, newRawToken, clientIdle, absoluteExpiresAt);
     }
 
     /// <summary>
     /// Grace path: mint another active token in the same family without revoking the prior replacement.
     /// </summary>
     private async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> IssueSiblingAsync(
-        RefreshTokenSession parent, string? ipAddress, string? userAgent, DateTime now)
+        RefreshTokenSession parent, string? ipAddress, string? userAgent, DateTime now, string? orgSlug = null)
     {
         var user = await _userManager.FindByIdAsync(parent.UserId);
         if (user == null || user.DeletedAt != null)
@@ -280,7 +293,7 @@ public class SessionService : ISessionService
         var newRawToken = GenerateSecureToken();
         var newTokenHash = ComputeSha256(newRawToken);
 
-        var idle = await ResolveIdleTimeoutAsync(user.Id);
+        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id, orgSlug);
         var absoluteExpiresAt = parent.AbsoluteExpiresAt ?? now + AbsoluteLifetime();
 
         var sibling = new RefreshTokenSession
@@ -289,7 +302,7 @@ public class SessionService : ISessionService
             FamilyId = parent.FamilyId,
             TokenHash = newTokenHash,
             CreatedAt = now,
-            ExpiresAt = IdleExpiry(now, idle, absoluteExpiresAt),
+            ExpiresAt = IdleExpiry(now, serverIdle, absoluteExpiresAt),
             AbsoluteExpiresAt = absoluteExpiresAt,
             CreatedByIp = ipAddress,
             UserAgent = userAgent,
@@ -302,7 +315,7 @@ public class SessionService : ISessionService
         _identityContext.RefreshTokens.Add(sibling);
         await _identityContext.SaveChangesAsync();
 
-        return await BuildRefreshResponseAsync(user, newRawToken, idle, absoluteExpiresAt);
+        return await BuildRefreshResponseAsync(user, newRawToken, clientIdle, absoluteExpiresAt);
     }
 
     private async Task RevokeFamilyAsync(
@@ -452,18 +465,49 @@ public class SessionService : ISessionService
             user.MfaReEnrollRequired);
     }
 
-    /// <summary>Strictest idle timeout across the user's active, non-deleted workspaces.</summary>
-    private async Task<TimeSpan> ResolveIdleTimeoutAsync(string userId)
+    /// <summary>
+    /// Client-facing idle timeout for the active workspace (or single workspace / default 60m),
+    /// paired with a server-side sliding window covering the longest active workspace membership.
+    /// </summary>
+    private async Task<(TimeSpan ClientIdle, TimeSpan ServerIdle)> ResolveIdleTimeoutAsync(string userId, string? orgSlug = null)
     {
-        var effective = _apiDb == null ? null : await GetEffectiveIdleTimeoutAsync(_apiDb, userId);
-        return TimeSpan.FromMinutes(effective?.IdleTimeoutMinutes ?? SessionTimeoutPolicy.DefaultIdleMinutes);
+        if (_apiDb == null)
+        {
+            var fallback = TimeSpan.FromMinutes(SessionTimeoutPolicy.DefaultIdleMinutes);
+            return (fallback, fallback);
+        }
+
+        var resolved = await ResolveEffectiveIdleTimeoutsAsync(_apiDb, userId, orgSlug);
+        if (resolved == null)
+        {
+            var fallback = TimeSpan.FromMinutes(SessionTimeoutPolicy.DefaultIdleMinutes);
+            return (fallback, fallback);
+        }
+
+        return (
+            TimeSpan.FromMinutes(resolved.Value.ClientMinutes),
+            TimeSpan.FromMinutes(resolved.Value.ServerMinutes));
     }
 
     /// <summary>
-    /// Strictest idle timeout across the user's active, non-deleted workspaces, and which of them set it; null when
-    /// they have none. Static (not on <see cref="ISessionService"/>) so decorators of the interface are unaffected.
+    /// Effective idle timeout for the user's active workspace (or single workspace / default 60m); null when
+    /// they have no active memberships. Static (not on <see cref="ISessionService"/>) so decorators of the interface are unaffected.
     /// </summary>
-    public static async Task<EffectiveIdleTimeout?> GetEffectiveIdleTimeoutAsync(ApiDbContext apiDb, string userId)
+    public static async Task<EffectiveIdleTimeout?> GetEffectiveIdleTimeoutAsync(
+        ApiDbContext apiDb,
+        string userId,
+        string? orgSlug = null)
+    {
+        var resolved = await ResolveEffectiveIdleTimeoutsAsync(apiDb, userId, orgSlug);
+        return resolved == null
+            ? null
+            : new EffectiveIdleTimeout(resolved.Value.ClientMinutes, resolved.Value.SetBy);
+    }
+
+    private static async Task<(int ClientMinutes, int ServerMinutes, IReadOnlyList<string> SetBy)?> ResolveEffectiveIdleTimeoutsAsync(
+        ApiDbContext apiDb,
+        string userId,
+        string? orgSlug = null)
     {
         if (string.IsNullOrEmpty(userId))
             return null;
@@ -478,6 +522,7 @@ public class SessionService : ISessionService
                 && m.Company.DeletedAt == null)
             .Select(m => new
             {
+                m.Company.Slug,
                 m.Company.Name,
                 Minutes = apiDb.CompanySettings
                     .Where(s => s.CompanyId == m.CompanyId)
@@ -488,11 +533,32 @@ public class SessionService : ISessionService
         if (rows.Count == 0)
             return null;
 
-        var normalized = rows.Select(r => (r.Name, Minutes: SessionTimeoutPolicy.Normalize(r.Minutes))).ToList();
-        var strictest = normalized.Min(r => r.Minutes);
-        return new EffectiveIdleTimeout(
-            strictest,
-            normalized.Where(r => r.Minutes == strictest).Select(r => r.Name).OrderBy(n => n, StringComparer.Ordinal).ToList());
+        var normalized = rows.Select(r => (r.Slug, r.Name, Minutes: SessionTimeoutPolicy.Normalize(r.Minutes))).ToList();
+        var trimmedSlug = string.IsNullOrWhiteSpace(orgSlug) ? null : orgSlug.Trim();
+        var activeRow = trimmedSlug != null
+            ? normalized.FirstOrDefault(r => string.Equals(r.Slug, trimmedSlug, StringComparison.OrdinalIgnoreCase))
+            : default;
+
+        int clientMinutes;
+        IReadOnlyList<string> setBy;
+        if (!string.IsNullOrEmpty(activeRow.Name) || !string.IsNullOrEmpty(activeRow.Slug))
+        {
+            clientMinutes = activeRow.Minutes;
+            setBy = string.IsNullOrEmpty(activeRow.Name) ? Array.Empty<string>() : new[] { activeRow.Name };
+        }
+        else if (normalized.Count == 1)
+        {
+            clientMinutes = normalized[0].Minutes;
+            setBy = string.IsNullOrEmpty(normalized[0].Name) ? Array.Empty<string>() : new[] { normalized[0].Name };
+        }
+        else
+        {
+            clientMinutes = SessionTimeoutPolicy.DefaultIdleMinutes;
+            setBy = Array.Empty<string>();
+        }
+
+        var serverMinutes = Math.Max(clientMinutes, normalized.Max(r => r.Minutes));
+        return (clientMinutes, serverMinutes, setBy);
     }
 
     private TimeSpan AbsoluteLifetime() => TimeSpan.FromHours(AbsoluteHours(_configuration));

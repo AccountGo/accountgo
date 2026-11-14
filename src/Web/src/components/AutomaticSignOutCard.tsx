@@ -109,8 +109,7 @@ export const AutomaticSignOutCard: React.FC<{ canEdit: boolean }> = ({ canEdit }
       )}
 
       <p className="text-[11px] text-[var(--text-muted)]">
-        Members see a one-minute warning first. Every session also ends {policy.absoluteSessionHours} hours after
-        sign-in. Members who belong to stricter workspaces may be signed out sooner.
+        Members see a one-minute warning first. This setting applies while members are working in this workspace. Every session also ends {policy.absoluteSessionHours} hours after sign-in.
       </p>
 
       {message && (
