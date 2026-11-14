@@ -1015,7 +1015,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 var line = _statements.UndoOwnerMovement(id, request?.Reason);
-                AuditStatementDecision(id, line.Amount < 0 ? "undo_owner_drawing" : "undo_owner_contribution");
+                AuditStatementDecision(id, line.Amount < 0 ? "undo_owner_drawing" : "undo_owner_contribution", line.MatchedPartnerId);
                 tx.Commit();
                 return Ok(line);
             }
@@ -1058,9 +1058,9 @@ namespace Api.Controllers
             try
             {
                 using var tx = BeginWriteTransaction();
-                var lines = _statements.RecordOwnerMovement(ids, request.Memo, request.RememberRule);
+                var lines = _statements.RecordOwnerMovement(ids, request.Memo, request.RememberRule, request.PartnerId);
                 foreach (var line in lines)
-                    AuditStatementDecision(line.Id, line.Amount < 0 ? "record_owner_drawing" : "record_owner_contribution");
+                    AuditStatementDecision(line.Id, line.Amount < 0 ? "record_owner_drawing" : "record_owner_contribution", request.PartnerId);
                 tx.Commit();
                 return bulk ? Ok(new { recorded = lines.Count, lines }) : Ok(lines[0]);
             }
@@ -1254,7 +1254,7 @@ namespace Api.Controllers
                 statementEndDate = ex.StatementEndDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
             });
 
-        private void AuditStatementDecision(int id, string action)
+        private void AuditStatementDecision(int id, string action, int? partnerId = null)
         {
             var line = _db.BankStatementLines.AsNoTracking()
                 .Single(l => l.Id == id && l.CompanyId == _tenant.RequireCompanyId());
@@ -1270,7 +1270,8 @@ namespace Api.Controllers
                 OriginalValue = string.Empty,
                 NewValue = System.Text.Json.JsonSerializer.Serialize(new
                 {
-                    action, line.BankId, line.DraftBillId, line.MatchedGeneralLedgerLineId,
+                    action, line.BankId, line.DraftBillId, line.MatchedGeneralLedgerLineId, partnerId,
+                    partnerName = partnerId.HasValue ? _db.Partners.Where(p => p.Id == partnerId && p.CompanyId == line.CompanyId).Select(p => p.Name).FirstOrDefault() : null,
                     line.ExclusionReason, line.ExclusionNote
                 })
             });

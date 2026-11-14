@@ -14,6 +14,8 @@ public sealed class EquityStatementDto
     public DateTime From { get; set; }
     public DateTime To { get; set; }
     public string Basis { get; set; } = "Accrual";
+    public bool PartnerMode { get; set; }
+    public bool HasUnallocatedProfit { get; set; }
     public IReadOnlyList<EquityStatementColumnDto> Columns { get; set; } = Array.Empty<EquityStatementColumnDto>();
     public IReadOnlyList<EquityStatementRowDto> Rows { get; set; } = Array.Empty<EquityStatementRowDto>();
     public decimal BalanceSheetEquity { get; set; }

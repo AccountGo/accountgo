@@ -77,6 +77,38 @@ public partial class MultiTenancyPhase3Tests
         }
     }
 
+    [Fact]
+    public async Task DashboardDrawings_InPartnerMode_IncludesPartnerDrawingsAccounts()
+    {
+        var fyEnd = DateTime.UtcNow.Date;
+        var fyStart = new DateTime(fyEnd.Year, 1, 1);
+        WithDb(db =>
+        {
+            var setting = db.CompanySettings.Single();
+            setting.EntityType = Core.Domain.EntityType.Partnership;
+            db.SaveChanges();
+        });
+
+        using var setupResponse = await Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = fyStart,
+            partners = new[]
+            {
+                new { name = "Avery", percent = 50m, capital = 0m, drawings = 0m },
+                new { name = "Blake", percent = 50m, capital = 0m, drawings = 0m },
+            }
+        });
+        Assert.True(setupResponse.IsSuccessStatusCode, await setupResponse.Content.ReadAsStringAsync());
+
+        await PostJournal(fyStart, ("30851", 1, 45m), ("10111", 2, 45m));
+
+        string Day(DateTime d) => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        using var response = await Send(HttpMethod.Get, $"/api/Dashboard/Summary?from={Day(fyStart)}&to={Day(fyEnd)}");
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        var summary = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(45m, summary.GetProperty("kpis").GetProperty("drawingsYtd").GetDecimal());
+    }
+
     private async Task PostJournal(DateTime date, params (string Code, int DrCr, decimal Amount)[] lines)
     {
         var journal = new Dto.Financial.JournalEntry { JournalDate = date, VoucherType = 6, Memo = "Dashboard period check" };

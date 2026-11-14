@@ -539,6 +539,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int")
                         .HasDefaultValue(0);
 
+                    b.Property<int?>("PartnerSetupJournalEntryId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("OnboardingChecklistDismissedAt")
                         .HasColumnType("datetime2");
 
@@ -1214,6 +1217,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("ExpenseAccountId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PartnerId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("LastUsedAt")
                         .HasColumnType("datetime2");
 
@@ -1225,6 +1231,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("PartnerId");
 
                     b.HasIndex("VendorId");
 
@@ -4629,12 +4637,19 @@ namespace Api.Data.Migrations.ApiDb
                         .HasForeignKey("ExpenseAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Core.Domain.Financials.Partner", "Partner")
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
                         .WithMany()
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ExpenseAccount");
+
+                    b.Navigation("Partner");
 
                     b.Navigation("Vendor");
                 });

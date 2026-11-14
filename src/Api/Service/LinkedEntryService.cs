@@ -351,6 +351,7 @@ public sealed class LinkedEntryService
         if (link == null) return new(403, "linked_entry_not_available", "Linked entries are not available for this workspace.");
         var personalCompanyId = link.PersonalCompanyId;
         if (string.IsNullOrWhiteSpace(ownerUserId)) return new(403, "linked_entry_not_available", "Only the workspace owner can create a linked entry.");
+        // Linked entries are sole-proprietor only, so partnerships never reach the shared 30100/30800 accounts from here.
         var entityType = _db.CompanySettings.IgnoreQueryFilters().Where(s => s.CompanyId == companyId).Select(s => s.EntityType).SingleOrDefault();
         if (entityType != EntityType.SoleProprietor) return new(403, "linked_entry_not_available", "Linked entries are available only for sole proprietor workspaces.");
         if (request == null || request.Date == default || request.Amount <= 0 || request.WorkBankAccountId <= 0 || request.PersonalAccountId <= 0)

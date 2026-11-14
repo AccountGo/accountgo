@@ -56,6 +56,7 @@ namespace Services.Financial
         private readonly IRepository<BankReconciliation> _bankReconciliationRepo;
         private readonly IRepository<BankStatementLine> _bankStatementLineRepo;
         private readonly IRepository<LinkedEntryPair> _linkedEntryPairRepo;
+        private readonly IRepository<Partner> _partnerRepo;
         private readonly Services.Banking.IReconciledPeriodGuard _reconciledPeriodGuard;
         private readonly IBooksLockGuard _booksLockGuard;
         private readonly Core.Authorization.IAccessAuthorizationService _auth;
@@ -109,7 +110,8 @@ namespace Services.Financial
             Microsoft.AspNetCore.Http.IHttpContextAccessor httpContextAccessor = null,
             Core.Authorization.IWorkspaceApprovalPolicyResolver approvalPolicyResolver = null,
             Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
-            IRepository<LinkedEntryPair> linkedEntryPairRepo = null
+            IRepository<LinkedEntryPair> linkedEntryPairRepo = null,
+            IRepository<Partner> partnerRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -150,6 +152,7 @@ namespace Services.Financial
             _bankReconciliationRepo = bankReconciliationRepo;
             _bankStatementLineRepo = bankStatementLineRepo;
             _linkedEntryPairRepo = linkedEntryPairRepo;
+            _partnerRepo = partnerRepo;
             _reconciledPeriodGuard = reconciledPeriodGuard;
         }
 

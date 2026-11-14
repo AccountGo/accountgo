@@ -191,6 +191,10 @@ namespace Dto.Banking
     {
         public string? MatchedOwnerAction { get; set; }
         public string? SuggestedOwnerAction { get; set; }
+        public int? MatchedPartnerId { get; set; }
+        public string? MatchedPartnerName { get; set; }
+        public int? SuggestedPartnerId { get; set; }
+        public string? SuggestedPartnerName { get; set; }
         public int? DraftBillId { get; set; }
         public int Id { get; set; }
         public int BankId { get; set; }

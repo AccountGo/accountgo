@@ -738,6 +738,7 @@ WHERE ""DisabledModulesJson"" IS NULL
         private static void EnsurePartnerAccounts(DbConnection connection)
         {
             AddColumnIfMissing(connection, "CompanySetting", "PartnerAccountsFrom", "TEXT NULL");
+            AddColumnIfMissing(connection, "CompanySetting", "PartnerSetupJournalEntryId", "INTEGER NULL");
             using var command = connection.CreateCommand();
             command.CommandText = @"
 CREATE TABLE IF NOT EXISTS ""Partners"" (
@@ -853,6 +854,7 @@ CREATE INDEX IF NOT EXISTS ""IX_PartnerShares_PartnerId"" ON ""PartnerShares"" (
             cmd.ExecuteNonQuery();
             // After the CREATE so a table created here also gets the owner-movement Action column.
             AddColumnIfMissing(connection, "BankStatementDescriptionRule", "Action", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing(connection, "BankStatementDescriptionRule", "PartnerId", "INTEGER NULL");
         }
 
         private static void EnsureBankStatementExclusionColumns(DbConnection connection)

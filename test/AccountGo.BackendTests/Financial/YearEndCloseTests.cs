@@ -1018,6 +1018,22 @@ public class YearEndCloseTests
     }
 
     [Fact]
+    public void Partnership_close_blocks_balance_in_an_archived_partner_account()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+        var avery = harness.AddPartner("Avery", 50m);
+        harness.AddPartner("Blake", 50m);
+        avery.ArchivedAt = D(2025, 2, 1);
+        harness.Post(D(2025, 6, 1), harness.CashId, avery.CapitalAccountId, 75m);
+
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+
+        var blocker = Assert.Single(preview.Blocking, item => item.Code == "partner_archived_balance_" + avery.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "_30101");
+        Assert.Contains("Avery is archived but has a balance in 30101. Restore the partner or move the balance with a journal.", blocker.Message);
+    }
+
+    [Fact]
     public void Closed_partnership_preview_does_not_add_the_profit_share_twice_to_capital()
     {
         using var harness = new Harness(EntityType.Partnership);

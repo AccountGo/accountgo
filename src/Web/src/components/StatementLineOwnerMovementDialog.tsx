@@ -4,18 +4,19 @@ import { ModalShell } from './ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
 import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
-import type { BankStatementLine, StatementOwnerAction } from '../types/banking';
+import type { BankStatementLine, StatementOwnerAction, StatementPartnerOwnerActions } from '../types/banking';
 
 interface Props {
   lines: BankStatementLine[];
   undo?: boolean;
   action: StatementOwnerAction;
+  partners?: StatementPartnerOwnerActions[] | null;
   formatCurrency: (n: number) => string;
   onSaved: () => void | Promise<void>;
   onClose: () => void;
 }
 
-export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, action, undo = false, formatCurrency, onSaved, onClose }) => {
+export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, action, partners, undo = false, formatCurrency, onSaved, onClose }) => {
   const { authFetch } = useAuth();
   const titleId = useId();
   const [memo, setMemo] = useState('');
@@ -24,6 +25,16 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
   const [error, setError] = useState<string | null>(null);
   const periodConfirm = useReconciledPeriodConfirm();
   const drawing = lines[0].amount < 0;
+  const offeredPartners = (partners ?? []).filter(p => drawing ? p.drawing : p.contribution);
+  const [partnerId, setPartnerId] = useState(() => {
+    const suggested = lines.length === 1 ? lines[0].suggestedPartnerId : null;
+    return String(suggested && offeredPartners.some(p => p.partnerId === suggested) ? suggested : offeredPartners.length === 1 ? offeredPartners[0].partnerId : '');
+  });
+  const partnerMode = !!partners;
+  const selectedPartner = offeredPartners.find(p => String(p.partnerId) === partnerId);
+  const selectedAction = partnerMode
+    ? (selectedPartner ? (drawing ? selectedPartner.drawing : selectedPartner.contribution) : null)
+    : action;
   const bulk = lines.length > 1;
   const description = lines[0].payee || lines[0].memo || '';
 
@@ -35,7 +46,7 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
       const route = undo ? `${lines[0].id}/UndoOwnerMovement` : bulk ? 'BulkRecordOwnerMovement' : `${lines[0].id}/RecordOwnerMovement`;
       const response = await authFetch(withConfirmReconciledPeriod(`/api/Banking/StatementLines/${route}`, confirmed), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(undo ? { reason: memo.trim() || null } : { ...(bulk ? { lineIds: lines.map(l => l.id) } : {}), memo: memo.trim() || null, rememberRule }),
+        body: JSON.stringify(undo ? { reason: memo.trim() || null } : { ...(bulk ? { lineIds: lines.map(l => l.id) } : {}), memo: memo.trim() || null, rememberRule, ...(partnerMode ? { partnerId: partnerId ? Number(partnerId) : null } : {}) }),
       });
       if (await periodConfirm.handleConflict(response, () => void submit(null, true))) return;
       if (!response.ok) {
@@ -53,17 +64,25 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
       bare aria-labelledby={titleId}
       panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl">
       <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
-        <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">{undo ? `Undo owner ${lines[0].matchedOwnerAction}?` : action.label}{bulk ? ` (${lines.length})` : ''}</h3>
+        <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">{undo ? `Undo ${lines[0].matchedPartnerName ? `partner ${lines[0].matchedOwnerAction} – ${lines[0].matchedPartnerName}` : `owner ${lines[0].matchedOwnerAction}`}?` : action.label}{bulk ? ` (${lines.length})` : ''}</h3>
         <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="p-1 rounded-lg text-[var(--text-muted)]"><X className="w-5 h-5" /></button>
       </div>
       <form onSubmit={e => void submit(e)} className="p-6 space-y-4">
         {!undo && <><ul className="text-sm text-[var(--text-secondary)] space-y-1">
           {lines.map(line => <li key={line.id}>{String(line.postedDate).slice(0, 10)} · {line.payee || line.memo || 'Statement line'} · <span className="font-mono">{formatCurrency(line.amount)}</span></li>)}
         </ul>
-        <p className="text-sm text-[var(--text-secondary)]">Account: {action.accountName} ({action.accountCode})</p>
+        {partnerMode && <label className="block text-sm text-[var(--text-secondary)]">Partner
+          <select aria-label="Partner" required value={partnerId} onChange={e => setPartnerId(e.target.value)} className="mt-1 block w-full h-10 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-sm text-[var(--text-main)]">
+            <option value="">Choose a partner</option>
+            {offeredPartners.map(p => <option key={p.partnerId} value={p.partnerId}>{p.name}</option>)}
+          </select>
+        </label>}
+        {selectedAction
+          ? <p className="text-sm text-[var(--text-secondary)]">Account: {selectedAction.accountName} ({selectedAction.accountCode})</p>
+          : <p className="text-sm text-[var(--text-secondary)]">Choose a partner to see the account.</p>}
         <p className="text-sm text-[var(--text-secondary)]">{drawing
-          ? "Money you took out of the business for personal use. It isn't an expense and doesn't reduce profit."
-          : "Money you put into the business from personal funds. It isn't income."}</p>
+          ? `Money ${partnerMode ? selectedPartner?.name || 'the partner' : 'you'} took out of the business for personal use. It isn't an expense and doesn't reduce profit.`
+          : `Money ${partnerMode ? selectedPartner?.name || 'the partner' : 'you'} put into the business from personal funds. It isn't income.`}</p>
         </>}
         {undo && <p className="text-sm text-[var(--text-secondary)]">Undo this owner {lines[0].matchedOwnerAction}? A reversing entry is posted and the line goes back to unmatched.</p>}
         {error && <p role="alert" className="p-3 bg-rose-500/10 rounded-xl text-sm text-rose-500">{error}</p>}
@@ -76,7 +95,7 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
         </label>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" disabled={busy} onClick={onClose} className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]">Cancel</button>
-          <button type="submit" disabled={busy} className="h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50">{busy ? 'Saving…' : undo ? 'Undo' : 'Record'}</button>
+          <button type="submit" disabled={busy || (!undo && partnerMode && !partnerId)} className="h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50">{busy ? 'Saving…' : undo ? 'Undo' : 'Record'}</button>
         </div>
       </form>
     </ModalShell>

@@ -99,7 +99,8 @@ namespace Services.Dashboard
                 .Select(a => a.Id)
                 .ToHashSet();
             var drawingsAccountIds = accounts
-                .Where(a => a.AccountCode == "30800")
+                .Where(a => a.AccountCode == "30800"
+                    || (a.Description == "Partner drawings" && a.AccountCode.Length == 5 && a.AccountCode.StartsWith("308", StringComparison.Ordinal)))
                 .Select(a => a.Id)
                 .ToHashSet();
 

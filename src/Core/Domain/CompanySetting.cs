@@ -34,6 +34,8 @@ namespace Core.Domain
         public DateTime? BooksLockedThrough { get; set; }
         /// <summary>First date using partner level capital accounts; null retains the single capital workflow.</summary>
         public DateTime? PartnerAccountsFrom { get; set; }
+        /// <summary>Ledger header for the journal that initially assigned shared balances to partners.</summary>
+        public int? PartnerSetupJournalEntryId { get; set; }
 
         public IndustryTemplate IndustryTemplate { get; set; } = IndustryTemplate.Services;
         public EntityType EntityType { get; set; } = EntityType.SoleProprietor;

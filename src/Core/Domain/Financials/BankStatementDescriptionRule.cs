@@ -25,11 +25,13 @@ namespace Core.Domain.Financials
 
         public int? VendorId { get; set; }
         public int? ExpenseAccountId { get; set; }
+        public int? PartnerId { get; set; }
 
         public DateTime CreatedAt { get; set; }
         public DateTime LastUsedAt { get; set; }
 
         public virtual Vendor? Vendor { get; set; }
         public virtual Account? ExpenseAccount { get; set; }
+        public virtual Partner? Partner { get; set; }
     }
 }

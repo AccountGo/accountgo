@@ -530,6 +530,7 @@ namespace Services.Banking
                     Action = (int)BankStatementRuleAction.Expense,
                     VendorId = vendorId,
                     ExpenseAccountId = expenseAccountId,
+                    PartnerId = null,
                     CreatedAt = now,
                     LastUsedAt = now
                 };
@@ -540,6 +541,7 @@ namespace Services.Banking
                 rule.Action = (int)BankStatementRuleAction.Expense;
                 rule.VendorId = vendorId;
                 rule.ExpenseAccountId = expenseAccountId;
+                rule.PartnerId = null;
                 rule.LastUsedAt = now;
                 _rules.Update(rule);
             }

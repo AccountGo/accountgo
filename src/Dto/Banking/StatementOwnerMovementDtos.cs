@@ -8,7 +8,8 @@ using System.Collections.Generic;
 namespace Dto.Banking
 {
     public sealed record StatementOwnerActionDto(int AccountId, string AccountCode, string AccountName, string Label);
-    public sealed record StatementOwnerActionsDto(StatementOwnerActionDto? Drawing, StatementOwnerActionDto? Contribution);
+    public sealed record StatementPartnerOwnerActionsDto(int PartnerId, string Name, StatementOwnerActionDto? Drawing, StatementOwnerActionDto? Contribution);
+    public sealed record StatementOwnerActionsDto(StatementOwnerActionDto? Drawing, StatementOwnerActionDto? Contribution, IReadOnlyList<StatementPartnerOwnerActionsDto>? Partners = null);
 
     public sealed class UndoOwnerMovementRequest
     {
@@ -19,6 +20,7 @@ namespace Dto.Banking
     {
         public string? Memo { get; set; }
         public bool RememberRule { get; set; }
+        public int? PartnerId { get; set; }
     }
 
     public sealed class BulkRecordOwnerMovementRequest : RecordOwnerMovementRequest

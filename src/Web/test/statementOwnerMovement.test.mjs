@@ -37,11 +37,27 @@ test('suggestion chip uses the available label only for the matching direction',
   assert.equal(ownerSuggestionLabel(line(10, { suggestedOwnerAction: 'drawing' }), contribution), null);
   assert.equal(ownerSuggestionLabel(line(-10, { suggestedOwnerAction: 'drawing' }), null), null);
   assert.equal(ownerSuggestionLabel(line(-10), drawing), null);
+  assert.equal(ownerSuggestionLabel(line(-10, { suggestedOwnerAction: 'drawing', suggestedPartnerName: 'Avery' }), { ...drawing, label: 'Partner drawing' }), 'Suggested: Partner drawing – Avery');
+  assert.equal(ownerSuggestionLabel(line(-10, { suggestedOwnerAction: 'drawing' }), { ...drawing, label: 'Partner drawing' }), 'Suggested: Partner drawing');
+});
+
+test('partner actions offer a drawing action for money-out lines', () => {
+  const partnerDrawing = { accountId: 21, accountCode: '30851', accountName: 'Drawings – Avery', label: 'Partner drawing' };
+  const partnerActions = {
+    drawing: null,
+    contribution: null,
+    partners: [{ partnerId: 1, name: 'Avery', drawing: partnerDrawing, contribution: null }],
+  };
+  assert.deepEqual(show([line(-10)], partnerActions), partnerDrawing);
+  assert.equal(show([line(10)], partnerActions), null);
 });
 
 test('linked Personal books take precedence when the user can create linked entries', () => {
   assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: true, ownerActionsAvailable: true }), 'linked');
   assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: true, ownerActionsAvailable: false }), 'linked');
+});
+test('partner mode uses owner movements even when linked Personal books are available', () => {
+  assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: true, ownerActionsAvailable: true, partnerMode: true }), 'owner');
 });
 test('linked workspaces fall back to owner actions without journal permissions', () => {
   assert.equal(ownerButtonSet({ linkedPersonalCompanyId: 2, canCreateLinkedEntry: false, ownerActionsAvailable: true }), 'owner');

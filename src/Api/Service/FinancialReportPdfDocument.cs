@@ -44,7 +44,11 @@ namespace Api.Service
         {
             container.Page(page =>
             {
-                page.Size(_report.CurrencyCode is "USD" or "CAD" ? PageSizes.Letter : PageSizes.A4);
+                var wideEquity = new[] { _report.EquityStatement, _report.EquityStatement?.Comparative }
+                    .Where(s => s != null).Any(s => s!.PartnerMode && s.Columns.Count + 1 > 4);
+                page.Size(wideEquity
+                    ? (_report.CurrencyCode is "USD" or "CAD" ? PageSizes.Letter.Landscape() : PageSizes.A4.Landscape())
+                    : (_report.CurrencyCode is "USD" or "CAD" ? PageSizes.Letter : PageSizes.A4));
                 page.Margin(36);
                 page.PageColor(Colors.White);
                 page.DefaultTextStyle(style => style.FontFamily(Fonts.Lato).FontSize(9).FontColor(Ink));
@@ -134,32 +138,44 @@ namespace Api.Service
 
         private void ComposeEquity(IContainer container, EquityStatementDto statement)
         {
-            var total = statement.Columns.Count > 1;
+            var partnerColumns = statement.Columns.Where(c => c.Key.StartsWith("partner:", StringComparison.Ordinal)).ToList();
+            var unallocated = statement.Columns.FirstOrDefault(c => c.Key == "unallocated");
+            var segments = statement.PartnerMode && partnerColumns.Count > 6
+                ? partnerColumns.Chunk(6).Select((chunk, index) => index == (partnerColumns.Count - 1) / 6
+                    ? chunk.Concat(unallocated == null ? Array.Empty<EquityStatementColumnDto>() : new[] { unallocated }).ToList()
+                    : chunk.ToList()).ToList()
+                : new List<List<EquityStatementColumnDto>> { statement.Columns.ToList() };
             container.Column(column =>
             {
-                column.Item().Table(table =>
+                for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
                 {
-                    table.ColumnsDefinition(columns =>
+                    var visibleColumns = segments[segmentIndex];
+                    var segmentTotal = statement.Columns.Count > 1
+                        && (!statement.PartnerMode || partnerColumns.Count <= 6 || segmentIndex == segments.Count - 1);
+                    column.Item().Table(table =>
                     {
-                        columns.RelativeColumn(2.5f);
-                        foreach (var component in statement.Columns) columns.RelativeColumn();
-                        if (total) columns.RelativeColumn();
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(2.5f);
+                            foreach (var component in visibleColumns) columns.RelativeColumn();
+                            if (segmentTotal) columns.RelativeColumn();
+                        });
+                        table.Header(header =>
+                        {
+                            HeaderCell(header.Cell(), "Movement", false);
+                            foreach (var component in visibleColumns) HeaderCell(header.Cell(), component.Label, true);
+                            if (segmentTotal) HeaderCell(header.Cell(), "Total", true);
+                        });
+                        foreach (var row in statement.Rows)
+                        {
+                            var bold = row.Key is "opening" or "restatedOpening" or "closing";
+                            BodyCell(table.Cell(), row.Label, false, bold);
+                            foreach (var component in visibleColumns)
+                                BodyCell(table.Cell(), Money(row.Amounts.GetValueOrDefault(component.Key)), true, bold);
+                            if (segmentTotal) BodyCell(table.Cell(), Money(row.Total), true, bold);
+                        }
                     });
-                    table.Header(header =>
-                    {
-                        HeaderCell(header.Cell(), "Movement", false);
-                        foreach (var component in statement.Columns) HeaderCell(header.Cell(), component.Label, true);
-                        if (total) HeaderCell(header.Cell(), "Total", true);
-                    });
-                    foreach (var row in statement.Rows)
-                    {
-                        var bold = row.Key is "opening" or "restatedOpening" or "closing";
-                        BodyCell(table.Cell(), row.Label, false, bold);
-                        foreach (var component in statement.Columns)
-                            BodyCell(table.Cell(), Money(row.Amounts[component.Key]), true, bold);
-                        if (total) BodyCell(table.Cell(), Money(row.Total), true, bold);
-                    }
-                });
+                }
                 var agrees = Math.Abs(statement.DifferenceToBalanceSheet) < 0.005m;
                 column.Item().PaddingTop(8).Text(agrees
                     ? "Agrees with the balance sheet (equity " + Money(statement.BalanceSheetEquity) + ")"
@@ -173,6 +189,8 @@ namespace Api.Service
                     if (Math.Abs(closing - bridge) >= 0.005m)
                         column.Item().PaddingTop(4).Text(component.Label + " movements don't reconcile to closing by " + Money(closing - bridge) + ".").FontColor("#B91C1C");
                 }
+                if (statement.PartnerMode && statement.HasUnallocatedProfit)
+                    column.Item().PaddingTop(5).Text("Profit is allocated to partners when the fiscal year is closed.").FontColor(Secondary);
             });
         }
 

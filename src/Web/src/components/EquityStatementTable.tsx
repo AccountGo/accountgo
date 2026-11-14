@@ -24,5 +24,7 @@ export function EquityStatementTable({ statement, formatAmount }: { statement: E
     <p role={reconciliation.agrees ? 'status' : 'alert'} className={`p-5 text-sm ${reconciliation.agrees ? 'text-emerald-500' : 'text-red-500'}`}>
       {reconciliation.message}
     </p>
+    {statement.partnerMode && statement.hasUnallocatedProfit &&
+      <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">Profit is allocated to partners when the fiscal year is closed.</p>}
   </>;
 }

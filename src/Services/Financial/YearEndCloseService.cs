@@ -4,6 +4,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Core.Data;
 using Core.Domain;
@@ -354,6 +355,16 @@ namespace Services.Financial
                     var tb = throughEnd ?? TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
                     if (tb.TryGetValue(account.Id, out var balance) && balance.Debit != balance.Credit)
                         blocking.Add(new YearEndCheckItem { Code = "partner_unassigned_balance_" + code, Message = $"Unassigned partner capital or drawings: move the balance in {code} {account.AccountName} to a partner with a journal.", Count = 1 });
+                }
+                var archivedPartners = _partners?.Table.Where(p => p.ArchivedAt != null).ToList() ?? new List<Partner>();
+                foreach (var partner in archivedPartners)
+                foreach (var accountId in new[] { partner.CapitalAccountId, partner.DrawingsAccountId })
+                {
+                    var account = _accounts.Table.FirstOrDefault(a => a.Id == accountId);
+                    var tb = throughEnd ?? TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
+                    if (account != null && tb.TryGetValue(account.Id, out var balance) && balance.Debit != balance.Credit)
+                        blocking.Add(new YearEndCheckItem { Code = "partner_archived_balance_" + partner.Id.ToString(CultureInfo.InvariantCulture) + "_" + account.AccountCode,
+                            Message = $"{partner.Name} is archived but has a balance in {account.AccountCode}. Restore the partner or move the balance with a journal.", Count = 1 });
                 }
             }
             if (setting != null)

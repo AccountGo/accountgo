@@ -433,6 +433,10 @@ export interface BankStatementMatchCandidate {
 export interface BankStatementLine {
   matchedOwnerAction?: 'drawing' | 'contribution' | null;
   suggestedOwnerAction?: 'drawing' | 'contribution' | null;
+  matchedPartnerId?: number | null;
+  matchedPartnerName?: string | null;
+  suggestedPartnerId?: number | null;
+  suggestedPartnerName?: string | null;
   draftBillId?: number | null;
   id: number;
   bankId: number;
@@ -502,6 +506,13 @@ export interface StatementOwnerAction {
   label: string;
 }
 export interface StatementOwnerActions {
+  drawing: StatementOwnerAction | null;
+  contribution: StatementOwnerAction | null;
+  partners?: StatementPartnerOwnerActions[] | null;
+}
+export interface StatementPartnerOwnerActions {
+  partnerId: number;
+  name: string;
   drawing: StatementOwnerAction | null;
   contribution: StatementOwnerAction | null;
 }
