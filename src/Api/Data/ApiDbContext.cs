@@ -462,6 +462,7 @@ namespace Api.Data
             builder.Entity<Company>().HasQueryFilter(c => c.DeletedAt == null);
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<Company>().Property(c => c.AccessBootstrapAvailable).HasDefaultValue(false);
+            builder.Entity<Company>().Property(c => c.PendingPlan).HasMaxLength(64);
             builder.Entity<Company>().Property(c => c.ActivationState)
                 .IsRequired()
                 .HasMaxLength(32)

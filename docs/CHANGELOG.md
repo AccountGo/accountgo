@@ -18,6 +18,9 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Bank statement lines that move money between you and your business can be recorded as an owner drawing or owner contribution wherever statement import is available, so they no longer count as expenses or income. Partnerships use partner wording.
 - Partnerships can set up each partner's capital and drawings accounts with profit-sharing ratios for each year. Closing the year splits the profit or loss between partners and closes each partner's drawings into their capital.
 
+### Changed
+- Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
+
 ### Fixed
 - Bank statement Personal actions appear only when Personal books are linked, and each workspace shows one set of owner money-movement actions.
 

@@ -121,17 +121,20 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const currentPlan = (billing.plan || entitlements?.effectivePlan || entitlements?.plan || subscription?.planId || '') as PlanKey;
   const effectiveTier = entitlements?.tier || billing.billing?.tier;
   const isProTier = effectiveTier === 'pro';
-  const tierBadge = billing.billingEnabled
-    ? (billing.status === 'past_due'
-      ? 'Past due'
-      : billing.cancelAtPeriodEnd
-        ? 'Canceling'
-        : (effectiveTier === 'comp' ? 'Managed' : isProTier ? 'Pro' : 'Free'))
-    : !entitlements?.enabled
-      ? 'Active'
-      : entitlements.tier === 'comp'
-        ? 'Managed'
-        : entitlements.tier === 'free' ? 'Free' : entitlements.tier;
+  const isPendingCheckout = tenantContext.currentOrg?.activationState === 'pending_checkout';
+  const tierBadge = isPendingCheckout
+    ? 'Pending payment'
+    : billing.billingEnabled
+      ? (billing.status === 'past_due'
+        ? 'Past due'
+        : billing.cancelAtPeriodEnd
+          ? 'Canceling'
+          : (effectiveTier === 'comp' ? 'Managed' : isProTier ? 'Pro' : 'Free'))
+      : !entitlements?.enabled
+        ? 'Active'
+        : entitlements.tier === 'comp'
+          ? 'Managed'
+          : entitlements.tier === 'free' ? 'Free' : entitlements.tier;
   // Only self-service plans can be picked; an operator-assigned current plan stays visible.
   const visiblePlans = (catalog.plans || []).filter((plan) => plan.selfService || plan.key === currentPlan);
   const personalBooks = Boolean(tenantContext.currentOrg?.isPersonalBooks);
@@ -149,7 +152,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
-  const [highlightPlan] = useState<string | null>(readUpgradeParam);
+  const [highlightPlan] = useState<string | null>(
+    () => readUpgradeParam() ?? tenantContext.currentOrg?.pendingPlan ?? null,
+  );
   const [checkoutProcessing, setCheckoutProcessing] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<Extract<UpgradeOutcome, { kind: 'confirm' }> | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -335,7 +340,11 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                 <h2 className="text-lg font-bold text-[var(--text-main)]">
                   {planHeading}
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                  isPendingCheckout
+                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
+                    : 'bg-emerald-500/10 text-emerald-400'
+                }`}>
                   {tierBadge}
                 </span>
               </div>
@@ -418,10 +427,11 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         const currentPlanEntry = allPlans.find(plan => plan.key === currentPlan);
         const currentProduct = currentPlanEntry?.product ?? groups[0]?.product ?? '';
         const highlightProduct = highlightPlan ? allPlans.find(plan => plan.key === highlightPlan)?.product : undefined;
-        const product = selectedProduct ?? highlightProduct ?? currentProduct;
+        const product = isPendingCheckout ? currentProduct : (selectedProduct ?? highlightProduct ?? currentProduct);
         const planKeys = new Set(plansForProduct(allPlans, product).map(plan => plan.key));
         const cards = derivePlanCards(String(currentPlan), allowedTransitions, allPlans)
-          .filter(card => !grouped || planKeys.has(card.key as PlanKey));
+          .filter(card => (!grouped || planKeys.has(card.key as PlanKey))
+            && (!isPendingCheckout || (card.role === 'action' && (card.monthlyPrice ?? 0) > 0)));
         const showInterval = cards.some((card) => card.role === 'action');
         return (
           <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
@@ -457,7 +467,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
               )}
             </div>
 
-            {grouped && (
+            {!isPendingCheckout && grouped && (
               <div role="group" aria-label="Product" className="inline-flex rounded-xl bg-[var(--bg-subtle)] p-1">
                 {groups.map(group => (
                   <button key={group.product} type="button" aria-pressed={product === group.product} onClick={() => setSelectedProduct(group.product)}

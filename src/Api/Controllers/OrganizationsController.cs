@@ -445,10 +445,16 @@ namespace Api.Controllers
                     .FirstOrDefault();
             var operating = _operatingPolicy?.GetSummary(id, memberId, UserId);
             var settings = _db.CompanySettings.Select(s => new { s.Currency, s.EntityType }).FirstOrDefault();
+            var activationState = string.IsNullOrWhiteSpace(company.ActivationState)
+                ? CompanyActivationStates.Active
+                : company.ActivationState;
             return Ok(new
             {
                 id = company.Id, name = company.Name, slug = company.Slug, shortName = company.ShortName,
-                plan = _plans.ResolveStoredPlan(company.Plan).Key, activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), subscriptionStatus = company.SubscriptionStatus,
+                plan = _plans.ResolveStoredPlan(company.Plan).Key,
+                activationState,
+                pendingPlan = ResolvePendingPlanKey(company, activationState),
+                activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), subscriptionStatus = company.SubscriptionStatus,
                 role = _tenant.Role.ToString(), permissions = _tenant.Permissions,
                 currency = settings?.Currency ?? "USD",
                 entityType = settings?.EntityType.ToString(),
@@ -1138,6 +1144,9 @@ namespace Api.Controllers
             facts ??= LoadSummaryFacts(new[] { company.Id });
             var isPersonalBooks = facts.PersonalBooksCompanyIds.Contains(company.Id);
             var isPersonalPurpose = facts.PersonalPurposeCompanyIds.Contains(company.Id);
+            var activationState = string.IsNullOrWhiteSpace(company.ActivationState)
+                ? CompanyActivationStates.Active
+                : company.ActivationState;
             return new
             {
                 isPersonalBooks,
@@ -1159,9 +1168,8 @@ namespace Api.Controllers
                 currency = facts.Currencies.TryGetValue(company.Id, out var currency) ? currency : null,
                 id = company.Id.ToString(), name = company.Name, shortName = company.ShortName, slug = company.Slug,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, subscriptionStatus = company.SubscriptionStatus,
-                activationState = string.IsNullOrWhiteSpace(company.ActivationState)
-                    ? CompanyActivationStates.Active
-                    : company.ActivationState,
+                activationState,
+                pendingPlan = ResolvePendingPlanKey(company, activationState),
                 activeModules = PlanModuleResolver.ResolveActiveModules(_plans, company), role = role.ToString(),
                 checkoutUrl,
                 checkoutError,
@@ -1175,6 +1183,19 @@ namespace Api.Controllers
                     journalWorkflow = initResult.JournalMode.ToString()
                 }
             };
+        }
+
+        private string? ResolvePendingPlanKey(Company company, string activationState)
+        {
+            if (!CompanyActivationStates.IsPendingCheckout(activationState)
+                || string.IsNullOrWhiteSpace(company.PendingPlan))
+                return null;
+            return _plans.TryResolvePlan(company.PendingPlan, out var resolved)
+                && resolved.SelfService
+                && resolved.MonthlyPrice > 0
+                && string.Equals(resolved.Product, _plans.ResolveStoredPlan(company.Plan).Product, StringComparison.Ordinal)
+                ? resolved.Key
+                : null;
         }
             /// <summary>Workspace facts the summary needs, loaded once for every listed workspace.</summary>
         private sealed record SummaryFacts(

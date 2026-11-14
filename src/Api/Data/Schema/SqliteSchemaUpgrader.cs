@@ -855,6 +855,7 @@ CREATE INDEX IF NOT EXISTS ""IX_PartnerShares_PartnerId"" ON ""PartnerShares"" (
             AddColumnIfMissing(connection, "BankStatementLine", "ExclusionNote", "TEXT NULL");
             AddColumnIfMissing(connection, "RecurringOccurrences", "SeriesAdvanced", "INTEGER NOT NULL DEFAULT 0");
             AddColumnIfMissing(connection, "Company", "ActivationState", "TEXT NOT NULL DEFAULT 'active'");
+            AddColumnIfMissing(connection, "Company", "PendingPlan", "TEXT NULL");
 
             using var idx = connection.CreateCommand();
             idx.CommandText = @"CREATE INDEX IF NOT EXISTS ""IX_BankStatementLine_Company_Bank_ExcludedAt""

@@ -105,6 +105,7 @@ export const OrgLayout: React.FC = () => {
           requiredModules: organization.requiredModules,
           currency: organization.currency,
           activationState: organization.activationState || 'active',
+          pendingPlan: organization.pendingPlan ?? null,
           avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
           whitelabel: {
             themeId: 'accountgo',
@@ -154,6 +155,7 @@ export const OrgLayout: React.FC = () => {
           fiscalYearEnd?: string;
           operatingPolicy?: OrgDetails['operatingPolicy'];
           activationState?: string;
+          pendingPlan?: string | null;
         };
         if (mounted) {
           const resolvedOrg: OrgDetails = {
@@ -169,6 +171,7 @@ export const OrgLayout: React.FC = () => {
             permissions: current.permissions,
             operatingPolicy: current.operatingPolicy ?? null,
             activationState: current.activationState || match.activationState || 'active',
+            pendingPlan: current.pendingPlan !== undefined ? current.pendingPlan : (match.pendingPlan ?? null),
             subscription: {
               planId: current.plan,
               planName: current.plan.charAt(0).toUpperCase() + current.plan.slice(1),
@@ -360,8 +363,9 @@ export const OrgLayout: React.FC = () => {
       <PendingCheckoutScreen
         name={currentOrg.name}
         slug={currentOrg.slug}
+        pendingPlan={currentOrg.pendingPlan ?? null}
         onActivated={() => {
-          updateCurrentOrg({ activationState: 'active' });
+          updateCurrentOrg({ activationState: 'active', pendingPlan: null });
           navigate(`/org/${encodeURIComponent(currentOrg.slug)}/dashboard`, { replace: true });
         }}
       />

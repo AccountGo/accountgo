@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CreditCard, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -9,19 +9,69 @@ import { useDeleteCurrentWorkspace } from '../lib/useDeleteCurrentWorkspace';
 export const PendingCheckoutScreen: React.FC<{
   name: string;
   slug: string;
+  pendingPlan?: string | null;
   onActivated: () => void;
-}> = ({ name, slug, onActivated }) => {
+}> = ({ name, slug, pendingPlan, onActivated }) => {
   const { authFetch } = useAuth();
   const [searchParams] = useSearchParams();
   const checkoutSuccess = searchParams.get('checkout') === 'success';
   const checkoutError = searchParams.get('checkoutError');
+  const resumeRequested = searchParams.get('resume') === '1';
+  const billingInterval: 'month' | 'year' = searchParams.get('interval') === 'year' ? 'year' : 'month';
+  const resumable = Boolean(pendingPlan);
   const [confirming, setConfirming] = useState(checkoutSuccess);
   const [timedOut, setTimedOut] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteSlug, setDeleteSlug] = useState('');
   const workspaceDelete = useDeleteCurrentWorkspace();
   const { deleting, error: deleteError, needsStepUp } = workspaceDelete;
   const ticks = useRef(0);
+  const autoResumed = useRef(false);
+
+  const handleResumePayment = useCallback(async () => {
+    if (!pendingPlan || resuming) return;
+    setResuming(true);
+    setResumeError(null);
+    try {
+      const returnUrl = `${window.location.origin}/org/${encodeURIComponent(slug)}`;
+      const res = await authFetch('/api/Subscription/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: pendingPlan,
+          billingInterval,
+          returnUrl,
+          confirmed: true,
+        }),
+      });
+      const body = await res.json().catch(() => ({})) as { redirectUrl?: string; message?: string; error?: string };
+      if (!res.ok) {
+        setResumeError(body.message || body.error || 'Could not start checkout. Please try again.');
+        setResuming(false);
+        return;
+      }
+      if (body.redirectUrl) {
+        window.location.assign(body.redirectUrl);
+        return;
+      }
+      setResumeError('Checkout link was not returned. Please choose a plan below.');
+      setResuming(false);
+    } catch {
+      setResumeError('Could not reach the billing service. Please try again.');
+      setResuming(false);
+    }
+  }, [authFetch, billingInterval, pendingPlan, resuming, slug]);
+
+  useEffect(() => {
+    if (!resumable || !resumeRequested || checkoutSuccess || autoResumed.current) return;
+    autoResumed.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('resume');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    void handleResumePayment();
+  }, [checkoutSuccess, handleResumePayment, resumable, resumeRequested]);
 
   useEffect(() => {
     if (!checkoutSuccess) return;
@@ -77,8 +127,8 @@ export const PendingCheckoutScreen: React.FC<{
           <strong className="text-[var(--text-main)]">{name}</strong> is ready once payment is confirmed.
           Unpaid workspaces are removed 7 days after they&apos;re created.
         </p>
-        {checkoutError && (
-          <p role="alert" className="text-xs text-rose-400 font-medium">{checkoutError}</p>
+        {(resumeError || checkoutError) && (
+          <p role="alert" className="text-xs text-rose-400 font-medium">{resumeError || checkoutError}</p>
         )}
         {timedOut && (
           <p role="status" className="text-xs text-amber-700 dark:text-amber-300 font-medium">
@@ -86,12 +136,24 @@ export const PendingCheckoutScreen: React.FC<{
           </p>
         )}
         <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-          <Link
-            to={`/org/${encodeURIComponent(slug)}/settings?tab=subscription`}
-            className="btn-primary !h-11 flex-1 inline-flex items-center justify-center"
-          >
-            Resume payment
-          </Link>
+          {resumable ? (
+            <button
+              type="button"
+              disabled={resuming || confirming}
+              onClick={() => { void handleResumePayment(); }}
+              className="btn-primary !h-11 flex-1 inline-flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {resuming && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+              {resuming ? 'Starting checkout…' : 'Resume payment'}
+            </button>
+          ) : (
+            <Link
+              to={`/org/${encodeURIComponent(slug)}/settings?tab=subscription`}
+              className="btn-primary !h-11 flex-1 inline-flex items-center justify-center"
+            >
+              Choose a plan
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => { setDeleteSlug(''); workspaceDelete.reset(); setDeleteOpen(true); }}
@@ -100,6 +162,16 @@ export const PendingCheckoutScreen: React.FC<{
             <Trash2 className="w-4 h-4" aria-hidden="true" /> Discard workspace
           </button>
         </div>
+        {resumable && pendingPlan && (
+          <div className="pt-1">
+            <Link
+              to={`/org/${encodeURIComponent(slug)}/settings?tab=subscription&upgrade=${encodeURIComponent(pendingPlan)}`}
+              className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
+            >
+              Choose a different plan
+            </Link>
+          </div>
+        )}
         {timedOut && (
           <button
             type="button"
