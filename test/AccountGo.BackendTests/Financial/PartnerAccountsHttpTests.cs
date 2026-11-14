@@ -414,7 +414,7 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
     [Fact]
     public async Task PartnerSetupIsUnavailableUntilTheFeatureFlagIsEnabled()
     {
-        var host = new AuditTestHost(partnerSetupEnabled: false);
+        var host = new AuditTestHost { PartnerSetupEnabled = false };
         await host.InitializeAsync();
         try
         {

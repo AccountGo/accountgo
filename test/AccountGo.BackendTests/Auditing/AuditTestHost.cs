@@ -49,7 +49,6 @@ namespace AccountGo.BackendTests.Auditing
         private static readonly TimeSpan EventPollInterval = TimeSpan.FromMilliseconds(50);
 
         private readonly string _dbPath = Path.Combine(Path.GetTempPath(), "accountgo_audit_" + Guid.NewGuid().ToString("N") + ".db");
-        private readonly bool _partnerSetupEnabled;
         private HttpClient _client = null!;
 
         public WebApplicationFactory<Program> Factory { get; private set; } = null!;
@@ -57,7 +56,7 @@ namespace AccountGo.BackendTests.Auditing
         public CapturingLoggerProvider Logs { get; } = new();
         public EntitlementOverrides Entitlements { get; } = new();
 
-        public AuditTestHost(bool partnerSetupEnabled = true) => _partnerSetupEnabled = partnerSetupEnabled;
+        public bool PartnerSetupEnabled { get; set; } = true;
 
         public Task InitializeAsync()
         {
@@ -70,7 +69,7 @@ namespace AccountGo.BackendTests.Auditing
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
                 builder.UseSetting("SERVER_TIMING_ENABLED", "true");
-                builder.UseSetting("Features:PartnerAccountingSetupEnabled", _partnerSetupEnabled.ToString());
+                builder.UseSetting("Features:PartnerAccountingSetupEnabled", PartnerSetupEnabled.ToString());
                 builder.UseSetting("AuditRetention:Enabled", "false");
                 builder.ConfigureLogging(logging => logging.AddProvider(Logs));
                 builder.ConfigureTestServices(services =>
