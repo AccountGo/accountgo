@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -7,6 +7,9 @@ import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { BankCloseStatusLoader } from '../components/BankCloseStatusCard';
 import { currencySymbol, DEFAULT_CURRENCY } from '../lib/currency';
 import { comparativeRange } from '../lib/comparativeRange';
+import { equityStatementCsv, showEquityStatement } from '../lib/equityStatement';
+import type { EquityStatement } from '../lib/equityStatement';
+import { EquityStatementTable } from '../components/EquityStatementTable';
 
 const COMPARE_STORAGE_KEY = 'accountgo.reports.comparePreviousPeriod';
 
@@ -103,11 +106,12 @@ export interface ReportData {
   balanceSheet: BalanceRow[];
   cashFlow: CashFlowStatementDto;
   cashMovement?: CashMovement;
+  equity?: EquityStatement;
   years: FinancialYear[];
   accounts: Account[];
 }
 
-export type Statement = 'trialBalance' | 'income' | 'balanceSheet' | 'cashFlow';
+export type Statement = 'trialBalance' | 'income' | 'balanceSheet' | 'equity' | 'cashFlow';
 export type AccountingBasis = 'accrual' | 'cash';
 type Preset = 'month' | 'quarter' | 'year' | 'all' | 'custom';
 export interface DateRange { from: string; to: string }
@@ -130,6 +134,7 @@ const statements: { key: Statement; label: string }[] = [
   { key: 'trialBalance', label: 'Trial Balance' },
   { key: 'income', label: 'Profit & Loss' },
   { key: 'balanceSheet', label: 'Balance Sheet' },
+  { key: 'equity', label: 'Changes in Equity' },
   { key: 'cashFlow', label: 'Cash Flow' },
 ];
 const localDate = (date: Date) =>
@@ -176,7 +181,7 @@ export function reportPdfQuery(
   const params = new URLSearchParams(reportQuery(range, basis).replace(/^\?/, ''));
   params.set('statement', statement);
   if (!hideZero) params.set('hideZero', 'false');
-  if (comparative && (statement === 'income' || statement === 'balanceSheet')) {
+  if (comparative && (statement === 'income' || statement === 'balanceSheet' || statement === 'equity')) {
     if (comparative.from) params.set('compareFrom', `${comparative.from}T00:00:00`);
     if (comparative.to) params.set('compareTo', `${comparative.to}T23:59:59.9999999`);
   }
@@ -437,7 +442,8 @@ export default function Reports() {
   const personal = !!currentOrg.isPersonalBooks;
   const allowed = hasPermission('reports.view');
   const showBankCloseStatus = hasModule('financials') && hasPermission('banking.accounts.view');
-  const [statement, setStatement] = useState<Statement>(personal ? 'balanceSheet' : 'trialBalance');
+  const [selectedStatement, setStatement] = useState<Statement>(personal ? 'balanceSheet' : 'trialBalance');
+  const statement = personal && selectedStatement === 'equity' ? 'balanceSheet' : selectedStatement;
   const [basis, setBasis] = useState<AccountingBasis>('accrual');
   const [preset, setPreset] = useState<Preset>('month');
   const [range, setRange] = useState<DateRange>(() => getDateRange('month', new Date()));
@@ -449,8 +455,11 @@ export default function Reports() {
   const [result, setResult] = useState<{ key: string; slug: string; data: ReportData; comparative?: ReportData; comparativeRange?: DateRange | null } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const validRange = !!range.to && (!range.from || range.from <= range.to);
-  const canCompare = statement === 'income' || statement === 'balanceSheet';
-  const key = JSON.stringify([currentOrg.slug, personal, range.from, range.to, basis, revision, compare && canCompare]);
+  const canCompare = statement === 'income' || statement === 'balanceSheet' || statement === 'equity';
+  // Tabs share one load; only equity, or a statement-specific comparative range, needs its own.
+  const loadGroup = statement === 'equity' ? 'equity' : compare && canCompare ? statement : null;
+  const loadedKey = useRef<string | null>(null);
+  const key = JSON.stringify([currentOrg.slug, personal, loadGroup, range.from, range.to, basis, revision, compare && canCompare]);
   const data = result?.key === key ? result.data : null;
   const comparativeData = result?.key === key ? result.comparative : undefined;
   const activeCompareRange = result?.key === key ? result.comparativeRange : undefined;
@@ -461,7 +470,7 @@ export default function Reports() {
   const activeYear = tenantData?.years.find(y => y.isActive && y.startDate.slice(0, 10) <= today && y.endDate.slice(0, 10) >= today);
 
   useEffect(() => {
-    if (!allowed || !validRange) return;
+    if (!allowed || !validRange || loadedKey.current === key) return;
     let cancelled = false;
     (async () => {
       try {
@@ -485,9 +494,20 @@ export default function Reports() {
             statement === 'balanceSheet' ? 'balanceSheet' : 'income',
             booksStart,
           );
-          if (prior) comparative = await loadReportData(authFetch, prior, basis, personal);
+          if (prior && statement !== 'equity') comparative = await loadReportData(authFetch, prior, basis, personal);
+        }
+        if (statement === 'equity' && showEquityStatement(personal)) {
+          const params = new URLSearchParams(reportQuery(range, basis).replace(/^\?/, ''));
+          if (prior) {
+            params.set('compareFrom', `${prior.from}T00:00:00`);
+            params.set('compareTo', `${prior.to}T23:59:59.9999999`);
+          }
+          const response = await authFetch(`/api/Financials/EquityStatement?${params}`);
+          if (!response.ok) throw new Error('Unable to load the statement of changes in equity.');
+          data.equity = await response.json() as EquityStatement;
         }
         if (!cancelled) {
+          loadedKey.current = key;
           setResult({ key, slug: currentOrg.slug, data, comparative, comparativeRange: prior });
           setFailure(null);
         }
@@ -500,8 +520,8 @@ export default function Reports() {
 
   if (!allowed) return <PermissionDeniedCard permission="reports.view" />;
 
-  const showingCompare = !!(compare && canCompare && comparativeData && activeCompareRange);
-  const baseRows = data ? buildStatement(statement, data, hideZero, personal) : [];
+  const showingCompare = !!(compare && canCompare && activeCompareRange && (statement === 'equity' ? data?.equity?.comparative : comparativeData));
+  const baseRows = data && statement !== 'equity' ? buildStatement(statement, data, hideZero, personal) : [];
   const rows = showingCompare && (statement === 'income' || statement === 'balanceSheet')
     ? applyComparativeAmounts(baseRows, buildStatement(statement, comparativeData!, hideZero, personal))
     : baseRows;
@@ -510,10 +530,10 @@ export default function Reports() {
     { key: 'income' as const, label: 'Money in and out' },
     { key: 'cashFlow' as const, label: 'Cash movement' },
     { key: 'trialBalance' as const, label: 'Trial balance' },
-  ] : statements;
+  ] : statements.filter(tab => tab.key !== 'equity' || showEquityStatement(personal));
   const title = visibleStatements.find(s => s.key === statement)!.label;
   const basisLabel = basis === 'cash' ? 'Cash Basis' : 'Accrual Basis';
-  const period = statement === 'balanceSheet' ? `As of ${range.to}` : `${range.from || 'All time'} to ${range.to}`;
+  const period = statement === 'equity' && data?.equity ? `${data.equity.from.slice(0, 10)} to ${data.equity.to.slice(0, 10)}` : statement === 'balanceSheet' ? `As of ${range.to}` : `${range.from || 'All time'} to ${range.to}`;
   const comparativePeriod = !activeCompareRange ? ''
     : statement === 'balanceSheet' ? `As of ${activeCompareRange.to}` : `${activeCompareRange.from} to ${activeCompareRange.to}`;
   const formatAmount = (value?: number) => value === undefined ? '' :
@@ -525,7 +545,7 @@ export default function Reports() {
     : rows.at(-1)?.amount ?? 0;
   const exportCsv = () => {
     if (!data || !validRange || error) return;
-    const csv = personal && statement === 'cashFlow' && data.cashMovement
+    const csv = statement === 'equity' && data.equity ? equityStatementCsv(data.equity) : personal && statement === 'cashFlow' && data.cashMovement
       ? cashMovementCsv(data.cashMovement)
       : statementCsv(statement, rows, [
       ['Statement', title], ['Accounting Basis', basisLabel], [personal ? 'Books' : 'Organization', currentOrg.name], ['Currency', currentOrg.currency || DEFAULT_CURRENCY],
@@ -646,15 +666,21 @@ export default function Reports() {
         : data && <section aria-label={title} className="overflow-hidden rounded-2xl bg-[var(--bg-surface)]">
           <div className="flex flex-wrap items-center justify-between gap-3 p-5">
             <div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-[var(--text-secondary)]">{period} | {personal && statement === 'cashFlow' ? '' : `${basisLabel} | `}{currentOrg.currency || DEFAULT_CURRENCY}</p></div>
-            {statement !== 'income' && !(personal && statement === 'cashFlow') && <p role="status" className={difference === 0 ? 'text-emerald-500' : 'text-red-500'}>
+            {statement !== 'equity' && statement !== 'income' && !(personal && statement === 'cashFlow') && <p role="status" className={difference === 0 ? 'text-emerald-500' : 'text-red-500'}>
               {difference === 0 ? 'In balance' : `Out of balance: ${formatAmount(Math.abs(difference))}`}
             </p>}
           </div>
           {statement === 'balanceSheet' && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">Cumulative balances through the as-of date, including opening balances and unclosed earnings.</p>}
           {compare && canCompare && !showingCompare && data && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No prior period is available (comparative range would start before the books start).</p>}
           {!personal && statement === 'cashFlow' && basis === 'cash' && data.cashFlow?.message && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">{data.cashFlow.message}</p>}
-          {!(personal && statement === 'cashFlow') && !rows.some(row => row.kind === 'account') && (!data.cashFlow?.message || statement !== 'cashFlow') && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No ledger activity for the selected dates and filters.</p>}
-          {personal && statement === 'cashFlow' && data.cashMovement ? <div className="overflow-x-auto p-5">
+          {statement !== 'equity' && !(personal && statement === 'cashFlow') && !rows.some(row => row.kind === 'account') && (!data.cashFlow?.message || statement !== 'cashFlow') && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No ledger activity for the selected dates and filters.</p>}
+          {statement === 'equity' && data.equity ? <>
+            <EquityStatementTable statement={data.equity} formatAmount={n => formatAmount(minorUnits(n))} />
+            {showingCompare && data.equity.comparative && <>
+              <h3 className="px-5 pt-5 pb-3 text-base font-semibold">Previous period: {data.equity.comparative.from.slice(0, 10)} – {data.equity.comparative.to.slice(0, 10)}</h3>
+              <EquityStatementTable statement={data.equity.comparative} formatAmount={n => formatAmount(minorUnits(n))} />
+            </>}
+          </> : personal && statement === 'cashFlow' && data.cashMovement ? <div className="overflow-x-auto p-5">
             <p><span>Opening cash</span>: {formatAmount(minorUnits(data.cashMovement.openingCash))}</p>
             <table className="w-full text-sm"><thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Counterpart</th><th>Money in</th><th>Money out</th></tr></thead>
               <tbody>{data.cashMovement.lines.map((line, index) => <tr key={`${line.generalLedgerHeaderId}-${index}`}><td>{line.date.slice(0, 10)}</td><td>{line.description}</td><td>{line.accountName}</td><td>{line.counterpartAccountName}</td><td>{formatAmount(minorUnits(line.moneyIn))}</td><td>{formatAmount(minorUnits(line.moneyOut))}</td></tr>)}</tbody>

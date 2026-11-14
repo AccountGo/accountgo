@@ -640,6 +640,37 @@ namespace Api.Controllers
             return new ObjectResult(dto);
         }
 
+        [HttpGet("EquityStatement")]
+        [RequirePermission(SystemPermissions.ReportsView)]
+        [AuditDataAccess("equity_statement")]
+        public IActionResult EquityStatement(DateTime? from = null, DateTime? to = null,
+            Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual,
+            DateTime? compareFrom = null, DateTime? compareTo = null)
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
+                return denied!;
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            if (compareFrom.HasValue != compareTo.HasValue)
+                return BadRequest(new { message = "Provide both compareFrom and compareTo for a comparison." });
+            if (compareFrom.HasValue && compareFrom.Value > compareTo!.Value)
+                return BadRequest(new { message = "Provide a valid comparative date range: compareFrom must not be after compareTo." });
+            try
+            {
+                var dto = _financialService.EquityStatement(from, to, basis);
+                if (compareTo.HasValue)
+                    dto.Comparative = _financialService.EquityStatement(compareFrom, compareTo, basis);
+                return Ok(dto);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpGet]
         [Route("IncomeStatement")]
         [RequirePermission(SystemPermissions.ReportsView)]
@@ -691,12 +722,14 @@ namespace Api.Controllers
                 return denied!;
 
             if (!TryParseReportKind(statement, out var kind))
-                return BadRequest(new { message = "Provide a statement: trialBalance, income, balanceSheet, or cashFlow." });
+                return BadRequest(new { message = "Provide a statement: trialBalance, income, balanceSheet, equity, or cashFlow." });
             if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
                 || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
                 return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
             if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
                 return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            if (kind == Services.Financial.FinancialReportKind.EquityStatement && compareFrom.HasValue != compareTo.HasValue)
+                return BadRequest(new { message = "Provide both compareFrom and compareTo for a comparison." });
             if (compareFrom.HasValue && !compareTo.HasValue)
                 return BadRequest(new { message = "Provide compareTo when compareFrom is set." });
             if (compareFrom.HasValue && compareTo.HasValue && compareFrom.Value > compareTo.Value)
@@ -709,13 +742,15 @@ namespace Api.Controllers
             var settings = await _db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(s => s.CompanyId == companyId);
             var personal = await _db.PersonalWorkspaces.AsNoTracking().AnyAsync(p => p.CompanyId == companyId);
             var compare = compareTo.HasValue
-                && (kind == Services.Financial.FinancialReportKind.IncomeStatement || kind == Services.Financial.FinancialReportKind.BalanceSheet);
+                && (kind == Services.Financial.FinancialReportKind.IncomeStatement || kind == Services.Financial.FinancialReportKind.BalanceSheet
+                    || kind == Services.Financial.FinancialReportKind.EquityStatement);
 
             IReadOnlyList<Services.Financial.TrialBalance>? trial = null;
             IReadOnlyList<Services.Financial.IncomeStatement>? income = null;
             IReadOnlyList<Services.Financial.IncomeStatement>? comparativeIncome = null;
             IReadOnlyList<Services.Financial.BalanceSheet>? balance = null;
             IReadOnlyList<Services.Financial.BalanceSheet>? comparativeBalance = null;
+            Dto.Financial.EquityStatementDto? equity = null;
             Services.Financial.CashFlowStatement? cashFlow = null;
             IReadOnlyList<Services.Financial.FinancialReportAccountNode>? accounts = null;
             Services.Financial.FinancialReportCashMovement? movement = null;
@@ -736,6 +771,20 @@ namespace Api.Controllers
                     if (compare)
                         comparativeBalance = _financialService.BalanceSheet(compareFrom, compareTo, basis).ToList();
                     break;
+                case Services.Financial.FinancialReportKind.EquityStatement:
+                    try
+                    {
+                        if (personal)
+                            return BadRequest(new { message = "The statement of changes in equity isn't available for personal books." });
+                        equity = _financialService.EquityStatement(from, to, basis);
+                        if (compare)
+                            equity.Comparative = _financialService.EquityStatement(compareFrom, compareTo, basis);
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+                    {
+                        return BadRequest(new { message = ex.Message });
+                    }
+                    break;
                 default:
                     if (personal)
                         movement = await LoadCashMovementAsync(from, to);
@@ -753,8 +802,9 @@ namespace Api.Controllers
                 LegalName = settings?.LegalName,
                 CurrencyCode = string.IsNullOrWhiteSpace(settings?.Currency) ? "USD" : settings!.Currency,
                 Basis = basis,
-                From = from,
-                To = to,
+                From = equity?.From ?? from,
+                To = equity?.To ?? to,
+                EquityStatement = equity,
                 CompareFrom = compare ? compareFrom : null,
                 CompareTo = compare ? compareTo : null,
                 Slug = company.Slug,
@@ -791,6 +841,11 @@ namespace Api.Controllers
                 case "balancesheet":
                 case "balance-sheet":
                     kind = Services.Financial.FinancialReportKind.BalanceSheet;
+                    return true;
+                case "equity":
+                case "changes-in-equity":
+                case "changesinequity":
+                    kind = Services.Financial.FinancialReportKind.EquityStatement;
                     return true;
                 case "cashflow":
                 case "cash-flow":

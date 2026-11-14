@@ -3,6 +3,7 @@
 
 #nullable enable
 using System.Globalization;
+using Dto.Financial;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -113,10 +114,65 @@ namespace Api.Service
                 if (!string.IsNullOrWhiteSpace(_report.Footnote))
                     column.Item().PaddingTop(6).Text(_report.Footnote).FontSize(8).FontColor(Muted).Italic();
 
-                if (_report.CashMovement != null)
+                if (_report.EquityStatement != null)
+                {
+                    column.Item().PaddingTop(12).Element(c => ComposeEquity(c, _report.EquityStatement));
+                    if (_report.EquityStatement.Comparative is { } prior)
+                    {
+                        column.Item().PaddingTop(20).Text("Previous period: "
+                            + prior.From.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " – "
+                            + prior.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)).SemiBold();
+                        column.Item().PaddingTop(8).Element(c => ComposeEquity(c, prior));
+                    }
+                }
+                else if (_report.CashMovement != null)
                     column.Item().PaddingTop(12).Element(ComposeMovement);
                 else if (_report.Lines.Count > 0)
                     column.Item().PaddingTop(12).Element(ComposeLines);
+            });
+        }
+
+        private void ComposeEquity(IContainer container, EquityStatementDto statement)
+        {
+            var total = statement.Columns.Count > 1;
+            container.Column(column =>
+            {
+                column.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(2.5f);
+                        foreach (var component in statement.Columns) columns.RelativeColumn();
+                        if (total) columns.RelativeColumn();
+                    });
+                    table.Header(header =>
+                    {
+                        HeaderCell(header.Cell(), "Movement", false);
+                        foreach (var component in statement.Columns) HeaderCell(header.Cell(), component.Label, true);
+                        if (total) HeaderCell(header.Cell(), "Total", true);
+                    });
+                    foreach (var row in statement.Rows)
+                    {
+                        var bold = row.Key is "opening" or "restatedOpening" or "closing";
+                        BodyCell(table.Cell(), row.Label, false, bold);
+                        foreach (var component in statement.Columns)
+                            BodyCell(table.Cell(), Money(row.Amounts[component.Key]), true, bold);
+                        if (total) BodyCell(table.Cell(), Money(row.Total), true, bold);
+                    }
+                });
+                var agrees = Math.Abs(statement.DifferenceToBalanceSheet) < 0.005m;
+                column.Item().PaddingTop(8).Text(agrees
+                    ? "Agrees with the balance sheet (equity " + Money(statement.BalanceSheetEquity) + ")"
+                    : "Doesn't agree with the balance sheet by " + Money(statement.DifferenceToBalanceSheet)
+                        + ". Check equity accounts posted outside the usual codes.")
+                    .FontColor(agrees ? "#047857" : "#B91C1C");
+                foreach (var component in statement.Columns)
+                {
+                    var closing = statement.Rows.First(r => r.Key == "closing").Amounts[component.Key];
+                    var bridge = statement.Rows.Where(r => r.Key is not ("closing" or "restatedOpening")).Sum(r => r.Amounts[component.Key]);
+                    if (Math.Abs(closing - bridge) >= 0.005m)
+                        column.Item().PaddingTop(4).Text(component.Label + " movements don't reconcile to closing by " + Money(closing - bridge) + ".").FontColor("#B91C1C");
+                }
             });
         }
 
