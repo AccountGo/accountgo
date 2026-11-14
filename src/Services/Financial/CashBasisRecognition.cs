@@ -407,7 +407,6 @@ namespace Services.Financial
             if (input.HasPurchaseInvoices)
             {
                 var paymentsByBill = input.VendorPayments
-                    .Where(p => p.GeneralLedgerHeaderId.HasValue)
                     .GroupBy(p => p.BillId)
                     .ToDictionary(g => g.Key, g => g.OrderBy(p => p.Date).ThenBy(p => p.Id).ToList());
 

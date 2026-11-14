@@ -194,11 +194,8 @@ public sealed class CashBasisRecognitionTests
             Invoices: new List<CashInvoiceInfo>(),
             HasPurchaseInvoices: true,
             VendorApAccounts: new Dictionary<int, int?> { [1] = 5 },
-            // Voided payment has no GeneralLedgerHeaderId
-            VendorPayments: new List<CashVendorPaymentInfo>
-            {
-                new(301, 60, null, new DateTime(2026, 10, 15), 224m),
-            },
+            // Voided payment (VoidedAt != null) is excluded by CashBasisRecognitionLoader.
+            VendorPayments: new List<CashVendorPaymentInfo>(),
             Bills: new List<CashBillInfo>
             {
                 new(60, 1, PurchaseInvoiceStatus.Open, 20, null),
@@ -208,5 +205,51 @@ public sealed class CashBasisRecognitionTests
 
         Assert.DoesNotContain(postings, p => p.Source == CashRecognitionSource.BillSettlement);
         Assert.DoesNotContain(postings, p => p.AccountId == 6);
+    }
+
+    [Fact]
+    public void Bill_WithPaymentHavingNullGlHeaderId_RecognizesSettlementOnPaymentDate()
+    {
+        var accounts = DefaultAccounts();
+        // Bill: 200 expense + 24 input tax = 224 AP
+        var glLines = new List<CashGlLineInfo>
+        {
+            new(1, 20, new DateTime(2026, 10, 1), DocumentTypes.PurchaseInvoice, 7, DrOrCrSide.Dr, 200m),
+            new(2, 20, new DateTime(2026, 10, 1), DocumentTypes.PurchaseInvoice, 6, DrOrCrSide.Dr, 24m),
+            new(3, 20, new DateTime(2026, 10, 1), DocumentTypes.PurchaseInvoice, 5, DrOrCrSide.Cr, 224m),
+        };
+
+        var paymentDate = new DateTime(2026, 10, 15);
+        var input = new CashBasisRecognitionInput(
+            Accounts: accounts,
+            GlLines: glLines,
+            PurchasingTaxAccountIds: new HashSet<int> { 6 },
+            HasSalesInvoices: false,
+            CustomerArAccounts: new Dictionary<int, int?>(),
+            ReceiptGlMap: new Dictionary<int, int>(),
+            Allocations: new List<CashAllocationInfo>(),
+            Invoices: new List<CashInvoiceInfo>(),
+            HasPurchaseInvoices: true,
+            VendorApAccounts: new Dictionary<int, int?> { [1] = 5 },
+            // 50% partial payment (112 of 224) with GeneralLedgerHeaderId == null
+            VendorPayments: new List<CashVendorPaymentInfo>
+            {
+                new(301, 60, null, paymentDate, 112m),
+            },
+            Bills: new List<CashBillInfo>
+            {
+                new(60, 1, PurchaseInvoiceStatus.Open, 20, null),
+            });
+
+        var postings = CashBasisRecognition.Recognize(input);
+
+        var billSettlements = postings
+            .Where(p => p.Source == CashRecognitionSource.BillSettlement && p.DocumentId == 60)
+            .ToList();
+
+        Assert.Equal(2, billSettlements.Count);
+        Assert.All(billSettlements, p => Assert.Equal(paymentDate, p.Date));
+        Assert.Equal(100m, billSettlements.Single(p => p.AccountId == 7).Amount);
+        Assert.Equal(12m, billSettlements.Single(p => p.AccountId == 6).Amount);
     }
 }

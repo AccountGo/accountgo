@@ -375,6 +375,8 @@ namespace Services.TaxSystem
                 .Select(t => t.PurchasingAccountId!.Value)
                 .ToHashSet();
 
+            var linesByHeader = recognitionInput.GlLines.ToLookup(l => l.GeneralLedgerHeaderId);
+
             var outputAcc = new Dictionary<int, TaxRowAccumulator>();
             var inputAcc = new Dictionary<int, TaxRowAccumulator>();
             var allDocuments = new List<TaxPeriodDocumentRow>();
@@ -407,7 +409,7 @@ namespace Services.TaxSystem
                         i => i.Id,
                         i =>
                         {
-                            var invLines = recognitionInput.GlLines.Where(l => l.GeneralLedgerHeaderId == i.GlHeaderId).ToList();
+                            var invLines = linesByHeader[i.GlHeaderId].ToList();
                             var customerAr = recognitionInput.CustomerArAccounts.GetValueOrDefault(i.CustomerId);
                             var ar = invLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr && customerAr.HasValue && l.AccountId == customerAr.Value)
                                      ?? invLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr && recognitionInput.Accounts.TryGetValue(l.AccountId, out var a) && a.AccountClassId == (int)AccountClasses.Assets)
@@ -473,7 +475,7 @@ namespace Services.TaxSystem
                         b => b.Id,
                         b =>
                         {
-                            var bLines = recognitionInput.GlLines.Where(l => l.GeneralLedgerHeaderId == b.GlHeaderId).ToList();
+                            var bLines = linesByHeader[b.GlHeaderId].ToList();
                             var vendorAp = b.VendorId.HasValue ? recognitionInput.VendorApAccounts.GetValueOrDefault(b.VendorId.Value) : null;
                             var apLine = bLines.LastOrDefault(l => l.DrCr == DrOrCrSide.Cr && vendorAp.HasValue && l.AccountId == vendorAp.Value)
                                          ?? bLines.Where(l => l.DrCr == DrOrCrSide.Cr && recognitionInput.Accounts.TryGetValue(l.AccountId, out var a) && a.AccountClassId == (int)AccountClasses.Liabilities)
@@ -785,10 +787,9 @@ namespace Services.TaxSystem
             var headerMeta = ledgerHeaderIds.Count > 0
                 ? _glHeaders.Table
                     .Where(h => ledgerHeaderIds.Contains(h.Id))
-                    .Select(h => new { h.Id, h.Date, Description = h.Description ?? "", h.DocumentType })
+                    .Select(h => new GlHeaderMeta(h.Id, h.Date, h.Description ?? "", h.DocumentType))
                     .ToDictionary(h => h.Id)
-                : new Dictionary<int, (int Id, DateTime Date, string Description, DocumentTypes DocumentType)>()
-                    .ToDictionary(kv => kv.Key, kv => new { Id = kv.Key, kv.Value.Date, kv.Value.Description, kv.Value.DocumentType });
+                : new Dictionary<int, GlHeaderMeta>();
 
             var postingsByAccount = periodPostings.GroupBy(p => p.AccountId).ToDictionary(g => g.Key, g => g.ToList());
             var result = new List<TaxPeriodLedgerAccount>(accounts.Count);
@@ -1219,6 +1220,8 @@ namespace Services.TaxSystem
 
         private static decimal Round2(decimal value) =>
             Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+        private sealed record GlHeaderMeta(int Id, DateTime Date, string Description, DocumentTypes DocumentType);
 
         private sealed record CashDocMeta(int Id, string No, string PartyName, decimal ShippingCharge, IReadOnlyList<LineProjection> Lines);
 
