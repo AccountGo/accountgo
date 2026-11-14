@@ -508,6 +508,25 @@ namespace Api.Data
                 entity.Property(e => e.ChangedBy).IsRequired().HasMaxLength(256);
                 entity.HasIndex(e => e.CompanyId);
             });
+            builder.Entity<TaxFiling>(entity =>
+            {
+                entity.Property(e => e.PeriodStart).HasColumnType("date");
+                entity.Property(e => e.PeriodEnd).HasColumnType("date");
+                entity.Property(e => e.FiledOn).HasColumnType("date");
+                entity.Property(e => e.AmendmentReason).HasMaxLength(500);
+                entity.Property(e => e.Reference).HasMaxLength(100);
+                entity.Property(e => e.Notes).HasMaxLength(1000);
+                entity.Property(e => e.OutputTax).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.InputTax).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.NetTax).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.SnapshotJson).IsRequired();
+                entity.Property(e => e.CreatedBy).IsRequired().HasMaxLength(256);
+                entity.HasIndex(e => new { e.CompanyId, e.PeriodStart, e.PeriodEnd, e.Sequence }).IsUnique();
+                entity.HasOne(e => e.AmendsFiling)
+                    .WithMany()
+                    .HasForeignKey(e => e.AmendsFilingId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
             builder.Entity<CompanySetting>().Property(s => s.InventoryCostingMethod).HasDefaultValue(InventoryCostingMethod.None);
             builder.Entity<CompanySetting>().Property(s => s.CoaTemplateId)
                 .IsRequired()
@@ -1252,6 +1271,7 @@ namespace Api.Data
         public virtual DbSet<BankStatementDescriptionRule> BankStatementDescriptionRules { get; set; }
         public virtual DbSet<BankStatementColumnMapping> BankStatementColumnMappings { get; set; }
         public virtual DbSet<BooksLockChange> BooksLockChanges { get; set; }
+        public virtual DbSet<TaxFiling> TaxFilings { get; set; }
         public DbSet<PersonalWorkspace> PersonalWorkspaces { get; set; }
         public DbSet<WorkspaceLink> WorkspaceLinks { get; set; }
         public DbSet<LinkedEntryPair> LinkedEntryPairs { get; set; }

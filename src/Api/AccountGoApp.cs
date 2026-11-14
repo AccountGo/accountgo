@@ -271,6 +271,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Services.Banking.IBankAccountService, Services.Banking.BankAccountService>();
         builder.Services.AddScoped<Services.Banking.IReconciledPeriodGuard, Services.Banking.ReconciledPeriodGuard>();
         builder.Services.AddScoped<Services.Financial.IBooksLockGuard, Services.Financial.BooksLockGuard>();
+        builder.Services.AddScoped<Services.Financial.IBooksLockService, Services.Financial.BooksLockService>();
         builder.Services.AddScoped<Services.Financial.IYearEndCloseService, Services.Financial.YearEndCloseService>();
         builder.Services.AddScoped<Services.Financial.PartnerService>();
         builder.Services.AddScoped<Services.Financial.IBooksReadinessService, Services.Financial.BooksReadinessService>();
@@ -290,6 +291,7 @@ public static class AccountGoApp
         builder.Services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));
         builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Services.TaxSystem.TaxService));
         builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxPeriodReportService), typeof(Services.TaxSystem.TaxPeriodReportService));
+        builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxFilingService), typeof(Services.TaxSystem.TaxFilingService));
 
         //seed the database
         builder.Services.AddScoped<DatabaseSeeder>();

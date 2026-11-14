@@ -16,7 +16,10 @@ import {
   buildTaxReportCsv,
   createLatestRequestGuard,
   documentKindLabel,
+  formatTaxDifference,
+  getPeriodChipStatus,
   isValidTaxDateRange,
+  type TaxFilingRecord,
   type TaxPeriodItem,
   type TaxPeriodReport,
   type TaxPeriodSideSummary,
@@ -48,8 +51,26 @@ export const Tax: React.FC = () => {
 
   const [docsOpen, setDocsOpen] = useState(false);
   const [expandedLedgerAccounts, setExpandedLedgerAccounts] = useState<Record<number, boolean>>({});
+  const [filingDialogMode, setFilingDialogMode] = useState<'new' | 'amend' | null>(null);
+  const [filedOnInput, setFiledOnInput] = useState(() => new Date().toISOString().slice(0, 10));
+  const [referenceInput, setReferenceInput] = useState('');
+  const [notesInput, setNotesInput] = useState('');
+  const [lockBooksInput, setLockBooksInput] = useState(true);
+  const [amendmentReasonInput, setAmendmentReasonInput] = useState('');
+  const [submittingFiling, setSubmittingFiling] = useState(false);
+  const [filingError, setFilingError] = useState<string | null>(null);
   const requestGuardRef = useRef(createLatestRequestGuard());
   const abortRef = useRef<AbortController | null>(null);
+
+  const loadPeriods = useCallback(async () => {
+    const periodsRes = await authFetch('/api/tax/periods?count=8');
+    if (periodsRes.ok) {
+      const list = (await periodsRes.json()) as TaxPeriodItem[];
+      setPeriods(list);
+      return list;
+    }
+    return null;
+  }, [authFetch]);
 
   useEffect(() => {
     if (!canView) return;
@@ -206,6 +227,75 @@ export const Tax: React.FC = () => {
     setExpandedLedgerAccounts((prev) => ({ ...prev, [accountId]: !prev[accountId] }));
   };
 
+  const selectedPeriod =
+    selectedMode === 'period' && periods[selectedPeriodIndex] ? periods[selectedPeriodIndex] : null;
+  const filings: TaxFilingRecord[] = report?.filings ?? [];
+  const latestFiling =
+    filings.length > 0 ? [...filings].sort((a, b) => b.sequence - a.sequence)[0] : null;
+
+  const openFilingDialog = (mode: 'new' | 'amend') => {
+    setFilingError(null);
+    setFiledOnInput(new Date().toISOString().slice(0, 10));
+    setReferenceInput('');
+    setNotesInput('');
+    setLockBooksInput(Boolean(report?.canLockOnFiling));
+    setAmendmentReasonInput('');
+    setFilingDialogMode(mode);
+  };
+
+  const handleSubmitFiling = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!report || !filingDialogMode) return;
+    if (filingDialogMode === 'amend' && !amendmentReasonInput.trim()) {
+      setFilingError('Give a reason for the amendment.');
+      return;
+    }
+
+    setSubmittingFiling(true);
+    setFilingError(null);
+    try {
+      const payload = {
+        periodStart: report.from,
+        periodEnd: report.to,
+        filedOn: filedOnInput,
+        reference: referenceInput.trim() || null,
+        notes: notesInput.trim() || null,
+        lockBooks: Boolean(report.canLockOnFiling && lockBooksInput),
+        expectedNetTax: report.netTax,
+        amendsFilingId: filingDialogMode === 'amend' && latestFiling ? latestFiling.id : null,
+        amendmentReason:
+          filingDialogMode === 'amend' ? amendmentReasonInput.trim() : null,
+      };
+
+      const res = await authFetch('/api/tax/filings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          code?: string;
+          message?: string;
+          detail?: string;
+        } | null;
+        const msg = body?.message || body?.detail || 'Filing could not be recorded.';
+        setFilingError(msg);
+        if (res.status === 409 && body?.code === 'tax_figures_changed') {
+          await Promise.all([loadPeriods(), loadReport(report.from, report.to)]);
+        }
+        return;
+      }
+
+      setFilingDialogMode(null);
+      await Promise.all([loadPeriods(), loadReport(report.from, report.to)]);
+    } catch (err) {
+      setFilingError(err instanceof Error ? err.message : 'Filing could not be recorded.');
+    } finally {
+      setSubmittingFiling(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
       <PageHeader
@@ -234,6 +324,11 @@ export const Tax: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {periods.map((p, idx) => {
                 const selected = selectedMode === 'period' && selectedPeriodIndex === idx;
+                const chip = getPeriodChipStatus(p);
+                const badgeClass =
+                  chip.tone === 'changed'
+                    ? 'border-amber-400/70 bg-amber-100/80 text-amber-950 dark:border-amber-700/70 dark:bg-amber-950/50 dark:text-amber-100'
+                    : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)]';
                 return (
                   <button
                     key={`${p.start}-${p.end}`}
@@ -249,17 +344,9 @@ export const Tax: React.FC = () => {
                     }`}
                   >
                     <span>{p.label}</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-surface)] px-2 py-0.5 text-xs text-[var(--text-muted)] border border-[var(--border-subtle)]">
-                      {p.lock === 'full' ? (
-                        <>
-                          <Lock className="h-3 w-3" />
-                          Locked
-                        </>
-                      ) : p.state === 'open' ? (
-                        'Open'
-                      ) : (
-                        'Ready to file'
-                      )}
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${badgeClass}`}>
+                      {chip.locked && <Lock className="h-3 w-3" />}
+                      {chip.label}
                     </span>
                   </button>
                 );
@@ -388,6 +475,178 @@ export const Tax: React.FC = () => {
               </p>
             )}
           </div>
+
+          {/* Filing panel */}
+          {report.isWholePeriod && selectedMode === 'period' && (
+            <div className="space-y-4">
+              {selectedPeriod?.state === 'open' && filings.length === 0 && (
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3 text-sm text-[var(--text-muted)]">
+                  You can record a filing once this period ends.
+                </div>
+              )}
+
+              {selectedPeriod?.state === 'ended' &&
+                filings.length === 0 &&
+                report.canRecordFiling && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="text-sm text-[var(--text-muted)]">
+                      This period has ended and has no recorded filing yet.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openFilingDialog('new')}
+                      className="rounded-lg bg-[var(--accent-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                    >
+                      Record filing
+                    </button>
+                  </div>
+                )}
+
+              {report.changedSinceFiling?.changed && latestFiling && (
+                <div className="rounded-xl border border-amber-300/70 bg-amber-50/70 p-4 text-sm text-amber-950 dark:border-amber-700/70 dark:bg-amber-950/30 dark:text-amber-100">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-medium">
+                          These figures differ from what you filed on {latestFiling.filedOn} by{' '}
+                          {formatTaxDifference(report.changedSinceFiling.netDifference, currency)}.
+                        </p>
+                      </div>
+                    </div>
+                    {report.canRecordFiling && (
+                      <button
+                        type="button"
+                        onClick={() => openFilingDialog('amend')}
+                        className="rounded-lg border border-amber-600/40 bg-white px-3 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
+                      >
+                        Record amended filing
+                      </button>
+                    )}
+                  </div>
+
+                  {report.changedSinceFiling.rows.length > 0 && (
+                    <div className="mt-3 overflow-x-auto rounded-lg border border-amber-300/60 bg-[var(--bg-surface)] text-[var(--text-main)] dark:border-amber-700/60">
+                      <table className="min-w-full divide-y divide-[var(--border-subtle)] text-xs">
+                        <thead className="bg-[var(--bg-page)] uppercase text-[var(--text-muted)]">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium">Code</th>
+                            <th className="px-3 py-2 text-left font-medium">Side</th>
+                            <th className="px-3 py-2 text-right font-medium">Filed</th>
+                            <th className="px-3 py-2 text-right font-medium">Current</th>
+                            <th className="px-3 py-2 text-right font-medium">Difference</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--border-subtle)]">
+                          {report.changedSinceFiling.rows.map((r) => (
+                            <tr key={`${r.side}-${r.taxId ?? 'no-tax'}`}>
+                              <td className="whitespace-nowrap px-3 py-2 font-medium">
+                                {r.taxCode}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 capitalize text-[var(--text-muted)]">
+                                {r.side}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+                                {formatMoney(r.filed, currency)}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+                                {formatMoney(r.current, currency)}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-medium">
+                                {formatTaxDifference(r.difference, currency)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <p className="mt-3 text-xs">
+                    Record an amended filing, or include the correction in your next return if your
+                    tax authority allows it.
+                  </p>
+                </div>
+              )}
+
+              {latestFiling && (
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-[var(--text-main)]">
+                        {latestFiling.sequence === 0
+                          ? 'Recorded filing'
+                          : `Recorded filing (Amendment #${latestFiling.sequence})`}
+                      </h2>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        Filed on {latestFiling.filedOn}
+                        {latestFiling.reference ? ` · Ref: ${latestFiling.reference}` : ''}
+                        {' · '}Basis: {latestFiling.basis}
+                        {' · '}Recorded by {latestFiling.createdBy} on{' '}
+                        {latestFiling.createdAt.slice(0, 10)}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-right text-xs">
+                      <div>
+                        <div className="text-[var(--text-muted)]">Filed output</div>
+                        <div className="font-semibold tabular-nums text-[var(--text-main)]">
+                          {formatMoney(latestFiling.outputTax, currency)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[var(--text-muted)]">Filed input</div>
+                        <div className="font-semibold tabular-nums text-[var(--text-main)]">
+                          {formatMoney(latestFiling.inputTax, currency)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[var(--text-muted)]">Filed net</div>
+                        <div className="font-semibold tabular-nums text-[var(--text-main)]">
+                          {formatMoney(latestFiling.netTax, currency)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {latestFiling.notes && (
+                    <p className="mt-2 text-xs text-[var(--text-muted)]">
+                      Notes: {latestFiling.notes}
+                    </p>
+                  )}
+
+                  {filings.length > 1 && (
+                    <div className="mt-4 border-t border-[var(--border-subtle)] pt-3">
+                      <div className="text-xs font-medium text-[var(--text-muted)]">
+                        Filing history
+                      </div>
+                      <ul className="mt-2 space-y-1.5 text-xs">
+                        {[...filings]
+                          .sort((a, b) => b.sequence - a.sequence)
+                          .map((f) => (
+                            <li
+                              key={f.id}
+                              className="flex flex-wrap items-center justify-between gap-2 text-[var(--text-muted)]"
+                            >
+                              <span>
+                                <strong className="text-[var(--text-main)]">
+                                  {f.sequence === 0 ? 'Original' : `Amendment #${f.sequence}`}
+                                </strong>{' '}
+                                · Filed {f.filedOn}
+                                {f.reference ? ` · ${f.reference}` : ''}
+                                {f.amendmentReason ? ` — ${f.amendmentReason}` : ''}
+                              </span>
+                              <span className="tabular-nums text-[var(--text-main)]">
+                                {formatMoney(f.netTax, currency)}
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Unposted warnings */}
           {report.warnings.unposted.length > 0 && (
@@ -607,6 +866,122 @@ export const Tax: React.FC = () => {
             </p>
           )}
         </>
+      )}
+      {filingDialogMode && report && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="w-full max-w-md rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-xl">
+            <h2 className="text-base font-semibold text-[var(--text-main)]">
+              {filingDialogMode === 'amend' ? 'Record amended filing' : 'Record filing'}
+            </h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              {periodDisplay} · Net {report.netTax < 0 ? 'refundable' : 'payable'}:{' '}
+              {formatMoney(Math.abs(report.netTax), currency)}
+            </p>
+
+            {filingError && (
+              <div
+                role="alert"
+                className="mt-3 rounded-lg border border-rose-300/70 bg-rose-50/80 px-3 py-2 text-xs text-rose-900 dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-100"
+              >
+                {filingError}
+              </div>
+            )}
+
+            <form onSubmit={(e) => void handleSubmitFiling(e)} className="mt-4 space-y-3">
+              <label className="block text-xs font-medium text-[var(--text-main)]">
+                Filed on
+                <input
+                  type="date"
+                  required
+                  value={filedOnInput}
+                  onChange={(e) => setFiledOnInput(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-main)]"
+                />
+              </label>
+
+              {filingDialogMode === 'amend' && (
+                <label className="block text-xs font-medium text-[var(--text-main)]">
+                  Reason for the amendment
+                  <input
+                    type="text"
+                    required
+                    maxLength={500}
+                    value={amendmentReasonInput}
+                    onChange={(e) => setAmendmentReasonInput(e.target.value)}
+                    placeholder="Why are you amending this filing?"
+                    className="mt-1 block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-main)]"
+                  />
+                </label>
+              )}
+
+              <label className="block text-xs font-medium text-[var(--text-main)]">
+                Reference
+                <input
+                  type="text"
+                  maxLength={100}
+                  value={referenceInput}
+                  onChange={(e) => setReferenceInput(e.target.value)}
+                  placeholder="Optional return or confirmation number"
+                  className="mt-1 block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-main)]"
+                />
+              </label>
+
+              <label className="block text-xs font-medium text-[var(--text-main)]">
+                Notes
+                <textarea
+                  rows={2}
+                  maxLength={1000}
+                  value={notesInput}
+                  onChange={(e) => setNotesInput(e.target.value)}
+                  placeholder="Optional notes"
+                  className="mt-1 block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-main)]"
+                />
+              </label>
+
+              {report.canLockOnFiling && (
+                <label className="flex items-start gap-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={lockBooksInput}
+                    onChange={(e) => setLockBooksInput(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-[var(--border-subtle)]"
+                  />
+                  <span>
+                    <span className="block font-medium text-[var(--text-main)]">
+                      Lock books through {report.to}
+                    </span>
+                    <span className="mt-0.5 block text-[var(--text-muted)]">
+                      Stops changes dated in this period. An owner or admin can reopen with a
+                      reason.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setFilingDialogMode(null)}
+                  disabled={submittingFiling}
+                  className="rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-xs font-medium text-[var(--text-main)] hover:bg-[var(--bg-page)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingFiling}
+                  className="rounded-lg bg-[var(--accent-primary)] px-4 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  {submittingFiling ? 'Saving...' : 'Save filing'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

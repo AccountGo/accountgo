@@ -76,7 +76,13 @@ namespace Services.TaxSystem
 
         public TaxPeriodReport Build(DateTime from, DateTime to) => Build(from, to, DefaultDocumentLimit);
 
-        public TaxPeriodReport Build(DateTime from, DateTime to, int? documentLimit)
+        public TaxPeriodReport Build(DateTime from, DateTime to, int? documentLimit) =>
+            Build(from, to, documentLimit, basisOverride: null);
+
+        public TaxPeriodReport Build(DateTime from, DateTime to, int? documentLimit, AccountingBasis basis) =>
+            Build(from, to, documentLimit, basisOverride: basis);
+
+        private TaxPeriodReport Build(DateTime from, DateTime to, int? documentLimit, AccountingBasis? basisOverride)
         {
             var startDate = from.Date;
             var endDate = to.Date;
@@ -88,6 +94,7 @@ namespace Services.TaxSystem
                 throw new TaxPeriodReportValidationException("range_too_long", "Choose a range of 400 days or less.");
 
             var setting = _settings.Table.FirstOrDefault() ?? new CompanySetting();
+            var effectiveBasis = basisOverride ?? setting.AccountingBasis;
 
             var endExclusive = endDate.AddDays(1);
             var cycleStart = TaxPeriodCalculator.EffectiveCycleStart(setting);
@@ -101,7 +108,7 @@ namespace Services.TaxSystem
                 .ToList();
             var taxById = taxCatalog.ToDictionary(t => t.Id);
 
-            if (setting.AccountingBasis == AccountingBasis.Cash)
+            if (effectiveBasis == AccountingBasis.Cash)
             {
                 return BuildCash(startDate, endDate, endExclusive, documentLimit, setting, isWholePeriod, periodLabel, taxCatalog, taxById);
             }

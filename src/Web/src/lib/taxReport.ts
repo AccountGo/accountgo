@@ -9,13 +9,57 @@ export interface TaxPeriodSettings {
   defaultQuarterCycleStartMonth: number;
 }
 
+export interface TaxFilingDiffRow {
+  side: 'output' | 'input';
+  taxId: number | null;
+  taxCode: string;
+  filed: number;
+  current: number;
+  difference: number;
+}
+
+export interface TaxChangedSinceFiling {
+  rows: TaxFilingDiffRow[];
+  netDifference: number;
+  changed: boolean;
+}
+
+export interface TaxPeriodFilingSummary {
+  id: number;
+  sequence: number;
+  filedOn: string;
+  reference: string | null;
+  netTax: number;
+  changedSinceFiling: TaxChangedSinceFiling;
+}
+
+export interface TaxFilingRecord {
+  id: number;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+  frequency: string;
+  basis: string;
+  sequence: number;
+  amendsFilingId: number | null;
+  amendmentReason: string | null;
+  filedOn: string;
+  reference: string | null;
+  notes: string | null;
+  outputTax: number;
+  inputTax: number;
+  netTax: number;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface TaxPeriodItem {
   start: string;
   end: string;
   label: string;
   state: 'open' | 'ended';
   lock: 'none' | 'partial' | 'full' | null;
-  filing: null;
+  filing: TaxPeriodFilingSummary | null;
 }
 
 export interface TaxPeriodTaxRow {
@@ -98,6 +142,10 @@ export interface TaxPeriodReport {
     accounts: TaxPeriodLedgerAccount[];
   } | null;
   lock: TaxPeriodLockStatus | null;
+  filings?: TaxFilingRecord[];
+  changedSinceFiling?: TaxChangedSinceFiling | null;
+  canRecordFiling?: boolean;
+  canLockOnFiling?: boolean;
 }
 
 export interface TaxNavVisibilityInput {
@@ -137,6 +185,33 @@ export function isValidTaxDateRange(from: string, to: string): boolean {
     return false;
   }
   return from <= to;
+}
+
+export interface PeriodChipStatus {
+  label: string;
+  tone: 'open' | 'ready' | 'filed' | 'changed';
+  locked: boolean;
+}
+
+export function getPeriodChipStatus(period: TaxPeriodItem): PeriodChipStatus {
+  const locked = period.lock === 'full';
+  if (period.filing?.changedSinceFiling?.changed) {
+    return { label: 'Changed since filing', tone: 'changed', locked };
+  }
+  if (period.filing) {
+    return { label: `Filed ${period.filing.filedOn}`, tone: 'filed', locked };
+  }
+  if (period.state === 'open') {
+    return { label: 'Open', tone: 'open', locked };
+  }
+  return { label: 'Ready to file', tone: 'ready', locked };
+}
+
+export function formatTaxDifference(amount: number, currency: string): string {
+  const abs = Math.abs(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (amount > 0) return `+${currency} ${abs}`;
+  if (amount < 0) return `-${currency} ${abs}`;
+  return `${currency} ${abs}`;
 }
 
 export function documentKindLabel(kind: TaxPeriodDocumentRow['kind'] | string): string | null {
@@ -211,12 +286,25 @@ export function buildTaxReportCsv(
     ['Total', '', '', money(side.taxable), money(side.tax)],
   ];
 
+  const latestFiling =
+    report.filings && report.filings.length > 0
+      ? [...report.filings].sort((a, b) => b.sequence - a.sequence)[0]
+      : null;
+
   const rows: string[][] = [
     ['Workspace', workspaceName],
     ['Period', periodText],
     ['Basis', basisLabel],
     ['Currency', report.currency],
     ['Generated at', generatedAtIso],
+    ...(latestFiling
+      ? [
+          ['Filed on', latestFiling.filedOn],
+          ['Reference', latestFiling.reference ?? ''],
+          ['Filed net', money(latestFiling.netTax)],
+          ['Changed since filing', report.changedSinceFiling?.changed ? 'Yes' : 'No'],
+        ]
+      : []),
     [],
     ...sideRows('Sales', report.output),
     [],

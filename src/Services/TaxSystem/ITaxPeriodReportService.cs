@@ -12,6 +12,7 @@ namespace Services.TaxSystem
     {
         TaxPeriodReport Build(DateTime from, DateTime to);
         TaxPeriodReport Build(DateTime from, DateTime to, int? documentLimit);
+        TaxPeriodReport Build(DateTime from, DateTime to, int? documentLimit, AccountingBasis basis);
         IReadOnlyList<TaxPeriodSummaryItem> GetRecentPeriods(int count);
         TaxPeriodSettingsDto GetSettings();
         TaxPeriodSettingsDto UpdateSettings(TaxPeriodFrequency frequency, int? quarterCycleStartMonth);

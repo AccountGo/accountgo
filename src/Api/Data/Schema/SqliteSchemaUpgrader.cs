@@ -730,6 +730,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureBankStatementColumnMappings(connection);
             EnsureStatementOtherIncomeColumns(connection);
             EnsureBooksLockChange(connection);
+            EnsureTaxFiling(connection);
             EnsureEntityTypeAndYearEndClose(connection);
             EnsurePartnerAccounts(connection);
             EnsureRecurringScheduleTables(connection);
@@ -786,6 +787,13 @@ CREATE INDEX IF NOT EXISTS ""IX_PartnerShares_PartnerId"" ON ""PartnerShares"" (
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = BooksLockChangeSql;
+            cmd.ExecuteNonQuery();
+        }
+
+        private static void EnsureTaxFiling(DbConnection connection)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = TaxFilingSql;
             cmd.ExecuteNonQuery();
         }
 
@@ -1395,6 +1403,31 @@ WHERE NOT EXISTS (
                 ""ChangedAt"" TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS ""IX_BooksLockChange_CompanyId"" ON ""BooksLockChange"" (""CompanyId"");";
+
+        private const string TaxFilingSql = @"
+            CREATE TABLE IF NOT EXISTS ""TaxFiling"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_TaxFiling"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""PeriodStart"" TEXT NOT NULL,
+                ""PeriodEnd"" TEXT NOT NULL,
+                ""Frequency"" INTEGER NOT NULL,
+                ""Basis"" INTEGER NOT NULL,
+                ""Sequence"" INTEGER NOT NULL,
+                ""AmendsFilingId"" INTEGER NULL,
+                ""AmendmentReason"" TEXT NULL,
+                ""FiledOn"" TEXT NOT NULL,
+                ""Reference"" TEXT NULL,
+                ""Notes"" TEXT NULL,
+                ""OutputTax"" TEXT NOT NULL,
+                ""InputTax"" TEXT NOT NULL,
+                ""NetTax"" TEXT NOT NULL,
+                ""SnapshotJson"" TEXT NOT NULL,
+                ""CreatedBy"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_TaxFiling_TaxFiling_AmendsFilingId"" FOREIGN KEY (""AmendsFilingId"") REFERENCES ""TaxFiling"" (""Id"") ON DELETE RESTRICT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_TaxFiling_CompanyId_PeriodStart_PeriodEnd_Sequence"" ON ""TaxFiling"" (""CompanyId"", ""PeriodStart"", ""PeriodEnd"", ""Sequence"");
+            CREATE INDEX IF NOT EXISTS ""IX_TaxFiling_AmendsFilingId"" ON ""TaxFiling"" (""AmendsFilingId"");";
 
         private const string EntityTypeYearEndAccount30800Sql = @"
             INSERT INTO ""Account"" (""CompanyId"", ""AccountCode"", ""AccountName"", ""ParentAccountId"", ""AccountClassId"", ""DrOrCrSide"", ""IsCash"", ""IsContraAccount"")

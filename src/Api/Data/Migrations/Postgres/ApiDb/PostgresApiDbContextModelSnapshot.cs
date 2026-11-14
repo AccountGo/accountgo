@@ -4062,6 +4062,81 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("Tax");
                 });
 
+            modelBuilder.Entity("Core.Domain.TaxSystem.TaxFiling", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AmendmentReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("AmendsFilingId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Basis")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("FiledOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("InputTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("NetTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<decimal>("OutputTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("PeriodEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AmendsFilingId");
+
+                    b.HasIndex("CompanyId", "PeriodStart", "PeriodEnd", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("TaxFiling");
+                });
+
             modelBuilder.Entity("Core.Domain.TaxSystem.TaxGroup", b =>
                 {
                     b.Property<int>("Id")
@@ -5803,6 +5878,16 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("PurchasingAccount");
 
                     b.Navigation("SalesAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.TaxSystem.TaxFiling", b =>
+                {
+                    b.HasOne("Core.Domain.TaxSystem.TaxFiling", "AmendsFiling")
+                        .WithMany()
+                        .HasForeignKey("AmendsFilingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AmendsFiling");
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.TaxGroupTax", b =>
