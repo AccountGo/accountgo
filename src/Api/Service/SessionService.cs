@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Api.Data;
 using Core.Domain;
 using Dto.Security;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -32,6 +33,7 @@ public class SessionService : ISessionService
     private readonly IConfiguration _configuration;
     private readonly ILogger<SessionService> _logger;
     private readonly ISecurityAuditService? _securityAudit;
+    private readonly IHttpContextAccessor? _httpContextAccessor;
 
     public SessionService(
         UserManager<ApplicationUser> userManager,
@@ -41,7 +43,8 @@ public class SessionService : ISessionService
         IConfiguration configuration,
         ILogger<SessionService> logger,
         ApiDbContext? apiDb = null,
-        ISecurityAuditService? securityAudit = null)
+        ISecurityAuditService? securityAudit = null,
+        IHttpContextAccessor? httpContextAccessor = null)
     {
         _userManager = userManager;
         _identityContext = identityContext;
@@ -51,6 +54,7 @@ public class SessionService : ISessionService
         _logger = logger;
         _apiDb = apiDb;
         _securityAudit = securityAudit;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     /// <summary>Best-effort <c>auth.refresh.reuse</c> event. Never includes token material.</summary>
@@ -76,14 +80,13 @@ public class SessionService : ISessionService
         ApplicationUser user,
         string? ipAddress,
         string? userAgent,
-        string? amr = null,
-        string? orgSlug = null)
+        string? amr = null)
     {
         var amrList = !string.IsNullOrEmpty(amr) ? new[] { amr } : null;
-        return CreateSessionCoreAsync(user, ipAddress, userAgent, amr: amrList, orgSlug: orgSlug);
+        return CreateSessionAsync(user, ipAddress, userAgent, amr: amrList);
     }
 
-    public Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionAsync(
+    public async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionAsync(
         ApplicationUser user,
         string? ipAddress,
         string? userAgent,
@@ -91,17 +94,6 @@ public class SessionService : ISessionService
         int? trustedDeviceId = null,
         IEnumerable<string>? amr = null,
         bool mfaSatisfied = false)
-        => CreateSessionCoreAsync(user, ipAddress, userAgent, mfaMethod, trustedDeviceId, amr, mfaSatisfied, orgSlug: null);
-
-    private async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionCoreAsync(
-        ApplicationUser user,
-        string? ipAddress,
-        string? userAgent,
-        string? mfaMethod = null,
-        int? trustedDeviceId = null,
-        IEnumerable<string>? amr = null,
-        bool mfaSatisfied = false,
-        string? orgSlug = null)
     {
         if (user.DeletedAt != null)
             return (false, null, null, "User account no longer exists.");
@@ -127,7 +119,7 @@ public class SessionService : ISessionService
         var rawRefreshToken = GenerateSecureToken();
         var tokenHash = ComputeSha256(rawRefreshToken);
         var now = DateTime.UtcNow;
-        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id, orgSlug);
+        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id);
         var absoluteExpiresAt = now + AbsoluteLifetime();
 
         var session = new RefreshTokenSession
@@ -168,8 +160,7 @@ public class SessionService : ISessionService
     public async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RefreshSessionAsync(
         string rawRefreshToken,
         string? ipAddress,
-        string? userAgent,
-        string? orgSlug = null)
+        string? userAgent)
     {
         if (string.IsNullOrWhiteSpace(rawRefreshToken))
             return (false, null, null, "Missing refresh token.");
@@ -214,7 +205,7 @@ public class SessionService : ISessionService
 
                 // Issue a sibling; keep the existing replacement active (concurrent tabs / lost response).
                 session.GraceReuseCount++;
-                return await IssueSiblingAsync(session, ipAddress, userAgent, now, orgSlug);
+                return await IssueSiblingAsync(session, ipAddress, userAgent, now);
             }
 
             await RevokeFamilyAsync(
@@ -231,7 +222,7 @@ public class SessionService : ISessionService
             return (false, null, null, "Session has expired. Please sign in again.");
         }
 
-        return await RotateAsync(session, ipAddress, userAgent, now, orgSlug);
+        return await RotateAsync(session, ipAddress, userAgent, now);
     }
 
     private async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RotateAsync(
@@ -252,7 +243,7 @@ public class SessionService : ISessionService
         session.RevokedAt ??= now;
         session.ReplacedByTokenHash = newTokenHash;
 
-        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id, orgSlug);
+        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id);
         // Rows from before the 12-hour limit get one from now.
         var absoluteExpiresAt = session.AbsoluteExpiresAt ?? now + AbsoluteLifetime();
 
@@ -293,7 +284,7 @@ public class SessionService : ISessionService
         var newRawToken = GenerateSecureToken();
         var newTokenHash = ComputeSha256(newRawToken);
 
-        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id, orgSlug);
+        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id);
         var absoluteExpiresAt = parent.AbsoluteExpiresAt ?? now + AbsoluteLifetime();
 
         var sibling = new RefreshTokenSession
@@ -477,7 +468,10 @@ public class SessionService : ISessionService
             return (fallback, fallback);
         }
 
-        var resolved = await ResolveEffectiveIdleTimeoutsAsync(_apiDb, userId, orgSlug);
+        var effectiveOrgSlug = !string.IsNullOrWhiteSpace(orgSlug)
+            ? orgSlug
+            : _httpContextAccessor?.HttpContext?.Request.Headers["X-AccountGo-Org"].FirstOrDefault()?.Trim();
+        var resolved = await ResolveEffectiveIdleTimeoutsAsync(_apiDb, userId, effectiveOrgSlug);
         if (resolved == null)
         {
             var fallback = TimeSpan.FromMinutes(SessionTimeoutPolicy.DefaultIdleMinutes);

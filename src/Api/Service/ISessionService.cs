@@ -26,14 +26,12 @@ public interface ISessionService
         ApplicationUser user,
         string? ipAddress,
         string? userAgent,
-        string? amr = null,
-        string? orgSlug = null);
+        string? amr = null);
 
     Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RefreshSessionAsync(
         string rawRefreshToken,
         string? ipAddress,
-        string? userAgent,
-        string? orgSlug = null);
+        string? userAgent);
 
     Task<bool> RevokeSessionAsync(string rawRefreshToken);
 
