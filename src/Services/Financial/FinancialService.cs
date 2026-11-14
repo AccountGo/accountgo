@@ -2589,7 +2589,7 @@ namespace Services.Financial
                                     approvalRow, "Consumed", _auth.ResolveActorContext()?.UserId));
                             }
 
-                            if (!isClosingEntry && !isPartnerSetupEntry)
+                            if (!isClosingEntry)
                             {
                                 RecordJournalPostingAuthorizationEvidence(
                                     journalEntry,
@@ -2599,7 +2599,8 @@ namespace Services.Financial
                                         ?? "system:draft-preparer",
                                     posterUserId: _auth.ResolveActorContext()?.UserId,
                                     independentApprovalRequestId: aprHeader,
-                                    resolvedRule: liveRule);
+                                    resolvedRule: liveRule,
+                                    partnerSetupEntry: isPartnerSetupEntry);
                             }
                         }
                     }
@@ -2710,13 +2711,14 @@ namespace Services.Financial
             string effectivePreparer,
             string posterUserId,
             string independentApprovalRequestId,
-            Core.Authorization.EffectiveApprovalRule resolvedRule = null)
+            Core.Authorization.EffectiveApprovalRule resolvedRule = null,
+            bool partnerSetupEntry = false)
         {
             if (_auditLogRepo == null || journalEntry.CompanyId <= 0 || journalEntry.Id <= 0)
                 return;
 
-            Core.Authorization.EffectiveApprovalRule rule = resolvedRule;
-            if (rule == null && _approvalPolicyResolver != null)
+            Core.Authorization.EffectiveApprovalRule rule = partnerSetupEntry ? null : resolvedRule;
+            if (!partnerSetupEntry && rule == null && _approvalPolicyResolver != null)
             {
                 rule = _approvalPolicyResolver.Resolve(
                     journalEntry.CompanyId,
@@ -2726,7 +2728,14 @@ namespace Services.Financial
             var mode = rule?.Mode ?? Core.Authorization.WorkspaceApprovalMode.CatalogDefault;
             var independentReviewUsed = !string.IsNullOrWhiteSpace(independentApprovalRequestId);
             string rendering;
-            if (mode == Core.Authorization.WorkspaceApprovalMode.SingleActorAllowed && !independentReviewUsed)
+            var operationKey = partnerSetupEntry
+                ? Core.Authorization.AccessOperationCatalog.WorkspaceAccountingPolicyUpdate
+                : Core.Authorization.AccessOperationCatalog.FinancialsJournalPost;
+            if (partnerSetupEntry)
+            {
+                rendering = $"Posted by {posterUserId} during partner account setup, authorized as an accounting policy change. Journal approval does not apply to this reclassification.";
+            }
+            else if (mode == Core.Authorization.WorkspaceApprovalMode.SingleActorAllowed && !independentReviewUsed)
             {
                 rendering = string.Equals(effectivePreparer, posterUserId, StringComparison.Ordinal)
                     ? $"Prepared and posted by {posterUserId} under the single-user workflow."
@@ -2743,7 +2752,7 @@ namespace Services.Financial
 
             var payload = System.Text.Json.JsonSerializer.Serialize(new
             {
-                operationKey = Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
+                operationKey,
                 policySchemaVersion = Core.Domain.WorkspaceOperatingPolicySchema.CurrentVersion,
                 journalEntryId = journalEntry.Id,
                 fingerprint = entryFingerprint,

@@ -52,7 +52,7 @@ public sealed class PartnerService
         if (setting.PartnerAccountsFrom != null) throw new InvalidOperationException("Partner accounts have already been set up.");
         var year = _years.Table.FirstOrDefault(y => y.StartDate.Date <= date.Date && y.EndDate.Date >= date.Date && y.ClosedAt == null)
             ?? throw new ArgumentException("The setup date must be inside an open fiscal year.");
-        if (_years.Table.Any(y => y.IsActive && y.EndDate.Date < date.Date && y.ClosedAt == null))
+        if (_years.Table.Any(y => y.EndDate.Date < date.Date && y.ClosedAt == null))
             throw new InvalidOperationException("Close earlier fiscal years before setting up partner accounts.");
         if (setting.BooksLockedThrough.HasValue && date.Date <= setting.BooksLockedThrough.Value.Date)
             throw new InvalidOperationException("The setup date is within the locked period.");

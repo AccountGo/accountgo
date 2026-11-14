@@ -23,6 +23,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Fixed
 - Bank statement Personal actions appear only when Personal books are linked, and each workspace shows one set of owner money-movement actions.
+- SQLite upgrades add the Action column to existing bank statement description rules, including databases created before that column was introduced.
 
 ### Removed
 - The unused audit settings API (`/api/Audit/Entity` and `/api/Audit/Attribute`) is gone. Its settings applied to every workspace on a server and never changed what the audit trail records.

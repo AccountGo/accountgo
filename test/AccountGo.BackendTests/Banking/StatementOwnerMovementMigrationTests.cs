@@ -31,4 +31,26 @@ public sealed class StatementOwnerMovementMigrationTests
         command.CommandText = "SELECT Action FROM BankStatementDescriptionRule WHERE Id = 1";
         Assert.Equal(0L, command.ExecuteScalar());
     }
+
+    [Fact]
+    public void SqliteSchemaUpgrader_AddsActionToExistingDescriptionRules()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection).Options;
+        using (var db = new ApiDbContext(options))
+        {
+            db.Database.EnsureCreated();
+            db.Database.ExecuteSqlRaw("CREATE TABLE \"__SchemaVersion\" (\"Version\" INTEGER NOT NULL PRIMARY KEY, \"AppliedAt\" TEXT NOT NULL);");
+            db.Database.ExecuteSqlRaw("INSERT INTO \"__SchemaVersion\" (\"Version\", \"AppliedAt\") VALUES (1, 'legacy');");
+            db.Database.ExecuteSqlRaw("ALTER TABLE \"BankStatementDescriptionRule\" DROP COLUMN \"Action\";");
+            db.Database.ExecuteSqlRaw("INSERT INTO \"BankStatementDescriptionRule\" (\"CompanyId\", \"DescriptionKey\", \"CreatedAt\", \"LastUsedAt\") VALUES (1, 'legacy description', '2026-01-01', '2026-01-01');");
+        }
+
+        Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(connection);
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT \"Action\" FROM \"BankStatementDescriptionRule\" WHERE \"DescriptionKey\" = 'legacy description';";
+        Assert.Equal(0L, command.ExecuteScalar());
+    }
 }
