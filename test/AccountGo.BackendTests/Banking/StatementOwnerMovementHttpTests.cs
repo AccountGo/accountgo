@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net;
@@ -156,6 +157,74 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         using var scope = _host.Factory.Services.CreateScope();
         using var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId);
         Assert.All(scope.ServiceProvider.GetRequiredService<IFinancialService>().IncomeStatement(new DateTime(2026, 1, 1), new DateTime(2026, 12, 31)), row => Assert.Equal(0, row.Amount));
+    }
+
+    [Fact]
+    public async Task PartnerMode_OffersAndRecordsOwnerMovementForTheChosenPartner()
+    {
+        var accountIds = new Dictionary<string, int>();
+        var partnerId = 0;
+        WithDb(db =>
+        {
+            var setting = db.CompanySettings.Single();
+            setting.EntityType = EntityType.Partnership;
+            setting.PartnerAccountsFrom = Date;
+            var capital = new Account { CompanyId = _companyId, AccountClassId = 3, AccountCode = "30101", AccountName = "Capital – Avery", DrOrCrSide = DrOrCrSide.Cr };
+            var drawings = new Account { CompanyId = _companyId, AccountClassId = 3, AccountCode = "30851", AccountName = "Drawings – Avery", DrOrCrSide = DrOrCrSide.Dr, IsContraAccount = true };
+            db.Accounts.AddRange(capital, drawings);
+            db.SaveChanges();
+            accountIds["capital"] = capital.Id;
+            accountIds["drawings"] = drawings.Id;
+            var partner = new Partner { CompanyId = _companyId, Name = "Avery", CapitalAccountId = capital.Id, DrawingsAccountId = drawings.Id, CreatedAt = DateTime.UtcNow, CreatedBy = "test", RowVersion = Guid.NewGuid().ToByteArray() };
+            db.Partners.Add(partner);
+            db.SaveChanges();
+            partnerId = partner.Id;
+        });
+
+        var actions = await AuditTestHost.Json(await Send(HttpMethod.Get, "StatementOwnerActions"));
+        Assert.True(!actions.TryGetProperty("drawing", out var sharedDrawing) || sharedDrawing.ValueKind == JsonValueKind.Null);
+        var offered = Assert.Single(actions.GetProperty("partners").EnumerateArray());
+        Assert.Equal("Avery", offered.GetProperty("name").GetString());
+        Assert.Equal("Partner drawing", offered.GetProperty("drawing").GetProperty("label").GetString());
+
+        var id = Line(-42, "Avery transfer");
+        var missingPartner = await Send(HttpMethod.Post, $"StatementLines/{id}/RecordOwnerMovement", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, missingPartner.StatusCode);
+        Assert.Equal("Choose a partner.", (await AuditTestHost.Json(missingPartner)).GetProperty("message").GetString());
+        var recorded = await Send(HttpMethod.Post, $"StatementLines/{id}/RecordOwnerMovement", new { partnerId, rememberRule = true });
+        await AssertOk(recorded);
+        var recordedJson = await AuditTestHost.Json(recorded);
+        Assert.Equal(partnerId, recordedJson.GetProperty("matchedPartnerId").GetInt32());
+        Assert.Equal("Avery", recordedJson.GetProperty("matchedPartnerName").GetString());
+        WithDb(db =>
+        {
+            Assert.Equal(accountIds["drawings"], Assert.Single(db.BankTransactions).ContraAccountId);
+            Assert.Equal(partnerId, Assert.Single(db.BankStatementDescriptionRules).PartnerId);
+        });
+        var suggestionLine = Line(-13, "Avery transfer");
+        var statementPage = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=unmatched"));
+        var suggestion = statementPage.GetProperty("lines").EnumerateArray().Single(line => line.GetProperty("id").GetInt32() == suggestionLine);
+        Assert.Equal("drawing", suggestion.GetProperty("suggestedOwnerAction").GetString());
+        Assert.Equal(partnerId, suggestion.GetProperty("suggestedPartnerId").GetInt32());
+        Assert.Equal("Avery", suggestion.GetProperty("suggestedPartnerName").GetString());
+        WithDb(db =>
+        {
+            db.Partners.Single(p => p.Id == partnerId).ArchivedAt = DateTime.UtcNow;
+        });
+        var undone = await Send(HttpMethod.Post, $"StatementLines/{id}/UndoOwnerMovement", new { });
+        await AssertOk(undone);
+        var undoJson = await AuditTestHost.Json(undone);
+        Assert.Equal(partnerId, undoJson.GetProperty("matchedPartnerId").GetInt32());
+        WithDb(db => Assert.NotNull(Assert.Single(db.BankTransactions).VoidGeneralLedgerHeaderId));
+
+        var legacyLine = Line(-17, "Legacy shared drawing");
+        var sharedDrawingAccountId = 0;
+        WithDb(db => sharedDrawingAccountId = db.Accounts.Single(a => a.AccountCode == "30800").Id);
+        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{legacyLine}/CreateTransaction", new { kind = 2, contraAccountId = sharedDrawingAccountId }));
+        var legacyUndo = await Send(HttpMethod.Post, $"StatementLines/{legacyLine}/UndoOwnerMovement", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, legacyUndo.StatusCode);
+        Assert.Equal("This line wasn't recorded as an owner drawing or contribution.", (await AuditTestHost.Json(legacyUndo)).GetProperty("message").GetString());
+        WithDb(db => Assert.False(Assert.Single(db.BankTransactions.Where(tx => tx.ContraAccountId == sharedDrawingAccountId)).IsVoid));
     }
 
     [Fact]

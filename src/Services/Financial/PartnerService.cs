@@ -105,6 +105,7 @@ public sealed class PartnerService
             _financial.AddJournalEntry(journal);
             using (_financial.AllowPartnerSetupPosting())
                 _financial.UpdateJournalEntry(journal, posted: true);
+            setting.PartnerSetupJournalEntryId = journal.GeneralLedgerHeaderId;
         }
         setting.PartnerAccountsFrom = date.Date;
         _settings.Update(setting);

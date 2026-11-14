@@ -1098,6 +1098,7 @@ namespace Api.Data
                 entity.HasOne(e => e.ExpenseAccount).WithMany()
                     .HasForeignKey(e => e.ExpenseAccountId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Partner).WithMany().HasForeignKey(e => e.PartnerId).OnDelete(DeleteBehavior.Restrict);
             });
 
             builder.Entity<BankStatementColumnMapping>(entity =>

@@ -14,7 +14,6 @@ using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Services.Financial;
 
@@ -29,10 +28,9 @@ public sealed class PartnersController : BaseController
     private readonly PartnerService _service;
     private readonly ITenantContext _tenant;
     private readonly IAccessAuthorizationService _authorization;
-    private readonly bool _setupEnabled;
 
-    public PartnersController(ApiDbContext db, PartnerService service, ITenantContext tenant, IAccessAuthorizationService authorization, IConfiguration configuration)
-    { _db = db; _service = service; _tenant = tenant; _authorization = authorization; _setupEnabled = configuration.GetValue<bool>("Features:PartnerAccountingSetupEnabled"); }
+    public PartnersController(ApiDbContext db, PartnerService service, ITenantContext tenant, IAccessAuthorizationService authorization)
+    { _db = db; _service = service; _tenant = tenant; _authorization = authorization; }
 
     private bool Authorize(string operation, string permission, out IActionResult? denied)
     {
@@ -85,7 +83,7 @@ public sealed class PartnersController : BaseController
         var permanent = accounts.Values.FirstOrDefault(a => a.AccountCode == "30100"); var distribution = accounts.Values.FirstOrDefault(a => a.AccountCode == "30800");
         var capitalBalance = permanent == null ? 0m : BalanceFor(permanent.Id);
         var drawingsBalance = distribution == null ? 0m : BalanceFor(distribution.Id);
-        return Ok(new { partnerAccountsFrom = setting.PartnerAccountsFrom, setupEnabled = _setupEnabled, capitalBalance, drawingsBalance, partners, openYears });
+        return Ok(new { partnerAccountsFrom = setting.PartnerAccountsFrom, capitalBalance, drawingsBalance, partners, openYears });
     }
 
     public sealed record SetupRow(string Name, decimal Percent, decimal Capital, decimal Drawings);
@@ -95,7 +93,6 @@ public sealed class PartnersController : BaseController
     public IActionResult Setup([FromBody] SetupRequest request)
     {
         if (!Authorize(AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, SystemPermissions.FinancialsAccountsManage, out var denied)) return denied!;
-        if (!_setupEnabled) return NotFound();
         try { using var tx = WriteTransaction(); _service.Setup(request.Date, request.Partners.Select(p => (p.Name, p.Percent, p.Capital, p.Drawings)).ToArray(), GetUserNameFromRequestHeader() ?? "unknown"); tx.Commit(); return Ok(GetResult()); }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { return BadRequest(new { message = ex.Message }); }
     }

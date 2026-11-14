@@ -10,6 +10,7 @@ export interface EquityStatement {
   from: string;
   to: string;
   basis: string;
+  partnerMode?: boolean;
   columns: EquityColumn[];
   rows: EquityRow[];
   balanceSheetEquity: number;
@@ -53,6 +54,8 @@ export function equityStatementCsv(statement: EquityStatement): string {
     for (const row of equityTableRows(report))
       cells.push([row.label, ...columns.map(c => (c.key === 'total' ? row.total : row.amounts[c.key] ?? 0).toFixed(2))]);
     cells.push([equityReconciliation(report, n => n.toFixed(2)).message]);
+    if (report.partnerMode && (report.rows.find(row => row.key === 'closing')?.amounts.unallocated ?? 0) !== 0)
+      cells.push(['Profit is allocated to partners when the fiscal year is closed.']);
   }
   return cells.map(row => row.map(cell => {
     const safe = /^\s*[=+@\t\r-]/.test(cell) && !/^-?\d+(\.\d+)?$/.test(cell) ? `'${cell}` : cell;

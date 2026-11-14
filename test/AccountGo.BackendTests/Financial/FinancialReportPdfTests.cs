@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using Api.Service;
 using Core.Domain;
+using Dto.Financial;
 using QuestPDF.Fluent;
 using Services.Financial;
 using UglyToad.PdfPig;
@@ -193,6 +194,45 @@ public class FinancialReportPdfTests
         Assert.Equal("In balance", print.BalanceStatus);
         Assert.Contains("unclosed earnings", print.Footnote, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("($20.00)", Text(print));
+    }
+
+    [Fact]
+    public void PartnerEquityStatement_WithEightPartners_UsesLandscapeAndRepeatsMovementTables()
+    {
+        var columns = Enumerable.Range(1, 8)
+            .Select(id => new EquityStatementColumnDto($"partner:{id}", $"Partner {id}"))
+            .Append(new EquityStatementColumnDto("unallocated", "Unallocated"))
+            .ToList();
+        var amounts = columns.ToDictionary(column => column.Key, _ => 0m);
+        var print = FinancialReportComposer.Compose(new FinancialReportRequest
+        {
+            Kind = FinancialReportKind.EquityStatement,
+            CompanyName = "Northwind Trading",
+            CurrencyCode = "USD",
+            From = new DateTime(2026, 1, 1),
+            To = new DateTime(2026, 12, 31),
+            EquityStatement = new EquityStatementDto
+            {
+                EntityType = "Partnership",
+                PartnerMode = true,
+                From = new DateTime(2026, 1, 1),
+                To = new DateTime(2026, 12, 31),
+                Columns = columns,
+                Rows =
+                [
+                    new EquityStatementRowDto { Key = "opening", Label = "Opening balance", Amounts = new(amounts), Total = 0m },
+                    new EquityStatementRowDto { Key = "closing", Label = "Closing balance", Amounts = new(amounts), Total = 0m },
+                ],
+            },
+        });
+
+        var bytes = GenerateExtensions.GeneratePdf(new FinancialReportPdfDocument(print));
+        using var document = PdfDocument.Open(bytes);
+        var page = Assert.Single(document.GetPages());
+        Assert.True(page.Width > page.Height);
+        Assert.True(page.Text.Split("Movement", StringSplitOptions.None).Length - 1 >= 2);
+        Assert.Contains("Partner 8", page.Text);
+        Assert.Contains("Unallocated", page.Text);
     }
 
     [Fact]

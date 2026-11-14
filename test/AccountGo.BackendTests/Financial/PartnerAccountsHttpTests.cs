@@ -84,6 +84,7 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         Assert.Empty(db.JournalEntryHeaders);
         Assert.Equal(2, db.PartnerShares.Count());
         Assert.Equal(new DateTime(2026, 6, 30), db.CompanySettings.Single().PartnerAccountsFrom);
+        Assert.Null(db.CompanySettings.Single().PartnerSetupJournalEntryId);
         var capitalParent = db.Accounts.Single(a => a.AccountCode == "30100").ParentAccountId;
         var drawingsParent = db.Accounts.Single(a => a.AccountCode == "30800").ParentAccountId;
         Assert.All(db.Partners, partner =>
@@ -112,6 +113,7 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         WithDb(db =>
         {
             var journal = Assert.Single(db.JournalEntryHeaders.Where(j => j.Memo == "Partner accounts set up"));
+            Assert.Equal(journal.GeneralLedgerHeaderId, db.CompanySettings.Single().PartnerSetupJournalEntryId);
             var evidence = Assert.Single(db.AuditLogs.Where(a => a.CompanyId == _companyId
                 && a.TableName == Services.Financial.FinancialService.JournalPostingAuthorizationAuditTable
                 && a.RecordId == journal.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
@@ -611,26 +613,26 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task PartnerSetupIsUnavailableUntilTheFeatureFlagIsEnabled()
+    public async Task PartnerSetupIsAvailableForPartnerships()
     {
-        var host = new AuditTestHost { PartnerSetupEnabled = false };
+        var host = new AuditTestHost();
         await host.InitializeAsync();
         try
         {
-            var user = await host.CreateUser("partners-disabled@example.test");
-            var companyId = await host.CreateWorkspace(user.Token, "Partner setup disabled", "partner-setup-disabled");
+            var user = await host.CreateUser("partners-setup-enabled@example.test");
+            var companyId = await host.CreateWorkspace(user.Token, "Partner setup available", "partner-setup-available");
             await host.SetFunctionalRoles(companyId, user.Id, "Accountant");
             using (var scope = host.Factory.Services.CreateScope())
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(companyId, "partner-setup-disabled", CompanyMemberRole.Owner))
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(companyId, "partner-setup-available", CompanyMemberRole.Owner))
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 db.CompanySettings.Single().EntityType = EntityType.Partnership;
                 db.SaveChanges();
             }
 
-            var response = await host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new { date = new DateTime(2026, 6, 30), partners = Array.Empty<object>() }, user.Token, "partner-setup-disabled");
+            var response = await host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new { date = new DateTime(2026, 6, 30), partners = new[] { new { name = "Avery", percent = 50m, capital = 0m, drawings = 0m }, new { name = "Blake", percent = 50m, capital = 0m, drawings = 0m } } }, user.Token, "partner-setup-available");
 
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
         finally
         {

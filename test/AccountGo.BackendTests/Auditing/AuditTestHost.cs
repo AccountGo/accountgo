@@ -56,7 +56,6 @@ namespace AccountGo.BackendTests.Auditing
         public CapturingLoggerProvider Logs { get; } = new();
         public EntitlementOverrides Entitlements { get; } = new();
 
-        public bool PartnerSetupEnabled { get; set; } = true;
 
         public Task InitializeAsync()
         {
@@ -69,7 +68,6 @@ namespace AccountGo.BackendTests.Auditing
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
                 builder.UseSetting("SERVER_TIMING_ENABLED", "true");
-                builder.UseSetting("Features:PartnerAccountingSetupEnabled", PartnerSetupEnabled.ToString());
                 builder.UseSetting("AuditRetention:Enabled", "false");
                 builder.ConfigureLogging(logging => logging.AddProvider(Logs));
                 builder.ConfigureTestServices(services =>

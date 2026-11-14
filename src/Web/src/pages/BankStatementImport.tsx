@@ -452,7 +452,8 @@ const BankStatementImportPage: React.FC = () => {
   const ownerButtons = ownerButtonSet({
     linkedPersonalCompanyId: currentOrg.linkedPersonalCompanyId,
     canCreateLinkedEntry,
-    ownerActionsAvailable: canManage && canCreateTx && !!(ownerActions?.drawing || ownerActions?.contribution),
+    ownerActionsAvailable: canManage && canCreateTx && !!(ownerActions?.drawing || ownerActions?.contribution || ownerActions?.partners?.some(p => p.drawing || p.contribution)),
+    partnerMode: !!ownerActions?.partners,
   });
   const selectedLines = (list?.lines ?? []).filter(l => selectedIds.includes(l.id));
   const bulkOwnerAction = ownerButtons === 'owner' && selectedLines.length === selectedIds.length
@@ -1001,6 +1002,7 @@ const BankStatementImportPage: React.FC = () => {
                   <td className="px-4 py-2.5">
                     <div>{line.payee || '—'}</div>
                     {line.memo && <div className="text-xs text-[var(--text-muted)]">{line.memo}</div>}
+                    {line.matchedPartnerName && <div className="text-xs text-[var(--text-muted)]">Partner: {line.matchedPartnerName}</div>}
                     {ownerSuggestion && <span className="inline-flex mt-1 px-2 py-0.5 rounded-full text-xs bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]">{ownerSuggestion}</span>}
                   </td>
                   <td className="px-4 py-2.5 max-w-[14rem]">
@@ -1031,7 +1033,10 @@ const BankStatementImportPage: React.FC = () => {
                         disabled={busy}
                         onClick={() => {
                           if (matchedLineAction(line, canManage, canCreateTx, ownerButtons) === 'undo') {
-                            const action = line.matchedOwnerAction === 'drawing' ? ownerActions?.drawing : ownerActions?.contribution;
+                            const partnerAction = ownerActions?.partners?.find(p => p.partnerId === line.matchedPartnerId);
+                            const action = line.matchedOwnerAction === 'drawing'
+                              ? partnerAction?.drawing ?? ownerActions?.drawing ?? (line.matchedPartnerId ? { accountId: 0, accountCode: '', accountName: '', label: 'Partner drawing' } : null)
+                              : partnerAction?.contribution ?? ownerActions?.contribution ?? (line.matchedPartnerId ? { accountId: 0, accountCode: '', accountName: '', label: 'Partner contribution' } : null);
                             if (action) setOwnerFor({ lines: [line], action, undo: true });
                           } else void lineAction(line, 'Unmatch');
                         }}
@@ -1189,7 +1194,7 @@ const BankStatementImportPage: React.FC = () => {
           }}
         />
       )}
-      {ownerFor && <StatementLineOwnerMovementDialog lines={ownerFor.lines} action={ownerFor.action} undo={ownerFor.undo}
+      {ownerFor && <StatementLineOwnerMovementDialog lines={ownerFor.lines} action={ownerFor.action} partners={ownerActions?.partners} undo={ownerFor.undo}
         formatCurrency={formatCurrency} onClose={() => setOwnerFor(null)} onSaved={async () => {
           setOwnerFor(null);
           setSelectedIds([]);

@@ -351,7 +351,9 @@ public sealed class LinkedEntryService
         if (link == null) return new(403, "linked_entry_not_available", "Linked entries are not available for this workspace.");
         var personalCompanyId = link.PersonalCompanyId;
         if (string.IsNullOrWhiteSpace(ownerUserId)) return new(403, "linked_entry_not_available", "Only the workspace owner can create a linked entry.");
-        var entityType = _db.CompanySettings.IgnoreQueryFilters().Where(s => s.CompanyId == companyId).Select(s => s.EntityType).SingleOrDefault();
+        var setting = _db.CompanySettings.IgnoreQueryFilters().SingleOrDefault(s => s.CompanyId == companyId);
+        if (PartnerAccountingMode.IsEnabled(setting)) return new(400, "linked_entry_not_available", "Linked Personal books entries aren't available after partner accounts are set up. Record a partner drawing or contribution instead.");
+        var entityType = setting?.EntityType ?? default;
         if (entityType != EntityType.SoleProprietor) return new(403, "linked_entry_not_available", "Linked entries are available only for sole proprietor workspaces.");
         if (request == null || request.Date == default || request.Amount <= 0 || request.WorkBankAccountId <= 0 || request.PersonalAccountId <= 0)
             return new(400, "linked_entry_invalid", "Provide a valid date, amount, work bank account, and personal account.");

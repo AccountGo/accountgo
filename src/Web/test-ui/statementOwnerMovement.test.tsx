@@ -51,3 +51,22 @@ it('undo confirms the reversal, sends the optional reason and retries after peri
   expect(fetcher.mock.calls[1][0]).toBe('/api/Banking/StatementLines/42/UndoOwnerMovement?confirmReconciledPeriod=true');
   expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ reason: 'Correction' });
 });
+
+it('requires a partner and updates the account before recording', async () => {
+  fetcher.mockResolvedValue(new Response('{}', { status: 200 }));
+  const partners = [
+    { partnerId: 1, name: 'Avery', drawing: { accountId: 21, accountCode: '30851', accountName: 'Drawings – Avery', label: 'Partner drawing' }, contribution: null },
+    { partnerId: 2, name: 'Blake', drawing: { accountId: 22, accountCode: '30852', accountName: 'Drawings – Blake', label: 'Partner drawing' }, contribution: null },
+  ];
+  const saved = vi.fn();
+  render(<StatementLineOwnerMovementDialog lines={[line]} action={partners[0].drawing!} partners={partners} formatCurrency={String} onClose={vi.fn()} onSaved={saved} />);
+  const submit = screen.getByRole('button', { name: 'Record' }) as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Partner'), { target: { value: '2' } });
+  expect(screen.getByText('Account: Drawings – Blake (30852)')).toBeTruthy();
+  expect(screen.getByText(/Money Blake took out/)).toBeTruthy();
+  expect(submit.disabled).toBe(false);
+  fireEvent.click(submit);
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(JSON.parse(fetcher.mock.calls[0][1].body).partnerId).toBe(2);
+});

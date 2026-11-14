@@ -547,6 +547,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<DateTime?>("PartnerAccountsFrom")
                         .HasColumnType("date");
 
+                    b.Property<int?>("PartnerSetupJournalEntryId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("RegistrationNumber")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -1216,6 +1219,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<DateTime>("LastUsedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<int?>("PartnerId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("VendorId")
                         .HasColumnType("integer");
 
@@ -1224,6 +1230,8 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("PartnerId");
 
                     b.HasIndex("VendorId");
 
@@ -4623,12 +4631,19 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasForeignKey("ExpenseAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Core.Domain.Financials.Partner", "Partner")
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
                         .WithMany()
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ExpenseAccount");
+
+                    b.Navigation("Partner");
 
                     b.Navigation("Vendor");
                 });

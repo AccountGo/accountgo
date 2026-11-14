@@ -241,6 +241,35 @@ public sealed class EquityStatementHttpTests : IAsyncLifetime
         Assert.StartsWith("2026-01-01", defaults.GetProperty("from").GetString());
     }
 
+    [Fact]
+    public async Task PartnerMode_ShowsPartnerColumnsAndPartnerContributions()
+    {
+        var partnerId = 0;
+        WithDb(db =>
+        {
+            var setting = db.CompanySettings.Single();
+            setting.EntityType = EntityType.Partnership;
+            setting.PartnerAccountsFrom = Start;
+            var capital = new Account { CompanyId = _companyId, AccountClassId = 3, AccountCode = "30101", AccountName = "Capital – Avery", DrOrCrSide = DrOrCrSide.Cr };
+            var drawings = new Account { CompanyId = _companyId, AccountClassId = 3, AccountCode = "30851", AccountName = "Drawings – Avery", DrOrCrSide = DrOrCrSide.Dr, IsContraAccount = true };
+            db.Accounts.AddRange(capital, drawings);
+            db.SaveChanges();
+            var partner = new Partner { CompanyId = _companyId, Name = "Avery", CapitalAccountId = capital.Id, DrawingsAccountId = drawings.Id, CreatedAt = DateTime.UtcNow, CreatedBy = "test", RowVersion = Guid.NewGuid().ToByteArray() };
+            db.Partners.Add(partner);
+            db.SaveChanges();
+            partnerId = partner.Id;
+        });
+        Post("10111", "30101", 125);
+        var report = await Ok(await Report());
+        var key = "partner:" + partnerId.ToString(CultureInfo.InvariantCulture);
+        Assert.True(report.GetProperty("partnerMode").GetBoolean());
+        Assert.Contains(report.GetProperty("columns").EnumerateArray(), c => c.GetProperty("key").GetString() == key && c.GetProperty("label").GetString() == "Avery");
+        Assert.Equal(125m, Row(report, "contributions").GetProperty("amounts").GetProperty(key).GetDecimal());
+        Assert.Equal(125m, Row(report, "closing").GetProperty("amounts").GetProperty(key).GetDecimal());
+        Assert.Equal(0m, report.GetProperty("differenceToBalanceSheet").GetDecimal());
+        await AssertReconciles(report);
+    }
+
     [Theory]
     [InlineData("from=invalid")]
     [InlineData("basis=invalid")]

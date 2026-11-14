@@ -48,6 +48,7 @@ namespace Services.Banking
         private readonly ITenantContext _tenant;
         private readonly IRepository<Account> _accounts;
         private readonly IRepository<BankStatementDescriptionRule> _rules;
+        private readonly IRepository<Partner>? _partners;
 
         public BankStatementImportService(
             IRepository<BankStatementImport> imports,
@@ -62,7 +63,8 @@ namespace Services.Banking
             IRepository<Account> accounts,
             IRepository<BankStatementDescriptionRule> rules,
             IRepository<BankTransaction> bankTransactions,
-            IReconciledPeriodGuard reconciledPeriodGuard)
+            IReconciledPeriodGuard reconciledPeriodGuard,
+            IRepository<Partner>? partners = null)
         {
             _imports = imports;
             _lines = lines;
@@ -77,6 +79,7 @@ namespace Services.Banking
             _rules = rules;
             _bankTransactions = bankTransactions;
             _reconciledPeriodGuard = reconciledPeriodGuard;
+            _partners = partners;
         }
 
         public static string? LastFour(string? identifier)
@@ -587,8 +590,39 @@ namespace Services.Banking
         {
             EnsureCompany();
             var type = WorkspaceEntityType();
+            var companyId = _tenant.RequireCompanyId();
+            var setting = _settings.Table.FirstOrDefault(s => s.CompanyId == companyId);
+            if (PartnerAccountingMode.IsEnabled(setting))
+            {
+                var activePartners = (_partners?.Table ?? Enumerable.Empty<Partner>().AsQueryable()).Where(p => p.CompanyId == companyId && p.ArchivedAt == null).OrderBy(p => p.Name).ToList();
+                var accounts = _accounts.Table.Where(a => a.CompanyId == companyId).ToList();
+                var accountsById = accounts.ToDictionary(a => a.Id);
+                var parentIds = accounts.Where(a => a.ParentAccountId.HasValue).Select(a => a.ParentAccountId!.Value).ToHashSet();
+                return new(null, null, activePartners
+                    .Select(p => new StatementPartnerOwnerActionsDto(p.Id, p.Name,
+                        ResolvePartnerOwnerAction(p.DrawingsAccountId, "Partner drawing", accountsById, parentIds),
+                        ResolvePartnerOwnerAction(p.CapitalAccountId, "Partner contribution", accountsById, parentIds))).ToList());
+            }
             return new(ResolveOwnerAction(OwnerMovementPolicy.Drawing(type)),
                 ResolveOwnerAction(OwnerMovementPolicy.Contribution(type)));
+        }
+
+        private StatementOwnerActionDto? ResolvePartnerOwnerAction(int accountId, string label)
+        {
+            var companyId = _tenant.RequireCompanyId();
+            var account = _accounts.GetById(accountId);
+            if (account == null || account.CompanyId != companyId || account.ArchivedAt != null || !account.CanPost()
+                || account.AccountClassId != (int)AccountClasses.Equity
+                || _accounts.Table.Any(a => a.CompanyId == companyId && a.ParentAccountId == account.Id)) return null;
+            return new(account.Id, account.AccountCode, account.AccountName, label);
+        }
+
+        private static StatementOwnerActionDto? ResolvePartnerOwnerAction(int accountId, string label,
+            IReadOnlyDictionary<int, Account> accounts, IReadOnlySet<int> parentIds)
+        {
+            if (!accounts.TryGetValue(accountId, out var account) || account.ArchivedAt != null || !account.CanPost()
+                || account.AccountClassId != (int)AccountClasses.Equity || parentIds.Contains(account.Id)) return null;
+            return new(account.Id, account.AccountCode, account.AccountName, label);
         }
 
         private EntityType WorkspaceEntityType() => _settings.Table
@@ -607,7 +641,7 @@ namespace Services.Banking
             return new(account.Id, account.AccountCode, account.AccountName, direction.Label);
         }
 
-        public IReadOnlyList<BankStatementLineDto> RecordOwnerMovement(IReadOnlyList<int> lineIds, string? memo, bool rememberRule)
+        public IReadOnlyList<BankStatementLineDto> RecordOwnerMovement(IReadOnlyList<int> lineIds, string? memo, bool rememberRule, int? partnerId = null)
         {
             EnsureCompany();
             if (lineIds == null || lineIds.Count == 0)
@@ -621,17 +655,38 @@ namespace Services.Banking
                     ? "All selected lines must be money out." : "All selected lines must be money in.");
 
             var type = WorkspaceEntityType();
+            var setting = _settings.Table.FirstOrDefault(s => s.CompanyId == _tenant.RequireCompanyId());
+            var partnerMode = PartnerAccountingMode.IsEnabled(setting);
+            if (partnerMode && !partnerId.HasValue) throw new InvalidOperationException("Choose a partner.");
+            if (!partnerMode && partnerId.HasValue) throw new InvalidOperationException("Partners aren't set up for this workspace.");
+            Partner? partner = null;
+            StatementOwnerActionDto? action;
+            if (partnerMode)
+            {
+                partner = _partners.Table.FirstOrDefault(p => p.CompanyId == _tenant.RequireCompanyId() && p.Id == partnerId!.Value);
+                if (partner == null || partner.ArchivedAt != null) throw new InvalidOperationException("Choose an active partner.");
+                action = ResolvePartnerOwnerAction(drawing ? partner!.DrawingsAccountId : partner!.CapitalAccountId,
+                    drawing ? "Partner drawing" : "Partner contribution");
+                if (action == null)
+                {
+                    var account = _accounts.GetById(drawing ? partner!.DrawingsAccountId : partner!.CapitalAccountId);
+                    throw new InvalidOperationException($"{account?.AccountName ?? "Partner account"} ({account?.AccountCode ?? "unknown"}) is missing, archived or can't be posted to.");
+                }
+            }
+            else
+            {
             var direction = (drawing ? OwnerMovementPolicy.Drawing(type) : OwnerMovementPolicy.Contribution(type))
                 ?? throw new InvalidOperationException(drawing
                     ? "Owner drawings aren't available for this workspace's entity type."
                     : "Owner contributions aren't available for this workspace's entity type.");
-            var action = ResolveOwnerAction(direction);
+            action = ResolveOwnerAction(direction);
             if (action == null)
             {
                 var companyId = _tenant.RequireCompanyId();
                 var name = _accounts.Table.Where(a => a.CompanyId == companyId && a.AccountCode == direction.AccountCode)
                     .Select(a => a.AccountName).FirstOrDefault() ?? direction.Label;
                 throw new InvalidOperationException($"{name} ({direction.AccountCode}) is missing, archived or can't be posted to.");
+            }
             }
             // Validate the entire selection before the first transaction or rule write.
             foreach (var line in lines)
@@ -652,14 +707,18 @@ namespace Services.Banking
             var result = new List<BankStatementLineDto>(lines.Count);
             foreach (var line in lines)
             {
-                result.Add(CreateTransaction(line.Id, new CreateTransactionFromStatementLineRequest
+                var recorded = CreateTransaction(line.Id, new CreateTransactionFromStatementLineRequest
                 {
                     Kind = (int)(drawing ? BankTransactionKinds.MoneyOut : BankTransactionKinds.MoneyIn),
                     ContraAccountId = action.AccountId,
-                    Memo = FirstNonBlank(memo, line.Memo, line.Payee, action.Label)
-                }));
+                    Memo = FirstNonBlank(memo, line.Memo, line.Payee, partner == null ? action.Label : $"{action.Label} – {partner.Name}")
+                });
+                recorded.MatchedOwnerAction = drawing ? "drawing" : "contribution";
+                recorded.MatchedPartnerId = partner?.Id;
+                recorded.MatchedPartnerName = partner?.Name;
+                result.Add(recorded);
                 if (rememberRule)
-                    RememberOwnerRule(line, drawing ? BankStatementRuleAction.OwnerDrawing : BankStatementRuleAction.OwnerContribution);
+                    RememberOwnerRule(line, drawing ? BankStatementRuleAction.OwnerDrawing : BankStatementRuleAction.OwnerContribution, partner?.Id);
             }
             return result;
         }
@@ -685,12 +744,16 @@ namespace Services.Banking
             _transactions.Void(match.TransactionId, new VoidBankTransactionRequest
             {
                 VoidDate = voidDate,
-                Reason = string.IsNullOrWhiteSpace(reason) ? $"Undo owner {match.Action}" : reason.Trim()
+                Reason = string.IsNullOrWhiteSpace(reason) ? match.PartnerName == null ? $"Undo owner {match.Action}" : $"Undo partner {match.Action} – {match.PartnerName}" : reason.Trim()
             });
-            return ToDto(line, Array.Empty<PoolEntry>());
+            var result = ToDto(line, Array.Empty<PoolEntry>());
+            result.MatchedOwnerAction = match.Action;
+            result.MatchedPartnerId = match.PartnerId;
+            result.MatchedPartnerName = match.PartnerName;
+            return result;
         }
 
-        private sealed record OwnerMatch(int TransactionId, int BankAccountId, string Action);
+        private sealed record OwnerMatch(int TransactionId, int BankAccountId, string Action, int? PartnerId = null, string? PartnerName = null);
 
         // One joined query for all matched lines on the page, including only the bank side
         // of a live transaction using the current workspace's available owner accounts.
@@ -701,6 +764,12 @@ namespace Services.Banking
             var companyId = _tenant.RequireCompanyId();
             var drawingId = actions.Drawing?.AccountId;
             var contributionId = actions.Contribution?.AccountId;
+            var partnerAccounts = actions.Partners == null
+                ? new Dictionary<int, (Partner Partner, string Action)>()
+                : (_partners?.Table ?? Enumerable.Empty<Partner>().AsQueryable()).Where(p => p.CompanyId == companyId).ToList()
+                .SelectMany(p => new[] { (Partner: p, AccountId: p.DrawingsAccountId, Action: "drawing"), (Partner: p, AccountId: p.CapitalAccountId, Action: "contribution") })
+                .ToDictionary(x => x.AccountId, x => (x.Partner, x.Action));
+            var partnerAccountIds = partnerAccounts.Keys.ToList();
             var matches = (from gl in _glLines.Table
                 join tx in _bankTransactions.Table on gl.GeneralLedgerHeaderId equals tx.GeneralLedgerHeaderId
                 join bank in _banks.Table on tx.BankId equals bank.Id
@@ -711,14 +780,17 @@ namespace Services.Banking
                     && !header.ReversedGeneralLedgerHeaderId.HasValue
                     && tx.VoidGeneralLedgerHeaderId == null && gl.AccountId == bank.AccountId
                     && ((tx.Kind == BankTransactionKinds.MoneyOut && drawingId.HasValue && tx.ContraAccountId == drawingId)
-                        || (tx.Kind == BankTransactionKinds.MoneyIn && contributionId.HasValue && tx.ContraAccountId == contributionId))
-                select new { gl.Id, tx.BankId, TransactionId = tx.Id, gl.AccountId, tx.Kind }).ToList();
+                        || (tx.Kind == BankTransactionKinds.MoneyIn && contributionId.HasValue && tx.ContraAccountId == contributionId)
+                        || partnerAccountIds.Contains(tx.ContraAccountId ?? 0))
+                select new { gl.Id, tx.BankId, TransactionId = tx.Id, gl.AccountId, tx.Kind, tx.ContraAccountId }).ToList();
             var lineBanks = lines.Where(l => l.IsMatched).ToDictionary(l => l.MatchedGeneralLedgerLineId!.Value, l => l.BankId);
             return matches.Where(m => lineBanks[m.Id] == m.BankId).ToDictionary(m => m.Id,
-                m => new OwnerMatch(m.TransactionId, m.AccountId, m.Kind == BankTransactionKinds.MoneyOut ? "drawing" : "contribution"));
+                m => partnerAccounts.TryGetValue(m.ContraAccountId ?? 0, out var partner)
+                    ? new OwnerMatch(m.TransactionId, m.AccountId, partner.Action, partner.Partner.Id, partner.Partner.Name)
+                    : new OwnerMatch(m.TransactionId, m.AccountId, m.Kind == BankTransactionKinds.MoneyOut ? "drawing" : "contribution"));
         }
 
-        private void RememberOwnerRule(BankStatementLine line, BankStatementRuleAction action)
+        private void RememberOwnerRule(BankStatementLine line, BankStatementRuleAction action, int? partnerId)
         {
             var key = StatementDescriptionKey.Normalize(FirstNonBlank(line.Payee, line.Memo));
             if (key == null) return;
@@ -729,6 +801,7 @@ namespace Services.Banking
             rule.Action = (int)action;
             rule.VendorId = null;
             rule.ExpenseAccountId = null;
+            rule.PartnerId = partnerId;
             rule.LastUsedAt = DateTime.UtcNow;
             if (isNew) _rules.Insert(rule); else _rules.Update(rule);
         }
@@ -737,26 +810,38 @@ namespace Services.Banking
         {
             var eligible = lines.Where(l => !l.IsMatched && !l.IsExcluded).ToList();
             var actions = GetOwnerActions();
-            if (actions.Drawing == null && actions.Contribution == null) return lines;
+            if (actions.Drawing == null && actions.Contribution == null && actions.Partners == null) return lines;
             var keys = eligible.Select(l => StatementDescriptionKey.Normalize(FirstNonBlank(l.Payee, l.Memo)))
                 .Where(k => k != null).Distinct().ToList();
             var companyId = _tenant.RequireCompanyId();
             // One rule query for the page, regardless of line count.
             var rules = _rules.Table.Where(r => r.CompanyId == companyId && keys.Contains(r.DescriptionKey)
                 && (r.Action == (int)BankStatementRuleAction.OwnerDrawing || r.Action == (int)BankStatementRuleAction.OwnerContribution))
-                .ToDictionary(r => r.DescriptionKey, r => r.Action);
+                .ToDictionary(r => r.DescriptionKey, r => (Action: r.Action, PartnerId: r.PartnerId));
             var matches = OwnerMovementMatches(lines, actions);
             foreach (var line in lines)
             {
                 if (line.MatchedGeneralLedgerLineId.HasValue && matches.TryGetValue(line.MatchedGeneralLedgerLineId.Value, out var match))
+                {
                     line.MatchedOwnerAction = match.Action;
+                    line.MatchedPartnerId = match.PartnerId;
+                    line.MatchedPartnerName = match.PartnerName;
+                }
                 if (line.IsMatched || line.IsExcluded) continue;
                 var key = StatementDescriptionKey.Normalize(FirstNonBlank(line.Payee, line.Memo));
-                if (key == null || !rules.TryGetValue(key, out var action)) continue;
-                if (line.Amount < 0 && actions.Drawing != null && action == (int)BankStatementRuleAction.OwnerDrawing)
-                    line.SuggestedOwnerAction = "drawing";
-                if (line.Amount > 0 && actions.Contribution != null && action == (int)BankStatementRuleAction.OwnerContribution)
-                    line.SuggestedOwnerAction = "contribution";
+                if (key == null || !rules.TryGetValue(key, out var rule)) continue;
+                var drawing = line.Amount < 0 && rule.Action == (int)BankStatementRuleAction.OwnerDrawing;
+                var contribution = line.Amount > 0 && rule.Action == (int)BankStatementRuleAction.OwnerContribution;
+                if (actions.Partners != null)
+                {
+                    if (!drawing && !contribution) continue;
+                    var offered = actions.Partners.FirstOrDefault(p => p.PartnerId == rule.PartnerId && (drawing ? p.Drawing : p.Contribution) != null);
+                    line.SuggestedOwnerAction = drawing ? "drawing" : "contribution";
+                    if (offered != null) { line.SuggestedPartnerId = offered.PartnerId; line.SuggestedPartnerName = offered.Name; }
+                    continue;
+                }
+                if (drawing && actions.Drawing != null) line.SuggestedOwnerAction = "drawing";
+                if (contribution && actions.Contribution != null) line.SuggestedOwnerAction = "contribution";
             }
             return lines;
         }
