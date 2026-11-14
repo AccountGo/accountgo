@@ -840,10 +840,11 @@ CREATE INDEX IF NOT EXISTS ""IX_PartnerShares_PartnerId"" ON ""PartnerShares"" (
             if (!TableExists(connection, "Vendor") || !TableExists(connection, "Account"))
                 return;
 
-            AddColumnIfMissing(connection, "BankStatementDescriptionRule", "Action", "INTEGER NOT NULL DEFAULT 0");
             using var cmd = connection.CreateCommand();
             cmd.CommandText = BankStatementDescriptionRuleSql;
             cmd.ExecuteNonQuery();
+            // After the CREATE so a table created here also gets the owner-movement Action column.
+            AddColumnIfMissing(connection, "BankStatementDescriptionRule", "Action", "INTEGER NOT NULL DEFAULT 0");
         }
 
         private static void EnsureBankStatementExclusionColumns(DbConnection connection)
