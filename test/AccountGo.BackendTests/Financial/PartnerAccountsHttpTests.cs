@@ -94,6 +94,205 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SetupPostingRecordsAccountingPolicyAuthorizationEvidence()
+    {
+        Post("10111", "30100", 100m);
+
+        var response = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Avery", percent = 60m, capital = 60m, drawings = 0m },
+                new { name = "Blake", percent = 40m, capital = 40m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        WithDb(db =>
+        {
+            var journal = Assert.Single(db.JournalEntryHeaders.Where(j => j.Memo == "Partner accounts set up"));
+            var evidence = Assert.Single(db.AuditLogs.Where(a => a.CompanyId == _companyId
+                && a.TableName == Services.Financial.FinancialService.JournalPostingAuthorizationAuditTable
+                && a.RecordId == journal.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            using var document = JsonDocument.Parse(evidence.NewValue);
+            var root = document.RootElement;
+            Assert.Equal(Core.Authorization.AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, root.GetProperty("operationKey").GetString());
+            Assert.Equal("Posted by " + _user.Id + " during partner account setup, authorized as an accounting policy change. Journal approval does not apply to this reclassification.", root.GetProperty("rendering").GetString());
+        });
+    }
+
+    [Fact]
+    public async Task SetupRejectsAnInactiveEarlierFiscalYearThatIsStillOpen()
+    {
+        WithDb(db => db.FinancialYears.Add(new FinancialYear
+        {
+            CompanyId = _companyId, FiscalYearCode = "FY2024", FiscalYearName = "FY2024",
+            StartDate = new DateTime(2024, 1, 1), EndDate = new DateTime(2024, 12, 31), IsActive = false
+        }));
+
+        var response = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Avery", percent = 60m, capital = 0m, drawings = 0m },
+                new { name = "Blake", percent = 40m, capital = 0m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Close earlier fiscal years", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SetupRejectsRunningTwice()
+    {
+        var first = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Avery", percent = 60m, capital = 0m, drawings = 0m },
+                new { name = "Blake", percent = 40m, capital = 0m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var second = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Casey", percent = 60m, capital = 0m, drawings = 0m },
+                new { name = "Drew", percent = 40m, capital = 0m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+
+        Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+        Assert.Contains("Partner accounts have already been set up.", await second.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SetupRejectsNonPartnershipEntityType()
+    {
+        WithDb(db => db.CompanySettings.Single().EntityType = EntityType.SoleProprietor);
+
+        var response = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Avery", percent = 60m, capital = 0m, drawings = 0m },
+                new { name = "Blake", percent = 40m, capital = 0m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Partners are only available for partnerships.", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SetupRejectsDateWithinLockedPeriod()
+    {
+        WithDb(db => db.CompanySettings.Single().BooksLockedThrough = new DateTime(2026, 6, 30));
+
+        var response = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Avery", percent = 60m, capital = 0m, drawings = 0m },
+                new { name = "Blake", percent = 40m, capital = 0m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("The setup date is within the locked period.", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task StaleRenameReturnsConflictAndLeavesNameUnchanged()
+    {
+        var setup = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Avery", percent = 60m, capital = 0m, drawings = 0m },
+                new { name = "Blake", percent = 40m, capital = 0m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+        Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
+        var list = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
+        var partner = list.GetProperty("partners")[0];
+        var partnerId = partner.GetProperty("id").GetInt32();
+        var staleVersion = partner.GetProperty("rowVersion").GetString();
+        WithDb(db => db.Partners.Single(p => p.Id == partnerId).RowVersion = Guid.NewGuid().ToByteArray());
+
+        var response = await _host.Send(HttpMethod.Put, $"/api/Financials/Partners/{partnerId}", new { name = "Changed", rowVersion = staleVersion }, _user.Token, Org);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("Someone else changed this. Reload and try again.", await response.Content.ReadAsStringAsync());
+        WithDb(db => Assert.Equal("Avery", db.Partners.Single(p => p.Id == partnerId).Name));
+    }
+
+    [Fact]
+    public async Task StaleShareVersionReturnsConflict()
+    {
+        var setup = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Avery", percent = 60m, capital = 0m, drawings = 0m },
+                new { name = "Blake", percent = 40m, capital = 0m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+        Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
+        var list = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
+        var ids = list.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetInt32()).ToArray();
+
+        var response = await _host.Send(HttpMethod.Put, "/api/Financials/Partners/Shares/FY2025", new[]
+        {
+            new { partnerId = ids[0], percent = 50m }, new { partnerId = ids[1], percent = 50m }
+        }, _user.Token, Org, headers: new System.Collections.Generic.Dictionary<string, string> { ["If-Match"] = "stale-version" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("Someone else changed this. Reload and try again.", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task EntityTypeChangeRequiresPartnersToBeArchived()
+    {
+        var setup = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
+        {
+            date = new DateTime(2026, 6, 30),
+            partners = new[]
+            {
+                new { name = "Avery", percent = 60m, capital = 0m, drawings = 0m },
+                new { name = "Blake", percent = 40m, capital = 0m, drawings = 0m }
+            }
+        }, _user.Token, Org);
+        Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
+
+        var blocked = await _host.Send(HttpMethod.Put, "/api/organizations/current/accounting-policy", new { entityType = EntityType.SoleProprietor }, _user.Token, Org);
+        Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
+        Assert.Contains("Archive the partners first.", await blocked.Content.ReadAsStringAsync());
+
+        var list = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
+        var partnerIds = list.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetInt32()).ToArray();
+        WithDb(db => db.PartnerShares.RemoveRange(db.PartnerShares.ToList()));
+        foreach (var partnerId in partnerIds)
+        {
+            var archived = await _host.Send(HttpMethod.Post, $"/api/Financials/Partners/{partnerId}/Archive", token: _user.Token, org: Org);
+            Assert.True(archived.StatusCode == HttpStatusCode.OK, await archived.Content.ReadAsStringAsync());
+        }
+        var allowed = await _host.Send(HttpMethod.Put, "/api/organizations/current/accounting-policy", new { entityType = EntityType.SoleProprietor }, _user.Token, Org);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+    }
+
+    [Fact]
     public async Task SetupRejectsSharesWithMoreThanFourDecimalPlaces()
     {
         var response = await _host.Send(HttpMethod.Post, "/api/Financials/Partners/Setup", new
