@@ -152,6 +152,7 @@ export const OrgLayout: React.FC = () => {
           role: OrgDetails['role'];
           permissions: string[];
           currency: string;
+          usesTax?: boolean;
           fiscalYearEnd?: string;
           operatingPolicy?: OrgDetails['operatingPolicy'];
           activationState?: string;
@@ -167,6 +168,7 @@ export const OrgLayout: React.FC = () => {
             plan: current.plan,
             role: current.role,
             currency: current.currency,
+            usesTax: current.usesTax,
             fiscalYearEnd: current.fiscalYearEnd,
             permissions: current.permissions,
             operatingPolicy: current.operatingPolicy ?? null,

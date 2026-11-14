@@ -6,6 +6,7 @@ import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { BankCloseStatusLoader } from '../components/BankCloseStatusCard';
 import { currencySymbol, DEFAULT_CURRENCY } from '../lib/currency';
+import { toCsv } from '../lib/csv';
 import { comparativeRange } from '../lib/comparativeRange';
 import { equityStatementCsv, showEquityStatement } from '../lib/equityStatement';
 import type { EquityStatement } from '../lib/equityStatement';
@@ -356,10 +357,7 @@ export function cashMovementCsv(data: CashMovement): string {
     ...data.lines.map(l => [l.date, l.description || '', l.accountName, l.counterpartAccountName, String(l.moneyIn), String(l.moneyOut)]),
     ['Total in', String(data.totalIn)], ['Total out', String(data.totalOut)], ['Closing cash', String(data.closingCash)],
   ];
-  return rows.map(row => row.map(cell => {
-    const safe = /^\s*[=+@\t\r-]/.test(cell) && !/^-?\d+(\.\d+)?$/.test(cell) ? `'${cell}` : cell;
-    return `"${safe.replaceAll('"', '""')}"`;
-  }).join(',')).join('\r\n');
+  return toCsv(rows);
 }
 
 export function statementCsv(
@@ -387,11 +385,7 @@ export function statementCsv(
         ? [row.code, row.label, amount(row.amount), amount(row.comparativeAmount), amount(row.change), pct(row.changePercent)]
         : [row.code, row.label, amount(row.amount)]),
   ];
-  return cells.map(row => row.map(cell => {
-    // Prevent spreadsheet formulas in user-controlled account codes and names.
-    const safe = /^\s*[=+@\t\r-]/.test(cell) && !/^-?\d+(\.\d+)?$/.test(cell) ? `'${cell}` : cell;
-    return `"${safe.replaceAll('"', '""')}"`;
-  }).join(',')).join('\r\n');
+  return toCsv(cells);
 }
 
 /** Merge current and comparative P&L / Balance Sheet statement rows by account id (or label for totals). */

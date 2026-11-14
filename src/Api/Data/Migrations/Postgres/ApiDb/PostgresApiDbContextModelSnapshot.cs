@@ -572,6 +572,14 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<string>("SalesInvoiceSettingsJson")
                         .HasColumnType("text");
 
+                    b.Property<int>("TaxPeriodFrequency")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(2);
+
+                    b.Property<int?>("TaxQuarterCycleStartMonth")
+                        .HasColumnType("integer");
+
                     b.Property<int>("TaxRegime")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")

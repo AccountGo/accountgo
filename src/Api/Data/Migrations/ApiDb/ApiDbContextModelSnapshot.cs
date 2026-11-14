@@ -573,6 +573,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("SalesInvoiceSettingsJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("TaxPeriodFrequency")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(2);
+
+                    b.Property<int?>("TaxQuarterCycleStartMonth")
+                        .HasColumnType("int");
+
                     b.Property<int>("TaxRegime")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")

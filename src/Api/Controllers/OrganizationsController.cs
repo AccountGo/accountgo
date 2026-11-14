@@ -444,7 +444,18 @@ namespace Api.Controllers
                     .Select(m => (int?)m.Id)
                     .FirstOrDefault();
             var operating = _operatingPolicy?.GetSummary(id, memberId, UserId);
-            var settings = _db.CompanySettings.Select(s => new { s.Currency, s.EntityType }).FirstOrDefault();
+            var settings = _db.CompanySettings
+                .Select(s => new
+                {
+                    s.Currency,
+                    s.EntityType,
+                    s.TaxRegime,
+                    HasTaxRate = _db.Taxes.Any(t => t.Rate > 0)
+                })
+                .FirstOrDefault();
+            var usesTax = settings != null
+                && settings.EntityType != EntityType.Individual
+                && (settings.TaxRegime != TaxRegime.None || settings.HasTaxRate);
             var activationState = string.IsNullOrWhiteSpace(company.ActivationState)
                 ? CompanyActivationStates.Active
                 : company.ActivationState;
@@ -458,6 +469,7 @@ namespace Api.Controllers
                 role = _tenant.Role.ToString(), permissions = _tenant.Permissions,
                 currency = settings?.Currency ?? "USD",
                 entityType = settings?.EntityType.ToString(),
+                usesTax,
                 fiscalYearEnd = fiscalYear?.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 operatingPolicy = operating == null ? null : new
                 {
