@@ -36,9 +36,10 @@ public sealed class PartnerService
 
     public void ValidateShares(int yearId, (int PartnerId, decimal Percent)[] shares)
     {
-        if (shares.Length < 2 || shares.Any(x => x.Percent <= 0m) || shares.Sum(x => x.Percent) != 100.0000m
+        var activePartnerIds = _partners.Table.Where(p => p.ArchivedAt == null).Select(p => p.Id).ToHashSet();
+        if (shares.Length < 2 || shares.Any(x => x.Percent <= 0m || decimal.Round(x.Percent, 4) != x.Percent) || shares.Sum(x => x.Percent) != 100.0000m
             || shares.Select(x => x.PartnerId).Distinct().Count() != shares.Length
-            || shares.Any(x => !_partners.Table.Any(p => p.Id == x.PartnerId && p.ArchivedAt == null)))
+            || shares.Any(x => !activePartnerIds.Contains(x.PartnerId)))
             throw new ArgumentException("Profit-sharing ratios must include at least two active partners and total exactly 100.0000%.");
         var year = _years.Table.FirstOrDefault(y => y.Id == yearId) ?? throw new ArgumentException("Fiscal year was not found.");
         if (year.ClosedAt != null) throw new InvalidOperationException("Shares for a closed fiscal year can't change.");
@@ -51,11 +52,15 @@ public sealed class PartnerService
         if (setting.PartnerAccountsFrom != null) throw new InvalidOperationException("Partner accounts have already been set up.");
         var year = _years.Table.FirstOrDefault(y => y.StartDate.Date <= date.Date && y.EndDate.Date >= date.Date && y.ClosedAt == null)
             ?? throw new ArgumentException("The setup date must be inside an open fiscal year.");
+        if (_years.Table.Any(y => y.IsActive && y.EndDate.Date < date.Date && y.ClosedAt == null))
+            throw new InvalidOperationException("Close earlier fiscal years before setting up partner accounts.");
         if (setting.BooksLockedThrough.HasValue && date.Date <= setting.BooksLockedThrough.Value.Date)
             throw new InvalidOperationException("The setup date is within the locked period.");
-        if (rows.Length < 2 || rows.Any(x => string.IsNullOrWhiteSpace(x.Name) || x.Name.Trim().Length > 100 || x.Percent <= 0m)
+        if (rows.Length < 2 || rows.Any(x => string.IsNullOrWhiteSpace(x.Name) || x.Name.Trim().Length > 100 || x.Percent <= 0m || decimal.Round(x.Percent, 4) != x.Percent)
             || rows.Sum(x => x.Percent) != 100.0000m)
             throw new ArgumentException("Profit-sharing ratios must include at least two partners and total exactly 100.0000%.");
+        if (rows.Any(x => decimal.Round(x.Capital, 2) != x.Capital || decimal.Round(x.Drawings, 2) != x.Drawings))
+            throw new ArgumentException("Partner capital and drawings amounts must have no more than two decimal places.");
         if (rows.Select(x => x.Name.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != rows.Length
             || _partners.Table.Where(p => p.ArchivedAt == null).ToList().Any(p => rows.Any(r => string.Equals(p.Name, r.Name.Trim(), StringComparison.OrdinalIgnoreCase))))
             throw new ArgumentException("Partner names must be unique.");
@@ -64,9 +69,11 @@ public sealed class PartnerService
         var capitalBalance = Balance(capitalAccount.Id, date);
         var drawingsBalance = Balance(drawingsAccount.Id, date);
         var capitalSum = rows.Sum(r => r.Capital);
+        if (rows.Any(r => r.Drawings < 0m))
+            throw new ArgumentException("Partner drawings amounts must be zero or positive.");
         var drawingsSum = rows.Sum(r => r.Drawings);
-        if (capitalSum != capitalBalance || drawingsSum != drawingsBalance)
-            throw new ArgumentException($"Partner capital must add up to {capitalBalance.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)} and drawings to {drawingsBalance.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}.");
+        if (capitalSum != capitalBalance || drawingsSum != Math.Abs(drawingsBalance))
+            throw new ArgumentException($"Partner capital must add up to {capitalBalance.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)} and drawings to {Math.Abs(drawingsBalance).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}.");
         using var bypass = _lockGuard.Bypass();
         var created = rows.Select(row =>
         {
@@ -86,15 +93,18 @@ public sealed class PartnerService
         }
         if (drawingsBalance != 0m)
         {
-            journalLines.Add(new JournalEntryLine { AccountId = drawingsAccount.Id, DrCr = DrOrCrSide.Cr, Amount = drawingsBalance });
-            foreach (var item in created.Where(x => x.Row.Drawings != 0m)) journalLines.Add(new JournalEntryLine { AccountId = item.Partner.DrawingsAccountId, DrCr = DrOrCrSide.Dr, Amount = item.Row.Drawings });
+            var partnerSide = drawingsBalance > 0m ? DrOrCrSide.Dr : DrOrCrSide.Cr;
+            var sourceSide = drawingsBalance > 0m ? DrOrCrSide.Cr : DrOrCrSide.Dr;
+            journalLines.Add(new JournalEntryLine { AccountId = drawingsAccount.Id, DrCr = sourceSide, Amount = Math.Abs(drawingsBalance) });
+            foreach (var item in created.Where(x => x.Row.Drawings != 0m)) journalLines.Add(new JournalEntryLine { AccountId = item.Partner.DrawingsAccountId, DrCr = partnerSide, Amount = item.Row.Drawings });
         }
         if (journalLines.Count > 0)
         {
             var journal = new JournalEntryHeader { CompanyId = setting.CompanyId, Date = date.Date, Memo = "Partner accounts set up", Posted = false, VoucherType = JournalVoucherTypes.AdjustmentEntries };
             foreach (var line in journalLines) journal.JournalEntryLines.Add(line);
             _financial.AddJournalEntry(journal);
-            _financial.UpdateJournalEntry(journal, posted: true);
+            using (_financial.AllowPartnerSetupPosting())
+                _financial.UpdateJournalEntry(journal, posted: true);
         }
         setting.PartnerAccountsFrom = date.Date;
         _settings.Update(setting);
@@ -106,8 +116,10 @@ public sealed class PartnerService
         var capitalCode = NextCode("301", 1, 49);
         var drawingsCode = NextCode("308", 51, 99);
         if (capitalCode == null || drawingsCode == null) throw new InvalidOperationException("This workspace already has the maximum of 49 partners.");
-        _accounts.Insert(new Account { CompanyId = Setting.CompanyId, AccountClassId = 3, AccountCode = capitalCode, AccountName = "Capital – " + name, DrOrCrSide = DrOrCrSide.Cr, Description = "Partner capital" });
-        _accounts.Insert(new Account { CompanyId = Setting.CompanyId, AccountClassId = 3, AccountCode = drawingsCode, AccountName = "Drawings – " + name, DrOrCrSide = DrOrCrSide.Dr, IsContraAccount = true, Description = "Partner drawings" });
+        var capitalParentId = _accounts.Table.FirstOrDefault(a => a.AccountCode == "30100")?.ParentAccountId;
+        var drawingsParentId = _accounts.Table.FirstOrDefault(a => a.AccountCode == "30800")?.ParentAccountId;
+        _accounts.Insert(new Account { CompanyId = Setting.CompanyId, AccountClassId = 3, ParentAccountId = capitalParentId, AccountCode = capitalCode, AccountName = "Capital – " + name, DrOrCrSide = DrOrCrSide.Cr, Description = "Partner capital" });
+        _accounts.Insert(new Account { CompanyId = Setting.CompanyId, AccountClassId = 3, ParentAccountId = drawingsParentId, AccountCode = drawingsCode, AccountName = "Drawings – " + name, DrOrCrSide = DrOrCrSide.Dr, IsContraAccount = true, Description = "Partner drawings" });
         return (capitalCode, drawingsCode);
     }
 

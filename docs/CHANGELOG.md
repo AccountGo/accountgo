@@ -28,7 +28,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - The unused audit settings API (`/api/Audit/Entity` and `/api/Audit/Attribute`) is gone. Its settings applied to every workspace on a server and never changed what the audit trail records.
 
 ### Self-hosting
-- A database migration adds partner and profit-sharing tables. It runs automatically when the API starts.
+- A database migration adds partner and profit-sharing tables. It runs automatically when the API starts. Partner account setup is disabled by default; enable `Features__PartnerAccountingSetupEnabled` only after partner owner movement support is available.
 - PostgreSQL deployments can run behind a transaction-mode connection pooler (such as Supabase's on port 6543), which lets more API instances share one database. The deployment guide lists the connection settings.
 
 ## [0.2.0] - 2026-11-13

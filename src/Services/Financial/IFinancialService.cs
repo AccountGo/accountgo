@@ -32,6 +32,8 @@ namespace Services.Financial
         /// (used by year-end close/reopen). Outside this scope the voucher type is rejected.
         /// </summary>
         IDisposable AllowClosingEntries();
+        /// <summary>Allows a partner setup reclassification journal to use the accounting policy operation that authorized setup.</summary>
+        IDisposable AllowPartnerSetupPosting();
         IDisposable AllowLinkedEntryReversal();
         IDisposable AllowLinkedEntryMirrorPosting();
         IDisposable AllowLinkedEntrySourcePosting();

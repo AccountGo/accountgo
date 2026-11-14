@@ -49,12 +49,15 @@ namespace AccountGo.BackendTests.Auditing
         private static readonly TimeSpan EventPollInterval = TimeSpan.FromMilliseconds(50);
 
         private readonly string _dbPath = Path.Combine(Path.GetTempPath(), "accountgo_audit_" + Guid.NewGuid().ToString("N") + ".db");
+        private readonly bool _partnerSetupEnabled;
         private HttpClient _client = null!;
 
         public WebApplicationFactory<Program> Factory { get; private set; } = null!;
         public CapturingEmailSender Emails { get; } = new();
         public CapturingLoggerProvider Logs { get; } = new();
         public EntitlementOverrides Entitlements { get; } = new();
+
+        public AuditTestHost(bool partnerSetupEnabled = true) => _partnerSetupEnabled = partnerSetupEnabled;
 
         public Task InitializeAsync()
         {
@@ -67,6 +70,7 @@ namespace AccountGo.BackendTests.Auditing
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
                 builder.UseSetting("SERVER_TIMING_ENABLED", "true");
+                builder.UseSetting("Features:PartnerAccountingSetupEnabled", _partnerSetupEnabled.ToString());
                 builder.UseSetting("AuditRetention:Enabled", "false");
                 builder.ConfigureLogging(logging => logging.AddProvider(Logs));
                 builder.ConfigureTestServices(services =>
@@ -186,13 +190,17 @@ namespace AccountGo.BackendTests.Auditing
             object? body = null,
             string? token = null,
             string? org = null,
-            bool scoped = true)
+            bool scoped = true,
+            IReadOnlyDictionary<string, string>? headers = null)
         {
             using var request = new HttpRequestMessage(method, path);
             if (!string.IsNullOrEmpty(token))
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             if (scoped)
                 request.Headers.Add("X-AccountGo-Org", org ?? "default-org");
+            if (headers != null)
+                foreach (var header in headers)
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             if (body != null)
                 request.Content = JsonContent.Create(body);
             return await _client.SendAsync(request);

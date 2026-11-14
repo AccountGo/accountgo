@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -13,6 +14,7 @@ using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Services.Financial;
 
@@ -27,9 +29,10 @@ public sealed class PartnersController : BaseController
     private readonly PartnerService _service;
     private readonly ITenantContext _tenant;
     private readonly IAccessAuthorizationService _authorization;
+    private readonly bool _setupEnabled;
 
-    public PartnersController(ApiDbContext db, PartnerService service, ITenantContext tenant, IAccessAuthorizationService authorization)
-    { _db = db; _service = service; _tenant = tenant; _authorization = authorization; }
+    public PartnersController(ApiDbContext db, PartnerService service, ITenantContext tenant, IAccessAuthorizationService authorization, IConfiguration configuration)
+    { _db = db; _service = service; _tenant = tenant; _authorization = authorization; _setupEnabled = configuration.GetValue<bool>("Features:PartnerAccountingSetupEnabled"); }
 
     private bool Authorize(string operation, string permission, out IActionResult? denied)
     {
@@ -47,19 +50,42 @@ public sealed class PartnersController : BaseController
         if (!Authorize(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied)) return denied!;
         var setting = _service.Setting;
         if (setting.EntityType != EntityType.Partnership) return BadRequest(new { message = "Partners are only available for partnerships." });
-        var partners = _service.Partners.OrderBy(p => p.Id).ToList().Select(p =>
+        var partnerRows = _db.Partners.OrderBy(p => p.Id).ToList();
+        var relevantAccountIds = partnerRows.SelectMany(p => new[] { p.CapitalAccountId, p.DrawingsAccountId }).ToHashSet();
+        var accounts = _db.Accounts.Where(a => relevantAccountIds.Contains(a.Id) || a.AccountCode == "30100" || a.AccountCode == "30800")
+            .ToDictionary(a => a.Id);
+        var through = asOf?.Date ?? DateTime.MaxValue;
+        var balanceAccountIds = relevantAccountIds.Concat(accounts.Values.Where(a => a.AccountCode is "30100" or "30800").Select(a => a.Id)).ToHashSet();
+        var ledgerLines = _db.GeneralLedgerLines
+            .Where(l => balanceAccountIds.Contains(l.AccountId) && l.GeneralLedgerHeader.Date <= through)
+            .Select(l => new { l.AccountId, l.DrCr, l.Amount })
+            .ToList();
+        var debitNet = ledgerLines.GroupBy(line => line.AccountId)
+            .ToDictionary(group => group.Key, group => group.Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount));
+        decimal BalanceFor(int accountId)
         {
-            var capital = _db.Accounts.First(a => a.Id == p.CapitalAccountId); var drawings = _db.Accounts.First(a => a.Id == p.DrawingsAccountId);
+            var debitBalance = debitNet.GetValueOrDefault(accountId);
+            return accounts.TryGetValue(accountId, out var account) && account.DrOrCrSide == DrOrCrSide.Cr ? -debitBalance : debitBalance;
+        }
+        var partners = partnerRows.Select(p =>
+        {
+            var capital = accounts[p.CapitalAccountId]; var drawings = accounts[p.DrawingsAccountId];
             return new { p.Id, p.Name, CapitalAccountCode = capital.AccountCode, CapitalAccountName = capital.AccountName, DrawingsAccountCode = drawings.AccountCode, DrawingsAccountName = drawings.AccountName,
-                CapitalBalance = _service.Balance(capital.Id, asOf?.Date ?? DateTime.MaxValue), DrawingsBalance = _service.Balance(drawings.Id, asOf?.Date ?? DateTime.MaxValue), Archived = p.ArchivedAt != null, RowVersion = Convert.ToBase64String(p.RowVersion) };
+                CapitalBalance = BalanceFor(capital.Id), DrawingsBalance = BalanceFor(drawings.Id), Archived = p.ArchivedAt != null, RowVersion = Convert.ToBase64String(p.RowVersion) };
         }).ToList();
         var openYearRows = _db.FinancialYears.Where(y => y.ClosedAt == null).OrderBy(y => y.StartDate).ToList();
-        var openYears = openYearRows.Select(y => new { y.FiscalYearCode, RowVersion = ShareVersion(y.Id), Shares = _db.PartnerShares.Where(s => s.FinancialYearId == y.Id).Select(s => new { s.PartnerId, s.Percent }).ToList() }).ToList();
-        var permanent = _db.Accounts.FirstOrDefault(a => a.AccountCode == "30100"); var distribution = _db.Accounts.FirstOrDefault(a => a.AccountCode == "30800");
-        var balanceDate = asOf?.Date ?? DateTime.MaxValue;
-        var capitalBalance = permanent == null ? 0m : _service.Balance(permanent.Id, balanceDate);
-        var drawingsBalance = distribution == null ? 0m : _service.Balance(distribution.Id, balanceDate);
-        return Ok(new { partnerAccountsFrom = setting.PartnerAccountsFrom, capitalBalance, drawingsBalance, partners, openYears });
+        var openYearIds = openYearRows.Select(year => year.Id).ToHashSet();
+        var openShares = _db.PartnerShares.Where(s => openYearIds.Contains(s.FinancialYearId)).OrderBy(s => s.PartnerId)
+            .Select(s => new { s.FinancialYearId, s.PartnerId, s.Percent }).ToList();
+        var openYears = openYearRows.Select(year =>
+        {
+            var yearShares = openShares.Where(share => share.FinancialYearId == year.Id).ToList();
+            return new { year.FiscalYearCode, RowVersion = ShareVersion(year.Id, yearShares.Select(share => (share.PartnerId, share.Percent))), Shares = yearShares.Select(share => new { share.PartnerId, share.Percent }).ToList() };
+        }).ToList();
+        var permanent = accounts.Values.FirstOrDefault(a => a.AccountCode == "30100"); var distribution = accounts.Values.FirstOrDefault(a => a.AccountCode == "30800");
+        var capitalBalance = permanent == null ? 0m : BalanceFor(permanent.Id);
+        var drawingsBalance = distribution == null ? 0m : BalanceFor(distribution.Id);
+        return Ok(new { partnerAccountsFrom = setting.PartnerAccountsFrom, setupEnabled = _setupEnabled, capitalBalance, drawingsBalance, partners, openYears });
     }
 
     public sealed record SetupRow(string Name, decimal Percent, decimal Capital, decimal Drawings);
@@ -69,6 +95,7 @@ public sealed class PartnersController : BaseController
     public IActionResult Setup([FromBody] SetupRequest request)
     {
         if (!Authorize(AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, SystemPermissions.FinancialsAccountsManage, out var denied)) return denied!;
+        if (!_setupEnabled) return NotFound();
         try { using var tx = WriteTransaction(); _service.Setup(request.Date, request.Partners.Select(p => (p.Name, p.Percent, p.Capital, p.Drawings)).ToArray(), GetUserNameFromRequestHeader() ?? "unknown"); tx.Commit(); return Ok(GetResult()); }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { return BadRequest(new { message = ex.Message }); }
     }
@@ -76,24 +103,32 @@ public sealed class PartnersController : BaseController
     public sealed record AddRequest(string Name, string FiscalYearCode, decimal Percent, ShareRequest[] Shares);
     [HttpPost]
     [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
-    public IActionResult Add([FromBody] AddRequest request)
+    public IActionResult Add([FromBody] AddRequest request, [FromHeader(Name = "If-Match")] string? rowVersion = null)
     {
         if (!Authorize(AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, SystemPermissions.FinancialsAccountsManage, out var denied)) return denied!;
+        if (request == null) return BadRequest(new { message = "Partner name is required and must be 100 characters or fewer." });
         var targetYear = _db.FinancialYears.FirstOrDefault(y => y.FiscalYearCode == request.FiscalYearCode);
         if (targetYear == null) return NotFound();
+        try { _service.ValidateName(request.Name ?? string.Empty); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
         try
         {
-            using var tx = WriteTransaction(); var setting = _service.Setting;
+            using var tx = WriteTransaction();
+            if (string.IsNullOrWhiteSpace(rowVersion) || !string.Equals(rowVersion.Trim('"'), ShareVersion(targetYear.Id), StringComparison.Ordinal))
+                return Conflict(new { message = "Someone else changed this. Reload and try again." });
+            var setting = _service.Setting;
             if (!setting.PartnerAccountsFrom.HasValue) throw new InvalidOperationException("Set up partner accounts first.");
             var year = targetYear;
-            var codes = _service.CreateAccounts(request.Name.Trim());
-            var partner = new Partner { CompanyId = setting.CompanyId, Name = request.Name.Trim(), CapitalAccountId = _db.Accounts.First(a => a.AccountCode == codes.CapitalCode).Id, DrawingsAccountId = _db.Accounts.First(a => a.AccountCode == codes.DrawingsCode).Id, CreatedAt = DateTime.UtcNow, CreatedBy = GetUserNameFromRequestHeader() ?? "unknown", RowVersion = Guid.NewGuid().ToByteArray() };
+            var partnerName = request.Name!.Trim();
+            var codes = _service.CreateAccounts(partnerName);
+            var partner = new Partner { CompanyId = setting.CompanyId, Name = partnerName, CapitalAccountId = _db.Accounts.First(a => a.AccountCode == codes.CapitalCode).Id, DrawingsAccountId = _db.Accounts.First(a => a.AccountCode == codes.DrawingsCode).Id, CreatedAt = DateTime.UtcNow, CreatedBy = GetUserNameFromRequestHeader() ?? "unknown", RowVersion = Guid.NewGuid().ToByteArray() };
             _db.Partners.Add(partner); _db.SaveChanges();
             var newShares = (request.Shares ?? Array.Empty<ShareRequest>()).Select(s => (PartnerId: s.PartnerId, Percent: s.Percent)).Append((PartnerId: partner.Id, Percent: request.Percent)).ToArray();
             _service.ValidateShares(year.Id, newShares); _db.PartnerShares.RemoveRange(_db.PartnerShares.Where(s => s.FinancialYearId == year.Id));
             _db.PartnerShares.AddRange(newShares.Select(s => new PartnerShare { CompanyId = setting.CompanyId, FinancialYearId = year.Id, PartnerId = s.PartnerId, Percent = s.Percent }));
             _db.SaveChanges(); tx.Commit(); return Ok(GetResult());
         }
+        catch (DbUpdateConcurrencyException) { return Conflict(new { message = "Someone else changed this. Reload and try again." }); }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { return BadRequest(new { message = ex.Message }); }
     }
 
@@ -117,9 +152,9 @@ public sealed class PartnersController : BaseController
     {
         if (!Authorize(AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, SystemPermissions.FinancialsAccountsManage, out var denied)) return denied!;
         var year = _db.FinancialYears.FirstOrDefault(y => y.FiscalYearCode == fiscalYearCode); if (year == null) return NotFound();
-        try { _service.ValidateShares(year.Id, request.Select(x => (x.PartnerId, x.Percent)).ToArray());
+        try { using var tx = WriteTransaction(); _service.ValidateShares(year.Id, request.Select(x => (x.PartnerId, x.Percent)).ToArray());
             if (!string.IsNullOrWhiteSpace(rowVersion) && !string.Equals(rowVersion.Trim('"'), ShareVersion(year.Id), StringComparison.Ordinal)) return Conflict(new { message = "Someone else changed this. Reload and try again." });
-            using var tx = WriteTransaction(); _db.PartnerShares.RemoveRange(_db.PartnerShares.Where(s => s.FinancialYearId == year.Id)); _db.PartnerShares.AddRange(request.Select(x => new PartnerShare { CompanyId = _tenant.RequireCompanyId(), FinancialYearId = year.Id, PartnerId = x.PartnerId, Percent = x.Percent })); _db.SaveChanges(); tx.Commit(); return Ok(GetResult()); }
+            _db.PartnerShares.RemoveRange(_db.PartnerShares.Where(s => s.FinancialYearId == year.Id)); _db.PartnerShares.AddRange(request.Select(x => new PartnerShare { CompanyId = _tenant.RequireCompanyId(), FinancialYearId = year.Id, PartnerId = x.PartnerId, Percent = x.Percent })); _db.SaveChanges(); tx.Commit(); return Ok(GetResult()); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); } catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
@@ -136,8 +171,14 @@ public sealed class PartnersController : BaseController
     private object GetResult() => Get() is OkObjectResult ok ? ok.Value! : new { };
     private string ShareVersion(int yearId)
     {
-        var canonical = yearId.ToString(CultureInfo.InvariantCulture) + ":" + string.Join(";", _db.PartnerShares.Where(s => s.FinancialYearId == yearId).OrderBy(s => s.PartnerId)
-            .AsEnumerable().Select(s => s.PartnerId.ToString(CultureInfo.InvariantCulture) + "=" + s.Percent.ToString("0.0000", CultureInfo.InvariantCulture)));
+        var shares = _db.PartnerShares.Where(s => s.FinancialYearId == yearId).OrderBy(s => s.PartnerId)
+            .Select(s => new { s.PartnerId, s.Percent }).ToList().Select(s => (s.PartnerId, s.Percent)).ToList();
+        return ShareVersion(yearId, shares);
+    }
+    private static string ShareVersion(int yearId, IEnumerable<(int PartnerId, decimal Percent)> shares)
+    {
+        var canonical = yearId.ToString(CultureInfo.InvariantCulture) + ":" + string.Join(";", shares.OrderBy(s => s.PartnerId)
+            .Select(s => s.PartnerId.ToString(CultureInfo.InvariantCulture) + "=" + s.Percent.ToString("0.0000", CultureInfo.InvariantCulture)));
         return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
     private Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction WriteTransaction() => _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable);

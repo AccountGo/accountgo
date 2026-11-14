@@ -9,6 +9,11 @@ export function percentageTotal(percentages: number[]): number {
   return Math.round(percentages.reduce((sum, value) => sum + Math.round(value * 10_000), 0)) / 10_000;
 }
 
+export function sharesForSubmission(shares: Array<{ partnerId: number; percent: number }>): Array<{ partnerId: number; percent: number }> {
+  return shares.filter(share => share.percent > 0);
+}
+
+
 export function splitAmount(amount: number, shares: Array<{ id: number; percent: number }>): number[] {
   const sign = amount < 0 ? -1 : 1;
   const cents = Math.round(Math.abs(amount) * 100);
@@ -32,11 +37,12 @@ export function splitPrefill(total: number, count: number): number[] {
 
 export function validatePartnerSetup(rows: PartnerSetupRow[], capitalBalance: number, drawingsBalance: number): string | null {
   if (rows.length < 2) return 'At least two partners are required.';
-  if (rows.some(row => !row.name.trim() || row.percent <= 0)) return 'Each partner needs a name and a positive share.';
+  if (rows.some(row => !row.name.trim() || row.percent <= 0 || Math.round(row.percent * 10_000) !== row.percent * 10_000)) return 'Each partner needs a name and a positive share with at most four decimal places.';
   if (percentageTotal(rows.map(row => row.percent)) !== 100) return 'Profit-sharing ratios must total 100%.';
+  if (rows.some(row => row.drawings < 0)) return 'Partner drawings amounts must be zero or positive.';
   if (Math.round(rows.reduce((sum, row) => sum + row.capital, 0) * 100) !== Math.round(capitalBalance * 100)
-      || Math.round(rows.reduce((sum, row) => sum + row.drawings, 0) * 100) !== Math.round(drawingsBalance * 100)) {
-    return `Partner capital must add up to ${capitalBalance.toFixed(2)} and drawings to ${drawingsBalance.toFixed(2)}.`;
+      || Math.round(rows.reduce((sum, row) => sum + row.drawings, 0) * 100) !== Math.round(Math.abs(drawingsBalance) * 100)) {
+    return `Partner capital must add up to ${capitalBalance.toFixed(2)} and drawings to ${Math.abs(drawingsBalance).toFixed(2)}.`;
   }
   return null;
 }
