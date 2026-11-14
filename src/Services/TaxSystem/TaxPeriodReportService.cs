@@ -15,6 +15,7 @@ using Core.Domain.Security;
 using Core.Domain.TaxSystem;
 using Core.Entitlements;
 using Core.Tenancy;
+using Services.Financial;
 
 namespace Services.TaxSystem
 {
@@ -31,7 +32,13 @@ namespace Services.TaxSystem
         private readonly IRepository<SalesInvoiceHeader> _salesInvoices;
         private readonly IRepository<PurchaseInvoiceHeader> _purchaseInvoices;
         private readonly IRepository<GeneralLedgerLine> _glLines;
+        private readonly IRepository<GeneralLedgerHeader> _glHeaders;
         private readonly IRepository<Account> _accounts;
+        private readonly IRepository<Customer> _customers;
+        private readonly IRepository<SalesReceiptHeader> _salesReceipts;
+        private readonly IRepository<CustomerAllocation> _customerAllocations;
+        private readonly IRepository<Vendor> _vendors;
+        private readonly IRepository<VendorPayment> _vendorPayments;
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
 
@@ -41,7 +48,13 @@ namespace Services.TaxSystem
             IRepository<SalesInvoiceHeader> salesInvoices,
             IRepository<PurchaseInvoiceHeader> purchaseInvoices,
             IRepository<GeneralLedgerLine> glLines,
+            IRepository<GeneralLedgerHeader> glHeaders,
             IRepository<Account> accounts,
+            IRepository<Customer> customers,
+            IRepository<SalesReceiptHeader> salesReceipts,
+            IRepository<CustomerAllocation> customerAllocations,
+            IRepository<Vendor> vendors,
+            IRepository<VendorPayment> vendorPayments,
             IEntitlementService entitlements,
             ITenantContext tenant)
         {
@@ -50,7 +63,13 @@ namespace Services.TaxSystem
             _salesInvoices = salesInvoices;
             _purchaseInvoices = purchaseInvoices;
             _glLines = glLines;
+            _glHeaders = glHeaders;
             _accounts = accounts;
+            _customers = customers;
+            _salesReceipts = salesReceipts;
+            _customerAllocations = customerAllocations;
+            _vendors = vendors;
+            _vendorPayments = vendorPayments;
             _entitlements = entitlements;
             _tenant = tenant;
         }
@@ -70,13 +89,6 @@ namespace Services.TaxSystem
 
             var setting = _settings.Table.FirstOrDefault() ?? new CompanySetting();
 
-            if (setting.AccountingBasis == AccountingBasis.Cash)
-            {
-                throw new TaxPeriodReportConflictException(
-                    "tax_cash_basis_pending",
-                    "Cash-basis tax reports are coming soon. Switch to accrual in Settings \u2192 Financial rules to see tax by invoice and bill date for now.");
-            }
-
             var endExclusive = endDate.AddDays(1);
             var cycleStart = TaxPeriodCalculator.EffectiveCycleStart(setting);
             var isWholePeriod = TaxPeriodCalculator.IsWholePeriod(startDate, endDate, setting.TaxPeriodFrequency, cycleStart);
@@ -88,6 +100,11 @@ namespace Services.TaxSystem
                 .Select(t => new TaxMeta(t.Id, t.TaxCode, t.TaxName, t.Rate, t.SalesAccountId, t.PurchasingAccountId))
                 .ToList();
             var taxById = taxCatalog.ToDictionary(t => t.Id);
+
+            if (setting.AccountingBasis == AccountingBasis.Cash)
+            {
+                return BuildCash(startDate, endDate, endExclusive, documentLimit, setting, isWholePeriod, periodLabel, taxCatalog, taxById);
+            }
 
             // 1. Sales invoices dated in range (posted/issued; exclude Draft, unposted Void, and unposted null-Status rows)
             var salesDocs = _salesInvoices.Table
@@ -323,6 +340,528 @@ namespace Services.TaxSystem
                 Warnings: new TaxPeriodWarnings(unpostedWarnings),
                 Ledger: ledger,
                 Lock: lockStatus);
+        }
+
+        private TaxPeriodReport BuildCash(
+            DateTime startDate,
+            DateTime endDate,
+            DateTime endExclusive,
+            int? documentLimit,
+            CompanySetting setting,
+            bool isWholePeriod,
+            string? periodLabel,
+            IReadOnlyList<TaxMeta> taxCatalog,
+            Dictionary<int, TaxMeta> taxById)
+        {
+            var recognitionInput = CashBasisRecognitionLoader.Load(
+                _accounts,
+                _glLines,
+                _taxes,
+                _salesInvoices,
+                _customers,
+                _salesReceipts,
+                _customerAllocations,
+                _purchaseInvoices,
+                _vendors,
+                _vendorPayments);
+            var allPostings = CashBasisRecognition.Recognize(recognitionInput);
+
+            var salesTaxAccountIds = taxCatalog
+                .Where(t => t.SalesAccountId.HasValue)
+                .Select(t => t.SalesAccountId!.Value)
+                .ToHashSet();
+            var purchasingTaxAccountIds = taxCatalog
+                .Where(t => t.PurchasingAccountId.HasValue)
+                .Select(t => t.PurchasingAccountId!.Value)
+                .ToHashSet();
+
+            var linesByHeader = recognitionInput.GlLines.ToLookup(l => l.GeneralLedgerHeaderId);
+
+            var outputAcc = new Dictionary<int, TaxRowAccumulator>();
+            var inputAcc = new Dictionary<int, TaxRowAccumulator>();
+            var allDocuments = new List<TaxPeriodDocumentRow>();
+
+            var invoiceSettlements = allPostings
+                .Where(p => p.Source == CashRecognitionSource.InvoiceSettlement && p.DocumentId.HasValue)
+                .GroupBy(p => p.DocumentId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var activeInvoiceIds = invoiceSettlements
+                .Where(kv => kv.Value.Any(p => p.Date.Date >= startDate && p.Date.Date <= endDate))
+                .Select(kv => kv.Key)
+                .ToList();
+
+            if (activeInvoiceIds.Count > 0)
+            {
+                var invMetas = _salesInvoices.Table
+                    .Where(h => activeInvoiceIds.Contains(h.Id))
+                    .Select(h => new CashDocMeta(
+                        h.Id,
+                        h.No ?? "",
+                        h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name : "",
+                        h.ShippingHandlingCharge,
+                        h.SalesInvoiceLines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.Amount, l.Discount, l.TaxAmount)).ToList()))
+                    .ToDictionary(h => h.Id);
+
+                var invoiceTotals = recognitionInput.Invoices
+                    .Where(i => activeInvoiceIds.Contains(i.Id))
+                    .ToDictionary(
+                        i => i.Id,
+                        i =>
+                        {
+                            var invLines = linesByHeader[i.GlHeaderId].ToList();
+                            var customerAr = recognitionInput.CustomerArAccounts.GetValueOrDefault(i.CustomerId);
+                            var ar = invLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr && customerAr.HasValue && l.AccountId == customerAr.Value)
+                                     ?? invLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr && recognitionInput.Accounts.TryGetValue(l.AccountId, out var a) && a.AccountClassId == (int)AccountClasses.Assets)
+                                     ?? invLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr);
+                            return ar?.Amount ?? 0m;
+                        });
+
+                foreach (var invId in activeInvoiceIds)
+                {
+                    if (!invMetas.TryGetValue(invId, out var meta))
+                        continue;
+
+                    var denom = invoiceTotals.GetValueOrDefault(invId);
+                    AccumulateCashDoc(
+                        side: "output",
+                        kind: "invoicePayment",
+                        meta: meta,
+                        docPostings: invoiceSettlements[invId],
+                        taxAccountIds: salesTaxAccountIds,
+                        isDebitPositive: false,
+                        docDenominator: denom,
+                        startDate: startDate,
+                        endDate: endDate,
+                        taxById: taxById,
+                        taxCatalog: taxCatalog,
+                        isSalesSide: true,
+                        acc: outputAcc,
+                        documents: allDocuments);
+                }
+            }
+
+            var billSettlements = allPostings
+                .Where(p => p.Source == CashRecognitionSource.BillSettlement && p.DocumentId.HasValue)
+                .GroupBy(p => p.DocumentId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var activeBillIds = billSettlements
+                .Where(kv => kv.Value.Any(p => p.Date.Date >= startDate && p.Date.Date <= endDate))
+                .Select(kv => kv.Key)
+                .ToList();
+
+            if (activeBillIds.Count > 0)
+            {
+                var billMetas = _purchaseInvoices.Table
+                    .Where(h => activeBillIds.Contains(h.Id))
+                    .Select(h => new CashDocMeta(
+                        h.Id,
+                        h.No ?? h.VendorInvoiceNo,
+                        h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name : "",
+                        0m,
+                        h.PurchaseInvoiceLines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.Amount, l.Discount, l.TaxAmount)).ToList()))
+                    .ToDictionary(h => h.Id);
+
+                bool IsCapitalizedAssetAccount(int accountId) =>
+                    recognitionInput.Accounts.TryGetValue(accountId, out var acc)
+                    && acc.AccountClassId == (int)AccountClasses.Assets
+                    && acc.AccountCode != "10160"
+                    && !purchasingTaxAccountIds.Contains(accountId);
+
+                var billDeferredTotals = recognitionInput.Bills
+                    .Where(b => activeBillIds.Contains(b.Id))
+                    .ToDictionary(
+                        b => b.Id,
+                        b =>
+                        {
+                            var bLines = linesByHeader[b.GlHeaderId].ToList();
+                            var vendorAp = b.VendorId.HasValue ? recognitionInput.VendorApAccounts.GetValueOrDefault(b.VendorId.Value) : null;
+                            var apLine = bLines.LastOrDefault(l => l.DrCr == DrOrCrSide.Cr && vendorAp.HasValue && l.AccountId == vendorAp.Value)
+                                         ?? bLines.Where(l => l.DrCr == DrOrCrSide.Cr && recognitionInput.Accounts.TryGetValue(l.AccountId, out var a) && a.AccountClassId == (int)AccountClasses.Liabilities)
+                                             .OrderByDescending(l => l.Amount).FirstOrDefault()
+                                         ?? bLines.Where(l => l.DrCr == DrOrCrSide.Cr).OrderByDescending(l => l.Amount).FirstOrDefault();
+                            if (apLine == null)
+                                return 0m;
+                            return bLines
+                                .Where(l => l.Id != apLine.Id && !IsCapitalizedAssetAccount(l.AccountId))
+                                .Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : -l.Amount);
+                        });
+
+                foreach (var billId in activeBillIds)
+                {
+                    if (!billMetas.TryGetValue(billId, out var meta))
+                        continue;
+
+                    var denom = billDeferredTotals.GetValueOrDefault(billId);
+                    AccumulateCashDoc(
+                        side: "input",
+                        kind: "billPayment",
+                        meta: meta,
+                        docPostings: billSettlements[billId],
+                        taxAccountIds: purchasingTaxAccountIds,
+                        isDebitPositive: true,
+                        docDenominator: denom,
+                        startDate: startDate,
+                        endDate: endDate,
+                        taxById: taxById,
+                        taxCatalog: taxCatalog,
+                        isSalesSide: false,
+                        acc: inputAcc,
+                        documents: allDocuments);
+                }
+            }
+
+            // Unposted issued documents in the period (listed in warnings only, never in cash figures).
+            var unpostedWarnings = new List<TaxPeriodUnpostedWarning>();
+            var unpostedSales = _salesInvoices.Table
+                .Where(h => h.Date >= startDate
+                            && h.Date < endExclusive
+                            && h.GeneralLedgerHeaderId == null
+                            && h.Status != null
+                            && h.Status != SalesInvoiceStatus.Draft
+                            && h.Status != SalesInvoiceStatus.Void)
+                .Select(h => new { h.Id, No = h.No ?? "", h.Date })
+                .ToList();
+            foreach (var u in unpostedSales)
+                unpostedWarnings.Add(new TaxPeriodUnpostedWarning("invoice", u.Id, u.No, FormatDate(u.Date)));
+
+            var unpostedBills = _purchaseInvoices.Table
+                .Where(h => h.Date >= startDate
+                            && h.Date < endExclusive
+                            && h.GeneralLedgerHeaderId == null
+                            && h.Status != null
+                            && h.Status != PurchaseInvoiceStatus.Draft
+                            && h.Status != PurchaseInvoiceStatus.Void)
+                .Select(h => new { h.Id, No = h.No ?? h.VendorInvoiceNo, h.Date })
+                .ToList();
+            foreach (var u in unpostedBills)
+                unpostedWarnings.Add(new TaxPeriodUnpostedWarning("bill", u.Id, u.No, FormatDate(u.Date)));
+
+            var outputSummary = BuildSideSummary(outputAcc, taxById);
+            var inputSummary = BuildSideSummary(inputAcc, taxById);
+            var netTax = Round2(outputSummary.Tax - inputSummary.Tax);
+
+            allDocuments.Sort((a, b) =>
+            {
+                var d = string.Compare(a.Date, b.Date, StringComparison.Ordinal);
+                if (d != 0) return d;
+                var s = string.Compare(a.Side, b.Side, StringComparison.Ordinal);
+                if (s != 0) return s;
+                return a.Id.CompareTo(b.Id);
+            });
+
+            unpostedWarnings.Sort((a, b) =>
+            {
+                var d = string.Compare(a.Date, b.Date, StringComparison.Ordinal);
+                if (d != 0) return d;
+                var k = string.Compare(a.Kind, b.Kind, StringComparison.Ordinal);
+                if (k != 0) return k;
+                return a.Id.CompareTo(b.Id);
+            });
+
+            var truncated = documentLimit.HasValue && allDocuments.Count > documentLimit.Value;
+            var returnedDocs = truncated
+                ? allDocuments.Take(documentLimit!.Value).ToList()
+                : allDocuments;
+
+            var hasFinancials = HasFinancialsModule();
+            var ledger = hasFinancials
+                ? BuildCashLedgerCheck(startDate, endDate, taxCatalog, allPostings)
+                : null;
+            var lockStatus = hasFinancials
+                ? BuildLockStatus(setting.BooksLockedThrough, startDate, endDate)
+                : null;
+
+            return new TaxPeriodReport(
+                From: FormatDate(startDate),
+                To: FormatDate(endDate),
+                Basis: "Cash",
+                Currency: setting.Currency ?? "USD",
+                IsWholePeriod: isWholePeriod,
+                PeriodLabel: periodLabel,
+                Output: outputSummary,
+                Input: inputSummary,
+                NetTax: netTax,
+                Documents: returnedDocs,
+                DocumentsTruncated: truncated,
+                Warnings: new TaxPeriodWarnings(unpostedWarnings),
+                Ledger: ledger,
+                Lock: lockStatus);
+        }
+
+        private static void AccumulateCashDoc(
+            string side,
+            string kind,
+            CashDocMeta meta,
+            IReadOnlyList<CashRecognizedPosting> docPostings,
+            HashSet<int> taxAccountIds,
+            bool isDebitPositive,
+            decimal docDenominator,
+            DateTime startDate,
+            DateTime endDate,
+            Dictionary<int, TaxMeta> taxById,
+            IReadOnlyList<TaxMeta> taxCatalog,
+            bool isSalesSide,
+            Dictionary<int, TaxRowAccumulator> acc,
+            List<TaxPeriodDocumentRow> documents)
+        {
+            var perTaxTaxable = new Dictionary<int, decimal>();
+            var perTaxLineTax = new Dictionary<int, decimal>();
+
+            foreach (var line in meta.Lines)
+            {
+                var subtotal = PurchaseInvoiceLine.SubtotalOf(line.Quantity, line.Amount, line.Discount);
+                var key = line.TaxId ?? NoTaxKey;
+                perTaxTaxable[key] = perTaxTaxable.GetValueOrDefault(key) + subtotal;
+                perTaxLineTax[key] = perTaxLineTax.GetValueOrDefault(key) + line.TaxAmount;
+            }
+
+            if (meta.ShippingCharge != 0m)
+            {
+                perTaxTaxable[NoTaxKey] = perTaxTaxable.GetValueOrDefault(NoTaxKey) + meta.ShippingCharge;
+            }
+
+            var taxDeltasByDateCode = new Dictionary<(DateTime Date, int TaxKey), decimal>();
+
+            foreach (var accountGroup in docPostings
+                         .Where(p => taxAccountIds.Contains(p.AccountId))
+                         .GroupBy(p => p.AccountId))
+            {
+                var accountId = accountGroup.Key;
+                var candidateCodes = perTaxLineTax.Keys
+                    .Where(k => k != NoTaxKey
+                                && taxById.TryGetValue(k, out var tm)
+                                && (isSalesSide ? tm.SalesAccountId == accountId : tm.PurchasingAccountId == accountId))
+                    .OrderBy(k => k)
+                    .ToList();
+
+                if (candidateCodes.Count == 0)
+                {
+                    var fallbackTax = taxCatalog.FirstOrDefault(t =>
+                        isSalesSide ? t.SalesAccountId == accountId : t.PurchasingAccountId == accountId);
+                    candidateCodes.Add(fallbackTax?.Id ?? NoTaxKey);
+                }
+
+                var codeWeights = candidateCodes.Select(c => perTaxLineTax.GetValueOrDefault(c)).ToList();
+                var totalWeight = codeWeights.Sum();
+                var prevCumByCode = new decimal[candidateCodes.Count];
+                var cumulativeAccountTax = 0m;
+
+                foreach (var p in accountGroup)
+                {
+                    var signed = SignedAmount(p.DrCr, p.Amount, isDebitPositive);
+                    cumulativeAccountTax += signed;
+                    var allocatedBeforeLast = 0m;
+                    var inPeriod = p.Date.Date >= startDate && p.Date.Date <= endDate;
+
+                    for (var i = 0; i < candidateCodes.Count; i++)
+                    {
+                        decimal delta;
+                        if (i < candidateCodes.Count - 1)
+                        {
+                            var targetCum = totalWeight != 0m
+                                ? Round2(cumulativeAccountTax * codeWeights[i] / totalWeight)
+                                : Round2(cumulativeAccountTax / candidateCodes.Count);
+                            delta = targetCum - prevCumByCode[i];
+                            prevCumByCode[i] = targetCum;
+                            allocatedBeforeLast += delta;
+                        }
+                        else
+                        {
+                            delta = signed - allocatedBeforeLast;
+                            prevCumByCode[i] += delta;
+                        }
+
+                        if (inPeriod && delta != 0m)
+                        {
+                            var key = (p.Date.Date, candidateCodes[i]);
+                            taxDeltasByDateCode[key] = taxDeltasByDateCode.GetValueOrDefault(key) + delta;
+                        }
+                    }
+                }
+            }
+
+            var taxableKeys = perTaxTaxable.Keys.OrderBy(k => k == NoTaxKey ? int.MaxValue : k).ToList();
+            var prevCumTaxable = new Dictionary<int, decimal>();
+            var cumulativeSettled = 0m;
+            var taxableDeltasByDateCode = new Dictionary<(DateTime Date, int TaxKey), decimal>();
+
+            foreach (var dateGroup in docPostings.GroupBy(p => p.Date.Date).OrderBy(g => g.Key))
+            {
+                var eventSettled = dateGroup.Sum(p => SignedAmount(p.DrCr, p.Amount, isDebitPositive));
+                cumulativeSettled += eventSettled;
+                var inPeriod = dateGroup.Key >= startDate && dateGroup.Key <= endDate;
+
+                if (docDenominator == 0m)
+                    continue;
+
+                foreach (var k in taxableKeys)
+                {
+                    var targetCum = Round2(perTaxTaxable[k] * cumulativeSettled / docDenominator);
+                    var delta = targetCum - prevCumTaxable.GetValueOrDefault(k);
+                    prevCumTaxable[k] = targetCum;
+
+                    if (inPeriod && delta != 0m)
+                    {
+                        var key = (dateGroup.Key, k);
+                        taxableDeltasByDateCode[key] = taxableDeltasByDateCode.GetValueOrDefault(key) + delta;
+                    }
+                }
+            }
+
+            var allPairs = taxDeltasByDateCode.Keys
+                .Union(taxableDeltasByDateCode.Keys)
+                .OrderBy(k => k.Date)
+                .ThenBy(k => k.TaxKey == NoTaxKey ? int.MaxValue : k.TaxKey);
+
+            foreach (var pair in allPairs)
+            {
+                var taxable = Round2(taxableDeltasByDateCode.GetValueOrDefault(pair));
+                var tax = Round2(taxDeltasByDateCode.GetValueOrDefault(pair));
+                if (taxable == 0m && tax == 0m)
+                    continue;
+
+                if (!acc.TryGetValue(pair.TaxKey, out var row))
+                {
+                    row = new TaxRowAccumulator();
+                    acc[pair.TaxKey] = row;
+                }
+
+                row.Taxable += taxable;
+                row.Tax += tax;
+                row.DocumentCount++;
+
+                documents.Add(new TaxPeriodDocumentRow(
+                    Side: side,
+                    Kind: kind,
+                    Id: meta.Id,
+                    No: meta.No,
+                    Date: FormatDate(pair.Date),
+                    Party: meta.PartyName,
+                    TaxId: pair.TaxKey == NoTaxKey ? null : pair.TaxKey,
+                    Taxable: taxable,
+                    Tax: tax,
+                    Posted: true));
+            }
+        }
+
+        private TaxPeriodLedgerCheck BuildCashLedgerCheck(
+            DateTime startDate,
+            DateTime endDate,
+            IReadOnlyList<TaxMeta> taxCatalog,
+            IReadOnlyList<CashRecognizedPosting> allPostings)
+        {
+            var accountIds = taxCatalog
+                .SelectMany(t => new[] { t.SalesAccountId, t.PurchasingAccountId })
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+
+            if (accountIds.Count == 0)
+                return new TaxPeriodLedgerCheck(Array.Empty<TaxPeriodLedgerAccount>());
+
+            var accounts = _accounts.Table
+                .Where(a => accountIds.Contains(a.Id))
+                .Select(a => new
+                {
+                    a.Id,
+                    a.AccountCode,
+                    a.AccountName,
+                    a.AccountClassId
+                })
+                .OrderBy(a => a.AccountCode)
+                .ToList();
+
+            var periodPostings = allPostings
+                .Where(p => accountIds.Contains(p.AccountId) && p.Date.Date >= startDate && p.Date.Date <= endDate)
+                .ToList();
+
+            var ledgerHeaderIds = periodPostings
+                .Where(p => p.Source == CashRecognitionSource.Ledger && p.GlHeaderId.HasValue)
+                .Select(p => p.GlHeaderId!.Value)
+                .Distinct()
+                .ToList();
+
+            var headerMeta = ledgerHeaderIds.Count > 0
+                ? _glHeaders.Table
+                    .Where(h => ledgerHeaderIds.Contains(h.Id))
+                    .Select(h => new GlHeaderMeta(h.Id, h.Date, h.Description ?? "", h.DocumentType))
+                    .ToDictionary(h => h.Id)
+                : new Dictionary<int, GlHeaderMeta>();
+
+            var postingsByAccount = periodPostings.GroupBy(p => p.AccountId).ToDictionary(g => g.Key, g => g.ToList());
+            var result = new List<TaxPeriodLedgerAccount>(accounts.Count);
+
+            foreach (var acc in accounts)
+            {
+                var isDebitPositive = acc.AccountClassId == (int)AccountClasses.Assets
+                                      || acc.AccountClassId == (int)AccountClasses.Expense;
+                var positiveSide = isDebitPositive ? "debit" : "credit";
+
+                decimal movement = 0m;
+                decimal fromDocuments = 0m;
+                var otherByHeader = new Dictionary<int, decimal>();
+
+                if (postingsByAccount.TryGetValue(acc.Id, out var accPostings))
+                {
+                    foreach (var p in accPostings)
+                    {
+                        var signed = SignedAmount(p.DrCr, p.Amount, isDebitPositive);
+                        movement += signed;
+
+                        if (p.Source == CashRecognitionSource.InvoiceSettlement || p.Source == CashRecognitionSource.BillSettlement)
+                        {
+                            fromDocuments += signed;
+                        }
+                        else if (p.GlHeaderId.HasValue)
+                        {
+                            otherByHeader[p.GlHeaderId.Value] = otherByHeader.GetValueOrDefault(p.GlHeaderId.Value) + signed;
+                        }
+                    }
+                }
+
+                movement = Round2(movement);
+                fromDocuments = Round2(fromDocuments);
+                var other = Round2(movement - fromDocuments);
+
+                var entries = otherByHeader
+                    .Select(kv =>
+                    {
+                        headerMeta.TryGetValue(kv.Key, out var h);
+                        return new
+                        {
+                            GlHeaderId = kv.Key,
+                            Date = h?.Date ?? startDate,
+                            Description = h?.Description ?? "",
+                            DocumentType = h?.DocumentType.ToString() ?? "",
+                            Amount = Round2(kv.Value)
+                        };
+                    })
+                    .OrderBy(e => e.Date)
+                    .ThenBy(e => e.GlHeaderId)
+                    .Take(MaxLedgerOtherEntries)
+                    .Select(e => new TaxPeriodLedgerOtherEntry(
+                        GlHeaderId: e.GlHeaderId,
+                        Date: FormatDate(e.Date),
+                        Description: e.Description,
+                        DocumentType: e.DocumentType,
+                        Amount: e.Amount))
+                    .ToList();
+
+                result.Add(new TaxPeriodLedgerAccount(
+                    AccountId: acc.Id,
+                    Code: acc.AccountCode ?? "",
+                    Name: acc.AccountName ?? "",
+                    PositiveSide: positiveSide,
+                    Movement: movement,
+                    FromDocuments: fromDocuments,
+                    Other: other,
+                    Entries: entries));
+            }
+
+            return new TaxPeriodLedgerCheck(result);
         }
 
         public IReadOnlyList<TaxPeriodSummaryItem> GetRecentPeriods(int count)
@@ -681,6 +1220,10 @@ namespace Services.TaxSystem
 
         private static decimal Round2(decimal value) =>
             Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+        private sealed record GlHeaderMeta(int Id, DateTime Date, string Description, DocumentTypes DocumentType);
+
+        private sealed record CashDocMeta(int Id, string No, string PartyName, decimal ShippingCharge, IReadOnlyList<LineProjection> Lines);
 
         private sealed record LineProjection(int? TaxId, decimal Quantity, decimal Amount, decimal? Discount, decimal TaxAmount);
 

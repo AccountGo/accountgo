@@ -9,6 +9,7 @@ const {
   buildTaxReportCsv,
   canShowTaxNav,
   createLatestRequestGuard,
+  documentKindLabel,
   isValidTaxDateRange,
 } = await server.ssrLoadModule('/src/lib/taxReport.ts');
 
@@ -145,4 +146,30 @@ test('createLatestRequestGuard ignores stale responses from an earlier request',
   if (guard.isCurrent(firstId, firstKey)) applied = firstKey;
 
   assert.equal(applied, secondKey);
+});
+
+test('buildTaxReportCsv labels Cash basis by payment date and documentKindLabel formats payment kinds', () => {
+  const cashReport = {
+    from: '2026-08-01',
+    to: '2026-10-31',
+    basis: 'Cash',
+    currency: 'PHP',
+    isWholePeriod: true,
+    periodLabel: 'Aug\u2013Oct 2026',
+    output: { rows: [], taxable: 0, tax: 0 },
+    input: { rows: [], taxable: 0, tax: 0 },
+    netTax: 0,
+    documents: [],
+    documentsTruncated: false,
+    warnings: { unposted: [] },
+    ledger: null,
+    lock: null,
+  };
+
+  const csv = buildTaxReportCsv(cashReport, 'Acme Corp', '2026-11-14T15:00:00.000Z');
+  assert.match(csv, /"Basis","Cash \(by payment date\)"/);
+  assert.equal(documentKindLabel('invoicePayment'), 'Payment received');
+  assert.equal(documentKindLabel('billPayment'), 'Payment made');
+  assert.equal(documentKindLabel('invoiceVoid'), 'Void');
+  assert.equal(documentKindLabel('invoice'), null);
 });

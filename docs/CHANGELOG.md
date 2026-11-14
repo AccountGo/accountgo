@@ -13,7 +13,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
-- Tax page: see output tax, input tax and the net payable for each monthly or quarterly tax period, by tax code, with the source invoices and bills and a CSV export. Tax periods are set in Settings → Taxes and don't have to match your fiscal year.
+- Tax page: see output tax, input tax and the net payable for each monthly or quarterly tax period, by tax code, with the source invoices and bills and a CSV export. Tax periods are set in Settings → Taxes and don't have to match your fiscal year. Cash-basis workspaces see tax when invoices and bills are paid.
 - Reports now include a statement of changes in equity: opening balance, profit, contributions and drawings (or shares issued and dividends), prior-period adjustments and closing balance, checked against the balance sheet, with a comparison period.
 - You can undo an owner drawing or contribution from the matched statement line.
 - Bank statement lines that move money between you and your business can be recorded as an owner drawing or owner contribution wherever statement import is available, so they no longer count as expenses or income. Partnerships use partner wording.

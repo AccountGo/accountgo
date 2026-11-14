@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronRight,
   FileDown,
-  Info,
   Loader2,
   Lock,
 } from 'lucide-react';
@@ -16,6 +15,7 @@ import { DEFAULT_CURRENCY } from '../lib/currency';
 import {
   buildTaxReportCsv,
   createLatestRequestGuard,
+  documentKindLabel,
   isValidTaxDateRange,
   type TaxPeriodItem,
   type TaxPeriodReport,
@@ -44,7 +44,6 @@ export const Tax: React.FC = () => {
   const [loadingPeriods, setLoadingPeriods] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [cashBasisNotice, setCashBasisNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [docsOpen, setDocsOpen] = useState(false);
@@ -113,25 +112,12 @@ export const Tax: React.FC = () => {
 
       setLoadingReport(true);
       setError(null);
-      setCashBasisNotice(null);
       try {
         const res = await authFetch(
           `/api/tax/report?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
           { signal: controller.signal },
         );
         if (!requestGuardRef.current.isCurrent(requestId, rangeKey)) return;
-        if (res.status === 409) {
-          const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
-          if (!requestGuardRef.current.isCurrent(requestId, rangeKey)) return;
-          if (body?.code === 'tax_cash_basis_pending') {
-            setReport(null);
-            setCashBasisNotice(
-              body.message ||
-                'Cash-basis tax reports are coming soon. Switch to accrual in Settings → Financial rules to see tax by invoice and bill date for now.',
-            );
-            return;
-          }
-        }
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { message?: string; detail?: string } | null;
           throw new Error(body?.message || body?.detail || 'Tax report could not be loaded.');
@@ -210,7 +196,9 @@ export const Tax: React.FC = () => {
 
   const docLink = (kind: string, id: number) => {
     if (!orgSlug) return '#';
-    if (kind === 'invoice' || kind === 'invoiceVoid') return `/org/${orgSlug}/sales/${id}`;
+    if (kind === 'invoice' || kind === 'invoiceVoid' || kind === 'invoicePayment') {
+      return `/org/${orgSlug}/sales/${id}`;
+    }
     return `/org/${orgSlug}/purchases/${id}`;
   };
 
@@ -316,17 +304,6 @@ export const Tax: React.FC = () => {
         )}
       </div>
 
-      {/* Cash-basis notice */}
-      {cashBasisNotice && (
-        <div
-          role="status"
-          className="flex items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-50/70 p-4 text-sm text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
-        >
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{cashBasisNotice}</p>
-        </div>
-      )}
-
       {/* Error card */}
       {error && (
         <div
@@ -389,7 +366,11 @@ export const Tax: React.FC = () => {
           </div>
 
           <div className="space-y-1 text-xs text-[var(--text-muted)]">
-            <p>Accrual basis: by invoice and bill date</p>
+            <p>
+              {report.basis === 'Cash'
+                ? 'Cash basis: by payment date (tax counts when an invoice or bill is paid)'
+                : 'Accrual basis: by invoice and bill date'}
+            </p>
             <p>
               A working summary of tax on your invoices and bills, not a tax return. Check it
               against your tax authority&apos;s form.
@@ -415,8 +396,9 @@ export const Tax: React.FC = () => {
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="space-y-2">
                   <p>
-                    {report.warnings.unposted.length} issued documents aren&apos;t posted to the
-                    ledger. They are included here, but the ledger check below will differ.
+                    {report.basis === 'Cash'
+                      ? `${report.warnings.unposted.length} issued documents aren't posted to the ledger, so they can't be counted on cash basis. Post them to include their tax when paid.`
+                      : `${report.warnings.unposted.length} issued documents aren't posted to the ledger. They are included here, but the ledger check below will differ.`}
                   </p>
                   <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                     {report.warnings.unposted.map((u) => (
@@ -483,6 +465,7 @@ export const Tax: React.FC = () => {
                       <tbody className="divide-y divide-[var(--border-subtle)]">
                         {report.documents.map((doc, i) => {
                           const isVoid = doc.kind === 'invoiceVoid' || doc.kind === 'billVoid';
+                          const kindLabel = documentKindLabel(doc.kind);
                           return (
                             <tr key={`${doc.kind}-${doc.id}-${doc.taxId ?? 'none'}-${i}`}>
                               <td className="whitespace-nowrap px-4 py-2 text-[var(--text-muted)]">
@@ -495,9 +478,15 @@ export const Tax: React.FC = () => {
                                 >
                                   {doc.no || `#${doc.id}`}
                                 </Link>
-                                {isVoid && (
-                                  <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-xs font-medium text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">
-                                    Void
+                                {kindLabel && (
+                                  <span
+                                    className={`ml-2 rounded px-1.5 py-0.5 text-xs font-medium ${
+                                      isVoid
+                                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200'
+                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                                    }`}
+                                  >
+                                    {kindLabel}
                                   </span>
                                 )}
                               </td>
