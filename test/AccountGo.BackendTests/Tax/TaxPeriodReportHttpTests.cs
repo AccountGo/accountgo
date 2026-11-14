@@ -854,6 +854,28 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task OrganizationsCurrent_UsesTaxSubquery_RespectsTenantFilter()
+    {
+        // Primary workspace (_companyId) has VAT12 (12% tax) -> usesTax = true.
+        var primaryCurrent = await OkJson(await _host.Send(HttpMethod.Get, "/api/organizations/current", null, _owner.Token, Org));
+        Assert.True(primaryCurrent.GetProperty("usesTax").GetBoolean());
+
+        // Second workspace has TaxRegime.None and no taxes -> usesTax must stay false (tenant filter applies inside subquery).
+        const string noTaxOrg = "tax-period-no-tax";
+        var secondCompanyId = await _host.CreateWorkspace(_owner.Token, "No Tax Co", noTaxOrg);
+        using (var scope = _host.Factory.Services.CreateScope())
+        using (var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(secondCompanyId, noTaxOrg, CompanyMemberRole.Owner))
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.CompanySettings.Single().TaxRegime = TaxRegime.None;
+            db.SaveChanges();
+        }
+
+        var secondaryCurrent = await OkJson(await _host.Send(HttpMethod.Get, "/api/organizations/current", null, _owner.Token, noTaxOrg));
+        Assert.False(secondaryCurrent.GetProperty("usesTax").GetBoolean());
+    }
+
+    [Fact]
     public async Task Access_MissingModules_Returns403()
     {
         var dbPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"accountgo_taxmod_{Guid.NewGuid():N}.db");
