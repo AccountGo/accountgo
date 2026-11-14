@@ -78,6 +78,8 @@ namespace Core.Authorization
         // --- Tax & Business Reference Configuration ---
         public const string TaxSettingsView = "admin.taxes.view";
         public const string AdminTaxesManage = SystemPermissions.AdminTaxesManage;
+        public const string TaxReportsView = "tax.reports.view";
+        public const string TaxPeriodsManage = "tax.periods.manage";
         public const string AdminMembersManage = SystemPermissions.AdminMembersManage;
         public const string AdminRolesManage = SystemPermissions.AdminRolesManage;
         public const string AdminSubscriptionManage = SystemPermissions.AdminSubscriptionManage;
@@ -500,6 +502,18 @@ namespace Core.Authorization
                     "POL-ADM-TAX-MANAGE",
                     permissionsAll: new[] { SystemPermissions.AdminTaxesManage },
                     description: "Create, update, or delete tax rates, tax groups, and item tax groups."),
+                Functional(
+                    TaxReportsView,
+                    "POL-TAX-REPORTS-VIEW",
+                    permissionsAll: new[] { SystemPermissions.ReportsView },
+                    modulesAny: new[] { SystemModules.Sales, SystemModules.Purchases, SystemModules.Financials, SystemModules.Reports },
+                    description: "View tax-period reports and period lists."),
+                Functional(
+                    TaxPeriodsManage,
+                    "POL-TAX-PERIODS-MANAGE",
+                    permissionsAll: new[] { SystemPermissions.AdminTaxesManage },
+                    modulesAny: new[] { SystemModules.Sales, SystemModules.Purchases, SystemModules.Financials, SystemModules.Reports },
+                    description: "Configure tax period frequency and quarter cycle."),
                 Functional(
                     AdminMembersManage,
                     "POL-ADM-MEM-MANAGE",

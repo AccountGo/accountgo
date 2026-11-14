@@ -1,0 +1,709 @@
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading.Tasks;
+using AccountGo.BackendTests.Auditing;
+using Api.Data;
+using Core.Domain;
+using Core.Domain.Financials;
+using Core.Domain.Items;
+using Core.Domain.Purchases;
+using Core.Domain.Sales;
+using Core.Domain.TaxSystem;
+using Core.Tenancy;
+using Dto.Banking;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace AccountGo.BackendTests.TaxSystem;
+
+[Collection("WorkspaceSetupHttp")]
+public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
+{
+    private readonly AuditTestHost _host = new();
+    private AuditTestHost.UserSession _owner = null!;
+    private int _companyId;
+    private const string Org = "tax-period-report";
+
+    private int _vat12Id;
+    private int _red5Id;
+    private int _customerId;
+    private int _vendorId;
+    private int _itemId;
+    private int _measurementId;
+    private int _expenseAccountId;
+    private int _salesTaxAccountId;
+    private int _purchasingTaxAccountId;
+
+    public async Task InitializeAsync()
+    {
+        await _host.InitializeAsync();
+        _owner = await _host.CreateUser("tax-owner@example.test");
+        _companyId = await _host.CreateWorkspace(_owner.Token, "Tax Period Co", Org);
+        await _host.SetFunctionalRoles(_companyId, _owner.Id, "Accountant");
+
+        WithDb(db =>
+        {
+            var setting = db.CompanySettings.Single();
+            setting.BooksStartDate = new DateTime(2025, 1, 1);
+            setting.AccountingBasis = AccountingBasis.Accrual;
+            setting.TaxRegime = TaxRegime.VatGst;
+            setting.FiscalYearPattern = FiscalYearPattern.Calendar;
+
+            foreach (var year in new[] { 2025, 2026, 2027 })
+            {
+                if (db.FinancialYears.Any(y => y.StartDate.Year == year)) continue;
+                db.FinancialYears.Add(new FinancialYear
+                {
+                    CompanyId = _companyId,
+                    FiscalYearCode = year.ToString(CultureInfo.InvariantCulture),
+                    FiscalYearName = year.ToString(CultureInfo.InvariantCulture),
+                    StartDate = new DateTime(year, 1, 1),
+                    EndDate = new DateTime(year, 12, 31),
+                    IsActive = true
+                });
+            }
+
+            var salesTaxAcc = db.Accounts.Single(a => a.AccountCode == "20300");
+            var purchaseTaxAcc = db.Accounts.Single(a => a.AccountCode == "10160");
+            _salesTaxAccountId = salesTaxAcc.Id;
+            _purchasingTaxAccountId = purchaseTaxAcc.Id;
+
+            var vat12 = new Core.Domain.TaxSystem.Tax
+            {
+                CompanyId = _companyId,
+                TaxCode = "VAT12",
+                TaxName = "VAT 12%",
+                Rate = 12m,
+                IsActive = true,
+                SalesAccountId = salesTaxAcc.Id,
+                PurchasingAccountId = purchaseTaxAcc.Id
+            };
+            var red5 = new Core.Domain.TaxSystem.Tax
+            {
+                CompanyId = _companyId,
+                TaxCode = "RED5",
+                TaxName = "Reduced 5%",
+                Rate = 5m,
+                IsActive = true,
+                SalesAccountId = salesTaxAcc.Id,
+                PurchasingAccountId = purchaseTaxAcc.Id
+            };
+            db.Taxes.AddRange(vat12, red5);
+
+            var salesAcc = db.Accounts.Single(a => a.AccountCode == "40100");
+            var arAcc = db.Accounts.Single(a => a.AccountCode == "10120");
+            var advAcc = db.Accounts.Single(a => a.AccountCode == "20120");
+            var apAcc = db.Accounts.Single(a => a.AccountCode == "20110");
+            var expAcc = db.Accounts.First(a =>
+                a.AccountClassId == (int)AccountClasses.Expense
+                && a.ParentAccountId != null
+                && !a.IsContraAccount
+                && !a.IsCash
+                && !db.Accounts.Any(c => c.ParentAccountId == a.Id && c.CompanyId == _companyId));
+            _expenseAccountId = expAcc.Id;
+
+            var glSetting = db.GeneralLedgerSettings.First();
+            glSetting.ShippingChargeAccountId ??= salesAcc.Id;
+            glSetting.PermanentAccountId ??= db.Accounts.Single(a => a.AccountCode == "30200").Id;
+
+            var meas = db.Measurements.First();
+            _measurementId = meas.Id;
+
+            var cat = new ItemCategory
+            {
+                CompanyId = _companyId,
+                Name = "Tax test services",
+                ItemType = ItemTypes.Service,
+                MeasurementId = meas.Id,
+                SalesAccountId = salesAcc.Id
+            };
+            var item = new Item
+            {
+                CompanyId = _companyId,
+                No = "TAX-SVC",
+                Code = "TAX-SVC",
+                Description = "Tax service",
+                Price = 1000m,
+                ItemCategory = cat,
+                SmallestMeasurementId = meas.Id,
+                SalesAccount = salesAcc
+            };
+            var customer = new Customer
+            {
+                CompanyId = _companyId,
+                No = "TAX-CUST",
+                Party = new Party { CompanyId = _companyId, Name = "Tax Customer", PartyType = PartyTypes.Customer },
+                PrimaryContact = new Contact
+                {
+                    CompanyId = _companyId,
+                    FirstName = "Tax",
+                    LastName = "Customer",
+                    Party = new Party { CompanyId = _companyId, Name = "Tax Contact", PartyType = PartyTypes.Contact }
+                },
+                AccountsReceivableAccount = arAcc,
+                SalesAccount = salesAcc,
+                CustomerAdvancesAccount = advAcc
+            };
+            var vendor = new Vendor
+            {
+                CompanyId = _companyId,
+                No = "TAX-VEND",
+                Party = new Party { CompanyId = _companyId, Name = "Tax Vendor", PartyType = PartyTypes.Vendor },
+                PrimaryContact = new Contact
+                {
+                    CompanyId = _companyId,
+                    FirstName = "Tax",
+                    LastName = "Vendor",
+                    Party = new Party { CompanyId = _companyId, Name = "Vendor Contact", PartyType = PartyTypes.Contact }
+                },
+                AccountsPayableAccount = apAcc
+            };
+
+            db.Items.Add(item);
+            db.Customers.Add(customer);
+            db.Vendors.Add(vendor);
+            db.SaveChanges();
+
+            _vat12Id = vat12.Id;
+            _red5Id = red5.Id;
+            _itemId = item.Id;
+            _customerId = customer.Id;
+            _vendorId = vendor.Id;
+        });
+    }
+
+    public Task DisposeAsync() => _host.DisposeAsync();
+
+    private void WithDb(Action<ApiDbContext> action)
+    {
+        using var scope = _host.Factory.Services.CreateScope();
+        using var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, Org, CompanyMemberRole.Owner);
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        action(db);
+        db.SaveChanges();
+    }
+
+    private Task<HttpResponseMessage> GetReport(string from, string to, string? token = null, string? org = null) =>
+        _host.Send(HttpMethod.Get, $"/api/tax/report?from={from}&to={to}", null, token ?? _owner.Token, org ?? Org);
+
+    private static async Task<JsonElement> OkJson(HttpResponseMessage response)
+    {
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        return await AuditTestHost.Json(response);
+    }
+
+    private async Task<int> CreatePostedInvoice(
+        DateTime date,
+        params (int? TaxId, decimal Amount, decimal TaxAmount)[] lines)
+        => await CreatePostedInvoiceWithShipping(date, 0m, lines);
+
+    private async Task<int> CreatePostedInvoiceWithShipping(
+        DateTime date,
+        decimal shipping,
+        params (int? TaxId, decimal Amount, decimal TaxAmount)[] lines)
+    {
+        var dto = new Dto.Sales.SalesInvoice
+        {
+            CustomerId = _customerId,
+            InvoiceDate = date,
+            Status = "Open",
+            ShippingHandlingCharge = shipping,
+            SalesInvoiceLines = lines.Select(l => new Dto.Sales.SalesInvoiceLine
+            {
+                ItemId = _itemId,
+                MeasurementId = _measurementId,
+                Quantity = 1m,
+                Amount = l.Amount,
+                TaxId = l.TaxId,
+                TaxAmount = l.TaxAmount
+            }).ToList()
+        };
+        var res = await _host.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto, _owner.Token, Org);
+        var json = await OkJson(res);
+        return json.GetProperty("id").GetInt32();
+    }
+
+    private async Task<int> CreatePostedBill(
+        DateTime date,
+        params (int? TaxId, decimal Amount, decimal TaxAmount)[] lines)
+    {
+        var bill = new PurchaseInvoiceHeader
+        {
+            CompanyId = _companyId,
+            VendorId = _vendorId,
+            Date = date,
+            VendorInvoiceNo = "V-" + Guid.NewGuid().ToString("N")[..6],
+            Status = PurchaseInvoiceStatus.Open,
+            PurchaseInvoiceLines = lines.Select(l => new PurchaseInvoiceLine
+            {
+                CompanyId = _companyId,
+                ItemId = _itemId,
+                AccountId = _expenseAccountId,
+                Quantity = 1m,
+                Amount = l.Amount,
+                TaxId = l.TaxId,
+                TaxAmount = l.TaxAmount
+            }).ToList()
+        };
+
+        var gl = new GeneralLedgerHeader
+        {
+            CompanyId = _companyId,
+            Date = date,
+            DocumentType = DocumentTypes.PurchaseInvoice,
+            Description = "Test bill " + bill.VendorInvoiceNo
+        };
+        var apAccId = 0;
+        WithDb(db =>
+        {
+            apAccId = db.Accounts.Single(a => a.AccountCode == "20110").Id;
+            decimal totalTax = 0m;
+            decimal totalSub = 0m;
+            foreach (var l in bill.PurchaseInvoiceLines)
+            {
+                totalSub += l.Subtotal;
+                totalTax += l.TaxAmount;
+                gl.GeneralLedgerLines.Add(new GeneralLedgerLine
+                {
+                    CompanyId = _companyId,
+                    AccountId = _expenseAccountId,
+                    DrCr = DrOrCrSide.Dr,
+                    Amount = l.Subtotal
+                });
+            }
+            if (totalTax > 0m)
+            {
+                gl.GeneralLedgerLines.Add(new GeneralLedgerLine
+                {
+                    CompanyId = _companyId,
+                    AccountId = _purchasingTaxAccountId,
+                    DrCr = DrOrCrSide.Dr,
+                    Amount = totalTax
+                });
+            }
+            gl.GeneralLedgerLines.Add(new GeneralLedgerLine
+            {
+                CompanyId = _companyId,
+                AccountId = apAccId,
+                DrCr = DrOrCrSide.Cr,
+                Amount = totalSub + totalTax
+            });
+            db.GeneralLedgerHeaders.Add(gl);
+            db.SaveChanges();
+            bill.GeneralLedgerHeaderId = gl.Id;
+            bill.No = "BILL-" + gl.Id.ToString(CultureInfo.InvariantCulture);
+            db.PurchaseInvoiceHeaders.Add(bill);
+        });
+        return bill.Id;
+    }
+
+    [Fact]
+    public async Task Report_TwoTaxCodes_NoTaxLine_AndShipping_ComputesRowsAndNet()
+    {
+        await CreatePostedInvoiceWithShipping(
+            new DateTime(2026, 10, 10),
+            50m,
+            (_vat12Id, 1000m, 120m),
+            (_red5Id, 200m, 10m),
+            (null, 300m, 0m));
+
+        await CreatePostedBill(
+            new DateTime(2026, 10, 12),
+            (_vat12Id, 500m, 60m));
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+
+        Assert.Equal("Accrual", json.GetProperty("basis").GetString());
+        Assert.Equal(1550m, json.GetProperty("output").GetProperty("taxable").GetDecimal());
+        Assert.Equal(130m, json.GetProperty("output").GetProperty("tax").GetDecimal());
+        Assert.Equal(500m, json.GetProperty("input").GetProperty("taxable").GetDecimal());
+        Assert.Equal(60m, json.GetProperty("input").GetProperty("tax").GetDecimal());
+        Assert.Equal(70m, json.GetProperty("netTax").GetDecimal());
+
+        var outRows = json.GetProperty("output").GetProperty("rows").EnumerateArray().ToList();
+        Assert.Equal(3, outRows.Count);
+        Assert.Equal("RED5", outRows[0].GetProperty("taxCode").GetString());
+        Assert.Equal(1, outRows[0].GetProperty("documentCount").GetInt32());
+        Assert.Equal("VAT12", outRows[1].GetProperty("taxCode").GetString());
+        Assert.Equal(1, outRows[1].GetProperty("documentCount").GetInt32());
+        Assert.Equal("No tax", outRows[2].GetProperty("taxCode").GetString());
+        Assert.Equal(350m, outRows[2].GetProperty("taxable").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, outRows[2].GetProperty("rate").ValueKind);
+    }
+
+    [Fact]
+    public async Task Boundaries_MonthlyAndQuarterlyCycle2_InclusiveEdges()
+    {
+        await CreatePostedInvoice(new DateTime(2026, 7, 31), (_vat12Id, 100m, 12m));
+        await CreatePostedInvoice(new DateTime(2026, 8, 1), (_vat12Id, 200m, 24m));
+        await CreatePostedInvoice(new DateTime(2026, 9, 30), (_vat12Id, 300m, 36m));
+        await CreatePostedInvoice(new DateTime(2026, 10, 1), (_vat12Id, 400m, 48m));
+        await CreatePostedInvoice(new DateTime(2026, 10, 31), (_vat12Id, 500m, 60m));
+        await CreatePostedInvoice(new DateTime(2026, 11, 1), (_vat12Id, 600m, 72m));
+
+        // Monthly Oct 2026
+        var oct = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(108m, oct.GetProperty("output").GetProperty("tax").GetDecimal());
+
+        // Quarterly cycle 2 (Aug–Oct 2026)
+        await OkJson(await _host.Send(HttpMethod.Put, "/api/tax/settings",
+            new { frequency = "Quarterly", quarterCycleStartMonth = 2 }, _owner.Token, Org));
+        var q = await OkJson(await GetReport("2026-08-01", "2026-10-31"));
+        Assert.True(q.GetProperty("isWholePeriod").GetBoolean());
+        Assert.Equal("Aug\u2013Oct 2026", q.GetProperty("periodLabel").GetString());
+        Assert.Equal(168m, q.GetProperty("output").GetProperty("tax").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Void_InSamePeriod_NetsToZero_AndIncludesBothDocumentRows()
+    {
+        var invId = await CreatePostedInvoice(new DateTime(2026, 10, 5), (_vat12Id, 1000m, 120m));
+        var voidRes = await _host.Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invId}&date=2026-10-20",
+            null, _owner.Token, Org);
+        Assert.True(voidRes.IsSuccessStatusCode, await voidRes.Content.ReadAsStringAsync());
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(0m, json.GetProperty("output").GetProperty("tax").GetDecimal());
+        Assert.Equal(0m, json.GetProperty("netTax").GetDecimal());
+
+        var docs = json.GetProperty("documents").EnumerateArray().ToList();
+        Assert.Equal(2, docs.Count);
+        Assert.Contains(docs, d => d.GetProperty("kind").GetString() == "invoice" && d.GetProperty("tax").GetDecimal() == 120m);
+        Assert.Contains(docs, d => d.GetProperty("kind").GetString() == "invoiceVoid" && d.GetProperty("tax").GetDecimal() == -120m);
+    }
+
+    [Fact]
+    public async Task Void_InNextPeriod_LeavesOriginalUnchanged_AndShowsNegativeInNextPeriod()
+    {
+        var invId = await CreatePostedInvoice(new DateTime(2026, 10, 15), (_vat12Id, 1000m, 120m));
+        var voidRes = await _host.Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invId}&date=2026-11-05",
+            null, _owner.Token, Org);
+        Assert.True(voidRes.IsSuccessStatusCode, await voidRes.Content.ReadAsStringAsync());
+
+        var oct = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(120m, oct.GetProperty("output").GetProperty("tax").GetDecimal());
+
+        var nov = await OkJson(await GetReport("2026-11-01", "2026-11-30"));
+        Assert.Equal(-120m, nov.GetProperty("output").GetProperty("tax").GetDecimal());
+        Assert.Equal(-120m, nov.GetProperty("netTax").GetDecimal());
+    }
+
+    [Fact]
+    public async Task DraftInvoice_IsExcluded()
+    {
+        var dto = new Dto.Sales.SalesInvoice
+        {
+            CustomerId = _customerId,
+            InvoiceDate = new DateTime(2026, 10, 10),
+            Status = "Draft",
+            SalesInvoiceLines =
+            {
+                new Dto.Sales.SalesInvoiceLine
+                {
+                    ItemId = _itemId,
+                    MeasurementId = _measurementId,
+                    Quantity = 1m,
+                    Amount = 1000m,
+                    TaxId = _vat12Id,
+                    TaxAmount = 120m
+                }
+            }
+        };
+        await OkJson(await _host.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto, _owner.Token, Org));
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(0m, json.GetProperty("output").GetProperty("tax").GetDecimal());
+        Assert.Empty(json.GetProperty("documents").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task IssuedUnpostedInvoice_IsIncluded_AndListedInWarnings()
+    {
+        WithDb(db =>
+        {
+            db.SalesInvoiceHeaders.Add(new SalesInvoiceHeader
+            {
+                CompanyId = _companyId,
+                CustomerId = _customerId,
+                No = "INV-UNPOSTED",
+                Date = new DateTime(2026, 10, 8),
+                Status = SalesInvoiceStatus.Open,
+                GeneralLedgerHeaderId = null,
+                SalesInvoiceLines =
+                {
+                    new SalesInvoiceLine
+                    {
+                        CompanyId = _companyId,
+                        ItemId = _itemId,
+                        MeasurementId = _measurementId,
+                        Quantity = 1m,
+                        Amount = 1000m,
+                        TaxId = _vat12Id,
+                        TaxAmount = 120m
+                    }
+                }
+            });
+        });
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(120m, json.GetProperty("output").GetProperty("tax").GetDecimal());
+
+        var unposted = json.GetProperty("warnings").GetProperty("unposted").EnumerateArray().ToList();
+        Assert.Single(unposted);
+        Assert.Equal("INV-UNPOSTED", unposted[0].GetProperty("no").GetString());
+        Assert.Equal("invoice", unposted[0].GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public async Task BillWithInputTax_ReducesNet_AndCanBeNegative()
+    {
+        await CreatePostedInvoice(new DateTime(2026, 10, 2), (_vat12Id, 500m, 60m));
+        await CreatePostedBill(new DateTime(2026, 10, 4), (_vat12Id, 1000m, 120m));
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(60m, json.GetProperty("output").GetProperty("tax").GetDecimal());
+        Assert.Equal(120m, json.GetProperty("input").GetProperty("tax").GetDecimal());
+        Assert.Equal(-60m, json.GetProperty("netTax").GetDecimal());
+    }
+
+    [Fact]
+    public async Task BankStatementLine_RecordedAsExpenseWithTax_AppearsAsInputTax()
+    {
+        var bankRes = await _host.Send(HttpMethod.Post, "/api/Banking/Accounts",
+            new CreateBankAccountRequest { Name = "Tax Bank", Type = 1 }, _owner.Token, Org);
+        var bankJson = await OkJson(bankRes);
+        var bankId = bankJson.GetProperty("id").GetInt32();
+
+        int lineId = 0;
+        WithDb(db =>
+        {
+            var import = new BankStatementImport
+            {
+                CompanyId = _companyId,
+                BankId = bankId,
+                Source = BankStatementSources.Csv,
+                FileName = "tax-test.csv",
+                ImportedAt = DateTime.UtcNow,
+                ImportedBy = "test"
+            };
+            db.Add(import);
+            db.SaveChanges();
+            var line = new BankStatementLine
+            {
+                CompanyId = _companyId,
+                BankId = bankId,
+                BankStatementImportId = import.Id,
+                Source = BankStatementSources.Csv,
+                ExternalId = Guid.NewGuid().ToString("N"),
+                PostedDate = new DateTime(2026, 10, 14),
+                Payee = "Host Co",
+                Amount = -112m
+            };
+            db.BankStatementLines.Add(line);
+            db.SaveChanges();
+            lineId = line.Id;
+        });
+
+        var recRes = await _host.Send(HttpMethod.Post, $"/api/Banking/StatementLines/{lineId}/RecordExpense",
+            new RecordExpenseFromStatementLineRequest
+            {
+                NewVendor = new QuickVendorFromStatementRequest { Name = "Host Co" },
+                ExpenseAccountId = _expenseAccountId,
+                TaxId = _vat12Id
+            }, _owner.Token, Org);
+        Assert.True(recRes.IsSuccessStatusCode, await recRes.Content.ReadAsStringAsync());
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(12m, json.GetProperty("input").GetProperty("tax").GetDecimal());
+        Assert.Equal(100m, json.GetProperty("input").GetProperty("taxable").GetDecimal());
+    }
+
+    [Fact]
+    public async Task LedgerCheck_MatchesDocumentsAndDetectsManualJournal()
+    {
+        await CreatePostedInvoice(new DateTime(2026, 10, 10), (_vat12Id, 1000m, 120m));
+        await CreatePostedBill(new DateTime(2026, 10, 11), (_vat12Id, 500m, 60m));
+
+        var clean = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        var accounts = clean.GetProperty("ledger").GetProperty("accounts").EnumerateArray().ToList();
+        var acc20300 = accounts.Single(a => a.GetProperty("code").GetString() == "20300");
+        var acc10160 = accounts.Single(a => a.GetProperty("code").GetString() == "10160");
+
+        Assert.Equal(0m, acc20300.GetProperty("other").GetDecimal());
+        Assert.Equal(0m, acc10160.GetProperty("other").GetDecimal());
+
+        // Post manual journal crediting 20300 by 50
+        WithDb(db =>
+        {
+            var cashAccId = db.Accounts.Single(a => a.AccountCode == "10111").Id;
+            db.GeneralLedgerHeaders.Add(new GeneralLedgerHeader
+            {
+                CompanyId = _companyId,
+                Date = new DateTime(2026, 10, 25),
+                DocumentType = DocumentTypes.JournalEntry,
+                Description = "Manual VAT adjustment",
+                GeneralLedgerLines =
+                {
+                    new GeneralLedgerLine { CompanyId = _companyId, AccountId = cashAccId, DrCr = DrOrCrSide.Dr, Amount = 50m },
+                    new GeneralLedgerLine { CompanyId = _companyId, AccountId = _salesTaxAccountId, DrCr = DrOrCrSide.Cr, Amount = 50m }
+                }
+            });
+        });
+
+        var withJournal = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        var accAfter = withJournal.GetProperty("ledger").GetProperty("accounts").EnumerateArray()
+            .Single(a => a.GetProperty("code").GetString() == "20300");
+        Assert.Equal(50m, accAfter.GetProperty("other").GetDecimal());
+        Assert.Equal(170m, accAfter.GetProperty("movement").GetDecimal());
+        Assert.Equal(120m, accAfter.GetProperty("fromDocuments").GetDecimal());
+        Assert.Single(accAfter.GetProperty("entries").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task ClosedFiscalYear_DoesNotChangeTaxReportOrLedgerCheck()
+    {
+        await CreatePostedInvoice(new DateTime(2025, 10, 10), (_vat12Id, 1000m, 120m));
+        var before = await OkJson(await GetReport("2025-10-01", "2025-10-31"));
+
+        var closeRes = await _host.Send(HttpMethod.Post, "/api/Financials/YearEnd/2025/Close",
+            new { acknowledgeWarnings = true }, _owner.Token, Org);
+        Assert.True(closeRes.IsSuccessStatusCode, await closeRes.Content.ReadAsStringAsync());
+
+        var after = await OkJson(await GetReport("2025-10-01", "2025-10-31"));
+        Assert.Equal(
+            before.GetProperty("netTax").GetDecimal(),
+            after.GetProperty("netTax").GetDecimal());
+        Assert.Equal(
+            before.GetProperty("ledger").GetProperty("accounts").EnumerateArray().Single(a => a.GetProperty("code").GetString() == "20300").GetProperty("movement").GetDecimal(),
+            after.GetProperty("ledger").GetProperty("accounts").EnumerateArray().Single(a => a.GetProperty("code").GetString() == "20300").GetProperty("movement").GetDecimal());
+    }
+
+    [Fact]
+    public async Task LockStatus_ReflectsNonePartialAndFull()
+    {
+        WithDb(db => db.CompanySettings.Single().BooksLockedThrough = new DateTime(2026, 9, 30));
+        var none = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal("none", none.GetProperty("lock").GetProperty("state").GetString());
+
+        WithDb(db => db.CompanySettings.Single().BooksLockedThrough = new DateTime(2026, 10, 15));
+        var partial = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal("partial", partial.GetProperty("lock").GetProperty("state").GetString());
+
+        WithDb(db => db.CompanySettings.Single().BooksLockedThrough = new DateTime(2026, 10, 31));
+        var full = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal("full", full.GetProperty("lock").GetProperty("state").GetString());
+    }
+
+    [Fact]
+    public async Task InvoicingOnlyWorkspace_WorksWithNullLedgerAndLock()
+    {
+        await CreatePostedInvoice(new DateTime(2026, 10, 10), (_vat12Id, 1000m, 120m));
+        WithDb(db => db.Companies.Single(c => c.Id == _companyId).ActiveModulesJson = "[\"sales\",\"purchases\"]");
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        Assert.Equal(120m, json.GetProperty("output").GetProperty("tax").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("ledger").ValueKind);
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("lock").ValueKind);
+    }
+
+    [Fact]
+    public async Task Access_MissingModulesOrPermission_Returns403()
+    {
+        // Member without reports.view
+        var member = await _host.CreateUser("tax-member@example.test");
+        await _host.AddMember(_companyId, member.Id, CompanyMemberRole.Member);
+        await _host.SetFunctionalRoles(_companyId, member.Id, "Sales Representative");
+
+        var deniedPerm = await GetReport("2026-10-01", "2026-10-31", token: member.Token);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedPerm.StatusCode);
+
+        var deniedPeriods = await _host.Send(HttpMethod.Get, "/api/tax/periods", null, member.Token, Org);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedPeriods.StatusCode);
+
+        var op = global::Core.Authorization.AccessOperationCatalog.GetPolicy(
+            global::Core.Authorization.AccessOperationCatalog.TaxReportsView)!;
+        Assert.Contains("sales", op.RequiredModulesAny);
+        Assert.Contains("purchases", op.RequiredModulesAny);
+        Assert.Contains("financials", op.RequiredModulesAny);
+        Assert.Contains("reports", op.RequiredModulesAny);
+    }
+
+    [Fact]
+    public async Task Validation_InvalidRangeAndOver400Days_Returns400()
+    {
+        var reversed = await GetReport("2026-10-31", "2026-10-01");
+        Assert.Equal(HttpStatusCode.BadRequest, reversed.StatusCode);
+
+        var tooLong = await GetReport("2025-01-01", "2026-06-01");
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+    }
+
+    [Fact]
+    public async Task CashBasisWorkspace_Returns409TaxCashBasisPending()
+    {
+        WithDb(db => db.CompanySettings.Single().AccountingBasis = AccountingBasis.Cash);
+
+        var res = await GetReport("2026-10-01", "2026-10-31");
+        Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
+        var json = await AuditTestHost.Json(res);
+        Assert.Equal("tax_cash_basis_pending", json.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Settings_GetDefault_UpdateCycle_EnforcePermissionsAndValidation()
+    {
+        // Default derived from Calendar FY = 1
+        var initial = await OkJson(await _host.Send(HttpMethod.Get, "/api/tax/settings", null, _owner.Token, Org));
+        Assert.Equal(1, initial.GetProperty("defaultQuarterCycleStartMonth").GetInt32());
+        Assert.Equal(1, initial.GetProperty("effectiveQuarterCycleStartMonth").GetInt32());
+
+        // PUT cycle 2
+        var updated = await OkJson(await _host.Send(HttpMethod.Put, "/api/tax/settings",
+            new { frequency = "Quarterly", quarterCycleStartMonth = 2 }, _owner.Token, Org));
+        Assert.Equal(2, updated.GetProperty("quarterCycleStartMonth").GetInt32());
+
+        var periods = await OkJson(await _host.Send(HttpMethod.Get, "/api/tax/periods?count=4", null, _owner.Token, Org));
+        var labels = periods.EnumerateArray().Select(p => p.GetProperty("label").GetString() ?? "").ToList();
+        Assert.Contains(labels, l => l.StartsWith("Aug\u2013Oct", StringComparison.Ordinal) || l.StartsWith("Nov ", StringComparison.Ordinal));
+
+        // Bad values -> 400
+        var badMonth = await _host.Send(HttpMethod.Put, "/api/tax/settings",
+            new { frequency = "Quarterly", quarterCycleStartMonth = 4 }, _owner.Token, Org);
+        Assert.Equal(HttpStatusCode.BadRequest, badMonth.StatusCode);
+
+        var badFreq = await _host.Send(HttpMethod.Put, "/api/tax/settings",
+            new { frequency = "Yearly", quarterCycleStartMonth = 1 }, _owner.Token, Org);
+        Assert.Equal(HttpStatusCode.BadRequest, badFreq.StatusCode);
+
+        // Without admin.taxes.manage -> 403
+        var viewer = await _host.CreateUser("tax-viewer@example.test");
+        await _host.AddMember(_companyId, viewer.Id, CompanyMemberRole.Member);
+        await _host.SetFunctionalRoles(_companyId, viewer.Id, "Auditor / Viewer");
+        var forbidden = await _host.Send(HttpMethod.Put, "/api/tax/settings",
+            new { frequency = "Monthly", quarterCycleStartMonth = (int?)null }, viewer.Token, Org);
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Fact]
+    public async Task ArchivedTax_StillAppearsWithStoredAmounts()
+    {
+        await CreatePostedInvoice(new DateTime(2026, 10, 9), (_red5Id, 400m, 20m));
+        WithDb(db => db.Taxes.Single(t => t.Id == _red5Id).IsActive = false);
+
+        var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
+        var row = Assert.Single(json.GetProperty("output").GetProperty("rows").EnumerateArray());
+        Assert.Equal("RED5", row.GetProperty("taxCode").GetString());
+        Assert.Equal(400m, row.GetProperty("taxable").GetDecimal());
+        Assert.Equal(20m, row.GetProperty("tax").GetDecimal());
+    }
+}

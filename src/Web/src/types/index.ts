@@ -108,6 +108,7 @@ export interface OrgDetails extends PersonalBooksMetadata {
   plan?: PlanKey;
   currency?: string;
   entityType?: string;
+  usesTax?: boolean;
   permissions?: string[];
   fiscalYearEnd?: string;
   avatarBg?: string;

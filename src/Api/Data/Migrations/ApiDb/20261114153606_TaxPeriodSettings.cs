@@ -1,0 +1,39 @@
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Api.Data.Migrations.ApiDb
+{
+    /// <inheritdoc />
+    public partial class TaxPeriodSettings : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.AddColumn<int>(
+                name: "TaxPeriodFrequency",
+                table: "CompanySetting",
+                type: "int",
+                nullable: false,
+                defaultValue: 0);
+
+            migrationBuilder.AddColumn<int>(
+                name: "TaxQuarterCycleStartMonth",
+                table: "CompanySetting",
+                type: "int",
+                nullable: true);
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropColumn(
+                name: "TaxPeriodFrequency",
+                table: "CompanySetting");
+
+            migrationBuilder.DropColumn(
+                name: "TaxQuarterCycleStartMonth",
+                table: "CompanySetting");
+        }
+    }
+}

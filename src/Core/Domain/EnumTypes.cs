@@ -284,6 +284,12 @@ namespace Core.Domain
         Custom = 4
     }
 
+    public enum TaxPeriodFrequency
+    {
+        Monthly = 1,
+        Quarterly = 2
+    }
+
     public enum IndustryTemplate
     {
         Services = 1,

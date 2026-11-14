@@ -25,6 +25,8 @@ namespace Core.Domain
         public TaxRegime TaxRegime { get; set; } = TaxRegime.None;
         public FiscalYearPattern FiscalYearPattern { get; set; } = FiscalYearPattern.Calendar;
         public int? FiscalYearStartMonth { get; set; }
+        public TaxPeriodFrequency TaxPeriodFrequency { get; set; } = TaxPeriodFrequency.Quarterly;
+        public int? TaxQuarterCycleStartMonth { get; set; }
         public DateTime BooksStartDate { get; set; } = DateTime.UtcNow.Date;
 
         /// <summary>

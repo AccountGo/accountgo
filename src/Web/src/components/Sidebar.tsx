@@ -8,12 +8,14 @@ import {
   Package,
   Landmark,
   BarChart3,
+  Percent,
   Settings,
   Users,
   X,
   Sparkles,
 } from 'lucide-react';
 import { OrgDetails, UserProfile, SidebarMode, SubscriptionInfo, ModuleKey } from '../types';
+import { canShowTaxNav } from '../lib/taxReport';
 import { OrgSwitcher } from './OrgSwitcher';
 import { UserProfileSection } from './UserProfileSection';
 
@@ -101,6 +103,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
       module: 'reports',
       permission: 'reports.view',
     },
+    ...(canShowTaxNav({
+      isPersonalBooks: currentOrg.isPersonalBooks,
+      usesTax: currentOrg.usesTax,
+      activeModules: hasModule
+        ? (['sales', 'purchases', 'financials'] as ModuleKey[]).filter(hasModule)
+        : currentOrg.subscription?.activeModules,
+    })
+      ? [
+          {
+            name: 'Tax',
+            path: `/org/${currentOrg.slug}/tax`,
+            icon: Percent,
+            module: ['sales', 'purchases', 'financials'] as ModuleKey[],
+            permission: 'reports.view',
+          },
+        ]
+      : []),
   ];
 
   const visibleMainLinks = mainLinks.filter((link) => {

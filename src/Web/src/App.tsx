@@ -26,6 +26,7 @@ import Inventory from './pages/Inventory';
 import GeneralLedger from './pages/GeneralLedger';
 import JournalEntries from './pages/JournalEntries';
 import Reports from './pages/Reports';
+import { Tax } from './pages/Tax';
 import ChartOfAccounts from './pages/ChartOfAccounts';
 import Banking from './pages/Banking';
 import BankRegisterPage from './pages/BankRegister';
@@ -407,6 +408,14 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="reports">
                 <Reports />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'tax',
+            element: (
+              <RequiresModule module={['sales', 'purchases', 'financials', 'reports']}>
+                <Tax />
               </RequiresModule>
             ),
           },

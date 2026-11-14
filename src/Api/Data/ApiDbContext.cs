@@ -472,6 +472,7 @@ namespace Api.Data
             builder.Entity<CompanySetting>().Property(s => s.ReportingFramework).HasDefaultValue(ReportingFramework.IfrsForSmes);
             builder.Entity<CompanySetting>().Property(s => s.TaxRegime).HasDefaultValue(TaxRegime.None);
             builder.Entity<CompanySetting>().Property(s => s.FiscalYearPattern).HasDefaultValue(FiscalYearPattern.Calendar);
+            builder.Entity<CompanySetting>().Property(s => s.TaxPeriodFrequency).HasDefaultValue(TaxPeriodFrequency.Quarterly);
             builder.Entity<CompanySetting>().Property(s => s.BooksStartDate)
                 .HasColumnType("date")
                 .HasDefaultValue(new System.DateTime(1970, 1, 1));

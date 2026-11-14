@@ -216,6 +216,8 @@ namespace Api.Data.Schema
                     new[] { "CompanySetting", "TaxRegime", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "FiscalYearPattern", "INTEGER NOT NULL DEFAULT 1" },
                     new[] { "CompanySetting", "FiscalYearStartMonth", "INTEGER NULL" },
+                    new[] { "CompanySetting", "TaxPeriodFrequency", "INTEGER NOT NULL DEFAULT 2" },
+                    new[] { "CompanySetting", "TaxQuarterCycleStartMonth", "INTEGER NULL" },
                     new[] { "CompanySetting", "BooksStartDate", "TEXT NOT NULL DEFAULT '1970-01-01'" },
                     new[] { "CompanySetting", "BooksLockedThrough", "TEXT NULL" },
                     new[] { "CompanySetting", "PartnerAccountsFrom", "TEXT NULL" },

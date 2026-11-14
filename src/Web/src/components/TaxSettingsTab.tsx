@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Archive, ArchiveRestore, Pencil, Percent, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { ModalShell } from './ModalShell';
+import { TaxPeriodsCard } from './TaxPeriodsCard';
 
 interface TaxRow {
   id: number;
@@ -317,6 +318,8 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
         </div>
         {!canManage && <p className="text-[11px] text-[var(--text-muted)]">You can view tax rates. Managing them takes the Manage Taxes permission.</p>}
       </div>
+
+      <TaxPeriodsCard canManage={canManage} />
 
       <ModalShell
         open={!!draft}
