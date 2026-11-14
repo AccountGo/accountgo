@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -456,7 +456,10 @@ export default function Reports() {
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const validRange = !!range.to && (!range.from || range.from <= range.to);
   const canCompare = statement === 'income' || statement === 'balanceSheet' || statement === 'equity';
-  const key = JSON.stringify([currentOrg.slug, personal, statement, range.from, range.to, basis, revision, compare && canCompare]);
+  // Tabs share one load; only equity, or a statement-specific comparative range, needs its own.
+  const loadGroup = statement === 'equity' ? 'equity' : compare && canCompare ? statement : null;
+  const loadedKey = useRef<string | null>(null);
+  const key = JSON.stringify([currentOrg.slug, personal, loadGroup, range.from, range.to, basis, revision, compare && canCompare]);
   const data = result?.key === key ? result.data : null;
   const comparativeData = result?.key === key ? result.comparative : undefined;
   const activeCompareRange = result?.key === key ? result.comparativeRange : undefined;
@@ -467,7 +470,7 @@ export default function Reports() {
   const activeYear = tenantData?.years.find(y => y.isActive && y.startDate.slice(0, 10) <= today && y.endDate.slice(0, 10) >= today);
 
   useEffect(() => {
-    if (!allowed || !validRange) return;
+    if (!allowed || !validRange || loadedKey.current === key) return;
     let cancelled = false;
     (async () => {
       try {
@@ -504,6 +507,7 @@ export default function Reports() {
           data.equity = await response.json() as EquityStatement;
         }
         if (!cancelled) {
+          loadedKey.current = key;
           setResult({ key, slug: currentOrg.slug, data, comparative, comparativeRange: prior });
           setFailure(null);
         }

@@ -118,3 +118,16 @@ it('hides the Changes in Equity tab in personal books', async () => {
   expect(screen.queryByRole('button', { name: 'Changes in Equity' })).toBeNull();
   expect(fetcher.mock.calls.some(call => String(call[0]).includes('EquityStatement'))).toBe(false);
 });
+
+it('reuses loaded data when switching between ledger tabs and fetches equity on its own', async () => {
+  await openReports();
+  const calls = (part: string) => fetcher.mock.calls.filter(call => String(call[0]).includes(part)).length;
+  expect(calls('trialbalance')).toBe(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Profit & Loss' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Balance Sheet' }));
+  expect(screen.queryByText(/Loading/)).toBeNull();
+  expect(calls('trialbalance')).toBe(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Changes in Equity' }));
+  await screen.findByRole('columnheader', { name: 'Share capital' });
+  expect(calls('EquityStatement')).toBe(1);
+});
