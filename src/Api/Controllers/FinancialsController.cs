@@ -2093,6 +2093,12 @@ namespace Api.Controllers
                 drCr = line.DrCr,
                 amount = line.Amount
             }),
+            partnerAllocations = preview.PartnerAllocations.Select(item => new
+            {
+                partnerId = item.PartnerId, name = item.Name, percent = item.Percent,
+                profitShare = item.ProfitShare, drawingsClosed = item.DrawingsClosed, capitalAfterClose = item.CapitalAfterClose
+            }),
+            partnerLossNotice = preview.PartnerLossNotice,
             currentBooksLockedThrough = preview.CurrentBooksLockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             proposedBooksLockedThrough = preview.ProposedBooksLockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             requiresLockAcknowledgement = preview.RequiresLockAcknowledgement,

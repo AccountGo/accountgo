@@ -32,6 +32,8 @@ namespace Core.Domain
         /// when the workspace has the Financials module. Null means unlocked.
         /// </summary>
         public DateTime? BooksLockedThrough { get; set; }
+        /// <summary>First date using partner level capital accounts; null retains the single capital workflow.</summary>
+        public DateTime? PartnerAccountsFrom { get; set; }
 
         public IndustryTemplate IndustryTemplate { get; set; } = IndustryTemplate.Services;
         public EntityType EntityType { get; set; } = EntityType.SoleProprietor;

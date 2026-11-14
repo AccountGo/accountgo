@@ -44,6 +44,8 @@ interface YearEndPreview {
   blocking: YearEndCheckItem[];
   warnings: YearEndCheckItem[];
   closingLines: YearEndClosingLine[];
+  partnerAllocations?: Array<{ partnerId: number; name: string; percent: number; profitShare: number; drawingsClosed: number; capitalAfterClose: number }>;
+  partnerLossNotice?: string | null;
   canClose: boolean;
   currentBooksLockedThrough?: string | null;
   proposedBooksLockedThrough?: string | null;
@@ -367,6 +369,11 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
             </p>
             <CheckList items={closeDialog.preview.blocking} tone="blocking" />
             <CheckList items={closeDialog.preview.warnings} tone="warning" />
+            {!!closeDialog.preview.partnerLossNotice && <p className="rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700">{closeDialog.preview.partnerLossNotice}</p>}
+            {!!closeDialog.preview.partnerAllocations?.length && <div className="overflow-x-auto">
+              <table className="w-full text-xs"><thead><tr className="text-left border-b border-[var(--border-subtle)]"><th className="py-2 pr-2">Partner</th><th className="py-2 pr-2">Share %</th><th className="py-2 pr-2">Profit share</th><th className="py-2 pr-2">Drawings closed</th><th className="py-2">Capital after close</th></tr></thead>
+                <tbody>{closeDialog.preview.partnerAllocations.map(row => <tr key={row.partnerId} className="border-b border-[var(--border-subtle)]"><td className="py-2 pr-2">{row.name}</td><td className="py-2 pr-2">{row.percent.toFixed(4)}%</td><td className="py-2 pr-2">{formatAmount(row.profitShare)}</td><td className="py-2 pr-2">{formatAmount(row.drawingsClosed)}</td><td className="py-2">{formatAmount(row.capitalAfterClose)}</td></tr>)}</tbody></table>
+            </div>}
             {closeDialog.preview.warnings.length > 0 && canClose && (
               <label className="flex items-start gap-2 text-xs text-[var(--text-main)] cursor-pointer">
                 <input

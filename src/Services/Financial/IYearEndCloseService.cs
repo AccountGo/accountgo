@@ -42,12 +42,24 @@ namespace Services.Financial
         public IReadOnlyList<YearEndCheckItem> Blocking { get; set; } = Array.Empty<YearEndCheckItem>();
         public IReadOnlyList<YearEndCheckItem> Warnings { get; set; } = Array.Empty<YearEndCheckItem>();
         public IReadOnlyList<YearEndClosingLine> ClosingLines { get; set; } = Array.Empty<YearEndClosingLine>();
+        public IReadOnlyList<PartnerAllocationPreview> PartnerAllocations { get; set; } = Array.Empty<PartnerAllocationPreview>();
+        public string? PartnerLossNotice { get; set; }
         public DateTime? CurrentBooksLockedThrough { get; set; }
         public DateTime? ProposedBooksLockedThrough { get; set; }
         public bool RequiresLockAcknowledgement { get; set; }
         public DateTime? NewlyUnlockedFrom { get; set; }
         public DateTime? NewlyUnlockedThrough { get; set; }
         public bool CanClose => Status != FiscalYearCloseStatus.Closed && Blocking.Count == 0;
+    }
+
+    public sealed class PartnerAllocationPreview
+    {
+        public int PartnerId { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Percent { get; set; }
+        public decimal ProfitShare { get; set; }
+        public decimal DrawingsClosed { get; set; }
+        public decimal CapitalAfterClose { get; set; }
     }
 
     public sealed class YearEndYearSummary

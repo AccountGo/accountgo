@@ -56,6 +56,8 @@ namespace AccountGo.BackendTests.Auditing
         public CapturingLoggerProvider Logs { get; } = new();
         public EntitlementOverrides Entitlements { get; } = new();
 
+        public bool PartnerSetupEnabled { get; set; } = true;
+
         public Task InitializeAsync()
         {
             Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
@@ -67,6 +69,7 @@ namespace AccountGo.BackendTests.Auditing
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
                 builder.UseSetting("SERVER_TIMING_ENABLED", "true");
+                builder.UseSetting("Features:PartnerAccountingSetupEnabled", PartnerSetupEnabled.ToString());
                 builder.UseSetting("AuditRetention:Enabled", "false");
                 builder.ConfigureLogging(logging => logging.AddProvider(Logs));
                 builder.ConfigureTestServices(services =>
@@ -186,13 +189,17 @@ namespace AccountGo.BackendTests.Auditing
             object? body = null,
             string? token = null,
             string? org = null,
-            bool scoped = true)
+            bool scoped = true,
+            IReadOnlyDictionary<string, string>? headers = null)
         {
             using var request = new HttpRequestMessage(method, path);
             if (!string.IsNullOrEmpty(token))
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             if (scoped)
                 request.Headers.Add("X-AccountGo-Org", org ?? "default-org");
+            if (headers != null)
+                foreach (var header in headers)
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             if (body != null)
                 request.Content = JsonContent.Create(body);
             return await _client.SendAsync(request);

@@ -67,6 +67,7 @@ namespace Services.Financial
         public const string JournalPostingAuthorizationAuditTable = "__JournalPostingAuthorization";
 
         private static readonly System.Threading.AsyncLocal<int> AllowClosingEntriesDepth = new();
+        private static readonly System.Threading.AsyncLocal<int> AllowPartnerSetupPostingDepth = new();
         private static readonly System.Threading.AsyncLocal<int> AllowLinkedEntryReversalDepth = new();
         private static readonly System.Threading.AsyncLocal<int> AllowLinkedEntryMirrorPostingDepth = new();
         private static readonly System.Threading.AsyncLocal<int> AllowLinkedEntrySourcePostingDepth = new();
@@ -678,6 +679,12 @@ namespace Services.Financial
             AllowClosingEntriesDepth.Value = AllowClosingEntriesDepth.Value + 1;
             return new ClosingEntriesScope(() =>
                 AllowClosingEntriesDepth.Value = Math.Max(0, AllowClosingEntriesDepth.Value - 1));
+        }
+
+        public IDisposable AllowPartnerSetupPosting()
+        {
+            AllowPartnerSetupPostingDepth.Value++;
+            return new ClosingEntriesScope(() => AllowPartnerSetupPostingDepth.Value = Math.Max(0, AllowPartnerSetupPostingDepth.Value - 1));
         }
 
         public IDisposable AllowLinkedEntryReversal()
@@ -2271,6 +2278,31 @@ namespace Services.Financial
                     if (!closeDecision.Allowed)
                         throw new InvalidOperationException(closeDecision.SafeMessage ?? "Unauthorized to close fiscal period.");
                 }
+                else if (AllowPartnerSetupPostingDepth.Value > 0)
+                {
+                    var setupDecision = _auth.Authorize(Core.Authorization.AccessOperationCatalog.WorkspaceAccountingPolicyUpdate);
+                    if (!setupDecision.Allowed)
+                        throw new InvalidOperationException(setupDecision.SafeMessage ?? "Unauthorized to set up partner accounts.");
+                    var actor = _auth.ResolveActorContext();
+                    effectivePreparer = actor?.UserId ?? "system:partner-setup";
+                    preparerIds.Add(effectivePreparer);
+                    entryFingerprint = Core.Authorization.AccessJournalFingerprint.Compute(
+                        journalEntry.Date,
+                        journalEntry.Memo,
+                        (int)(journalEntry.VoucherType ?? 0),
+                        journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                    postResource = new Core.Authorization.AccessResourceContext
+                    {
+                        WorkspaceCompanyId = journalEntry.CompanyId > 0 ? journalEntry.CompanyId : null,
+                        ResourceCompanyId = journalEntry.CompanyId > 0 ? journalEntry.CompanyId : null,
+                        ResourceType = "PartnerSetupJournal",
+                        ResourceId = journalEntry.Id > 0 ? journalEntry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
+                        ResourceFingerprint = entryFingerprint,
+                        WorkflowState = "Draft",
+                        PreparedByUserId = effectivePreparer,
+                        PreparedByUserIds = preparerIds
+                    };
+                }
                 else
                 {
                     if (_auditLogRepo != null && journalEntry.Id > 0)
@@ -2384,6 +2416,7 @@ namespace Services.Financial
                     throw new InvalidOperationException("Posting requires at least two positive debit or credit lines.");
 
                 var isClosingEntry = journalEntry.VoucherType == JournalVoucherTypes.ClosingEntries && AllowClosingEntriesDepth.Value > 0;
+                var isPartnerSetupEntry = AllowPartnerSetupPostingDepth.Value > 0;
 
                 Action executePosting = () =>
                 {
@@ -2462,7 +2495,7 @@ namespace Services.Financial
                     };
 
                     Core.Authorization.EffectiveApprovalRule liveRule = null;
-                    if (!isClosingEntry && _approvalPolicyResolver != null && journalEntry.CompanyId > 0)
+                    if (!isClosingEntry && !isPartnerSetupEntry && _approvalPolicyResolver != null && journalEntry.CompanyId > 0)
                     {
                         liveRule = _approvalPolicyResolver.Resolve(
                             journalEntry.CompanyId,
@@ -2473,7 +2506,9 @@ namespace Services.Financial
                     {
                         var liveDecision = isClosingEntry
                             ? _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsPeriodsClose, guardedPostResource)
-                            : _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, guardedPostResource);
+                            : isPartnerSetupEntry
+                                ? _auth.Authorize(Core.Authorization.AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, guardedPostResource)
+                                : _auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, guardedPostResource);
 
                         Core.Authorization.WorkspacePolicyTestGate.AfterAuthorizationRead?.Invoke(journalEntry.CompanyId);
 
@@ -2554,7 +2589,7 @@ namespace Services.Financial
                                     approvalRow, "Consumed", _auth.ResolveActorContext()?.UserId));
                             }
 
-                            if (!isClosingEntry)
+                            if (!isClosingEntry && !isPartnerSetupEntry)
                             {
                                 RecordJournalPostingAuthorizationEvidence(
                                     journalEntry,

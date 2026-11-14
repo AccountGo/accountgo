@@ -31,6 +31,8 @@ namespace Services.Financial
         private readonly IRepository<BankReconciliation> _reconciliations;
         private readonly IRepository<BankStatementLine> _statementLines;
         private readonly IRepository<BooksLockChange> _lockChanges;
+        private readonly IRepository<Partner>? _partners;
+        private readonly IRepository<PartnerShare>? _partnerShares;
         private readonly bool _allowUnapprovedIndividualMapping;
 
         /// <param name="allowUnapprovedIndividualMapping">
@@ -53,7 +55,9 @@ namespace Services.Financial
             IRepository<BankReconciliation> reconciliations,
             IRepository<BankStatementLine> statementLines,
             IRepository<BooksLockChange> lockChanges,
-            bool allowUnapprovedIndividualMapping = false)
+            bool allowUnapprovedIndividualMapping = false,
+            IRepository<Partner>? partners = null,
+            IRepository<PartnerShare>? partnerShares = null)
         {
             _allowUnapprovedIndividualMapping = allowUnapprovedIndividualMapping;
             _financial = financial;
@@ -71,6 +75,8 @@ namespace Services.Financial
             _reconciliations = reconciliations;
             _statementLines = statementLines;
             _lockChanges = lockChanges;
+            _partners = partners;
+            _partnerShares = partnerShares;
         }
 
         public IReadOnlyList<YearEndYearSummary> ListYears()
@@ -179,6 +185,10 @@ namespace Services.Financial
 
             var setting = _settings.Table.FirstOrDefault()
                 ?? throw new InvalidOperationException("Company settings were not found.");
+            if (setting.EntityType == EntityType.Partnership
+                && setting.PartnerAccountsFrom.HasValue
+                && year.EndDate.Date < setting.PartnerAccountsFrom.Value.Date)
+                throw new YearEndCloseException("A fiscal year ending before partner account setup can't be reopened.");
             var (currentLock, nextLock, independentLock) = ReopenLockImpact(year, setting);
             if (independentLock && (!acknowledgeIndependentLock || expectedLockThrough?.Date != currentLock))
                 throw new YearEndCloseException("Acknowledge the independent lock change and confirm the current lock date before reopening.");
@@ -267,21 +277,30 @@ namespace Services.Financial
             var status = ResolveStatus(year, today);
             var blocking = new List<YearEndCheckItem>();
             var warnings = new List<YearEndCheckItem>();
+            var setting = _settings.Table.FirstOrDefault();
+            var partnerMode = setting?.EntityType == EntityType.Partnership && setting.PartnerAccountsFrom.HasValue;
+            Dictionary<int, (decimal Debit, decimal Credit)>? fyTb = null;
+            Dictionary<int, (decimal Debit, decimal Credit)>? throughEnd = null;
+            if (status != FiscalYearCloseStatus.Closed || partnerMode)
+            {
+                fyTb = TrialBalanceExcludingClosing(year.StartDate.Date, InclusiveEnd(year.EndDate));
+                throughEnd = TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
+            }
 
             if (status != FiscalYearCloseStatus.Closed)
             {
-                AddBlockingChecks(year, today, blocking);
+                AddBlockingChecks(year, today, blocking, throughEnd);
                 AddWarningChecks(year, warnings);
             }
-
             var closingLines = status == FiscalYearCloseStatus.Closed
                 ? Array.Empty<YearEndClosingLine>()
-                : BuildClosingLines(year);
-
-            var setting = _settings.Table.FirstOrDefault();
+                : BuildClosingLines(year, fyTb!, throughEnd!);
             var impact = setting != null && status == FiscalYearCloseStatus.Closed
                 ? ReopenLockImpact(year, setting)
                 : (Current: (DateTime?)null, Proposed: (DateTime?)null, RequiresAcknowledgement: false);
+            var partnerAllocations = partnerMode
+                ? BuildPartnerAllocations(year, fyTb!, throughEnd!, closingLines)
+                : Array.Empty<PartnerAllocationPreview>();
             return new YearEndPreview
             {
                 CurrentBooksLockedThrough = impact.Current,
@@ -298,11 +317,16 @@ namespace Services.Financial
                 ClosedBy = year.ClosedBy,
                 Blocking = blocking,
                 Warnings = warnings,
-                ClosingLines = closingLines
+                ClosingLines = closingLines,
+                PartnerAllocations = partnerAllocations,
+                PartnerLossNotice = partnerAllocations.Sum(a => a.ProfitShare) < 0m
+                    ? "Losses are shared in the same ratios."
+                    : null
             };
         }
 
-        private void AddBlockingChecks(FinancialYear year, DateTime today, List<YearEndCheckItem> blocking)
+        private void AddBlockingChecks(FinancialYear year, DateTime today, List<YearEndCheckItem> blocking,
+            Dictionary<int, (decimal Debit, decimal Credit)>? throughEnd = null)
         {
             if (year.EndDate.Date >= today)
             {
@@ -315,6 +339,23 @@ namespace Services.Financial
             }
 
             var setting = _settings.Table.FirstOrDefault();
+            if (setting?.EntityType == EntityType.Partnership && setting.PartnerAccountsFrom.HasValue)
+            {
+                var shares = _partnerShares?.Table.Where(s => s.FinancialYearId == year.Id).ToList() ?? new List<PartnerShare>();
+                var active = _partners?.Table.Where(p => p.ArchivedAt == null).ToList() ?? new List<Partner>();
+                var valid = shares.Count >= 2 && shares.All(s => s.Percent > 0m && active.Any(p => p.Id == s.PartnerId))
+                    && shares.Sum(s => s.Percent) == 100.0000m;
+                if (!valid)
+                    blocking.Add(new YearEndCheckItem { Code = "partner_shares_missing", Message = $"Profit-sharing ratios aren't set for {year.FiscalYearCode}.", Count = 1 });
+                foreach (var code in new[] { "30100", "30800" })
+                {
+                    var account = _accounts.Table.FirstOrDefault(a => a.AccountCode == code);
+                    if (account == null) continue;
+                    var tb = throughEnd ?? TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
+                    if (tb.TryGetValue(account.Id, out var balance) && balance.Debit != balance.Credit)
+                        blocking.Add(new YearEndCheckItem { Code = "partner_unassigned_balance_" + code, Message = $"Unassigned partner capital or drawings: move the balance in {code} {account.AccountName} to a partner with a journal.", Count = 1 });
+                }
+            }
             if (setting != null)
             {
                 var knownYears = _fiscalYears.Table.Select(fy => fy.FiscalYearCode).ToHashSet();
@@ -514,21 +555,24 @@ namespace Services.Financial
             }
         }
 
-        private IReadOnlyList<YearEndClosingLine> BuildClosingLines(FinancialYear year)
+        private IReadOnlyList<YearEndClosingLine> BuildClosingLines(FinancialYear year,
+            Dictionary<int, (decimal Debit, decimal Credit)> fyTb,
+            Dictionary<int, (decimal Debit, decimal Credit)> throughEnd)
         {
+            var accountRows = _accounts.Table.ToList();
+            var accountsById = accountRows.ToDictionary(account => account.Id);
             var glSetting = _glSettings.Table.FirstOrDefault();
             if (glSetting?.PermanentAccountId == null)
                 throw new YearEndCloseException("Permanent (retained earnings) account is not configured.");
 
-            var permanent = _accounts.Table.FirstOrDefault(a => a.Id == glSetting.PermanentAccountId.Value)
+            var permanent = accountsById.GetValueOrDefault(glSetting.PermanentAccountId.Value)
                 ?? throw new YearEndCloseException("Permanent (retained earnings) account was not found.");
 
             var setting = _settings.Table.FirstOrDefault();
             var entityType = setting?.EntityType ?? EntityType.Corporation;
             var profile = EntityEquityMapping.GetProfile(entityType, _allowUnapprovedIndividualMapping);
 
-            var fyTb = TrialBalanceExcludingClosing(year.StartDate.Date, InclusiveEnd(year.EndDate));
-            var incomeExpense = _accounts.Table
+            var incomeExpense = accountRows
                 .Where(a => a.AccountClassId == 4 || a.AccountClassId == 5)
                 .Select(a => new { a.Id, a.AccountCode, a.AccountName })
                 .ToList();
@@ -577,20 +621,57 @@ namespace Services.Financial
 
             // Cumulative balances through FY end must INCLUDE earlier ClosingEntries (they already
             // zeroed prior drawings / PPAs). Excluding them would re-close those on every later close.
-            var throughEnd = TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
-
-            if (!string.IsNullOrEmpty(profile.DistributionAccountCode))
+            bool partnerMode = entityType == EntityType.Partnership && setting?.PartnerAccountsFrom.HasValue == true;
+            if (!partnerMode && !string.IsNullOrEmpty(profile.DistributionAccountCode))
             {
-                var dist = _accounts.Table.FirstOrDefault(a => a.AccountCode == profile.DistributionAccountCode);
+                var dist = accountRows.FirstOrDefault(a => a.AccountCode == profile.DistributionAccountCode);
                 if (dist != null && throughEnd.TryGetValue(dist.Id, out var distBal))
                     ZeroAccount(dist.Id, dist.AccountCode, dist.AccountName, distBal.Debit, distBal.Credit);
             }
 
             // Prior-period adjustments (30820) are equity corrections posted in open years against a
             // closed year; close them into the permanent account like distributions (own preview line).
-            var ppa = _accounts.Table.FirstOrDefault(a => a.AccountCode == "30820");
-            if (ppa != null && throughEnd.TryGetValue(ppa.Id, out var ppaBal))
+            var ppa = accountRows.FirstOrDefault(a => a.AccountCode == "30820");
+            if (!partnerMode && ppa != null && throughEnd.TryGetValue(ppa.Id, out var ppaBal))
                 ZeroAccount(ppa.Id, ppa.AccountCode, ppa.AccountName, ppaBal.Debit, ppaBal.Credit);
+
+            if (partnerMode)
+            {
+                var partnerList = _partners?.Table.Where(p => p.ArchivedAt == null).ToList() ?? new List<Partner>();
+                var shares = _partnerShares?.Table.Where(s => s.FinancialYearId == year.Id).ToList() ?? new List<PartnerShare>();
+                var validShares = shares.Where(s => s.Percent > 0m && partnerList.Any(p => p.Id == s.PartnerId)).OrderBy(s => s.PartnerId).ToList();
+                if (validShares.Count < 2 || validShares.Sum(s => s.Percent) != 100.0000m)
+                    return lines;
+                var ppaNet = ppa != null && throughEnd.TryGetValue(ppa.Id, out var ppaValue) ? ppaValue.Credit - ppaValue.Debit : 0m;
+                if (ppa != null && ppaNet != 0m)
+                {
+                    lines.Add(new YearEndClosingLine { AccountId = ppa.Id, AccountCode = ppa.AccountCode, AccountName = ppa.AccountName, DrCr = ppaNet > 0m ? "Dr" : "Cr", Amount = Math.Abs(ppaNet) });
+                }
+                var profit = permanentCr - permanentDr + ppaNet;
+                var allocations = PartnerAllocation.Allocate(profit, validShares.Select(s => (s.PartnerId, s.Percent)).ToList());
+                for (var i = 0; i < validShares.Count; i++)
+                {
+                    var partner = partnerList.Single(p => p.Id == validShares[i].PartnerId);
+                    var capital = accountsById[partner.CapitalAccountId];
+                    if (allocations[i] != 0m)
+                        lines.Add(new YearEndClosingLine { AccountId = capital.Id, AccountCode = capital.AccountCode, AccountName = capital.AccountName, DrCr = allocations[i] > 0m ? "Cr" : "Dr", Amount = Math.Abs(allocations[i]) });
+                }
+                foreach (var partner in partnerList)
+                {
+                    var capital = accountsById[partner.CapitalAccountId];
+                    var drawings = accountsById[partner.DrawingsAccountId];
+                    if (throughEnd.TryGetValue(drawings.Id, out var drawBal))
+                    {
+                        var netDr = drawBal.Debit - drawBal.Credit;
+                        if (netDr != 0m)
+                        {
+                            lines.Add(new YearEndClosingLine { AccountId = drawings.Id, AccountCode = drawings.AccountCode, AccountName = drawings.AccountName, DrCr = netDr > 0m ? "Cr" : "Dr", Amount = Math.Abs(netDr) });
+                            lines.Add(new YearEndClosingLine { AccountId = capital.Id, AccountCode = capital.AccountCode, AccountName = capital.AccountName, DrCr = netDr > 0m ? "Dr" : "Cr", Amount = Math.Abs(netDr) });
+                        }
+                    }
+                }
+                return lines;
+            }
 
             var permanentNet = permanentCr - permanentDr;
             if (permanentNet > 0m)
@@ -617,6 +698,34 @@ namespace Services.Financial
             }
 
             return lines;
+        }
+
+        private IReadOnlyList<PartnerAllocationPreview> BuildPartnerAllocations(FinancialYear year,
+            Dictionary<int, (decimal Debit, decimal Credit)> fyTb,
+            Dictionary<int, (decimal Debit, decimal Credit)> throughEnd,
+            IReadOnlyList<YearEndClosingLine> closingLines)
+        {
+            var setting = _settings.Table.FirstOrDefault();
+            if (setting?.EntityType != EntityType.Partnership || !setting.PartnerAccountsFrom.HasValue) return Array.Empty<PartnerAllocationPreview>();
+            var partners = _partners?.Table.Where(p => p.ArchivedAt == null).ToList() ?? new List<Partner>();
+            var shares = _partnerShares?.Table.Where(s => s.FinancialYearId == year.Id).OrderBy(s => s.PartnerId).ToList() ?? new List<PartnerShare>();
+            if (shares.Count < 2 || shares.Sum(s => s.Percent) != 100m || shares.Any(s => s.Percent <= 0m || partners.All(p => p.Id != s.PartnerId))) return Array.Empty<PartnerAllocationPreview>();
+            var accounts = _accounts.Table.ToDictionary(account => account.Id);
+            var netIncome = accounts.Values.Where(account => account.AccountClassId == 4 || account.AccountClassId == 5)
+                .Sum(account => fyTb.TryGetValue(account.Id, out var amount) ? amount.Credit - amount.Debit : 0m);
+            var ppa = accounts.Values.FirstOrDefault(account => account.AccountCode == "30820");
+            var ppaNet = ppa != null && throughEnd.TryGetValue(ppa.Id, out var ppaBalance) ? ppaBalance.Credit - ppaBalance.Debit : 0m;
+            var profitAllocations = PartnerAllocation.Allocate(netIncome + ppaNet, shares.Select(share => (share.PartnerId, share.Percent)).ToList());
+            return shares.Select(s =>
+            {
+                var p = partners.Single(x => x.Id == s.PartnerId);
+                var capital = accounts[p.CapitalAccountId];
+                var drawings = accounts[p.DrawingsAccountId];
+                var profit = profitAllocations[shares.IndexOf(s)];
+                var closed = closingLines.Where(line => line.AccountId == drawings.Id).Sum(line => line.DrCr == "Cr" ? line.Amount : -line.Amount);
+                var currentCapital = throughEnd.TryGetValue(capital.Id, out var bal) ? bal.Credit - bal.Debit : 0m;
+                return new PartnerAllocationPreview { PartnerId = p.Id, Name = p.Name, Percent = s.Percent, ProfitShare = profit, DrawingsClosed = closed, CapitalAfterClose = year.ClosedAt.HasValue ? currentCapital : currentCapital + profit - closed };
+            }).ToList();
         }
 
         private Dictionary<int, (decimal Debit, decimal Credit)> TrialBalanceExcludingClosing(DateTime? from, DateTime to) =>

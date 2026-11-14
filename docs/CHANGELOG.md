@@ -16,6 +16,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Reports now include a statement of changes in equity: opening balance, profit, contributions and drawings (or shares issued and dividends), prior-period adjustments and closing balance, checked against the balance sheet, with a comparison period.
 - You can undo an owner drawing or contribution from the matched statement line.
 - Bank statement lines that move money between you and your business can be recorded as an owner drawing or owner contribution wherever statement import is available, so they no longer count as expenses or income. Partnerships use partner wording.
+- Partnerships can set up each partner's capital and drawings accounts with profit-sharing ratios for each year. Closing the year splits the profit or loss between partners and closes each partner's drawings into their capital.
 
 ### Changed
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
@@ -27,6 +28,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - The unused audit settings API (`/api/Audit/Entity` and `/api/Audit/Attribute`) is gone. Its settings applied to every workspace on a server and never changed what the audit trail records.
 
 ### Self-hosting
+- A database migration adds partner and profit-sharing tables. It runs automatically when the API starts. Partner account setup is disabled by default; enable `Features__PartnerAccountingSetupEnabled` only after partner owner movement support is available.
 - PostgreSQL deployments can run behind a transaction-mode connection pooler (such as Supabase's on port 6543), which lets more API instances share one database. The deployment guide lists the connection settings.
 
 ## [0.2.0] - 2026-11-13

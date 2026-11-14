@@ -477,6 +477,26 @@ namespace Api.Data
                 .HasDefaultValue(new System.DateTime(1970, 1, 1));
             builder.Entity<CompanySetting>().Property(s => s.BooksLockedThrough)
                 .HasColumnType("date");
+            builder.Entity<CompanySetting>().Property(s => s.PartnerAccountsFrom).HasColumnType("date");
+            builder.Entity<Partner>(entity =>
+            {
+                entity.ToTable("Partners");
+                entity.Property(p => p.Name).IsRequired().HasMaxLength(100);
+                entity.Property(p => p.CreatedBy).IsRequired().HasMaxLength(256);
+                entity.Property(p => p.RowVersion).IsConcurrencyToken().ValueGeneratedNever();
+                entity.HasIndex(p => new { p.CompanyId, p.CapitalAccountId }).IsUnique();
+                entity.HasIndex(p => new { p.CompanyId, p.DrawingsAccountId }).IsUnique();
+                entity.HasIndex(p => new { p.CompanyId, p.Name }).IsUnique().HasFilter("[ArchivedAt] IS NULL");
+            });
+            builder.Entity<PartnerShare>(entity =>
+            {
+                entity.ToTable("PartnerShares");
+                entity.Ignore(s => s.Id);
+                entity.HasKey(s => new { s.FinancialYearId, s.PartnerId });
+                entity.Property(s => s.Percent).HasColumnType("decimal(7,4)");
+                entity.HasOne<FinancialYear>().WithMany().HasForeignKey(s => s.FinancialYearId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<Partner>().WithMany().HasForeignKey(s => s.PartnerId).OnDelete(DeleteBehavior.Cascade);
+            });
             builder.Entity<CompanySetting>().Property(s => s.EntityType).HasDefaultValue(EntityType.Corporation);
             builder.Entity<CompanySetting>().Property(s => s.IndustryTemplate).HasDefaultValue(IndustryTemplate.Services);
             builder.Entity<BooksLockChange>(entity =>
@@ -1210,6 +1230,8 @@ namespace Api.Data
             builder.Entity<TEntity>().HasQueryFilter(e => e.CompanyId == CurrentTenantCompanyId);
         }
         public virtual DbSet<Account> Accounts { get; set; }
+        public virtual DbSet<Partner> Partners { get; set; }
+        public virtual DbSet<PartnerShare> PartnerShares { get; set; }
         public virtual DbSet<AccountClass> AccountClasses { get; set; }
         public virtual DbSet<Address> Addresses { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }

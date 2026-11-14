@@ -164,6 +164,8 @@ public class YearEndCloseTests
         public Banking.BankingMemoryRepo<BankReconciliation> Reconciliations { get; } = new();
         public Banking.BankingMemoryRepo<BankStatementLine> StatementLines { get; } = new();
         public Banking.BankingMemoryRepo<BooksLockChange> LockChanges { get; } = new();
+        public Banking.BankingMemoryRepo<Partner> Partners { get; } = new();
+        public Banking.BankingMemoryRepo<PartnerShare> PartnerShares { get; } = new();
 
         public Mock<IEntitlementService> Entitlements { get; } = new();
         public Mock<ITenantContext> Tenant { get; } = new();
@@ -179,6 +181,7 @@ public class YearEndCloseTests
         public int RevenueId { get; }
         public int ExpenseId { get; }
         public int ObeId { get; }
+        public int PriorPeriodAdjustmentId { get; } = 38;
 
         public DateTime Fy2025Start { get; } = D(2025, 1, 1);
         public DateTime Fy2025End { get; } = EndOfDay(D(2025, 12, 31));
@@ -248,6 +251,7 @@ public class YearEndCloseTests
             Accounts.Insert(new Account { Id = DrawingsId, CompanyId = 1, AccountCode = "30800", AccountName = "Owner's Drawings", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Dr });
             Accounts.Insert(new Account { Id = DividendsId, CompanyId = 1, AccountCode = "30810", AccountName = "Dividends Declared", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Dr });
             Accounts.Insert(new Account { Id = ObeId, CompanyId = 1, AccountCode = "30700", AccountName = "Opening Balance Equity", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Cr });
+            Accounts.Insert(new Account { Id = PriorPeriodAdjustmentId, CompanyId = 1, AccountCode = "30820", AccountName = "Prior period adjustments", AccountClassId = 3, DrOrCrSide = DrOrCrSide.Cr });
             Accounts.Insert(new Account
             {
                 Id = RevenueId,
@@ -325,7 +329,9 @@ public class YearEndCloseTests
                 Reconciliations,
                 StatementLines,
                 LockChanges,
-                allowUnapprovedIndividualMapping);
+                allowUnapprovedIndividualMapping,
+                Partners,
+                PartnerShares);
         }
 
         public void Dispose() { }
@@ -365,6 +371,20 @@ public class YearEndCloseTests
             header.GeneralLedgerLines.Add(debit);
             header.GeneralLedgerLines.Add(credit);
             GlHeaders.Insert(header);
+        }
+
+        public Partner AddPartner(string name, decimal? percent = null)
+        {
+            var ordinal = Partners.Table.Count() + 1;
+            var capitalId = 100 + ordinal;
+            var drawingsId = 200 + ordinal;
+            Accounts.Insert(new Account { Id = capitalId, CompanyId = 1, AccountCode = "301" + ordinal.ToString("00", CultureInfo.InvariantCulture), AccountName = "Capital – " + name, AccountClassId = 3, DrOrCrSide = DrOrCrSide.Cr });
+            Accounts.Insert(new Account { Id = drawingsId, CompanyId = 1, AccountCode = "308" + (50 + ordinal).ToString("00", CultureInfo.InvariantCulture), AccountName = "Drawings – " + name, AccountClassId = 3, DrOrCrSide = DrOrCrSide.Dr, IsContraAccount = true });
+            var partner = new Partner { CompanyId = 1, Name = name, CapitalAccountId = capitalId, DrawingsAccountId = drawingsId, CreatedAt = D(2025, 1, 1), CreatedBy = "test", RowVersion = new byte[] { 1 } };
+            Partners.Insert(partner);
+            if (percent.HasValue)
+                PartnerShares.Insert(new PartnerShare { CompanyId = 1, FinancialYearId = FiscalYears.Table.Single(y => y.FiscalYearCode == Fy2025Code).Id, PartnerId = partner.Id, Percent = percent.Value });
+            return partner;
         }
 
         public void AddActiveBankWithoutReconciliation()
@@ -979,5 +999,166 @@ public class YearEndCloseTests
         Assert.DoesNotContain(preview.ClosingLines, l => l.AccountCode == "30810");
         Assert.DoesNotContain(preview.ClosingLines, l => l.AccountCode == "30300");
         Assert.Equal(500m, Assert.Single(preview.ClosingLines, l => l.AccountCode == "30100").Amount);
+    }
+
+    [Fact]
+    public void Partnership_close_clears_drawings_for_active_partner_without_a_share()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+        harness.AddPartner("Avery", 60m);
+        harness.AddPartner("Blake", 40m);
+        var noShare = harness.AddPartner("Casey");
+        harness.Post(D(2025, 6, 1), noShare.DrawingsAccountId, harness.CashId, 25m);
+
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == noShare.DrawingsAccountId && line.DrCr == "Cr" && line.Amount == 25m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == noShare.CapitalAccountId && line.DrCr == "Dr" && line.Amount == 25m);
+    }
+
+    [Fact]
+    public void Closed_partnership_preview_does_not_add_the_profit_share_twice_to_capital()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+        var avery = harness.AddPartner("Avery", 50m);
+        harness.AddPartner("Blake", 50m);
+        harness.Post(D(2025, 6, 1), harness.CashId, harness.RevenueId, 100m);
+
+        var closed = harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "closer");
+
+        Assert.Equal(50m, Assert.Single(closed.PartnerAllocations, row => row.PartnerId == avery.Id).CapitalAfterClose);
+    }
+
+    [Fact]
+    public void Reopen_refuses_a_fiscal_year_ending_before_partner_setup()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Post(D(2025, 6, 1), harness.CashId, harness.RevenueId, 100m);
+        harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "closer");
+        var setting = harness.Settings.Table.Single();
+        setting.PartnerAccountsFrom = D(2026, 6, 30);
+
+        var error = Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Reopen(Harness.Fy2025Code, "Correction", "reviewer"));
+
+        Assert.Contains("before partner account setup", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Partnership_close_allocates_profit_with_largest_remainder_and_closes_each_drawings_account()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+        var avery = harness.AddPartner("Avery", 33.3333m);
+        var blake = harness.AddPartner("Blake", 33.3333m);
+        var casey = harness.AddPartner("Casey", 33.3334m);
+        harness.Post(D(2025, 6, 1), harness.CashId, harness.RevenueId, 1000.01m);
+        harness.Post(D(2025, 7, 1), avery.DrawingsAccountId, harness.CashId, 10m);
+        harness.Post(D(2025, 7, 2), casey.DrawingsAccountId, harness.CashId, 15m);
+
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == avery.CapitalAccountId && line.DrCr == "Cr" && line.Amount == 333.34m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == blake.CapitalAccountId && line.DrCr == "Cr" && line.Amount == 333.33m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == avery.DrawingsAccountId && line.DrCr == "Cr" && line.Amount == 10m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == avery.CapitalAccountId && line.DrCr == "Dr" && line.Amount == 10m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == casey.DrawingsAccountId && line.DrCr == "Cr" && line.Amount == 15m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == casey.CapitalAccountId && line.DrCr == "Dr" && line.Amount == 15m);
+        Assert.Equal(1000.01m, preview.ClosingLines.Where(line => (line.AccountId == avery.CapitalAccountId || line.AccountId == blake.CapitalAccountId || line.AccountId == casey.CapitalAccountId) && line.DrCr == "Cr")
+            .Sum(line => line.Amount));
+    }
+
+    [Fact]
+    public void Partnership_loss_is_debited_by_ratio_and_preview_shows_loss_notice()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+        var avery = harness.AddPartner("Avery", 50m);
+        var blake = harness.AddPartner("Blake", 50m);
+        harness.Post(D(2025, 6, 1), harness.ExpenseId, harness.CashId, 120m);
+
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+
+        Assert.Equal("Losses are shared in the same ratios.", preview.PartnerLossNotice);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == avery.CapitalAccountId && line.DrCr == "Dr" && line.Amount == 60m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == blake.CapitalAccountId && line.DrCr == "Dr" && line.Amount == 60m);
+    }
+
+    [Fact]
+    public void Partnership_close_allocates_prior_period_adjustment_with_profit_and_zeros_it()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+        var avery = harness.AddPartner("Avery", 50m);
+        var blake = harness.AddPartner("Blake", 50m);
+        harness.Post(D(2025, 6, 1), harness.CashId, harness.RevenueId, 100m);
+        harness.Post(D(2025, 7, 1), harness.CashId, harness.PriorPeriodAdjustmentId, 30m);
+
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == harness.PriorPeriodAdjustmentId && line.DrCr == "Dr" && line.Amount == 30m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == avery.CapitalAccountId && line.DrCr == "Cr" && line.Amount == 65m);
+        Assert.Contains(preview.ClosingLines, line => line.AccountId == blake.CapitalAccountId && line.DrCr == "Cr" && line.Amount == 65m);
+    }
+
+    [Fact]
+    public void Partnership_close_is_blocked_when_the_year_has_no_valid_share_set()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+
+        Assert.Contains(preview.Blocking, item => item.Code == "partner_shares_missing");
+        Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "closer"));
+    }
+
+    [Fact]
+    public void Partnership_close_blocks_unassigned_30100_and_30800_balances()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+        harness.AddPartner("Avery", 50m);
+        harness.AddPartner("Blake", 50m);
+        harness.Post(D(2025, 6, 1), harness.CashId, harness.OwnerCapitalId, 100m);
+        harness.Post(D(2025, 6, 2), harness.DrawingsId, harness.CashId, 20m);
+
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+
+        Assert.Contains(preview.Blocking, item => item.Code == "partner_unassigned_balance_30100");
+        Assert.Contains(preview.Blocking, item => item.Code == "partner_unassigned_balance_30800");
+    }
+
+    [Fact]
+    public void Partnership_without_partner_setup_keeps_the_single_capital_close_flow()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Post(D(2025, 6, 1), harness.CashId, harness.RevenueId, 100m);
+        harness.Post(D(2025, 7, 1), harness.DrawingsId, harness.CashId, 20m);
+
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+
+        Assert.Equal(("Cr", 80m), (Assert.Single(preview.ClosingLines, line => line.AccountCode == "30100").DrCr, Assert.Single(preview.ClosingLines, line => line.AccountCode == "30100").Amount));
+        Assert.Contains(preview.ClosingLines, line => line.AccountCode == "30800" && line.DrCr == "Cr" && line.Amount == 20m);
+        Assert.Empty(preview.PartnerAllocations);
+    }
+
+    [Fact]
+    public void Reopen_then_reclose_partnership_keeps_the_same_partner_allocations()
+    {
+        using var harness = new Harness(EntityType.Partnership);
+        harness.Settings.Table.Single().PartnerAccountsFrom = D(2025, 1, 1);
+        var avery = harness.AddPartner("Avery", 50m);
+        harness.AddPartner("Blake", 50m);
+        harness.Post(D(2025, 6, 1), harness.CashId, harness.RevenueId, 100m);
+
+        harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "closer");
+        harness.YearEnd.Reopen(Harness.Fy2025Code, "Correct the source entry", "reviewer");
+        var reclosed = harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "closer");
+
+        Assert.Equal(FiscalYearCloseStatus.Closed, reclosed.Status);
+        Assert.Equal(50m, -NetDrOf(harness.Financial.TrialBalance(null, harness.Fy2025End).ToList(), "30101"));
+        Assert.Equal(50m, Assert.Single(reclosed.PartnerAllocations, row => row.PartnerId == avery.Id).ProfitShare);
     }
 }

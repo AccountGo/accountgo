@@ -41,6 +41,8 @@ namespace Api.Data.Schema
             "Measurement",
             "Party",
             "PaymentTerm",
+            "Partners",
+            "PartnerShares",
             "PurchaseInvoiceHeader",
             "PurchaseInvoiceLine",
             "PurchaseOrderHeader",
@@ -216,6 +218,7 @@ namespace Api.Data.Schema
                     new[] { "CompanySetting", "FiscalYearStartMonth", "INTEGER NULL" },
                     new[] { "CompanySetting", "BooksStartDate", "TEXT NOT NULL DEFAULT '1970-01-01'" },
                     new[] { "CompanySetting", "BooksLockedThrough", "TEXT NULL" },
+                    new[] { "CompanySetting", "PartnerAccountsFrom", "TEXT NULL" },
                     new[] { "CompanySetting", "IndustryTemplate", "INTEGER NOT NULL DEFAULT 1" },
                     new[] { "CompanySetting", "InventoryCostingMethod", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "CoaTemplateId", "TEXT NOT NULL DEFAULT 'legacy-default'" },
@@ -718,9 +721,42 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureStatementOtherIncomeColumns(connection);
             EnsureBooksLockChange(connection);
             EnsureEntityTypeAndYearEndClose(connection);
+            EnsurePartnerAccounts(connection);
             EnsureRecurringScheduleTables(connection);
             EnsurePersonalBooksTables(connection);
             EnsureLinkedEntryPairs(connection);
+        }
+
+        private static void EnsurePartnerAccounts(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "CompanySetting", "PartnerAccountsFrom", "TEXT NULL");
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+CREATE TABLE IF NOT EXISTS ""Partners"" (
+  ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  ""CompanyId"" INTEGER NOT NULL,
+  ""Name"" TEXT NOT NULL CHECK(length(""Name"") <= 100),
+  ""CapitalAccountId"" INTEGER NOT NULL,
+  ""DrawingsAccountId"" INTEGER NOT NULL,
+  ""CreatedAt"" TEXT NOT NULL,
+  ""CreatedBy"" TEXT NOT NULL,
+  ""ArchivedAt"" TEXT NULL,
+  ""RowVersion"" BLOB NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Partners_CompanyId_CapitalAccountId"" ON ""Partners"" (""CompanyId"", ""CapitalAccountId"");
+CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Partners_CompanyId_DrawingsAccountId"" ON ""Partners"" (""CompanyId"", ""DrawingsAccountId"");
+CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Partners_CompanyId_Name"" ON ""Partners"" (""CompanyId"", ""Name"") WHERE ""ArchivedAt"" IS NULL;
+CREATE TABLE IF NOT EXISTS ""PartnerShares"" (
+  ""CompanyId"" INTEGER NOT NULL,
+  ""FinancialYearId"" INTEGER NOT NULL,
+  ""PartnerId"" INTEGER NOT NULL,
+  ""Percent"" NUMERIC(7,4) NOT NULL,
+  PRIMARY KEY (""FinancialYearId"", ""PartnerId""),
+  FOREIGN KEY (""FinancialYearId"") REFERENCES ""FinancialYear"" (""Id"") ON DELETE CASCADE,
+  FOREIGN KEY (""PartnerId"") REFERENCES ""Partners"" (""Id"") ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS ""IX_PartnerShares_PartnerId"" ON ""PartnerShares"" (""PartnerId"");";
+            command.ExecuteNonQuery();
         }
 
         // D1 0043_bank_statement_column_mappings.sql (#447 Phase B)
@@ -804,6 +840,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             if (!TableExists(connection, "Vendor") || !TableExists(connection, "Account"))
                 return;
 
+            AddColumnIfMissing(connection, "BankStatementDescriptionRule", "Action", "INTEGER NOT NULL DEFAULT 0");
             using var cmd = connection.CreateCommand();
             cmd.CommandText = BankStatementDescriptionRuleSql;
             cmd.ExecuteNonQuery();

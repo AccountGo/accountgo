@@ -269,7 +269,7 @@ public sealed class RecordChangeInterceptorTests
     }
 
     [Fact]
-    public void Every_audited_type_has_one_integer_primary_key()
+    public void Every_audited_type_has_supported_integer_primary_key()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
         using var db = CreateDb(connection, new FixedAuditContext());
@@ -277,6 +277,13 @@ public sealed class RecordChangeInterceptorTests
         foreach (var type in RecordChangeInterceptor.AllowList.Keys)
         {
             var key = Assert.IsAssignableFrom<Microsoft.EntityFrameworkCore.Metadata.IKey>(db.Model.FindEntityType(type)?.FindPrimaryKey());
+            if (type == typeof(PartnerShare))
+            {
+                Assert.Equal(new[] { nameof(PartnerShare.FinancialYearId), nameof(PartnerShare.PartnerId) }, key.Properties.Select(property => property.Name));
+                Assert.All(key.Properties, property => Assert.Equal(typeof(int), Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType));
+                continue;
+            }
+
             var property = Assert.Single(key.Properties);
             Assert.Equal(typeof(int), Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType);
         }
