@@ -1074,10 +1074,8 @@ namespace Api.Controllers
 
             if (!isReopen && next.HasValue)
             {
-                var booksLock = _booksLock ?? new Services.Financial.BooksLockService(
-                    new Api.Data.EfRepository<CompanySetting>(Microsoft.Extensions.Logging.Abstractions.NullLogger<CompanySetting>.Instance, _db),
-                    new Api.Data.EfRepository<BooksLockChange>(Microsoft.Extensions.Logging.Abstractions.NullLogger<BooksLockChange>.Instance, _db),
-                    _tenant);
+                var booksLock = _booksLock
+                    ?? HttpContext?.RequestServices.GetRequiredService<Services.Financial.IBooksLockService>();
                 try
                 {
                     var actor = GetUserNameFromRequestHeader() ?? UserId ?? "unknown";

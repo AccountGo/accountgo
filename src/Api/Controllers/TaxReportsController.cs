@@ -121,7 +121,7 @@ namespace Api.Controllers
                 var report = _taxReports.Build(fromDate, toDate, limit);
                 var filings = _taxFilings.ForPeriod(fromDate, toDate);
                 var changedSinceFiling = filings.Count > 0
-                    ? _taxFilings.ChangedSinceFilingForPeriod(fromDate, toDate)
+                    ? _taxFilings.ChangedSinceFilingForPeriod(fromDate, toDate, report)
                     : null;
 
                 var canRecordFiling = _tenant.IsResolved

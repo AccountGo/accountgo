@@ -205,12 +205,28 @@ namespace Services.TaxSystem
                 CreatedAt = DateTime.UtcNow
             };
 
-            // 7. Insert (with unique index backstop).
+            // 7. Insert & 8. Lock books + commit (with unique index and serialization conflict backstop).
             try
             {
                 _filings.Insert(filing);
+
+                if (request.LockBooks)
+                {
+                    var refLabel = reference ?? "no reference";
+                    try
+                    {
+                        _booksLock.Advance(end, $"Tax filing {period.Label} ({refLabel})", actor);
+                    }
+                    catch (BooksLockValidationException ex)
+                    {
+                        _unitOfWork.DiscardPendingChanges();
+                        throw new TaxFilingValidationException("books_lock_invalid", ex.Message);
+                    }
+                }
+
+                tx.Commit();
             }
-            catch (Exception ex) when (IsUniqueConstraintViolation(ex))
+            catch (Exception ex) when (IsConcurrencyOrUniqueConflict(ex))
             {
                 _unitOfWork.DiscardPendingChanges();
                 throw new TaxFilingConflictException(
@@ -218,22 +234,6 @@ namespace Services.TaxSystem
                     "This period already has a filing. Record an amended filing instead.");
             }
 
-            // 8. Lock books in the same transaction (CFO9).
-            if (request.LockBooks)
-            {
-                var refLabel = reference ?? "no reference";
-                try
-                {
-                    _booksLock.Advance(end, $"Tax filing {period.Label} ({refLabel})", actor);
-                }
-                catch (BooksLockValidationException ex)
-                {
-                    _unitOfWork.DiscardPendingChanges();
-                    throw new TaxFilingValidationException("books_lock_invalid", ex.Message);
-                }
-            }
-
-            tx.Commit();
             return ToDto(filing);
         }
 
@@ -266,6 +266,35 @@ namespace Services.TaxSystem
                 throw new ArgumentNullException(nameof(filing));
 
             var current = _taxReports.Build(filing.PeriodStart.Date, filing.PeriodEnd.Date, documentLimit: 0, filing.Basis);
+            return ComputeChangedSinceFiling(filing, current);
+        }
+
+        public TaxChangedSinceFilingDto? ChangedSinceFilingForPeriod(
+            DateTime periodStart,
+            DateTime periodEnd,
+            TaxPeriodReport? precomputedCurrentReport = null)
+        {
+            var start = periodStart.Date;
+            var end = periodEnd.Date;
+            var latest = _filings.Table
+                .Where(f => f.PeriodStart == start && f.PeriodEnd == end)
+                .OrderByDescending(f => f.Sequence)
+                .FirstOrDefault();
+
+            if (latest == null)
+                return null;
+
+            if (precomputedCurrentReport != null
+                && string.Equals(latest.Basis.ToString(), precomputedCurrentReport.Basis, StringComparison.OrdinalIgnoreCase))
+            {
+                return ComputeChangedSinceFiling(latest, precomputedCurrentReport);
+            }
+
+            return ChangedSinceFiling(latest);
+        }
+
+        private static TaxChangedSinceFilingDto ComputeChangedSinceFiling(TaxFiling filing, TaxPeriodReport current)
+        {
             var snapshot = DeserializeSnapshot(filing.SnapshotJson);
 
             var diffRows = new List<TaxFilingDiffRowDto>();
@@ -279,18 +308,6 @@ namespace Services.TaxSystem
                 Rows: diffRows,
                 NetDifference: netDifference,
                 Changed: changed);
-        }
-
-        public TaxChangedSinceFilingDto? ChangedSinceFilingForPeriod(DateTime periodStart, DateTime periodEnd)
-        {
-            var start = periodStart.Date;
-            var end = periodEnd.Date;
-            var latest = _filings.Table
-                .Where(f => f.PeriodStart == start && f.PeriodEnd == end)
-                .OrderByDescending(f => f.Sequence)
-                .FirstOrDefault();
-
-            return latest == null ? null : ChangedSinceFiling(latest);
         }
 
         public IReadOnlyDictionary<(string Start, string End), TaxPeriodFilingSummaryDto> GetPeriodSummaries(
@@ -427,22 +444,29 @@ namespace Services.TaxSystem
                 _tenant.RequireCompanyId(),
                 new EntitlementAction.Module(ModuleAccess.Read, SystemModules.Financials)).Allowed;
 
-        private static bool IsUniqueConstraintViolation(Exception ex)
+        public static bool IsConcurrencyOrUniqueConflict(Exception ex)
         {
-            if (!string.Equals(ex.GetType().Name, "DbUpdateException", StringComparison.Ordinal))
-                return false;
-
-            var inner = ex.InnerException;
-            while (inner != null)
+            var current = ex;
+            while (current != null)
             {
-                var msg = inner.Message ?? string.Empty;
-                if (msg.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase)
-                    || msg.Contains("23505", StringComparison.Ordinal)
-                    || msg.Contains("IX_TaxFiling_", StringComparison.OrdinalIgnoreCase))
+                var sqlState = current.GetType().GetProperty("SqlState")?.GetValue(current)?.ToString();
+                if (string.Equals(sqlState, "23505", StringComparison.Ordinal)
+                    || string.Equals(sqlState, "40001", StringComparison.Ordinal))
                 {
                     return true;
                 }
-                inner = inner.InnerException;
+
+                var msg = current.Message ?? string.Empty;
+                if (msg.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("23505", StringComparison.Ordinal)
+                    || msg.Contains("40001", StringComparison.Ordinal)
+                    || msg.Contains("could not serialize access", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("IX_TaxFiling_CompanyId_PeriodStart_PeriodEnd_Sequence", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                current = current.InnerException;
             }
 
             return false;

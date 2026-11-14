@@ -41,6 +41,9 @@ namespace Services.TaxSystem
         private readonly IRepository<VendorPayment> _vendorPayments;
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
+        private CompanySetting? _cachedSetting;
+        private IReadOnlyList<TaxMeta>? _cachedTaxCatalog;
+        private (CashBasisRecognitionInput Input, IReadOnlyList<CashRecognizedPosting> Postings)? _cachedCashRecognition;
 
         public TaxPeriodReportService(
             IRepository<CompanySetting> settings,
@@ -93,7 +96,7 @@ namespace Services.TaxSystem
             if ((endDate - startDate).TotalDays > MaxRangeDays)
                 throw new TaxPeriodReportValidationException("range_too_long", "Choose a range of 400 days or less.");
 
-            var setting = _settings.Table.FirstOrDefault() ?? new CompanySetting();
+            var setting = _cachedSetting ??= (_settings.Table.FirstOrDefault() ?? new CompanySetting());
             var effectiveBasis = basisOverride ?? setting.AccountingBasis;
 
             var endExclusive = endDate.AddDays(1);
@@ -103,7 +106,7 @@ namespace Services.TaxSystem
                 ? TaxPeriodCalculator.Containing(startDate, setting.TaxPeriodFrequency, cycleStart).Label
                 : null;
 
-            var taxCatalog = _taxes.Table
+            var taxCatalog = _cachedTaxCatalog ??= _taxes.Table
                 .Select(t => new TaxMeta(t.Id, t.TaxCode, t.TaxName, t.Rate, t.SalesAccountId, t.PurchasingAccountId))
                 .ToList();
             var taxById = taxCatalog.ToDictionary(t => t.Id);
@@ -360,18 +363,7 @@ namespace Services.TaxSystem
             IReadOnlyList<TaxMeta> taxCatalog,
             Dictionary<int, TaxMeta> taxById)
         {
-            var recognitionInput = CashBasisRecognitionLoader.Load(
-                _accounts,
-                _glLines,
-                _taxes,
-                _salesInvoices,
-                _customers,
-                _salesReceipts,
-                _customerAllocations,
-                _purchaseInvoices,
-                _vendors,
-                _vendorPayments);
-            var allPostings = CashBasisRecognition.Recognize(recognitionInput);
+            var (recognitionInput, allPostings) = _cachedCashRecognition ??= LoadAndRecognizeCash();
 
             var salesTaxAccountIds = taxCatalog
                 .Where(t => t.SalesAccountId.HasValue)
@@ -932,8 +924,26 @@ namespace Services.TaxSystem
             setting.TaxPeriodFrequency = frequency;
             setting.TaxQuarterCycleStartMonth = quarterCycleStartMonth;
             _settings.Update(setting);
+            _cachedSetting = setting;
 
             return GetSettings();
+        }
+
+        private (CashBasisRecognitionInput Input, IReadOnlyList<CashRecognizedPosting> Postings) LoadAndRecognizeCash()
+        {
+            var input = CashBasisRecognitionLoader.Load(
+                _accounts,
+                _glLines,
+                _taxes,
+                _salesInvoices,
+                _customers,
+                _salesReceipts,
+                _customerAllocations,
+                _purchaseInvoices,
+                _vendors,
+                _vendorPayments);
+            var postings = CashBasisRecognition.Recognize(input);
+            return (input, postings);
         }
 
         private TaxPeriodLedgerCheck BuildLedgerCheck(

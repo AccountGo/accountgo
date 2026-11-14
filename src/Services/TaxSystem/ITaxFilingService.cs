@@ -14,7 +14,7 @@ namespace Services.TaxSystem
         IReadOnlyList<TaxFilingDto> List();
         IReadOnlyList<TaxFilingDto> ForPeriod(DateTime periodStart, DateTime periodEnd);
         TaxChangedSinceFilingDto ChangedSinceFiling(TaxFiling filing);
-        TaxChangedSinceFilingDto? ChangedSinceFilingForPeriod(DateTime periodStart, DateTime periodEnd);
+        TaxChangedSinceFilingDto? ChangedSinceFilingForPeriod(DateTime periodStart, DateTime periodEnd, TaxPeriodReport? precomputedCurrentReport = null);
         IReadOnlyDictionary<(string Start, string End), TaxPeriodFilingSummaryDto> GetPeriodSummaries(
             IEnumerable<(DateTime Start, DateTime End)> periods);
     }

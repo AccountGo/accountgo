@@ -4,6 +4,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Net;
@@ -23,6 +24,7 @@ using Core.Tenancy;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Services.TaxSystem;
 using Xunit;
 
 namespace AccountGo.BackendTests.TaxSystem;
@@ -678,5 +680,88 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
 
         var postRes = await PostFiling("2026-07-01", "2026-09-30", 0m, token: viewer.Token);
         Assert.Equal(HttpStatusCode.Forbidden, postRes.StatusCode);
+    }
+
+    [Fact]
+    public void IsConcurrencyOrUniqueConflict_DetectsPostgres40001AndUniqueIndex()
+    {
+        var serialEx = new FakePostgresException("40001", "could not serialize access due to concurrent update");
+        Assert.True(TaxFilingService.IsConcurrencyOrUniqueConflict(
+            new DbUpdateException("Save failed", new InvalidOperationException("wrapped", serialEx))));
+
+        var uniqueEx = new FakePostgresException("23505", "duplicate key value violates unique constraint");
+        Assert.True(TaxFilingService.IsConcurrencyOrUniqueConflict(new DbUpdateException("Save failed", uniqueEx)));
+
+        Assert.True(TaxFilingService.IsConcurrencyOrUniqueConflict(
+            new Exception("IX_TaxFiling_CompanyId_PeriodStart_PeriodEnd_Sequence violation")));
+        Assert.True(TaxFilingService.IsConcurrencyOrUniqueConflict(
+            new Exception("UNIQUE constraint failed: TaxFiling.CompanyId")));
+
+        Assert.False(TaxFilingService.IsConcurrencyOrUniqueConflict(
+            new InvalidOperationException("unrelated database error")));
+    }
+
+    [Fact]
+    public async Task GetPeriods_CashBasisWithThreeFiledPeriods_BoundsSqlQueries()
+    {
+        WithDb(db =>
+        {
+            var setting = db.CompanySettings.Single();
+            setting.AccountingBasis = AccountingBasis.Cash;
+            setting.TaxPeriodFrequency = TaxPeriodFrequency.Monthly;
+        });
+
+        await CreatePostedInvoice(new DateTime(2026, 7, 10), (_vat12Id, 1000m, 120m));
+        await CreatePostedInvoice(new DateTime(2026, 8, 10), (_vat12Id, 500m, 60m));
+        await CreatePostedInvoice(new DateTime(2026, 9, 10), (_red5Id, 200m, 10m));
+
+        Assert.Equal(HttpStatusCode.Created, (await PostFiling("2026-07-01", "2026-07-31", 0m)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await PostFiling("2026-08-01", "2026-08-31", 0m)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await PostFiling("2026-09-01", "2026-09-30", 0m)).StatusCode);
+
+        var commandCount = 0;
+        var subscriptions = new List<IDisposable>();
+        using var allSub = DiagnosticListener.AllListeners.Subscribe(new Observer<DiagnosticListener>(listener =>
+        {
+            if (listener.Name == "Microsoft.EntityFrameworkCore")
+            {
+                subscriptions.Add(listener.Subscribe(new Observer<KeyValuePair<string, object?>>(ev =>
+                {
+                    if (ev.Key == "Microsoft.EntityFrameworkCore.Database.Command.CommandExecuted")
+                        System.Threading.Interlocked.Increment(ref commandCount);
+                })));
+            }
+        }));
+
+        try
+        {
+            var res = await _host.Send(
+                HttpMethod.Get, "/api/tax/periods?count=8&asOf=2026-10-15", null, _owner.Token, Org);
+            var body = await OkJson(res);
+            Assert.Equal(8, body.GetArrayLength());
+            Assert.InRange(commandCount, 1, 30);
+        }
+        finally
+        {
+            foreach (var sub in subscriptions)
+                sub.Dispose();
+        }
+    }
+
+    private sealed class FakePostgresException : Exception
+    {
+        public string SqlState { get; }
+
+        public FakePostgresException(string sqlState, string message) : base(message)
+        {
+            SqlState = sqlState;
+        }
+    }
+
+    private sealed class Observer<T>(Action<T> onNext) : IObserver<T>
+    {
+        public void OnCompleted() { }
+        public void OnError(Exception error) { }
+        public void OnNext(T value) => onNext(value);
     }
 }
