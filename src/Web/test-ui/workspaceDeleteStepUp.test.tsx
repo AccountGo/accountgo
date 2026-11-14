@@ -96,7 +96,7 @@ describe('workspace delete with step-up', () => {
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/Subscription/update' && init?.method === 'PUT') {
         expect(JSON.parse(String(init.body))).toEqual({
-          plan: 'accounting_pro',
+          plan: 'paid_plan',
           billingInterval: 'month',
           returnUrl: 'https://app.example/org/scratch',
           confirmed: true,
@@ -110,13 +110,13 @@ describe('workspace delete with step-up', () => {
       <PendingCheckoutScreen
         name="Scratch"
         slug="scratch"
-        pendingPlan="accounting_pro"
+        pendingPlan="paid_plan"
         onActivated={() => {}}
       />,
     );
 
     const diffLink = screen.getByRole('link', { name: 'Choose a different plan' });
-    expect(diffLink.getAttribute('href')).toBe('/org/scratch/settings?tab=subscription&upgrade=accounting_pro');
+    expect(diffLink.getAttribute('href')).toBe('/org/scratch/settings?tab=subscription&upgrade=paid_plan');
 
     fireEvent.click(screen.getByRole('button', { name: 'Resume payment' }));
     await waitFor(() => expect(assignSpy).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_123'));
@@ -138,7 +138,7 @@ describe('workspace delete with step-up', () => {
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/Subscription/update' && init?.method === 'PUT') {
         expect(JSON.parse(String(init.body))).toEqual({
-          plan: 'accounting_pro',
+          plan: 'paid_plan',
           billingInterval: 'year',
           returnUrl: 'https://app.example/org/scratch',
           confirmed: true,
@@ -152,7 +152,7 @@ describe('workspace delete with step-up', () => {
       <PendingCheckoutScreen
         name="Scratch"
         slug="scratch"
-        pendingPlan="accounting_pro"
+        pendingPlan="paid_plan"
         onActivated={() => {}}
       />,
     );
