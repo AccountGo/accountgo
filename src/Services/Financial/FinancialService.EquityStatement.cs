@@ -217,7 +217,8 @@ public partial class FinancialService
             foreach (var row in rows) row.Amounts.Remove("unallocated");
         }
         var balanceSheetEquity = BuildBalanceSheet(end, basis, closing).Where(r => r.AccountClassId == 3).Sum(r => r.Amount);
-        return new EquityStatementDto { EntityType = EntityType.Partnership.ToString(), From = start, To = end, Basis = basis.ToString(), PartnerMode = true,
+        var hasUnallocatedProfit = profitIds.Sum(id => Net(closing, id)) != 0m;
+        return new EquityStatementDto { EntityType = EntityType.Partnership.ToString(), From = start, To = end, Basis = basis.ToString(), PartnerMode = true, HasUnallocatedProfit = hasUnallocatedProfit,
             Columns = columns, Rows = rows, BalanceSheetEquity = balanceSheetEquity, DifferenceToBalanceSheet = rows[^1].Total - balanceSheetEquity };
 
         Dictionary<string, decimal> PartnerClosingMovement()

@@ -45,3 +45,23 @@ test('CSV exports both periods, signed values, and safely escaped column and row
   assert.equal(csv?.includes('Previous period: 2025-01-01 – 2025-12-31'), true);
   assert.equal(csv?.includes('Agrees with the balance sheet (equity 75.00)'), true);
 });
+
+test('CSV includes the partner profit allocation note only when hasUnallocatedProfit is true', () => {
+  const partnerReport = {
+    ...statement,
+    from: '2026-01-01',
+    to: '2026-12-31',
+    partnerMode: true,
+    columns: [column('partner:1', 'Avery'), column('unallocated', 'Unallocated')],
+    rows: [
+      row('opening', { 'partner:1': 0, unallocated: 0 }),
+      row('profit', { 'partner:1': 0, unallocated: 0 }),
+      row('closing', { 'partner:1': 0, unallocated: 50 }),
+    ],
+    balanceSheetEquity: 50,
+  };
+  const withoutProfit = equity.equityStatementCsv({ ...partnerReport, hasUnallocatedProfit: false });
+  assert.equal(withoutProfit?.includes('Profit is allocated to partners when the fiscal year is closed.'), false);
+  const withProfit = equity.equityStatementCsv({ ...partnerReport, hasUnallocatedProfit: true });
+  assert.equal(withProfit?.includes('Profit is allocated to partners when the fiscal year is closed.'), true);
+});

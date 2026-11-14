@@ -306,4 +306,203 @@ public sealed class EquityStatementHttpTests : IAsyncLifetime
         Assert.Contains("Agrees with the balance sheet", text);
         Assert.Equal(compare, text.Contains("Previous period:", StringComparison.Ordinal));
     }
+
+    private async Task<List<(int Id, string Name, string CapitalCode, string DrawingsCode)>> SetupPartners(
+        DateTime date, params (string Name, decimal Percent, decimal Capital, decimal Drawings)[] partners)
+    {
+        WithDb(db =>
+        {
+            db.CompanySettings.Single().EntityType = EntityType.Partnership;
+            db.GeneralLedgerSettings.Single().PermanentAccountId = db.Accounts.Single(a => a.AccountCode == "30100").Id;
+        });
+        var payload = new
+        {
+            date = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            partners = partners.Select(p => new { name = p.Name, percent = p.Percent, capital = p.Capital, drawings = p.Drawings }).ToArray()
+        };
+        var json = await Ok(await Send("Partners/Setup", HttpMethod.Post, payload));
+        return json.GetProperty("partners").EnumerateArray().Select(p => (
+            p.GetProperty("id").GetInt32(),
+            p.GetProperty("name").GetString()!,
+            p.GetProperty("capitalAccountCode").GetString()!,
+            p.GetProperty("drawingsAccountCode").GetString()!
+        )).ToList();
+    }
+
+    private static string PartnerKey(int id) => "partner:" + id.ToString(CultureInfo.InvariantCulture);
+
+    [Fact]
+    public async Task PartnerMode_HasUnallocatedProfit_FalseForResidualDrawingsAndTrueForOpenProfit()
+    {
+        await SetupPartners(new DateTime(2025, 1, 1), ("Avery", 50m, 0m, 0m), ("Blake", 50m, 0m, 0m));
+        Post("30800", "10111", 75m, new DateTime(2025, 3, 1));
+
+        var residualOnly = await Ok(await Report(from: new DateTime(2025, 1, 1), to: new DateTime(2025, 12, 31)));
+        Assert.False(residualOnly.GetProperty("hasUnallocatedProfit").GetBoolean());
+        Assert.Equal(-75m, Row(residualOnly, "closing").GetProperty("amounts").GetProperty("unallocated").GetDecimal());
+    }
+
+    [Fact]
+    public async Task PartnerMode_SetupInsidePeriod_ThreePartners_ReconcilesWithoutDoubleCounting()
+    {
+        Post("10111", "30100", 1000m, new DateTime(2025, 2, 1));
+        Post("30800", "10111", 250m, new DateTime(2025, 2, 15));
+
+        var partners = await SetupPartners(new DateTime(2025, 6, 1),
+            ("Avery", 50m, 500m, 150m),
+            ("Blake", 30m, 300m, 100m),
+            ("Casey", 20m, 200m, 0m));
+
+        var to = new DateTime(2025, 12, 31);
+        var report = await Ok(await Report(from: new DateTime(2025, 1, 1), to: to));
+        var setupRow = Row(report, "partnerSetup");
+        Assert.Equal(0m, setupRow.GetProperty("total").GetDecimal());
+        Assert.Equal(-750m, setupRow.GetProperty("amounts").GetProperty("unallocated").GetDecimal());
+        Assert.Equal(350m, setupRow.GetProperty("amounts").GetProperty(PartnerKey(partners[0].Id)).GetDecimal());
+        Assert.Equal(200m, setupRow.GetProperty("amounts").GetProperty(PartnerKey(partners[1].Id)).GetDecimal());
+        Assert.Equal(200m, setupRow.GetProperty("amounts").GetProperty(PartnerKey(partners[2].Id)).GetDecimal());
+
+        var contributions = Row(report, "contributions");
+        Assert.Equal(1000m, contributions.GetProperty("amounts").GetProperty("unallocated").GetDecimal());
+        foreach (var p in partners)
+            Assert.Equal(0m, contributions.GetProperty("amounts").GetProperty(PartnerKey(p.Id)).GetDecimal());
+        Assert.DoesNotContain(report.GetProperty("rows").EnumerateArray(), r => r.GetProperty("key").GetString() == "other");
+
+        await AssertReconciles(report, to: to);
+    }
+
+    [Fact]
+    public async Task PartnerMode_ClosedYearWithAllocation_AllocatesProfitAndClosesDrawings()
+    {
+        var partners = await SetupPartners(new DateTime(2025, 1, 1),
+            ("Avery", 50m, 0m, 0m), ("Blake", 30m, 0m, 0m), ("Casey", 20m, 0m, 0m));
+        Post("10111", "40100", 1000m, new DateTime(2025, 3, 1));
+        Post(partners[0].DrawingsCode, "10111", 120m, new DateTime(2025, 4, 1));
+        await Close();
+
+        var to = new DateTime(2025, 12, 31);
+        var report = await Ok(await Report(from: new DateTime(2025, 1, 1), to: to));
+        Assert.False(report.GetProperty("hasUnallocatedProfit").GetBoolean());
+        Assert.Equal(1000m, Row(report, "profit").GetProperty("amounts").GetProperty("unallocated").GetDecimal());
+
+        var allocated = Row(report, "profitAllocated");
+        Assert.Equal(0m, allocated.GetProperty("total").GetDecimal());
+        Assert.Equal(-1000m, allocated.GetProperty("amounts").GetProperty("unallocated").GetDecimal());
+        Assert.Equal(500m, allocated.GetProperty("amounts").GetProperty(PartnerKey(partners[0].Id)).GetDecimal());
+        Assert.Equal(300m, allocated.GetProperty("amounts").GetProperty(PartnerKey(partners[1].Id)).GetDecimal());
+        Assert.Equal(200m, allocated.GetProperty("amounts").GetProperty(PartnerKey(partners[2].Id)).GetDecimal());
+
+        var closing = Row(report, "closing");
+        Assert.Equal(380m, closing.GetProperty("amounts").GetProperty(PartnerKey(partners[0].Id)).GetDecimal());
+        if (closing.GetProperty("amounts").TryGetProperty("unallocated", out var unalloc))
+            Assert.Equal(0m, unalloc.GetDecimal());
+
+        await AssertReconciles(report, to: to);
+    }
+
+    [Fact]
+    public async Task PartnerMode_ReopenedYear_ReversesAllocationAndKeepsProfitUnallocated()
+    {
+        var partners = await SetupPartners(new DateTime(2025, 1, 1),
+            ("Avery", 50m, 0m, 0m), ("Blake", 30m, 0m, 0m), ("Casey", 20m, 0m, 0m));
+        Post("10111", "40100", 1000m, new DateTime(2025, 3, 1));
+        Post(partners[0].DrawingsCode, "10111", 120m, new DateTime(2025, 4, 1));
+        await Close();
+        await Ok(await Send("YearEnd/2025/Reopen", HttpMethod.Post, new { reason = "Correction" }));
+
+        var to = new DateTime(2025, 12, 31);
+        var report = await Ok(await Report(from: new DateTime(2025, 1, 1), to: to));
+        var allocatedRow = report.GetProperty("rows").EnumerateArray().FirstOrDefault(r => r.GetProperty("key").GetString() == "profitAllocated");
+        if (allocatedRow.ValueKind != JsonValueKind.Undefined)
+            Assert.All(allocatedRow.GetProperty("amounts").EnumerateObject(), prop => Assert.Equal(0m, prop.Value.GetDecimal()));
+        Assert.Equal(1000m, Row(report, "closing").GetProperty("amounts").GetProperty("unallocated").GetDecimal());
+        Assert.True(report.GetProperty("hasUnallocatedProfit").GetBoolean());
+        await AssertReconciles(report, to: to);
+    }
+
+    [Fact]
+    public async Task PartnerMode_OpenYear_KeepsProfitUnallocatedAndSetsFlag()
+    {
+        await Close();
+        await SetupPartners(new DateTime(2026, 1, 1), ("Avery", 50m, 0m, 0m), ("Blake", 50m, 0m, 0m));
+        Post("10111", "40100", 400m, new DateTime(2026, 5, 1));
+
+        var to = new DateTime(2026, 12, 31);
+        var report = await Ok(await Report(from: new DateTime(2026, 1, 1), to: to));
+        Assert.True(report.GetProperty("hasUnallocatedProfit").GetBoolean());
+        Assert.Equal(400m, Row(report, "profit").GetProperty("amounts").GetProperty("unallocated").GetDecimal());
+        Assert.DoesNotContain(report.GetProperty("rows").EnumerateArray(), r => r.GetProperty("key").GetString() == "profitAllocated");
+        Assert.Equal(400m, Row(report, "closing").GetProperty("amounts").GetProperty("unallocated").GetDecimal());
+        await AssertReconciles(report, to: to);
+    }
+
+    [Fact]
+    public async Task PartnerMode_PeriodEndingBeforeSetup_UsesSingleColumnLayout()
+    {
+        await Close();
+        await SetupPartners(new DateTime(2026, 6, 30), ("Avery", 50m, 0m, 0m), ("Blake", 50m, 0m, 0m));
+
+        var before = await Ok(await Report(from: new DateTime(2025, 1, 1), to: new DateTime(2025, 12, 31)));
+        Assert.False(before.GetProperty("partnerMode").GetBoolean());
+        var col = Assert.Single(before.GetProperty("columns").EnumerateArray());
+        Assert.Equal("capital", col.GetProperty("key").GetString());
+        Assert.Equal("Partners' capital", col.GetProperty("label").GetString());
+
+        var after = await Ok(await Report(from: new DateTime(2026, 1, 1), to: new DateTime(2026, 12, 31)));
+        Assert.True(after.GetProperty("partnerMode").GetBoolean());
+    }
+
+    [Fact]
+    public async Task PartnerMode_ComparativeWithDifferentLayouts_RendersBothLayoutsIndependently()
+    {
+        WithDb(db =>
+        {
+            db.CompanySettings.Single().EntityType = EntityType.Partnership;
+            db.GeneralLedgerSettings.Single().PermanentAccountId = db.Accounts.Single(a => a.AccountCode == "30100").Id;
+        });
+        Post("10111", "30100", 500m, new DateTime(2025, 4, 1));
+        await Close();
+        await SetupPartners(new DateTime(2026, 6, 30), ("Avery", 50m, 300m, 0m), ("Blake", 50m, 200m, 0m));
+
+        var report = await Ok(await Report("&compareFrom=2025-01-01&compareTo=2025-12-31",
+            from: new DateTime(2026, 1, 1), to: new DateTime(2026, 12, 31)));
+        Assert.True(report.GetProperty("partnerMode").GetBoolean());
+
+        var comparative = report.GetProperty("comparative");
+        Assert.False(comparative.GetProperty("partnerMode").GetBoolean());
+        Assert.Equal("capital", Assert.Single(comparative.GetProperty("columns").EnumerateArray()).GetProperty("key").GetString());
+    }
+
+    [Fact]
+    public async Task PartnerMode_ArchivedPartnerColumn_HiddenWhenZeroAndShownWithMovement()
+    {
+        var partners = await SetupPartners(new DateTime(2025, 1, 1),
+            ("Avery", 50m, 0m, 0m), ("Blake", 30m, 0m, 0m), ("Casey", 20m, 0m, 0m));
+        var casey = partners[2];
+        WithDb(db => db.Partners.Single(p => p.Id == casey.Id).ArchivedAt = new DateTime(2025, 2, 1));
+
+        var to = new DateTime(2025, 12, 31);
+        var hidden = await Ok(await Report(from: new DateTime(2025, 1, 1), to: to));
+        Assert.DoesNotContain(hidden.GetProperty("columns").EnumerateArray(), c => c.GetProperty("key").GetString() == PartnerKey(casey.Id));
+
+        Post("10111", casey.CapitalCode, 75m, new DateTime(2025, 6, 1));
+        var shown = await Ok(await Report(from: new DateTime(2025, 1, 1), to: to));
+        var col = Assert.Single(shown.GetProperty("columns").EnumerateArray(), c => c.GetProperty("key").GetString() == PartnerKey(casey.Id));
+        Assert.Equal("Casey (archived)", col.GetProperty("label").GetString());
+        await AssertReconciles(shown, to: to);
+    }
+
+    [Fact]
+    public async Task PartnerMode_CashBasis_ClosedYearWithAllocation_Reconciles()
+    {
+        var partners = await SetupPartners(new DateTime(2025, 1, 1),
+            ("Avery", 50m, 0m, 0m), ("Blake", 30m, 0m, 0m), ("Casey", 20m, 0m, 0m));
+        Post("10111", "40100", 1000m, new DateTime(2025, 3, 1));
+        Post(partners[0].DrawingsCode, "10111", 120m, new DateTime(2025, 4, 1));
+        await Close();
+
+        var to = new DateTime(2025, 12, 31);
+        var report = await Ok(await Report("&basis=Cash", from: new DateTime(2025, 1, 1), to: to));
+        await AssertReconciles(report, "Cash", to);
+    }
 }

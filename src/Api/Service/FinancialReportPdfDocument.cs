@@ -189,7 +189,7 @@ namespace Api.Service
                     if (Math.Abs(closing - bridge) >= 0.005m)
                         column.Item().PaddingTop(4).Text(component.Label + " movements don't reconcile to closing by " + Money(closing - bridge) + ".").FontColor("#B91C1C");
                 }
-                if (statement.PartnerMode && (statement.Rows.FirstOrDefault(r => r.Key == "closing")?.Amounts.GetValueOrDefault("unallocated") ?? 0m) != 0m)
+                if (statement.PartnerMode && statement.HasUnallocatedProfit)
                     column.Item().PaddingTop(5).Text("Profit is allocated to partners when the fiscal year is closed.").FontColor(Secondary);
             });
         }

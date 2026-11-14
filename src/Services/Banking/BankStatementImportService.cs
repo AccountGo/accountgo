@@ -595,9 +595,14 @@ namespace Services.Banking
             if (PartnerAccountingMode.IsEnabled(setting))
             {
                 var activePartners = (_partners?.Table ?? Enumerable.Empty<Partner>().AsQueryable()).Where(p => p.CompanyId == companyId && p.ArchivedAt == null).OrderBy(p => p.Name).ToList();
-                var accounts = _accounts.Table.Where(a => a.CompanyId == companyId).ToList();
-                var accountsById = accounts.ToDictionary(a => a.Id);
-                var parentIds = accounts.Where(a => a.ParentAccountId.HasValue).Select(a => a.ParentAccountId!.Value).ToHashSet();
+                var ids = activePartners.SelectMany(p => new[] { p.DrawingsAccountId, p.CapitalAccountId }).Distinct().ToList();
+                var accountsById = ids.Count == 0
+                    ? new Dictionary<int, Account>()
+                    : _accounts.Table.Where(a => a.CompanyId == companyId && ids.Contains(a.Id)).ToDictionary(a => a.Id);
+                var parentIds = ids.Count == 0
+                    ? new HashSet<int>()
+                    : _accounts.Table.Where(a => a.CompanyId == companyId && a.ParentAccountId != null && ids.Contains(a.ParentAccountId.Value))
+                        .Select(a => a.ParentAccountId!.Value).Distinct().ToHashSet();
                 return new(null, null, activePartners
                     .Select(p => new StatementPartnerOwnerActionsDto(p.Id, p.Name,
                         ResolvePartnerOwnerAction(p.DrawingsAccountId, "Partner drawing", accountsById, parentIds),
@@ -605,16 +610,6 @@ namespace Services.Banking
             }
             return new(ResolveOwnerAction(OwnerMovementPolicy.Drawing(type)),
                 ResolveOwnerAction(OwnerMovementPolicy.Contribution(type)));
-        }
-
-        private StatementOwnerActionDto? ResolvePartnerOwnerAction(int accountId, string label)
-        {
-            var companyId = _tenant.RequireCompanyId();
-            var account = _accounts.GetById(accountId);
-            if (account == null || account.CompanyId != companyId || account.ArchivedAt != null || !account.CanPost()
-                || account.AccountClassId != (int)AccountClasses.Equity
-                || _accounts.Table.Any(a => a.CompanyId == companyId && a.ParentAccountId == account.Id)) return null;
-            return new(account.Id, account.AccountCode, account.AccountName, label);
         }
 
         private static StatementOwnerActionDto? ResolvePartnerOwnerAction(int accountId, string label,
@@ -663,15 +658,20 @@ namespace Services.Banking
             StatementOwnerActionDto? action;
             if (partnerMode)
             {
-                partner = _partners.Table.FirstOrDefault(p => p.CompanyId == _tenant.RequireCompanyId() && p.Id == partnerId!.Value);
+                if (_partners == null) throw new InvalidOperationException("Partners aren't set up for this workspace.");
+                var companyId = _tenant.RequireCompanyId();
+                partner = _partners.Table.FirstOrDefault(p => p.CompanyId == companyId && p.Id == partnerId!.Value);
                 if (partner == null || partner.ArchivedAt != null) throw new InvalidOperationException("Choose an active partner.");
-                action = ResolvePartnerOwnerAction(drawing ? partner!.DrawingsAccountId : partner!.CapitalAccountId,
-                    drawing ? "Partner drawing" : "Partner contribution");
+                var targetAccountId = drawing ? partner.DrawingsAccountId : partner.CapitalAccountId;
+                var rawAccount = _accounts.GetById(targetAccountId);
+                var account = rawAccount?.CompanyId == companyId ? rawAccount : null;
+                var accountsById = account != null ? new Dictionary<int, Account> { [account.Id] = account } : new Dictionary<int, Account>();
+                var parentIds = account != null && _accounts.Table.Any(a => a.CompanyId == companyId && a.ParentAccountId == account.Id)
+                    ? new HashSet<int> { account.Id }
+                    : new HashSet<int>();
+                action = ResolvePartnerOwnerAction(targetAccountId, drawing ? "Partner drawing" : "Partner contribution", accountsById, parentIds);
                 if (action == null)
-                {
-                    var account = _accounts.GetById(drawing ? partner!.DrawingsAccountId : partner!.CapitalAccountId);
                     throw new InvalidOperationException($"{account?.AccountName ?? "Partner account"} ({account?.AccountCode ?? "unknown"}) is missing, archived or can't be posted to.");
-                }
             }
             else
             {
@@ -764,12 +764,13 @@ namespace Services.Banking
             var companyId = _tenant.RequireCompanyId();
             var drawingId = actions.Drawing?.AccountId;
             var contributionId = actions.Contribution?.AccountId;
-            var partnerAccounts = actions.Partners == null
-                ? new Dictionary<int, (Partner Partner, string Action)>()
-                : (_partners?.Table ?? Enumerable.Empty<Partner>().AsQueryable()).Where(p => p.CompanyId == companyId).ToList()
-                .SelectMany(p => new[] { (Partner: p, AccountId: p.DrawingsAccountId, Action: "drawing"), (Partner: p, AccountId: p.CapitalAccountId, Action: "contribution") })
-                .ToDictionary(x => x.AccountId, x => (x.Partner, x.Action));
-            var partnerAccountIds = partnerAccounts.Keys.ToList();
+            var partners = actions.Partners == null
+                ? new List<Partner>()
+                : (_partners?.Table ?? Enumerable.Empty<Partner>().AsQueryable()).Where(p => p.CompanyId == companyId).ToList();
+            var partnerByDrawingId = partners.ToDictionary(p => p.DrawingsAccountId);
+            var partnerByCapitalId = partners.ToDictionary(p => p.CapitalAccountId);
+            var partnerDrawingIds = partnerByDrawingId.Keys.ToList();
+            var partnerCapitalIds = partnerByCapitalId.Keys.ToList();
             var matches = (from gl in _glLines.Table
                 join tx in _bankTransactions.Table on gl.GeneralLedgerHeaderId equals tx.GeneralLedgerHeaderId
                 join bank in _banks.Table on tx.BankId equals bank.Id
@@ -779,15 +780,20 @@ namespace Services.Banking
                     && header.DocumentType == DocumentTypes.BankTransaction
                     && !header.ReversedGeneralLedgerHeaderId.HasValue
                     && tx.VoidGeneralLedgerHeaderId == null && gl.AccountId == bank.AccountId
-                    && ((tx.Kind == BankTransactionKinds.MoneyOut && drawingId.HasValue && tx.ContraAccountId == drawingId)
-                        || (tx.Kind == BankTransactionKinds.MoneyIn && contributionId.HasValue && tx.ContraAccountId == contributionId)
-                        || partnerAccountIds.Contains(tx.ContraAccountId ?? 0))
+                    && ((tx.Kind == BankTransactionKinds.MoneyOut && ((drawingId.HasValue && tx.ContraAccountId == drawingId) || partnerDrawingIds.Contains(tx.ContraAccountId ?? 0)))
+                        || (tx.Kind == BankTransactionKinds.MoneyIn && ((contributionId.HasValue && tx.ContraAccountId == contributionId) || partnerCapitalIds.Contains(tx.ContraAccountId ?? 0))))
                 select new { gl.Id, tx.BankId, TransactionId = tx.Id, gl.AccountId, tx.Kind, tx.ContraAccountId }).ToList();
             var lineBanks = lines.Where(l => l.IsMatched).ToDictionary(l => l.MatchedGeneralLedgerLineId!.Value, l => l.BankId);
             return matches.Where(m => lineBanks[m.Id] == m.BankId).ToDictionary(m => m.Id,
-                m => partnerAccounts.TryGetValue(m.ContraAccountId ?? 0, out var partner)
-                    ? new OwnerMatch(m.TransactionId, m.AccountId, partner.Action, partner.Partner.Id, partner.Partner.Name)
-                    : new OwnerMatch(m.TransactionId, m.AccountId, m.Kind == BankTransactionKinds.MoneyOut ? "drawing" : "contribution"));
+                m =>
+                {
+                    var isDrawing = m.Kind == BankTransactionKinds.MoneyOut;
+                    var action = isDrawing ? "drawing" : "contribution";
+                    var partner = m.ContraAccountId.HasValue
+                        && (isDrawing ? partnerByDrawingId : partnerByCapitalId).TryGetValue(m.ContraAccountId.Value, out var p)
+                        ? p : null;
+                    return new OwnerMatch(m.TransactionId, m.AccountId, action, partner?.Id, partner?.Name);
+                });
         }
 
         private void RememberOwnerRule(BankStatementLine line, BankStatementRuleAction action, int? partnerId)

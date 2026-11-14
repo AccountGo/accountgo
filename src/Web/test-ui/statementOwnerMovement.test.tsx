@@ -61,6 +61,7 @@ it('requires a partner and updates the account before recording', async () => {
   const saved = vi.fn();
   render(<StatementLineOwnerMovementDialog lines={[line]} action={partners[0].drawing!} partners={partners} formatCurrency={String} onClose={vi.fn()} onSaved={saved} />);
   const submit = screen.getByRole('button', { name: 'Record' }) as HTMLButtonElement;
+  expect(screen.queryByText(/30851|30852/)).toBeNull();
   expect(submit.disabled).toBe(true);
   fireEvent.change(screen.getByLabelText('Partner'), { target: { value: '2' } });
   expect(screen.getByText('Account: Drawings – Blake (30852)')).toBeTruthy();

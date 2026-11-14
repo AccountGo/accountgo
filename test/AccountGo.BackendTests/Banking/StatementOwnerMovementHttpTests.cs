@@ -567,4 +567,203 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, json.GetProperty("drawing").ValueKind);
         WithDb(db => { Assert.Single(db.BankTransactions); Assert.NotNull(db.BankStatementLines.Single(l => l.Id == id).MatchedGeneralLedgerLineId); Assert.Equal(2, db.GeneralLedgerLines.Count()); });
     }
+
+    private (int PartnerId, int CapitalId, int DrawingsId) SetupPartner(
+        string name = "Avery", string suffix = "1", DateTime? partnerArchivedAt = null, DateTime? drawingsArchivedAt = null)
+    {
+        var ids = (0, 0, 0);
+        WithDb(db =>
+        {
+            var setting = db.CompanySettings.Single();
+            setting.EntityType = EntityType.Partnership;
+            setting.PartnerAccountsFrom ??= Date;
+            var capital = new Account
+            {
+                CompanyId = _companyId, AccountClassId = 3, AccountCode = "3010" + suffix,
+                AccountName = "Capital – " + name, DrOrCrSide = DrOrCrSide.Cr
+            };
+            var drawings = new Account
+            {
+                CompanyId = _companyId, AccountClassId = 3, AccountCode = "3085" + suffix,
+                AccountName = "Drawings – " + name, DrOrCrSide = DrOrCrSide.Dr, IsContraAccount = true,
+                ArchivedAt = drawingsArchivedAt
+            };
+            db.Accounts.AddRange(capital, drawings);
+            db.SaveChanges();
+            var partner = new Partner
+            {
+                CompanyId = _companyId, Name = name, CapitalAccountId = capital.Id, DrawingsAccountId = drawings.Id,
+                ArchivedAt = partnerArchivedAt, CreatedAt = DateTime.UtcNow, CreatedBy = "test",
+                RowVersion = Guid.NewGuid().ToByteArray()
+            };
+            db.Partners.Add(partner);
+            db.SaveChanges();
+            ids = (partner.Id, capital.Id, drawings.Id);
+        });
+        return ids;
+    }
+
+    [Fact]
+    public async Task PartnerMode_MatchedLineDirectionMustMatchAccountType()
+    {
+        var (_, _, drawingsId) = SetupPartner();
+        var lineId = Line(30, "Repayment");
+        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{lineId}/CreateTransaction",
+            new { kind = 1, contraAccountId = drawingsId }));
+
+        var page = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=matched"));
+        var matched = page.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetInt32() == lineId);
+        Assert.True(!matched.TryGetProperty("matchedOwnerAction", out var action) || action.ValueKind == JsonValueKind.Null);
+        Assert.True(!matched.TryGetProperty("matchedPartnerId", out var pid) || pid.ValueKind == JsonValueKind.Null);
+
+        var undo = await Send(HttpMethod.Post, $"StatementLines/{lineId}/UndoOwnerMovement", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, undo.StatusCode);
+        Assert.Equal("This line wasn't recorded as an owner drawing or contribution.",
+            (await AuditTestHost.Json(undo)).GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task PartnerMode_BulkRecordOwnerMovement_PostsToChosenPartner()
+    {
+        var (partnerId, _, drawingsId) = SetupPartner();
+        var line1 = Line(-20, "Avery 1");
+        var line2 = Line(-35, "Avery 2");
+
+        var response = await Send(HttpMethod.Post, "StatementLines/BulkRecordOwnerMovement",
+            new { lineIds = new[] { line1, line2 }, partnerId });
+        await AssertOk(response);
+
+        WithDb(db =>
+        {
+            var txs = db.BankTransactions.ToList();
+            Assert.Equal(2, txs.Count);
+            Assert.All(txs, tx => Assert.Equal(drawingsId, tx.ContraAccountId));
+        });
+    }
+
+    [Fact]
+    public async Task PartnerMode_RecordOwnerMovement_ValidationErrors()
+    {
+        var line1 = Line(-20, "Sole prop check");
+        var soleProp = await Send(HttpMethod.Post, $"StatementLines/{line1}/RecordOwnerMovement", new { partnerId = 1, rememberRule = true });
+        Assert.Equal(HttpStatusCode.BadRequest, soleProp.StatusCode);
+        Assert.Equal("Partners aren't set up for this workspace.", (await AuditTestHost.Json(soleProp)).GetProperty("message").GetString());
+        AssertNothingPosted(line1);
+        WithDb(db => Assert.Empty(db.BankStatementDescriptionRules));
+
+        var (archivedPartnerId, _, _) = SetupPartner("Archived", "1", partnerArchivedAt: DateTime.UtcNow);
+        var (archivedAccountPartnerId, _, _) = SetupPartner("NoDrawings", "2", drawingsArchivedAt: DateTime.UtcNow);
+
+        var archivedRes = await Send(HttpMethod.Post, $"StatementLines/{line1}/RecordOwnerMovement", new { partnerId = archivedPartnerId, rememberRule = true });
+        Assert.Equal(HttpStatusCode.BadRequest, archivedRes.StatusCode);
+        Assert.Equal("Choose an active partner.", (await AuditTestHost.Json(archivedRes)).GetProperty("message").GetString());
+
+        var unknownRes = await Send(HttpMethod.Post, $"StatementLines/{line1}/RecordOwnerMovement", new { partnerId = 999999, rememberRule = true });
+        Assert.Equal(HttpStatusCode.BadRequest, unknownRes.StatusCode);
+        Assert.Equal("Choose an active partner.", (await AuditTestHost.Json(unknownRes)).GetProperty("message").GetString());
+
+        var archivedAcctRes = await Send(HttpMethod.Post, $"StatementLines/{line1}/RecordOwnerMovement", new { partnerId = archivedAccountPartnerId, rememberRule = true });
+        Assert.Equal(HttpStatusCode.BadRequest, archivedAcctRes.StatusCode);
+        Assert.Equal("Drawings – NoDrawings (30852) is missing, archived or can't be posted to.",
+            (await AuditTestHost.Json(archivedAcctRes)).GetProperty("message").GetString());
+
+        AssertNothingPosted(line1);
+        WithDb(db => Assert.Empty(db.BankStatementDescriptionRules));
+    }
+
+    [Fact]
+    public async Task PartnerMode_Rules_LegacyArchivedAndExpenseOverwrite()
+    {
+        var (activeId, _, _) = SetupPartner("Avery", "1");
+        var (archivedId, _, _) = SetupPartner("Blake", "2", partnerArchivedAt: DateTime.UtcNow);
+
+        WithDb(db =>
+        {
+            db.BankStatementDescriptionRules.AddRange(
+                new BankStatementDescriptionRule
+                {
+                    CompanyId = _companyId, DescriptionKey = "legacy draw",
+                    Action = (int)BankStatementRuleAction.OwnerDrawing, PartnerId = null,
+                    CreatedAt = DateTime.UtcNow, LastUsedAt = DateTime.UtcNow
+                },
+                new BankStatementDescriptionRule
+                {
+                    CompanyId = _companyId, DescriptionKey = "archived draw",
+                    Action = (int)BankStatementRuleAction.OwnerDrawing, PartnerId = archivedId,
+                    CreatedAt = DateTime.UtcNow, LastUsedAt = DateTime.UtcNow
+                },
+                new BankStatementDescriptionRule
+                {
+                    CompanyId = _companyId, DescriptionKey = "avery expense",
+                    Action = (int)BankStatementRuleAction.OwnerDrawing, PartnerId = activeId,
+                    CreatedAt = DateTime.UtcNow, LastUsedAt = DateTime.UtcNow
+                });
+        });
+
+        var legacyLine = Line(-10, "Legacy draw");
+        var archivedLine = Line(-15, "Archived draw");
+        var expenseLine = Line(-25, "Avery expense");
+
+        var page = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=unmatched"));
+        var lines = page.GetProperty("lines").EnumerateArray().ToList();
+
+        var legacyDto = lines.Single(l => l.GetProperty("id").GetInt32() == legacyLine);
+        Assert.Equal("drawing", legacyDto.GetProperty("suggestedOwnerAction").GetString());
+        Assert.True(!legacyDto.TryGetProperty("suggestedPartnerId", out var lpid) || lpid.ValueKind == JsonValueKind.Null);
+
+        var archivedDto = lines.Single(l => l.GetProperty("id").GetInt32() == archivedLine);
+        Assert.Equal("drawing", archivedDto.GetProperty("suggestedOwnerAction").GetString());
+        Assert.True(!archivedDto.TryGetProperty("suggestedPartnerId", out var apid) || apid.ValueKind == JsonValueKind.Null);
+
+        var expenseAccountId = 0;
+        WithDb(db => expenseAccountId = db.Accounts.First(a => a.AccountClassId == (int)AccountClasses.Expense
+            && !db.Accounts.Any(child => child.ParentAccountId == a.Id)).Id);
+        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{expenseLine}/RecordExpense", new
+        {
+            expenseAccountId, newVendor = new { name = "Avery Vendor" }, rememberRule = true
+        }));
+        WithDb(db =>
+        {
+            var rule = db.BankStatementDescriptionRules.Single(r => r.DescriptionKey == "avery expense");
+            Assert.Equal((int)BankStatementRuleAction.Expense, rule.Action);
+            Assert.Null(rule.PartnerId);
+        });
+    }
+
+    [Fact]
+    public async Task PartnerMode_GetOwnerActions_FiltersArchivedAndHidesSharedActions()
+    {
+        var (activeId, _, _) = SetupPartner("Avery", "1");
+        SetupPartner("Archived", "2", partnerArchivedAt: DateTime.UtcNow);
+        var (noDrawingsId, _, _) = SetupPartner("Blake", "3", drawingsArchivedAt: DateTime.UtcNow);
+
+        var json = await AuditTestHost.Json(await Send(HttpMethod.Get, "StatementOwnerActions"));
+        Assert.True(!json.TryGetProperty("drawing", out var d) || d.ValueKind == JsonValueKind.Null);
+        Assert.True(!json.TryGetProperty("contribution", out var c) || c.ValueKind == JsonValueKind.Null);
+        var partners = json.GetProperty("partners").EnumerateArray().ToList();
+        Assert.Equal(2, partners.Count);
+        Assert.DoesNotContain(partners, p => p.GetProperty("name").GetString() == "Archived");
+
+        var avery = partners.Single(p => p.GetProperty("partnerId").GetInt32() == activeId);
+        Assert.Equal(JsonValueKind.Object, avery.GetProperty("drawing").ValueKind);
+        var blake = partners.Single(p => p.GetProperty("partnerId").GetInt32() == noDrawingsId);
+        Assert.Equal(JsonValueKind.Null, blake.GetProperty("drawing").ValueKind);
+        Assert.Equal(JsonValueKind.Object, blake.GetProperty("contribution").ValueKind);
+    }
+
+    [Fact]
+    public async Task SoleProprietor_OwnerActionsHaveNullPartners_AndRecordsTo30800()
+    {
+        var actions = await AuditTestHost.Json(await Send(HttpMethod.Get, "StatementOwnerActions"));
+        Assert.True(!actions.TryGetProperty("partners", out var partners) || partners.ValueKind == JsonValueKind.Null);
+        Assert.Equal("30800", actions.GetProperty("drawing").GetProperty("accountCode").GetString());
+
+        var id = Line(-55, "Sole draw");
+        await AssertOk(await Record(id));
+        WithDb(db =>
+        {
+            var drawingsId = db.Accounts.Single(a => a.AccountCode == "30800").Id;
+            Assert.Equal(drawingsId, Assert.Single(db.BankTransactions).ContraAccountId);
+        });
+    }
 }

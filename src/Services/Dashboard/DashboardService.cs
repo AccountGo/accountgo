@@ -26,7 +26,6 @@ namespace Services.Dashboard
         private readonly IBankAccountService _bankAccountService;
         private readonly ITenantContext _tenantContext;
         private readonly IAccessAuthorizationService? _authorizationService;
-        private readonly Core.Data.IRepository<Partner>? _partners;
 
         public DashboardService(
             IFinancialService financialService,
@@ -34,8 +33,7 @@ namespace Services.Dashboard
             IPurchasingService purchasingService,
             IBankAccountService bankAccountService,
             ITenantContext tenantContext,
-            IAccessAuthorizationService? authorizationService = null,
-            Core.Data.IRepository<Partner>? partners = null)
+            IAccessAuthorizationService? authorizationService = null)
         {
             _financialService = financialService;
             _salesService = salesService;
@@ -43,7 +41,6 @@ namespace Services.Dashboard
             _bankAccountService = bankAccountService;
             _tenantContext = tenantContext;
             _authorizationService = authorizationService;
-            _partners = partners;
         }
 
         public DashboardSummaryDto GetDashboardSummary(
@@ -102,12 +99,10 @@ namespace Services.Dashboard
                 .Select(a => a.Id)
                 .ToHashSet();
             var drawingsAccountIds = accounts
-                .Where(a => a.AccountCode == "30800")
+                .Where(a => a.AccountCode == "30800"
+                    || (a.Description == "Partner drawings" && a.AccountCode.Length == 5 && a.AccountCode.StartsWith("308", StringComparison.Ordinal)))
                 .Select(a => a.Id)
                 .ToHashSet();
-            foreach (var accountId in (_partners?.Table ?? Enumerable.Empty<Partner>().AsQueryable())
-                         .Where(p => p.CompanyId == _tenantContext.RequireCompanyId()).Select(p => p.DrawingsAccountId))
-                drawingsAccountIds.Add(accountId);
 
             // Workspaces without bank records still hold cash in the postable cash accounts (e.g. 10111).
             var bankAccountIds = canViewFinancials

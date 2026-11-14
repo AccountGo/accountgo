@@ -30,9 +30,11 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
     const suggested = lines.length === 1 ? lines[0].suggestedPartnerId : null;
     return String(suggested && offeredPartners.some(p => p.partnerId === suggested) ? suggested : offeredPartners.length === 1 ? offeredPartners[0].partnerId : '');
   });
-  const selectedPartner = offeredPartners.find(p => String(p.partnerId) === partnerId);
-  const selectedAction = selectedPartner ? (drawing ? selectedPartner.drawing : selectedPartner.contribution)! : action;
   const partnerMode = !!partners;
+  const selectedPartner = offeredPartners.find(p => String(p.partnerId) === partnerId);
+  const selectedAction = partnerMode
+    ? (selectedPartner ? (drawing ? selectedPartner.drawing : selectedPartner.contribution) : null)
+    : action;
   const bulk = lines.length > 1;
   const description = lines[0].payee || lines[0].memo || '';
 
@@ -75,7 +77,9 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
             {offeredPartners.map(p => <option key={p.partnerId} value={p.partnerId}>{p.name}</option>)}
           </select>
         </label>}
-        <p className="text-sm text-[var(--text-secondary)]">Account: {selectedAction.accountName} ({selectedAction.accountCode})</p>
+        {selectedAction
+          ? <p className="text-sm text-[var(--text-secondary)]">Account: {selectedAction.accountName} ({selectedAction.accountCode})</p>
+          : <p className="text-sm text-[var(--text-secondary)]">Choose a partner to see the account.</p>}
         <p className="text-sm text-[var(--text-secondary)]">{drawing
           ? `Money ${partnerMode ? selectedPartner?.name || 'the partner' : 'you'} took out of the business for personal use. It isn't an expense and doesn't reduce profit.`
           : `Money ${partnerMode ? selectedPartner?.name || 'the partner' : 'you'} put into the business from personal funds. It isn't income.`}</p>
