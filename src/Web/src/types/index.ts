@@ -115,6 +115,7 @@ export interface OrgDetails extends PersonalBooksMetadata {
   subscription?: SubscriptionInfo;
   operatingPolicy?: WorkspaceOperatingPolicySummary | null;
   activationState?: string;
+  pendingPlan?: string | null;
 }
 
 export interface Organization extends PersonalBooksMetadata {
@@ -129,6 +130,7 @@ export interface Organization extends PersonalBooksMetadata {
   currency?: string;
   permissions?: string[];
   activationState?: string;
+  pendingPlan?: string | null;
 }
 
 export interface UserProfile {

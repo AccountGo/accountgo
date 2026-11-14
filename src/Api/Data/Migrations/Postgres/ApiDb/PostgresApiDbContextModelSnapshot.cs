@@ -269,6 +269,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<DateTime?>("PaidAccessEndedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<string>("PendingPlan")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Plan")
                         .HasColumnType("text");
 

@@ -83,6 +83,9 @@ namespace Api.Service
                 ShortName = string.IsNullOrWhiteSpace(shortName) ? name.Trim().Substring(0, Math.Min(4, name.Trim().Length)).ToUpperInvariant() : shortName.Trim(),
                 CompanyCode = RandomNumberGenerator.GetInt32(100, 1000).ToString(),
                 Plan = plan,
+                PendingPlan = pendingCheckout && !string.IsNullOrWhiteSpace(requestedPlanKey)
+                    ? requestedPlanKey.Trim().ToLowerInvariant()
+                    : null,
                 ActivationState = pendingCheckout ? CompanyActivationStates.PendingCheckout : CompanyActivationStates.Active,
                 SubscriptionStatus = "active", CreatedByUserId = userId,
                 AccessBootstrapAvailable = initialSecurityRoleIds == null || !initialSecurityRoleIds.Any()

@@ -2,10 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PendingCheckoutScreen } from '../src/components/PendingCheckoutScreen';
 
-const { authFetch, completeStepUp, navigate } = vi.hoisted(() => ({
+const { authFetch, completeStepUp, navigate, searchParamsState } = vi.hoisted(() => ({
   authFetch: vi.fn(),
   completeStepUp: vi.fn(),
   navigate: vi.fn(),
+  searchParamsState: { value: new URLSearchParams() },
 }));
 
 vi.mock('../src/auth/AuthContext', () => ({
@@ -13,9 +14,11 @@ vi.mock('../src/auth/AuthContext', () => ({
 }));
 
 vi.mock('react-router-dom', () => ({
-  Link: ({ children }: { children: unknown }) => children,
+  Link: ({ children, to, className }: { children: unknown; to: string; className?: string }) => (
+    <a href={to} className={className}>{children as never}</a>
+  ),
   useNavigate: () => navigate,
-  useSearchParams: () => [new URLSearchParams()],
+  useSearchParams: () => [searchParamsState.value],
 }));
 
 vi.mock('../src/lib/webauthn', () => ({
@@ -29,6 +32,7 @@ const json = (status: number, body: unknown) =>
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  searchParamsState.value = new URLSearchParams();
 });
 
 describe('workspace delete with step-up', () => {
@@ -73,5 +77,88 @@ describe('workspace delete with step-up', () => {
 
     expect(await screen.findByText('Transfer billing first.')).toBeTruthy();
     expect(screen.queryByLabelText('Authenticator code')).toBeNull();
+  });
+
+  it('shows Choose a plan link when pendingPlan is absent', () => {
+    render(<PendingCheckoutScreen name="Scratch" slug="scratch" onActivated={() => {}} />);
+
+    const chooseLink = screen.getByRole('link', { name: 'Choose a plan' });
+    expect(chooseLink.getAttribute('href')).toBe('/org/scratch/settings?tab=subscription');
+    expect(screen.queryByRole('button', { name: /Resume payment/i })).toBeNull();
+  });
+
+  it('shows Resume payment button and Choose a different plan link when pendingPlan is present', async () => {
+    const assignSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, origin: 'https://app.example', assign: assignSpy },
+    });
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/Subscription/update' && init?.method === 'PUT') {
+        expect(JSON.parse(String(init.body))).toEqual({
+          plan: 'accounting_pro',
+          billingInterval: 'month',
+          returnUrl: 'https://app.example/org/scratch',
+          confirmed: true,
+        });
+        return json(200, { redirectUrl: 'https://checkout.stripe.com/c/pay/cs_123' });
+      }
+      return json(404, {});
+    });
+
+    render(
+      <PendingCheckoutScreen
+        name="Scratch"
+        slug="scratch"
+        pendingPlan="accounting_pro"
+        onActivated={() => {}}
+      />,
+    );
+
+    const diffLink = screen.getByRole('link', { name: 'Choose a different plan' });
+    expect(diffLink.getAttribute('href')).toBe('/org/scratch/settings?tab=subscription&upgrade=accounting_pro');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resume payment' }));
+    await waitFor(() => expect(assignSpy).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_123'));
+  });
+
+  it('auto-resumes checkout and strips ?resume=1 on mount when resume=1&interval=year', async () => {
+    searchParamsState.value = new URLSearchParams('resume=1&interval=year');
+    const assignSpy = vi.fn();
+    const replaceStateSpy = vi.spyOn(window.history, 'replaceState').mockImplementation(() => {});
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...window.location,
+        origin: 'https://app.example',
+        href: 'https://app.example/org/scratch?resume=1&interval=year',
+        assign: assignSpy,
+      },
+    });
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/Subscription/update' && init?.method === 'PUT') {
+        expect(JSON.parse(String(init.body))).toEqual({
+          plan: 'accounting_pro',
+          billingInterval: 'year',
+          returnUrl: 'https://app.example/org/scratch',
+          confirmed: true,
+        });
+        return json(200, { redirectUrl: 'https://checkout.stripe.com/c/pay/cs_year' });
+      }
+      return json(404, {});
+    });
+
+    render(
+      <PendingCheckoutScreen
+        name="Scratch"
+        slug="scratch"
+        pendingPlan="accounting_pro"
+        onActivated={() => {}}
+      />,
+    );
+
+    await waitFor(() => expect(replaceStateSpy).toHaveBeenCalledWith({}, '', '/org/scratch?interval=year'));
+    await waitFor(() => expect(assignSpy).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_year'));
+    replaceStateSpy.mockRestore();
   });
 });
