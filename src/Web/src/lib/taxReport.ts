@@ -36,7 +36,7 @@ export interface TaxPeriodSideSummary {
 
 export interface TaxPeriodDocumentRow {
   side: 'output' | 'input';
-  kind: 'invoice' | 'invoiceVoid' | 'bill' | 'billVoid';
+  kind: 'invoice' | 'invoiceVoid' | 'invoicePayment' | 'bill' | 'billVoid' | 'billPayment';
   id: number;
   no: string;
   date: string;
@@ -139,6 +139,20 @@ export function isValidTaxDateRange(from: string, to: string): boolean {
   return from <= to;
 }
 
+export function documentKindLabel(kind: TaxPeriodDocumentRow['kind'] | string): string | null {
+  switch (kind) {
+    case 'invoicePayment':
+      return 'Payment received';
+    case 'billPayment':
+      return 'Payment made';
+    case 'invoiceVoid':
+    case 'billVoid':
+      return 'Void';
+    default:
+      return null;
+  }
+}
+
 export function createLatestRequestGuard() {
   let seq = 0;
   let activeKey = '';
@@ -168,7 +182,11 @@ export function buildTaxReportCsv(
   const netLabel = report.netTax < 0 ? 'Net refundable' : 'Net payable';
   const netValue = money(Math.abs(report.netTax));
   const basisLabel =
-    report.basis === 'Accrual' ? 'Accrual (by invoice and bill date)' : report.basis;
+    report.basis === 'Cash'
+      ? 'Cash (by payment date)'
+      : report.basis === 'Accrual'
+        ? 'Accrual (by invoice and bill date)'
+        : report.basis;
 
   const taxCodeById = new Map<number, string>();
   for (const row of report.output.rows) {
