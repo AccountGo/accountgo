@@ -44,6 +44,7 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
         [typeof(PaymentTerm)] = "PaymentTerm",
         [typeof(GeneralLedgerSetting)] = "GeneralLedgerSetting", [typeof(WorkspaceOperatingSettings)] = "WorkspaceOperatingSettings",
         [typeof(BooksLockChange)] = "BooksLockChange", [typeof(FinancialYear)] = "FinancialYear",
+        [typeof(Partner)] = "Partner", [typeof(PartnerShare)] = "PartnerShare",
         [typeof(CompanyMember)] = "CompanyMember", [typeof(CompanyMemberSecurityRole)] = "CompanyMemberSecurityRole",
         [typeof(RecurringSchedule)] = "RecurringSchedule", [typeof(RecurringScheduleLine)] = "RecurringScheduleLine"
     };
@@ -105,12 +106,15 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
         foreach (var entry in candidates)
         {
             var key = entry.Metadata.FindPrimaryKey();
-            if (key is null || key.Properties.Count != 1 || (Nullable.GetUnderlyingType(key.Properties[0].ClrType) ?? key.Properties[0].ClrType) != typeof(int))
+            var keyProperty = key?.Properties.Count == 1 && (Nullable.GetUnderlyingType(key.Properties[0].ClrType) ?? key.Properties[0].ClrType) == typeof(int)
+                ? key.Properties[0]
+                : entry.Metadata.ClrType == typeof(PartnerShare) ? entry.Metadata.FindProperty(nameof(PartnerShare.FinancialYearId)) : null;
+            if (keyProperty is null)
                 throw new InvalidOperationException($"Audited type {entry.Metadata.ClrType.Name} must have a single integer key.");
             var companyId = await ResolveCompanyId(context, entry, async, cancellationToken).ConfigureAwait(false);
             var (parentType, parentId) = ResolveParent(entry);
             state.Changes.Add(new CapturedChange(entry, companyId, AllowList[entry.Metadata.ClrType],
-                entry.State.ToString(), Snapshot(entry, entry.State), key.Properties[0].Name, parentType, parentId));
+                entry.State.ToString(), Snapshot(entry, entry.State), keyProperty.Name, parentType, parentId));
         }
         if (context.Database.CurrentTransaction is null)
             state.OwnedTransaction = async

@@ -540,6 +540,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<string>("OnboardingChecklistJson")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("PartnerAccountsFrom")
+                        .HasColumnType("date");
+
                     b.Property<string>("RegistrationNumber")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -1739,6 +1742,80 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasIndex("RelatedContraAccountId");
 
                     b.ToTable("MainContraAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.Partner", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("CapitalAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("DrawingsAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "CapitalAccountId")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "DrawingsAccountId")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "Name")
+                        .IsUnique()
+                        .HasFilter("ArchivedAt IS NULL");
+
+                    b.ToTable("Partners", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.PartnerShare", b =>
+                {
+                    b.Property<int>("FinancialYearId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PartnerId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Percent")
+                        .HasColumnType("decimal(7,4)");
+
+                    b.HasKey("FinancialYearId", "PartnerId");
+
+                    b.HasIndex("PartnerId");
+
+                    b.ToTable("PartnerShares", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.Items.InventoryAdjustment", b =>
@@ -4771,6 +4848,21 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("MainAccount");
 
                     b.Navigation("RelatedContraAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.PartnerShare", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.FinancialYear", null)
+                        .WithMany()
+                        .HasForeignKey("FinancialYearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.Partner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Core.Domain.Items.InventoryAdjustment", b =>

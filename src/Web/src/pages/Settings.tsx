@@ -46,6 +46,7 @@ import { TaxSettingsTab } from '../components/TaxSettingsTab';
 import { AccountingPolicyCard } from '../components/AccountingPolicyCard';
 import { BooksLockCard } from '../components/BooksLockCard';
 import { YearEndCloseCard } from '../components/YearEndCloseCard';
+import { PartnersSettingsCard } from '../components/PartnersSettingsCard';
 import { SettingsNav, SettingsNavGroup } from '../components/SettingsNav';
 import { ModalShell } from '../components/ModalShell';
 import { IntegrationsSettingsTab } from '../components/IntegrationsSettingsTab';
@@ -86,7 +87,7 @@ export const Settings: React.FC = () => {
   const auditAccess = auditAccessLevel(capabilities?.entitlements ?? null, hasPermission);
   const activityMode = capabilities?.entitlements ? activityTabMode(auditAccess, personal) : 'hidden';
 
-  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles' | 'activity' | 'approvals' | 'integrations';
+  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'partners' | 'whitelabel' | 'subscription' | 'roles' | 'activity' | 'approvals' | 'integrations';
 
   const handleTabChange = (tab: TabKey) => {
     setSearchParams(tab === 'general' ? {} : { tab });
@@ -110,7 +111,7 @@ export const Settings: React.FC = () => {
       : []),
     // Only sections for modules this workspace has; an invoicing-only workspace has no ledger to configure.
     ...(hasFinancials
-      ? [{ label: 'Accounting', items: [{ key: 'financials' as const, label: personal ? 'Books' : 'Financial Rules & Banking', icon: Coins }] }]
+      ? [{ label: 'Accounting', items: [{ key: 'financials' as const, label: personal ? 'Books' : 'Financial Rules & Banking', icon: Coins }, ...(!personal && currentOrg.entityType?.toLowerCase() === 'partnership' ? [{ key: 'partners' as const, label: 'Partners', icon: Users }] : [])] }]
       : []),
     {
       label: 'Access & Billing',
@@ -926,6 +927,7 @@ export const Settings: React.FC = () => {
               </>}
             </div>
           )}
+          {currentTab === 'partners' && <div role="tabpanel" id="panel-partners" aria-labelledby="tab-partners" tabIndex={0} className="focus:outline-none"><PartnersSettingsCard canManage={isWorkspaceAdmin && hasPermission('financials.accounts.manage')} /></div>}
 
           {/* ========================================================================= */}
           {/* TAB 3: WHITELABEL BRANDING & THEME                                        */}

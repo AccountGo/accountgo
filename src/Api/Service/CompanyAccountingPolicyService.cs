@@ -61,6 +61,9 @@ namespace Api.Service
 
             if (change.EntityType.HasValue && change.EntityType.Value != setting.EntityType)
             {
+                if (setting.EntityType == EntityType.Partnership && change.EntityType.Value != EntityType.Partnership
+                    && _db.Partners.Any(p => p.CompanyId == setting.CompanyId && p.ArchivedAt == null))
+                    return new AccountingPolicyChangeResult { Errors = new[] { "Archive the partners first." } };
                 var hasClosedYears = _db.FinancialYears.Any(fy => fy.CompanyId == setting.CompanyId && fy.ClosedAt != null);
                 if (hasClosedYears)
                     return new AccountingPolicyChangeResult { ClosedYearsConflict = true };

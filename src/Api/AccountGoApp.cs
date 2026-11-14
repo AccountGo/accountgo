@@ -272,6 +272,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Services.Banking.IReconciledPeriodGuard, Services.Banking.ReconciledPeriodGuard>();
         builder.Services.AddScoped<Services.Financial.IBooksLockGuard, Services.Financial.BooksLockGuard>();
         builder.Services.AddScoped<Services.Financial.IYearEndCloseService, Services.Financial.YearEndCloseService>();
+        builder.Services.AddScoped<Services.Financial.PartnerService>();
         builder.Services.AddScoped<Services.Financial.IBooksReadinessService, Services.Financial.BooksReadinessService>();
         builder.Services.AddScoped<Services.Banking.IBankTransactionService, Services.Banking.BankTransactionService>();
         builder.Services.AddScoped<Services.Banking.IBankReconciliationService, Services.Banking.BankReconciliationService>();
