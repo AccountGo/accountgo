@@ -84,6 +84,14 @@ namespace Api.Controllers
             }
         }
 
+        private IActionResult? RefuseBeforeBooksStart(DateTime date)
+        {
+            var booksStart = _db.CompanySettings.Select(s => (DateTime?)s.BooksStartDate).FirstOrDefault()?.Date;
+            if (booksStart.HasValue && date.Date < booksStart.Value)
+                return BadRequest(new { message = new Core.Domain.BooksStartViolationException(date, booksStart.Value).Message });
+            return null;
+        }
+
         [HttpPost]
         [Route("SaveCustomer")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
@@ -1779,6 +1787,8 @@ namespace Api.Controllers
                 bool issuing = isNew ? salesInvoiceDto.Status != "Draft" : !string.IsNullOrWhiteSpace(salesInvoiceDto.Status) && salesInvoiceDto.Status != "Draft";
                 if (issuing && !_tenantContext.Permissions.Contains(Core.Domain.Security.SystemPermissions.SalesInvoicesPost))
                     return RequirePermissionAttribute.Denied(Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
+                if (issuing && RefuseBeforeBooksStart(salesInvoiceDto.InvoiceDate) is { } beforeBooksStart)
+                    return beforeBooksStart;
 
                 Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
                 Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
@@ -2419,6 +2429,11 @@ namespace Api.Controllers
 
                 if (invoice.Status != Core.Domain.SalesInvoiceStatus.Draft)
                     return BadRequest(new { message = $"Cannot issue an invoice with status {invoice.Status}." });
+
+                if (RefuseBeforeBooksStart(invoice.Date) is { } beforeBooksStart)
+                    return beforeBooksStart;
+                if (RefuseIfBooksLocked(invoice.Date) is { } locked)
+                    return locked;
 
                 var stockWarnings = invoice.GeneralLedgerHeaderId.HasValue
                     ? new List<string>()
