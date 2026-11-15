@@ -29,6 +29,8 @@ using Xunit;
 
 namespace AccountGo.BackendTests.TaxSystem;
 
+// Serialized: GetPeriods_CashBasisWithThreeFiledPeriods_BoundsSqlQueries counts SQL commands process-wide.
+[Collection("WorkspaceSetupHttp")]
 public sealed class TaxFilingHttpTests : IAsyncLifetime
 {
     private readonly AuditTestHost _host = new();
