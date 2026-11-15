@@ -658,6 +658,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     }
   };
 
+  const previewTargetNumber = !isIssued ? (invoiceNo.trim() || nextNumber) : null;
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
       <PageHeader
@@ -666,8 +668,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         title={isEdit ? (invoiceNo && isIssued ? `Edit invoice #${invoiceNo}` : 'Edit draft') : 'New invoice'}
         subtitle={
           duplicatedTitle
-            ? `A copy of ${duplicatedTitle}, dated today. Nothing is saved until you save it.`
-            : 'Save a draft to finish later, or issue it to post it to your books.'
+            ? `A copy of ${duplicatedTitle}, dated today. Nothing is saved until you save it.${previewTargetNumber ? ` Will issue as #${previewTargetNumber}.` : ''}`
+            : previewTargetNumber
+              ? `Save a draft to finish later, or issue it as #${previewTargetNumber} to post it to your books.`
+              : 'Save a draft to finish later, or issue it to post it to your books.'
         }
         actions={
           <>
@@ -861,7 +865,19 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 className="w-full px-3.5 py-2.5 text-sm font-mono bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition read-only:opacity-70 read-only:cursor-not-allowed"
               />
               <p id="invoice-number-hint" className="mt-1.5 text-xs text-[var(--text-muted)]">
-                {isIssued ? 'Issued invoices keep their number.' : 'Blank: numbered when issued.'}
+                {isIssued ? (
+                  'Issued invoices keep their number.'
+                ) : !invoiceNo.trim() && nextNumber ? (
+                  <>
+                    Blank: will be issued as <span className="font-semibold font-mono text-[var(--text-main)]">#{nextNumber}</span>.
+                  </>
+                ) : invoiceNo.trim() && nextNumber ? (
+                  <>
+                    Custom number; leave blank to issue as <span className="font-mono">#{nextNumber}</span>.
+                  </>
+                ) : (
+                  'Blank: numbered when issued.'
+                )}
               </p>
             </div>
 
