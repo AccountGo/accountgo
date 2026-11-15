@@ -23,7 +23,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Partnerships can set up each partner's capital and drawings accounts with profit-sharing ratios for each year. Bank statement lines can be recorded as a drawing or contribution for a chosen partner, with remembered suggestions and undo, and the statement of changes in equity shows a column for each partner. Closing the year splits the profit or loss between partners and closes each partner's drawings into their capital.
 
 ### Changed
-- Opening a draft sales invoice or editing an invoice now previews the next invoice number that will be assigned when issued, based on the invoice date.
+- Unnumbered invoice drafts show the next number for their invoice date. The issue action checks the previewed number and asks for confirmation again if another invoice has taken it.
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
 
 ### Fixed

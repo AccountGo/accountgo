@@ -99,6 +99,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [invoiceNo, setInvoiceNo] = useState<string>('');
   // Issued invoices keep their number; only drafts (and new invoices) can change it.
   const [isIssued, setIsIssued] = useState<boolean>(false);
+  const [loadedInvoiceId, setLoadedInvoiceId] = useState<string | null>(null);
   // Shown as the placeholder: the number the invoice takes when issued, if none is typed.
   const [nextNumber, setNextNumber] = useState<string | null>(null);
   const [referenceNo, setReferenceNo] = useState<string>('');
@@ -216,7 +217,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         const res = await authFetch(`/api/Sales/NextSalesInvoiceNumber${query}`);
         if (!res.ok || cancelled) return;
         const data = await res.json();
-        setNextNumber(data?.next ?? null);
+        if (!cancelled) setNextNumber(data?.next ?? null);
       } catch (err) {
         console.error('Error loading the next invoice number:', err);
       }
@@ -312,6 +313,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           setSelectedCustomerId(data.customerId);
           setInvoiceNo(data.no || '');
           setIsIssued(data.status !== 'Draft');
+          setLoadedInvoiceId(invoiceId);
           setReferenceNo(data.referenceNo || '');
           setShippingHandlingCharge(data.shippingHandlingCharge ?? 0);
           if (data.invoiceDate) {
@@ -658,7 +660,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     }
   };
 
-  const previewTargetNumber = !isIssued ? (invoiceNo.trim() || nextNumber) : null;
+  const numberHintReady = !isEdit || loadedInvoiceId === invoiceId;
+  const numberPreview = numberHintReady && !isIssued
+    ? invoiceNo.trim() ? `Invoice number: #${invoiceNo.trim()}` : nextNumber ? `Next number: #${nextNumber}` : null
+    : null;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
@@ -666,13 +671,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         className="mb-6"
         back={{ to: `/org/${orgSlug}/sales`, label: 'Back to invoices' }}
         title={isEdit ? (invoiceNo && isIssued ? `Edit invoice #${invoiceNo}` : 'Edit draft') : 'New invoice'}
-        subtitle={
+        subtitle={[
           duplicatedTitle
-            ? `A copy of ${duplicatedTitle}, dated today. Nothing is saved until you save it.${previewTargetNumber ? ` Will issue as #${previewTargetNumber}.` : ''}`
-            : previewTargetNumber
-              ? `Save a draft to finish later, or issue it as #${previewTargetNumber} to post it to your books.`
-              : 'Save a draft to finish later, or issue it to post it to your books.'
-        }
+            ? `A copy of ${duplicatedTitle}, dated today. Nothing is saved until you save it.`
+            : 'Save a draft to finish later, or issue it to post it to your books.',
+          numberPreview,
+        ].filter(Boolean).join(' · ')}
         actions={
           <>
             <HeaderButton label="Cancel" to={`/org/${orgSlug}/sales`} />
@@ -865,19 +869,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 className="w-full px-3.5 py-2.5 text-sm font-mono bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition read-only:opacity-70 read-only:cursor-not-allowed"
               />
               <p id="invoice-number-hint" className="mt-1.5 text-xs text-[var(--text-muted)]">
-                {isIssued ? (
-                  'Issued invoices keep their number.'
-                ) : !invoiceNo.trim() && nextNumber ? (
-                  <>
-                    Blank: will be issued as <span className="font-semibold font-mono text-[var(--text-main)]">#{nextNumber}</span>.
-                  </>
-                ) : invoiceNo.trim() && nextNumber ? (
-                  <>
-                    Custom number; leave blank to issue as <span className="font-mono">#{nextNumber}</span>.
-                  </>
-                ) : (
-                  'Blank: numbered when issued.'
-                )}
+                {numberHintReady && (isIssued ? 'Issued invoices keep their number.' : numberPreview || 'Blank: numbered when issued.')}
               </p>
             </div>
 

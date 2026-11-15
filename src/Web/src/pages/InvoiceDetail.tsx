@@ -395,49 +395,48 @@ export const InvoiceDetail: React.FC = () => {
     catch (err) { setSendError(err instanceof Error ? err.message : 'Pending email status could not be read.'); }
     return () => { active = false; };
   }, [authFetch, currentOrg.id, invoice?.id, sendDialogMode]);
-  // The number an unnumbered draft takes when issued, previewed on the draft and shown in the issue dialog.
+  // Shared by the draft preview and issue dialog; peeking does not reserve a number.
   const [issueNumber, setIssueNumber] = useState<string | null>(null);
+  const canPreviewNumber = hasPermission('sales.invoices.create');
+  useEffect(() => {
+    setIssueNumber(null);
+    if (!invoice || String(invoice.id) !== invoiceId || invoice.status !== 'Draft' || invoice.no || !canPreviewNumber) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const query = invoice.invoiceDate ? `?invoiceDate=${encodeURIComponent(invoice.invoiceDate)}` : '';
+        const res = await authFetch(`/api/Sales/NextSalesInvoiceNumber${query}`, { signal: controller.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!controller.signal.aborted) setIssueNumber(data?.next ?? null);
+      } catch { /* A failed preview must not prevent viewing the draft. */ }
+    })();
+    return () => controller.abort();
+  }, [authFetch, invoiceId, invoice?.id, invoice?.invoiceDate, invoice?.status, invoice?.no, canPreviewNumber]);
 
-  const fetchNextNumber = useCallback(async (invoiceDate?: string): Promise<string | null> => {
-    const dateParam = invoiceDate ?? invoice?.invoiceDate;
-    const query = dateParam ? `?invoiceDate=${encodeURIComponent(dateParam)}` : '';
+  const fetchNextNumber = async (): Promise<string | null> => {
+    const query = invoice?.invoiceDate ? `?invoiceDate=${encodeURIComponent(invoice.invoiceDate)}` : '';
     const res = await authFetch(`/api/Sales/NextSalesInvoiceNumber${query}`);
     if (!res.ok) return null;
     const data = await res.json().catch(() => null);
     return data?.next ?? null;
-  }, [authFetch, invoice?.invoiceDate]);
-
-  useEffect(() => {
-    if (!invoice || invoice.status !== 'Draft' || invoice.no || !hasPermission('sales.invoices.create')) {
-      setIssueNumber(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const next = await fetchNextNumber(invoice.invoiceDate);
-        if (!cancelled) setIssueNumber(next);
-      } catch {
-        if (!cancelled) setIssueNumber(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [invoice?.id, invoice?.status, invoice?.no, invoice?.invoiceDate, hasPermission, fetchNextNumber]);
+  };
 
   /** Issues the draft and returns the number it was given. */
   const issueInvoice = async (): Promise<string> => {
     if (!invoice) return '';
-    // The dialog asked the user to confirm a number; the server refuses if another invoice took it meanwhile.
-    const expected = sendDialogMode === 'issue' && !invoice.no && issueNumber ? `&expectedNo=${encodeURIComponent(issueNumber)}` : '';
+    // Every issue path must honor the number shown on the page or in the dialog.
+    const expected = !invoice.no && issueNumber ? `&expectedNo=${encodeURIComponent(issueNumber)}` : '';
     const res = await authFetch(`/api/Sales/IssueSalesInvoice?id=${invoice.id}${expected}`, {
       method: 'POST',
     });
 
     const data = await res.json().catch(() => null);
     if (!res.ok) {
-      if (data?.code === 'number_changed' && data?.next) setIssueNumber(data.next);
+      if (data?.code === 'number_changed' && data?.next) {
+        setIssueNumber(data.next);
+        if (!sendDialogMode) throw new Error(`${data.message || 'The next invoice number has changed.'} Click Issue invoice again to confirm #${data.next}.`);
+      }
       throw new Error(data?.message || 'Failed to issue invoice.');
     }
     setStockWarnings(Array.isArray(data?.warnings) ? data.warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : []);
@@ -631,10 +630,6 @@ export const InvoiceDetail: React.FC = () => {
         : invoice.status === 'Paid'
           ? 'Paid in full'
           : null;
-  const nextNumberSummary =
-    invoice.status === 'Draft' && !invoice.no && issueNumber
-      ? `Will issue as #${issueNumber}`
-      : null;
 
   // Like the PDF, the tax column shows only when a line has tax.
   const showTax = invoice.salesInvoiceLines?.some((line) => (line.taxAmount ?? 0) !== 0) ?? false;
@@ -661,7 +656,9 @@ export const InvoiceDetail: React.FC = () => {
             )}
           </>
         }
-        subtitle={[invoice.customerName, nextNumberSummary, balanceSummary].filter(Boolean).join(' · ')}
+        subtitle={[invoice.customerName, balanceSummary,
+          invoice.status === 'Draft' && !invoice.no && canPreviewNumber && issueNumber ? `Next number: #${issueNumber}` : null,
+        ].filter(Boolean).join(' · ')}
         actions={
           <>
             {canEmail && (
@@ -814,7 +811,7 @@ export const InvoiceDetail: React.FC = () => {
             </h3>
             {invoice.no ? (
               <p className="text-base font-bold font-mono text-[var(--brand-primary)]">#{invoice.no}</p>
-            ) : issueNumber ? (
+            ) : invoice.status === 'Draft' && canPreviewNumber && issueNumber ? (
               <p data-testid="draft-next-invoice-number" className="text-xs text-[var(--text-muted)]">
                 Next: <span className="font-semibold font-mono text-[var(--text-main)]">#{issueNumber}</span> (assigned on issue)
               </p>

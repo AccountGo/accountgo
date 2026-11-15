@@ -189,8 +189,8 @@ describe('Draft invoice next-number preview', () => {
 
     const preview = await screen.findByTestId('draft-next-invoice-number');
     expect(preview.textContent).toContain('Next: #INV-2026-0008 (assigned on issue)');
-    expect(screen.getByText(/Will issue as #INV-2026-0008/)).toBeTruthy();
-    expect(authFetch).toHaveBeenCalledWith('/api/Sales/NextSalesInvoiceNumber?invoiceDate=2026-11-15');
+    expect(screen.getByText(/Next number: #INV-2026-0008/)).toBeTruthy();
+    expect(authFetch).toHaveBeenCalledWith('/api/Sales/NextSalesInvoiceNumber?invoiceDate=2026-11-15', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 
   it('previews the next invoice number in the hint and header subtitle when editing a draft in InvoiceEdit', async () => {
@@ -227,8 +227,8 @@ describe('Draft invoice next-number preview', () => {
     );
 
     await waitFor(() => {
-      expect(document.getElementById('invoice-number-hint')?.textContent).toContain('Blank: will be issued as #INV-2026-0008.');
+      expect(document.getElementById('invoice-number-hint')?.textContent).toContain('Next number: #INV-2026-0008');
     });
-    expect(screen.getByText(/issue it as #INV-2026-0008 to post it to your books/)).toBeTruthy();
+    expect(screen.getByRole('banner').textContent).toContain('Next number: #INV-2026-0008');
   });
 });
