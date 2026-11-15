@@ -84,10 +84,10 @@ namespace Services.Sales
             IRepository<VendorContact> vendorContactRepo,
             ILogger<SalesService> logger,
             IMapper mapper,
-            IEntitlementService entitlements = null,
-            IRepository<DocumentNumberSeries> documentNumberSeriesRepo = null,
-            IRepository<FinancialYear> fiscalYearRepo = null,
-            IRepository<CompanySetting> companySettingRepo = null)
+            IRepository<DocumentNumberSeries> documentNumberSeriesRepo,
+            IRepository<FinancialYear> fiscalYearRepo,
+            IRepository<CompanySetting> companySettingRepo,
+            IEntitlementService entitlements = null)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _entitlements = entitlements;
@@ -410,7 +410,7 @@ namespace Services.Sales
         public string PeekNextInvoiceNumber(DateTime? invoiceDate = null)
         {
             var fmt = GetInvoiceNumberFormat();
-            if (!fmt.UsesFiscalYear || _fiscalYearRepo == null || _documentNumberSeriesRepo == null)
+            if (!fmt.UsesFiscalYear)
             {
                 var next = PeekNextNumber(SequenceNumberTypes.SalesInvoice);
                 while (InvoiceNumberTaken(fmt.Render(next), 0))
@@ -432,7 +432,7 @@ namespace Services.Sales
             }
             else
             {
-                var setting = _companySettingRepo?.Table.FirstOrDefault();
+                var setting = _companySettingRepo.Table.FirstOrDefault();
                 var pattern = setting?.FiscalYearPattern ?? FiscalYearPattern.Calendar;
                 var startMonth = setting?.FiscalYearStartMonth;
                 fyCode = FiscalYearCalculator.Containing(d, pattern, startMonth).Code;
@@ -464,7 +464,7 @@ namespace Services.Sales
             }
 
             var fmt = GetInvoiceNumberFormat();
-            if (!fmt.UsesFiscalYear || _fiscalYearRepo == null || _documentNumberSeriesRepo == null)
+            if (!fmt.UsesFiscalYear)
             {
                 if (fmt.TryParseSequence(invoice.No, null, out var typed))
                     AdvanceNextNumber(SequenceNumberTypes.SalesInvoice, typed + 1);
@@ -479,7 +479,7 @@ namespace Services.Sales
         private string AllocateInvoiceNumber(int invoiceId, DateTime documentDate)
         {
             var fmt = GetInvoiceNumberFormat();
-            if (!fmt.UsesFiscalYear || _fiscalYearRepo == null || _documentNumberSeriesRepo == null)
+            if (!fmt.UsesFiscalYear)
             {
                 // Skip numbers a draft already holds because they were typed in.
                 var next = PeekNextNumber(SequenceNumberTypes.SalesInvoice);
@@ -511,7 +511,7 @@ namespace Services.Sales
         private FinancialYear EnsureAndFindFiscalYear(DateTime documentDate)
         {
             var d = documentDate.Date;
-            var booksStart = _companySettingRepo?.Table.Select(s => (DateTime?)s.BooksStartDate).FirstOrDefault()?.Date;
+            var booksStart = _companySettingRepo.Table.Select(s => (DateTime?)s.BooksStartDate).FirstOrDefault()?.Date;
             if (booksStart.HasValue && d < booksStart.Value)
                 throw new BooksStartViolationException(d, booksStart.Value);
 
