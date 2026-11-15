@@ -1895,6 +1895,8 @@ namespace Services.Financial
                 throw new LinkedEntryOperationException("linked_entry_use_pair_reversal", "A linked mirror journal can only be posted through the linked entry service.");
             if (!posted && journalEntry.Id > 0 && IsLinkedEntryJournal(journalEntry.CompanyId, journalEntry.Id))
                 throw new LinkedEntryOperationException("linked_entry_use_pair_reversal", "Linked journals must be corrected through the linked entry pair.");
+            if (!posted && !string.IsNullOrWhiteSpace(journalEntry.SourceSystem))
+                throw new SourceJournalLockedException("source_journal_locked", "Imported journals can't be edited. Discard it and import it again instead.");
             if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("Posted journal entries cannot be edited or posted again.");
 
@@ -1927,7 +1929,9 @@ namespace Services.Financial
                         journalEntry.Date,
                         journalEntry.Memo,
                         (int)(journalEntry.VoucherType ?? 0),
-                        journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                        journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)),
+                        journalEntry.SourceSystem,
+                        journalEntry.SourceKey);
                     postResource = new Core.Authorization.AccessResourceContext
                     {
                         WorkspaceCompanyId = journalEntry.CompanyId > 0 ? journalEntry.CompanyId : null,
@@ -1957,7 +1961,9 @@ namespace Services.Financial
                         journalEntry.Date,
                         journalEntry.Memo,
                         (int)(journalEntry.VoucherType ?? 0),
-                        journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                        journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)),
+                        journalEntry.SourceSystem,
+                        journalEntry.SourceKey);
 
                     if (_journalEntryRepo != null && journalEntry.Id > 0)
                     {
@@ -1968,7 +1974,9 @@ namespace Services.Financial
                                 storedDraft.Date,
                                 storedDraft.Memo,
                                 (int)(storedDraft.VoucherType ?? 0),
-                                storedDraft.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                                storedDraft.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)),
+                                storedDraft.SourceSystem,
+                                storedDraft.SourceKey);
                             if (!string.Equals(entryFingerprint, storedFingerprint, StringComparison.Ordinal))
                             {
                                 throw new InvalidOperationException("The in-memory journal entry content differs from the approved stored draft. Any changes must be saved as a draft and re-approved before posting.");
@@ -2079,13 +2087,17 @@ namespace Services.Financial
                             fresh.Date,
                             fresh.Memo,
                             (int)(fresh.VoucherType ?? 0),
-                            freshLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                            freshLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)),
+                            fresh.SourceSystem,
+                            fresh.SourceKey);
 
                         var memoryFingerprint = Core.Authorization.AccessJournalFingerprint.Compute(
                             journalEntry.Date,
                             journalEntry.Memo,
                             (int)(journalEntry.VoucherType ?? 0),
-                            journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                            journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)),
+                            journalEntry.SourceSystem,
+                            journalEntry.SourceKey);
 
                         if (!string.Equals(memoryFingerprint, freshFingerprint, StringComparison.Ordinal))
                         {
@@ -2114,7 +2126,9 @@ namespace Services.Financial
                         journalEntry.Date,
                         journalEntry.Memo,
                         (int)(journalEntry.VoucherType ?? 0),
-                        journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                        journalEntry.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)),
+                        journalEntry.SourceSystem,
+                        journalEntry.SourceKey);
 
                     var guardedPostResource = new Core.Authorization.AccessResourceContext
                     {
