@@ -538,5 +538,75 @@ namespace AccountGo.BackendTests
                 Assert.Equal("STM-2026-0001", inv.No);
             });
         }
+
+        [Fact]
+        public async Task InvoiceNumbering_Settings_FormatAndNextNumber_ForwardOnly_Permission_And_Audit()
+        {
+            SetCompanyFiscalYearPattern(_companyId, FiscalYearPattern.Calendar, null, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+            // 1. Non-admin member cannot update numbering settings (403 Forbidden).
+            WithDb(db =>
+            {
+                if (!db.CompanyMembers.Any(m => m.CompanyId == _companyId && m.UserId == _otherId))
+                {
+                    db.CompanyMembers.Add(new CompanyMember
+                    {
+                        CompanyId = _companyId,
+                        UserId = _otherId,
+                        Role = CompanyMemberRole.Member,
+                        Status = CompanyMemberStatus.Active
+                    });
+                    db.SaveChanges();
+                }
+            });
+            var nonAdminRes = await Send(HttpMethod.Put, "/api/organizations/current/sales-invoice-numbering",
+                new { format = "INV-{FY}-{####}", nextNumber = 1 }, token: _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, nonAdminRes.StatusCode);
+
+            // 2. Invalid format returns 400 with code = "invalid_format".
+            var badFormatRes = await Send(HttpMethod.Put, "/api/organizations/current/sales-invoice-numbering",
+                new { format = "BAD-{NOPE}" });
+            Assert.Equal(HttpStatusCode.BadRequest, badFormatRes.StatusCode);
+            Assert.Equal("invalid_format", (await Json(badFormatRes)).GetProperty("code").GetString());
+
+            // 3. Valid format + nextNumber = 50 succeeds and writes audit row.
+            var okRes = await Send(HttpMethod.Put, "/api/organizations/current/sales-invoice-numbering",
+                new { format = "INV-{FY}-{####}", nextNumber = 50 });
+            Assert.Equal(HttpStatusCode.OK, okRes.StatusCode);
+            var okJson = await Json(okRes);
+            Assert.Equal("INV-{FY}-{####}", okJson.GetProperty("format").GetString());
+            Assert.Equal(50, okJson.GetProperty("nextNumber").GetInt32());
+
+            WithDb(db =>
+            {
+                var audit = db.RecordChanges.IgnoreQueryFilters()
+                    .Where(r => r.CompanyId == _companyId && r.EntityType == "SalesInvoiceNumbering")
+                    .OrderByDescending(r => r.Id)
+                    .FirstOrDefault();
+                Assert.NotNull(audit);
+                Assert.Contains("INV-{FY}-{####}", audit.ChangesJson);
+                Assert.Contains("50", audit.ChangesJson);
+            });
+
+            // 4. Issue an invoice on today's date -> gets 0050, series advances to 51.
+            var d = await SaveDraftOnDate(DateTime.UtcNow.Date);
+            var issuedNo = await Issue(d);
+            Assert.EndsWith("-0050", issuedNo);
+
+            // 5. Attempting to move nextNumber backwards (to 49 or 50) is refused (400 invalid_next_number).
+            var backRes = await Send(HttpMethod.Put, "/api/organizations/current/sales-invoice-numbering",
+                new { format = "INV-{FY}-{####}", nextNumber = 50 });
+            Assert.Equal(HttpStatusCode.BadRequest, backRes.StatusCode);
+            Assert.Equal("invalid_next_number", (await Json(backRes)).GetProperty("code").GetString());
+
+            // 6. GET returns samples without writing new FinancialYear rows.
+            var getRes = await Send(HttpMethod.Get, "/api/organizations/current/sales-invoice-numbering");
+            Assert.Equal(HttpStatusCode.OK, getRes.StatusCode);
+            var getJson = await Json(getRes);
+            Assert.Equal(51, getJson.GetProperty("nextNumber").GetInt32());
+            Assert.True(getJson.GetProperty("hasIssuedInCurrentFiscalYear").GetBoolean());
+            Assert.False(string.IsNullOrWhiteSpace(getJson.GetProperty("sampleCurrentYear").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace(getJson.GetProperty("sampleNextYear").GetString()));
+        }
     }
 }
