@@ -1213,6 +1213,15 @@ namespace Api.Data
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
+            builder.Entity<JournalEntryHeader>(entity =>
+            {
+                entity.Property(e => e.SourceSystem).HasMaxLength(32);
+                entity.Property(e => e.SourceKey).HasMaxLength(200);
+                entity.HasIndex(e => new { e.CompanyId, e.SourceSystem, e.SourceKey })
+                    .IsUnique()
+                    .HasFilter("[SourceSystem] IS NOT NULL");
+            });
+
             builder.Entity<RecurringOccurrence>(entity =>
             {
                 entity.Property(e => e.IdempotencyKey).IsRequired().HasMaxLength(100);

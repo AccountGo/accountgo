@@ -181,6 +181,7 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
     private static bool IsSecret(string name, Type type)
     {
         if (type == typeof(byte[]) || type == typeof(Stream)) return true;
+        if (string.Equals(name, "SourceKey", StringComparison.Ordinal)) return false;
         if (name.EndsWith("Id", StringComparison.OrdinalIgnoreCase)) return false;
         foreach (var part in PrivateNameParts)
             if (name.Contains(part, StringComparison.OrdinalIgnoreCase) || type.Name.Contains(part, StringComparison.OrdinalIgnoreCase))

@@ -42,9 +42,11 @@ namespace Api.Authorization
             DateTime date,
             string? memo,
             int voucherType,
-            IEnumerable<(int AccountId, DrOrCrSide DrCr, decimal Amount, string? Memo)> lines)
+            IEnumerable<(int AccountId, DrOrCrSide DrCr, decimal Amount, string? Memo)> lines,
+            string? sourceSystem = null,
+            string? sourceKey = null)
         {
-            return AccessJournalFingerprint.Compute(date, memo, voucherType, lines);
+            return AccessJournalFingerprint.Compute(date, memo, voucherType, lines, sourceSystem, sourceKey);
         }
 
         /// <summary>
@@ -1450,7 +1452,9 @@ namespace Api.Authorization
                                 je.Date,
                                 je.Memo,
                                 (int)(je.VoucherType ?? 0),
-                                je.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                                je.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)),
+                                je.SourceSystem,
+                                je.SourceKey);
                             if (!string.Equals(payload.ResourceFingerprint, currentFingerprint, StringComparison.Ordinal))
                             {
                                 continue;
@@ -1566,7 +1570,9 @@ namespace Api.Authorization
                         je.Date,
                         je.Memo,
                         (int)(je.VoucherType ?? 0),
-                        je.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)));
+                        je.JournalEntryLines.Select(l => (l.AccountId, l.DrCr, l.Amount, l.Memo)),
+                        je.SourceSystem,
+                        je.SourceKey);
                 }
             }
 

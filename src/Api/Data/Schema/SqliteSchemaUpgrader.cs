@@ -146,6 +146,7 @@ namespace Api.Data.Schema
                 EnsureTables(connection);
                 // Outside EnsureTables so JournalEntryHeader upgrades even when optional later tables are absent.
                 EnsurePriorPeriodAdjustment(connection);
+                EnsureSourceJournalColumns(connection);
                 EnsureSecurityTables(connection);
                 EnsureWorkspaceOperatingPolicy(connection);
                 EnsureRecordChanges(connection);
@@ -833,6 +834,20 @@ CREATE INDEX IF NOT EXISTS ""IX_PartnerShares_PartnerId"" ON ""PartnerShares"" (
         private static void EnsurePriorPeriodAdjustment(DbConnection connection)
         {
             AddColumnIfMissing(connection, "JournalEntryHeader", "AdjustsFiscalYearId", "INTEGER NULL");
+        }
+
+        private static void EnsureSourceJournalColumns(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "JournalEntryHeader", "SourceSystem", "TEXT NULL");
+            AddColumnIfMissing(connection, "JournalEntryHeader", "SourceKey", "TEXT NULL");
+            if (TableExists(connection, "JournalEntryHeader"))
+            {
+                using var idx = connection.CreateCommand();
+                idx.CommandText = @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_JournalEntryHeader_CompanyId_SourceSystem_SourceKey""
+                    ON ""JournalEntryHeader"" (""CompanyId"", ""SourceSystem"", ""SourceKey"")
+                    WHERE ""SourceSystem"" IS NOT NULL;";
+                idx.ExecuteNonQuery();
+            }
         }
 
         // D1 0042_statement_other_income.sql (#436 I5)

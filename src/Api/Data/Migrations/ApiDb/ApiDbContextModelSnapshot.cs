@@ -1719,6 +1719,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SourceSystem")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<int?>("VoucherType")
                         .HasColumnType("int");
 
@@ -1729,6 +1737,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("GeneralLedgerHeaderId");
 
                     b.HasIndex("PartyId");
+
+                    b.HasIndex("CompanyId", "SourceSystem", "SourceKey")
+                        .IsUnique()
+                        .HasFilter("[SourceSystem] IS NOT NULL");
 
                     b.ToTable("JournalEntryHeader");
                 });

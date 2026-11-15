@@ -353,7 +353,9 @@ namespace Core.Authorization
             DateTime date,
             string? memo,
             int voucherType,
-            IEnumerable<(int AccountId, DrOrCrSide DrCr, decimal Amount, string? Memo)> lines)
+            IEnumerable<(int AccountId, DrOrCrSide DrCr, decimal Amount, string? Memo)> lines,
+            string? sourceSystem = null,
+            string? sourceKey = null)
         {
             var lineParts = (lines ?? Enumerable.Empty<(int, DrOrCrSide, decimal, string?)>())
                 .OrderBy(l => l.AccountId)
@@ -361,7 +363,10 @@ namespace Core.Authorization
                 .ThenBy(l => l.Amount)
                 .Select(l => $"{l.AccountId}:{l.DrCr}:{l.Amount.ToString("F4", CultureInfo.InvariantCulture)}:{l.Memo}");
 
-            var raw = $"{date:yyyy-MM-dd}:{memo}:{voucherType}:{string.Join("|", lineParts)}";
+            var baseRaw = $"{date:yyyy-MM-dd}:{memo}:{voucherType}:{string.Join("|", lineParts)}";
+            var raw = sourceSystem == null && sourceKey == null
+                ? baseRaw
+                : $"{baseRaw}:{sourceSystem}:{sourceKey}";
             using var sha = SHA256.Create();
             var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(raw));
             return Convert.ToHexString(hash);

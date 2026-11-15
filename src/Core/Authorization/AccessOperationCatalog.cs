@@ -28,6 +28,7 @@ namespace Core.Authorization
         public const string FinancialsJournalView = "financials.journal.view";
         public const string FinancialsJournalCreate = "financials.journal.create";
         public const string FinancialsJournalPost = "financials.journal.post";
+        public const string FinancialsJournalPostBatch = "financials.journal.post_batch";
         public const string LinkedEntriesCreate = "financials.linked_entries.create";
         public const string FinancialsPeriodsClose = "financials.periods.close";
         public const string FinancialsReportsView = "financials.reports.view";
@@ -169,6 +170,8 @@ namespace Core.Authorization
             new AccessPathMigrationEntry("HTTP-FILTERS", "HTTP MVC Filters", "RequirePermissionAttribute / RequireWorkspaceRoleAttribute / RequireOperationAttribute", "*", AccessMigrationStatus.Migrated, "Shared Authorization Contract"),
             new AccessPathMigrationEntry("HTTP-FIN-ACCOUNTS", "HTTP & Direct Controller", "FinancialsController (Accounts, JournalEntries, Reports, COA Import/Export, Bank, YearEnd)", FinancialsAccountsView, AccessMigrationStatus.Migrated, "Financials & COA"),
             new AccessPathMigrationEntry("HTTP-FIN-JE-POST", "HTTP & Direct Controller", "FinancialsController.PostJournalEntry", FinancialsJournalPost, AccessMigrationStatus.Migrated, "Financials & General Ledger"),
+            new AccessPathMigrationEntry("HTTP-FIN-JE-POST-BATCH", "HTTP & Direct Controller", "FinancialsController.PostJournalEntriesBatch", FinancialsJournalPostBatch, AccessMigrationStatus.Migrated, "Financials & General Ledger"),
+            new AccessPathMigrationEntry("HTTP-FIN-JE-DISCARD", "HTTP & Direct Controller", "FinancialsController.DiscardImportedJournalEntry", FinancialsJournalCreate, AccessMigrationStatus.Migrated, "Financials & General Ledger"),
             new AccessPathMigrationEntry("HTTP-DASHBOARD", "HTTP & Application Service", "DashboardController.GetSummary / DashboardService.GetDashboardSummary", DashboardSummaryView, AccessMigrationStatus.Migrated, "Dashboard Domain Scoping"),
             new AccessPathMigrationEntry("HTTP-WS-ORG", "HTTP Controller", "OrganizationsController (Settings, BusinessProfile, AccountingPolicy, BooksLock, OwnershipTransfer, Delete)", WorkspaceSettingsUpdate, AccessMigrationStatus.Migrated, "Workspace Governance"),
             new AccessPathMigrationEntry("HTTP-WS-MEMBERS", "HTTP Controller", "WorkspaceMembersController (Members, Update, CreateApproval, RevokeApproval, Remove)", WorkspaceMembersAssignFunctionalRoles, AccessMigrationStatus.Migrated, "Delegation & Dual-Control"),
@@ -269,6 +272,12 @@ namespace Core.Authorization
                     DisallowedWorkflowStates = new[] { "Posted", "Void", "PeriodLocked" },
                     Description = "Post or reverse journal entries with workflow and separation-of-duty checks."
                 },
+                Functional(
+                    FinancialsJournalPostBatch,
+                    "POL-FIN-JE-POST-BATCH",
+                    permissionsAll: new[] { SystemPermissions.FinancialsJournalPost },
+                    modulesAny: new[] { SystemModules.Financials },
+                    description: "Batch post draft journal entries while enforcing per-entry posting policies."),
                 Functional(
                     LinkedEntriesCreate,
                     "POL-FIN-LINKED-ENTRY-CREATE",

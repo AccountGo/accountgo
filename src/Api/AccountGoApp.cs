@@ -162,6 +162,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Core.Authorization.IWorkspaceAccessProfileCatalog, Api.Service.WorkspaceAccessProfileCatalog>();
         builder.Services.AddScoped<Core.Authorization.IWorkspacePolicyTransaction, Api.Service.WorkspacePolicyTransaction>();
         builder.Services.AddScoped<Api.Service.LinkedEntryService>();
+        builder.Services.AddScoped<Api.Service.SourceJournalService>();
         builder.Services.AddScoped<Api.Service.WorkspaceSetupCorrectionService>();
         builder.Services.AddScoped<Api.Service.Google.IGoogleIdTokenValidator, Api.Service.Google.GoogleIdTokenValidator>();
         builder.Services.AddScoped<Api.Service.Google.IGoogleSignInService, Api.Service.Google.GoogleSignInService>();
