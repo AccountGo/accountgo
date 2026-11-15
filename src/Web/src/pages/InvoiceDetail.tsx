@@ -399,7 +399,8 @@ export const InvoiceDetail: React.FC = () => {
   const [issueNumber, setIssueNumber] = useState<string | null>(null);
 
   const fetchNextNumber = async (): Promise<string | null> => {
-    const res = await authFetch('/api/Sales/NextSalesInvoiceNumber');
+    const query = invoice?.invoiceDate ? `?invoiceDate=${encodeURIComponent(invoice.invoiceDate)}` : '';
+    const res = await authFetch(`/api/Sales/NextSalesInvoiceNumber${query}`);
     if (!res.ok) return null;
     const data = await res.json().catch(() => null);
     return data?.next ?? null;

@@ -912,6 +912,16 @@ namespace Api.Controllers
             return Ok(ToSalesInvoiceSettingsModel(settings));
         }
 
+        [TenantScoped]
+        [HttpGet("current/sales-invoice-numbering")]
+        public IActionResult GetSalesInvoiceNumbering() => GetSalesInvoiceNumberingCore();
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPut("current/sales-invoice-numbering")]
+        public IActionResult UpdateSalesInvoiceNumbering([FromBody] UpdateSalesInvoiceNumberingRequest? request) =>
+            UpdateSalesInvoiceNumberingCore(request);
+
         public class AccountingPolicyModel
         {
             [JsonConverter(typeof(StringEnumConverter))] public ReportingFramework? ReportingFramework { get; set; }

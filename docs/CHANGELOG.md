@@ -13,6 +13,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
+- Optional fiscal-year sales invoice numbering in Settings → Invoices: configure a format pattern using `{FY}` and `{####}` (for example `INV-{FY}-{####}`) with a forward-only starting number and live preview across fiscal years, or leave the format blank for continuous numbering.
 - Tax page: see output tax, input tax and the net payable for each monthly or quarterly tax period, by tax code, with the source invoices and bills and a CSV export. Tax periods are set in Settings → Taxes and don't have to match your fiscal year. Cash-basis workspaces see tax when invoices and bills are paid.
 - Record a tax filing for a period: AccountGo keeps the figures you filed, warns when they change afterwards, and can lock the books through the period end. Corrections are recorded as amended filings.
 - Due recurring invoices can be run directly from the recurring schedules list.
@@ -25,6 +26,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
 
 ### Fixed
+- Issuing a sales invoice dated in a locked period or before the books start date is now refused before an invoice number is assigned, so failed attempts no longer consume a number.
 - Workspace automatic sign-out settings now apply per active workspace and no longer fall back to 15 minutes when unconfigured or when a member belongs to another workspace with a shorter timeout.
 - Recurring invoice statuses and cadence labels display correctly, restoring Run now, Skip and Pause actions for active schedules.
 - Bank statement Personal actions appear only when Personal books are linked, and each workspace shows one set of owner money-movement actions.

@@ -731,6 +731,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureStatementOtherIncomeColumns(connection);
             EnsureBooksLockChange(connection);
             EnsureTaxFiling(connection);
+            EnsureDocumentNumberSeries(connection);
             EnsureEntityTypeAndYearEndClose(connection);
             EnsurePartnerAccounts(connection);
             EnsureRecurringScheduleTables(connection);
@@ -794,6 +795,14 @@ CREATE INDEX IF NOT EXISTS ""IX_PartnerShares_PartnerId"" ON ""PartnerShares"" (
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = TaxFilingSql;
+            cmd.ExecuteNonQuery();
+        }
+
+        private static void EnsureDocumentNumberSeries(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "SequenceNumber", "Format", "TEXT NULL");
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = DocumentNumberSeriesSql;
             cmd.ExecuteNonQuery();
         }
 
@@ -1428,6 +1437,18 @@ WHERE NOT EXISTS (
             );
             CREATE UNIQUE INDEX IF NOT EXISTS ""IX_TaxFiling_CompanyId_PeriodStart_PeriodEnd_Sequence"" ON ""TaxFiling"" (""CompanyId"", ""PeriodStart"", ""PeriodEnd"", ""Sequence"");
             CREATE INDEX IF NOT EXISTS ""IX_TaxFiling_AmendsFilingId"" ON ""TaxFiling"" (""AmendsFilingId"");";
+
+        private const string DocumentNumberSeriesSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentNumberSeries"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_DocumentNumberSeries"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""SequenceNumberType"" INTEGER NOT NULL,
+                ""FinancialYearId"" INTEGER NOT NULL,
+                ""NextNumber"" INTEGER NOT NULL DEFAULT 1,
+                CONSTRAINT ""FK_DocumentNumberSeries_FinancialYear_FinancialYearId"" FOREIGN KEY (""FinancialYearId"") REFERENCES ""FinancialYear"" (""Id"") ON DELETE RESTRICT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentNumberSeries_CompanyId_SequenceNumberType_FinancialYearId"" ON ""DocumentNumberSeries"" (""CompanyId"", ""SequenceNumberType"", ""FinancialYearId"");
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentNumberSeries_FinancialYearId"" ON ""DocumentNumberSeries"" (""FinancialYearId"");";
 
         private const string EntityTypeYearEndAccount30800Sql = @"
             INSERT INTO ""Account"" (""CompanyId"", ""AccountCode"", ""AccountName"", ""ParentAccountId"", ""AccountClassId"", ""DrOrCrSide"", ""IsCash"", ""IsContraAccount"")

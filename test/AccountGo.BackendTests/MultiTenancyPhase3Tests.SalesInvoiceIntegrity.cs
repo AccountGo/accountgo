@@ -576,5 +576,52 @@ namespace AccountGo.BackendTests
             var okRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={draftId}");
             Assert.Equal(HttpStatusCode.OK, okRes.StatusCode);
         }
+
+        [Fact]
+        public async Task SalesInvoice_IssueSalesInvoice_RefusesLockedPeriodAndBeforeBooksStart_WithoutConsumingNumber()
+        {
+            var nextBeforeRes = await Send(HttpMethod.Get, "/api/Sales/NextSalesInvoiceNumber");
+            Assert.Equal(HttpStatusCode.OK, nextBeforeRes.StatusCode);
+            var nextBefore = JsonDocument.Parse(await nextBeforeRes.Content.ReadAsStringAsync()).RootElement.GetProperty("next").GetString();
+
+            var draftId = await SaveDraft();
+
+            // 1. Lock books through today, then attempt to issue the draft.
+            WithDb(db =>
+            {
+                var setting = db.CompanySettings.First(s => s.CompanyId == _companyId);
+                setting.BooksLockedThrough = DateTime.UtcNow.Date;
+                db.SaveChanges();
+            });
+
+            var lockedRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}");
+            Assert.Equal(HttpStatusCode.BadRequest, lockedRes.StatusCode);
+            var afterLocked = await GetInvoice(draftId);
+            Assert.Equal("Draft", afterLocked.Status);
+            Assert.Null(afterLocked.No);
+
+            var nextAfterLockRes = await Send(HttpMethod.Get, "/api/Sales/NextSalesInvoiceNumber");
+            var nextAfterLock = JsonDocument.Parse(await nextAfterLockRes.Content.ReadAsStringAsync()).RootElement.GetProperty("next").GetString();
+            Assert.Equal(nextBefore, nextAfterLock);
+
+            // 2. Clear the lock, move BooksStartDate to tomorrow, and attempt to issue the draft dated today.
+            WithDb(db =>
+            {
+                var setting = db.CompanySettings.First(s => s.CompanyId == _companyId);
+                setting.BooksLockedThrough = null;
+                setting.BooksStartDate = DateTime.UtcNow.Date.AddDays(1);
+                db.SaveChanges();
+            });
+
+            var beforeStartRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}");
+            Assert.Equal(HttpStatusCode.BadRequest, beforeStartRes.StatusCode);
+            var afterBeforeStart = await GetInvoice(draftId);
+            Assert.Equal("Draft", afterBeforeStart.Status);
+            Assert.Null(afterBeforeStart.No);
+
+            var nextAfterStartRes = await Send(HttpMethod.Get, "/api/Sales/NextSalesInvoiceNumber");
+            var nextAfterStart = JsonDocument.Parse(await nextAfterStartRes.Content.ReadAsStringAsync()).RootElement.GetProperty("next").GetString();
+            Assert.Equal(nextBefore, nextAfterStart);
+        }
     }
 }

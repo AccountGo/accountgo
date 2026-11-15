@@ -958,9 +958,24 @@ namespace Api.Data
                 .HasIndex(e => new { e.CompanyId, e.AccountCode })
                 .IsUnique();
 
-            builder.Entity<SequenceNumber>()
-                .HasIndex(e => new { e.CompanyId, e.SequenceNumberType })
-                .IsUnique();
+            builder.Entity<SequenceNumber>(entity =>
+            {
+                entity.HasIndex(e => new { e.CompanyId, e.SequenceNumberType })
+                    .IsUnique();
+                entity.Property(e => e.Format)
+                    .HasMaxLength(40);
+            });
+
+            builder.Entity<DocumentNumberSeries>(entity =>
+            {
+                entity.ToTable("DocumentNumberSeries");
+                entity.HasIndex(e => new { e.CompanyId, e.SequenceNumberType, e.FinancialYearId })
+                    .IsUnique();
+                entity.HasOne(e => e.FinancialYear)
+                    .WithMany()
+                    .HasForeignKey(e => e.FinancialYearId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
 
             builder.Entity<Customer>()
                 .HasIndex(e => new { e.CompanyId, e.No })
@@ -1272,6 +1287,7 @@ namespace Api.Data
         public virtual DbSet<BankStatementColumnMapping> BankStatementColumnMappings { get; set; }
         public virtual DbSet<BooksLockChange> BooksLockChanges { get; set; }
         public virtual DbSet<TaxFiling> TaxFilings { get; set; }
+        public virtual DbSet<DocumentNumberSeries> DocumentNumberSeries { get; set; }
         public DbSet<PersonalWorkspace> PersonalWorkspaces { get; set; }
         public DbSet<WorkspaceLink> WorkspaceLinks { get; set; }
         public DbSet<LinkedEntryPair> LinkedEntryPairs { get; set; }

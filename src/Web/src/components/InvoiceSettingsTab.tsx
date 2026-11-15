@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, FileText, RefreshCw, Save } from 'lucide-rea
 import { useAuth } from '../auth/AuthContext';
 import { SalesInvoiceSettings, SellerNameSource } from '../types/invoicing';
 import { InvoicePdfAppearanceSection } from './InvoicePdfAppearanceSection';
+import { InvoiceNumberingSection } from './InvoiceNumberingSection';
 import type { BankAccountPickerItem } from '../types/banking';
 import { paymentBankChoice } from '../lib/paymentBank';
 
@@ -249,6 +250,8 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
         </form>
 
         <InvoicePdfAppearanceSection canEdit={canEdit} />
+
+        <InvoiceNumberingSection canEdit={canEdit} />
 
         {canEdit ? (
           <div className="pt-1 flex items-center justify-end">

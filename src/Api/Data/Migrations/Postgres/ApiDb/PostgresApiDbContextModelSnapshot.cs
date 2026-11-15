@@ -658,6 +658,36 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("CustomerContact");
                 });
 
+            modelBuilder.Entity("Core.Domain.DocumentNumberSeries", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FinancialYearId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("NextNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SequenceNumberType")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FinancialYearId");
+
+                    b.HasIndex("CompanyId", "SequenceNumberType", "FinancialYearId")
+                        .IsUnique();
+
+                    b.ToTable("DocumentNumberSeries", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>
                 {
                     b.Property<int>("Id")
@@ -3949,6 +3979,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<string>("Format")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<int>("NextNumber")
                         .HasColumnType("integer");
 
@@ -4585,6 +4619,17 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Contact");
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentNumberSeries", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.FinancialYear", "FinancialYear")
+                        .WithMany()
+                        .HasForeignKey("FinancialYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FinancialYear");
                 });
 
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>
