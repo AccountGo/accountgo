@@ -10,12 +10,14 @@ using System.Threading.Tasks;
 using Core.Domain;
 using Core.Domain.Financials;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    /// <summary>Phase 2b-2 of #455: PPA HTTP flow and ClosingEntries system-only.</summary>
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3PriorPeriodAdjustmentTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3PriorPeriodAdjustmentTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task ClosingEntries_SaveJournalEntry_Returns400()
         {

@@ -29,7 +29,6 @@ using Xunit;
 
 namespace AccountGo.BackendTests.TaxSystem;
 
-[Collection("WorkspaceSetupHttp")]
 public sealed class TaxFilingHttpTests : IAsyncLifetime
 {
     private readonly AuditTestHost _host = new();

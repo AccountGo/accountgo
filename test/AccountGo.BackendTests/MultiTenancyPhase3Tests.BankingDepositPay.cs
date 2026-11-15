@@ -13,12 +13,26 @@ using Dto.Banking;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
     // #413 1C: Deposit-to / Pay-from resolve on RecordPayment and PayBill.
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected async Task<BankAccountDto> CreateBankOk(CreateBankAccountRequest request, string token = null)
+        {
+            var response = await Send(HttpMethod.Post, "/api/Banking/Accounts", request, token);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<BankAccountDto>();
+        }
+    }
+
+    public sealed class MultiTenancyPhase3BankingDepositPayTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3BankingDepositPayTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task RecordPayment_WithBankAccountId_DebitsThatBanksAccount()
         {
@@ -130,13 +144,6 @@ namespace AccountGo.BackendTests
                 new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 50m, BankAccountId = bank.Id, Date = DateTime.UtcNow }));
             var payment = Assert.Single(paid.Payments);
             Assert.Equal(bank.AccountId, payment.AccountId);
-        }
-
-        private async Task<BankAccountDto> CreateBankOk(CreateBankAccountRequest request, string token = null)
-        {
-            var response = await Send(HttpMethod.Post, "/api/Banking/Accounts", request, token);
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<BankAccountDto>();
         }
     }
 }

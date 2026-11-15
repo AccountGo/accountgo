@@ -19,11 +19,14 @@ using Dto.Sales;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3BankingAcceptanceTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3BankingAcceptanceTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Acceptance_200LineDayFirstCsv_ImportsAllRowsWithCorrectDates_AndRefusesReimportAsAlreadyImported()
         {

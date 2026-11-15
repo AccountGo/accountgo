@@ -4,12 +4,14 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    // Stock posting edge cases: failed postings, zero quantities, voids with repeated items, rounding and negative stock.
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3StockPostingTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3StockPostingTests(ITestOutputHelper output) : base(output) { }
+
         // A zero-quantity stock line moves no stock and doesn't stop the invoice from posting.
         [Fact]
         public async Task Invoice_ZeroQuantityStockLine_StillPosts()

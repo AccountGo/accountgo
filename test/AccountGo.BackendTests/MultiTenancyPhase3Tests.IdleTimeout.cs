@@ -12,13 +12,57 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
     // Automatic sign-out: idle limit = active workspace setting, 12-hour hard limit from sign-in.
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
-        private const string SessionPolicy = "/api/organizations/current/session-policy";
+        protected const string SessionPolicy = "/api/organizations/current/session-policy";
+
+        protected async Task<int> RefreshIdleSeconds(string orgSlug = null)
+        {
+            var raw = "test-refresh-" + Guid.NewGuid().ToString("N");
+            AddSession(raw);
+            using var browser = _factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh")
+            {
+                Content = JsonContent.Create(new { refreshToken = raw }),
+            };
+            if (!string.IsNullOrEmpty(orgSlug))
+            {
+                request.Headers.Add("X-AccountGo-Org", orgSlug);
+            }
+            var response = await browser.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return (await Json(response)).GetProperty("idleTimeoutSeconds").GetInt32();
+        }
+
+        protected void SetToken(string rawToken, Action<RefreshTokenSession> change)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+            change(identity.RefreshTokens.Single(t => t.TokenHash == Hash(rawToken)));
+            identity.SaveChanges();
+        }
+
+        protected RefreshTokenSession ActiveToken(string familyId) => ActiveTokens(familyId).Single();
+
+        protected RefreshTokenSession[] ActiveTokens(string familyId)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+            return identity.RefreshTokens.Where(t => t.FamilyId == familyId && t.RevokedAt == null).ToArray();
+        }
+
+        protected static void AssertNear(DateTime expected, DateTime actual) =>
+            Assert.True(Math.Abs((expected - actual).TotalSeconds) < 30, $"expected ~{expected:O}, got {actual:O}");
+    }
+
+    public sealed class MultiTenancyPhase3IdleTimeoutTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3IdleTimeoutTests(ITestOutputHelper output) : base(output) { }
 
         [Fact]
         public async Task Refresh_UsesDefaultIdleTimeout_AndTwelveHourLimit()
@@ -269,43 +313,5 @@ namespace AccountGo.BackendTests
             var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
             Assert.Single(identity.SecurityAuditEvents.Where(e => e.EventType == "auth.logout" && e.UserId == _ownerId));
         }
-
-        private async Task<int> RefreshIdleSeconds(string orgSlug = null)
-        {
-            var raw = "test-refresh-" + Guid.NewGuid().ToString("N");
-            AddSession(raw);
-            using var browser = _factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh")
-            {
-                Content = JsonContent.Create(new { refreshToken = raw }),
-            };
-            if (!string.IsNullOrEmpty(orgSlug))
-            {
-                request.Headers.Add("X-AccountGo-Org", orgSlug);
-            }
-            var response = await browser.SendAsync(request);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            return (await Json(response)).GetProperty("idleTimeoutSeconds").GetInt32();
-        }
-
-        private void SetToken(string rawToken, Action<RefreshTokenSession> change)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
-            change(identity.RefreshTokens.Single(t => t.TokenHash == Hash(rawToken)));
-            identity.SaveChanges();
-        }
-
-        private RefreshTokenSession ActiveToken(string familyId) => ActiveTokens(familyId).Single();
-
-        private RefreshTokenSession[] ActiveTokens(string familyId)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
-            return identity.RefreshTokens.Where(t => t.FamilyId == familyId && t.RevokedAt == null).ToArray();
-        }
-
-        private static void AssertNear(DateTime expected, DateTime actual) =>
-            Assert.True(Math.Abs((expected - actual).TotalSeconds) < 30, $"expected ~{expected:O}, got {actual:O}");
     }
 }

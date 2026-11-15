@@ -15,12 +15,104 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
     // Purchases & Bills: vendors, bills, and what approving, paying and voiding them posts.
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected static Dto.Purchasing.Bill NewBill(int vendorId, params (string Description, decimal Quantity, decimal Amount, int? AccountId)[] lines) => new()
+        {
+            VendorId = vendorId,
+            Date = DateTime.UtcNow.Date,
+            Status = "Draft",
+            Lines = lines.Select(l => new Dto.Purchasing.BillLine { Description = l.Description, Quantity = l.Quantity, Amount = l.Amount, AccountId = l.AccountId }).ToList(),
+        };
+
+        protected Task<HttpResponseMessage> SaveBill(Dto.Purchasing.Bill bill, string token = null) =>
+            Send(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, token);
+
+        protected async Task<Dto.Purchasing.Bill> SaveBillOk(Dto.Purchasing.Bill bill) => await BillOk(await SaveBill(bill));
+
+        protected static async Task<Dto.Purchasing.Bill> BillOk(HttpResponseMessage response)
+        {
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Bill>();
+        }
+
+        protected async Task<List<Dto.Purchasing.Bill>> Bills(int? vendorId = null) =>
+            await (await Send(HttpMethod.Get, "/api/Purchasing/Bills" + (vendorId.HasValue ? $"?vendorId={vendorId}" : ""))).Content
+                .ReadFromJsonAsync<List<Dto.Purchasing.Bill>>();
+
+        protected async Task<Dto.Purchasing.Supplier> SaveVendor(Dto.Purchasing.Supplier vendor)
+        {
+            var response = await Send(HttpMethod.Post, "/api/Purchasing/SaveVendor", vendor);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Supplier>();
+        }
+
+        protected async Task<Dto.Purchasing.Supplier> GetVendor(int id)
+        {
+            var response = await Send(HttpMethod.Get, $"/api/Purchasing/Vendor?id={id}");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Supplier>();
+        }
+
+        protected async Task<List<Dto.Purchasing.Supplier>> Vendors() =>
+            await (await Send(HttpMethod.Get, "/api/Purchasing/Vendors")).Content.ReadFromJsonAsync<List<Dto.Purchasing.Supplier>>();
+
+        protected void WithDb(Action<ApiDbContext> action)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                action(db);
+        }
+
+        protected int AccountId(string code)
+        {
+            var id = 0;
+            WithDb(db => id = AccountIdIn(db, code));
+            return id;
+        }
+
+        protected static int AccountIdIn(ApiDbContext db, string code) => db.Accounts.Single(a => a.AccountCode == code).Id;
+
+        protected int BillLedgerId(int billId)
+        {
+            var id = 0;
+            WithDb(db => id = db.PurchaseInvoiceHeaders.Single(b => b.Id == billId).GeneralLedgerHeaderId.Value);
+            return id;
+        }
+
+        protected int BillVoidLedgerId(int billId)
+        {
+            var id = 0;
+            WithDb(db => id = db.PurchaseInvoiceHeaders.Single(b => b.Id == billId).VoidGeneralLedgerHeaderId.Value);
+            return id;
+        }
+
+        protected int PaymentLedgerId(int paymentId)
+        {
+            var id = 0;
+            WithDb(db => id = db.VendorPayments.Single(p => p.Id == paymentId).GeneralLedgerHeaderId.Value);
+            return id;
+        }
+
+        protected List<Core.Domain.Financials.GeneralLedgerLine> Ledger(int generalLedgerHeaderId)
+        {
+            List<Core.Domain.Financials.GeneralLedgerLine> lines = null;
+            WithDb(db => lines = db.GeneralLedgerLines.AsNoTracking().Where(l => l.GeneralLedgerHeaderId == generalLedgerHeaderId).ToList());
+            return lines;
+        }
+    }
+
+    public sealed class MultiTenancyPhase3BillsTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3BillsTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Bill_DraftEditApprove_PostsEachLineToItsAccount_AgainstPayables()
         {
@@ -483,91 +575,6 @@ namespace AccountGo.BackendTests
             // Voiding again doesn't reverse twice.
             Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             WithDb(db => Assert.Equal(reversal, db.SalesInvoiceHeaders.Single(i => i.Id == id).VoidGeneralLedgerHeaderId));
-        }
-
-        private static Dto.Purchasing.Bill NewBill(int vendorId, params (string Description, decimal Quantity, decimal Amount, int? AccountId)[] lines) => new()
-        {
-            VendorId = vendorId,
-            Date = DateTime.UtcNow.Date,
-            Status = "Draft",
-            Lines = lines.Select(l => new Dto.Purchasing.BillLine { Description = l.Description, Quantity = l.Quantity, Amount = l.Amount, AccountId = l.AccountId }).ToList(),
-        };
-
-        private Task<HttpResponseMessage> SaveBill(Dto.Purchasing.Bill bill, string token = null) =>
-            Send(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, token);
-
-        private async Task<Dto.Purchasing.Bill> SaveBillOk(Dto.Purchasing.Bill bill) => await BillOk(await SaveBill(bill));
-
-        private static async Task<Dto.Purchasing.Bill> BillOk(HttpResponseMessage response)
-        {
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Bill>();
-        }
-
-        private async Task<List<Dto.Purchasing.Bill>> Bills(int? vendorId = null) =>
-            await (await Send(HttpMethod.Get, "/api/Purchasing/Bills" + (vendorId.HasValue ? $"?vendorId={vendorId}" : ""))).Content
-                .ReadFromJsonAsync<List<Dto.Purchasing.Bill>>();
-
-        private async Task<Dto.Purchasing.Supplier> SaveVendor(Dto.Purchasing.Supplier vendor)
-        {
-            var response = await Send(HttpMethod.Post, "/api/Purchasing/SaveVendor", vendor);
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Supplier>();
-        }
-
-        private async Task<Dto.Purchasing.Supplier> GetVendor(int id)
-        {
-            var response = await Send(HttpMethod.Get, $"/api/Purchasing/Vendor?id={id}");
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Supplier>();
-        }
-
-        private async Task<List<Dto.Purchasing.Supplier>> Vendors() =>
-            await (await Send(HttpMethod.Get, "/api/Purchasing/Vendors")).Content.ReadFromJsonAsync<List<Dto.Purchasing.Supplier>>();
-
-        private void WithDb(Action<ApiDbContext> action)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-                action(db);
-        }
-
-        private int AccountId(string code)
-        {
-            var id = 0;
-            WithDb(db => id = AccountIdIn(db, code));
-            return id;
-        }
-
-        private static int AccountIdIn(ApiDbContext db, string code) => db.Accounts.Single(a => a.AccountCode == code).Id;
-
-        private int BillLedgerId(int billId)
-        {
-            var id = 0;
-            WithDb(db => id = db.PurchaseInvoiceHeaders.Single(b => b.Id == billId).GeneralLedgerHeaderId.Value);
-            return id;
-        }
-
-        private int BillVoidLedgerId(int billId)
-        {
-            var id = 0;
-            WithDb(db => id = db.PurchaseInvoiceHeaders.Single(b => b.Id == billId).VoidGeneralLedgerHeaderId.Value);
-            return id;
-        }
-
-        private int PaymentLedgerId(int paymentId)
-        {
-            var id = 0;
-            WithDb(db => id = db.VendorPayments.Single(p => p.Id == paymentId).GeneralLedgerHeaderId.Value);
-            return id;
-        }
-
-        private List<Core.Domain.Financials.GeneralLedgerLine> Ledger(int generalLedgerHeaderId)
-        {
-            List<Core.Domain.Financials.GeneralLedgerLine> lines = null;
-            WithDb(db => lines = db.GeneralLedgerLines.AsNoTracking().Where(l => l.GeneralLedgerHeaderId == generalLedgerHeaderId).ToList());
-            return lines;
         }
     }
 }

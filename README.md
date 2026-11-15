@@ -334,7 +334,7 @@ pnpm test
 pnpm build
 ```
 
-The focused statement-import suite can be run with `dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj --filter 'FullyQualifiedName~BankStatementParserTests|FullyQualifiedName~BankStatementImportServiceTests|FullyQualifiedName~StatementIncomeRecorderTests|FullyQualifiedName~MultiTenancyPhase3Tests.Acceptance_'`. Automated tests do not replace checking the full browser flow and external service integrations.
+The focused statement-import suite can be run with `dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj --filter 'FullyQualifiedName~BankStatementParserTests|FullyQualifiedName~BankStatementImportServiceTests|FullyQualifiedName~StatementIncomeRecorderTests|FullyQualifiedName~MultiTenancyPhase3BankingAcceptanceTests'`. Automated tests do not replace checking the full browser flow and external service integrations.
 
 ---
 

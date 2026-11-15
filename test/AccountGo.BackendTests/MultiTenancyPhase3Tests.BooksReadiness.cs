@@ -10,13 +10,33 @@ using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
-        private static readonly string[] ModulesWithoutFinancials = { "sales", "purchases", "reports" };
-        private static readonly string[] ModulesWithFinancials = { "sales", "purchases", "reports", "financials" };
+        protected static readonly string[] ModulesWithoutFinancials = { "sales", "purchases", "reports" };
+        protected static readonly string[] ModulesWithFinancials = { "sales", "purchases", "reports", "financials" };
+
+        /// <summary>Simulates an invoice whose posting failed when it was issued.</summary>
+        protected void UnlinkInvoicePosting(int invoiceId)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using (tenant.Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var invoice = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId);
+                invoice.GeneralLedgerHeaderId = null;
+                db.SaveChanges();
+            }
+        }
+    }
+
+    public sealed class MultiTenancyPhase3BooksReadinessTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3BooksReadinessTests(ITestOutputHelper output) : base(output) { }
 
         [Fact]
         public async Task BooksCheck_TurningOnFinancials_WithUnpostedInvoice_Returns409_UntilPosted()
@@ -73,20 +93,6 @@ namespace AccountGo.BackendTests
             Assert.True(off.IsSuccessStatusCode, await off.Content.ReadAsStringAsync());
             var on = await Send(HttpMethod.Put, "/api/Subscription/update", new { activeModules = ModulesWithFinancials });
             Assert.True(on.IsSuccessStatusCode, await on.Content.ReadAsStringAsync());
-        }
-
-        /// <summary>Simulates an invoice whose posting failed when it was issued.</summary>
-        private void UnlinkInvoicePosting(int invoiceId)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
-            using (tenant.Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-            {
-                var invoice = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId);
-                invoice.GeneralLedgerHeaderId = null;
-                db.SaveChanges();
-            }
         }
     }
 }

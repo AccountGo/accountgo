@@ -11,12 +11,33 @@ using Core.Domain;
 using Core.Domain.Financials;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
     /// <summary>Phase 2b-1 of #455: year-end close HTTP flow (real SQLite).</summary>
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected async Task CloseYearWithWarnings(string fyCode)
+        {
+            var close = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
+                new { acknowledgeWarnings = false });
+            if (close.StatusCode == HttpStatusCode.BadRequest
+                && (await close.Content.ReadAsStringAsync()).Contains("Acknowledge", StringComparison.OrdinalIgnoreCase))
+            {
+                close = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
+                    new { acknowledgeWarnings = true });
+            }
+
+            Assert.True(close.IsSuccessStatusCode, await close.Content.ReadAsStringAsync());
+        }
+    }
+
+    public sealed class MultiTenancyPhase3YearEndCloseTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3YearEndCloseTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task YearEndClose_PreviewCloseLockReopen_AndEntityTypeBlockedWhileClosed()
         {
@@ -261,20 +282,6 @@ namespace AccountGo.BackendTests
                 Assert.Equal(beforeChanges, db.BooksLockChanges.Count());
                 Assert.Empty(db.GeneralLedgerHeaders.Where(h => h.ReversedGeneralLedgerHeaderId != null));
             });
-        }
-
-        private async Task CloseYearWithWarnings(string fyCode)
-        {
-            var close = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
-                new { acknowledgeWarnings = false });
-            if (close.StatusCode == HttpStatusCode.BadRequest
-                && (await close.Content.ReadAsStringAsync()).Contains("Acknowledge", StringComparison.OrdinalIgnoreCase))
-            {
-                close = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
-                    new { acknowledgeWarnings = true });
-            }
-
-            Assert.True(close.IsSuccessStatusCode, await close.Content.ReadAsStringAsync());
         }
     }
 }

@@ -29,7 +29,6 @@ using Xunit;
 
 namespace AccountGo.BackendTests.Organizations;
 
-[Collection("WorkspaceSetupHttp")]
 public sealed class PersonalBooksHttpTests : IAsyncLifetime
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"personal-books-{Guid.NewGuid():N}.db");

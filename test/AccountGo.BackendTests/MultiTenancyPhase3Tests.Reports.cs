@@ -8,11 +8,31 @@ using Core.Domain;
 using Core.Domain.Financials;
 using UglyToad.PdfPig;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected GeneralLedgerHeader ReportEntry(DateTime date, Account debit, Account credit, decimal amount)
+        {
+            return new GeneralLedgerHeader
+            {
+                CompanyId = _companyId, Date = date, Description = "Report test", DocumentType = DocumentTypes.JournalEntry,
+                GeneralLedgerLines =
+                {
+                    new GeneralLedgerLine { CompanyId = _companyId, Account = debit, DrCr = DrOrCrSide.Dr, Amount = amount },
+                    new GeneralLedgerLine { CompanyId = _companyId, Account = credit, DrCr = DrOrCrSide.Cr, Amount = amount }
+                }
+            };
+        }
+    }
+
+    public sealed class MultiTenancyPhase3ReportsTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3ReportsTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Reports_FilterLedgerDates_KeepOpeningBalances_AndBalanceWithContraAccounts()
         {
@@ -738,19 +758,6 @@ namespace AccountGo.BackendTests
 
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Get, "/api/Financials/Report.pdf?statement=nope")).StatusCode);
             Assert.False((await Send(HttpMethod.Get, "/api/Financials/Report.pdf?statement=trialBalance&to=2026-04-30T23:59:59.9999999", token: _otherToken)).IsSuccessStatusCode);
-        }
-
-        private GeneralLedgerHeader ReportEntry(DateTime date, Account debit, Account credit, decimal amount)
-        {
-            return new GeneralLedgerHeader
-            {
-                CompanyId = _companyId, Date = date, Description = "Report test", DocumentType = DocumentTypes.JournalEntry,
-                GeneralLedgerLines =
-                {
-                    new GeneralLedgerLine { CompanyId = _companyId, Account = debit, DrCr = DrOrCrSide.Dr, Amount = amount },
-                    new GeneralLedgerLine { CompanyId = _companyId, Account = credit, DrCr = DrOrCrSide.Cr, Amount = amount }
-                }
-            };
         }
     }
 }

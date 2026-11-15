@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Dto.Banking;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
@@ -17,17 +18,58 @@ namespace AccountGo.BackendTests
     /// The assistant's data tools read the same GET actions the pages use, behind the same filters, for the member the
     /// Anter run is for. These tests call them the way Anter does: the shared gate key plus a signed caller assertion.
     /// </summary>
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
         internal const string TestAnterApiKey = "proj_api-key_phase3_anter_mcp_gate_secret";
 
-        private static readonly string[] AssistantDataTools =
+        protected static readonly string[] AssistantDataTools =
         {
             "get_workspace_context", "get_dashboard_summary", "search_journal_entries", "get_journal_entry", "search_items",
             "get_tax_rates", "get_linked_entries", "search_clients", "get_client", "search_invoices", "get_invoice",
             "get_receivables_aging", "get_recurring_schedules", "search_vendors", "get_vendor", "search_bills", "get_bill",
             "get_payables_aging", "list_bank_accounts", "get_bank_register", "get_bank_reconciliations", "get_bank_statement_lines"
         };
+
+        /// <summary>Calls a tool as Anter does and returns its structured result.</summary>
+        protected async Task<JsonElement> CallTool(string name, object arguments, string userId = null)
+        {
+            var response = await McpRequest(
+                new { jsonrpc = "2.0", id = 2, method = "tools/call", @params = new { name, arguments } }, userId);
+            Assert.True(response.TryGetProperty("result", out var result), response.GetRawText());
+            Assert.False(result.TryGetProperty("isError", out var isError) && isError.GetBoolean(), result.GetRawText());
+            var text = result.GetProperty("content").EnumerateArray().First().GetProperty("text").GetString();
+            return JsonDocument.Parse(text).RootElement.Clone();
+        }
+
+        protected async Task<JsonElement> McpRequest(object body, string userId = null)
+        {
+            string assertion;
+            using (var scope = _factory.Services.CreateScope())
+            {
+                assertion = scope.ServiceProvider.GetRequiredService<Api.Service.Ai.IMcpCallerAssertionService>()
+                    .MintAssertion(userId ?? _ownerId, _companyId, _slug);
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", TestAnterApiKey);
+            request.Headers.Add(Api.Service.Ai.McpCallerAssertionService.HeaderName, assertion);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            var response = await _client.SendAsync(request);
+            var text = await response.Content.ReadAsStringAsync();
+            Assert.True(response.IsSuccessStatusCode, $"{(int)response.StatusCode}: {text}");
+
+            var payload = text.TrimStart().StartsWith("{", StringComparison.Ordinal)
+                ? text
+                : text.Split('\n').Select(l => l.TrimEnd('\r')).Last(l => l.StartsWith("data: ", StringComparison.Ordinal))["data: ".Length..];
+            return JsonDocument.Parse(payload).RootElement.Clone();
+        }
+    }
+
+    public sealed class MultiTenancyPhase3AssistantToolsTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3AssistantToolsTests(ITestOutputHelper output) : base(output) { }
 
         [Fact]
         public async Task AssistantTools_AreListedAsReadOnly()
@@ -174,42 +216,6 @@ namespace AccountGo.BackendTests
             var context = await CallTool("get_workspace_context", new { }, _otherId);
             Assert.Equal("Success", context.GetProperty("status").GetString());
             Assert.Equal("Member", context.GetProperty("data").GetProperty("workspace").GetProperty("role").GetString());
-        }
-
-        /// <summary>Calls a tool as Anter does and returns its structured result.</summary>
-        private async Task<JsonElement> CallTool(string name, object arguments, string userId = null)
-        {
-            var response = await McpRequest(
-                new { jsonrpc = "2.0", id = 2, method = "tools/call", @params = new { name, arguments } }, userId);
-            Assert.True(response.TryGetProperty("result", out var result), response.GetRawText());
-            Assert.False(result.TryGetProperty("isError", out var isError) && isError.GetBoolean(), result.GetRawText());
-            var text = result.GetProperty("content").EnumerateArray().First().GetProperty("text").GetString();
-            return JsonDocument.Parse(text).RootElement.Clone();
-        }
-
-        private async Task<JsonElement> McpRequest(object body, string userId = null)
-        {
-            string assertion;
-            using (var scope = _factory.Services.CreateScope())
-            {
-                assertion = scope.ServiceProvider.GetRequiredService<Api.Service.Ai.IMcpCallerAssertionService>()
-                    .MintAssertion(userId ?? _ownerId, _companyId, _slug);
-            }
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", TestAnterApiKey);
-            request.Headers.Add(Api.Service.Ai.McpCallerAssertionService.HeaderName, assertion);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
-            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            var response = await _client.SendAsync(request);
-            var text = await response.Content.ReadAsStringAsync();
-            Assert.True(response.IsSuccessStatusCode, $"{(int)response.StatusCode}: {text}");
-
-            var payload = text.TrimStart().StartsWith("{", StringComparison.Ordinal)
-                ? text
-                : text.Split('\n').Select(l => l.TrimEnd('\r')).Last(l => l.StartsWith("data: ", StringComparison.Ordinal))["data: ".Length..];
-            return JsonDocument.Parse(payload).RootElement.Clone();
         }
     }
 }

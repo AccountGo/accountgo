@@ -12,11 +12,25 @@ using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Sales;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected class SalesAccountOptionDto
+        {
+            public int Id { get; set; }
+            public string Code { get; set; }
+            public string Name { get; set; }
+        }
+    }
+
+    public sealed class MultiTenancyPhase3SalesAccountTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3SalesAccountTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Catalog_SalesAccounts_ReturnsOnlyPostableRevenueAccounts()
         {
@@ -512,13 +526,6 @@ namespace AccountGo.BackendTests
             var pdfAscii = System.Text.Encoding.Latin1.GetString(bytes);
             Assert.DoesNotContain("40600", pdfAscii);
             Assert.DoesNotContain("Other Income", pdfAscii);
-        }
-
-        private class SalesAccountOptionDto
-        {
-            public int Id { get; set; }
-            public string Code { get; set; }
-            public string Name { get; set; }
         }
     }
 }

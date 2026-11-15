@@ -66,25 +66,6 @@ jobs:
               - 'test/AccountGo.ServicesTests/WorkspacePolicyCoordinationRaceTests.cs'
               - 'test/AccountGo.ServicesTests/PersonalWorkspaceConversionScriptTests.cs'
 
-  api:
-    name: Build API
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.database == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore
-        run: dotnet restore src/Api/Api.csproj
-
-      - name: Build
-        run: dotnet build src/Api/Api.csproj -c Release --no-restore
-
   web:
     name: Build Web
     needs: changes
@@ -171,7 +152,7 @@ jobs:
       - name: Multi-tenancy and architecture tests
         run: >-
           dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj -c Release
-          --filter "FullyQualifiedName~MultiTenancyPhase3Tests|FullyQualifiedName~PostgresConnectionString|FullyQualifiedName~Architecture|FullyQualifiedName~WorkspaceOperatingPolicyMigrationRehearsal"
+          --filter "FullyQualifiedName~MultiTenancyPhase3|FullyQualifiedName~PostgresConnectionString|FullyQualifiedName~Architecture|FullyQualifiedName~WorkspaceOperatingPolicyMigrationRehearsal"
           -- xUnit.MaxParallelThreads=4
 
       # pg_dump refuses a server newer than itself. Ubuntu's default repository may not carry 17;
@@ -220,14 +201,13 @@ jobs:
 
   ci-status:
     name: CI Status
-    needs: [changes, api, web, api-tests, api-tests-postgres, worker-tests]
+    needs: [changes, web, api-tests, api-tests-postgres, worker-tests]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate overall CI result
         run: |
           echo "Changes detection: ${{ needs.changes.result }}"
-          echo "Build API: ${{ needs.api.result }}"
           echo "Build Web: ${{ needs.web.result }}"
           echo "API tests (SQLite): ${{ needs.api-tests.result }}"
           echo "API tests (Postgres): ${{ needs.api-tests-postgres.result }}"

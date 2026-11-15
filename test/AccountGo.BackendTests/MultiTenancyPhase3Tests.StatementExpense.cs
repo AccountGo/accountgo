@@ -13,12 +13,51 @@ using Dto.Banking;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
     // Recording an expense from a statement line, against the real database (foreign keys enforced).
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected int AddStatementPayment(int bankId, decimal amount, string payee, DateTime posted)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var import = new BankStatementImport
+                {
+                    BankId = bankId,
+                    Source = BankStatementSources.Csv,
+                    FileName = "wise.csv",
+                    ImportedAt = DateTime.UtcNow,
+                    ImportedBy = "test"
+                };
+                db.Add(import);
+                db.SaveChanges();
+                var line = new BankStatementLine
+                {
+                    BankId = bankId,
+                    BankStatementImportId = import.Id,
+                    Source = BankStatementSources.Csv,
+                    ExternalId = Guid.NewGuid().ToString("N"),
+                    PostedDate = posted,
+                    Amount = amount,
+                    Payee = payee
+                };
+                db.Add(line);
+                db.SaveChanges();
+                return line.Id;
+            }
+        }
+    }
+
+    public sealed class MultiTenancyPhase3StatementExpenseTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3StatementExpenseTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task RecordExpense_FromStatementLine_BooksGeneralItem_AndCreatesVendorOnce()
         {
@@ -128,38 +167,6 @@ namespace AccountGo.BackendTests
                 var earlyLine = db.BankStatementLines.Single(l => l.Id == early);
                 Assert.NotNull(earlyLine.ExcludedAt);
             });
-        }
-
-        private int AddStatementPayment(int bankId, decimal amount, string payee, DateTime posted)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-            {
-                var import = new BankStatementImport
-                {
-                    BankId = bankId,
-                    Source = BankStatementSources.Csv,
-                    FileName = "wise.csv",
-                    ImportedAt = DateTime.UtcNow,
-                    ImportedBy = "test"
-                };
-                db.Add(import);
-                db.SaveChanges();
-                var line = new BankStatementLine
-                {
-                    BankId = bankId,
-                    BankStatementImportId = import.Id,
-                    Source = BankStatementSources.Csv,
-                    ExternalId = Guid.NewGuid().ToString("N"),
-                    PostedDate = posted,
-                    Amount = amount,
-                    Payee = payee
-                };
-                db.Add(line);
-                db.SaveChanges();
-                return line.Id;
-            }
         }
     }
 }
