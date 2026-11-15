@@ -32,24 +32,24 @@ using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests : IAsyncLifetime
+    public abstract partial class MultiTenancyPhase3TestBase : IAsyncLifetime
     {
-        private readonly string _path = Path.Combine(Path.GetTempPath(), "accountgo_p3_" + Guid.NewGuid().ToString("N") + ".db");
-        private readonly FakeEmailSender _emails = new FakeEmailSender();
-        private PostgresTestDatabase? _postgres;
-        private WebApplicationFactory<Program> _factory;
-        private HttpClient _client;
-        private string _ownerToken;
-        private string _ownerId;
-        private string _otherToken;
-        private string _otherId;
-        private string _slug;
-        private static string IsoDate(DateTime dt) => dt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-        private int _companyId;
-        private const string Current = "/api/organizations/current";
-        private readonly ITestOutputHelper _output;
+        protected readonly string _path = Path.Combine(Path.GetTempPath(), "accountgo_p3_" + Guid.NewGuid().ToString("N") + ".db");
+        protected readonly FakeEmailSender _emails = new FakeEmailSender();
+        protected PostgresTestDatabase? _postgres;
+        protected WebApplicationFactory<Program> _factory;
+        protected HttpClient _client;
+        protected string _ownerToken;
+        protected string _ownerId;
+        protected string _otherToken;
+        protected string _otherId;
+        protected string _slug;
+        protected static string IsoDate(DateTime dt) => dt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        protected int _companyId;
+        protected const string Current = "/api/organizations/current";
+        protected readonly ITestOutputHelper _output;
 
-        public MultiTenancyPhase3Tests(ITestOutputHelper output)
+        protected MultiTenancyPhase3TestBase(ITestOutputHelper output)
         {
             _output = output;
         }
@@ -118,6 +118,315 @@ namespace AccountGo.BackendTests
                     File.Delete(file);
             return Task.CompletedTask;
         }
+
+        protected void SetDefaultPaymentInstructions(string text)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var setting = db.CompanySettings.First();
+                var settings = setting.GetSalesInvoiceSettings();
+                settings.DefaultPaymentInstructions = text;
+                setting.SetSalesInvoiceSettings(settings);
+                db.SaveChanges();
+            }
+        }
+
+        protected async Task<int> SaveDraft(string number = null)
+        {
+            var invoice = await NewInvoice();
+            invoice.Status = "Draft";
+            invoice.No = number;
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            return (await Json(saved)).GetProperty("id").GetInt32();
+        }
+
+        protected async Task<string> Issue(int id)
+        {
+            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={id}");
+            Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
+            return (await Json(issued)).GetProperty("no").GetString();
+        }
+
+        protected async Task<string> NextNumber()
+        {
+            var response = await Send(HttpMethod.Get, "/api/Sales/NextSalesInvoiceNumber");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return (await Json(response)).GetProperty("next").GetString();
+        }
+
+        protected static string RepoRoot()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "accountgo.sln")))
+                dir = dir.Parent;
+            return dir?.FullName ?? throw new DirectoryNotFoundException("Repository root not found.");
+        }
+
+        protected async Task<Dto.Sales.SalesInvoice> GetInvoice(int id)
+        {
+            var response = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={id}");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+        }
+
+        protected Task<decimal> OutstandingReceivables() => DashboardKpi("outstandingReceivables");
+
+        protected async Task<decimal> DashboardKpi(string name)
+        {
+            var response = await Send(HttpMethod.Get, "/api/Dashboard/Summary");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("kpis").GetProperty(name).GetDecimal();
+        }
+
+        protected async Task<Tuple<string, string>> CreateUser(string email)
+        {
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+                var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
+                Assert.True((await manager.CreateAsync(user)).Succeeded);
+                var token = await scope.ServiceProvider.GetRequiredService<IAuthenticationService>().CreateToken(user, true);
+                return Tuple.Create(token.AccessToken, user.Id);
+            }
+        }
+
+        protected async Task<int> Invite(string email, string role = "Member", int[] securityRoleIds = null)
+        {
+            var response = await Send(HttpMethod.Post, Current + "/invitations", new { email, role, securityRoleIds = securityRoleIds ?? new int[0] });
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return (await Json(response)).GetProperty("id").GetInt32();
+        }
+
+        protected async Task JoinOther(string role = "Member")
+        {
+            await Invite("phase3-other@example.com", role);
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/invitations/" + InvitationToken() + "/accept", token: _otherToken, scoped: false)).StatusCode);
+        }
+
+        protected string InvitationToken()
+        {
+            var email = _emails.Messages.Last(m => m.Subject.Contains(" invited you to "));
+            return Regex.Match(email.Html, @"/invite/([A-Za-z0-9_-]{43})").Groups[1].Value;
+        }
+
+        protected string OtpCode()
+        {
+            return Regex.Match(_emails.Messages.Last(m => m.Subject.StartsWith("Welcome to AccountGo!", StringComparison.Ordinal)).Subject, @"\d{6}").Value;
+        }
+
+        protected int ViewerRoleId()
+        {
+            using (var scope = _factory.Services.CreateScope())
+                return scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.Single(r => r.Name == "Auditor / Viewer").Id;
+        }
+
+        protected int RoleId(string name)
+        {
+            using (var scope = _factory.Services.CreateScope())
+                return scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.Single(r => r.Name == name).Id;
+        }
+
+        protected int MemberId(string userId)
+        {
+            using (var scope = _factory.Services.CreateScope())
+                return scope.ServiceProvider.GetRequiredService<ApiDbContext>().CompanyMembers.Single(m => m.UserId == userId && m.CompanyId == _companyId).Id;
+        }
+
+        protected async Task<Dto.Inventory.CatalogItem> SaveItem(Dto.Inventory.CatalogItem item)
+        {
+            var response = await Send(HttpMethod.Post, "/api/Catalog/SaveItem", item);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Inventory.CatalogItem>();
+        }
+
+        protected async Task<Dto.Sales.Client> SaveClient(Dto.Sales.Client client)
+        {
+            var response = await Send(HttpMethod.Post, "/api/Sales/SaveClient", client);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Sales.Client>();
+        }
+
+        protected async Task<Dto.Sales.Client> GetClient(int id)
+        {
+            var response = await Send(HttpMethod.Get, $"/api/Sales/Client?id={id}");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Sales.Client>();
+        }
+
+        protected async Task<List<Dto.Sales.Client>> Clients() =>
+            await (await Send(HttpMethod.Get, "/api/Sales/Clients")).Content.ReadFromJsonAsync<List<Dto.Sales.Client>>();
+
+        protected async Task<int> FirstPaymentTermId()
+        {
+            var terms = await Json(await Send(HttpMethod.Get, "/api/Common/PaymentTerms"));
+            return terms[0].GetProperty("id").GetInt32();
+        }
+
+        protected async Task EditCustomer(int customerId, string name, string email, string street)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var party = db.Customers.Where(c => c.Id == customerId).Select(c => c.Party).Single();
+                party.Name = name;
+                party.Email = email;
+                party.CompanyStreet = street;
+                party.CompanyProvince = street == null ? null : "Makati";
+                await db.SaveChangesAsync();
+            }
+        }
+
+        protected async Task EditItem(int itemId, string description)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                db.Items.Single(i => i.Id == itemId).Description = description;
+                await db.SaveChangesAsync();
+            }
+        }
+
+        protected async Task<Dto.Sales.SalesInvoice> NewInvoice(string customerEmail = null)
+        {
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var advancesAccount = db.Accounts.FirstOrDefault(a => a.AccountCode == "20120") ?? db.Accounts.First(a => a.AccountClassId == 2);
+                    var customer = new Customer
+                    {
+                        No = Guid.NewGuid().ToString("N"), Party = new Party { Name = "Real customer", PartyType = PartyTypes.Customer, Email = customerEmail },
+                        PrimaryContact = new Contact { FirstName = "Customer", LastName = "Contact", Party = new Party { Name = "Contact", PartyType = PartyTypes.Contact } },
+                        AccountsReceivableAccount = db.Accounts.Single(a => a.AccountCode == "10120"),
+                        SalesAccount = db.Accounts.Single(a => a.AccountCode == "40100"),
+                        CustomerAdvancesAccount = advancesAccount,
+                        CustomerAdvancesAccountId = advancesAccount.Id
+                    };
+                    var glSetting = db.GeneralLedgerSettings.FirstOrDefault();
+                    if (glSetting != null && !glSetting.ShippingChargeAccountId.HasValue)
+                    {
+                        glSetting.ShippingChargeAccountId = customer.SalesAccount.Id;
+                    }
+                    var serviceCat = db.ItemCategories.FirstOrDefault(c => c.ItemType == ItemTypes.Service);
+                    if (serviceCat == null)
+                    {
+                        serviceCat = new ItemCategory
+                        {
+                            Name = "Services",
+                            ItemType = ItemTypes.Service,
+                            MeasurementId = db.Measurements.First().Id,
+                            SalesAccountId = customer.SalesAccount.Id
+                        };
+                        db.ItemCategories.Add(serviceCat);
+                    }
+                    var item = new Item { No = Guid.NewGuid().ToString("N"), Code = "CONSULTING", Description = "Consulting", Price = 100,
+                        ItemCategory = serviceCat,
+                        SmallestMeasurementId = db.Measurements.First().Id, SalesAccount = customer.SalesAccount };
+                    db.Customers.Add(customer);
+                    db.Items.Add(item);
+                    await db.SaveChangesAsync();
+                    return new Dto.Sales.SalesInvoice
+                    {
+                        CustomerId = customer.Id, InvoiceDate = DateTime.UtcNow,
+                        SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine> { new Dto.Sales.SalesInvoiceLine
+                        {
+                            ItemId = item.Id, Quantity = 1, Amount = 100, MeasurementId = item.SmallestMeasurementId.Value
+                        } }
+                    };
+                }
+            }
+        }
+
+        protected async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, bool scoped = true, IDictionary<string, string> extraHeaders = null)
+        {
+            using (var request = new HttpRequestMessage(method, path))
+            {
+                var bearer = token ?? _ownerToken;
+                if (!string.IsNullOrEmpty(bearer)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+                if (scoped) request.Headers.Add("X-AccountGo-Org", _slug);
+                if (extraHeaders != null)
+                {
+                    foreach (var kvp in extraHeaders)
+                    {
+                        request.Headers.Add(kvp.Key, kvp.Value);
+                    }
+                }
+                if (body != null) request.Content = JsonContent.Create(body);
+                return await _client.SendAsync(request);
+            }
+        }
+
+        protected async Task<IDictionary<string, string>> ApproveJournalPostAsync(int journalId)
+        {
+            var approver = await CreateUser($"approver-{Guid.NewGuid():N}@example.com");
+            string reqId = null;
+            WithDb(db =>
+            {
+                db.CompanyMembers.Add(new CompanyMember
+                {
+                    CompanyId = _companyId,
+                    UserId = approver.Item2,
+                    Role = CompanyMemberRole.Admin,
+                    Status = CompanyMemberStatus.Active
+                });
+                db.SaveChanges();
+                var res = Api.Authorization.AccessAuthorizationService.RecordAuthenticatedApprovalAsync(
+                    db, _companyId, approver.Item2, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, resourceId: journalId.ToString()).GetAwaiter().GetResult();
+                reqId = res.RequestId;
+            });
+
+            return new Dictionary<string, string>
+            {
+                { "X-Approval-Request-Id", reqId },
+                { "X-Approved-By-User-Id", approver.Item2 }
+            };
+        }
+
+        protected static async Task<JsonElement> Json(HttpResponseMessage response)
+        {
+            var text = await response.Content.ReadAsStringAsync();
+            return JsonDocument.Parse(text).RootElement.Clone();
+        }
+
+        protected static int TotalResponseHeaderBytes(HttpResponseMessage response)
+        {
+            var statusLineBytes = Encoding.UTF8.GetByteCount(
+                $"HTTP/{response.Version} {(int)response.StatusCode} {response.ReasonPhrase}\r\n");
+            var headersBytes = response.Headers.Concat(response.Content.Headers)
+                .Sum(h => Encoding.UTF8.GetByteCount(h.Key + ": " + string.Join(", ", h.Value) + "\r\n"));
+            return statusLineBytes + headersBytes + 2;
+        }
+
+        protected class FakeEmailSender : IEmailSender
+        {
+            public bool Fail { get; set; }
+            public List<Message> Messages { get; } = new List<Message>();
+            public Task<string> SendAsync(EmailMessage message, CancellationToken ct = default(CancellationToken))
+            {
+                if (Fail) throw new HttpRequestException("Simulated email delivery failure");
+                Messages.Add(new Message { To = message.To, Subject = message.Subject, Html = message.Html, Raw = message });
+                return Task.FromResult("fake-" + Messages.Count);
+            }
+        }
+
+        protected class Message
+        {
+            public string To { get; set; }
+            public string Subject { get; set; }
+            public string Html { get; set; }
+            public EmailMessage Raw { get; set; }
+        }
+    }
+
+    public sealed class MultiTenancyPhase3CoreTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3CoreTests(ITestOutputHelper output) : base(output) { }
 
         [SqliteFact]
         public async Task Create_ProvisionsScopedCleanBooks_Idempotently_AndInvoiceWorks()
@@ -365,20 +674,6 @@ namespace AccountGo.BackendTests
             Assert.Null((await GetInvoice(invoice.Id)).PaymentInstructions);
         }
 
-        private void SetDefaultPaymentInstructions(string text)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-            {
-                var setting = db.CompanySettings.First();
-                var settings = setting.GetSalesInvoiceSettings();
-                settings.DefaultPaymentInstructions = text;
-                setting.SetSalesInvoiceSettings(settings);
-                db.SaveChanges();
-            }
-        }
-
         [Fact]
         public async Task PaymentInstructions_AreFrozenAtIssue_AndAClearedFieldStaysNone()
         {
@@ -624,45 +919,6 @@ namespace AccountGo.BackendTests
                 Assert.Throws<InvoiceNumberException>(() => InvoiceNumber.ForSave(null, null, false, new string('1', 31))).Error);
             Assert.Equal(InvoiceNumberError.Invalid,
                 Assert.Throws<InvoiceNumberException>(() => InvoiceNumber.ForSave(null, null, false, "-1")).Error);
-        }
-
-        private async Task<int> SaveDraft(string number = null)
-        {
-            var invoice = await NewInvoice();
-            invoice.Status = "Draft";
-            invoice.No = number;
-            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
-            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            return (await Json(saved)).GetProperty("id").GetInt32();
-        }
-
-        private async Task<string> Issue(int id)
-        {
-            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={id}");
-            Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
-            return (await Json(issued)).GetProperty("no").GetString();
-        }
-
-        private async Task<string> NextNumber()
-        {
-            var response = await Send(HttpMethod.Get, "/api/Sales/NextSalesInvoiceNumber");
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return (await Json(response)).GetProperty("next").GetString();
-        }
-
-        private static string RepoRoot()
-        {
-            var dir = new DirectoryInfo(AppContext.BaseDirectory);
-            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "accountgo.sln")))
-                dir = dir.Parent;
-            return dir?.FullName ?? throw new DirectoryNotFoundException("Repository root not found.");
-        }
-
-        private async Task<Dto.Sales.SalesInvoice> GetInvoice(int id)
-        {
-            var response = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={id}");
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
         }
 
         [Fact]
@@ -1100,15 +1356,6 @@ namespace AccountGo.BackendTests
             Assert.Equal(100m, await OutstandingReceivables());
         }
 
-        private Task<decimal> OutstandingReceivables() => DashboardKpi("outstandingReceivables");
-
-        private async Task<decimal> DashboardKpi(string name)
-        {
-            var response = await Send(HttpMethod.Get, "/api/Dashboard/Summary");
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("kpis").GetProperty(name).GetDecimal();
-        }
-
         [Fact]
         public async Task Invite_EmailHashAndSecurityRoles_WrongEmailDenied_SingleUse()
         {
@@ -1502,60 +1749,6 @@ namespace AccountGo.BackendTests
             for (var i = 0; i < 30; i++)
                 Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, path, token: "", scoped: false)).StatusCode);
             Assert.Equal(HttpStatusCode.TooManyRequests, (await Send(HttpMethod.Get, path, token: "", scoped: false)).StatusCode);
-        }
-
-        private async Task<Tuple<string, string>> CreateUser(string email)
-        {
-            using (var scope = _factory.Services.CreateScope())
-            {
-                var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-                var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
-                Assert.True((await manager.CreateAsync(user)).Succeeded);
-                var token = await scope.ServiceProvider.GetRequiredService<IAuthenticationService>().CreateToken(user, true);
-                return Tuple.Create(token.AccessToken, user.Id);
-            }
-        }
-
-        private async Task<int> Invite(string email, string role = "Member", int[] securityRoleIds = null)
-        {
-            var response = await Send(HttpMethod.Post, Current + "/invitations", new { email, role, securityRoleIds = securityRoleIds ?? new int[0] });
-            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            return (await Json(response)).GetProperty("id").GetInt32();
-        }
-
-        private async Task JoinOther(string role = "Member")
-        {
-            await Invite("phase3-other@example.com", role);
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/invitations/" + InvitationToken() + "/accept", token: _otherToken, scoped: false)).StatusCode);
-        }
-
-        private string InvitationToken()
-        {
-            var email = _emails.Messages.Last(m => m.Subject.Contains(" invited you to "));
-            return Regex.Match(email.Html, @"/invite/([A-Za-z0-9_-]{43})").Groups[1].Value;
-        }
-
-        private string OtpCode()
-        {
-            return Regex.Match(_emails.Messages.Last(m => m.Subject.StartsWith("Welcome to AccountGo!", StringComparison.Ordinal)).Subject, @"\d{6}").Value;
-        }
-
-        private int ViewerRoleId()
-        {
-            using (var scope = _factory.Services.CreateScope())
-                return scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.Single(r => r.Name == "Auditor / Viewer").Id;
-        }
-
-        private int RoleId(string name)
-        {
-            using (var scope = _factory.Services.CreateScope())
-                return scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.Single(r => r.Name == name).Id;
-        }
-
-        private int MemberId(string userId)
-        {
-            using (var scope = _factory.Services.CreateScope())
-                return scope.ServiceProvider.GetRequiredService<ApiDbContext>().CompanyMembers.Single(m => m.UserId == userId && m.CompanyId == _companyId).Id;
         }
 
         [SqliteFact]
@@ -1975,194 +2168,6 @@ namespace AccountGo.BackendTests
                 Assert.Equal(today, c.LastInvoiceDate?.Date);
             }
             Assert.Equal(70 + 40, single.Outstanding);
-        }
-
-        private async Task<Dto.Inventory.CatalogItem> SaveItem(Dto.Inventory.CatalogItem item)
-        {
-            var response = await Send(HttpMethod.Post, "/api/Catalog/SaveItem", item);
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Inventory.CatalogItem>();
-        }
-
-        private async Task<Dto.Sales.Client> SaveClient(Dto.Sales.Client client)
-        {
-            var response = await Send(HttpMethod.Post, "/api/Sales/SaveClient", client);
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Sales.Client>();
-        }
-
-        private async Task<Dto.Sales.Client> GetClient(int id)
-        {
-            var response = await Send(HttpMethod.Get, $"/api/Sales/Client?id={id}");
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Sales.Client>();
-        }
-
-        private async Task<List<Dto.Sales.Client>> Clients() =>
-            await (await Send(HttpMethod.Get, "/api/Sales/Clients")).Content.ReadFromJsonAsync<List<Dto.Sales.Client>>();
-
-        private async Task<int> FirstPaymentTermId()
-        {
-            var terms = await Json(await Send(HttpMethod.Get, "/api/Common/PaymentTerms"));
-            return terms[0].GetProperty("id").GetInt32();
-        }
-
-        private async Task EditCustomer(int customerId, string name, string email, string street)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-            {
-                var party = db.Customers.Where(c => c.Id == customerId).Select(c => c.Party).Single();
-                party.Name = name;
-                party.Email = email;
-                party.CompanyStreet = street;
-                party.CompanyProvince = street == null ? null : "Makati";
-                await db.SaveChangesAsync();
-            }
-        }
-
-        private async Task EditItem(int itemId, string description)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-            {
-                db.Items.Single(i => i.Id == itemId).Description = description;
-                await db.SaveChangesAsync();
-            }
-        }
-
-        private async Task<Dto.Sales.SalesInvoice> NewInvoice(string customerEmail = null)
-        {
-            using (var scope = _factory.Services.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-                {
-                    var advancesAccount = db.Accounts.FirstOrDefault(a => a.AccountCode == "20120") ?? db.Accounts.First(a => a.AccountClassId == 2);
-                    var customer = new Customer
-                    {
-                        No = Guid.NewGuid().ToString("N"), Party = new Party { Name = "Real customer", PartyType = PartyTypes.Customer, Email = customerEmail },
-                        PrimaryContact = new Contact { FirstName = "Customer", LastName = "Contact", Party = new Party { Name = "Contact", PartyType = PartyTypes.Contact } },
-                        AccountsReceivableAccount = db.Accounts.Single(a => a.AccountCode == "10120"),
-                        SalesAccount = db.Accounts.Single(a => a.AccountCode == "40100"),
-                        CustomerAdvancesAccount = advancesAccount,
-                        CustomerAdvancesAccountId = advancesAccount.Id
-                    };
-                    var glSetting = db.GeneralLedgerSettings.FirstOrDefault();
-                    if (glSetting != null && !glSetting.ShippingChargeAccountId.HasValue)
-                    {
-                        glSetting.ShippingChargeAccountId = customer.SalesAccount.Id;
-                    }
-                    var serviceCat = db.ItemCategories.FirstOrDefault(c => c.ItemType == ItemTypes.Service);
-                    if (serviceCat == null)
-                    {
-                        serviceCat = new ItemCategory
-                        {
-                            Name = "Services",
-                            ItemType = ItemTypes.Service,
-                            MeasurementId = db.Measurements.First().Id,
-                            SalesAccountId = customer.SalesAccount.Id
-                        };
-                        db.ItemCategories.Add(serviceCat);
-                    }
-                    var item = new Item { No = Guid.NewGuid().ToString("N"), Code = "CONSULTING", Description = "Consulting", Price = 100,
-                        ItemCategory = serviceCat,
-                        SmallestMeasurementId = db.Measurements.First().Id, SalesAccount = customer.SalesAccount };
-                    db.Customers.Add(customer);
-                    db.Items.Add(item);
-                    await db.SaveChangesAsync();
-                    return new Dto.Sales.SalesInvoice
-                    {
-                        CustomerId = customer.Id, InvoiceDate = DateTime.UtcNow,
-                        SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine> { new Dto.Sales.SalesInvoiceLine
-                        {
-                            ItemId = item.Id, Quantity = 1, Amount = 100, MeasurementId = item.SmallestMeasurementId.Value
-                        } }
-                    };
-                }
-            }
-        }
-
-        private async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, bool scoped = true, IDictionary<string, string> extraHeaders = null)
-        {
-            using (var request = new HttpRequestMessage(method, path))
-            {
-                var bearer = token ?? _ownerToken;
-                if (!string.IsNullOrEmpty(bearer)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
-                if (scoped) request.Headers.Add("X-AccountGo-Org", _slug);
-                if (extraHeaders != null)
-                {
-                    foreach (var kvp in extraHeaders)
-                    {
-                        request.Headers.Add(kvp.Key, kvp.Value);
-                    }
-                }
-                if (body != null) request.Content = JsonContent.Create(body);
-                return await _client.SendAsync(request);
-            }
-        }
-
-        private async Task<IDictionary<string, string>> ApproveJournalPostAsync(int journalId)
-        {
-            var approver = await CreateUser($"approver-{Guid.NewGuid():N}@example.com");
-            string reqId = null;
-            WithDb(db =>
-            {
-                db.CompanyMembers.Add(new CompanyMember
-                {
-                    CompanyId = _companyId,
-                    UserId = approver.Item2,
-                    Role = CompanyMemberRole.Admin,
-                    Status = CompanyMemberStatus.Active
-                });
-                db.SaveChanges();
-                var res = Api.Authorization.AccessAuthorizationService.RecordAuthenticatedApprovalAsync(
-                    db, _companyId, approver.Item2, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost, resourceId: journalId.ToString()).GetAwaiter().GetResult();
-                reqId = res.RequestId;
-            });
-
-            return new Dictionary<string, string>
-            {
-                { "X-Approval-Request-Id", reqId },
-                { "X-Approved-By-User-Id", approver.Item2 }
-            };
-        }
-
-        private static async Task<JsonElement> Json(HttpResponseMessage response)
-        {
-            var text = await response.Content.ReadAsStringAsync();
-            return JsonDocument.Parse(text).RootElement.Clone();
-        }
-
-        private static int TotalResponseHeaderBytes(HttpResponseMessage response)
-        {
-            var statusLineBytes = Encoding.UTF8.GetByteCount(
-                $"HTTP/{response.Version} {(int)response.StatusCode} {response.ReasonPhrase}\r\n");
-            var headersBytes = response.Headers.Concat(response.Content.Headers)
-                .Sum(h => Encoding.UTF8.GetByteCount(h.Key + ": " + string.Join(", ", h.Value) + "\r\n"));
-            return statusLineBytes + headersBytes + 2;
-        }
-
-        private class FakeEmailSender : IEmailSender
-        {
-            public bool Fail { get; set; }
-            public List<Message> Messages { get; } = new List<Message>();
-            public Task<string> SendAsync(EmailMessage message, CancellationToken ct = default(CancellationToken))
-            {
-                if (Fail) throw new HttpRequestException("Simulated email delivery failure");
-                Messages.Add(new Message { To = message.To, Subject = message.Subject, Html = message.Html, Raw = message });
-                return Task.FromResult("fake-" + Messages.Count);
-            }
-        }
-
-        private class Message
-        {
-            public string To { get; set; }
-            public string Subject { get; set; }
-            public string Html { get; set; }
-            public EmailMessage Raw { get; set; }
         }
     }
 }

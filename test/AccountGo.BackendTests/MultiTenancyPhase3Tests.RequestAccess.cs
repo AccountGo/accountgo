@@ -18,11 +18,13 @@ using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests;
-
-public partial class MultiTenancyPhase3Tests
+public sealed class MultiTenancyPhase3RequestAccessTests : MultiTenancyPhase3TestBase
 {
+    public MultiTenancyPhase3RequestAccessTests(ITestOutputHelper output) : base(output) { }
+
     [Theory]
     [InlineData("removed", HttpStatusCode.NotFound)]
     [InlineData("suspended", HttpStatusCode.NotFound)]

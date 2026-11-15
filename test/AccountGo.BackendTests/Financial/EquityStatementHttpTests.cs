@@ -23,7 +23,6 @@ using Xunit;
 
 namespace AccountGo.BackendTests.Financial;
 
-[Collection("WorkspaceSetupHttp")]
 public sealed class EquityStatementHttpTests : IAsyncLifetime
 {
     private readonly AuditTestHost _host = new();

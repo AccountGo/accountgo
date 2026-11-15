@@ -16,13 +16,85 @@ using Core.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Services.Recurring;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
     // #482: processing a claimed occurrence through the real generation service + real SalesService against a
     // provisioned workspace, so the whole draft-and-issue path (including GL posting) is exercised end to end.
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        /// <summary>Seeds just a customer and returns its id (for create-endpoint tests).</summary>
+        protected int SeedCustomerId(string tag)
+        {
+            var id = 0;
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var customer = new Core.Domain.Sales.Customer { CompanyId = _companyId, No = tag + "-CUST" };
+                db.Customers.Add(customer);
+                db.SaveChanges();
+                id = customer.Id;
+            }
+            return id;
+        }
+
+        /// <summary>Seeds a one-line service-item sales schedule whose NextRunDate is the given run date.</summary>
+        protected int SeedSalesSchedule(string tag, RecurringAction action, DateTime runDate, string automationEnabledBy,
+            RecurringScheduleStatus status = RecurringScheduleStatus.Active)
+        {
+            var scheduleId = 0;
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
+            {
+                var salesAccountId = db.Accounts.Single(a => a.AccountCode == "40100").Id;
+                var arAccountId = db.Accounts.Single(a => a.AccountCode == "10120").Id;
+                var measurementId = db.Measurements.First().Id;
+
+                var customer = new Core.Domain.Sales.Customer { CompanyId = _companyId, No = tag + "-CUST", AccountsReceivableAccountId = arAccountId };
+                db.Customers.Add(customer);
+                var category = new Core.Domain.Items.ItemCategory { CompanyId = _companyId, Name = tag + "-Cat", ItemType = Core.Domain.ItemTypes.Service };
+                db.ItemCategories.Add(category);
+                db.SaveChanges();
+
+                var item = new Core.Domain.Items.Item
+                {
+                    CompanyId = _companyId, No = tag + "-ITEM", Description = "Service " + tag,
+                    ItemCategoryId = category.Id, SalesAccountId = salesAccountId,
+                    SellMeasurementId = measurementId, SmallestMeasurementId = measurementId, Price = 100m,
+                };
+                db.Items.Add(item);
+                db.SaveChanges();
+
+                var schedule = new RecurringSchedule
+                {
+                    CompanyId = _companyId, Kind = RecurringScheduleKind.SalesInvoice, PartyId = customer.Id,
+                    Name = tag, Cadence = RecurringCadence.Monthly, Interval = 1, DayOfMonth = runDate.Day,
+                    StartDate = runDate, NextRunDate = runDate, Action = action, Status = status,
+                    ServicePeriodMode = RecurringServicePeriodMode.CurrentMonth,
+                    AutomationEnabledBy = automationEnabledBy,
+                };
+                db.RecurringSchedules.Add(schedule);
+                db.SaveChanges();
+                scheduleId = schedule.Id;
+
+                db.RecurringScheduleLines.Add(new RecurringScheduleLine
+                {
+                    CompanyId = _companyId, RecurringScheduleId = schedule.Id, ItemId = item.Id, Quantity = 1, Amount = 100m,
+                });
+                db.SaveChanges();
+            }
+            return scheduleId;
+        }
+    }
+
+    public sealed class MultiTenancyPhase3RecurringTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3RecurringTests(ITestOutputHelper output) : base(output) { }
+
         [SqliteFact]
         public void Recurring_AutoIssue_AllGuardsPass_PostsInvoiceToLedger()
         {
@@ -1175,71 +1247,6 @@ namespace AccountGo.BackendTests
             var res = await Send(HttpMethod.Post, "/api/RecurringSchedules", body);
             Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
             Assert.Contains("draft or auto-issue", await res.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
-        }
-
-        /// <summary>Seeds just a customer and returns its id (for create-endpoint tests).</summary>
-        private int SeedCustomerId(string tag)
-        {
-            var id = 0;
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-            {
-                var customer = new Core.Domain.Sales.Customer { CompanyId = _companyId, No = tag + "-CUST" };
-                db.Customers.Add(customer);
-                db.SaveChanges();
-                id = customer.Id;
-            }
-            return id;
-        }
-
-        /// <summary>Seeds a one-line service-item sales schedule whose NextRunDate is the given run date.</summary>
-        private int SeedSalesSchedule(string tag, RecurringAction action, DateTime runDate, string automationEnabledBy,
-            RecurringScheduleStatus status = RecurringScheduleStatus.Active)
-        {
-            var scheduleId = 0;
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
-            {
-                var salesAccountId = db.Accounts.Single(a => a.AccountCode == "40100").Id;
-                var arAccountId = db.Accounts.Single(a => a.AccountCode == "10120").Id;
-                var measurementId = db.Measurements.First().Id;
-
-                var customer = new Core.Domain.Sales.Customer { CompanyId = _companyId, No = tag + "-CUST", AccountsReceivableAccountId = arAccountId };
-                db.Customers.Add(customer);
-                var category = new Core.Domain.Items.ItemCategory { CompanyId = _companyId, Name = tag + "-Cat", ItemType = Core.Domain.ItemTypes.Service };
-                db.ItemCategories.Add(category);
-                db.SaveChanges();
-
-                var item = new Core.Domain.Items.Item
-                {
-                    CompanyId = _companyId, No = tag + "-ITEM", Description = "Service " + tag,
-                    ItemCategoryId = category.Id, SalesAccountId = salesAccountId,
-                    SellMeasurementId = measurementId, SmallestMeasurementId = measurementId, Price = 100m,
-                };
-                db.Items.Add(item);
-                db.SaveChanges();
-
-                var schedule = new RecurringSchedule
-                {
-                    CompanyId = _companyId, Kind = RecurringScheduleKind.SalesInvoice, PartyId = customer.Id,
-                    Name = tag, Cadence = RecurringCadence.Monthly, Interval = 1, DayOfMonth = runDate.Day,
-                    StartDate = runDate, NextRunDate = runDate, Action = action, Status = status,
-                    ServicePeriodMode = RecurringServicePeriodMode.CurrentMonth,
-                    AutomationEnabledBy = automationEnabledBy,
-                };
-                db.RecurringSchedules.Add(schedule);
-                db.SaveChanges();
-                scheduleId = schedule.Id;
-
-                db.RecurringScheduleLines.Add(new RecurringScheduleLine
-                {
-                    CompanyId = _companyId, RecurringScheduleId = schedule.Id, ItemId = item.Id, Quantity = 1, Amount = 100m,
-                });
-                db.SaveChanges();
-            }
-            return scheduleId;
         }
     }
 }

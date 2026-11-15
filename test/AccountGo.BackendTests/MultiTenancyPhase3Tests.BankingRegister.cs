@@ -9,12 +9,14 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Dto.Banking;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    // #413 1D: register and opening-balance posting.
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3BankingRegisterTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3BankingRegisterTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Register_ShowsReceiptAndBillPayment_WithRunningBalance()
         {
@@ -83,6 +85,5 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
             Assert.Contains("books start", await refused.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
         }
-
     }
 }

@@ -17,11 +17,19 @@ using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests;
 
-public partial class MultiTenancyPhase3Tests
+public abstract partial class MultiTenancyPhase3TestBase
 {
+    protected static string AuditFixtureSource([CallerFilePath] string path = "") => path;
+}
+
+public sealed class MultiTenancyPhase3AuditBaselineTests : MultiTenancyPhase3TestBase
+{
+    public MultiTenancyPhase3AuditBaselineTests(ITestOutputHelper output) : base(output) { }
+
     [Fact]
     public async Task AuditBaseline_SigninReportJournalRoleAndExport()
     {
@@ -77,5 +85,4 @@ public partial class MultiTenancyPhase3Tests
         var snapshot = Path.Combine(Path.GetDirectoryName(AuditFixtureSource())!, "Observability", "performance-audit-golden.json");
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(File.ReadAllText(snapshot)), actual), "Audit output changed: " + actual.ToJsonString());
     }
-    private static string AuditFixtureSource([CallerFilePath] string path = "") => path;
 }

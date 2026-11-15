@@ -19,11 +19,176 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Services.Inventory;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected void SetInventoryModuleEnabled(bool enabled)
+        {
+            WithDb(db =>
+            {
+                var company = db.Companies.Single(c => c.Id == _companyId);
+                company.Plan = "community";
+                company.ActiveModulesJson = null;
+                // Community catalog includes inventory; opt out via DisabledModulesJson when disabled.
+                company.DisabledModulesJson = enabled ? "[]" : "[\"inventory\"]";
+                db.SaveChanges();
+            });
+        }
+
+        protected int CreateStockItem(string description, decimal cost = 0m)
+        {
+            var itemId = 0;
+            WithDb(db =>
+            {
+                var sales = db.Accounts.Single(account => account.AccountCode == "40100");
+                var inventory = db.Accounts.Single(account => account.AccountCode == "10800");
+                var cogs = db.Accounts.Single(account => account.AccountCode == "50300");
+                var adjustments = db.Accounts.Single(account => account.AccountCode == "50310");
+                var measurement = db.Measurements.First();
+                var category = new ItemCategory
+                {
+                    Name = "Stock items",
+                    ItemType = ItemTypes.Purchased,
+                    MeasurementId = measurement.Id,
+                    SalesAccountId = sales.Id,
+                    InventoryAccountId = inventory.Id,
+                    CostOfGoodsSoldAccountId = cogs.Id,
+                    AdjustmentAccountId = adjustments.Id
+                };
+                var item = new Item
+                {
+                    No = Guid.NewGuid().ToString("N"),
+                    Code = "STOCK-" + Guid.NewGuid().ToString("N").Substring(0, 8),
+                    Description = description,
+                    Cost = cost,
+                    Price = 20m,
+                    ItemCategory = category,
+                    SmallestMeasurementId = measurement.Id,
+                    SellMeasurementId = measurement.Id,
+                    PurchaseMeasurementId = measurement.Id,
+                    SalesAccountId = sales.Id,
+                    InventoryAccountId = inventory.Id,
+                    CostOfGoodsSoldAccountId = cogs.Id,
+                    InventoryAdjustmentAccountId = adjustments.Id
+                };
+                db.Items.Add(item);
+                db.SaveChanges();
+                itemId = item.Id;
+            });
+            return itemId;
+        }
+
+        protected void AdjustStock(int itemId, decimal quantityChange, decimal? unitCost, string reason, string memo)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
+            {
+                var item = db.Items.Include(i => i.InventoryControlJournals).Single(i => i.Id == itemId);
+                scope.ServiceProvider.GetRequiredService<IStockService>()
+                    .Adjust(item, quantityChange, unitCost, reason, DateTime.UtcNow.Date, memo);
+                db.SaveChanges();
+            }
+        }
+
+        protected async Task<Dto.Sales.SalesInvoice> NewStockInvoice(int itemId, decimal quantity)
+        {
+            var invoice = await NewInvoice();
+            var item = new Item();
+            var measurementId = 0;
+            WithDb(db =>
+            {
+                item = db.Items.Single(i => i.Id == itemId);
+                measurementId = item.SellMeasurementId.Value;
+            });
+            invoice.Status = "Open";
+            var line = invoice.SalesInvoiceLines.Single();
+            line.ItemId = itemId;
+            line.ItemDescription = item.Description;
+            line.Quantity = quantity;
+            line.Amount = 20m;
+            line.MeasurementId = measurementId;
+            return invoice;
+        }
+
+        protected void AssertStockState(int itemId, decimal quantity, decimal averageCost)
+        {
+            var state = (Quantity: 0m, AverageCost: 0m);
+            WithDb(db =>
+            {
+                var item = db.Items.Single(i => i.Id == itemId);
+                state = (item.QuantityOnHand, item.AverageCost);
+            });
+            Assert.Equal(quantity, state.Quantity);
+            Assert.Equal(averageCost, state.AverageCost);
+        }
+
+        protected void AssertStockInvariant(int itemId)
+        {
+            WithDb(db =>
+            {
+                var item = db.Items.Include(i => i.InventoryControlJournals).Single(i => i.Id == itemId);
+                Assert.Equal(item.ComputeQuantityOnHand(), item.QuantityOnHand);
+
+                var stockValue = db.Items.ToList().Sum(i => i.StockValue);
+                var inventoryAccountId = AccountIdIn(db, "10800");
+                var lines = db.GeneralLedgerLines.Where(line => line.AccountId == inventoryAccountId).ToList();
+                var inventoryBalance = lines.Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount);
+                Assert.Equal(inventoryBalance, stockValue);
+
+                var allLines = db.GeneralLedgerLines.ToList();
+                var debits = allLines.Where(line => line.DrCr == DrOrCrSide.Dr).Sum(line => line.Amount);
+                var credits = allLines.Where(line => line.DrCr == DrOrCrSide.Cr).Sum(line => line.Amount);
+                Assert.Equal(debits, credits);
+            });
+        }
+
+        protected InventoryControlJournal JournalForBill(int billId)
+        {
+            InventoryControlJournal journal = null;
+            WithDb(db =>
+            {
+                var line = db.PurchaseInvoiceLines.Single(l => l.PurchaseInvoiceHeaderId == billId);
+                journal = db.InventoryControlJournals.Single(j => j.Id == line.InventoryControlJournalId);
+            });
+            return journal;
+        }
+
+        protected int InvoiceVoidLedgerId(int invoiceId)
+        {
+            var id = 0;
+            WithDb(db => id = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).VoidGeneralLedgerHeaderId.Value);
+            return id;
+        }
+
+        protected static bool ColumnExists(SqliteCommand command, string table, string column)
+        {
+            command.CommandText = $"PRAGMA table_info(\"{table}\")";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+                if (reader.GetString(1) == column)
+                    return true;
+            return false;
+        }
+
+        protected static bool TableExists(SqliteCommand command, string table)
+        {
+            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name";
+            command.Parameters.Clear();
+            command.Parameters.AddWithValue("$name", table);
+            return Convert.ToInt32(command.ExecuteScalar()) == 1;
+        }
+
+    }
+
+    public sealed class MultiTenancyPhase3StockTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3StockTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task StockLedger_UsesMovingAverage_ReversesVoidsAndBalancesInventory()
         {
@@ -284,19 +449,6 @@ namespace AccountGo.BackendTests
             Assert.Contains("can't stop tracking stock", await switchedOff.Content.ReadAsStringAsync());
         }
 
-        private void SetInventoryModuleEnabled(bool enabled)
-        {
-            WithDb(db =>
-            {
-                var company = db.Companies.Single(c => c.Id == _companyId);
-                company.Plan = "community";
-                company.ActiveModulesJson = null;
-                // Community catalog includes inventory; opt out via DisabledModulesJson when disabled.
-                company.DisabledModulesJson = enabled ? "[]" : "[\"inventory\"]";
-                db.SaveChanges();
-            });
-        }
-
         [SqliteFact]
         public void StockValueMigration_BackfillsMovementCentsInsteadOfRoundedAverage()
         {
@@ -317,150 +469,5 @@ namespace AccountGo.BackendTests
             command.CommandText = @"SELECT ""StockValue"" FROM ""Item"" WHERE ""Id"" = " + itemId;
             Assert.Equal(30200m, Convert.ToDecimal(command.ExecuteScalar()));
         }
-
-        private int CreateStockItem(string description, decimal cost = 0m)
-        {
-            var itemId = 0;
-            WithDb(db =>
-            {
-                var sales = db.Accounts.Single(account => account.AccountCode == "40100");
-                var inventory = db.Accounts.Single(account => account.AccountCode == "10800");
-                var cogs = db.Accounts.Single(account => account.AccountCode == "50300");
-                var adjustments = db.Accounts.Single(account => account.AccountCode == "50310");
-                var measurement = db.Measurements.First();
-                var category = new ItemCategory
-                {
-                    Name = "Stock items",
-                    ItemType = ItemTypes.Purchased,
-                    MeasurementId = measurement.Id,
-                    SalesAccountId = sales.Id,
-                    InventoryAccountId = inventory.Id,
-                    CostOfGoodsSoldAccountId = cogs.Id,
-                    AdjustmentAccountId = adjustments.Id
-                };
-                var item = new Item
-                {
-                    No = Guid.NewGuid().ToString("N"),
-                    Code = "STOCK-" + Guid.NewGuid().ToString("N").Substring(0, 8),
-                    Description = description,
-                    Cost = cost,
-                    Price = 20m,
-                    ItemCategory = category,
-                    SmallestMeasurementId = measurement.Id,
-                    SellMeasurementId = measurement.Id,
-                    PurchaseMeasurementId = measurement.Id,
-                    SalesAccountId = sales.Id,
-                    InventoryAccountId = inventory.Id,
-                    CostOfGoodsSoldAccountId = cogs.Id,
-                    InventoryAdjustmentAccountId = adjustments.Id
-                };
-                db.Items.Add(item);
-                db.SaveChanges();
-                itemId = item.Id;
-            });
-            return itemId;
-        }
-
-        private void AdjustStock(int itemId, decimal quantityChange, decimal? unitCost, string reason, string memo)
-        {
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().ImpersonateUser(_companyId, _ownerId, _slug, CompanyMemberRole.Owner))
-            {
-                var item = db.Items.Include(i => i.InventoryControlJournals).Single(i => i.Id == itemId);
-                scope.ServiceProvider.GetRequiredService<IStockService>()
-                    .Adjust(item, quantityChange, unitCost, reason, DateTime.UtcNow.Date, memo);
-                db.SaveChanges();
-            }
-        }
-
-        private async Task<Dto.Sales.SalesInvoice> NewStockInvoice(int itemId, decimal quantity)
-        {
-            var invoice = await NewInvoice();
-            var item = new Item();
-            var measurementId = 0;
-            WithDb(db =>
-            {
-                item = db.Items.Single(i => i.Id == itemId);
-                measurementId = item.SellMeasurementId.Value;
-            });
-            invoice.Status = "Open";
-            var line = invoice.SalesInvoiceLines.Single();
-            line.ItemId = itemId;
-            line.ItemDescription = item.Description;
-            line.Quantity = quantity;
-            line.Amount = 20m;
-            line.MeasurementId = measurementId;
-            return invoice;
-        }
-
-        private void AssertStockState(int itemId, decimal quantity, decimal averageCost)
-        {
-            var state = (Quantity: 0m, AverageCost: 0m);
-            WithDb(db =>
-            {
-                var item = db.Items.Single(i => i.Id == itemId);
-                state = (item.QuantityOnHand, item.AverageCost);
-            });
-            Assert.Equal(quantity, state.Quantity);
-            Assert.Equal(averageCost, state.AverageCost);
-        }
-
-        private void AssertStockInvariant(int itemId)
-        {
-            WithDb(db =>
-            {
-                var item = db.Items.Include(i => i.InventoryControlJournals).Single(i => i.Id == itemId);
-                Assert.Equal(item.ComputeQuantityOnHand(), item.QuantityOnHand);
-
-                var stockValue = db.Items.ToList().Sum(i => i.StockValue);
-                var inventoryAccountId = AccountIdIn(db, "10800");
-                var lines = db.GeneralLedgerLines.Where(line => line.AccountId == inventoryAccountId).ToList();
-                var inventoryBalance = lines.Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount);
-                Assert.Equal(inventoryBalance, stockValue);
-
-                var allLines = db.GeneralLedgerLines.ToList();
-                var debits = allLines.Where(line => line.DrCr == DrOrCrSide.Dr).Sum(line => line.Amount);
-                var credits = allLines.Where(line => line.DrCr == DrOrCrSide.Cr).Sum(line => line.Amount);
-                Assert.Equal(debits, credits);
-            });
-        }
-
-        private InventoryControlJournal JournalForBill(int billId)
-        {
-            InventoryControlJournal journal = null;
-            WithDb(db =>
-            {
-                var line = db.PurchaseInvoiceLines.Single(l => l.PurchaseInvoiceHeaderId == billId);
-                journal = db.InventoryControlJournals.Single(j => j.Id == line.InventoryControlJournalId);
-            });
-            return journal;
-        }
-
-        private int InvoiceVoidLedgerId(int invoiceId)
-        {
-            var id = 0;
-            WithDb(db => id = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).VoidGeneralLedgerHeaderId.Value);
-            return id;
-        }
-
-        private static bool ColumnExists(SqliteCommand command, string table, string column)
-        {
-            command.CommandText = $"PRAGMA table_info(\"{table}\")";
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-                if (reader.GetString(1) == column)
-                    return true;
-            return false;
-        }
-
-        private static bool TableExists(SqliteCommand command, string table)
-        {
-            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name";
-            command.Parameters.Clear();
-            command.Parameters.AddWithValue("$name", table);
-            return Convert.ToInt32(command.ExecuteScalar()) == 1;
-        }
-
     }
 }

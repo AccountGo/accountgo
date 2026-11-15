@@ -33,6 +33,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 ### Self-hosting
 - A database migration adds partner and profit-sharing tables and partner columns to bank statement description rules and company settings. It runs automatically when the API starts.
 - PostgreSQL deployments can run behind a transaction-mode connection pooler (such as Supabase's on port 6543), which lets more API instances share one database. The deployment guide lists the connection settings.
+- `SEED_DEMO_DATA=false` now also applies to a new SQLite database, so it starts without the demo books. The default is unchanged: new databases get the demo books.
 
 ## [0.2.0] - 2026-11-13
 

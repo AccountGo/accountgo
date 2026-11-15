@@ -19,11 +19,78 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected int AddSalesTax(decimal rate, int? accountId = null)
+        {
+            var id = 0;
+            WithDb(db =>
+            {
+                var tax = new Tax
+                {
+                    TaxCode = "SALE-" + rate.ToString(CultureInfo.InvariantCulture),
+                    TaxName = "Sales tax " + rate.ToString(CultureInfo.InvariantCulture),
+                    Rate = rate, IsActive = true,
+                    SalesAccountId = accountId ?? AccountIdIn(db, "20300")
+                };
+                db.Taxes.Add(tax);
+                db.SaveChanges();
+                id = tax.Id;
+            });
+            return id;
+        }
+
+        protected async Task<Dto.Sales.SalesInvoice> NewTaxInvoice()
+        {
+            var invoice = await NewInvoice();
+            WithDb(db =>
+            {
+                var item = db.Items.Single(i => i.Id == invoice.SalesInvoiceLines.Single().ItemId);
+                item.ItemCategory = new Core.Domain.Items.ItemCategory
+                {
+                    Name = "Sales tax services", ItemType = ItemTypes.Service,
+                    MeasurementId = item.SmallestMeasurementId.Value, SalesAccountId = item.SalesAccountId
+                };
+                db.SaveChanges();
+            });
+            return invoice;
+        }
+
+        protected async Task<Dto.Sales.SalesInvoice> SaveTaxInvoice(Dto.Sales.SalesInvoice invoice)
+        {
+            var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+        }
+
+        protected int SalesTaxLedgerId(int invoiceId)
+        {
+            var id = 0;
+            WithDb(db => id = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).GeneralLedgerHeaderId.Value);
+            return id;
+        }
+
+        protected static void AssertTaxTotals(Dto.Sales.SalesInvoice invoice, decimal subtotal, decimal tax, decimal total)
+        {
+            Assert.Equal(subtotal, invoice.Amount);
+            Assert.Equal(tax, invoice.TotalTax);
+            Assert.Equal(total, invoice.TotalAmountAfterTax);
+        }
+
+        protected static void AssertBalancedSalesTax(List<GeneralLedgerLine> entry) =>
+            Assert.Equal(entry.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount),
+                entry.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount));
+    }
+
+    public sealed class MultiTenancyPhase3SalesTaxTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3SalesTaxTests(ITestOutputHelper output) : base(output) { }
+
         [Theory]
         [InlineData(100, 1, 0, 100, 12, 112)]
         [InlineData(200, 1, 10, 180, 21.60, 201.60)]
@@ -362,65 +429,5 @@ namespace AccountGo.BackendTests
             Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
             Assert.True(ColumnExists(command, "SalesInvoiceLine", "TaxAmount"));
         }
-
-        private int AddSalesTax(decimal rate, int? accountId = null)
-        {
-            var id = 0;
-            WithDb(db =>
-            {
-                var tax = new Tax
-                {
-                    TaxCode = "SALE-" + rate.ToString(CultureInfo.InvariantCulture),
-                    TaxName = "Sales tax " + rate.ToString(CultureInfo.InvariantCulture),
-                    Rate = rate, IsActive = true,
-                    SalesAccountId = accountId ?? AccountIdIn(db, "20300")
-                };
-                db.Taxes.Add(tax);
-                db.SaveChanges();
-                id = tax.Id;
-            });
-            return id;
-        }
-
-        private async Task<Dto.Sales.SalesInvoice> NewTaxInvoice()
-        {
-            var invoice = await NewInvoice();
-            WithDb(db =>
-            {
-                var item = db.Items.Single(i => i.Id == invoice.SalesInvoiceLines.Single().ItemId);
-                item.ItemCategory = new Core.Domain.Items.ItemCategory
-                {
-                    Name = "Sales tax services", ItemType = ItemTypes.Service,
-                    MeasurementId = item.SmallestMeasurementId.Value, SalesAccountId = item.SalesAccountId
-                };
-                db.SaveChanges();
-            });
-            return invoice;
-        }
-
-        private async Task<Dto.Sales.SalesInvoice> SaveTaxInvoice(Dto.Sales.SalesInvoice invoice)
-        {
-            var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
-        }
-
-        private int SalesTaxLedgerId(int invoiceId)
-        {
-            var id = 0;
-            WithDb(db => id = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).GeneralLedgerHeaderId.Value);
-            return id;
-        }
-
-        private static void AssertTaxTotals(Dto.Sales.SalesInvoice invoice, decimal subtotal, decimal tax, decimal total)
-        {
-            Assert.Equal(subtotal, invoice.Amount);
-            Assert.Equal(tax, invoice.TotalTax);
-            Assert.Equal(total, invoice.TotalAmountAfterTax);
-        }
-
-        private static void AssertBalancedSalesTax(List<GeneralLedgerLine> entry) =>
-            Assert.Equal(entry.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount),
-                entry.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount));
     }
 }
