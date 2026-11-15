@@ -50,6 +50,7 @@ namespace Api.Controllers
         private readonly IAccessAuthorizationService? _authorizationService;
         private readonly Core.Entitlements.IEntitlementService? _entitlements;
         private readonly Api.Service.LinkedEntryService? _linkedEntries;
+        private readonly Api.Service.SourceJournalService? _sourceJournals;
 
         public FinancialsController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -62,7 +63,8 @@ namespace Api.Controllers
             IYearEndCloseService yearEndCloseService,
             IAccessAuthorizationService? authorizationService = null,
             Core.Entitlements.IEntitlementService? entitlements = null,
-            Api.Service.LinkedEntryService? linkedEntries = null)
+            Api.Service.LinkedEntryService? linkedEntries = null,
+            Api.Service.SourceJournalService? sourceJournals = null)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -76,6 +78,7 @@ namespace Api.Controllers
             _authorizationService = authorizationService;
             _entitlements = entitlements;
             _linkedEntries = linkedEntries;
+            _sourceJournals = sourceJournals;
         }
 
         private IAccessAuthorizationService AuthService =>
@@ -212,12 +215,22 @@ namespace Api.Controllers
         [HttpGet]
         [Route("JournalEntries")] // api/Financials/JournalEntries
         [RequirePermission(SystemPermissions.FinancialsJournalView)]
-        public IActionResult JournalEntries()
+        public IActionResult JournalEntries([FromQuery] string? source = null)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalView, SystemPermissions.FinancialsJournalView, out var denied))
                 return denied!;
 
             var journalEntries = _financialService.GetJournalEntries();
+            if (!string.IsNullOrWhiteSpace(source))
+            {
+                if (string.Equals(source, "any", StringComparison.OrdinalIgnoreCase))
+                    journalEntries = journalEntries.Where(je => !string.IsNullOrEmpty(je.SourceSystem));
+                else if (string.Equals(source, "none", StringComparison.OrdinalIgnoreCase))
+                    journalEntries = journalEntries.Where(je => string.IsNullOrEmpty(je.SourceSystem));
+                else
+                    journalEntries = journalEntries.Where(je => string.Equals(je.SourceSystem, source, StringComparison.Ordinal));
+            }
+
             var journalEntriesDto = new List<JournalEntry>();
 
             foreach (var je in journalEntries)
@@ -265,7 +278,9 @@ namespace Api.Controllers
                 VoucherType = (int)je.VoucherType.GetValueOrDefault(),
                 AdjustsFiscalYearId = je.AdjustsFiscalYearId,
                 AdjustsFiscalYearCode = je.AdjustsFiscalYear?.FiscalYearCode,
-                Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue
+                Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue,
+                SourceSystem = je.SourceSystem,
+                SourceKey = je.SourceKey
             };
 
             foreach (var line in je.JournalEntryLines)
@@ -289,40 +304,180 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.FinancialsJournalPost)]
         public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToArray();
+
+                return new BadRequestObjectResult(errors);
+            }
+
+            var aprHeader = HttpContext?.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
+            var approverHeader = HttpContext?.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
+
+            var result = PostSingleJournalEntry(
+                journalEntryDto?.Id ?? 0,
+                journalEntryDto?.JournalDate,
+                aprHeader,
+                approverHeader,
+                rethrowMiddlewareExceptions: true);
+
+            if (result.DirectActionResult != null)
+                return result.DirectActionResult;
+
+            if (result.Posted)
+                return new OkObjectResult(Ok());
+
+            return result.StatusCode switch
+            {
+                StatusCodes.Status404NotFound => NotFound(new { message = result.Message }),
+                StatusCodes.Status409Conflict => Conflict(new { code = result.Code, message = result.Message }),
+                StatusCodes.Status403Forbidden => Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: result.Message),
+                _ => new BadRequestObjectResult(new string[] { result.Message ?? "Failed to post journal entry." })
+            };
+        }
+
+        [HttpPost]
+        [Route("JournalEntries/PostBatch")]
+        [RequireModule("financials")]
+        [RequireOperation(AccessOperationCatalog.FinancialsJournalPostBatch)]
+        public IActionResult PostJournalEntriesBatch([FromBody] PostJournalBatchRequest? request)
+        {
+            if (request?.Ids == null || request.Ids.Count == 0)
+                return BadRequest(new { message = "Provide at least one journal entry id." });
+
+            if (request.Ids.Count > 200)
+                return BadRequest(new { message = "At most 200 journal entry ids may be posted in one batch." });
+
+            var aprHeader = HttpContext?.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
+            var approverHeader = HttpContext?.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
+
+            var results = new List<PostJournalBatchItemResult>(request.Ids.Count);
+            foreach (var id in request.Ids)
+            {
+                var outcome = PostSingleJournalEntry(
+                    id,
+                    fallbackDate: null,
+                    aprHeader,
+                    approverHeader,
+                    rethrowMiddlewareExceptions: false);
+
+                if (outcome.Posted)
+                {
+                    results.Add(new PostJournalBatchItemResult(id, Posted: true, Code: null, Message: null));
+                }
+                else
+                {
+                    _db.ChangeTracker.Clear();
+                    results.Add(new PostJournalBatchItemResult(id, Posted: false, Code: outcome.Code, Message: outcome.Message));
+                }
+            }
+
+            return Ok(results);
+        }
+
+        [HttpPost]
+        [Route("JournalEntries/{id:int}/DiscardImported")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsJournalCreate)]
+        public IActionResult DiscardImportedJournalEntry(int id)
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalCreate, SystemPermissions.FinancialsJournalCreate, out var denied))
+                return denied!;
+
+            var companyId = _tenantContext.CompanyId;
+            if (!companyId.HasValue)
+                return BadRequest(new { message = "Workspace context is required." });
+
+            var sourceJournals = _sourceJournals ?? HttpContext?.RequestServices.GetService<Api.Service.SourceJournalService>();
+            if (sourceJournals == null)
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Source journal service is unavailable." });
+
+            var actorId = _tenantContext.UserId
+                ?? User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? "unknown";
+
+            try
+            {
+                sourceJournals.Discard(companyId.Value, id, actorId);
+                return Ok(new { discarded = true, id });
+            }
+            catch (Api.Service.SourceJournalOperationException ex)
+            {
+                if (ex.StatusCode == StatusCodes.Status404NotFound)
+                    return NotFound(new { code = ex.Code, message = ex.Message });
+                return Conflict(new { code = ex.Code, message = ex.Message });
+            }
+        }
+
+        private sealed record PostSingleResult(
+            int Id,
+            bool Posted,
+            int StatusCode,
+            string? Code,
+            string? Message,
+            IActionResult? DirectActionResult = null);
+
+        public sealed class PostJournalBatchRequest
+        {
+            public List<int> Ids { get; set; } = new();
+        }
+
+        public sealed record PostJournalBatchItemResult(
+            int Id,
+            bool Posted,
+            string? Code,
+            string? Message);
+
+        private PostSingleResult PostSingleJournalEntry(
+            int journalId,
+            DateTime? fallbackDate,
+            string? aprHeader,
+            string? approverHeader,
+            bool rethrowMiddlewareExceptions)
+        {
             var companyId = _tenantContext.CompanyId;
             var linkedEntries = _linkedEntries ?? HttpContext?.RequestServices.GetService<Api.Service.LinkedEntryService>();
-            if (companyId.HasValue && journalEntryDto?.Id > 0 && linkedEntries?.IsMirrorJournal(companyId.Value, journalEntryDto.Id) == true)
-                return Conflict(new { code = "linked_entry_use_pair_reversal", message = "A linked mirror journal can only be posted through the linked entry service." });
-            if (companyId.HasValue && journalEntryDto?.Id > 0 && linkedEntries?.GetSourcePairState(companyId.Value, journalEntryDto.Id) is { } pairState && pairState != "PendingSource")
-                return Conflict(new { code = "linked_entry_not_pending", message = "The linked entry is no longer pending source posting." });
+            if (companyId.HasValue && journalId > 0 && linkedEntries?.IsMirrorJournal(companyId.Value, journalId) == true)
+            {
+                const string msg = "A linked mirror journal can only be posted through the linked entry service.";
+                return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, "linked_entry_use_pair_reversal", msg,
+                    Conflict(new { code = "linked_entry_use_pair_reversal", message = msg }));
+            }
+            if (companyId.HasValue && journalId > 0 && linkedEntries?.GetSourcePairState(companyId.Value, journalId) is { } pairState && pairState != "PendingSource")
+            {
+                const string msg = "The linked entry is no longer pending source posting.";
+                return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, "linked_entry_not_pending", msg,
+                    Conflict(new { code = "linked_entry_not_pending", message = msg }));
+            }
+
             Core.Domain.Financials.JournalEntryHeader? existingHeader = null;
-            if (journalEntryDto != null && journalEntryDto.Id > 0)
+            if (journalId > 0)
             {
                 existingHeader = _db.JournalEntryHeaders
                     .AsNoTracking()
-                    .FirstOrDefault(h => h.Id == journalEntryDto.Id);
+                    .FirstOrDefault(h => h.Id == journalId);
             }
 
-            var preparerIds = journalEntryDto != null && journalEntryDto.Id > 0 && companyId.HasValue
-                ? JournalEvidence.PreparerIds(_db.AuditLogs.AsNoTracking(), companyId.Value, journalEntryDto.Id)
+            var preparerIds = journalId > 0 && companyId.HasValue
+                ? JournalEvidence.PreparerIds(_db.AuditLogs.AsNoTracking(), companyId.Value, journalId)
                 : new HashSet<string>(StringComparer.Ordinal);
             var currentActorId = _tenantContext.UserId ?? User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             var effectivePreparer = preparerIds.FirstOrDefault() ?? currentActorId ?? "system:draft-preparer";
             if (preparerIds.Count == 0) preparerIds.Add(effectivePreparer);
 
             var isPosted = existingHeader != null && (existingHeader.Posted == true || existingHeader.GeneralLedgerHeaderId.HasValue);
-            var aprHeader = HttpContext?.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
-            var approverHeader = HttpContext?.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
-
-            var entryDate = existingHeader?.Date ?? journalEntryDto?.JournalDate ?? DateTime.UtcNow;
+            var entryDate = existingHeader?.Date ?? fallbackDate ?? DateTime.UtcNow;
             var isLocked = _booksLockGuard?.IsDateLocked(entryDate) == true;
 
             var postResource = new AccessResourceContext
             {
                 WorkspaceCompanyId = companyId,
-                ResourceCompanyId = existingHeader != null ? existingHeader.CompanyId : (journalEntryDto != null && journalEntryDto.Id > 0 ? -1 : companyId),
+                ResourceCompanyId = existingHeader != null ? existingHeader.CompanyId : (journalId > 0 ? -1 : companyId),
                 ResourceType = "JournalEntry",
-                ResourceId = journalEntryDto?.Id.ToString(CultureInfo.InvariantCulture),
+                ResourceId = journalId.ToString(CultureInfo.InvariantCulture),
                 WorkflowState = isPosted ? "Posted" : "Draft",
                 IsPeriodLockedOrClosed = isLocked,
                 PreparedByUserId = effectivePreparer,
@@ -331,54 +486,74 @@ namespace Api.Controllers
                 ApprovalRequestId = aprHeader
             };
 
-            if (companyId.HasValue && journalEntryDto?.Id > 0 &&
-                ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader, journalEntryDto.Id))
-                return ApprovalAlreadyUsed();
+            if (companyId.HasValue && journalId > 0 &&
+                ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader, journalId))
+            {
+                return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, "approval_already_used",
+                    "This approval was already used. Ask for a new approval.", ApprovalAlreadyUsed());
+            }
 
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalPost, SystemPermissions.FinancialsJournalPost, out var denied, postResource))
-                return denied!;
-
-            string[]? errors = null;
+            {
+                var denyCode = isPosted ? "already_posted" : isLocked ? "period_locked" : "forbidden";
+                var denyMsg = isPosted
+                    ? "Posted journal entries cannot be posted again."
+                    : isLocked
+                        ? "This accounting period is locked."
+                        : "Forbidden to post journal entry.";
+                return new PostSingleResult(journalId, false, StatusCodes.Status403Forbidden, denyCode, denyMsg, denied);
+            }
 
             try
             {
-                if (!ModelState.IsValid)
-                {
-                    // Collect per-error messages; do not index Errors by ModelState.ErrorCount (ArgumentOutOfRange).
-                    errors = ModelState.Values
-                        .SelectMany(v => v.Errors)
-                        .Select(e => e.ErrorMessage)
-                        .ToArray();
-
-                    return new BadRequestObjectResult(errors);
-                }
-
-                var je = _financialService.GetJournalEntry(journalEntryDto!.Id, false);
+                var je = _financialService.GetJournalEntry(journalId, false);
                 if (je == null)
-                    return NotFound(new { message = "Journal entry not found." });
+                    return new PostSingleResult(journalId, false, StatusCodes.Status404NotFound, "not_found", "Journal entry not found.");
 
                 var linkedPosted = linkedEntries?.PostSource(companyId!.Value, je.Id, currentActorId ?? "",
                     _tenantContext.Role ?? Core.Domain.CompanyMemberRole.Member,
                     () => _financialService.UpdateJournalEntry(je, true)) == true;
                 if (!linkedPosted)
                     _financialService.UpdateJournalEntry(je, true);
-                if (je.Posted != true)
-                    return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: "A user who prepared a transaction cannot independently approve or post it without a verified independent approval.");
 
-                return new OkObjectResult(Ok());
+                if (je.Posted != true)
+                {
+                    const string sodMsg = "A user who prepared a transaction cannot independently approve or post it without a verified independent approval.";
+                    return new PostSingleResult(journalId, false, StatusCodes.Status403Forbidden, "separation_of_duties_violation", sodMsg);
+                }
+
+                return new PostSingleResult(journalId, true, StatusCodes.Status200OK, null, null);
             }
             catch (Exception ex)
             {
                 if (ApprovalEvidence.IsApprovalStateUniqueViolation(ex))
-                    return ApprovalAlreadyUsed();
+                {
+                    return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, "approval_already_used",
+                        "This approval was already used. Ask for a new approval.", ApprovalAlreadyUsed());
+                }
                 if (ex is Services.Financial.LinkedEntryOperationException linkedFailure)
-                    return Conflict(new { code = linkedFailure.Code, message = linkedFailure.Message });
-                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
-                if (ex is DbUpdateException && companyId.HasValue && journalEntryDto?.Id > 0 &&
-                    ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader, journalEntryDto.Id))
-                    return ApprovalAlreadyUsed();
-                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
-                return new BadRequestObjectResult(errors);
+                {
+                    return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, linkedFailure.Code, linkedFailure.Message,
+                        Conflict(new { code = linkedFailure.Code, message = linkedFailure.Message }));
+                }
+                if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException)
+                {
+                    if (rethrowMiddlewareExceptions)
+                        throw;
+                    var code = ex is Services.Banking.ReconciledPeriodConfirmationRequiredException
+                        ? "reconciled_period_confirmation_required"
+                        : "tenant_error";
+                    return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, code, ex.Message);
+                }
+                if (ex is DbUpdateException && companyId.HasValue && journalId > 0 &&
+                    ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader, journalId))
+                {
+                    return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, "approval_already_used",
+                        "This approval was already used. Ask for a new approval.", ApprovalAlreadyUsed());
+                }
+
+                var message = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+                return new PostSingleResult(journalId, false, StatusCodes.Status400BadRequest, "post_failed", message);
             }
         }
 
@@ -463,6 +638,8 @@ namespace Api.Controllers
                         return Problem(statusCode: StatusCodes.Status409Conflict, title: "linked_entry_use_pair_reversal",
                             detail: "Linked journals must be corrected through the linked entry pair.",
                             extensions: new Dictionary<string, object?> { ["code"] = "linked_entry_use_pair_reversal" });
+                    if (!string.IsNullOrWhiteSpace(journalEntry.SourceSystem))
+                        return Conflict(new { code = "source_journal_locked", message = "Imported journals can't be edited. Discard it and import it again instead." });
                     if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
                         return BadRequest(new { message = "Posted journal entries cannot be edited." });
 
@@ -567,6 +744,8 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Services.Financial.SourceJournalLockedException lockedEx)
+                    return Conflict(new { code = lockedEx.Code, message = lockedEx.Message });
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
@@ -1799,6 +1978,8 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Services.Financial.SourceJournalLockedException lockedEx)
+                    return Conflict(new { code = lockedEx.Code, message = lockedEx.Message });
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 return BadRequest(new { message = ex.Message });
             }
@@ -1833,6 +2014,8 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Services.Financial.SourceJournalLockedException lockedEx)
+                    return Conflict(new { code = lockedEx.Code, message = lockedEx.Message });
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 return BadRequest(new { message = ex.Message });
             }
@@ -1878,6 +2061,8 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Services.Financial.SourceJournalLockedException lockedEx)
+                    return Conflict(new { code = lockedEx.Code, message = lockedEx.Message });
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 return BadRequest(new { message = ex.Message });
             }
@@ -1908,6 +2093,8 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Services.Financial.SourceJournalLockedException lockedEx)
+                    return Conflict(new { code = lockedEx.Code, message = lockedEx.Message });
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 return BadRequest(new { message = ex.Message });
             }

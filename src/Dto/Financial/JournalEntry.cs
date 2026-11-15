@@ -13,6 +13,8 @@ namespace Dto.Financial
         public string? Memo { get; set; }
         public bool? Posted { get; set; }
         public bool? ReadyForPosting { get; set; }
+        public string? SourceSystem { get; set; }
+        public string? SourceKey { get; set; }
         public decimal? debitAmount { get { return GetDebitAmount(); } }
         public decimal? creditAmount { get { return GetCreditAmount(); } }
         public System.Collections.Generic.IList<JournalEntryLine> JournalEntryLines { get; set; }
