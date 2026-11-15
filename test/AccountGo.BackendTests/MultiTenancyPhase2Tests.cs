@@ -650,6 +650,8 @@ namespace AccountGo.BackendTests
                 "LinkedEntryService.cs",
                 "LinkedEntryIntegrityScanner.cs",
                 "LinkedEntriesController.cs",
+                // SourceJournalService explicitly scopes every query by CompanyId for importer/webhook draft creation.
+                "SourceJournalService.cs",
                 // Audit writes resolve membership ownership when the grant navigation is not loaded.
                 "RecordChangeInterceptor.cs"
             };

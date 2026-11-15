@@ -65,6 +65,7 @@
         "PartyId",
         "Posted",
         "ReferenceNo",
+        "SourceSystem",
         "VoucherType"
       ]
     },

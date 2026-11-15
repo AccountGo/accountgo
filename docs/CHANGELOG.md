@@ -13,6 +13,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
+- Imported journals: journals created by an importer show where they came from, can't be edited, can be discarded before posting, and can be posted together from the journal list. The same imported item is never recorded twice.
 - Optional fiscal-year sales invoice numbering in Settings → Invoices: configure a format pattern using `{FY}` and `{####}` (for example `INV-{FY}-{####}`) with a forward-only starting number and live preview across fiscal years, or leave the format blank for continuous numbering.
 - Tax page: see output tax, input tax and the net payable for each monthly or quarterly tax period, by tax code, with the source invoices and bills and a CSV export. Tax periods are set in Settings → Taxes and don't have to match your fiscal year. Cash-basis workspaces see tax when invoices and bills are paid.
 - Record a tax filing for a period: AccountGo keeps the figures you filed, warns when they change afterwards, and can lock the books through the period end. Corrections are recorded as amended filings.
