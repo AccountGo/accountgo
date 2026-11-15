@@ -295,12 +295,37 @@ public sealed class SourceJournalTests : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
 
         var created = svc.CreateDraft(MakeRequest(sourceKey: "test10:discard:v1"));
+        var lineIds = db.JournalEntryLines
+            .AsNoTracking()
+            .Where(l => l.JournalEntryHeaderId == created.JournalId)
+            .Select(l => l.Id)
+            .ToList();
+        Assert.Equal(2, lineIds.Count);
+
         svc.Discard(_companyId, created.JournalId, "user-actor");
 
         Assert.Null(db.JournalEntryHeaders.FirstOrDefault(j => j.Id == created.JournalId));
-        var audit = db.AuditLogs.Single(a => a.TableName == "__SourceJournalDiscarded" && a.RecordId == created.JournalId.ToString(CultureInfo.InvariantCulture));
+        var createdIdStr = created.JournalId.ToString(CultureInfo.InvariantCulture);
+        var audit = db.AuditLogs.Single(a => a.TableName == "__SourceJournalDiscarded" && a.RecordId == createdIdStr);
         Assert.Equal("example-feed:test10:discard:v1", audit.OriginalValue);
         Assert.Equal("user-actor", audit.UserName);
+
+        var deletedHeaderChange = db.RecordChanges.AsNoTracking().Single(r =>
+            r.EntityType == nameof(JournalEntryHeader)
+            && r.EntityId == created.JournalId
+            && r.Action == "Deleted");
+        using (var doc = System.Text.Json.JsonDocument.Parse(deletedHeaderChange.ChangesJson))
+        {
+            Assert.Equal("test10:discard:v1", doc.RootElement.GetProperty(nameof(JournalEntryHeader.SourceKey)).GetString());
+        }
+
+        foreach (var lineId in lineIds)
+        {
+            Assert.True(db.RecordChanges.AsNoTracking().Any(r =>
+                r.EntityType == nameof(JournalEntryLine)
+                && r.EntityId == lineId
+                && r.Action == "Deleted"));
+        }
 
         // Key is freed; creating again succeeds
         var recreated = svc.CreateDraft(MakeRequest(sourceKey: "test10:discard:v1"));

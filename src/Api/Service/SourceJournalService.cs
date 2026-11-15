@@ -208,25 +208,15 @@ public sealed class SourceJournalService
         SourceJournalTestGate.BeforeDiscardDelete?.Invoke(companyId, journalId);
 
         using var tx = _db.Database.BeginTransaction();
-        _db.JournalEntryLines
-            .Where(l => l.CompanyId == companyId
-                && l.JournalEntryHeaderId == journalId
-                && _db.JournalEntryHeaders.Any(h => h.Id == journalId
-                    && h.CompanyId == companyId
-                    && h.SourceSystem != null
-                    && h.Posted != true
-                    && h.GeneralLedgerHeaderId == null))
-            .ExecuteDelete();
-
-        var deleted = _db.JournalEntryHeaders
+        var claimed = _db.JournalEntryHeaders
             .Where(h => h.Id == journalId
                 && h.CompanyId == companyId
                 && h.SourceSystem != null
                 && h.Posted != true
                 && h.GeneralLedgerHeaderId == null)
-            .ExecuteDelete();
+            .ExecuteUpdate(s => s.SetProperty(h => h.Posted, (bool?)false));
 
-        if (deleted != 1)
+        if (claimed != 1)
         {
             tx.Rollback();
             var current = _db.JournalEntryHeaders
@@ -238,6 +228,13 @@ public sealed class SourceJournalService
                 throw new SourceJournalOperationException("source_journal_posted", "Posted journals cannot be discarded.", 409);
             throw new SourceJournalOperationException("not_a_source_journal", "Only imported source journals can be discarded.", 409);
         }
+
+        var trackedHeader = _db.JournalEntryHeaders
+            .Include(h => h.JournalEntryLines)
+            .Single(h => h.CompanyId == companyId && h.Id == journalId);
+        if (trackedHeader.JournalEntryLines != null && trackedHeader.JournalEntryLines.Count > 0)
+            _db.JournalEntryLines.RemoveRange(trackedHeader.JournalEntryLines);
+        _db.JournalEntryHeaders.Remove(trackedHeader);
 
         _db.AuditLogs.Add(new AuditLog
         {
