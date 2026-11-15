@@ -212,7 +212,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await authFetch('/api/Sales/NextSalesInvoiceNumber');
+        const query = invoiceDate ? `?invoiceDate=${encodeURIComponent(invoiceDate)}` : '';
+        const res = await authFetch(`/api/Sales/NextSalesInvoiceNumber${query}`);
         if (!res.ok || cancelled) return;
         const data = await res.json();
         setNextNumber(data?.next ?? null);
@@ -221,7 +222,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       }
     })();
     return () => { cancelled = true; };
-  }, [authFetch]);
+  }, [authFetch, invoiceDate]);
 
   // Prefill a new invoice with the workspace's default notes and payment instructions
   useEffect(() => {

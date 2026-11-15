@@ -19,3 +19,4 @@ Please refer to the main [AccountGo Project README](../README.md) at the reposit
 - [Chart of accounts import, export & lifecycle requirements](./accounting/coa-import-export-requirements.md)
 - [COA format adapters (AccountGo / Xero / QBO)](./accounting/format-adapters.md)
 - [AccountGo Assistant (AI chat)](./assistant.md)
+- [Sales invoice numbering](./accounting/invoice-numbering.md)
