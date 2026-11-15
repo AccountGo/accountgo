@@ -34,6 +34,7 @@ public class SessionService : ISessionService
     private readonly ILogger<SessionService> _logger;
     private readonly ISecurityAuditService? _securityAudit;
     private readonly IHttpContextAccessor? _httpContextAccessor;
+    private readonly SessionRefreshTestGate? _refreshTestGate;
 
     public SessionService(
         UserManager<ApplicationUser> userManager,
@@ -44,7 +45,8 @@ public class SessionService : ISessionService
         ILogger<SessionService> logger,
         ApiDbContext? apiDb = null,
         ISecurityAuditService? securityAudit = null,
-        IHttpContextAccessor? httpContextAccessor = null)
+        IHttpContextAccessor? httpContextAccessor = null,
+        SessionRefreshTestGate? refreshTestGate = null)
     {
         _userManager = userManager;
         _identityContext = identityContext;
@@ -55,6 +57,7 @@ public class SessionService : ISessionService
         _apiDb = apiDb;
         _securityAudit = securityAudit;
         _httpContextAccessor = httpContextAccessor;
+        _refreshTestGate = refreshTestGate;
     }
 
     /// <summary>Best-effort <c>auth.refresh.reuse</c> event. Never includes token material.</summary>
@@ -171,6 +174,10 @@ public class SessionService : ISessionService
         if (session == null)
             return (false, null, null, "Invalid session token.");
 
+        var channel = string.IsNullOrEmpty(session.Channel) ? RefreshTokenChannels.Web : session.Channel;
+        if (!string.Equals(channel, RefreshTokenChannels.Web, StringComparison.OrdinalIgnoreCase))
+            return (false, null, null, "Invalid session token.");
+
         EnsureFamilyId(session);
 
         var account = await _userManager.FindByIdAsync(session.UserId);
@@ -180,7 +187,9 @@ public class SessionService : ISessionService
         var now = DateTime.UtcNow;
         if (session.IsRevoked)
         {
-            var withinGrace = session.ReplacedByTokenHash != null
+            var familyRevoked = await IsFamilyRevokedAsync(session.FamilyId);
+            var withinGrace = !familyRevoked
+                && session.ReplacedByTokenHash != null
                 && session.RevokedAt.HasValue
                 && session.RevokedAt.Value > now - RotationGracePeriod;
 
@@ -204,7 +213,6 @@ public class SessionService : ISessionService
                 }
 
                 // Issue a sibling; keep the existing replacement active (concurrent tabs / lost response).
-                session.GraceReuseCount++;
                 return await IssueSiblingAsync(session, ipAddress, userAgent, now);
             }
 
@@ -215,6 +223,16 @@ public class SessionService : ISessionService
                 "Revoked refresh token reuse outside grace window");
             await AuditRefreshReuseAsync(session, "reuse_outside_grace_window");
             return (false, null, null, "Session security violation detected. Please sign in again.");
+        }
+
+        if (await IsFamilyRevokedAsync(session.FamilyId))
+        {
+            await RevokeFamilyAsync(
+                session,
+                ipAddress,
+                userAgent,
+                "Refresh token used after family revocation");
+            return (false, null, null, "Session has expired or been revoked.");
         }
 
         if (session.IsExpired)
@@ -240,31 +258,90 @@ public class SessionService : ISessionService
         var newRawToken = GenerateSecureToken();
         var newTokenHash = ComputeSha256(newRawToken);
 
-        session.RevokedAt ??= now;
-        session.ReplacedByTokenHash = newTokenHash;
-
-        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id);
+        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id, orgSlug);
         // Rows from before the 12-hour limit get one from now.
         var absoluteExpiresAt = session.AbsoluteExpiresAt ?? now + AbsoluteLifetime();
 
-        var newSession = new RefreshTokenSession
-        {
-            UserId = user.Id,
-            FamilyId = session.FamilyId,
-            TokenHash = newTokenHash,
-            CreatedAt = now,
-            ExpiresAt = IdleExpiry(now, serverIdle, absoluteExpiresAt),
-            AbsoluteExpiresAt = absoluteExpiresAt,
-            CreatedByIp = ipAddress,
-            UserAgent = userAgent,
-            GraceReuseCount = 0,
-            MfaMethod = session.MfaMethod,
-            Amr = session.Amr,
-            TrustedDeviceId = session.TrustedDeviceId
-        };
+        if (_refreshTestGate != null)
+            await _refreshTestGate.PauseBeforeInsertIfConfiguredAsync(session.FamilyId);
 
-        _identityContext.RefreshTokens.Add(newSession);
-        await _identityContext.SaveChangesAsync();
+        string? auditReuseReason = null;
+        var lockResult = await RefreshTokenFamilyLock.ExecuteAsync(
+            _identityContext,
+            async () =>
+            {
+                await _identityContext.Entry(session).ReloadAsync();
+                EnsureFamilyId(session);
+
+                if (await IsFamilyRevokedAsync(session.FamilyId))
+                {
+                    await RevokeFamilyInTransactionAsync(
+                        session,
+                        ipAddress,
+                        userAgent,
+                        "Refresh token rotation blocked by concurrent family revocation");
+                    return (Success: false, Error: "Session has expired or been revoked.");
+                }
+
+                if (session.IsRevoked)
+                {
+                    var withinGrace = session.ReplacedByTokenHash != null
+                        && session.RevokedAt.HasValue
+                        && session.RevokedAt.Value > now - RotationGracePeriod;
+
+                    if (withinGrace && session.AbsoluteExpiresAt.HasValue && now >= session.AbsoluteExpiresAt.Value)
+                        return (Success: false, Error: "Session has expired. Please sign in again.");
+
+                    if (!withinGrace || session.GraceReuseCount >= MaxGraceReuseCount)
+                    {
+                        var reason = withinGrace
+                            ? "Grace reuse bound exceeded"
+                            : "Revoked refresh token reuse outside grace window";
+                        auditReuseReason = withinGrace
+                            ? "grace_reuse_bound_exceeded"
+                            : "reuse_outside_grace_window";
+                        await RevokeFamilyInTransactionAsync(session, ipAddress, userAgent, reason);
+                        return (Success: false, Error: "Session security violation detected. Please sign in again.");
+                    }
+
+                    // A concurrent active refresh just rotated this token; issue a grace sibling without overwriting ReplacedByTokenHash.
+                    session.GraceReuseCount++;
+                }
+                else
+                {
+                    if (session.IsExpired)
+                        return (Success: false, Error: "Session has expired. Please sign in again.");
+
+                    session.RevokedAt ??= now;
+                    session.ReplacedByTokenHash = newTokenHash;
+                }
+
+                var newSession = new RefreshTokenSession
+                {
+                    UserId = user.Id,
+                    FamilyId = session.FamilyId,
+                    TokenHash = newTokenHash,
+                    CreatedAt = now,
+                    ExpiresAt = IdleExpiry(now, serverIdle, absoluteExpiresAt),
+                    AbsoluteExpiresAt = absoluteExpiresAt,
+                    CreatedByIp = ipAddress,
+                    UserAgent = userAgent,
+                    GraceReuseCount = 0,
+                    MfaMethod = session.MfaMethod,
+                    Amr = session.Amr,
+                    TrustedDeviceId = session.TrustedDeviceId
+                };
+
+                _identityContext.RefreshTokens.Add(newSession);
+                await _identityContext.SaveChangesAsync();
+                return (Success: true, Error: (string?)null);
+            });
+
+        if (auditReuseReason != null)
+            await AuditRefreshReuseAsync(session, auditReuseReason);
+
+        if (!lockResult.Success)
+            return (false, null, null, lockResult.Error);
 
         return await BuildRefreshResponseAsync(user, newRawToken, clientIdle, absoluteExpiresAt);
     }
@@ -284,32 +361,83 @@ public class SessionService : ISessionService
         var newRawToken = GenerateSecureToken();
         var newTokenHash = ComputeSha256(newRawToken);
 
-        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id);
+        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id, orgSlug);
         var absoluteExpiresAt = parent.AbsoluteExpiresAt ?? now + AbsoluteLifetime();
 
-        var sibling = new RefreshTokenSession
-        {
-            UserId = user.Id,
-            FamilyId = parent.FamilyId,
-            TokenHash = newTokenHash,
-            CreatedAt = now,
-            ExpiresAt = IdleExpiry(now, serverIdle, absoluteExpiresAt),
-            AbsoluteExpiresAt = absoluteExpiresAt,
-            CreatedByIp = ipAddress,
-            UserAgent = userAgent,
-            GraceReuseCount = 0,
-            MfaMethod = parent.MfaMethod,
-            Amr = parent.Amr,
-            TrustedDeviceId = parent.TrustedDeviceId
-        };
+        if (_refreshTestGate != null)
+            await _refreshTestGate.PauseBeforeInsertIfConfiguredAsync(parent.FamilyId);
 
-        _identityContext.RefreshTokens.Add(sibling);
-        await _identityContext.SaveChangesAsync();
+        string? auditReuseReason = null;
+        var lockResult = await RefreshTokenFamilyLock.ExecuteAsync(
+            _identityContext,
+            async () =>
+            {
+                await _identityContext.Entry(parent).ReloadAsync();
+                EnsureFamilyId(parent);
+
+                var familyRevoked = await IsFamilyRevokedAsync(parent.FamilyId);
+                var withinGrace = !familyRevoked
+                    && parent.ReplacedByTokenHash != null
+                    && parent.RevokedAt.HasValue
+                    && parent.RevokedAt.Value > now - RotationGracePeriod;
+
+                if (withinGrace && parent.AbsoluteExpiresAt.HasValue && now >= parent.AbsoluteExpiresAt.Value)
+                    return (Success: false, Error: "Session has expired. Please sign in again.");
+
+                if (!withinGrace || parent.GraceReuseCount >= MaxGraceReuseCount)
+                {
+                    var reason = withinGrace
+                        ? "Grace reuse bound exceeded"
+                        : "Revoked refresh token reuse outside grace window";
+                    auditReuseReason = withinGrace
+                        ? "grace_reuse_bound_exceeded"
+                        : "reuse_outside_grace_window";
+                    await RevokeFamilyInTransactionAsync(parent, ipAddress, userAgent, reason);
+                    return (Success: false, Error: "Session security violation detected. Please sign in again.");
+                }
+
+                parent.GraceReuseCount++;
+
+                var sibling = new RefreshTokenSession
+                {
+                    UserId = user.Id,
+                    FamilyId = parent.FamilyId,
+                    TokenHash = newTokenHash,
+                    CreatedAt = now,
+                    ExpiresAt = IdleExpiry(now, serverIdle, absoluteExpiresAt),
+                    AbsoluteExpiresAt = absoluteExpiresAt,
+                    CreatedByIp = ipAddress,
+                    UserAgent = userAgent,
+                    GraceReuseCount = 0,
+                    MfaMethod = parent.MfaMethod,
+                    Amr = parent.Amr,
+                    TrustedDeviceId = parent.TrustedDeviceId
+                };
+
+                _identityContext.RefreshTokens.Add(sibling);
+                await _identityContext.SaveChangesAsync();
+                return (Success: true, Error: (string?)null);
+            });
+
+        if (auditReuseReason != null)
+            await AuditRefreshReuseAsync(parent, auditReuseReason);
+
+        if (!lockResult.Success)
+            return (false, null, null, lockResult.Error);
 
         return await BuildRefreshResponseAsync(user, newRawToken, clientIdle, absoluteExpiresAt);
     }
 
-    private async Task RevokeFamilyAsync(
+    private Task RevokeFamilyAsync(
+        RefreshTokenSession trigger,
+        string? ipAddress,
+        string? userAgent,
+        string reason) =>
+        RefreshTokenFamilyLock.ExecuteAsync(
+            _identityContext,
+            () => RevokeFamilyInTransactionAsync(trigger, ipAddress, userAgent, reason));
+
+    private async Task RevokeFamilyInTransactionAsync(
         RefreshTokenSession trigger,
         string? ipAddress,
         string? userAgent,
@@ -328,14 +456,23 @@ public class SessionService : ISessionService
 
         var now = DateTime.UtcNow;
         var familySessions = await _identityContext.RefreshTokens
-            .Where(t => t.FamilyId == familyId && t.RevokedAt == null)
+            .Where(t => t.FamilyId == familyId && (t.RevokedAt == null || t.ReplacedByTokenHash != null))
             .ToListAsync();
+        if ((trigger.RevokedAt == null || trigger.ReplacedByTokenHash != null) && !familySessions.Contains(trigger))
+            familySessions.Add(trigger);
 
         foreach (var s in familySessions)
-            s.RevokedAt = now;
+        {
+            s.RevokedAt ??= now;
+            s.ReplacedByTokenHash = null;
+        }
 
         await _identityContext.SaveChangesAsync();
     }
+
+    private Task<bool> IsFamilyRevokedAsync(string familyId) =>
+        _identityContext.RefreshTokens.AnyAsync(
+            t => t.FamilyId == familyId && t.RevokedAt != null && t.ReplacedByTokenHash == null);
 
     private async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> BuildRefreshResponseAsync(
         ApplicationUser user,
@@ -376,27 +513,35 @@ public class SessionService : ISessionService
             return false;
 
         var tokenHash = ComputeSha256(rawRefreshToken);
-        var session = await _identityContext.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
-        if (session == null)
-            return false;
+        return await RefreshTokenFamilyLock.ExecuteAsync(
+            _identityContext,
+            async () =>
+            {
+                var session = await _identityContext.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
+                if (session == null)
+                    return false;
 
-        // Sign-out ends the whole sign-in: grace siblings held by other tabs must not keep it alive.
-        EnsureFamilyId(session);
-        var now = DateTime.UtcNow;
-        var familyId = session.FamilyId;
-        var active = await _identityContext.RefreshTokens
-            .Where(t => t.FamilyId == familyId && t.RevokedAt == null)
-            .ToListAsync();
-        // Rows without a stored FamilyId only get one in memory, so the query above can miss the cookie's own row.
-        if (session.RevokedAt == null && !active.Contains(session))
-            active.Add(session);
-        if (active.Count == 0)
-            return false;
+                // Sign-out ends the whole sign-in: grace siblings and rotated ancestors must not keep it alive.
+                EnsureFamilyId(session);
+                var now = DateTime.UtcNow;
+                var familyId = session.FamilyId;
+                var family = await _identityContext.RefreshTokens
+                    .Where(t => t.FamilyId == familyId && (t.RevokedAt == null || t.ReplacedByTokenHash != null))
+                    .ToListAsync();
+                // Rows without a stored FamilyId only get one in memory, so the query above can miss the cookie's own row.
+                if ((session.RevokedAt == null || session.ReplacedByTokenHash != null) && !family.Contains(session))
+                    family.Add(session);
+                if (family.Count == 0)
+                    return false;
 
-        foreach (var t in active)
-            t.RevokedAt = now;
-        await _identityContext.SaveChangesAsync();
-        return true;
+                foreach (var t in family)
+                {
+                    t.RevokedAt ??= now;
+                    t.ReplacedByTokenHash = null;
+                }
+                await _identityContext.SaveChangesAsync();
+                return true;
+            });
     }
 
     public async Task<bool> RevokeAllSessionsForUserAsync(string userId)
@@ -404,21 +549,27 @@ public class SessionService : ISessionService
         if (string.IsNullOrWhiteSpace(userId))
             return false;
 
-        var activeSessions = await _identityContext.RefreshTokens
-            .Where(t => t.UserId == userId && t.RevokedAt == null)
-            .ToListAsync();
+        return await RefreshTokenFamilyLock.ExecuteAsync(
+            _identityContext,
+            async () =>
+            {
+                var activeSessions = await _identityContext.RefreshTokens
+                    .Where(t => t.UserId == userId && (t.RevokedAt == null || t.ReplacedByTokenHash != null))
+                    .ToListAsync();
 
-        if (activeSessions.Count == 0)
-            return true;
+                if (activeSessions.Count == 0)
+                    return true;
 
-        var now = DateTime.UtcNow;
-        foreach (var s in activeSessions)
-        {
-            s.RevokedAt = now;
-        }
+                var now = DateTime.UtcNow;
+                foreach (var s in activeSessions)
+                {
+                    s.RevokedAt ??= now;
+                    s.ReplacedByTokenHash = null;
+                }
 
-        await _identityContext.SaveChangesAsync();
-        return true;
+                await _identityContext.SaveChangesAsync();
+                return true;
+            });
     }
 
     public async Task<UserDto> BuildUserDtoAsync(ApplicationUser user)

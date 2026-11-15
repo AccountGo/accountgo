@@ -198,6 +198,7 @@ public static class AccountGoApp
         builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, Api.Filters.CommunityStepUpHandler>();
         builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, Api.Filters.MfaAuthorizationMiddlewareResultHandler>();
 
+        builder.Services.AddSingleton<SessionRefreshTestGate>();
         builder.Services.AddScoped<ISessionService, SessionService>();
         builder.Services.AddScoped<ISecurityAuditService, SecurityAuditService>();
         builder.Services.Configure<Api.Service.CliOAuthOptions>(

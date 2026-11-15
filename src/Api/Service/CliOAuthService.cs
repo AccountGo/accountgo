@@ -36,6 +36,7 @@ public sealed class CliOAuthService : ICliOAuthService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly CliOAuthOptions _options;
     private readonly ILogger<CliOAuthService> _logger;
+    private readonly SessionRefreshTestGate? _refreshTestGate;
     private static DateTime LastCleanupUtc = DateTime.MinValue;
     private static int CleanupInFlight;
 
@@ -46,7 +47,8 @@ public sealed class CliOAuthService : ICliOAuthService
         ISecurityAuditService audit,
         IServiceScopeFactory scopeFactory,
         IOptions<CliOAuthOptions> options,
-        ILogger<CliOAuthService> logger)
+        ILogger<CliOAuthService> logger,
+        SessionRefreshTestGate? refreshTestGate = null)
     {
         _db = db;
         _userManager = userManager;
@@ -55,6 +57,7 @@ public sealed class CliOAuthService : ICliOAuthService
         _scopeFactory = scopeFactory;
         _options = options.Value;
         _logger = logger;
+        _refreshTestGate = refreshTestGate;
     }
 
     public string CreatePendingAuthorization(
@@ -302,29 +305,41 @@ public sealed class CliOAuthService : ICliOAuthService
             return;
 
         var hash = HashToken(token);
-        var session = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
-        if (session == null)
+        var revokedSession = await RefreshTokenFamilyLock.ExecuteAsync(
+            _db,
+            async () =>
+            {
+                var session = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
+                if (session == null)
+                    return null;
+
+                var now = DateTime.UtcNow;
+                if (string.Equals(session.Channel, RefreshTokenChannels.Cli, StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrEmpty(session.FamilyId))
+                {
+                    await RevokeFamilyInternalAsync(session.FamilyId, now, ct);
+                }
+                else if (session.RevokedAt == null || session.ReplacedByTokenHash != null)
+                {
+                    session.RevokedAt ??= now;
+                    session.ReplacedByTokenHash = null;
+                }
+
+                await _db.SaveChangesAsync(ct);
+                return session;
+            },
+            ct);
+
+        if (revokedSession == null)
             return;
 
-        var now = DateTime.UtcNow;
-        if (string.Equals(session.Channel, RefreshTokenChannels.Cli, StringComparison.OrdinalIgnoreCase)
-            && !string.IsNullOrEmpty(session.FamilyId))
-        {
-            await RevokeFamilyInternalAsync(session.FamilyId, now);
-        }
-        else if (session.RevokedAt == null)
-        {
-            session.RevokedAt = now;
-        }
-
-        await _db.SaveChangesAsync(ct);
         await _audit.LogEventAsync(
             "cli_oauth_revoked",
-            session.UserId,
+            revokedSession.UserId,
             null,
             null,
             null,
-            new { session.FamilyId, session.ClientId });
+            new { revokedSession.FamilyId, revokedSession.ClientId });
     }
 
     public async Task CleanupExpiredAsync(CancellationToken ct = default)
@@ -370,81 +385,148 @@ public sealed class CliOAuthService : ICliOAuthService
             return new RotateResult(false, null, "Invalid or expired refresh token", false, session.UserId);
 
         var now = DateTime.UtcNow;
+        var familyRevoked = await IsCliFamilyRevokedAsync(session.FamilyId, ct);
         if (session.IsRevoked)
         {
-            var withinGrace = session.ReplacedByTokenHash != null
+            var withinGrace = !familyRevoked
+                && session.ReplacedByTokenHash != null
                 && session.RevokedAt.HasValue
                 && session.RevokedAt.Value > now - TimeSpan.FromMinutes(5);
 
             if (!withinGrace || session.GraceReuseCount >= 3)
             {
-                await RevokeFamilyInternalAsync(session.FamilyId, now);
-                await _db.SaveChangesAsync(ct);
+                await RefreshTokenFamilyLock.ExecuteAsync(
+                    _db,
+                    async () =>
+                    {
+                        await RevokeFamilyInternalAsync(session.FamilyId, now, ct);
+                        await _db.SaveChangesAsync(ct);
+                    },
+                    ct);
                 return new RotateResult(false, null, "Session security violation detected", true, session.UserId);
             }
+        }
+        else
+        {
+            if (familyRevoked)
+            {
+                await RefreshTokenFamilyLock.ExecuteAsync(
+                    _db,
+                    async () =>
+                    {
+                        await RevokeFamilyInternalAsync(session.FamilyId, now, ct);
+                        await _db.SaveChangesAsync(ct);
+                    },
+                    ct);
+                return new RotateResult(false, null, "Invalid or expired refresh token", false, session.UserId);
+            }
 
-            session.GraceReuseCount++;
-            var (siblingResponse, _) = await MintRotatedPairAsync(session, ipAddress, userAgent, now, ct);
-            return new RotateResult(true, siblingResponse, null, false, session.UserId);
+            if (session.IsExpired)
+                return new RotateResult(false, null, "Invalid or expired refresh token", false, session.UserId);
         }
 
-        if (session.IsExpired)
-            return new RotateResult(false, null, "Invalid or expired refresh token", false, session.UserId);
+        var user = await _userManager.FindByIdAsync(session.UserId);
+        if (user == null || user.DeletedAt != null)
+            throw OAuthException.InvalidGrant("User account not found for OAuth session");
 
-        session.RevokedAt ??= now;
-        var (response, newHash) = await MintRotatedPairAsync(session, ipAddress, userAgent, now, ct);
-        session.ReplacedByTokenHash = newHash;
-        await _db.SaveChangesAsync(ct);
-        return new RotateResult(true, response, null, false, session.UserId);
-    }
+        if (_refreshTestGate != null)
+            await _refreshTestGate.PauseBeforeInsertIfConfiguredAsync(session.FamilyId);
 
-    private async Task<(CliOAuthTokenResponse Response, string NewTokenHash)> MintRotatedPairAsync(
-        RefreshTokenSession parent,
-        string? ipAddress,
-        string? userAgent,
-        DateTime now,
-        CancellationToken ct)
-    {
-        var raw = GenerateSecureToken();
-        var hash = HashToken(raw);
-        var absolute = parent.AbsoluteExpiresAt ?? now.Add(_options.RefreshAbsoluteTtl);
-        var idleExpiry = now.Add(_options.RefreshIdleTtl);
-        var expires = absolute < idleExpiry ? absolute : idleExpiry;
+        var mintOutcome = await RefreshTokenFamilyLock.ExecuteAsync(
+            _db,
+            async () =>
+            {
+                await _db.Entry(session).ReloadAsync(ct);
 
-        var next = new RefreshTokenSession
+                var lockedFamilyRevoked = await IsCliFamilyRevokedAsync(session.FamilyId, ct);
+                if (session.IsRevoked)
+                {
+                    var withinGrace = !lockedFamilyRevoked
+                        && session.ReplacedByTokenHash != null
+                        && session.RevokedAt.HasValue
+                        && session.RevokedAt.Value > now - TimeSpan.FromMinutes(5);
+
+                    if (!withinGrace || session.GraceReuseCount >= 3)
+                    {
+                        await RevokeFamilyInternalAsync(session.FamilyId, now, ct);
+                        await _db.SaveChangesAsync(ct);
+                        return (Success: false, Next: (RefreshTokenSession?)null, RawToken: (string?)null, Error: "Session security violation detected", ReuseDetected: true);
+                    }
+
+                    session.GraceReuseCount++;
+                }
+                else
+                {
+                    if (lockedFamilyRevoked)
+                    {
+                        await RevokeFamilyInternalAsync(session.FamilyId, now, ct);
+                        await _db.SaveChangesAsync(ct);
+                        return (Success: false, Next: (RefreshTokenSession?)null, RawToken: (string?)null, Error: "Invalid or expired refresh token", ReuseDetected: false);
+                    }
+
+                    if (session.IsExpired)
+                        return (Success: false, Next: (RefreshTokenSession?)null, RawToken: (string?)null, Error: "Invalid or expired refresh token", ReuseDetected: false);
+                }
+
+                var raw = GenerateSecureToken();
+                var hash = HashToken(raw);
+                var absolute = session.AbsoluteExpiresAt ?? now.Add(_options.RefreshAbsoluteTtl);
+                var idleExpiry = now.Add(_options.RefreshIdleTtl);
+                var expires = absolute < idleExpiry ? absolute : idleExpiry;
+
+                if (!session.IsRevoked)
+                {
+                    session.RevokedAt = now;
+                    session.ReplacedByTokenHash = hash;
+                }
+
+                var next = new RefreshTokenSession
+                {
+                    UserId = session.UserId,
+                    FamilyId = session.FamilyId,
+                    TokenHash = hash,
+                    CreatedAt = now,
+                    ExpiresAt = expires,
+                    AbsoluteExpiresAt = absolute,
+                    CreatedByIp = ipAddress,
+                    UserAgent = userAgent,
+                    GraceReuseCount = 0,
+                    MfaMethod = session.MfaMethod,
+                    Amr = session.Amr,
+                    TrustedDeviceId = session.TrustedDeviceId,
+                    Channel = RefreshTokenChannels.Cli,
+                    ClientId = session.ClientId,
+                    DeviceLabel = session.DeviceLabel,
+                    Scope = session.Scope
+                };
+
+                _db.RefreshTokens.Add(next);
+                await _db.SaveChangesAsync(ct);
+                return (Success: true, Next: (RefreshTokenSession?)next, RawToken: (string?)raw, Error: (string?)null, ReuseDetected: false);
+            },
+            ct);
+
+        if (!mintOutcome.Success || mintOutcome.Next == null || mintOutcome.RawToken == null)
         {
-            UserId = parent.UserId,
-            FamilyId = parent.FamilyId,
-            TokenHash = hash,
-            CreatedAt = now,
-            ExpiresAt = expires,
-            AbsoluteExpiresAt = absolute,
-            CreatedByIp = ipAddress,
-            UserAgent = userAgent,
-            GraceReuseCount = 0,
-            MfaMethod = parent.MfaMethod,
-            Amr = parent.Amr,
-            TrustedDeviceId = parent.TrustedDeviceId,
-            Channel = RefreshTokenChannels.Cli,
-            ClientId = parent.ClientId,
-            DeviceLabel = parent.DeviceLabel,
-            Scope = parent.Scope
-        };
-        _db.RefreshTokens.Add(next);
-        await _db.SaveChangesAsync(ct);
+            return new RotateResult(false, null, mintOutcome.Error, mintOutcome.ReuseDetected, session.UserId);
+        }
 
-        var user = await _userManager.FindByIdAsync(parent.UserId)
-            ?? throw OAuthException.InvalidGrant("User account not found for OAuth session");
-
-        var access = await CreateCliAccessTokenAsync(user, next);
+        var access = await CreateCliAccessTokenAsync(user, mintOutcome.Next);
         var response = new CliOAuthTokenResponse(
             access.AccessToken,
             "Bearer",
             (int)_options.AccessTokenTtl.TotalSeconds,
-            raw,
-            next.Scope ?? "offline_access api");
-        return (response, hash);
+            mintOutcome.RawToken,
+            mintOutcome.Next.Scope ?? "offline_access api");
+        return new RotateResult(true, response, null, false, session.UserId);
     }
+
+    private Task<bool> IsCliFamilyRevokedAsync(string? familyId, CancellationToken ct) =>
+        string.IsNullOrEmpty(familyId)
+            ? Task.FromResult(false)
+            : _db.RefreshTokens.AnyAsync(
+                t => t.FamilyId == familyId && t.RevokedAt != null && t.ReplacedByTokenHash == null,
+                ct);
 
     private async Task<(CliOAuthTokenResponse Response, string FamilyId)> IssueCliTokenPairAsync(
         ApplicationUser user,
@@ -527,8 +609,13 @@ public sealed class CliOAuthService : ICliOAuthService
             request.IssuedRefreshFamilyId,
             request.Id);
 
-        await RevokeFamilyInternalAsync(request.IssuedRefreshFamilyId, DateTime.UtcNow);
-        await _db.SaveChangesAsync();
+        await RefreshTokenFamilyLock.ExecuteAsync(
+            _db,
+            async () =>
+            {
+                await RevokeFamilyInternalAsync(request.IssuedRefreshFamilyId, DateTime.UtcNow, CancellationToken.None);
+                await _db.SaveChangesAsync();
+            });
         await _audit.LogEventAsync(
             "cli_oauth_refresh_reuse",
             request.UserId,
@@ -538,13 +625,16 @@ public sealed class CliOAuthService : ICliOAuthService
             new { request.Id, familyId = request.IssuedRefreshFamilyId, reason });
     }
 
-    private async Task RevokeFamilyInternalAsync(string familyId, DateTime now)
+    private async Task RevokeFamilyInternalAsync(string familyId, DateTime now, CancellationToken ct = default)
     {
         var family = await _db.RefreshTokens
-            .Where(t => t.FamilyId == familyId && t.RevokedAt == null)
-            .ToListAsync();
+            .Where(t => t.FamilyId == familyId && (t.RevokedAt == null || t.ReplacedByTokenHash != null))
+            .ToListAsync(ct);
         foreach (var s in family)
-            s.RevokedAt = now;
+        {
+            s.RevokedAt ??= now;
+            s.ReplacedByTokenHash = null;
+        }
     }
 
     private async Task<OAuthAuthorizationRequest> RequirePendingRequestAsync(string requestId, CancellationToken ct)

@@ -1004,14 +1004,37 @@ namespace Api.Controllers
             if (user == null)
                 return NotFound();
 
-            var session = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-                .FirstOrDefaultAsync(_identityContext.RefreshTokens, s => s.Id == id && s.UserId == user.Id);
+            var revoked = await RefreshTokenFamilyLock.ExecuteAsync(
+                _identityContext,
+                async () =>
+                {
+                    var session = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                        .FirstOrDefaultAsync(_identityContext.RefreshTokens, s => s.Id == id && s.UserId == user.Id);
 
-            if (session == null)
+                    if (session == null)
+                        return false;
+
+                    var now = DateTime.UtcNow;
+                    session.RevokedAt ??= now;
+                    session.ReplacedByTokenHash = null;
+                    if (!string.IsNullOrEmpty(session.FamilyId))
+                    {
+                        var familyMembers = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                            .ToListAsync(System.Linq.Queryable.Where(
+                                _identityContext.RefreshTokens,
+                                s => s.UserId == user.Id && s.FamilyId == session.FamilyId && (s.RevokedAt == null || s.ReplacedByTokenHash != null)));
+                        foreach (var member in familyMembers)
+                        {
+                            member.RevokedAt ??= now;
+                            member.ReplacedByTokenHash = null;
+                        }
+                    }
+                    await _identityContext.SaveChangesAsync();
+                    return true;
+                });
+
+            if (!revoked)
                 return NotFound(new ProblemDetails { Title = "Session Not Found", Detail = "The requested session does not exist.", Status = StatusCodes.Status404NotFound });
-
-            session.RevokedAt = DateTime.UtcNow;
-            await _identityContext.SaveChangesAsync();
 
             return Ok(new { success = true, message = "Session revoked successfully." });
         }
@@ -1041,17 +1064,61 @@ namespace Api.Controllers
                 currentHash = Convert.ToBase64String(hashBytes);
             }
 
-            var otherSessions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-                .ToListAsync(System.Linq.Queryable.Where(_identityContext.RefreshTokens, t => t.UserId == user.Id && t.RevokedAt == null && (currentHash == null || t.TokenHash != currentHash)));
+            var revokedCount = await RefreshTokenFamilyLock.ExecuteAsync(
+                _identityContext,
+                async () =>
+                {
+                    var currentFamilyId = currentHash == null
+                        ? null
+                        : await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                            .FirstOrDefaultAsync(
+                                System.Linq.Queryable.Select(
+                                    System.Linq.Queryable.Where(
+                                        _identityContext.RefreshTokens,
+                                        t => t.UserId == user.Id && t.TokenHash == currentHash),
+                                    t => t.FamilyId));
 
-            foreach (var s in otherSessions)
-            {
-                s.RevokedAt = DateTime.UtcNow;
-            }
+                    var otherActiveSessions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                        .ToListAsync(System.Linq.Queryable.Where(
+                            _identityContext.RefreshTokens,
+                            t => t.UserId == user.Id
+                                && t.RevokedAt == null
+                                && (currentHash == null || t.TokenHash != currentHash)
+                                && (string.IsNullOrEmpty(currentFamilyId) || t.FamilyId != currentFamilyId)));
 
-            await _identityContext.SaveChangesAsync();
-            await AuditAsync("auth.session.revoke_others", "success", user.Id, new { revokedCount = otherSessions.Count });
-            return Ok(new { success = true, revokedCount = otherSessions.Count });
+                    var now = DateTime.UtcNow;
+                    var otherFamilyIds = System.Linq.Enumerable.ToHashSet(
+                        System.Linq.Enumerable.Where(
+                            System.Linq.Enumerable.Select(otherActiveSessions, s => s.FamilyId),
+                            f => !string.IsNullOrEmpty(f)));
+
+                    if (otherFamilyIds.Count > 0)
+                    {
+                        var familyRows = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                            .ToListAsync(System.Linq.Queryable.Where(
+                                _identityContext.RefreshTokens,
+                                t => t.UserId == user.Id
+                                    && otherFamilyIds.Contains(t.FamilyId)
+                                    && (t.RevokedAt == null || t.ReplacedByTokenHash != null)));
+                        foreach (var row in familyRows)
+                        {
+                            row.RevokedAt ??= now;
+                            row.ReplacedByTokenHash = null;
+                        }
+                    }
+
+                    foreach (var s in otherActiveSessions)
+                    {
+                        s.RevokedAt ??= now;
+                        s.ReplacedByTokenHash = null;
+                    }
+
+                    await _identityContext.SaveChangesAsync();
+                    return otherActiveSessions.Count;
+                });
+
+            await AuditAsync("auth.session.revoke_others", "success", user.Id, new { revokedCount });
+            return Ok(new { success = true, revokedCount });
         }
 
         public class DeleteAccountRequest

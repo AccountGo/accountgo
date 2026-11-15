@@ -34,6 +34,7 @@ import {
   maxRequestBodyBytesForRoute,
   payloadTooLargeResponse,
   toRequest,
+  turnstileActionForRoute,
   unavailableResponse,
   watchContainerExit,
   type ContainerHost,
@@ -509,14 +510,9 @@ export default {
       );
     }
 
-    const authActions: Record<string, string> = {
-      "/api/auth/send-otp": "login",
-      "/api/auth/signup": "signup",
-      "/api/auth/verify-otp": "verify_otp",
-    };
+    const expectedAction = turnstileActionForRoute(url.pathname, request.method);
 
-    if (request.method === "POST" && authActions[url.pathname]) {
-      const expectedAction = authActions[url.pathname];
+    if (expectedAction) {
       let bodyText = "";
       let token: string | null = request.headers.get("cf-turnstile-response");
 

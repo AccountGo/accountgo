@@ -152,5 +152,6 @@ const PUBLIC_AUTH_PATHS = new Set([
 ]);
 
 export function isPublicAuthRequest(path: string): boolean {
-  return PUBLIC_AUTH_PATHS.has(path);
+  const normalized = path.split(/[?#]/)[0].replace(/\/+/g, "/").replace(/\/+$/, "").toLowerCase();
+  return PUBLIC_AUTH_PATHS.has(path) || PUBLIC_AUTH_PATHS.has(normalized);
 }

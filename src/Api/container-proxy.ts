@@ -184,6 +184,21 @@ export function isInvoiceLogoRoute(pathname: string): boolean {
   return raw === "/api/invoice-branding/logo" || canonical === "/api/invoice-branding/logo";
 }
 
+const TURNSTILE_AUTH_ACTIONS: Record<string, string> = {
+  "/api/auth/send-otp": "login",
+  "/api/auth/signup": "signup",
+  "/api/auth/verify-otp": "verify_otp",
+};
+
+export function turnstileActionForRoute(pathname: string, method = "POST"): string | undefined {
+  if (method.toUpperCase() !== "POST") {
+    return undefined;
+  }
+  const raw = pathname.split(/[?#]/)[0].replace(/\/+/g, "/").replace(/\/+$/, "").toLowerCase();
+  const canonical = canonicalizePath(pathname);
+  return TURNSTILE_AUTH_ACTIONS[raw] ?? TURNSTILE_AUTH_ACTIONS[canonical];
+}
+
 export function maxRequestBodyBytesForRoute(pathname: string, method?: string): number | undefined {
   if (method) {
     const m = method.toUpperCase();

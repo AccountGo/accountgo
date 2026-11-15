@@ -17,6 +17,7 @@ import {
   maxRequestBodyBytesForRoute,
   payloadTooLargeResponse,
   toRequest,
+  turnstileActionForRoute,
   unavailableResponse,
   watchContainerExit,
   MAX_LOGO_REQUEST_BYTES,
@@ -347,6 +348,29 @@ test("isInvoiceLogoRoute and maxRequestBodyBytesForRoute handle variants, percen
   assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "GET"), undefined);
   assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "DELETE"), undefined);
   assert.equal(maxRequestBodyBytesForRoute("/api/other", "PUT"), undefined);
+});
+
+test("turnstileActionForRoute matches mixed-case, trailing-slash, and percent-encoded auth POST routes", () => {
+  assert.equal(turnstileActionForRoute("/api/auth/send-otp", "POST"), "login");
+  assert.equal(turnstileActionForRoute("/api/auth/SEND-OTP", "POST"), "login");
+  assert.equal(turnstileActionForRoute("/API/Auth/Send-Otp/", "post"), "login");
+  assert.equal(turnstileActionForRoute("//api//auth//SEND-OTP", "POST"), "login");
+  assert.equal(turnstileActionForRoute("/api/auth/%73end-otp", "POST"), "login");
+  assert.equal(turnstileActionForRoute("/api/auth/send%2dotp", "POST"), "login");
+
+  assert.equal(turnstileActionForRoute("/api/auth/signup", "POST"), "signup");
+  assert.equal(turnstileActionForRoute("/api/auth/SIGNUP", "POST"), "signup");
+  assert.equal(turnstileActionForRoute("/API/Auth/SignUp/", "POST"), "signup");
+  assert.equal(turnstileActionForRoute("/api/auth/%73ignup", "POST"), "signup");
+
+  assert.equal(turnstileActionForRoute("/api/auth/verify-otp", "POST"), "verify_otp");
+  assert.equal(turnstileActionForRoute("/api/auth/VERIFY-OTP", "POST"), "verify_otp");
+  assert.equal(turnstileActionForRoute("/API/Auth/Verify-Otp/", "POST"), "verify_otp");
+  assert.equal(turnstileActionForRoute("/api/auth/verify%2dotp", "POST"), "verify_otp");
+
+  assert.equal(turnstileActionForRoute("/api/auth/send-otp", "GET"), undefined);
+  assert.equal(turnstileActionForRoute("/api/auth/send-otp", "OPTIONS"), undefined);
+  assert.equal(turnstileActionForRoute("/api/auth/refresh", "POST"), undefined);
 });
 
 test("bufferRequest rejects percent-encoded logo route when body exceeds limit", async () => {
