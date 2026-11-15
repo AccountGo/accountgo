@@ -28,8 +28,8 @@ namespace Services.Sales
         SalesInvoiceHeader GetSalesInvoiceById(int id);
         SalesInvoiceHeader GetSalesInvoiceByNo(string no);
         void UpdateSalesInvoice(SalesInvoiceHeader salesInvoice);
-        /// <summary>The number the next issued invoice will take, without taking it.</summary>
-        string PeekNextInvoiceNumber();
+        /// <summary>The number the next issued invoice will take for <paramref name="invoiceDate"/> (default today), without taking it.</summary>
+        string PeekNextInvoiceNumber(DateTime? invoiceDate = null);
         IEnumerable<SalesReceiptHeader> GetSalesReceipts();
         SalesReceiptHeader GetSalesReceiptById(int id);
         void UpdateSalesReceipt(SalesReceiptHeader salesReceipt);

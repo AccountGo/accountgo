@@ -2064,10 +2064,10 @@ namespace Api.Controllers
         [HttpGet]
         [Route("NextSalesInvoiceNumber")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult NextSalesInvoiceNumber()
+        public IActionResult NextSalesInvoiceNumber(DateTime? invoiceDate = null)
         {
             // A preview only: the number is taken when an invoice is issued, and may have moved on by then.
-            return Ok(new { next = _salesService.PeekNextInvoiceNumber() });
+            return Ok(new { next = _salesService.PeekNextInvoiceNumber(invoiceDate) });
         }
 
         // On SQLite, Serializable is BEGIN IMMEDIATE: the write lock is taken up front, so concurrent saves that
@@ -2124,7 +2124,9 @@ namespace Api.Controllers
             var detail = ex.InnerException?.Message ?? string.Empty;
             if (ex is Microsoft.EntityFrameworkCore.DbUpdateException
                 && (detail.Contains("SalesInvoiceHeader.No", StringComparison.Ordinal)
-                    || detail.Contains("IX_SalesInvoiceHeader_CompanyId_No", StringComparison.Ordinal)))
+                    || detail.Contains("IX_SalesInvoiceHeader_CompanyId_No", StringComparison.Ordinal)
+                    || detail.Contains("DocumentNumberSeries", StringComparison.Ordinal)
+                    || detail.Contains("IX_DocumentNumberSeries_CompanyId_SequenceNumberType_FinancialYearId", StringComparison.Ordinal)))
             {
                 return new NumberProblem(StatusCodes.Status409Conflict,
                     "That invoice number was just taken by another invoice. Please try again.", "number_taken");
@@ -2443,7 +2445,7 @@ namespace Api.Controllers
                 var expected = Core.Domain.Sales.InvoiceNumber.Normalize(expectedNo);
                 if (expected != null && Core.Domain.Sales.InvoiceNumber.Normalize(invoice.No) == null)
                 {
-                    var next = _salesService.PeekNextInvoiceNumber();
+                    var next = _salesService.PeekNextInvoiceNumber(invoice.Date);
                     if (!string.Equals(next, expected, StringComparison.OrdinalIgnoreCase))
                         return Conflict(new { message = $"Another invoice just took #{expected}. This one will be #{next}.", code = "number_changed", next });
                 }

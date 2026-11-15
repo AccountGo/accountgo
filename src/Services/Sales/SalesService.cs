@@ -56,6 +56,9 @@ namespace Services.Sales
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
         private readonly ISalesOrderRepository _salesOrderRepository;
+        private readonly IRepository<DocumentNumberSeries> _documentNumberSeriesRepo;
+        private readonly IRepository<FinancialYear> _fiscalYearRepo;
+        private readonly IRepository<CompanySetting> _companySettingRepo;
 
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
@@ -81,7 +84,10 @@ namespace Services.Sales
             IRepository<VendorContact> vendorContactRepo,
             ILogger<SalesService> logger,
             IMapper mapper,
-            IEntitlementService entitlements = null)
+            IEntitlementService entitlements = null,
+            IRepository<DocumentNumberSeries> documentNumberSeriesRepo = null,
+            IRepository<FinancialYear> fiscalYearRepo = null,
+            IRepository<CompanySetting> companySettingRepo = null)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _entitlements = entitlements;
@@ -107,6 +113,9 @@ namespace Services.Sales
             _salesOrderLineRepo = salesOrderLineRepo;
             _customerContactRepo = customerContactRepo;
             _vendorContactRepo = vendorContactRepo;
+            _documentNumberSeriesRepo = documentNumberSeriesRepo;
+            _fiscalYearRepo = fiscalYearRepo;
+            _companySettingRepo = companySettingRepo;
             _logger = logger;
             _mapper = mapper;
         }
@@ -258,7 +267,7 @@ namespace Services.Sales
             {
                 salesInvoice.GeneralLedgerHeader = glHeader;
 
-                salesInvoice.No = AllocateInvoiceNumber(salesInvoice.Id);
+                salesInvoice.No = AllocateInvoiceNumber(salesInvoice.Id, salesInvoice.Date);
 
                 if (!salesDeliveryId.HasValue)
                 {
@@ -398,17 +407,46 @@ namespace Services.Sales
             _salesInvoiceRepo.Update(salesInvoice);
         }
 
-        public string PeekNextInvoiceNumber()
+        public string PeekNextInvoiceNumber(DateTime? invoiceDate = null)
         {
-            var next = PeekNextNumber(SequenceNumberTypes.SalesInvoice);
-            while (InvoiceNumberTaken(next.ToString(CultureInfo.InvariantCulture), 0))
-                next++;
-            return next.ToString(CultureInfo.InvariantCulture);
+            var fmt = GetInvoiceNumberFormat();
+            if (!fmt.UsesFiscalYear || _fiscalYearRepo == null || _documentNumberSeriesRepo == null)
+            {
+                var next = PeekNextNumber(SequenceNumberTypes.SalesInvoice);
+                while (InvoiceNumberTaken(fmt.Render(next), 0))
+                    next++;
+                return fmt.Render(next);
+            }
+
+            // Preview must never write to the database: use stored FinancialYear if present, otherwise compute code.
+            var d = (invoiceDate ?? DateTime.UtcNow).Date;
+            var fy = _fiscalYearRepo.Table.FirstOrDefault(y => y.StartDate <= d && y.EndDate >= d);
+            string fyCode;
+            int nextInSeries;
+            if (fy != null)
+            {
+                fyCode = fy.FiscalYearCode;
+                var series = _documentNumberSeriesRepo.Table.FirstOrDefault(s =>
+                    s.SequenceNumberType == SequenceNumberTypes.SalesInvoice && s.FinancialYearId == fy.Id);
+                nextInSeries = Math.Max(series?.NextNumber ?? 1, 1);
+            }
+            else
+            {
+                var setting = _companySettingRepo?.Table.FirstOrDefault();
+                var pattern = setting?.FiscalYearPattern ?? FiscalYearPattern.Calendar;
+                var startMonth = setting?.FiscalYearStartMonth;
+                fyCode = FiscalYearCalculator.Containing(d, pattern, startMonth).Code;
+                nextInSeries = 1;
+            }
+
+            while (InvoiceNumberTaken(fmt.Render(nextInSeries, fyCode), 0))
+                nextInSeries++;
+            return fmt.Render(nextInSeries, fyCode);
         }
 
         // Every invoice write goes through here. Callers that issue invoices hold a write transaction (see
         // SalesController), so the read-then-advance of the sequence can't interleave; the unique index on
-        // (CompanyId, No) is the last line of defence, locally and in D1.
+        // (CompanyId, No) and (CompanyId, SequenceNumberType, FinancialYearId) are the last lines of defence.
         private void ApplyInvoiceNumber(SalesInvoiceHeader invoice)
         {
             invoice.No = InvoiceNumber.Normalize(invoice.No);
@@ -421,23 +459,88 @@ namespace Services.Sales
 
             if (invoice.No == null)
             {
-                invoice.No = AllocateInvoiceNumber(invoice.Id);
+                invoice.No = AllocateInvoiceNumber(invoice.Id, invoice.Date);
+                return;
             }
-            else if (InvoiceNumber.AsSequence(invoice.No) is int typed)
+
+            var fmt = GetInvoiceNumberFormat();
+            if (!fmt.UsesFiscalYear || _fiscalYearRepo == null || _documentNumberSeriesRepo == null)
             {
-                // A typed plain number moves the sequence past it, so automatic numbering continues from there.
-                AdvanceNextNumber(SequenceNumberTypes.SalesInvoice, typed + 1);
+                if (fmt.TryParseSequence(invoice.No, null, out var typed))
+                    AdvanceNextNumber(SequenceNumberTypes.SalesInvoice, typed + 1);
+                return;
             }
+
+            var fy = EnsureAndFindFiscalYear(invoice.Date);
+            if (fmt.TryParseSequence(invoice.No, fy.FiscalYearCode, out var yearlyTyped))
+                AdvanceSeriesNextNumber(SequenceNumberTypes.SalesInvoice, fy, yearlyTyped + 1);
         }
 
-        private string AllocateInvoiceNumber(int invoiceId)
+        private string AllocateInvoiceNumber(int invoiceId, DateTime documentDate)
         {
-            // Skip numbers a draft already holds because they were typed in.
-            var next = PeekNextNumber(SequenceNumberTypes.SalesInvoice);
-            while (InvoiceNumberTaken(next.ToString(CultureInfo.InvariantCulture), invoiceId))
-                next++;
-            AdvanceNextNumber(SequenceNumberTypes.SalesInvoice, next + 1);
-            return next.ToString(CultureInfo.InvariantCulture);
+            var fmt = GetInvoiceNumberFormat();
+            if (!fmt.UsesFiscalYear || _fiscalYearRepo == null || _documentNumberSeriesRepo == null)
+            {
+                // Skip numbers a draft already holds because they were typed in.
+                var next = PeekNextNumber(SequenceNumberTypes.SalesInvoice);
+                while (InvoiceNumberTaken(fmt.Render(next), invoiceId))
+                    next++;
+                AdvanceNextNumber(SequenceNumberTypes.SalesInvoice, next + 1);
+                return fmt.Render(next);
+            }
+
+            var fy = EnsureAndFindFiscalYear(documentDate);
+            var series = _documentNumberSeriesRepo.Table.FirstOrDefault(s =>
+                s.SequenceNumberType == SequenceNumberTypes.SalesInvoice && s.FinancialYearId == fy.Id);
+            var nextInSeries = Math.Max(series?.NextNumber ?? 1, 1);
+            while (InvoiceNumberTaken(fmt.Render(nextInSeries, fy.FiscalYearCode), invoiceId))
+                nextInSeries++;
+            AdvanceSeriesNextNumber(SequenceNumberTypes.SalesInvoice, fy, nextInSeries + 1, series);
+            return fmt.Render(nextInSeries, fy.FiscalYearCode);
+        }
+
+        private DocumentNumberFormat GetInvoiceNumberFormat()
+        {
+            var raw = _sequenceNumberRepo.Table
+                .Where(s => s.SequenceNumberType == SequenceNumberTypes.SalesInvoice)
+                .Select(s => s.Format)
+                .FirstOrDefault();
+            return DocumentNumberFormat.Parse(raw);
+        }
+
+        private FinancialYear EnsureAndFindFiscalYear(DateTime documentDate)
+        {
+            var d = documentDate.Date;
+            var booksStart = _companySettingRepo?.Table.Select(s => (DateTime?)s.BooksStartDate).FirstOrDefault()?.Date;
+            if (booksStart.HasValue && d < booksStart.Value)
+                throw new BooksStartViolationException(d, booksStart.Value);
+
+            _financialService.EnsureFiscalYearsThrough(d);
+            var fy = _fiscalYearRepo.Table.FirstOrDefault(y => y.StartDate <= d && y.EndDate >= d);
+            if (fy == null)
+                throw new InvalidOperationException($"No fiscal year covers invoice date {d:yyyy-MM-dd}.");
+            return fy;
+        }
+
+        private void AdvanceSeriesNextNumber(SequenceNumberTypes type, FinancialYear fy, int nextNumber, DocumentNumberSeries existing = null)
+        {
+            var series = existing ?? _documentNumberSeriesRepo.Table.FirstOrDefault(s =>
+                s.SequenceNumberType == type && s.FinancialYearId == fy.Id);
+            if (series == null)
+            {
+                _documentNumberSeriesRepo.Insert(new DocumentNumberSeries
+                {
+                    CompanyId = fy.CompanyId,
+                    SequenceNumberType = type,
+                    FinancialYearId = fy.Id,
+                    NextNumber = nextNumber
+                });
+            }
+            else if (nextNumber > series.NextNumber)
+            {
+                series.NextNumber = nextNumber;
+                _documentNumberSeriesRepo.Update(series);
+            }
         }
 
         private bool InvoiceNumberTaken(string number, int exceptInvoiceId)
@@ -1273,7 +1376,7 @@ namespace Services.Sales
             glHeader.GeneralLedgerLines.Add(debitCustomerAR);
 
             _financialService.ValidateGeneralLedgerEntry(glHeader);
-            salesInvoice.No = InvoiceNumber.Normalize(salesInvoice.No) ?? AllocateInvoiceNumber(salesInvoice.Id);
+            salesInvoice.No = InvoiceNumber.Normalize(salesInvoice.No) ?? AllocateInvoiceNumber(salesInvoice.Id, salesInvoice.Date);
             foreach (var issue in stockIssues)
             {
                 var projected = projectedItems[issue.Item.Id];
