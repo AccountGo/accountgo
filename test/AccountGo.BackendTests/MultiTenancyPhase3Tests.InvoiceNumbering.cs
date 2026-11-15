@@ -19,11 +19,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Services.Banking;
 using Services.Recurring;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3InvoiceNumberingTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3InvoiceNumberingTests(ITestOutputHelper output) : base(output) { }
+
         private void SetInvoiceFormat(int companyId, string format, string userId = null, string slug = null)
         {
             using var scope = _factory.Services.CreateScope();
