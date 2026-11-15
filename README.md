@@ -253,7 +253,7 @@ The local settings in this file are:
 | `PUBLIC_WEB_URL`, `PUBLIC_API_URL` | Local origins used in invitation and signed invoice links. |
 | `DBPROVIDER` | Selects `Sqlite` or `Postgres`. |
 | `ConnectionStrings:SqliteConnection`, `ConnectionStrings:PostgresConnection` | Connection string for the chosen provider. |
-| `SEED_DEMO_DATA` | Optional PostgreSQL first-start seed control; defaults to enabled. |
+| `SEED_DEMO_DATA` | Optional first-start seed control for a new SQLite or PostgreSQL database; defaults to enabled. Set `false` to start without the demo books. |
 | `ASPNETCORE_ENVIRONMENT` | Set to `Development` in the API process environment, before startup. |
 
 Do not copy the placeholder Resend key from `.env.example`: an absent `RESEND_API_KEY` selects the development console sender. The sample file documents optional email and assistant settings. `.env` is parsed as simple `KEY=value` lines, not executed as shell code; do not put command substitutions in it. Use colon-separated configuration keys in this file (for example `ConnectionStrings:PostgresConnection`). When exporting configuration directly in the shell, use double underscores instead (for example `ConnectionStrings__PostgresConnection`).
@@ -334,7 +334,7 @@ pnpm test
 pnpm build
 ```
 
-The focused statement-import suite can be run with `dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj --filter 'FullyQualifiedName~BankStatementParserTests|FullyQualifiedName~BankStatementImportServiceTests|FullyQualifiedName~StatementIncomeRecorderTests|FullyQualifiedName~MultiTenancyPhase3Tests.Acceptance_'`. Automated tests do not replace checking the full browser flow and external service integrations.
+The focused statement-import suite can be run with `dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj --filter 'FullyQualifiedName~BankStatementParserTests|FullyQualifiedName~BankStatementImportServiceTests|FullyQualifiedName~StatementIncomeRecorderTests|FullyQualifiedName~MultiTenancyPhase3BankingAcceptanceTests'`. Automated tests do not replace checking the full browser flow and external service integrations.
 
 ---
 

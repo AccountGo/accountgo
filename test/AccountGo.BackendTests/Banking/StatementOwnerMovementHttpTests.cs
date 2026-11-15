@@ -25,7 +25,6 @@ using Xunit;
 
 namespace AccountGo.BackendTests.Banking;
 
-[Collection("WorkspaceSetupHttp")]
 public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
 {
     private readonly AuditTestHost _host = new();

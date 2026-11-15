@@ -15,11 +15,37 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests;
 
-public partial class MultiTenancyPhase3Tests
+public abstract partial class MultiTenancyPhase3TestBase
 {
+
+    protected IHost MeasurementHost(bool audit) => Host.CreateDefaultBuilder().ConfigureServices(services =>
+    {
+        services.AddScoped<ITenantContext, TenantContext>();
+        services.AddScoped<IRequestAuditContext, AuditCostContext>();
+        services.AddDbContext<PostgresApiDbContext>((sp, options) =>
+        {
+            options.UseNpgsql(_postgres.ConnectionString, p => p.ExecutionStrategy(d => new BufferingExecutionStrategy(d)));
+            if (audit) options.AddInterceptors(new RecordChangeInterceptor(sp.GetRequiredService<IRequestAuditContext>()));
+        });
+    }).Build();
+
+    protected sealed class AuditCostContext : IRequestAuditContext
+    {
+        public string ActorUserId => "cost-measurement";
+        public string ActorKind => "user";
+        public string CorrelationId => "cost-measurement";
+        public string IpAddress => null;
+    }
+}
+
+public sealed class MultiTenancyPhase3AuditCostTests : MultiTenancyPhase3TestBase
+{
+    public MultiTenancyPhase3AuditCostTests(ITestOutputHelper output) : base(output) { }
+
     [Fact]
     public async Task PostgresAuditCost_ReportsPaired50LineJournalSaveSamples()
     {
@@ -132,24 +158,5 @@ public partial class MultiTenancyPhase3Tests
                 Assert.Equal(row.EntityId, values.RootElement.GetProperty("Id").GetInt32());
             });
         });
-    }
-
-    private IHost MeasurementHost(bool audit) => Host.CreateDefaultBuilder().ConfigureServices(services =>
-    {
-        services.AddScoped<ITenantContext, TenantContext>();
-        services.AddScoped<IRequestAuditContext, AuditCostContext>();
-        services.AddDbContext<PostgresApiDbContext>((sp, options) =>
-        {
-            options.UseNpgsql(_postgres.ConnectionString, p => p.ExecutionStrategy(d => new BufferingExecutionStrategy(d)));
-            if (audit) options.AddInterceptors(new RecordChangeInterceptor(sp.GetRequiredService<IRequestAuditContext>()));
-        });
-    }).Build();
-
-    private sealed class AuditCostContext : IRequestAuditContext
-    {
-        public string ActorUserId => "cost-measurement";
-        public string ActorKind => "user";
-        public string CorrelationId => "cost-measurement";
-        public string IpAddress => null;
     }
 }

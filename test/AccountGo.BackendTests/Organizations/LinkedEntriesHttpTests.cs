@@ -29,7 +29,6 @@ using Xunit;
 
 namespace AccountGo.BackendTests.Organizations;
 
-[Collection("WorkspaceSetupHttp")]
 public sealed class LinkedEntriesHttpTests : IAsyncLifetime
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"linked-entries-{Guid.NewGuid():N}.db");

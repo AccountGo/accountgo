@@ -13,11 +13,42 @@ using System.Threading.Tasks;
 using Dto.Banking;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests;
 
-public partial class MultiTenancyPhase3Tests
+public abstract partial class MultiTenancyPhase3TestBase
 {
+    protected static string PerformanceFixtureSource([CallerFilePath] string path = "") => path;
+
+    protected static JsonNode NormalizeGolden(JsonNode node)
+    {
+        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { "id", "accountId", "lineId", "headerId", "bankId", "reconciliationId", "sourceDocumentId", "sourcePath" };
+        if (node is JsonObject obj)
+        {
+            var result = new JsonObject();
+            foreach (var pair in obj)
+                if (!ignored.Contains(pair.Key)) result[pair.Key] = pair.Value == null ? null : NormalizeGolden(pair.Value);
+            return result;
+        }
+        if (node is JsonArray array)
+        {
+            var normalized = array.Select(value => value == null ? null : NormalizeGolden(value))
+                .OrderBy(value => value?.ToJsonString(), StringComparer.Ordinal).ToArray();
+            var result = new JsonArray();
+            foreach (var value in normalized) result.Add(value);
+            return result;
+        }
+        return node.DeepClone();
+    }
+
+}
+
+public sealed class MultiTenancyPhase3PerformanceFixtureTests : MultiTenancyPhase3TestBase
+{
+    public MultiTenancyPhase3PerformanceFixtureTests(ITestOutputHelper output) : base(output) { }
+
     [Fact]
     public async Task PerformanceBooks_PostedDocumentsAndReconciliationAreCreatedThroughEndpoints()
     {
@@ -167,28 +198,4 @@ public partial class MultiTenancyPhase3Tests
         var growing = counts.Where(c => c.Value["5x"] > c.Value["1x"]).Select(c => $"{c.Key}: {c.Value["1x"]} -> {c.Value["5x"]}").ToList();
         Assert.True(growing.Count == 0, "Query count grows with volume: " + string.Join(", ", growing));
     }
-    private static string PerformanceFixtureSource([CallerFilePath] string path = "") => path;
-
-    private static JsonNode NormalizeGolden(JsonNode node)
-    {
-        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        { "id", "accountId", "lineId", "headerId", "bankId", "reconciliationId", "sourceDocumentId", "sourcePath" };
-        if (node is JsonObject obj)
-        {
-            var result = new JsonObject();
-            foreach (var pair in obj)
-                if (!ignored.Contains(pair.Key)) result[pair.Key] = pair.Value == null ? null : NormalizeGolden(pair.Value);
-            return result;
-        }
-        if (node is JsonArray array)
-        {
-            var normalized = array.Select(value => value == null ? null : NormalizeGolden(value))
-                .OrderBy(value => value?.ToJsonString(), StringComparer.Ordinal).ToArray();
-            var result = new JsonArray();
-            foreach (var value in normalized) result.Add(value);
-            return result;
-        }
-        return node.DeepClone();
-    }
-
 }

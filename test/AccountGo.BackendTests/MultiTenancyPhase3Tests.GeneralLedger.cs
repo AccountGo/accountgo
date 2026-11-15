@@ -13,11 +13,31 @@ using Core.Domain.Security;
 using Core.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        protected Dto.Financial.JournalEntry LedgerDraft()
+        {
+            return new Dto.Financial.JournalEntry
+            {
+                JournalDate = DateTime.UtcNow.Date.AddDays(-1), VoucherType = 6, Memo = "Manual adjustment",
+                JournalEntryLines =
+                {
+                    new Dto.Financial.JournalEntryLine { AccountId = AccountId("10111"), DrCr = 1, Amount = 25m },
+                    new Dto.Financial.JournalEntryLine { AccountId = AccountId("40100"), DrCr = 2, Amount = 25m }
+                }
+            };
+        }
+    }
+
+    public sealed class MultiTenancyPhase3GeneralLedgerTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3GeneralLedgerTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task GeneralLedger_FiltersHeaderDatesAndAccounts_RetainsBalancedLinesAndAuditMetadata()
         {
@@ -349,19 +369,6 @@ namespace AccountGo.BackendTests
             Assert.Equal(2, posted.GetProperty("lines").EnumerateArray().Count(l => l.GetProperty("accountId").GetInt32() == cash));
             Assert.Equal(25m, posted.GetProperty("totalDebit").GetDecimal());
             Assert.Equal(25m, posted.GetProperty("totalCredit").GetDecimal());
-        }
-
-        private Dto.Financial.JournalEntry LedgerDraft()
-        {
-            return new Dto.Financial.JournalEntry
-            {
-                JournalDate = DateTime.UtcNow.Date.AddDays(-1), VoucherType = 6, Memo = "Manual adjustment",
-                JournalEntryLines =
-                {
-                    new Dto.Financial.JournalEntryLine { AccountId = AccountId("10111"), DrCr = 1, Amount = 25m },
-                    new Dto.Financial.JournalEntryLine { AccountId = AccountId("40100"), DrCr = 2, Amount = 25m }
-                }
-            };
         }
     }
 }

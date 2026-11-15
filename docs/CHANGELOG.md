@@ -17,6 +17,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 - Tax page: see output tax, input tax and the net payable for each monthly or quarterly tax period, by tax code, with the source invoices and bills and a CSV export. Tax periods are set in Settings → Taxes and don't have to match your fiscal year. Cash-basis workspaces see tax when invoices and bills are paid.
 - Record a tax filing for a period: AccountGo keeps the figures you filed, warns when they change afterwards, and can lock the books through the period end. Corrections are recorded as amended filings.
+- Due recurring invoices can be run directly from the recurring schedules list.
 - Reports now include a statement of changes in equity: opening balance, profit, contributions and drawings (or shares issued and dividends), prior-period adjustments and closing balance, checked against the balance sheet, with a comparison period.
 - You can undo an owner drawing or contribution from the matched statement line.
 - Bank statement lines that move money between you and your business can be recorded as an owner drawing or owner contribution wherever statement import is available, so they no longer count as expenses or income. Partnerships use partner wording.
@@ -28,6 +29,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 ### Fixed
 - Issuing a sales invoice dated in a locked period or before the books start date is now refused before an invoice number is assigned, so failed attempts no longer consume a number.
 - Workspace automatic sign-out settings now apply per active workspace and no longer fall back to 15 minutes when unconfigured or when a member belongs to another workspace with a shorter timeout.
+- Recurring invoice statuses and cadence labels display correctly, restoring Run now, Skip and Pause actions for active schedules.
 - Bank statement Personal actions appear only when Personal books are linked, and each workspace shows one set of owner money-movement actions.
 
 ### Removed
@@ -36,6 +38,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 ### Self-hosting
 - A database migration adds partner and profit-sharing tables and partner columns to bank statement description rules and company settings. It runs automatically when the API starts.
 - PostgreSQL deployments can run behind a transaction-mode connection pooler (such as Supabase's on port 6543), which lets more API instances share one database. The deployment guide lists the connection settings.
+- `SEED_DEMO_DATA=false` now also applies to a new SQLite database, so it starts without the demo books. The default is unchanged: new databases get the demo books.
 
 ## [0.2.0] - 2026-11-13
 

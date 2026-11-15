@@ -12,14 +12,20 @@ using Core.Domain.Sales;
 using Core.Domain.Security;
 using Dto.Banking;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
     /// <summary>Phase 2a of #455: books lock API and refused postings (real SQLite).</summary>
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
-        private static string LockMessage(DateTime lockedThrough) =>
+        protected static string LockMessage(DateTime lockedThrough) =>
             BooksLockedException.FormatMessage(lockedThrough);
+    }
+
+    public sealed class MultiTenancyPhase3BooksLockTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3BooksLockTests(ITestOutputHelper output) : base(output) { }
 
         [Fact]
         public async Task BooksLock_PutLaterWithoutReason_WritesHistory_And_BlocksLockedPosting()

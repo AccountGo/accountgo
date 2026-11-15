@@ -1,6 +1,7 @@
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { canRunDueSchedule, normalizeRecurringSummary } from '../lib/recurring';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Loader2, Plus, Repeat, Search } from 'lucide-react';
@@ -29,6 +30,8 @@ export const RecurringSchedules: React.FC = () => {
   const [schedules, setSchedules] = useState<RecurringScheduleSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const canPost = hasPermission('sales.invoices.post') && salesWritable;
+  const [running, setRunning] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const initialFilter = (searchParams.get('filter') as FilterKey) || 'all';
@@ -42,7 +45,7 @@ export const RecurringSchedules: React.FC = () => {
       const res = await authFetch('/api/RecurringSchedules');
       if (!res.ok) throw new Error(`Failed to load recurring schedules (${res.status}).`);
       const data = await res.json();
-      setSchedules(Array.isArray(data) ? data : []);
+      setSchedules(Array.isArray(data) ? data.map(normalizeRecurringSummary) : []);
     } catch (err: any) {
       setErrorBanner(err.message || 'The recurring schedules could not be loaded.');
     } finally {
@@ -79,6 +82,29 @@ export const RecurringSchedules: React.FC = () => {
     }
     return rows;
   }, [schedules, filter, searchQuery]);
+
+  const runNow = async (schedule: RecurringScheduleSummary) => {
+    if (running !== null || !canRunDueSchedule(schedule, canCreate, canPost)) return;
+    setRunning(schedule.id);
+    setErrorBanner(null);
+    try {
+      const res = await authFetch(`/api/RecurringSchedules/${schedule.id}/run`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runDate: schedule.nextRunDate }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || `The run could not be completed (${res.status}).`);
+      if (data?.outcome === 'Failed' || data?.outcome === 'Aborted') {
+        await loadSchedules();
+        throw new Error(data.message || 'The run could not be completed. Open the schedule to review its history.');
+      }
+      navigate(`/org/${orgSlug}/sales/recurring/${schedule.id}`);
+    } catch (err: any) {
+      setErrorBanner(err.message || 'The run could not be completed.');
+    } finally {
+      setRunning(null);
+    }
+  };
 
   const onFilter = (key: FilterKey) => {
     setFilter(key);
@@ -195,6 +221,7 @@ export const RecurringSchedules: React.FC = () => {
                 <th className="py-3 px-4">Next run</th>
                 <th className="py-3 px-4 text-right">Runs</th>
                 <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
@@ -238,6 +265,16 @@ export const RecurringSchedules: React.FC = () => {
                         </StatusPill>
                       )}
                     </span>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    {canRunDueSchedule(s, canCreate, canPost) && (
+                      <button type="button" disabled={running !== null}
+                        aria-label={`Run now: ${s.name}`}
+                        onClick={(event) => { event.stopPropagation(); void runNow(s); }}
+                        className="px-3 py-2 rounded-lg text-sm font-semibold bg-[var(--brand-primary)] text-[var(--brand-text)] disabled:opacity-50">
+                        {running === s.id ? 'Running…' : 'Run now'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

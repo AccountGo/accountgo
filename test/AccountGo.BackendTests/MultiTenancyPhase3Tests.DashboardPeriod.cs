@@ -7,11 +7,31 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests;
 
-public partial class MultiTenancyPhase3Tests
+public abstract partial class MultiTenancyPhase3TestBase
 {
+
+    protected async Task PostJournal(DateTime date, params (string Code, int DrCr, decimal Amount)[] lines)
+    {
+        var journal = new Dto.Financial.JournalEntry { JournalDate = date, VoucherType = 6, Memo = "Dashboard period check" };
+        foreach (var (code, drCr, amount) in lines)
+            journal.JournalEntryLines.Add(new Dto.Financial.JournalEntryLine { AccountId = AccountId(code), DrCr = drCr, Amount = amount });
+        using var saved = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", journal);
+        Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+        journal.Id = (await saved.Content.ReadFromJsonAsync<Dto.Financial.JournalEntry>()).Id;
+        var approval = await ApproveJournalPostAsync(journal.Id);
+        using var posted = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", journal, extraHeaders: approval);
+        Assert.True(posted.IsSuccessStatusCode, await posted.Content.ReadAsStringAsync());
+    }
+}
+
+public sealed class MultiTenancyPhase3DashboardPeriodTests : MultiTenancyPhase3TestBase
+{
+    public MultiTenancyPhase3DashboardPeriodTests(ITestOutputHelper output) : base(output) { }
+
     [Fact]
     public async Task DashboardPeriodFigures_FollowTheRangeAndLeaveOutYearEndClosing()
     {
@@ -107,18 +127,5 @@ public partial class MultiTenancyPhase3Tests
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
         var summary = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(45m, summary.GetProperty("kpis").GetProperty("drawingsYtd").GetDecimal());
-    }
-
-    private async Task PostJournal(DateTime date, params (string Code, int DrCr, decimal Amount)[] lines)
-    {
-        var journal = new Dto.Financial.JournalEntry { JournalDate = date, VoucherType = 6, Memo = "Dashboard period check" };
-        foreach (var (code, drCr, amount) in lines)
-            journal.JournalEntryLines.Add(new Dto.Financial.JournalEntryLine { AccountId = AccountId(code), DrCr = drCr, Amount = amount });
-        using var saved = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", journal);
-        Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-        journal.Id = (await saved.Content.ReadFromJsonAsync<Dto.Financial.JournalEntry>()).Id;
-        var approval = await ApproveJournalPostAsync(journal.Id);
-        using var posted = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", journal, extraHeaders: approval);
-        Assert.True(posted.IsSuccessStatusCode, await posted.Content.ReadAsStringAsync());
     }
 }

@@ -1,6 +1,7 @@
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { normalizeRecurringDetail } from '../lib/recurring';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Loader2, Mail, Package, Plus, Trash2, X } from 'lucide-react';
@@ -106,7 +107,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
       try {
         const res = await authFetch(`/api/RecurringSchedules/${scheduleId}`);
         if (!res.ok) throw new Error('The schedule could not be loaded.');
-        const s: RecurringScheduleDetail = await res.json();
+        const s: RecurringScheduleDetail = normalizeRecurringDetail(await res.json());
         if (cancelled) return;
         setCustomerId(s.customerId);
         setName(s.name);

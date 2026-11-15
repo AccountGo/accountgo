@@ -4,6 +4,10 @@
 // Shared formatting/labels for the recurring sales-invoice UI (#484).
 
 import type {
+  RecurringAction,
+  RecurringScheduleSummary,
+  RecurringScheduleDetail,
+  RecurringOccurrenceView,
   RecurringCadence,
   RecurringScheduleStatus,
   RecurringOccurrenceStatus,
@@ -88,4 +92,43 @@ export function toDateInput(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+// Keep compatibility with servers that returned numeric enums before the string contract fix.
+function enumName<T extends string>(value: T | number, names: readonly T[], first = 1): T {
+  if (typeof value === 'string' && names.includes(value)) return value;
+  if (typeof value === 'number' && Number.isInteger(value) && names[value - first]) return names[value - first];
+  throw new Error(`Unknown recurring enum value: ${value}`);
+}
+
+type SummaryWire = Omit<RecurringScheduleSummary, 'status' | 'cadence' | 'action'> & {
+  status: RecurringScheduleStatus | number;
+  cadence: RecurringCadence | number;
+  action: RecurringAction | number;
+};
+export function normalizeRecurringSummary(s: SummaryWire): RecurringScheduleSummary {
+  return { ...s,
+    status: enumName(s.status, ['Active', 'Paused', 'Ended']),
+    cadence: enumName(s.cadence, ['Weekly', 'Monthly', 'Quarterly', 'Yearly']),
+    action: enumName(s.action, ['CreateDraft', 'AutoIssue', 'AutoApprove']),
+  };
+}
+
+type DetailWire = Omit<RecurringScheduleDetail, 'status' | 'cadence' | 'action' | 'servicePeriodMode' | 'lines'> & SummaryWire & {
+  servicePeriodMode: RecurringScheduleDetail['servicePeriodMode'] | number;
+  lines: (Omit<RecurringScheduleDetail['lines'][number], 'discountType'> & { discountType: RecurringScheduleDetail['lines'][number]['discountType'] | number })[];
+};
+export function normalizeRecurringDetail(s: DetailWire): RecurringScheduleDetail {
+  return { ...s, ...normalizeRecurringSummary(s),
+    servicePeriodMode: enumName(s.servicePeriodMode, ['CurrentMonth', 'PreviousMonth']),
+    lines: s.lines.map(l => ({ ...l, discountType: enumName(l.discountType, ['Percentage', 'Amount'], 0) })),
+  };
+}
+
+export function normalizeRecurringOccurrence(s: Omit<RecurringOccurrenceView, 'status'> & { status: RecurringOccurrenceStatus | number }): RecurringOccurrenceView {
+  return { ...s, status: enumName(s.status, ['Scheduled', 'Running', 'DraftCreated', 'Issued', 'Skipped', 'Failed', 'Held', 'Superseded']) };
+}
+
+export function canRunDueSchedule(s: RecurringScheduleSummary, canCreate: boolean, canPost: boolean): boolean {
+  return s.status === 'Active' && s.isOverdue && canCreate && (s.action !== 'AutoIssue' || canPost);
 }

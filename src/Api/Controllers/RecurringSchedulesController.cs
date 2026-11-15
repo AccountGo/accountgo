@@ -7,6 +7,8 @@ using System.Linq;
 using System.Security.Claims;
 using Api.Filters;
 using Core.Domain.Recurring;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Microsoft.AspNetCore.Mvc;
 using Services.Recurring;
 
@@ -70,6 +72,7 @@ namespace Api.Controllers
         /// <summary>Editor payload for the next-dates preview (no persistence).</summary>
         public sealed class PreviewRequest
         {
+            [JsonConverter(typeof(StringEnumConverter))]
             public RecurringCadence Cadence { get; set; } = RecurringCadence.Monthly;
             public int Interval { get; set; } = 1;
             public DateTime StartDate { get; set; }

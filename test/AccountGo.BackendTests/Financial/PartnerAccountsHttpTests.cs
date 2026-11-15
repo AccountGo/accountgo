@@ -17,7 +17,6 @@ using Xunit;
 
 namespace AccountGo.BackendTests.Financial;
 
-[Collection("WorkspaceSetupHttp")]
 public sealed class PartnerAccountsHttpTests : IAsyncLifetime
 {
     private readonly AuditTestHost _host = new();

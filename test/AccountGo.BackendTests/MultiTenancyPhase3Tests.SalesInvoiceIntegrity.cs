@@ -15,11 +15,14 @@ using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3SalesInvoiceIntegrityTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3SalesInvoiceIntegrityTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task SalesInvoice_IssuedInvoices_CannotBeEdited_Or_Deleted()
         {

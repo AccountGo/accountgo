@@ -72,6 +72,8 @@ namespace AccountGo.BackendTests
             {
                 builder.UseSetting("DatabaseProvider", "Sqlite");
                 builder.UseSetting("ConnectionStrings:SqliteConnection", $"Data Source={_dbPath}");
+                // These tests use the demo companies and users that the first-start seed creates.
+                builder.UseSetting("SEED_DEMO_DATA", "true");
                 builder.UseSetting("ENVIRONMENT", "Development");
                 builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
             });

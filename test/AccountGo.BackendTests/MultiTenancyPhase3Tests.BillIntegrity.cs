@@ -10,11 +10,14 @@ using System.Threading.Tasks;
 using Core.Domain;
 using Core.Domain.Purchases;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3BillIntegrityTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3BillIntegrityTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Bill_Payment_DebitsPayableAccount_EvenWithNegativeLineLargerThanTotal()
         {

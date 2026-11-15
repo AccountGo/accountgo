@@ -8,12 +8,14 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Dto.Banking;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    /// <summary>Phase 1 of #455: fiscal years roll forward on posting (real SQLite).</summary>
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3FiscalYearRolloverTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3FiscalYearRolloverTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Invoice_DatedInNextFiscalYear_PostsAndCreatesTheYear()
         {

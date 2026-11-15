@@ -751,7 +751,7 @@ public static class AccountGoApp
                     // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes, security tables)
                     Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
 
-                    if (isNewDatabase)
+                    if (isNewDatabase && SeedDemoData(services))
                     {
                         var seeder = services.GetRequiredService<DatabaseSeeder>();
                         Console.WriteLine("Seeding SQLite database...");
@@ -848,6 +848,10 @@ public static class AccountGoApp
     /// Start-up writes persist on Postgres: migrate, seed demo books only into an
     /// empty database, and keep the default roles current on every start.
     /// </summary>
+    /// <summary>A new database gets the demo books unless SEED_DEMO_DATA is "false".</summary>
+    private static bool SeedDemoData(IServiceProvider services) =>
+        !string.Equals(services.GetRequiredService<IConfiguration>()["SEED_DEMO_DATA"], "false", StringComparison.OrdinalIgnoreCase);
+
     private static void InitializePostgres(IServiceProvider services, ApiDbContext apiDbContext,
         ApplicationIdentityDbContext identityDbContext)
     {
@@ -862,8 +866,7 @@ public static class AccountGoApp
 
         if (isNewDatabase)
         {
-            var configuration = services.GetRequiredService<IConfiguration>();
-            if (!string.Equals(configuration["SEED_DEMO_DATA"], "false", StringComparison.OrdinalIgnoreCase))
+            if (SeedDemoData(services))
             {
                 Console.WriteLine("Seeding new Postgres database...");
                 services.GetRequiredService<DatabaseSeeder>().Seed();

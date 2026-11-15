@@ -9,12 +9,14 @@ using Core.Entitlements;
 using Microsoft.Extensions.DependencyInjection;
 using Services.Billing;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    /// <summary>Community entitlements: unlimited quotas, community plan, no features.</summary>
-    public partial class MultiTenancyPhase3Tests
+    public sealed class MultiTenancyPhase3EntitlementsTests : MultiTenancyPhase3TestBase
     {
+        public MultiTenancyPhase3EntitlementsTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Entitlements_Community_NothingIsLimitedOrRecordedAsQuota()
         {

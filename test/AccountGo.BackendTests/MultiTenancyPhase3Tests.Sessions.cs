@@ -11,13 +11,52 @@ using Api.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
     // Refresh tokens rotate per use. Concurrent reuse within the grace window mints family siblings
     // (bounded); reuse outside grace revokes only that family.
-    public partial class MultiTenancyPhase3Tests
+    public abstract partial class MultiTenancyPhase3TestBase
     {
+
+        /// <summary>Returns the FamilyId assigned to the new session.</summary>
+        protected string AddSession(string rawToken, string familyId = null)
+        {
+            familyId ??= Guid.NewGuid().ToString("N");
+            using var scope = _factory.Services.CreateScope();
+            var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+            identity.RefreshTokens.Add(new RefreshTokenSession
+            {
+                UserId = _ownerId,
+                FamilyId = familyId,
+                TokenHash = Hash(rawToken),
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                GraceReuseCount = 0,
+            });
+            identity.SaveChanges();
+            return familyId;
+        }
+
+        /// <summary>Refreshes with a raw token; returns the new raw token from the cookie, or null when refused.</summary>
+        protected static async Task<string> Refresh(HttpClient browser, string rawToken)
+        {
+            var response = await browser.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = rawToken });
+            if (!response.IsSuccessStatusCode)
+                return null;
+            var cookie = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith("accountgo_refresh_token=", StringComparison.Ordinal));
+            return WebUtility.UrlDecode(cookie.Substring("accountgo_refresh_token=".Length).Split(';')[0]);
+        }
+
+        protected static string Hash(string rawToken) =>
+            Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
+    }
+
+    public sealed class MultiTenancyPhase3SessionsTests : MultiTenancyPhase3TestBase
+    {
+        public MultiTenancyPhase3SessionsTests(ITestOutputHelper output) : base(output) { }
+
         [Fact]
         public async Task Refresh_GraceReuse_KeepsReplacement_AndIssuesSibling()
         {
@@ -137,37 +176,5 @@ namespace AccountGo.BackendTests
                 identity.RefreshTokens.Where(t => t.FamilyId == familyId),
                 t => t.RevokedAt == null);
         }
-
-        /// <summary>Returns the FamilyId assigned to the new session.</summary>
-        private string AddSession(string rawToken, string familyId = null)
-        {
-            familyId ??= Guid.NewGuid().ToString("N");
-            using var scope = _factory.Services.CreateScope();
-            var identity = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
-            identity.RefreshTokens.Add(new RefreshTokenSession
-            {
-                UserId = _ownerId,
-                FamilyId = familyId,
-                TokenHash = Hash(rawToken),
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(7),
-                GraceReuseCount = 0,
-            });
-            identity.SaveChanges();
-            return familyId;
-        }
-
-        /// <summary>Refreshes with a raw token; returns the new raw token from the cookie, or null when refused.</summary>
-        private static async Task<string> Refresh(HttpClient browser, string rawToken)
-        {
-            var response = await browser.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = rawToken });
-            if (!response.IsSuccessStatusCode)
-                return null;
-            var cookie = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith("accountgo_refresh_token=", StringComparison.Ordinal));
-            return WebUtility.UrlDecode(cookie.Substring("accountgo_refresh_token=".Length).Split(';')[0]);
-        }
-
-        private static string Hash(string rawToken) =>
-            Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
     }
 }
