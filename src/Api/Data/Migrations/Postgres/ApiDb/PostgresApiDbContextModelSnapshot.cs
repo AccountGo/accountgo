@@ -1718,6 +1718,14 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("text");
 
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SourceSystem")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<int?>("VoucherType")
                         .HasColumnType("integer");
 
@@ -1728,6 +1736,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasIndex("GeneralLedgerHeaderId");
 
                     b.HasIndex("PartyId");
+
+                    b.HasIndex("CompanyId", "SourceSystem", "SourceKey")
+                        .IsUnique()
+                        .HasFilter("\"SourceSystem\" IS NOT NULL");
 
                     b.ToTable("JournalEntryHeader");
                 });
