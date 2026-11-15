@@ -93,9 +93,17 @@ namespace Api.Controllers
             string operationKey,
             string fallbackPermission,
             out IActionResult? deniedResult,
+            AccessResourceContext? resource = null) =>
+            TryAuthorizeOperation(operationKey, fallbackPermission, out deniedResult, out _, resource);
+
+        private bool TryAuthorizeOperation(
+            string operationKey,
+            string fallbackPermission,
+            out IActionResult? deniedResult,
+            out AccessDecision? decision,
             AccessResourceContext? resource = null)
         {
-            var decision = AuthService.Authorize(operationKey, resource);
+            decision = AuthService.Authorize(operationKey, resource);
             if (decision.Allowed)
             {
                 deniedResult = null;
@@ -348,14 +356,22 @@ namespace Api.Controllers
             if (request?.Ids == null || request.Ids.Count == 0)
                 return BadRequest(new { message = "Provide at least one journal entry id." });
 
-            if (request.Ids.Count > 200)
+            var distinctIds = new List<int>(request.Ids.Count);
+            var seen = new HashSet<int>();
+            foreach (var id in request.Ids)
+            {
+                if (seen.Add(id))
+                    distinctIds.Add(id);
+            }
+
+            if (distinctIds.Count > 200)
                 return BadRequest(new { message = "At most 200 journal entry ids may be posted in one batch." });
 
             var aprHeader = HttpContext?.Request.Headers["X-Approval-Request-Id"].FirstOrDefault();
             var approverHeader = HttpContext?.Request.Headers["X-Approved-By-User-Id"].FirstOrDefault();
 
-            var results = new List<PostJournalBatchItemResult>(request.Ids.Count);
-            foreach (var id in request.Ids)
+            var results = new List<PostJournalBatchItemResult>(distinctIds.Count);
+            foreach (var id in distinctIds)
             {
                 var outcome = PostSingleJournalEntry(
                     id,
@@ -396,8 +412,9 @@ namespace Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Source journal service is unavailable." });
 
             var actorId = _tenantContext.UserId
-                ?? User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                ?? "unknown";
+                ?? User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(actorId))
+                return Unauthorized(new { message = "Authenticated user identity is required." });
 
             try
             {
@@ -493,15 +510,11 @@ namespace Api.Controllers
                     "This approval was already used. Ask for a new approval.", ApprovalAlreadyUsed());
             }
 
-            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalPost, SystemPermissions.FinancialsJournalPost, out var denied, postResource))
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalPost, SystemPermissions.FinancialsJournalPost, out var denied, out var decision, postResource))
             {
-                var denyCode = isPosted ? "already_posted" : isLocked ? "period_locked" : "forbidden";
-                var denyMsg = isPosted
-                    ? "Posted journal entries cannot be posted again."
-                    : isLocked
-                        ? "This accounting period is locked."
-                        : "Forbidden to post journal entry.";
-                return new PostSingleResult(journalId, false, StatusCodes.Status403Forbidden, denyCode, denyMsg, denied);
+                var denyCode = decision?.ReasonCodeString?.ToLowerInvariant() ?? (isPosted ? "already_posted" : isLocked ? "period_locked" : "forbidden");
+                var denyMsg = decision?.SafeMessage ?? "Forbidden to post journal entry.";
+                return new PostSingleResult(journalId, false, decision?.HttpStatus ?? StatusCodes.Status403Forbidden, denyCode, denyMsg, denied);
             }
 
             try

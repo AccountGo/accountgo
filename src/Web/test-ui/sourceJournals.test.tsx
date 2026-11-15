@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import JournalEntries, {
   JournalEditor,
+  emptyJournalMessage,
   filterJournalEntries,
   type JournalEntry,
 } from '../src/pages/JournalEntries';
@@ -176,4 +177,27 @@ it('renders imported draft read-only without Save and discards via ConfirmDialog
     );
     expect(onDiscarded).toHaveBeenCalledTimes(1);
   });
+});
+
+it('renders filter-specific empty state messages', async () => {
+  expect(emptyJournalMessage('draft', 'imported')).toBe('No imported drafts.');
+  expect(emptyJournalMessage('draft', 'manual')).toBe('No draft manual journals.');
+  expect(emptyJournalMessage('draft', 'all')).toBe('No draft journals.');
+  expect(emptyJournalMessage('posted', 'all')).toBe('No posted journals.');
+  expect(emptyJournalMessage('posted', 'imported')).toBe('No imported posted journals.');
+
+  authFetch.mockImplementation(async (path?: string) => {
+    if (typeof path === 'string' && path.includes('Accounts')) return new Response(JSON.stringify(ACCOUNTS), { status: 200 });
+    return new Response('[]', { status: 200 });
+  });
+
+  render(
+    <MemoryRouter>
+      <JournalEntries />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByText('No draft journals.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Imported' }));
+  expect(await screen.findByText('No imported drafts.')).toBeTruthy();
 });

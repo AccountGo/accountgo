@@ -64,6 +64,18 @@ public sealed class SourceJournalOperationException : InvalidOperationException
     }
 }
 
+public static class SourceJournalTestGate
+{
+    public static Action<int, string, string>? BeforeCreateInsert { get; set; }
+    public static Action<int, int>? BeforeDiscardDelete { get; set; }
+
+    public static void Reset()
+    {
+        BeforeCreateInsert = null;
+        BeforeDiscardDelete = null;
+    }
+}
+
 /// <summary>
 /// Creates idempotent source-referenced journal drafts for server-side importers and discards
 /// unposted imported drafts so their source key can be re-issued.
@@ -102,7 +114,9 @@ public sealed class SourceJournalService
 
         var existing = FindExisting(request.CompanyId, request.SourceSystem, request.SourceKey);
         if (existing != null)
-            return MatchOrConflict(existing, requestedFingerprint);
+            return MatchOrConflict(existing, requestedFingerprint, request.ReferenceNo);
+
+        SourceJournalTestGate.BeforeCreateInsert?.Invoke(request.CompanyId, request.SourceSystem, request.SourceKey);
 
         using var tx = _db.Database.BeginTransaction();
         try
@@ -162,7 +176,7 @@ public sealed class SourceJournalService
 
             var raced = FindExisting(request.CompanyId, request.SourceSystem, request.SourceKey);
             if (raced != null)
-                return MatchOrConflict(raced, requestedFingerprint);
+                return MatchOrConflict(raced, requestedFingerprint, request.ReferenceNo);
 
             throw;
         }
@@ -177,7 +191,7 @@ public sealed class SourceJournalService
             throw new ArgumentException("ActorId is required.", nameof(actorId));
 
         var header = _db.JournalEntryHeaders
-            .Include(j => j.JournalEntryLines)
+            .AsNoTracking()
             .FirstOrDefault(j => j.CompanyId == companyId && j.Id == journalId);
 
         if (header == null)
@@ -191,9 +205,40 @@ public sealed class SourceJournalService
 
         var sourceRef = $"{header.SourceSystem}:{header.SourceKey}";
 
+        SourceJournalTestGate.BeforeDiscardDelete?.Invoke(companyId, journalId);
+
         using var tx = _db.Database.BeginTransaction();
-        _db.JournalEntryLines.RemoveRange(header.JournalEntryLines);
-        _db.JournalEntryHeaders.Remove(header);
+        _db.JournalEntryLines
+            .Where(l => l.CompanyId == companyId
+                && l.JournalEntryHeaderId == journalId
+                && _db.JournalEntryHeaders.Any(h => h.Id == journalId
+                    && h.CompanyId == companyId
+                    && h.SourceSystem != null
+                    && h.Posted != true
+                    && h.GeneralLedgerHeaderId == null))
+            .ExecuteDelete();
+
+        var deleted = _db.JournalEntryHeaders
+            .Where(h => h.Id == journalId
+                && h.CompanyId == companyId
+                && h.SourceSystem != null
+                && h.Posted != true
+                && h.GeneralLedgerHeaderId == null)
+            .ExecuteDelete();
+
+        if (deleted != 1)
+        {
+            tx.Rollback();
+            var current = _db.JournalEntryHeaders
+                .AsNoTracking()
+                .FirstOrDefault(j => j.CompanyId == companyId && j.Id == journalId);
+            if (current == null)
+                throw new SourceJournalOperationException("not_found", $"Journal entry #{journalId} not found.", 404);
+            if (current.Posted == true || current.GeneralLedgerHeaderId.HasValue)
+                throw new SourceJournalOperationException("source_journal_posted", "Posted journals cannot be discarded.", 409);
+            throw new SourceJournalOperationException("not_a_source_journal", "Only imported source journals can be discarded.", 409);
+        }
+
         _db.AuditLogs.Add(new AuditLog
         {
             CompanyId = companyId,
@@ -282,7 +327,10 @@ public sealed class SourceJournalService
                 && j.SourceSystem == sourceSystem
                 && j.SourceKey == sourceKey);
 
-    private static SourceJournalDraftResult MatchOrConflict(JournalEntryHeader existing, string requestedFingerprint)
+    private static SourceJournalDraftResult MatchOrConflict(
+        JournalEntryHeader existing,
+        string requestedFingerprint,
+        string? requestedReferenceNo)
     {
         var existingFingerprint = AccessJournalFingerprint.Compute(
             existing.Date,
@@ -292,7 +340,12 @@ public sealed class SourceJournalService
             existing.SourceSystem,
             existing.SourceKey);
 
-        if (string.Equals(existingFingerprint, requestedFingerprint, StringComparison.Ordinal))
+        var sameReference = string.Equals(
+            existing.ReferenceNo ?? string.Empty,
+            requestedReferenceNo ?? string.Empty,
+            StringComparison.Ordinal);
+
+        if (string.Equals(existingFingerprint, requestedFingerprint, StringComparison.Ordinal) && sameReference)
         {
             return new SourceJournalDraftResult(
                 existing.Id,

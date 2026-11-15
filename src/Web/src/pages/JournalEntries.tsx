@@ -67,6 +67,17 @@ export function canPostJournal(entry: JournalEntry) {
   return !entry.posted && entry.journalEntryLines.length >= 2 && totals.debit > 0 && totals.debit === totals.credit
     && entry.journalEntryLines.every(line => line.accountId > 0 && Number.isFinite(line.amount) && line.amount > 0 && [1, 2].includes(line.drCr));
 }
+
+export function emptyJournalMessage(status: 'draft' | 'posted', sourceFilter: 'all' | 'imported' | 'manual'): string {
+  if (status === 'posted') {
+    if (sourceFilter === 'imported') return 'No imported posted journals.';
+    if (sourceFilter === 'manual') return 'No manual posted journals.';
+    return 'No posted journals.';
+  }
+  if (sourceFilter === 'imported') return 'No imported drafts.';
+  if (sourceFilter === 'manual') return 'No draft manual journals.';
+  return 'No draft journals.';
+}
 const JOURNAL_POST_OPERATION_KEY = 'financials.journal.post';
 const APPROVAL_REQUEST_HEADER = 'X-Approval-Request-Id';
 const APPROVER_USER_HEADER = 'X-Approved-By-User-Id';
@@ -484,7 +495,7 @@ export default function JournalEntries() {
               <td className="p-4">{entry.referenceNo}</td><td className="p-4">{entry.memo}</td><td className="p-4">{entry.posted ? 'Posted' : 'Draft'}</td>
             </tr>)}</tbody>
           </table>
-          {visibleEntries.length === 0 && <p role="status" className="p-4">No {status} manual journals.</p>}
+          {visibleEntries.length === 0 && <p role="status" className="p-4">{emptyJournalMessage(status, sourceFilter)}</p>}
         </div>
       </>}
   </div>;

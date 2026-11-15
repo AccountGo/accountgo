@@ -179,30 +179,76 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
     {
         var lockedDateId = CreateSourceDraft("http8:lockdate:v1", new DateTime(2026, 6, 15));
         var closedYearId = CreateSourceDraft("http8:closedyr:v1", new DateTime(2025, 6, 15));
+        var reconciledPeriodId = CreateSourceDraft("http8:reconciled:v1", new DateTime(2026, 8, 15));
 
         using (var scope = _host.Factory.Services.CreateScope())
         {
             var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
-            using var _ = tenant.Impersonate(_companyId, Org, CompanyMemberRole.Owner);
+            using var _ = tenant.ImpersonateUser(_companyId, _owner.Id, Org, CompanyMemberRole.Owner);
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            var setting = db.CompanySettings.Single();
-            setting.BooksLockedThrough = new DateTime(2026, 6, 30);
-            var fy2025 = db.FinancialYears.Single(y => y.StartDate.Year == 2025);
-            fy2025.IsActive = false;
-            fy2025.ClosedAt = DateTime.UtcNow;
+            foreach (var fy2025 in db.FinancialYears.Where(y => y.StartDate.Year == 2025).ToList())
+            {
+                fy2025.IsActive = false;
+                fy2025.ClosedAt = DateTime.UtcNow;
+            }
+            db.SaveChanges();
+        }
+
+        // Closed period (2025) must fail before BooksLockedThrough or bank reconciliation is set
+        var closedResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = closedYearId, journalDate = "2025-06-15" });
+        Assert.Equal(HttpStatusCode.BadRequest, closedResp.StatusCode);
+
+        using (var scope = _host.Factory.Services.CreateScope())
+        {
+            var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using var _ = tenant.ImpersonateUser(_companyId, _owner.Id, Org, CompanyMemberRole.Owner);
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var bank = new Bank
+            {
+                CompanyId = _companyId,
+                Name = "Operating Bank",
+                AccountId = _cashAccountId,
+                Type = BankTypes.CheckingAccount
+            };
+            db.Banks.Add(bank);
+            db.SaveChanges();
+
+            db.BankReconciliations.Add(new BankReconciliation
+            {
+                CompanyId = _companyId,
+                BankId = bank.Id,
+                StatementEndDate = new DateTime(2026, 8, 31),
+                StatementEndingBalance = 1000m,
+                Status = BankReconciliationStatuses.Finished,
+                FinishedAt = DateTime.UtcNow
+            });
+            db.SaveChanges();
+        }
+
+        // Reconciled bank period guard (2026-08-15 <= 2026-08-31)
+        var reconciledResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = reconciledPeriodId, journalDate = "2026-08-15" });
+        Assert.Equal(HttpStatusCode.Conflict, reconciledResp.StatusCode);
+        Assert.Equal("RECONCILED_PERIOD_CONFIRM_REQUIRED", (await AuditTestHost.Json(reconciledResp)).GetProperty("code").GetString());
+
+        // Books lock (2026-06-15 <= 2026-06-30)
+        using (var scope = _host.Factory.Services.CreateScope())
+        {
+            var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using var _ = tenant.ImpersonateUser(_companyId, _owner.Id, Org, CompanyMemberRole.Owner);
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.CompanySettings.Single().BooksLockedThrough = new DateTime(2026, 6, 30);
             db.SaveChanges();
         }
 
         var lockedResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = lockedDateId, journalDate = "2026-06-15" });
         Assert.Equal(HttpStatusCode.Forbidden, lockedResp.StatusCode);
-
-        var closedResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = closedYearId, journalDate = "2025-06-15" });
-        Assert.NotEqual(HttpStatusCode.OK, closedResp.StatusCode);
     }
 
     [Fact]
     public async Task PostBatch_HandlesMixedIdsIndependently()
     {
+        // Draft whose account is archived after creation -> fails inside UpdateJournalEntry (R3)
+        var reconciledDraft = CreateSourceDraft("http9:reconciled:v1", new DateTime(2026, 8, 15));
         var valid1 = CreateSourceDraft("http9:valid1:v1", new DateTime(2026, 11, 10));
         var alreadyPosted = CreateSourceDraft("http9:posted:v1", new DateTime(2026, 11, 10));
         Assert.Equal(HttpStatusCode.OK, (await Send("PostJournalEntry", HttpMethod.Post, new { id = alreadyPosted, journalDate = "2026-11-10" })).StatusCode);
@@ -211,29 +257,118 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
         using (var scope = _host.Factory.Services.CreateScope())
         {
             var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
-            using var _ = tenant.Impersonate(_companyId, Org, CompanyMemberRole.Owner);
+            using var _ = tenant.ImpersonateUser(_companyId, _owner.Id, Org, CompanyMemberRole.Owner);
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
             db.CompanySettings.Single().BooksLockedThrough = new DateTime(2026, 5, 31);
+            var bank = new Bank
+            {
+                CompanyId = _companyId,
+                Name = "Batch Guard Bank",
+                AccountId = _cashAccountId,
+                Type = BankTypes.CheckingAccount
+            };
+            db.Banks.Add(bank);
+            db.SaveChanges();
+            db.BankReconciliations.Add(new BankReconciliation
+            {
+                CompanyId = _companyId,
+                BankId = bank.Id,
+                StatementEndDate = new DateTime(2026, 8, 31),
+                StatementEndingBalance = 1000m,
+                Status = BankReconciliationStatuses.Finished,
+                FinishedAt = DateTime.UtcNow
+            });
             db.SaveChanges();
         }
 
         var otherCompanyDraft = CreateSourceDraft("http9:other:v1", new DateTime(2026, 11, 10), companyId: _otherCompanyId, orgSlug: OtherOrg);
         var nonExistent = 999999;
 
+        // Place in-service failure (reconciled period guard inside UpdateJournalEntry) before valid1, and include duplicate valid1 (R3, R9)
         var batchResp = await Send("JournalEntries/PostBatch", HttpMethod.Post, new
         {
-            ids = new[] { valid1, alreadyPosted, otherCompanyDraft, lockedPeriod, nonExistent }
+            ids = new[] { reconciledDraft, valid1, valid1, alreadyPosted, otherCompanyDraft, lockedPeriod, nonExistent }
         });
 
         Assert.Equal(HttpStatusCode.OK, batchResp.StatusCode);
         var arr = await AuditTestHost.Json(batchResp);
+        Assert.Equal(6, arr.GetArrayLength());
         var items = arr.EnumerateArray().ToDictionary(e => e.GetProperty("id").GetInt32());
 
+        Assert.False(items[reconciledDraft].GetProperty("posted").GetBoolean());
+        Assert.Equal("reconciled_period_confirmation_required", items[reconciledDraft].GetProperty("code").GetString());
+
         Assert.True(items[valid1].GetProperty("posted").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, items[valid1].GetProperty("code").ValueKind);
+
         Assert.False(items[alreadyPosted].GetProperty("posted").GetBoolean());
+        Assert.Equal("workflow_state_invalid", items[alreadyPosted].GetProperty("code").GetString());
+
         Assert.False(items[otherCompanyDraft].GetProperty("posted").GetBoolean());
+        Assert.Equal("foreign_resource", items[otherCompanyDraft].GetProperty("code").GetString());
+
         Assert.False(items[lockedPeriod].GetProperty("posted").GetBoolean());
+        Assert.Equal("workflow_state_invalid", items[lockedPeriod].GetProperty("code").GetString());
+
         Assert.False(items[nonExistent].GetProperty("posted").GetBoolean());
+        Assert.Equal("foreign_resource", items[nonExistent].GetProperty("code").GetString());
+
+        using (var verifyScope = _host.Factory.Services.CreateScope())
+        {
+            var tenant = verifyScope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using var _ = tenant.ImpersonateUser(_companyId, _owner.Id, Org, CompanyMemberRole.Owner);
+            var db = verifyScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var failedHeader = db.JournalEntryHeaders.AsNoTracking().Single(h => h.Id == reconciledDraft);
+            Assert.NotEqual(true, failedHeader.Posted);
+            Assert.Null(failedHeader.GeneralLedgerHeaderId);
+        }
+    }
+
+    [Fact]
+    public async Task PostBatch_ReviewRequired_ReturnsRealSeparationOfDutiesReasonForManualDraft()
+    {
+        var getSettings = await _host.Send(HttpMethod.Get, "/api/organizations/current/operating-settings", null, _owner.Token, Org);
+        Assert.Equal(HttpStatusCode.OK, getSettings.StatusCode);
+        var rev = (await AuditTestHost.Json(getSettings)).GetProperty("policyRevision").GetInt32();
+
+        var setPolicy = await _host.Send(
+            HttpMethod.Post,
+            "/api/organizations/current/operating-settings/journal-approval-policy",
+            new { expectedPolicyRevision = rev, journalWorkflow = "IndependentReviewerRequired" },
+            _owner.Token,
+            Org);
+        Assert.Equal(HttpStatusCode.OK, setPolicy.StatusCode);
+
+        var saveManual = await Send("SaveJournalEntry", HttpMethod.Post, new
+        {
+            id = 0,
+            journalDate = "2026-11-10",
+            voucherType = (int)JournalVoucherTypes.Other,
+            referenceNo = "MAN-SOD-1",
+            memo = "Manual SoD draft",
+            journalEntryLines = new[]
+            {
+                new { id = 0, accountId = _cashAccountId, drCr = 1, amount = 50m, memo = "Dr" },
+                new { id = 0, accountId = _revenueAccountId, drCr = 2, amount = 50m, memo = "Cr" }
+            }
+        });
+        Assert.Equal(HttpStatusCode.OK, saveManual.StatusCode);
+        var manualId = (await AuditTestHost.Json(saveManual)).GetProperty("id").GetInt32();
+        var importedId = CreateSourceDraft("http-sod:imported:v1", new DateTime(2026, 11, 10));
+
+        var batchResp = await Send("JournalEntries/PostBatch", HttpMethod.Post, new
+        {
+            ids = new[] { manualId, importedId }
+        });
+        Assert.Equal(HttpStatusCode.OK, batchResp.StatusCode);
+
+        var items = (await AuditTestHost.Json(batchResp)).EnumerateArray().ToDictionary(e => e.GetProperty("id").GetInt32());
+        Assert.False(items[manualId].GetProperty("posted").GetBoolean());
+        Assert.Equal("separation_of_duties_violation", items[manualId].GetProperty("code").GetString());
+        Assert.Contains("prepared", items[manualId].GetProperty("message").GetString() ?? "", StringComparison.OrdinalIgnoreCase);
+
+        Assert.True(items[importedId].GetProperty("posted").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, items[importedId].GetProperty("code").ValueKind);
     }
 
     [Fact]

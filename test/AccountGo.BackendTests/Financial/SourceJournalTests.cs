@@ -150,6 +150,53 @@ public sealed class SourceJournalTests : IAsyncLifetime
         var stored = db.JournalEntryHeaders.Include(j => j.JournalEntryLines).Single(j => j.Id == first.JournalId);
         Assert.Equal("Original", stored.Memo);
         Assert.All(stored.JournalEntryLines, l => Assert.Equal(100m, l.Amount));
+
+        // Same content/fingerprint but different ReferenceNo must also conflict (R8)
+        var refConflict = svc.CreateDraft(new SourceJournalDraftRequest(
+            _companyId,
+            "example-feed",
+            "test3:v1",
+            "system:example-importer",
+            new DateTime(2026, 11, 10),
+            "Original",
+            "REF-CHANGED",
+            new[]
+            {
+                new SourceJournalDraftLine(_cashAccountId, DrOrCrSide.Dr, 100m, "Dr"),
+                new SourceJournalDraftLine(_revenueAccountId, DrOrCrSide.Cr, 100m, "Cr")
+            }));
+        Assert.Equal(SourceJournalDraftState.Conflict, refConflict.State);
+        Assert.Equal("source_key_conflict", refConflict.Code);
+
+        // Null vs empty ReferenceNo is treated as equal
+        var nullRefDraft = svc.CreateDraft(new SourceJournalDraftRequest(
+            _companyId,
+            "example-feed",
+            "test3:nullref",
+            "system:example-importer",
+            new DateTime(2026, 11, 10),
+            "Original",
+            null,
+            new[]
+            {
+                new SourceJournalDraftLine(_cashAccountId, DrOrCrSide.Dr, 100m, "Dr"),
+                new SourceJournalDraftLine(_revenueAccountId, DrOrCrSide.Cr, 100m, "Cr")
+            }));
+        var emptyRefRetry = svc.CreateDraft(new SourceJournalDraftRequest(
+            _companyId,
+            "example-feed",
+            "test3:nullref",
+            "system:example-importer",
+            new DateTime(2026, 11, 10),
+            "Original",
+            string.Empty,
+            new[]
+            {
+                new SourceJournalDraftLine(_cashAccountId, DrOrCrSide.Dr, 100m, "Dr"),
+                new SourceJournalDraftLine(_revenueAccountId, DrOrCrSide.Cr, 100m, "Cr")
+            }));
+        Assert.Equal(SourceJournalDraftState.Existing, emptyRefRetry.State);
+        Assert.Equal(nullRefDraft.JournalId, emptyRefRetry.JournalId);
     }
 
     [Fact]
@@ -344,5 +391,124 @@ public sealed class SourceJournalTests : IAsyncLifetime
         }
 
         Assert.Contains("IX_JournalEntryHeader_CompanyId_SourceSystem_SourceKey", idxNames);
+    }
+
+    [Fact]
+    public void Discard_WhenPostedConcurrentlyBetweenReadAndDelete_ReturnsConflictAndPreservesLedger()
+    {
+        int draftId;
+        using (var setupScope = _host.Factory.Services.CreateScope())
+        {
+            var tenant = setupScope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using var _ = tenant.ImpersonateUser(_companyId, _user.Id, Org, CompanyMemberRole.Owner);
+            draftId = setupScope.ServiceProvider.GetRequiredService<SourceJournalService>()
+                .CreateDraft(MakeRequest(sourceKey: "test:discard-race:v1"))
+                .JournalId;
+        }
+
+        try
+        {
+            SourceJournalTestGate.BeforeDiscardDelete = (cid, jid) =>
+            {
+                if (cid != _companyId || jid != draftId) return;
+                using var raceScope = _host.Factory.Services.CreateScope();
+                var raceTenant = raceScope.ServiceProvider.GetRequiredService<ITenantContext>();
+                using var __ = raceTenant.ImpersonateUser(_companyId, _user.Id, Org, CompanyMemberRole.Owner);
+                var fin = raceScope.ServiceProvider.GetRequiredService<Services.Financial.IFinancialService>();
+                var je = fin.GetJournalEntry(jid, false);
+                fin.UpdateJournalEntry(je, posted: true);
+            };
+
+            using var discardScope = _host.Factory.Services.CreateScope();
+            var discardTenant = discardScope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using var ___ = discardTenant.ImpersonateUser(_companyId, _user.Id, Org, CompanyMemberRole.Owner);
+            var svc = discardScope.ServiceProvider.GetRequiredService<SourceJournalService>();
+
+            var ex = Assert.Throws<SourceJournalOperationException>(() => svc.Discard(_companyId, draftId, _user.Id));
+            Assert.Equal("source_journal_posted", ex.Code);
+
+            var db = discardScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var header = db.JournalEntryHeaders.AsNoTracking().SingleOrDefault(j => j.Id == draftId);
+            Assert.NotNull(header);
+            Assert.True(header!.Posted);
+            Assert.NotNull(header.GeneralLedgerHeaderId);
+            Assert.True(db.GeneralLedgerHeaders.AsNoTracking().Any(g => g.Id == header.GeneralLedgerHeaderId));
+            Assert.False(db.AuditLogs.AsNoTracking().Any(a => a.TableName == "__SourceJournalDiscarded" && a.RecordId == draftId.ToString()));
+        }
+        finally
+        {
+            SourceJournalTestGate.Reset();
+        }
+    }
+
+    [Fact]
+    public void CreateDraft_UniqueViolationRace_HandlesExistingAndConflictAndKeepsContextUsable()
+    {
+        try
+        {
+            var raceExistingId = 0;
+            var firedKeys = new HashSet<string>(StringComparer.Ordinal);
+            SourceJournalTestGate.BeforeCreateInsert = (cid, sys, key) =>
+            {
+                if (cid != _companyId || (key != "test:race-same:v1" && key != "test:race-diff:v1")) return;
+                if (!firedKeys.Add(key)) return;
+                using var raceScope = _host.Factory.Services.CreateScope();
+                var raceTenant = raceScope.ServiceProvider.GetRequiredService<ITenantContext>();
+                using var __ = raceTenant.ImpersonateUser(_companyId, _user.Id, Org, CompanyMemberRole.Owner);
+                raceExistingId = raceScope.ServiceProvider.GetRequiredService<SourceJournalService>()
+                    .CreateDraft(MakeRequest(sourceKey: key, amount: 100m, memo: "Winner"))
+                    .JournalId;
+            };
+
+            using var scope = _host.Factory.Services.CreateScope();
+            var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using var _ = tenant.ImpersonateUser(_companyId, _user.Id, Org, CompanyMemberRole.Owner);
+            var svc = scope.ServiceProvider.GetRequiredService<SourceJournalService>();
+
+            // Same content after unique constraint violation -> Existing with winner's id
+            var sameResult = svc.CreateDraft(MakeRequest(sourceKey: "test:race-same:v1", amount: 100m, memo: "Winner"));
+            Assert.False(sameResult.Created);
+            Assert.Equal(SourceJournalDraftState.Existing, sameResult.State);
+            Assert.Equal(raceExistingId, sameResult.JournalId);
+
+            // Different content after unique constraint violation -> Conflict
+            var diffResult = svc.CreateDraft(MakeRequest(sourceKey: "test:race-diff:v1", amount: 200m, memo: "Loser"));
+            Assert.False(diffResult.Created);
+            Assert.Equal(SourceJournalDraftState.Conflict, diffResult.State);
+            Assert.Equal("source_key_conflict", diffResult.Code);
+            Assert.Equal(raceExistingId, diffResult.JournalId);
+
+            // Service's DbContext must still be usable for a subsequent CreateDraft
+            SourceJournalTestGate.Reset();
+            var followup = svc.CreateDraft(MakeRequest(sourceKey: "test:race-followup:v1"));
+            Assert.True(followup.Created);
+
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            Assert.Equal(1, db.JournalEntryHeaders.AsNoTracking().Count(j => j.SourceSystem == "example-feed" && j.SourceKey == "test:race-same:v1"));
+            Assert.Equal(1, db.JournalEntryHeaders.AsNoTracking().Count(j => j.SourceSystem == "example-feed" && j.SourceKey == "test:race-diff:v1"));
+        }
+        finally
+        {
+            SourceJournalTestGate.Reset();
+        }
+    }
+
+    [Fact]
+    public void CreateDraft_RecordsSourceKeyInRecordChangeAudit()
+    {
+        using var scope = _host.Factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        using var _ = tenant.ImpersonateUser(_companyId, _user.Id, Org, CompanyMemberRole.Owner);
+        var svc = scope.ServiceProvider.GetRequiredService<SourceJournalService>();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+        var result = svc.CreateDraft(MakeRequest(sourceKey: "test:audit-source-key:v1"));
+        var recordChange = db.RecordChanges
+            .AsNoTracking()
+            .Single(r => r.EntityType == "JournalEntryHeader" && r.EntityId == result.JournalId && r.Action == "Added");
+
+        using var doc = System.Text.Json.JsonDocument.Parse(recordChange.ChangesJson);
+        Assert.Equal("example-feed", doc.RootElement.GetProperty("SourceSystem").GetString());
+        Assert.Equal("test:audit-source-key:v1", doc.RootElement.GetProperty("SourceKey").GetString());
     }
 }
