@@ -5,6 +5,8 @@
 using System;
 using System.Collections.Generic;
 using Core.Domain.Recurring;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Services.Recurring
 {
@@ -27,6 +29,7 @@ namespace Services.Recurring
         public decimal Quantity { get; set; } = 1m;
         public decimal Amount { get; set; }
         public decimal Discount { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringDiscountType DiscountType { get; set; } = RecurringDiscountType.Percentage;
         public int? TaxId { get; set; }
         public int? AccountId { get; set; }
@@ -39,13 +42,16 @@ namespace Services.Recurring
         public int Id { get; set; }
         public int CustomerId { get; set; }
         public string Name { get; set; } = "";
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringCadence Cadence { get; set; } = RecurringCadence.Monthly;
         public int Interval { get; set; } = 1;
         public int? DayOfMonth { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public int? MaxOccurrences { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringAction Action { get; set; } = RecurringAction.CreateDraft;
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringServicePeriodMode ServicePeriodMode { get; set; } = RecurringServicePeriodMode.CurrentMonth;
         public int? PaymentTermId { get; set; }
         public string? Notes { get; set; }
@@ -63,6 +69,7 @@ namespace Services.Recurring
         public decimal Quantity { get; set; }
         public decimal Amount { get; set; }
         public decimal Discount { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringDiscountType DiscountType { get; set; }
         public int? TaxId { get; set; }
         public int? AccountId { get; set; }
@@ -77,9 +84,12 @@ namespace Services.Recurring
         public int CustomerId { get; set; }
         public string? CustomerName { get; set; }
         public bool CustomerArchived { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringScheduleStatus Status { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringCadence Cadence { get; set; }
         public int Interval { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringAction Action { get; set; }
         public DateTime? NextRunDate { get; set; }
         public DateTime StartDate { get; set; }
@@ -100,7 +110,9 @@ namespace Services.Recurring
         public int CustomerId { get; set; }
         public string? CustomerName { get; set; }
         public bool CustomerArchived { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringScheduleStatus Status { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringCadence Cadence { get; set; }
         public int Interval { get; set; }
         public int? DayOfMonth { get; set; }
@@ -109,7 +121,9 @@ namespace Services.Recurring
         public int? MaxOccurrences { get; set; }
         public DateTime? NextRunDate { get; set; }
         public int OccurrenceCount { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringAction Action { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringServicePeriodMode ServicePeriodMode { get; set; }
         public int? PaymentTermId { get; set; }
         public string? Notes { get; set; }
@@ -130,6 +144,7 @@ namespace Services.Recurring
         public DateTime PeriodStart { get; set; }
         public DateTime PeriodEnd { get; set; }
         public DateTime DocumentDate { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public RecurringOccurrenceStatus Status { get; set; }
         public int? SalesInvoiceId { get; set; }
         public string? ErrorCode { get; set; }

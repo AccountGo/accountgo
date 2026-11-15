@@ -1,6 +1,7 @@
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { normalizeRecurringDetail, normalizeRecurringOccurrence } from '../lib/recurring';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import {
@@ -53,8 +54,8 @@ export const RecurringScheduleDetailPage: React.FC = () => {
         return;
       }
       if (!schedRes.ok) throw new Error(`Failed to load the schedule (${schedRes.status}).`);
-      setSchedule(await schedRes.json());
-      setOccurrences(occRes.ok ? await occRes.json() : []);
+      setSchedule(normalizeRecurringDetail(await schedRes.json()));
+      setOccurrences(occRes.ok ? (await occRes.json()).map(normalizeRecurringOccurrence) : []);
     } catch (err: any) {
       setError(err.message || 'The schedule could not be loaded.');
     } finally {
