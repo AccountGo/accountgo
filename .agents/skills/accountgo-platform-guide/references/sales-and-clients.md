@@ -5,7 +5,7 @@ This reference covers all user workflows under **Invoices & Sales** (`/org/{orgS
 ## Module & Permission Requirements
 
 - **Required Module**: `sales` (for Invoices & Clients); `sales` or `purchases` (for Products & services).
-- **Permissions** (`Owner` and `Admin` workspace roles have all permissions automatically; `Member` users need these granted via a Security Role):
+- **Permissions** (the workspace role does not grant these: `Owner`, `Admin` and `Member` each need them through a functional access profile or Security Role):
   - `sales.customers.view` — View the **Clients** tab and client detail pages.
   - `sales.customers.manage` — Create, edit, archive, restore, or delete clients and client contacts.
   - `sales.invoices.view` — View the **Invoices & Sales** area and invoice list/detail pages.

@@ -13,10 +13,14 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
+<<<<<<< HEAD
 - The assistant can run a set of checks over a period when you ask it to review your books: whether what clients and vendors owe agrees with the ledger, invoices and bills missing from the ledger, duplicate bills, manual journals worth a second look, and bank accounts not reconciled to the period end. Each result links to the records behind it.
 - The assistant can pick out ledger entries by amount or by text in the description or account, and for a manual journal can tell members who may view record history who prepared it, who posted it and when.
 - The assistant can now tell you what clients owed you and what you owed vendors at the end of any past day, such as a month end or year end, and compare it with the balance sheet at that date.
 - The assistant can read fiscal years, tax reports and filings, changes in equity, sales receipts, bank outstanding aging, workspace members and roles, record history, and stock movements, with the same access rules as the app.
+=======
+- The assistant can review your books: it checks the reports, bank reconciliations, invoices, bills and manual journals for likely errors, lists what it found with links to each record, and says what it could not check. It can also help answer an accountant's or auditor's requests. This is a review of your own records, not an audit.
+>>>>>>> origin/feat/assistant-books-review-skill-tools
 - Imported journals: journals created by an importer show where they came from, can't be edited, can be discarded before posting, and can be posted together from the journal list. The same imported item is never recorded twice.
 - Optional fiscal-year sales invoice numbering in Settings → Invoices: configure a format pattern using `{FY}` and `{####}` (for example `INV-{FY}-{####}`) with a forward-only starting number and live preview across fiscal years, or leave the format blank for continuous numbering.
 - Tax page: see output tax, input tax and the net payable for each monthly or quarterly tax period, by tax code, with the source invoices and bills and a CSV export. Tax periods are set in Settings → Taxes and don't have to match your fiscal year. Cash-basis workspaces see tax when invoices and bills are paid.
