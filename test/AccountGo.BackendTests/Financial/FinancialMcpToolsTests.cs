@@ -478,7 +478,7 @@ namespace AccountGo.BackendTests.Financial
             _mockFinancial.Setup(s => s.GetGeneralLedgerTransactions(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<DocumentTypes?>(),
-                10, 20))
+                10, 20, It.IsAny<string?>(), It.IsAny<decimal?>(), It.IsAny<decimal?>()))
                 .Returns(page);
 
             var tools = CreateTools();
@@ -532,7 +532,7 @@ namespace AccountGo.BackendTests.Financial
                 s => s.GetGeneralLedgerTransactions(
                     It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                     It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<DocumentTypes?>(),
-                    It.IsAny<int>(), It.IsAny<int>()),
+                    It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<decimal?>(), It.IsAny<decimal?>()),
                 Times.Never);
         }
 

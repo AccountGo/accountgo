@@ -98,7 +98,7 @@ namespace Api.Mcp.Tools
         }
 
         [McpServerTool(Name = "get_journal_entry", Title = "Get Journal Entry", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
-        [Description("Returns one journal entry with its lines (account code and name, debit or credit, amount, memo), totals, reference, memo and posted state. Use the id from search_journal_entries or a GL transaction's sourceDocumentId for document type JournalEntry. Requires the Financials module and permission to view journals.")]
+        [Description("Returns one journal entry with its lines (account code and name, debit or credit, amount, memo), totals, reference, memo and posted state. For a member who may view record history it also returns attribution: who prepared it, who posted it and when, and whether the person who posted also prepared it; posted details are empty for journals posted before history was kept. Use the id from search_journal_entries or a GL transaction's sourceDocumentId for document type JournalEntry. Requires the Financials module and permission to view journals.")]
         public Task<WorkspaceDataMcpResponse> GetJournalEntry(
             [Description("The journal entry id.")] int journalEntryId,
             CancellationToken cancellationToken = default) =>
@@ -162,6 +162,7 @@ namespace Api.Mcp.Tools
                 entry.AdjustsFiscalYearCode,
                 TotalDebit = entry.debitAmount,
                 TotalCredit = entry.creditAmount,
+                entry.Attribution,
                 Lines = entry.JournalEntryLines.Select(l =>
                 {
                     accounts.TryGetValue(l.AccountId ?? 0, out var account);

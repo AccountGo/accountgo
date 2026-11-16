@@ -272,6 +272,14 @@ namespace Api.Controllers
                 journalEntryDto.ReadyForPosting = true;
             }
 
+            // Who prepared and posted is record history, so it follows the same permission as the History panel.
+            var attribution = HttpContext?.RequestServices?.GetService(typeof(Api.Service.JournalAttributionReader)) as Api.Service.JournalAttributionReader;
+            if (attribution != null && _tenantContext.CompanyId.HasValue
+                && AuthService.AuthorizeRequirement(requiredPermissionsAll: new[] { SystemPermissions.AuditLogsView }).Allowed)
+            {
+                journalEntryDto.Attribution = attribution.Read(_tenantContext.CompanyId.Value, id);
+            }
+
             return new ObjectResult(journalEntryDto);
         }
 
@@ -775,7 +783,10 @@ namespace Api.Controllers
             int? transactionNo = null,
             Core.Domain.DocumentTypes? documentType = null,
             int skip = 0,
-            int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize)
+            int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize,
+            string? search = null,
+            decimal? minAmount = null,
+            decimal? maxAmount = null)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalView, SystemPermissions.FinancialsJournalView, out var denied))
                 return (ActionResult)denied!;
@@ -788,7 +799,7 @@ namespace Api.Controllers
                 return BadRequest(new { message = $"Provide skip >= 0 and take between 1 and {Services.Financial.FinancialService.GeneralLedgerMaxPageSize}." });
             try
             {
-                return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take));
+                return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take, search, minAmount, maxAmount));
             }
             catch (ArgumentException ex)
             {

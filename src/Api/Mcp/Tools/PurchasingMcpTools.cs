@@ -169,6 +169,55 @@ namespace Api.Mcp.Tools
                 link: PagePath("purchases"));
         }
 
+        [McpServerTool(Name = "search_bill_payments", Title = "Search Bill Payments", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+        [Description("Lists payments made on vendor bills, newest first, each with its date, amount, method, reference and the bill it settled (bill number, vendor invoice number, bill date, vendor). Filter by payment date range or vendor. Use it to see what was paid after a period end and which period the bill belongs to. Voided payments are left out unless includeVoided is true. Requires the Purchases module and permission to view bills.")]
+        public async Task<WorkspaceDataMcpResponse> SearchBillPayments(
+            [Description("Optional vendor id.")] int? vendorId = null,
+            [Description("Optional earliest payment date (e.g. '2027-01-01').")] string? fromDate = null,
+            [Description("Optional latest payment date (e.g. '2027-01-31').")] string? toDate = null,
+            [Description("Include voided payments. Defaults to false.")] bool includeVoided = false,
+            [Description("Records to skip. Defaults to 0.")] int skip = 0,
+            [Description("Records to return (1-100). Defaults to 25.")] int take = DefaultTake,
+            CancellationToken cancellationToken = default)
+        {
+            ValidatePaging(skip, take);
+            var from = ParseDate(fromDate, nameof(fromDate));
+            var to = ParseDate(toDate, nameof(toDate));
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+                throw new ArgumentException("The earliest date must not be after the latest date.", nameof(fromDate));
+
+            var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorId),
+                new Dictionary<string, object?> { ["vendorId"] = vendorId });
+            if (!read.Succeeded) return Refused("billPayments", read);
+
+            var payments = ((IEnumerable<Dto.Purchasing.Bill>?)read.Value ?? Array.Empty<Dto.Purchasing.Bill>())
+                .SelectMany(b => (b.Payments ?? new List<Dto.Purchasing.BillPayment>()).Select(p => new { Bill = b, Payment = p }))
+                .Where(x => includeVoided || !x.Payment.IsVoid)
+                .Where(x => (!from.HasValue || x.Payment.Date.Date >= from.Value) && (!to.HasValue || x.Payment.Date.Date <= to.Value))
+                .OrderByDescending(x => x.Payment.Date).ThenByDescending(x => x.Payment.Id)
+                .Select(x => (object)new
+                {
+                    x.Payment.Id,
+                    x.Payment.No,
+                    x.Payment.Date,
+                    x.Payment.Amount,
+                    x.Payment.PaymentMethod,
+                    x.Payment.ReferenceNo,
+                    x.Payment.AccountName,
+                    x.Payment.IsVoid,
+                    x.Payment.VoidedAt,
+                    BillId = x.Bill.Id,
+                    BillNo = x.Bill.No,
+                    x.Bill.VendorInvoiceNo,
+                    BillDate = x.Bill.Date,
+                    x.Bill.VendorId,
+                    x.Bill.VendorName,
+                    Link = PagePath($"purchases/{x.Bill.Id}")
+                })
+                .ToList();
+            return Page("billPayments", payments, skip, take, link: PagePath("purchases"));
+        }
+
         private object BillSummary(Dto.Purchasing.Bill b) => new
         {
             b.Id,

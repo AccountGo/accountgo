@@ -162,7 +162,8 @@ namespace Services.Financial
         /// <inheritdoc />
         public Dto.Financial.GeneralLedgerTransactionPage GetGeneralLedgerTransactions(
             DateTime? from = null, DateTime? to = null, string accountCode = null,
-            int? transactionNo = null, DocumentTypes? documentType = null, int skip = 0, int take = GeneralLedgerDefaultPageSize)
+            int? transactionNo = null, DocumentTypes? documentType = null, int skip = 0, int take = GeneralLedgerDefaultPageSize,
+            string search = null, decimal? minAmount = null, decimal? maxAmount = null)
         {
             if (_auth == null)
                 return new Dto.Financial.GeneralLedgerTransactionPage { Items = new List<Dto.Financial.GeneralLedgerTransaction>(), TotalCount = 0 };
@@ -188,6 +189,20 @@ namespace Services.Financial
                 query = query.Where(h => h.GeneralLedgerLines.Any(l => l.Account.AccountCode == accountCode));
             if (transactionNo.HasValue) query = query.Where(h => h.Id == transactionNo.Value);
             if (documentType.HasValue) query = query.Where(h => h.DocumentType == documentType.Value);
+            if (minAmount.HasValue && maxAmount.HasValue && minAmount.Value > maxAmount.Value)
+                throw new ArgumentException("The smallest amount must not be larger than the largest amount.");
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+                query = query.Where(h =>
+                    (h.Description != null && h.Description.ToLower().Contains(term)) ||
+                    h.GeneralLedgerLines.Any(l => l.Account.AccountCode.ToLower().Contains(term) || l.Account.AccountName.ToLower().Contains(term)));
+            }
+            // A transaction's amount is its total debits, which equal its total credits.
+            if (minAmount.HasValue)
+                query = query.Where(h => h.GeneralLedgerLines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount) >= minAmount.Value);
+            if (maxAmount.HasValue)
+                query = query.Where(h => h.GeneralLedgerLines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount) <= maxAmount.Value);
 
             var totalCount = query.Count();
             var transactions = query.OrderByDescending(h => h.Date).ThenByDescending(h => h.Id)

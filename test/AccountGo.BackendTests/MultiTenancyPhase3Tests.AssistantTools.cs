@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Dto.Banking;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
@@ -27,7 +28,7 @@ namespace AccountGo.BackendTests
             "get_workspace_context", "get_dashboard_summary", "search_journal_entries", "get_journal_entry", "search_items",
             "get_tax_rates", "get_linked_entries", "search_clients", "get_client", "search_invoices", "get_invoice",
             "get_receivables_aging", "get_recurring_schedules", "search_vendors", "get_vendor", "search_bills", "get_bill",
-            "get_payables_aging", "list_bank_accounts", "get_bank_register", "get_bank_reconciliations", "get_bank_statement_lines"
+            "get_payables_aging", "search_bill_payments", "list_bank_accounts", "get_bank_register", "get_bank_reconciliations", "get_bank_statement_lines"
         };
 
         /// <summary>Calls a tool as Anter does and returns its structured result.</summary>
@@ -136,6 +137,51 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task AssistantTools_SelectJournalsByAmountAndText_AndShowWhoPreparedAndPosted()
+        {
+            var today = DateTime.UtcNow.Date;
+            await PostJournal(today, ("10120", 1, 50m), ("40100", 2, 50m));
+            await PostJournal(today, ("10120", 1, 5000m), ("40100", 2, 5000m));
+
+            async Task<List<JsonElement>> Journals(object arguments) =>
+                (await CallTool("get_general_ledger_transactions", arguments)).GetProperty("transactions").EnumerateArray().ToList();
+
+            Assert.Equal(2, (await Journals(new { documentType = "JournalEntry" })).Count);
+            var large = Assert.Single(await Journals(new { documentType = "JournalEntry", minAmount = 1000 }));
+            Assert.Equal(5000m, large.GetProperty("totalDebit").GetDecimal());
+            var small = Assert.Single(await Journals(new { documentType = "JournalEntry", maxAmount = 100 }));
+            Assert.Equal(50m, small.GetProperty("totalDebit").GetDecimal());
+            Assert.Equal(2, (await Journals(new { search = "DASHBOARD period" })).Count);
+            Assert.Empty(await Journals(new { search = "no such narration" }));
+
+            var bad = await McpRequest(new { jsonrpc = "2.0", id = 4, method = "tools/call",
+                @params = new { name = "get_general_ledger_transactions", arguments = new { minAmount = 10, maxAmount = 5 } } });
+            Assert.True(bad.GetProperty("result").GetProperty("isError").GetBoolean());
+
+            // Who prepared and posted is record history: hidden until the member may view it.
+            var journalId = large.GetProperty("sourceDocumentId").GetInt32();
+            var hidden = (await CallTool("get_journal_entry", new { journalEntryId = journalId })).GetProperty("data");
+            Assert.Equal(JsonValueKind.Null, hidden.GetProperty("attribution").ValueKind);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<Api.Data.ApiDbContext>();
+                var ownerMemberId = db.CompanyMembers.IgnoreQueryFilters().Single(m => m.CompanyId == _companyId && m.UserId == _ownerId).Id;
+                var viewerRoleId = db.SecurityRoles.IgnoreQueryFilters().Single(r => r.Name == "Auditor / Viewer").Id;
+                db.CompanyMemberSecurityRoles.Add(new Core.Domain.CompanyMemberSecurityRole { CompanyMemberId = ownerMemberId, SecurityRoleId = viewerRoleId });
+                await db.SaveChangesAsync();
+            }
+
+            var journal = (await CallTool("get_journal_entry", new { journalEntryId = journalId })).GetProperty("data");
+            var attribution = journal.GetProperty("attribution");
+            var preparer = Assert.Single(attribution.GetProperty("preparedBy").EnumerateArray());
+            Assert.Equal(_ownerId, preparer.GetProperty("userId").GetString());
+            Assert.Equal(_ownerId, attribution.GetProperty("postedByUserId").GetString());
+            Assert.True(attribution.GetProperty("postedByAPreparer").GetBoolean());
+            Assert.True(attribution.GetProperty("postedAt").GetDateTime() > DateTime.UtcNow.AddMinutes(-30));
+        }
+
+        [Fact]
         public async Task AssistantTools_ReadBillsVendorsAndPayables()
         {
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Assistant supplier" });
@@ -160,6 +206,19 @@ namespace AccountGo.BackendTests
 
             var aging = (await CallTool("get_payables_aging", new { })).GetProperty("data");
             Assert.Equal(120m, aging.GetProperty("total").GetDecimal());
+
+            // Payments are listed by their own date, with the bill each one settled.
+            await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
+                new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 20m, Date = DateTime.UtcNow, PaymentMethod = "Check", ReferenceNo = "CHK-20" }));
+            var today = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            var payments = await CallTool("search_bill_payments", new { fromDate = today, toDate = today });
+            Assert.Equal(1, payments.GetProperty("totalCount").GetInt32());
+            var payment = payments.GetProperty("data").EnumerateArray().Single();
+            Assert.Equal(20m, payment.GetProperty("amount").GetDecimal());
+            Assert.Equal(approved.Id, payment.GetProperty("billId").GetInt32());
+            Assert.Equal("SUP-778", payment.GetProperty("vendorInvoiceNo").GetString());
+            var tomorrow = DateTime.UtcNow.Date.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Equal(0, (await CallTool("search_bill_payments", new { fromDate = tomorrow })).GetProperty("totalCount").GetInt32());
         }
 
         [Fact]

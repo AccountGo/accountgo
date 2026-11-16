@@ -60,10 +60,14 @@ namespace Services.Financial
         /// <param name="documentType">Optional source document type.</param>
         /// <param name="skip">Headers to skip after filtering (default 0).</param>
         /// <param name="take">Page size (default 100, maximum 500).</param>
+        /// <param name="search">Optional text matched, ignoring case, against the description and the code or name of any account on the transaction.</param>
+        /// <param name="minAmount">Optional smallest transaction total (total debits) to include.</param>
+        /// <param name="maxAmount">Optional largest transaction total (total debits) to include.</param>
         /// <returns>Paged posted journals ordered by date and identifier descending.</returns>
         Dto.Financial.GeneralLedgerTransactionPage GetGeneralLedgerTransactions(
             DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null,
-            DocumentTypes? documentType = null, int skip = 0, int take = 100);
+            DocumentTypes? documentType = null, int skip = 0, int take = 100,
+            string search = null, decimal? minAmount = null, decimal? maxAmount = null);
         FinancialYear CurrentFiscalYear();
         /// <summary>
         /// Creates every missing open fiscal year from the books start through the year containing <paramref name="date"/>.
