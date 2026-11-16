@@ -843,6 +843,28 @@ namespace Api.Controllers
             return new ObjectResult(dto);
         }
 
+        /// <summary>The repeatable checks of a books review for a period. Each area is checked only when the caller may read it.</summary>
+        [HttpGet("BooksChecks")]
+        [RequireModule("financials", "reports")]
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public IActionResult BooksChecks(DateTime from, DateTime to)
+        {
+            if (from == default || to == default || from.Date > to.Date)
+                return BadRequest(new { message = "Provide the period to check: from must not be after to." });
+            if (HttpContext?.RequestServices?.GetService(typeof(Api.Service.BooksChecksService)) is not Api.Service.BooksChecksService checks
+                || !_tenantContext.CompanyId.HasValue)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Books checks are not available." });
+
+            bool May(string permission) => AuthService.AuthorizeRequirement(requiredPermissionsAll: new[] { permission }).Allowed;
+            var access = new Api.Service.BooksChecksAccess(
+                Ledger: May(SystemPermissions.FinancialsJournalView),
+                Sales: May(SystemPermissions.SalesInvoicesView),
+                Purchases: May(SystemPermissions.PurchasesBillsView),
+                Banking: May(SystemPermissions.BankingAccountsView),
+                History: May(SystemPermissions.AuditLogsView));
+            return Ok(checks.Run(_tenantContext.CompanyId.Value, from, to, access));
+        }
+
         [HttpGet("EquityStatement")]
         [RequirePermission(SystemPermissions.ReportsView)]
         [AuditDataAccess("equity_statement")]

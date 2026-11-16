@@ -13,6 +13,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
+- The assistant can run a set of checks over a period when you ask it to review your books: whether what clients and vendors owe agrees with the ledger, invoices and bills missing from the ledger, duplicate bills, manual journals worth a second look, and bank accounts not reconciled to the period end. Each result links to the records behind it.
 - The assistant can pick out ledger entries by amount or by text in the description or account, and for a manual journal can tell members who may view record history who prepared it, who posted it and when.
 - The assistant can now tell you what clients owed you and what you owed vendors at the end of any past day, such as a month end or year end, and compare it with the balance sheet at that date.
 - Imported journals: journals created by an importer show where they came from, can't be edited, can be discarded before posting, and can be posted together from the journal list. The same imported item is never recorded twice.
