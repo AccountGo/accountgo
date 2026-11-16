@@ -119,6 +119,26 @@ namespace Core.Domain.Sales
         public decimal BalanceDue() =>
             Math.Round(Math.Max(0, GrandTotal() - TotalAllocated()), 2, MidpointRounding.AwayFromZero);
 
+        /// <summary>
+        /// What was still owed on this invoice at the end of <paramref name="asOf"/>, following ledger dates: the invoice
+        /// counts from its own date, receipts from their allocation date, and a void from the date its reversal was posted.
+        /// </summary>
+        /// <param name="voidDate">The posting date of the void reversal, or null when a voided invoice never reached the ledger.</param>
+        public decimal BalanceDueAsOf(DateTime asOf, DateTime? voidDate)
+        {
+            var day = asOf.Date;
+            var allocations = CustomerAllocations ?? new List<CustomerAllocation>();
+            if (Date.Date > day)
+                return 0;
+            if (Status == SalesInvoiceStatus.Draft && allocations.Count == 0)
+                return 0;
+            if (Status == SalesInvoiceStatus.Void && (voidDate == null || voidDate.Value.Date <= day))
+                return 0;
+
+            var allocated = allocations.Where(a => a.Date.Date <= day).Sum(a => a.Amount);
+            return Math.Round(Math.Max(0, GrandTotal() - allocated), 2, MidpointRounding.AwayFromZero);
+        }
+
         public bool IsFullPaid() =>
             TotalAllocated() >= GrandTotal() - 0.005m;
 

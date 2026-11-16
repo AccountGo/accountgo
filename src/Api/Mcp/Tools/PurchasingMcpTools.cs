@@ -152,11 +152,26 @@ namespace Api.Mcp.Tools
         }
 
         [McpServerTool(Name = "get_payables_aging", Title = "Get Payables Aging", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
-        [Description("Accounts payable aging as of today, from the same bill balances and due dates the Purchases pages show: totals in Current, 1-30, 31-60, 61-90 and over 90 days past due, and the same buckets per vendor. Drafts and voided bills are excluded. Requires the Purchases module and permission to view bills.")]
+        [Description("Accounts payable aging: totals in Current, 1-30, 31-60, 61-90 and over 90 days past due, and the same buckets per vendor. Without asOfDate it is as of today, from the bill balances the Purchases pages show. With asOfDate it is what was owed at the end of that day, following ledger dates (bill date, payment date, void posting date), so its total can be compared with the payables control account in the balance sheet at the same date; unpostedTotal is the part owed on bills that have no ledger posting. Drafts and voided bills are excluded. Requires the Purchases module and permission to view bills.")]
         public async Task<WorkspaceDataMcpResponse> GetPayablesAging(
             [Description("Optional vendor id to age one vendor only.")] int? vendorId = null,
+            [Description("Optional date to age as of, e.g. a period end '2026-12-31'. Defaults to today.")] string? asOfDate = null,
             CancellationToken cancellationToken = default)
         {
+            var asOf = ParseDate(asOfDate, nameof(asOfDate));
+            if (asOf.HasValue)
+            {
+                var past = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.PayablesAsOf), c => c.PayablesAsOf(asOf.Value, vendorId),
+                    new Dictionary<string, object?> { ["asOf"] = asOf.Value, ["vendorId"] = vendorId });
+                if (!past.Succeeded) return Refused("payablesAging", past);
+
+                var items = ((IEnumerable<Dto.Financial.OpenItemAsOf>?)past.Value ?? Array.Empty<Dto.Financial.OpenItemAsOf>()).ToList();
+                return Success("payablesAging",
+                    Aging.Build(items.Select(i => new AgingInput(i.PartyId, i.PartyName, i.Id, i.No, i.DueDate, i.BalanceDue)).ToList(),
+                        asOf.Value.Date, id => PagePath($"purchases/vendors/{id}"), items.Where(i => !i.Posted).Sum(i => i.BalanceDue)),
+                    link: PagePath("purchases"));
+            }
+
             var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorId),
                 new Dictionary<string, object?> { ["vendorId"] = vendorId });
             if (!read.Succeeded) return Refused("payablesAging", read);

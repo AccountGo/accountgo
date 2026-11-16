@@ -179,6 +179,91 @@ namespace AccountGo.BackendTests
             Assert.Equal(_ownerId, attribution.GetProperty("postedByUserId").GetString());
             Assert.True(attribution.GetProperty("postedByAPreparer").GetBoolean());
             Assert.True(attribution.GetProperty("postedAt").GetDateTime() > DateTime.UtcNow.AddMinutes(-30));
+        public async Task AssistantTools_ReceivablesAgingAsOfADate_FollowsLedgerDatesAndTiesToTheControlAccount()
+        {
+            var today = DateTime.UtcNow.Date;
+            string Iso(DateTime d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+            var invoice = await NewInvoice();
+            invoice.InvoiceDate = today.AddDays(-2);
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
+
+            var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Aging bank", Type = 1 });
+            var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
+                new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 40, PaymentDate = today, BankAccountId = bank.Id });
+            Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
+
+            // Before the invoice existed nothing was owed.
+            var before = (await CallTool("get_receivables_aging", new { asOfDate = Iso(today.AddDays(-3)) })).GetProperty("data");
+            Assert.Equal(0m, before.GetProperty("total").GetDecimal());
+
+            // The day before the receipt the whole invoice was owed, although today only 60 is.
+            var dayBefore = (await CallTool("get_receivables_aging", new { asOfDate = Iso(today.AddDays(-1)) })).GetProperty("data");
+            Assert.Equal(100m, dayBefore.GetProperty("total").GetDecimal());
+            Assert.Equal(0m, dayBefore.GetProperty("unpostedTotal").GetDecimal());
+            Assert.Equal(today.AddDays(-1), dayBefore.GetProperty("asOf").GetDateTime().Date);
+
+            var now = (await CallTool("get_receivables_aging", new { asOfDate = Iso(today) })).GetProperty("data");
+            Assert.Equal(60m, now.GetProperty("total").GetDecimal());
+            Assert.Equal(60m, (await CallTool("get_receivables_aging", new { })).GetProperty("data").GetProperty("total").GetDecimal());
+
+            // Each as-of total equals the receivables account in the balance sheet at the same date.
+            foreach (var (date, expected) in new[] { (today.AddDays(-1), 100m), (today, 60m) })
+            {
+                var sheet = await CallTool("get_balance_sheet", new { asOfDate = Iso(date) });
+                var receivable = sheet.GetProperty("items").EnumerateArray()
+                    .Where(i => i.GetProperty("accountCode").GetString() == "10120")
+                    .Sum(i => i.GetProperty("amount").GetDecimal());
+                Assert.Equal(expected, receivable);
+            }
+
+            var bad = await McpRequest(new { jsonrpc = "2.0", id = 3, method = "tools/call",
+                @params = new { name = "get_receivables_aging", arguments = new { asOfDate = "not-a-date" } } });
+            Assert.True(bad.GetProperty("result").GetProperty("isError").GetBoolean());
+        }
+
+        [Fact]
+        public async Task AssistantTools_PayablesAgingAsOfADate_FollowsPaymentAndVoidDates()
+        {
+            var today = DateTime.UtcNow.Date;
+            string Iso(DateTime d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "As-of supplier" });
+            var bill = NewBill(vendor.Id, ("Rent", 1, 300m, null));
+            bill.Date = today.AddDays(-2);
+            bill.Status = "Open";
+            var approved = await SaveBillOk(bill);
+            await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
+                new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 100m, Date = today, PaymentMethod = "Check", ReferenceNo = "CHK-9" }));
+
+            var toVoid = NewBill(vendor.Id, ("Entered twice", 1, 50m, null));
+            toVoid.Date = today.AddDays(-2);
+            toVoid.Status = "Open";
+            var second = await SaveBillOk(toVoid);
+            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={second.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
+
+            Assert.Equal(0m, (await CallTool("get_payables_aging", new { asOfDate = Iso(today.AddDays(-3)) })).GetProperty("data").GetProperty("total").GetDecimal());
+
+            // Yesterday both bills were owed in full: the payment and the void are dated today.
+            var dayBefore = (await CallTool("get_payables_aging", new { asOfDate = Iso(today.AddDays(-1)) })).GetProperty("data");
+            Assert.Equal(350m, dayBefore.GetProperty("total").GetDecimal());
+            Assert.Equal(2, dayBefore.GetProperty("documentCount").GetInt32());
+
+            var now = (await CallTool("get_payables_aging", new { asOfDate = Iso(today), vendorId = vendor.Id })).GetProperty("data");
+            Assert.Equal(200m, now.GetProperty("total").GetDecimal());
+            Assert.Equal(200m, (await CallTool("get_payables_aging", new { })).GetProperty("data").GetProperty("total").GetDecimal());
+
+            foreach (var (date, expected) in new[] { (today.AddDays(-1), 350m), (today, 200m) })
+            {
+                var sheet = await CallTool("get_balance_sheet", new { asOfDate = Iso(date) });
+                var payable = sheet.GetProperty("items").EnumerateArray()
+                    .Where(i => i.GetProperty("accountCode").GetString() == "20110")
+                    .Sum(i => Math.Abs(i.GetProperty("amount").GetDecimal()));
+                Assert.Equal(expected, payable);
+            }
         }
 
         [Fact]

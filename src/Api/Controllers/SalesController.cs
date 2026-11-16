@@ -1422,6 +1422,47 @@ namespace Api.Controllers
             return new ObjectResult(salesInvoicesDto);
         }
 
+        [HttpGet]
+        [Route("ReceivablesAsOf")] // api/Sales/ReceivablesAsOf?asOf=2026-12-31
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
+        public IActionResult ReceivablesAsOf(DateTime asOf, int? customerId = null)
+        {
+            if (asOf == default)
+                return BadRequest(new { message = "Provide the date to report receivables as of." });
+
+            var paymentTerms = _adminService.GetPaymentTerms().ToList();
+            var invoices = _salesService.GetSalesInvoices()
+                .Where(i => customerId == null || i.CustomerId == customerId)
+                .Where(i => i.Date.Date <= asOf.Date)
+                .ToList();
+            var voidHeaderIds = invoices.Where(i => i.VoidGeneralLedgerHeaderId.HasValue)
+                .Select(i => i.VoidGeneralLedgerHeaderId!.Value).ToList();
+            var voidDates = _db.GeneralLedgerHeaders.Where(h => voidHeaderIds.Contains(h.Id))
+                .Select(h => new { h.Id, h.Date }).ToDictionary(h => h.Id, h => h.Date);
+
+            var open = new List<Dto.Financial.OpenItemAsOf>();
+            foreach (var invoice in invoices)
+            {
+                DateTime? voidDate = invoice.VoidGeneralLedgerHeaderId.HasValue
+                    && voidDates.TryGetValue(invoice.VoidGeneralLedgerHeaderId.Value, out var posted) ? posted : null;
+                var balance = invoice.BalanceDueAsOf(asOf, voidDate);
+                if (balance <= 0.005m) continue;
+                open.Add(new Dto.Financial.OpenItemAsOf
+                {
+                    Id = invoice.Id,
+                    No = invoice.No,
+                    PartyId = invoice.CustomerId,
+                    PartyName = invoice.Customer?.Party?.Name ?? "Unknown",
+                    Date = invoice.Date,
+                    DueDate = invoice.ResolveDueDate(paymentTerms.FirstOrDefault(t => t.Id == invoice.PaymentTermId)),
+                    BalanceDue = balance,
+                    Posted = invoice.GeneralLedgerHeaderId != null
+                });
+            }
+
+            return Ok(open.OrderBy(i => i.DueDate).ThenBy(i => i.Id).ToList());
+        }
+
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsView)]
         [HttpGet]
         [Route("SalesReceipts")] // api/Sales/SalesReceipts
