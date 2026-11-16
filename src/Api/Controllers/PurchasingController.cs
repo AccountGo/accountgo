@@ -732,6 +732,47 @@ namespace Api.Controllers
         }
 
         [HttpGet]
+        [Route("PayablesAsOf")] // api/Purchasing/PayablesAsOf?asOf=2026-12-31
+        [RequirePermission(SystemPermissions.PurchasesBillsView)]
+        public IActionResult PayablesAsOf(DateTime asOf, int? vendorId = null)
+        {
+            if (asOf == default)
+                return BadRequest(new { message = "Provide the date to report payables as of." });
+
+            var terms = _adminService.GetPaymentTerms().ToList();
+            var day = asOf.Date;
+            var nextDay = day.AddDays(1);
+            var bills = _db.PurchaseInvoiceHeaders
+                .Include(b => b.Vendor).ThenInclude(v => v!.Party)
+                .Include(b => b.PurchaseInvoiceLines)
+                .Include(b => b.VoidGeneralLedgerHeader)
+                .Include(b => b.VendorPayments).ThenInclude(p => p.VoidGeneralLedgerHeader)
+                .Where(b => vendorId == null || b.VendorId == vendorId)
+                .Where(b => b.Date < nextDay)
+                .AsEnumerable();
+
+            var open = new List<Dto.Financial.OpenItemAsOf>();
+            foreach (var bill in bills)
+            {
+                var balance = bill.BalanceDueAsOf(day);
+                if (balance <= 0.005m) continue;
+                open.Add(new Dto.Financial.OpenItemAsOf
+                {
+                    Id = bill.Id,
+                    No = bill.No,
+                    PartyId = bill.VendorId ?? 0,
+                    PartyName = bill.Vendor?.Party?.Name,
+                    Date = bill.Date,
+                    DueDate = bill.ResolveDueDate(terms.FirstOrDefault(t => t.Id == bill.PaymentTermId)),
+                    BalanceDue = balance,
+                    Posted = bill.GeneralLedgerHeaderId != null
+                });
+            }
+
+            return Ok(open.OrderBy(b => b.DueDate).ThenBy(b => b.Id).ToList());
+        }
+
+        [HttpGet]
         [Route("Bill")] // api/Purchasing/Bill?id=
         [RequirePermission(SystemPermissions.PurchasesBillsView)]
         public IActionResult Bill(int id)

@@ -98,7 +98,7 @@ namespace Api.Mcp.Tools
         }
 
         [McpServerTool(Name = "get_journal_entry", Title = "Get Journal Entry", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
-        [Description("Returns one journal entry with its lines (account code and name, debit or credit, amount, memo), totals, reference, memo and posted state. Use the id from search_journal_entries or a GL transaction's sourceDocumentId for document type JournalEntry. Requires the Financials module and permission to view journals.")]
+        [Description("Returns one journal entry with its lines (account code and name, debit or credit, amount, memo), totals, reference, memo and posted state. For a member who may view record history it also returns attribution: who prepared it, who posted it and when, and whether the person who posted also prepared it; posted details are empty for journals posted before history was kept. Use the id from search_journal_entries or a GL transaction's sourceDocumentId for document type JournalEntry. Requires the Financials module and permission to view journals.")]
         public Task<WorkspaceDataMcpResponse> GetJournalEntry(
             [Description("The journal entry id.")] int journalEntryId,
             CancellationToken cancellationToken = default) =>
@@ -106,6 +106,22 @@ namespace Api.Mcp.Tools
                 link: PagePath("financials/journals"),
                 arguments: new Dictionary<string, object?> { ["id"] = journalEntryId },
                 shape: value => value is Dto.Financial.JournalEntry entry ? DescribeJournal(entry) : value);
+
+        [McpServerTool(Name = "get_books_checks", Title = "Get Books Checks", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+        [Description("Runs the repeatable checks of a books review for a period and returns each with a status: Pass, Finding (a difference or error), Review (records a person should look at) or NotChecked (the member cannot read that area). Covers: every ledger entry balances; balances on the unusual side; receivables and payables at the period end against their ledger accounts; issued invoices and approved bills missing from the ledger; duplicate invoice numbers and duplicate bills; manual journals at the period end, without a memo, posted to receivables, payables or bank accounts, reversed soon after the period end, or posted by their own preparer; bank accounts not reconciled through the period end; imported bank lines not yet in the books. Each check has a count, an amount where it applies, a plain explanation and up to ten example records with a path inside the workspace. All figures are computed on the server: quote them instead of adding rows yourself. Call it first in a review, then use the other tools to follow up each Finding and Review. A Pass means that check found nothing, not that the books are correct. Requires the Financials or Reports module and permission to view reports.")]
+        public Task<WorkspaceDataMcpResponse> GetBooksChecks(
+            [Description("First day of the period under review, e.g. '2026-01-01'.")] string fromDate,
+            [Description("Last day of the period under review, e.g. '2026-12-31'.")] string toDate,
+            CancellationToken cancellationToken = default)
+        {
+            var from = ParseDate(fromDate, nameof(fromDate)) ?? throw new ArgumentException("Provide the first day of the period.", nameof(fromDate));
+            var to = ParseDate(toDate, nameof(toDate)) ?? throw new ArgumentException("Provide the last day of the period.", nameof(toDate));
+            if (from > to)
+                throw new ArgumentException("The first day must not be after the last day.", nameof(fromDate));
+            return RecordAsync<FinancialsController>("booksChecks", nameof(FinancialsController.BooksChecks), c => c.BooksChecks(from, to),
+                link: PagePath("reports"),
+                arguments: new Dictionary<string, object?> { ["from"] = from, ["to"] = to });
+        }
 
         [McpServerTool(Name = "search_items", Title = "Search Products and Services", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Lists the products and services catalog with code, name, price, cost, revenue account, whether stock is tracked and quantity on hand. Filter by text or include archived items; with itemId returns that one item. Requires the Sales or Purchases module and permission to view items.")]
@@ -162,6 +178,7 @@ namespace Api.Mcp.Tools
                 entry.AdjustsFiscalYearCode,
                 TotalDebit = entry.debitAmount,
                 TotalCredit = entry.creditAmount,
+                entry.Attribution,
                 Lines = entry.JournalEntryLines.Select(l =>
                 {
                     accounts.TryGetValue(l.AccountId ?? 0, out var account);

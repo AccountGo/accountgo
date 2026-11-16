@@ -441,7 +441,7 @@ namespace Api.Mcp.Tools
             Destructive = false,
             OpenWorld = false
         )]
-        [Description("Retrieves a paged register of posted General Ledger journal transactions with complete lines (accounts, debits, credits, narrations, and document types). Requires activeModules 'financials' or 'reports' and FinancialsJournalView permission. On restriction returns Status PlanRestricted or AccessDenied instead of throwing.")]
+        [Description("Retrieves a paged register of posted General Ledger journal transactions with complete lines (accounts, debits, credits, narrations, and document types). Filter by date range, account, document type, text in the description or account, and transaction amount (total debits) to select entries for testing, such as large or period-end manual journals. Requires activeModules 'financials' or 'reports' and FinancialsJournalView permission. On restriction returns Status PlanRestricted or AccessDenied instead of throwing.")]
         public Task<GeneralLedgerTransactionsMcpResponse> GetGeneralLedgerTransactions(
             [Description("Optional start date filter (e.g., '2026-01-01').")] string? fromDate = null,
             [Description("Optional end date filter (e.g., '2026-12-31').")] string? toDate = null,
@@ -450,6 +450,9 @@ namespace Api.Mcp.Tools
             [Description("Optional source document type (e.g., 'SalesInvoice', 'SalesReceipt', 'PurchaseInvoice', 'PurchaseInvoicePayment', 'JournalEntry', 'CustomerAllocation', 'InventoryAdjustment').")] string? documentType = null,
             [Description("Number of records to skip for pagination. Defaults to 0.")] int skip = 0,
             [Description("Number of records to take (1 to 500). Defaults to 50.")] int take = 50,
+            [Description("Optional text matched, ignoring case, against the transaction description and the code or name of any account on it.")] string? search = null,
+            [Description("Optional smallest transaction amount (total debits) to include.")] decimal? minAmount = null,
+            [Description("Optional largest transaction amount (total debits) to include.")] decimal? maxAmount = null,
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
@@ -476,6 +479,10 @@ namespace Api.Mcp.Tools
             var from = ParseDate(fromDate, nameof(fromDate));
             var to = ParseDate(toDate, nameof(toDate), inclusiveEndOfDay: true);
             ValidateDateRange(from, to);
+            if (minAmount.HasValue && maxAmount.HasValue && minAmount.Value > maxAmount.Value)
+            {
+                throw new ArgumentException("The smallest amount must not be larger than the largest amount.", nameof(minAmount));
+            }
 
             DocumentTypes? parsedDocType = null;
             if (!string.IsNullOrWhiteSpace(documentType))
@@ -497,7 +504,9 @@ namespace Api.Mcp.Tools
                 string.IsNullOrWhiteSpace(accountCode) ? null : accountCode.Trim(),
                 transactionNo,
                 parsedDocType,
-                skip, take);
+                skip, take,
+                string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
+                minAmount, maxAmount);
 
             var response = new GeneralLedgerTransactionsMcpResponse
             {

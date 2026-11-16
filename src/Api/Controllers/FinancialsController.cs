@@ -272,6 +272,14 @@ namespace Api.Controllers
                 journalEntryDto.ReadyForPosting = true;
             }
 
+            // Who prepared and posted is record history, so it follows the same permission as the History panel.
+            var attribution = HttpContext?.RequestServices?.GetService(typeof(Api.Service.JournalAttributionReader)) as Api.Service.JournalAttributionReader;
+            if (attribution != null && _tenantContext.CompanyId.HasValue
+                && AuthService.AuthorizeRequirement(requiredPermissionsAll: new[] { SystemPermissions.AuditLogsView }).Allowed)
+            {
+                journalEntryDto.Attribution = attribution.Read(_tenantContext.CompanyId.Value, id);
+            }
+
             return new ObjectResult(journalEntryDto);
         }
 
@@ -775,7 +783,10 @@ namespace Api.Controllers
             int? transactionNo = null,
             Core.Domain.DocumentTypes? documentType = null,
             int skip = 0,
-            int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize)
+            int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize,
+            string? search = null,
+            decimal? minAmount = null,
+            decimal? maxAmount = null)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalView, SystemPermissions.FinancialsJournalView, out var denied))
                 return (ActionResult)denied!;
@@ -788,7 +799,7 @@ namespace Api.Controllers
                 return BadRequest(new { message = $"Provide skip >= 0 and take between 1 and {Services.Financial.FinancialService.GeneralLedgerMaxPageSize}." });
             try
             {
-                return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take));
+                return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take, search, minAmount, maxAmount));
             }
             catch (ArgumentException ex)
             {
@@ -830,6 +841,28 @@ namespace Api.Controllers
                 return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
             var dto = _financialService.BalanceSheet(from, to, basis).ToList();
             return new ObjectResult(dto);
+        }
+
+        /// <summary>The repeatable checks of a books review for a period. Each area is checked only when the caller may read it.</summary>
+        [HttpGet("BooksChecks")]
+        [RequireModule("financials", "reports")]
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public IActionResult BooksChecks(DateTime from, DateTime to)
+        {
+            if (from == default || to == default || from.Date > to.Date)
+                return BadRequest(new { message = "Provide the period to check: from must not be after to." });
+            if (HttpContext?.RequestServices?.GetService(typeof(Api.Service.BooksChecksService)) is not Api.Service.BooksChecksService checks
+                || !_tenantContext.CompanyId.HasValue)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Books checks are not available." });
+
+            bool May(string permission) => AuthService.AuthorizeRequirement(requiredPermissionsAll: new[] { permission }).Allowed;
+            var access = new Api.Service.BooksChecksAccess(
+                Ledger: May(SystemPermissions.FinancialsJournalView),
+                Sales: May(SystemPermissions.SalesInvoicesView),
+                Purchases: May(SystemPermissions.PurchasesBillsView),
+                Banking: May(SystemPermissions.BankingAccountsView),
+                History: May(SystemPermissions.AuditLogsView));
+            return Ok(checks.Run(_tenantContext.CompanyId.Value, from, to, access));
         }
 
         [HttpGet("EquityStatement")]

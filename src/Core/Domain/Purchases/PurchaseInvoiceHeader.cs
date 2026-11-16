@@ -84,6 +84,35 @@ namespace Core.Domain.Purchases
 
         public decimal BalanceDue() => Math.Max(0, Total() - AmountPaid());
 
+        /// <summary>
+        /// What was still owed on this bill at the end of <paramref name="asOf"/>, following ledger dates: the bill counts
+        /// from its own date, a payment from its date until the date its void was posted, and a bill void from the date
+        /// its reversal was posted. Needs <see cref="VoidGeneralLedgerHeader"/> loaded on the bill and its payments.
+        /// </summary>
+        public decimal BalanceDueAsOf(DateTime asOf)
+        {
+            var day = asOf.Date;
+            if (IsDraft || Date.Date > day)
+                return 0;
+            if (IsVoid)
+            {
+                var voided = VoidGeneralLedgerHeader?.Date ?? VoidedAt;
+                if (voided == null || voided.Value.Date <= day)
+                    return 0;
+            }
+
+            var paid = (VendorPayments ?? new List<VendorPayment>())
+                .Where(p => p.Date.Date <= day)
+                .Where(p =>
+                {
+                    if (!p.IsVoid) return true;
+                    var paymentVoided = p.VoidGeneralLedgerHeader?.Date ?? p.VoidedAt;
+                    return paymentVoided != null && paymentVoided.Value.Date > day;
+                })
+                .Sum(p => p.Amount);
+            return Math.Round(Math.Max(0, Total() - paid), 2, MidpointRounding.AwayFromZero);
+        }
+
         public void EnsureEditable()
         {
             if (!IsDraft)

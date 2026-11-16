@@ -154,11 +154,26 @@ namespace Api.Mcp.Tools
         }
 
         [McpServerTool(Name = "get_receivables_aging", Title = "Get Receivables Aging", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
-        [Description("Accounts receivable aging as of today, from the same invoice balances and due dates the Sales pages show: totals in Current, 1-30, 31-60, 61-90 and over 90 days past due, and the same buckets per client. Drafts and voided invoices are excluded. Requires the Sales module and permission to view invoices.")]
+        [Description("Accounts receivable aging: totals in Current, 1-30, 31-60, 61-90 and over 90 days past due, and the same buckets per client. Without asOfDate it is as of today, from the invoice balances the Sales pages show. With asOfDate it is what was owed at the end of that day, following ledger dates (invoice date, receipt date, void posting date), so its total can be compared with the receivables control account in the balance sheet at the same date; unpostedTotal is the part owed on invoices that have no ledger posting. Drafts and voided invoices are excluded. Requires the Sales module and permission to view invoices.")]
         public async Task<WorkspaceDataMcpResponse> GetReceivablesAging(
             [Description("Optional client id to age one client only.")] int? clientId = null,
+            [Description("Optional date to age as of, e.g. a period end '2026-12-31'. Defaults to today.")] string? asOfDate = null,
             CancellationToken cancellationToken = default)
         {
+            var asOf = ParseDate(asOfDate, nameof(asOfDate));
+            if (asOf.HasValue)
+            {
+                var past = await Reader.ReadAsync<SalesController>(nameof(SalesController.ReceivablesAsOf), c => c.ReceivablesAsOf(asOf.Value, clientId),
+                    new Dictionary<string, object?> { ["asOf"] = asOf.Value, ["customerId"] = clientId });
+                if (!past.Succeeded) return Refused("receivablesAging", past);
+
+                var items = ((IEnumerable<Dto.Financial.OpenItemAsOf>?)past.Value ?? Array.Empty<Dto.Financial.OpenItemAsOf>()).ToList();
+                return Success("receivablesAging",
+                    Aging.Build(items.Select(i => new AgingInput(i.PartyId, i.PartyName, i.Id, i.No, i.DueDate, i.BalanceDue)).ToList(),
+                        asOf.Value.Date, id => PagePath($"sales/clients/{id}"), items.Where(i => !i.Posted).Sum(i => i.BalanceDue)),
+                    link: PagePath("sales"));
+            }
+
             var read = await Reader.ReadAsync<SalesController>(nameof(SalesController.SalesInvoices), c => c.SalesInvoices(clientId),
                 new Dictionary<string, object?> { ["customerId"] = clientId });
             if (!read.Succeeded) return Refused("receivablesAging", read);
@@ -220,7 +235,7 @@ namespace Api.Mcp.Tools
     {
         private static readonly string[] Buckets = { "current", "days1To30", "days31To60", "days61To90", "over90" };
 
-        public static object Build(IReadOnlyCollection<AgingInput> open, DateTime today, Func<int, string> partyLink)
+        public static object Build(IReadOnlyCollection<AgingInput> open, DateTime today, Func<int, string> partyLink, decimal? unpostedTotal = null)
         {
             static int BucketOf(DateTime due, DateTime today)
             {
@@ -240,6 +255,7 @@ namespace Api.Mcp.Tools
             {
                 AsOf = today,
                 Total = open.Sum(r => r.Balance),
+                UnpostedTotal = unpostedTotal,
                 Buckets = Totals(open),
                 DocumentCount = open.Count,
                 Parties = open
