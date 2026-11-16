@@ -1,6 +1,6 @@
 ---
 name: accountgo-platform-guide
-description: Explain AccountGo screens, navigation, accounting workflows, workspace operating settings, onboarding, access recovery, permissions, and plan-dependent visibility, and answer questions about the current workspace's own records with the live AccountGo data tools. Use for guided setup, first workflows, how-to questions or missing and disabled controls in AccountGo, including AccountGo Assistant support. Also use whenever someone asks about a specific invoice, client, bill, vendor, bank account, register, reconciliation, statement line, journal, product, tax rate, receivables or payables aging, dashboard figure or ledger transaction, including what document is behind a GL line. Also use when someone asks to review, check or audit the books, whether the figures are right, to prepare for month-end, year-end or an outside auditor, or relays an auditor's or accountant's request. Also use when someone asks why personal books include a ledger or Transactions, why household books need accounting, or why personal books cannot issue an invoice.
+description: Guide AccountGo screens, accounting workflows, permissions, operating settings, onboarding and plan visibility, and answer active-workspace record questions with live tools. Use for setup/how-to help; clients, invoices, receipts, vendors, bills, banks, stock, tax, journals, ledger and reports; review my books, are my books right, audit prep, month-end/year-end checks and auditor requests; and personal books, shared bank accounts or linked workspaces.
 ---
 
 # AccountGo platform guide
@@ -28,20 +28,25 @@ The AccountGo tools read exactly what the matching page shows, as the signed-in 
 | Dashboard figures for a period | `get_dashboard_summary` |
 | Clients and what they owe / one client with recent invoices | `search_clients` / `get_client` |
 | Invoices by client, status, date, number / one invoice in full | `search_invoices` / `get_invoice` |
-| Who owes what and how late | `get_receivables_aging` |
+| Who owes what and how late, today or at a period end | `get_receivables_aging` (`asOfDate` for cutoff) |
 | Recurring invoices | `get_recurring_schedules` |
 | Vendors / one vendor with recent bills | `search_vendors` / `get_vendor` |
+| Payments on bills after a cutoff | `search_bill_payments` |
 | Bills / one bill in full / what we owe and how late | `search_bills` / `get_bill` / `get_payables_aging` |
 | Bank accounts, register, reconciliations, imported statement lines | `list_bank_accounts`, `get_bank_register`, `get_bank_reconciliations`, `get_bank_statement_lines` |
 | Manual journals including drafts / one journal | `search_journal_entries` / `get_journal_entry` |
 | Products and services; tax rates | `search_items`; `get_tax_rates` |
 | Linked work and personal entries (Owner only) | `get_linked_entries` |
+| Fiscal years, tax reports/filings, equity rollforward | `get_fiscal_years`, `get_tax_report`, `get_equity_statement` |
+| Receipts, bank outstanding aging, stock movements | `search_receipts`, `get_bank_outstanding_items`, `get_stock_movements` |
+| Current members/roles and recorded changes | `get_members_and_roles`, `get_record_history` |
+| Repeatable period checks before cycle review | `get_books_checks` |
 | Chart of accounts, posted ledger, trial balance, balance sheet, P&L, cash flow | `get_chart_of_accounts`, `get_general_ledger_transactions`, `get_trial_balance`, `get_balance_sheet`, `get_income_statement`, `get_cash_flow` |
 
 - **Drill down instead of stopping at the ledger.** Each GL transaction has `documentType` and `sourceDocumentId`: `SalesInvoice` → `get_invoice(invoiceId)`, `PurchaseInvoice` or `PurchaseInvoicePayment` → `get_bill(billId)`, `JournalEntry` → `get_journal_entry`. People quote document numbers, so `get_invoice` takes `invoiceNo` and `get_bill` takes `billNo` (the bill number or the vendor's invoice number).
 - Search first when you only have a name or text, then fetch the one record. Lists are paged: say how many matched (`totalCount`) and page with `skip`/`take` rather than claiming you saw everything.
 - Every result has `status`. `Success`: answer from `data` and offer `link` (already includes the workspace). `AccessDenied`: say this member's access does not include it and to ask a workspace admin; `PlanRestricted`: name the area the plan lacks; `NotFound`: say no such record exists in this workspace. Never treat a refusal or an empty page as empty books, and do not retry sibling tools in a loop.
-- Amounts are in the workspace currency from `get_workspace_context`. Aging is as of today. Full bank account numbers are never returned; quote only the masked number.
+- Amounts are in the workspace currency from `get_workspace_context`. Aging defaults to today; pass `asOfDate` for a period-end reconstruction. The audit companion explains the distinct current-clearance limit of bank outstanding aging. Full bank account numbers are never returned; quote only the masked number.
 
 ## Navigation
 

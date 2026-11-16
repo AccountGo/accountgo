@@ -1,157 +1,124 @@
 # Books review and audit support
 
-Read this when someone asks to review, check or audit their books, asks whether the figures are right, prepares for month-end, year-end or an outside auditor, or relays an auditor's request. It is a financial statement review programme. It is not the record change history shown on a document.
+Read for “review my books”, “are my books right”, “audit prep”, month-end or year-end checks, and an auditor's request. This programme reviews financial records; document change history is supporting evidence, not the programme itself.
 
 ## Role and limits
 
-Two jobs are in scope:
+Two modes: **pre-audit books review** finds possible errors; **audit support** supplies traceable schedules. Never issue an opinion or call books audited, certified, clean, compliant, true and fair, fraud-free or free of misstatement. Report checked scope, findings and limits.
 
-- **Books review**: run the programme below over the workspace's own records and report likely misstatements before an auditor or tax preparer finds them.
-- **Audit support**: answer an auditor's or accountant's questions with traceable evidence, and say where each schedule can be exported.
+All tools only read. Never claim a correction, filing or sign-off was made. Refusal means **not reviewed**, not no issues. Distinguish confirmed errors from indicators; unusual entries need investigation before quantifying a misstatement.
 
-This is not an audit. An audit needs an independent auditor and evidence from outside the books. Never say the books are "audited", "certified", "clean", "compliant" with an accounting standard, "true and fair", or free of fraud. Say what was checked, what was found, and what was not checked.
+A person must obtain these; include them under **Not checked** in every report:
 
-The tools only read this workspace's records. These always remain for a person to obtain, and belong in every report under **Not checked**:
+- Independent bank statements and balance confirmations; client and vendor confirmations.
+- Original invoices, contracts, delivery/acceptance evidence, ownership documents and off-system liabilities.
+- Physical stock counts and evidence of condition.
+- Judgement on estimates: collectability, stock value, accruals, useful lives and impairment.
+- Subsequent events outside the records inspected and the ability to keep trading.
 
-- Bank statements or bank confirmation of balances; client and vendor confirmation of what is owed.
-- Original vendor invoices, contracts, delivery or acceptance evidence, and title to assets.
-- A physical stock count.
-- Judgement on estimates: collectability of old receivables, stock value, accruals, useful lives.
-- Events after the period end and the ability to keep trading.
+For personal books, call this a **books check**, load the personal books companion, use its net-worth/money wording and skip inapplicable sales and tax work. Do not propose an upgrade there.
 
-Everything is read-only. Never claim a correction was made. A refused or plan-restricted tool means that area was **not reviewed**, never that it had no issues.
+## 1. Plan
 
-For a personal books workspace, call this a **books check**, keep to the wording rules in the personal books reference, and skip the sales and tax programmes that do not apply.
+1. Call `get_workspace_context` for workspace, currency, entity type, year end, lock, journal workflow and permissions. Never substitute a remembered workspace or a slug from ordinary chat. If trusted context is unavailable, ask the person to open the intended workspace.
+2. Agree inclusive dates, basis and reporting framework; use the same basis throughout. `get_fiscal_years` returns dates and active flag, including a fallback; it has no closed/lock state. Read the books lock from workspace context.
+3. Agree **materiality** with the person/accountant. Without a figure, report amounts without material/immaterial labels; do not invent a percentage. Disclose any separate selection threshold.
+4. Date the review. A lock is a control, not proof of correct balances; unlocked figures can change.
+5. Single-user posting permits self-posting; inspect attribution before claiming an individual journal lacked independent review.
 
-## 1. Plan the review
+## 2. Assess risk
 
-1. Call `get_workspace_context`: currency, entity type, fiscal year end, books lock date, journal workflow (independent review or single-user posting) and the caller's permissions.
-2. Agree the **period** (from and to dates) and the **basis** (accrual or cash) the person reports on. Use the same basis in every report call.
-3. Agree a **materiality** figure: the amount above which an error would change a reader's decision. Ask for it. If the person has none, explain that auditors set it from a benchmark such as profit, revenue or total assets, and that their accountant should choose. Without a figure, report every difference with its amount and do not label anything material or immaterial.
-4. Note whether the period is locked. If the books lock date is before the period end, the figures can still change; say the results are as of the time of the review.
-5. State the journal workflow as a fact about controls. Single-user posting means no second person checked manual journals, so test more of them.
+Call `get_books_checks(fromDate, toDate)` first. Quote its server-computed counts/amounts and follow each Finding/Review. Pass means only that check found nothing; NotChecked means not tested. Up to ten examples are returned, not the full flagged population.
 
-## 2. Find where the risk is
+Compare trial balance, income statement and cash flow for the period, prior-period income statement, and balance sheets at both period ends. Use actual chart accounts; current chart balances are not historical balances.
 
-Start with `get_books_checks` for the period. It runs the repeatable checks on the server and returns each as `Pass`, `Finding`, `Review` or `NotChecked`, with a count, an amount, an explanation and example records. Quote its figures; do not recompute them. Follow up every `Finding` and `Review` with the programmes below. A `Pass` means that check found nothing, not that the area is right, and `NotChecked` means the person's access does not cover it. The checks do not replace the analysis below or the judgement areas.
+Follow equation or trial-balance differences, movements above materiality, missing regular costs, unusual margins/sides, and suspense, uncategorised, opening or clearing balances. Balanced debits/credits prove arithmetic equality only. Seek explanations, then test them; inquiry is not proof.
 
-Then run these and use them to choose what else to test:
+## 3. Evidence tools and selection
 
-- `get_trial_balance`, `get_income_statement` and `get_cash_flow` for the period, and `get_income_statement` for the comparable prior period.
-- `get_balance_sheet` at the period end and at the prior period end.
-- `get_chart_of_accounts` for normal balances and current balances.
+Use these alongside the existing reports, ledger, invoice, bill, journal and banking tools. Every read retains the page's permissions and plan gates.
 
-Flag and follow up:
+| Tool | Evidence and boundary |
+| --- | --- |
+| `get_fiscal_years` | Dates/active flag, no closed state. |
+| `get_tax_report` | No dates: settings/periods/filings. Both `from`/`to`: period report, ledger check, warnings, filing comparison. Disclose `documentsTruncated`; request `includeAllDocuments` when needed. |
+| `get_equity_statement` | Equity rollforward, balance-sheet checks, comparison/partner columns; pass `basis`. |
+| `search_receipts` | Filtered list or `receiptId` detail; summaries omit posting/void status and allocations. |
+| `get_bank_outstanding_items` | `bankId`/`asOfDate`: aggregate buckets using current clearance, not historical outstanding items. |
+| `get_members_and_roles` | Current membership/permissions, not historical access or control effectiveness. |
+| `get_record_history` | Entity type/id together for record history; omit both for activity feed. Preserve cursor/`windowDays`; missing history proves nothing. |
+| `get_stock_movements` | Item/date movements and original running quantities; use `itemId` for per-item quantities. No counts. |
+| Aging tools | `asOfDate` uses ledger dates, including dated payments/voids; `unpostedTotal` is owed on documents without postings. |
+| `search_bill_payments` | Payment dates/vendor and bill dates; voided excluded unless `includeVoided=true`. |
+| `get_books_checks` | Ledger, AR/AP, missing postings, duplicates, journal indicators and bank checks; a bounded set. |
 
-- Assets must equal liabilities plus equity, and trial balance debits must equal credits. A balanced trial balance proves only that debits equal credits, not that entries are right.
-- A movement between periods larger than materiality, or a line that stayed flat while the business changed.
-- An expense that appears in the prior period but not this one (possible unrecorded cost).
-- A balance on the wrong side for its account type: a receivable or bank account in credit, a payable in debit, a negative expense.
-- Balances in suspense, uncategorised, opening balance or clearing accounts. Find them by name in the chart; never assume a code.
-- Margins or ratios that moved sharply without a business reason the person can give.
+Test direction matters:
 
-Ask the person to explain each flagged movement. Their explanation is an inquiry, not proof; test it against records.
+- **Occurrence/existence:** ledger to source document; use `documentType` and `sourceDocumentId` to open invoice, bill or journal.
+- **Completeness:** document lists, imported statements, sequences and later activity into the ledger. These cannot expose documents never entered in AccountGo.
+- **Accuracy:** recalculate selected document lines and compare posting amounts.
+- **Cutoff:** inspect dates and evidence on both sides of period end.
+- **Classification:** compare the description and actual chart account.
+- **Valuation:** present balances, age and other facts; a person judges the estimate.
 
-## 3. Test by direction
+There is no `select_sample`. Test all in a small population; otherwise all above an agreed threshold plus every nth transaction/document number. Obtain pages and sort explicitly; newest-page selection is not systematic sampling. Disclose population, pages, ordering, threshold, interval/start, IDs and number tested. If incomplete, state the restricted population. Never claim random, statistically representative or seeded sampling.
 
-The direction of a test decides what it proves.
+Prefer report totals; label own additions, preserve signs/currency and never extrapolate a sample as the population.
 
-- **Is it real?** (occurrence, existence): start from the ledger and go back to the document. `get_general_ledger_transactions` gives `documentType` and `sourceDocumentId`; open the document with `get_invoice`, `get_bill` or `get_journal_entry`.
-- **Is anything missing?** (completeness): start outside the ledger and trace in: the document lists, number sequences, bank statement lines, and activity after the period end.
-- **Is the amount right?** (accuracy): recalculate from the document's own lines.
-- **Is it in the right period?** (cutoff): look at the days either side of the period end.
-- **Is it in the right account?** (classification): compare each line's account with what the line describes.
-- **Is the balance worth what it says?** (valuation): mostly judgement; give the facts and leave the estimate to the person.
-
-Lists are paged. Report the population (`totalCount`), how many items were read, and how they were chosen. If the population is small, test all of it. Otherwise take every item above materiality (or the largest items when there is no figure) plus every nth item by number, and say which rule was used. Never describe a sample as the whole population.
-
-Prefer totals returned by a report tool over adding rows yourself. When a total is your own addition, say so.
-
-## 4. Programmes
+## 4. Cycle programmes
 
 ### Sales and receivables
 
-- **Real**: from revenue postings (`documentType` `SalesInvoice`) open each selected invoice. Check the client exists, the invoice is not void, and its total equals the posting. A later receipt on the invoice supports that the sale was real; delivery evidence is outside the books.
-- **Missing**: `search_invoices` for the period. Every issued invoice should show as posted to the ledger; an issued but unposted invoice is revenue missing from the reports. Look for gaps in the invoice number sequence and ask about each. Check `get_recurring_schedules` with `needsAttention` for runs that did not happen. Ask about draft invoices dated in the period.
-- **Amount**: recalculate quantity × price, less discount, plus tax, using `get_tax_rates`.
-- **Period**: invoices dated in the last and first days around the period end; confirm with the person when the work was delivered.
-- **Account**: each line's revenue account is a revenue account in the chart.
-- **Value**: `get_receivables_aging`. Old balances, especially over 90 days, may not be collectable. Report them and ask whether an allowance is recorded.
-- **Value at the period end**: call `get_receivables_aging` with `asOfDate` at the period end to judge collectability as it stood then.
-- **Tie-out**: `get_books_checks` compares what posted invoices show as owed at the period end with the receivables accounts in the ledger. A difference usually means a manual journal was posted straight to the control account (see its journals check), or an invoice whose posting differs from its total. `unpostedTotal` in the aging is owed on invoices that never reached the ledger.
+- **Real:** ledger to invoice: client, status, account and amount. Inspect subsequent `search_receipts`, receipt detail and invoice payments. Collection supports receipt of money, not delivery or period recognition.
+- **Missing:** issued invoices to ledger; follow unposted checks, number gaps, period drafts and recurring schedules needing attention. A gap may be a valid void or numbering rule.
+- **Amount/account:** recalculate quantity × price, discounts and tax; compare rates, revenue accounts and postings.
+- **Period:** invoices/receipts either side of cutoff; request delivery/performance evidence.
+- **Value/tie-out:** period-end `asOfDate` aging to AR controls. Explain old debts, posted totals and `unpostedTotal` separately. Collectability needs judgement; later receipts are separate evidence. Control-account journals can explain tie-out differences.
 
 ### Purchases and payables
 
-Unrecorded bills are the main risk: profit looks higher when costs are missing.
+Unrecorded costs can overstate profit.
 
-- **Missing**: `search_bill_payments` with dates after the period end shows each payment with its bill and bill date; a payment soon after the period end for a bill dated after it, or with no bill in the period, may be a cost that belongs in the period. Also `search_bills` dated after the period end; ask which relate to the period under review. Unmatched money out in `get_bank_statement_lines` with no bill. Draft bills dated in the period. A regular cost with a month missing.
-- **Real**: from expense postings open each selected bill. Check vendor, vendor invoice number and approval details. The vendor's original invoice is outside the books.
-- **Duplicates**: `get_books_checks` lists bills from the same vendor with the same vendor invoice number, or the same date and amount. Ask whether each pair is a genuine repeat.
-- **Amount, period, account**: as for sales. Watch for large purchases of lasting assets recorded as expenses.
-- **Tie-out**: `get_books_checks` compares posted bills owed at the period end with the payables accounts in the ledger. Use `get_payables_aging` with `asOfDate` for the detail by vendor.
+- **Missing:** search payments/bills after cutoff, then inspect bill and service/delivery dates. Follow unmatched money out, missing regular costs and drafts. Off-system liabilities need external evidence.
+- **Real/duplicates:** ledger to bill/vendor; investigate same-vendor invoice-number or same-date/amount candidates before calling them duplicate errors.
+- **Amount/period/account:** recalculate lines, inspect cutoff evidence and lasting assets expensed. A bill date alone does not prove the cost's period.
+- **Tie-out:** period-end payables aging and posted totals to controls; separate unposted amounts.
 
 ### Cash and bank
 
-- For each account in `list_bank_accounts`, compare its balance with its linked ledger account.
-- `get_bank_reconciliations` with `asOfDate` at the period end: every account should be reconciled through the period end with no difference. An account not reconciled to the period end is a finding in itself.
-- Open the reconciliation covering the period end and read the outstanding items. Old outstanding items need an explanation.
-- `get_bank_statement_lines` with status `unmatched`: each is money that moved and may not be in the books.
-- A reconciliation agrees the books to the statement balance someone typed in. Only the bank's own statement proves that figure.
-- A transfer between two accounts near the period end should have both sides in the same period.
+Compare registers with linked ledger accounts at the same cutoff. Check coverage with `get_bank_reconciliations(asOfDate)`, then reconciliation detail and outstanding entries. Use outstanding-aging buckets for current stale items and the register for individual evidence; never present current clearance as historical reconstruction. Follow unmatched imported lines and trace both sides of transfers near cutoff. Obtain the bank's own statement: reconciliation only agrees to the balance a person entered.
 
 ### Tax
 
-Recalculate tax on selected invoices and bills from `get_tax_rates` and confirm the tax lands in the tax accounts named there. Agreeing the tax accounts to a filed return is not possible from the tools today; list it under **Not checked** and point the person to the **Tax** page.
+Read the default tax context, select its tax period (which may differ from the fiscal/reporting period), then call with both dates. Inspect warnings, basis, ledger differences, filing snapshots and changed-since-filing. Compare actual tax accounts at the same cutoff; report net tax is not a cumulative account balance. Recalculate selected invoices/bills. Disclose truncation and missing originals. Recorded filing is internal evidence, not authority acceptance; no tool files or amends it.
 
 ### Equity and opening balances
 
-- Opening balances: find them with `search_journal_entries` and ask the person to agree them to the prior period's closing statements.
-- Retained earnings should move by the period's profit or loss, less what owners took out. Explain any other movement.
-- Owner drawings and contributions should sit in equity, not in expenses or income.
-- **Reports** has a statement of changes in equity that shows this movement. The tools cannot read it; ask the person to open it and compare.
+Use `get_equity_statement` for period/basis and optional comparison. Agree openings to prior closing statements; reconcile profit, contributions/distributions, adjustments and closing equity to the balance sheet. Use owner/partner/shareholder wording appropriate to the entity. Investigate drawings/contributions in income/expense, using journals/history. Obtain external capital/ownership documents.
 
-### Manual journals
+### Manual journals and controls
 
-Manual journals bypass the checks built into invoices and bills, so auditors always test them. The population is `get_general_ledger_transactions` with `documentType` `JournalEntry` for posted entries, plus `search_journal_entries` for drafts. `get_books_checks` already lists those dated at the period end, without a memo, posted to receivables, payables or bank accounts, reversed soon after the period end, and posted by their own preparer. Use `minAmount` to pull the largest entries and `search` to find wording such as "adjust", "correct" or "reclass". Select entries with these traits first:
+Use ledger `documentType: JournalEntry` for posted entries and journal search for drafts. Select period-end, round-amount, blank/vague-memo, seldom-used-account, control-account and early-next-period reversal traits. Ledger `search`/`minAmount`/`maxAmount` help; amounts are transaction total debits, not individual lines. Books checks automate only some traits. `reversedGeneralLedgerHeaderId` links a reversal.
 
-- Dated in the last days of the period or just after it.
-- Posted to an account that is rarely used.
-- Round amounts, or a blank or vague memo.
-- Posted to a receivables, payables or bank account, which breaks the tie-outs above.
-- Reversed early in the next period (`reversedGeneralLedgerHeaderId` links a reversal to its original).
-- Moving amounts between revenue and the balance sheet, or between expense and asset.
+Open each journal, check purpose, balance and accounts, and request evidence. With history access, `attribution` gives preparer/poster/time and overlap; older data may be absent. Ask about late postings. Missing attribution does not prove absent review; permitted self-posting is not wrongdoing. Members/roles show current responsibility; record history supports selected who/when inquiries, subject to windows/cursors. Neither proves controls operated effectively.
 
-For each, open `get_journal_entry`, check the memo explains a business purpose and the accounts fit it, and ask what supports it. When the person may view record history, the result includes `attribution`: who prepared it, who posted it and when, and whether the same person did both. Compare the posting time with the journal date: an entry dated in the period but posted well after it ended was backdated and needs a reason. Without that access, say who prepared and posted is not visible to them and point to **History** on the journal. A journal posted by its preparer is expected where the workspace allows single-user posting; report it as a fact, not as wrongdoing.
+### Inventory
 
-### Stock
+Use `search_items` for negative quantities or missing cost. Inspect selected `get_stock_movements(itemId, fromDate, toDate)` around cutoff and trace invoices/bills/ledger for occurrence, amount and account. Running quantities retain the endpoint computation, not a filtered-window recomputation. Existence, condition, ownership and valuation need human evidence.
 
-`search_items`: negative quantities on hand, and tracked items with no cost. A physical count is the only proof that stock exists.
+## 5. Findings and audit support
 
-## 5. Report
+Lead with workspace, period, framework/basis, currency, materiality (or not agreed), review date and lock status. Then report:
 
-Lead with scope: workspace, period, basis, materiality, date of the review, whether the period is locked. Then:
+1. **Findings:** largest first; condition, transaction/document number and link, assertion affected, amount, proposed fix, and who has permission to do it. Label unresolved indicators separately from established errors.
+2. **Effect:** quantify confirmed misstatements against materiality; show profit and net-assets effects separately. Deduplicate the same error across checks/cycles; do not cancel unrelated over/understatements without explanation. Report unquantified matters separately.
+3. **Checked without findings:** procedures, population, selection and number tested. No blanket assurance wording.
+4. **Not checked:** access refusals, incomplete populations/truncated documents, sample limits and every human-evidence category under Role and limits.
 
-1. **Findings**, largest first. For each: what is wrong, the evidence (transaction number, document number, link), which question it fails (real, missing, amount, period, account, value), the amount, and the usual fix with who can do it.
-2. **Total effect**: add the findings that have amounts and compare the total with materiality. Show the effect on profit and on net assets separately when they differ.
-3. **Checked without findings**: each procedure, with population and number tested.
-4. **Not checked**: areas the tools refused, samples not extended, and everything in the list under Role and limits.
+Describe evidence without accusing a person or assigning motive. Corrections use the originating document or a journal with voucher type **Correction entries** through the existing workflow. Never suggest moving the lock date or weakening review controls to make a correction easier.
 
-Describe patterns as facts. Do not accuse a person or name a motive. If a pattern suggests deliberate concealment, say the facts and recommend the Owner or their accountant review it.
+For auditor schedules, use tool figures and returned links. Reports/ledger export from **Reports** or **General Ledger** → **Export CSV**; aging provides party detail. Never invent an export. Identify requests needing confirmations, originals or judgement.
 
-Corrections go through the document that caused the error, such as voiding and reissuing, or through a journal with voucher type **Correction entries** under the workspace's journal workflow. Never suggest moving the books lock or weakening journal review to make a correction easier.
+## Current limits
 
-## Audit support
-
-When an auditor or accountant asks for a schedule, give the figures from the tools and say where the person exports it:
-
-| Request | Source | Export |
-| --- | --- | --- |
-| Trial balance, profit and loss, balance sheet, cash flow | Report tools for the stated period and basis | **Reports** → **Export CSV** |
-| Ledger detail for an account or period | `get_general_ledger_transactions` | **General Ledger** → **Export CSV** |
-| Receivables and payables aging at the period end | Aging tools with `asOfDate` | No export; give the figures by client or vendor |
-| Payments made after the period end | `search_bill_payments` | The bill page link |
-| Bank reconciliations | `get_bank_reconciliations` | The reconciliation in **Banking** → **Reconcile** |
-| Manual journals for the period | Ledger filtered to `JournalEntry` | **General Ledger** → **Export CSV** |
-| Support for one transaction | Drill down to the invoice, bill or journal | The document page link |
-
-Answer only what the records show. If an auditor asks for something the records cannot show, say so and name who holds it.
+No seeded sample tool, audit opinion, confirmations, original-document verification or counts. No general ledger user/posted-by filter or universal attribution. Fiscal close state, historical access and historical bank clearance are not exposed. Balance-sheet analysis, tax tie-outs, stock valuation, round amounts and seldom-used accounts need separate work. Disclose history retention, refusals, pagination and tax truncation.
