@@ -33,7 +33,9 @@ For a personal books workspace, call this a **books check**, keep to the wording
 
 ## 2. Find where the risk is
 
-Run these before any detailed testing and use them to choose what to test:
+Start with `get_books_checks` for the period. It runs the repeatable checks on the server and returns each as `Pass`, `Finding`, `Review` or `NotChecked`, with a count, an amount, an explanation and example records. Quote its figures; do not recompute them. Follow up every `Finding` and `Review` with the programmes below. A `Pass` means that check found nothing, not that the area is right, and `NotChecked` means the person's access does not cover it. The checks do not replace the analysis below or the judgement areas.
+
+Then run these and use them to choose what else to test:
 
 - `get_trial_balance`, `get_income_statement` and `get_cash_flow` for the period, and `get_income_statement` for the comparable prior period.
 - `get_balance_sheet` at the period end and at the prior period end.
@@ -75,17 +77,18 @@ Prefer totals returned by a report tool over adding rows yourself. When a total 
 - **Period**: invoices dated in the last and first days around the period end; confirm with the person when the work was delivered.
 - **Account**: each line's revenue account is a revenue account in the chart.
 - **Value**: `get_receivables_aging`. Old balances, especially over 90 days, may not be collectable. Report them and ask whether an allowance is recorded.
-- **Tie-out**: the aging total should equal the receivables control account. Aging is as of today, so compare it with `get_balance_sheet` as of today, not the period end. A difference usually means a manual journal was posted straight to the control account; find it with the account filter on the ledger.
+- **Value at the period end**: call `get_receivables_aging` with `asOfDate` at the period end to judge collectability as it stood then.
+- **Tie-out**: `get_books_checks` compares what posted invoices show as owed at the period end with the receivables accounts in the ledger. A difference usually means a manual journal was posted straight to the control account (see its journals check), or an invoice whose posting differs from its total. `unpostedTotal` in the aging is owed on invoices that never reached the ledger.
 
 ### Purchases and payables
 
 Unrecorded bills are the main risk: profit looks higher when costs are missing.
 
-- **Missing**: `search_bills` dated after the period end, and money out in `get_bank_register` after the period end; ask which relate to the period under review. Unmatched money out in `get_bank_statement_lines` with no bill. Draft bills dated in the period. A regular cost with a month missing.
+- **Missing**: `search_bill_payments` with dates after the period end shows each payment with its bill and bill date; a payment soon after the period end for a bill dated after it, or with no bill in the period, may be a cost that belongs in the period. Also `search_bills` dated after the period end; ask which relate to the period under review. Unmatched money out in `get_bank_statement_lines` with no bill. Draft bills dated in the period. A regular cost with a month missing.
 - **Real**: from expense postings open each selected bill. Check vendor, vendor invoice number and approval details. The vendor's original invoice is outside the books.
-- **Duplicates**: per vendor, the same vendor invoice number twice, or the same amount on the same date.
+- **Duplicates**: `get_books_checks` lists bills from the same vendor with the same vendor invoice number, or the same date and amount. Ask whether each pair is a genuine repeat.
 - **Amount, period, account**: as for sales. Watch for large purchases of lasting assets recorded as expenses.
-- **Tie-out**: `get_payables_aging` against the payables control account, as of today only.
+- **Tie-out**: `get_books_checks` compares posted bills owed at the period end with the payables accounts in the ledger. Use `get_payables_aging` with `asOfDate` for the detail by vendor.
 
 ### Cash and bank
 
@@ -109,7 +112,7 @@ Recalculate tax on selected invoices and bills from `get_tax_rates` and confirm 
 
 ### Manual journals
 
-Manual journals bypass the checks built into invoices and bills, so auditors always test them. The population is `get_general_ledger_transactions` with `documentType` `JournalEntry` for posted entries, plus `search_journal_entries` for drafts. Select entries with these traits first:
+Manual journals bypass the checks built into invoices and bills, so auditors always test them. The population is `get_general_ledger_transactions` with `documentType` `JournalEntry` for posted entries, plus `search_journal_entries` for drafts. `get_books_checks` already lists those dated at the period end, without a memo, posted to receivables, payables or bank accounts, reversed soon after the period end, and posted by their own preparer. Use `minAmount` to pull the largest entries and `search` to find wording such as "adjust", "correct" or "reclass". Select entries with these traits first:
 
 - Dated in the last days of the period or just after it.
 - Posted to an account that is rarely used.
@@ -118,7 +121,7 @@ Manual journals bypass the checks built into invoices and bills, so auditors alw
 - Reversed early in the next period (`reversedGeneralLedgerHeaderId` links a reversal to its original).
 - Moving amounts between revenue and the balance sheet, or between expense and asset.
 
-For each, open `get_journal_entry`, check the memo explains a business purpose and the accounts fit it, and ask what supports it. The tools do not show who prepared or posted an entry; say so, and point to **History** on the journal.
+For each, open `get_journal_entry`, check the memo explains a business purpose and the accounts fit it, and ask what supports it. When the person may view record history, the result includes `attribution`: who prepared it, who posted it and when, and whether the same person did both. Compare the posting time with the journal date: an entry dated in the period but posted well after it ended was backdated and needs a reason. Without that access, say who prepared and posted is not visible to them and point to **History** on the journal. A journal posted by its preparer is expected where the workspace allows single-user posting; report it as a fact, not as wrongdoing.
 
 ### Stock
 
@@ -145,7 +148,8 @@ When an auditor or accountant asks for a schedule, give the figures from the too
 | --- | --- | --- |
 | Trial balance, profit and loss, balance sheet, cash flow | Report tools for the stated period and basis | **Reports** → **Export CSV** |
 | Ledger detail for an account or period | `get_general_ledger_transactions` | **General Ledger** → **Export CSV** |
-| Receivables and payables aging | Aging tools, as of today only | Say that a period-end aging is not available from the assistant |
+| Receivables and payables aging at the period end | Aging tools with `asOfDate` | No export; give the figures by client or vendor |
+| Payments made after the period end | `search_bill_payments` | The bill page link |
 | Bank reconciliations | `get_bank_reconciliations` | The reconciliation in **Banking** → **Reconcile** |
 | Manual journals for the period | Ledger filtered to `JournalEntry` | **General Ledger** → **Export CSV** |
 | Support for one transaction | Drill down to the invoice, bill or journal | The document page link |
