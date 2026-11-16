@@ -372,11 +372,24 @@ namespace AccountGo.BackendTests.Auditing
         public sealed class EntitlementOverrides
         {
             private readonly ConcurrentDictionary<int, (string Plan, IReadOnlySet<string> Features)> _overrides = new();
+            private readonly ConcurrentDictionary<int, bool> _withoutModules = new();
+
+            public void UseNoModules(int companyId)
+            {
+                UsePlan(companyId, "without-modules");
+                _withoutModules[companyId] = true;
+            }
+
+            public bool HasNoModules(int companyId) => _withoutModules.ContainsKey(companyId);
 
             public void UsePlan(int companyId, string plan, params string[] features) =>
                 _overrides[companyId] = (plan, new HashSet<string>(features, StringComparer.Ordinal));
 
-            public void Clear(int companyId) => _overrides.TryRemove(companyId, out _);
+            public void Clear(int companyId)
+            {
+                _overrides.TryRemove(companyId, out _);
+                _withoutModules.TryRemove(companyId, out _);
+            }
 
             public bool TryGet(int companyId, out (string Plan, IReadOnlySet<string> Features) value) =>
                 _overrides.TryGetValue(companyId, out value);
@@ -404,12 +417,23 @@ namespace AccountGo.BackendTests.Auditing
                 {
                     Plan = overridden.Plan,
                     EffectivePlan = overridden.Plan,
-                    Features = overridden.Features
+                    Features = overridden.Features,
+                    Modules = _overrides.HasNoModules(companyId) ? Array.Empty<string>() : snapshot.Modules,
+                    ReadOnlyModules = _overrides.HasNoModules(companyId) ? Array.Empty<string>() : snapshot.ReadOnlyModules
                 };
             }
 
-            public EntitlementDecision Evaluate(int companyId, EntitlementAction action) => _inner.Evaluate(companyId, action);
-            public void Ensure(int companyId, EntitlementAction action) => _inner.Ensure(companyId, action);
+            public EntitlementDecision Evaluate(int companyId, EntitlementAction action) =>
+                _overrides.HasNoModules(companyId) && action is EntitlementAction.Module module
+                    ? new EntitlementDecision(false, "MODULE_NOT_SUBSCRIBED", "This workspace's plan does not include this module.",
+                        RequiredModule: module.AnyOf.FirstOrDefault(), EffectivePlan: "without-modules")
+                    : _inner.Evaluate(companyId, action);
+            public void Ensure(int companyId, EntitlementAction action)
+            {
+                var decision = Evaluate(companyId, action);
+                if (!decision.Allowed)
+                    throw EntitlementDecisions.ToException(decision);
+            }
             public EntitlementDecision EvaluateForUser(string userId, UserAction action) => _inner.EvaluateForUser(userId, action);
             public void ClearPolicyMemo(int companyId) => _inner.ClearPolicyMemo(companyId);
             public bool TryGetResolvedPolicyVersion(int companyId, out string version) => _inner.TryGetResolvedPolicyVersion(companyId, out version);

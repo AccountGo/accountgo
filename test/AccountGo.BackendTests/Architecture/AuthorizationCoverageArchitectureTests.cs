@@ -334,6 +334,47 @@ namespace AccountGo.BackendTests.Architecture
             }
         }
 
+        [Fact]
+        public void ReviewTools_AreDeclaredTogetherToIsolateSiblingChanges()
+        {
+            var methods = typeof(FinancialMcpTools).Assembly.GetTypes()
+                .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+                .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null).ToList();
+            foreach (var name in new[] { "get_fiscal_years", "get_tax_report", "get_equity_statement", "search_receipts",
+                "get_bank_outstanding_items", "get_members_and_roles", "get_record_history", "get_stock_movements" })
+            {
+                var method = Assert.Single(methods, m => m.GetCustomAttribute<McpServerToolAttribute>()!.Name == name);
+                Assert.Equal("Api.Mcp.Tools.ReviewMcpTools", method.DeclaringType!.FullName);
+            }
+        }
+
+        [Fact]
+        public void WorkspaceMcpTools_AllGroupsAreRegisteredAndReadOnly()
+        {
+            var appSource = File.ReadAllText(Path.Combine(RepoRoot, "src/Api/AccountGoApp.cs"));
+            var groups = typeof(FinancialMcpTools).Assembly.GetTypes()
+                .Where(t => !t.IsAbstract && typeof(WorkspaceMcpToolBase).IsAssignableFrom(t)).ToList();
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var group in groups)
+            {
+                Assert.Contains($".WithTools<{group.FullName}>()", appSource);
+                Assert.NotNull(group.GetCustomAttribute<McpServerToolTypeAttribute>());
+                foreach (var method in group.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+                {
+                    var tool = method.GetCustomAttribute<McpServerToolAttribute>();
+                    if (tool == null) continue;
+                    Assert.True(names.Add(tool.Name!), $"Duplicate tool: {tool.Name}");
+                    Assert.True(tool.ReadOnly);
+                    Assert.True(tool.Idempotent);
+                    Assert.False(tool.Destructive);
+                    Assert.False(tool.OpenWorld);
+                }
+            }
+            foreach (var name in new[] { "get_fiscal_years", "get_tax_report", "get_equity_statement", "search_receipts",
+                "get_bank_outstanding_items", "get_members_and_roles", "get_record_history", "get_stock_movements" })
+                Assert.Contains(name, names);
+        }
+
         private static readonly IReadOnlyDictionary<string, string> AllowedCSharpFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             // Core

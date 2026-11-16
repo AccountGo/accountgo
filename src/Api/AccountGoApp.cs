@@ -309,7 +309,8 @@ public static class AccountGoApp
             .WithTools<Api.Mcp.Tools.WorkspaceMcpTools>()
             .WithTools<Api.Mcp.Tools.SalesMcpTools>()
             .WithTools<Api.Mcp.Tools.PurchasingMcpTools>()
-            .WithTools<Api.Mcp.Tools.BankingMcpTools>();
+            .WithTools<Api.Mcp.Tools.BankingMcpTools>()
+            .WithTools<Api.Mcp.Tools.ReviewMcpTools>();
         // Assistant data tools read through the same GET actions and filters as the pages.
         builder.Services.AddScoped<Api.Mcp.McpControllerReader>();
 
