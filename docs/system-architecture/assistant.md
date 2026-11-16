@@ -40,7 +40,7 @@ Layer 2 lives in Anter Agent Builder (draft → promote in UI). Paste / merge th
 2. **Use `companyPlan` for upgrade copy only** (e.g. Invoicing → Accounting / Enterprise under Settings > Subscription).
 3. **Status-first tool results.** If a financial tool returns `status` of `PlanRestricted` or `AccessDenied`, explain `message` to the user. Do **not** interpret empty `accounts` / `items` / `transactions` as empty books, and do **not** retry sibling financial tools in a loop.
 4. **Invoicing without financial modules:** quotes, invoices, payments, and vendor bills only — no GL, trial balance, balance sheet, or P&L via tools.
-5. **`companyRole`:** Owners/Admins typically have report access; Members need explicit permissions. On `AccessDenied`, tell the user to ask a workspace admin.
+5. **`companyRole`:** the workspace role does not grant report or ledger access by itself; Owners, Admins and Members all need the functional permission. Call `get_workspace_context` for the caller's effective permissions. On `AccessDenied`, tell the user to ask a workspace admin.
 
 See also [assistant-agent-entitlements.md](./assistant-agent-entitlements.md).
 

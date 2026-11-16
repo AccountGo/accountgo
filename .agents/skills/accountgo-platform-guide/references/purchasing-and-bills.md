@@ -5,7 +5,7 @@ This reference covers all user workflows under **Purchases & Bills** (`/org/{org
 ## Module & Permission Requirements
 
 - **Required Modules**: `purchases` (for Bills & Vendors); `inventory` (for Inventory stock tracking and adjustments).
-- **Permissions** (`Owner` and `Admin` workspace roles have all permissions automatically; `Member` users need these granted via a Security Role):
+- **Permissions** (the workspace role does not grant these: `Owner`, `Admin` and `Member` each need them through a functional access profile or Security Role):
   - `purchases.vendors.view` — View the **Vendors** tab and vendor detail pages.
   - `purchases.vendors.manage` — Create, edit, archive, restore, or delete vendors and vendor contacts.
   - `purchases.bills.view` — View the **Purchases & Bills** area and bill list/detail pages.

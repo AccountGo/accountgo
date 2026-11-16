@@ -7,7 +7,7 @@ This reference covers all user workflows under **General Ledger** (`/org/{orgSlu
 - **Required Modules**:
   - `financials` — Required for General Ledger, Manual Journals, and Chart of Accounts. (If disabled, clicking Dashboard or General Ledger redirects to Invoices).
   - `reports` — Required for the Financial Reports section (`/org/{orgSlug}/reports`).
-- **Permissions** (`Owner` and `Admin` have full access; `Member` users require these granted via a Security Role):
+- **Permissions** (the workspace role does not grant these: `Owner`, `Admin` and `Member` each need them through a functional access profile or Security Role):
   - `financials.journal.view` — View the General Ledger posted transaction register and manual journal entry list.
   - `financials.journal.create` — Draft manual journal entries.
   - `financials.journal.post` — Post manual journal entries to the General Ledger.
@@ -30,7 +30,7 @@ At the top of the General Ledger screen, you can switch between three views:
 ### Filtering & Paging
 - **Period Preset**: Choose **This Month**, **Quarter-to-Date**, **Year-to-Date**, **All Time**, or **Custom Range** (`From` and `To` dates).
 - **Document Type**: Filter by transaction source: `Sales Delivery`, `Sales Invoice`, `Sales Receipt`, `Purchase Receipt`, `Purchase Invoice`, `Purchase Invoice Payment`, `Journal Entry`, `Customer Allocation`, or `Inventory Adjustment`.
-- **Account Code**: Filter transactions that touch a specific general ledger account (e.g., `10100`, `40100`).
+- **Account Code**: Filter transactions that touch a specific general ledger account (use a code from this workspace's chart).
 - **Transaction #**: Search for an exact sequential transaction number.
 - **Search Box**: Free-text search matching transaction numbers, descriptions, account codes, or account names.
 - **Pagination**: Default 100 transactions per page (up to 500 max).
@@ -90,7 +90,7 @@ The Chart of Accounts organizes all assets, liabilities, equity, revenues, and e
 6. **Closing Accounts** (Class 6) — Year-end retained earnings and closing summaries.
 
 ### Key Account Properties
-- **Account Code**: Unique numeric code (e.g., `10100` Cash, `12000` Accounts Receivable, `20100` Accounts Payable).
+- **Account Code**: Unique numeric code. Read the actual codes from this workspace's chart; do not quote defaults.
 - **Account Name**: Descriptive title.
 - **Parent Account**: If selected, the account is a sub-account. Parent accounts display rolled-up balances of their children.
 - **Can Post (`canPost`)**: Only leaf accounts without sub-accounts can be posted to directly on invoices, bills, or journals.
@@ -111,7 +111,7 @@ The Chart of Accounts organizes all assets, liabilities, equity, revenues, and e
 Available when the workspace has the `reports` module enabled.
 
 ### Available Reports
-1. **Trial Balance**: Verifies that total debit balances equal total credit balances across all active accounts for the period.
+1. **Trial Balance**: Lists each account's debit or credit balance for the period and shows whether total debits equal total credits. A balanced trial balance does not prove the entries are correct.
 2. **Profit & Loss (Income Statement)**: Calculates total revenues, total expenses, and resulting Net Income.
 3. **Balance Sheet**: Cumulative statement of financial position showing Total Assets = Total Liabilities + Total Equity (including unclosed current-period net income).
 4. **Cash Flow Statement**: Breaks down cash movements into Operating Activities, Investing Activities, and Financing Activities, detailing starting cash, net change in cash, and ending cash.
