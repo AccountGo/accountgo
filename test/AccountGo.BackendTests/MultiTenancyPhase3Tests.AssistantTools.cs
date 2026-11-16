@@ -25,6 +25,8 @@ namespace AccountGo.BackendTests
 
         protected static readonly string[] AssistantDataTools =
         {
+            "get_fiscal_years", "get_tax_report", "get_equity_statement", "search_receipts",
+            "get_bank_outstanding_items", "get_members_and_roles", "get_record_history", "get_stock_movements",
             "get_workspace_context", "get_dashboard_summary", "get_books_checks", "search_journal_entries", "get_journal_entry", "search_items",
             "get_tax_rates", "get_linked_entries", "search_clients", "get_client", "search_invoices", "get_invoice",
             "get_receivables_aging", "get_recurring_schedules", "search_vendors", "get_vendor", "search_bills", "get_bill",
