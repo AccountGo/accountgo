@@ -13,6 +13,8 @@ namespace Dto.Financial
         public string? Memo { get; set; }
         public bool? Posted { get; set; }
         public bool? ReadyForPosting { get; set; }
+        /// <summary>Who prepared and posted this journal. Only set on a single-journal read by a member who may view record history.</summary>
+        public JournalAttribution? Attribution { get; set; }
         public string? SourceSystem { get; set; }
         public string? SourceKey { get; set; }
         public decimal? debitAmount { get { return GetDebitAmount(); } }

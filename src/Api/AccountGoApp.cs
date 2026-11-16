@@ -277,6 +277,8 @@ public static class AccountGoApp
         builder.Services.AddScoped<Services.Financial.IYearEndCloseService, Services.Financial.YearEndCloseService>();
         builder.Services.AddScoped<Services.Financial.PartnerService>();
         builder.Services.AddScoped<Services.Financial.IBooksReadinessService, Services.Financial.BooksReadinessService>();
+        builder.Services.AddScoped<Api.Service.JournalAttributionReader>();
+        builder.Services.AddScoped<Api.Service.BooksChecksService>();
         builder.Services.AddScoped<Services.Banking.IBankTransactionService, Services.Banking.BankTransactionService>();
         builder.Services.AddScoped<Services.Banking.IBankReconciliationService, Services.Banking.BankReconciliationService>();
         builder.Services.AddScoped<Services.Banking.IBankStatementImportService, Services.Banking.BankStatementImportService>();
@@ -309,7 +311,8 @@ public static class AccountGoApp
             .WithTools<Api.Mcp.Tools.WorkspaceMcpTools>()
             .WithTools<Api.Mcp.Tools.SalesMcpTools>()
             .WithTools<Api.Mcp.Tools.PurchasingMcpTools>()
-            .WithTools<Api.Mcp.Tools.BankingMcpTools>();
+            .WithTools<Api.Mcp.Tools.BankingMcpTools>()
+            .WithTools<Api.Mcp.Tools.ReviewMcpTools>();
         // Assistant data tools read through the same GET actions and filters as the pages.
         builder.Services.AddScoped<Api.Mcp.McpControllerReader>();
 

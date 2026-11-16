@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Dto.Banking;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
@@ -24,10 +25,12 @@ namespace AccountGo.BackendTests
 
         protected static readonly string[] AssistantDataTools =
         {
-            "get_workspace_context", "get_dashboard_summary", "search_journal_entries", "get_journal_entry", "search_items",
+            "get_fiscal_years", "get_tax_report", "get_equity_statement", "search_receipts",
+            "get_bank_outstanding_items", "get_members_and_roles", "get_record_history", "get_stock_movements",
+            "get_workspace_context", "get_dashboard_summary", "get_books_checks", "search_journal_entries", "get_journal_entry", "search_items",
             "get_tax_rates", "get_linked_entries", "search_clients", "get_client", "search_invoices", "get_invoice",
             "get_receivables_aging", "get_recurring_schedules", "search_vendors", "get_vendor", "search_bills", "get_bill",
-            "get_payables_aging", "list_bank_accounts", "get_bank_register", "get_bank_reconciliations", "get_bank_statement_lines"
+            "get_payables_aging", "search_bill_payments", "list_bank_accounts", "get_bank_register", "get_bank_reconciliations", "get_bank_statement_lines"
         };
 
         /// <summary>Calls a tool as Anter does and returns its structured result.</summary>
@@ -136,6 +139,202 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task AssistantTools_SelectJournalsByAmountAndText_AndShowWhoPreparedAndPosted()
+        {
+            var today = DateTime.UtcNow.Date;
+            await PostJournal(today, ("10120", 1, 50m), ("40100", 2, 50m));
+            await PostJournal(today, ("10120", 1, 5000m), ("40100", 2, 5000m));
+
+            async Task<List<JsonElement>> Journals(object arguments) =>
+                (await CallTool("get_general_ledger_transactions", arguments)).GetProperty("transactions").EnumerateArray().ToList();
+
+            Assert.Equal(2, (await Journals(new { documentType = "JournalEntry" })).Count);
+            var large = Assert.Single(await Journals(new { documentType = "JournalEntry", minAmount = 1000 }));
+            Assert.Equal(5000m, large.GetProperty("totalDebit").GetDecimal());
+            var small = Assert.Single(await Journals(new { documentType = "JournalEntry", maxAmount = 100 }));
+            Assert.Equal(50m, small.GetProperty("totalDebit").GetDecimal());
+            Assert.Equal(2, (await Journals(new { search = "DASHBOARD period" })).Count);
+            Assert.Empty(await Journals(new { search = "no such narration" }));
+
+            var bad = await McpRequest(new { jsonrpc = "2.0", id = 4, method = "tools/call",
+                @params = new { name = "get_general_ledger_transactions", arguments = new { minAmount = 10, maxAmount = 5 } } });
+            Assert.True(bad.GetProperty("result").GetProperty("isError").GetBoolean());
+
+            // Who prepared and posted is record history: hidden until the member may view it.
+            var journalId = large.GetProperty("sourceDocumentId").GetInt32();
+            var hidden = (await CallTool("get_journal_entry", new { journalEntryId = journalId })).GetProperty("data");
+            Assert.Equal(JsonValueKind.Null, hidden.GetProperty("attribution").ValueKind);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<Api.Data.ApiDbContext>();
+                var ownerMemberId = db.CompanyMembers.IgnoreQueryFilters().Single(m => m.CompanyId == _companyId && m.UserId == _ownerId).Id;
+                var viewerRoleId = db.SecurityRoles.IgnoreQueryFilters().Single(r => r.Name == "Auditor / Viewer").Id;
+                db.CompanyMemberSecurityRoles.Add(new Core.Domain.CompanyMemberSecurityRole { CompanyMemberId = ownerMemberId, SecurityRoleId = viewerRoleId });
+                await db.SaveChangesAsync();
+            }
+
+            var journal = (await CallTool("get_journal_entry", new { journalEntryId = journalId })).GetProperty("data");
+            var attribution = journal.GetProperty("attribution");
+            var preparer = Assert.Single(attribution.GetProperty("preparedBy").EnumerateArray());
+            Assert.Equal(_ownerId, preparer.GetProperty("userId").GetString());
+            Assert.Equal(_ownerId, attribution.GetProperty("postedByUserId").GetString());
+            Assert.True(attribution.GetProperty("postedByAPreparer").GetBoolean());
+            Assert.True(attribution.GetProperty("postedAt").GetDateTime() > DateTime.UtcNow.AddMinutes(-30));
+        }
+
+        [Fact]
+        public async Task AssistantTools_ReceivablesAgingAsOfADate_FollowsLedgerDatesAndTiesToTheControlAccount()
+        {
+            var today = DateTime.UtcNow.Date;
+            string Iso(DateTime d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+            var invoice = await NewInvoice();
+            invoice.InvoiceDate = today.AddDays(-2);
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
+
+            var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Aging bank", Type = 1 });
+            var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
+                new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 40, PaymentDate = today, BankAccountId = bank.Id });
+            Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
+
+            // Before the invoice existed nothing was owed.
+            var before = (await CallTool("get_receivables_aging", new { asOfDate = Iso(today.AddDays(-3)) })).GetProperty("data");
+            Assert.Equal(0m, before.GetProperty("total").GetDecimal());
+
+            // The day before the receipt the whole invoice was owed, although today only 60 is.
+            var dayBefore = (await CallTool("get_receivables_aging", new { asOfDate = Iso(today.AddDays(-1)) })).GetProperty("data");
+            Assert.Equal(100m, dayBefore.GetProperty("total").GetDecimal());
+            Assert.Equal(0m, dayBefore.GetProperty("unpostedTotal").GetDecimal());
+            Assert.Equal(today.AddDays(-1), dayBefore.GetProperty("asOf").GetDateTime().Date);
+
+            var now = (await CallTool("get_receivables_aging", new { asOfDate = Iso(today) })).GetProperty("data");
+            Assert.Equal(60m, now.GetProperty("total").GetDecimal());
+            Assert.Equal(60m, (await CallTool("get_receivables_aging", new { })).GetProperty("data").GetProperty("total").GetDecimal());
+
+            // Each as-of total equals the receivables account in the balance sheet at the same date.
+            foreach (var (date, expected) in new[] { (today.AddDays(-1), 100m), (today, 60m) })
+            {
+                var sheet = await CallTool("get_balance_sheet", new { asOfDate = Iso(date) });
+                var receivable = sheet.GetProperty("items").EnumerateArray()
+                    .Where(i => i.GetProperty("accountCode").GetString() == "10120")
+                    .Sum(i => i.GetProperty("amount").GetDecimal());
+                Assert.Equal(expected, receivable);
+            }
+
+            var bad = await McpRequest(new { jsonrpc = "2.0", id = 3, method = "tools/call",
+                @params = new { name = "get_receivables_aging", arguments = new { asOfDate = "not-a-date" } } });
+            Assert.True(bad.GetProperty("result").GetProperty("isError").GetBoolean());
+        }
+
+        [Fact]
+        public async Task AssistantTools_PayablesAgingAsOfADate_FollowsPaymentAndVoidDates()
+        {
+            var today = DateTime.UtcNow.Date;
+            string Iso(DateTime d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "As-of supplier" });
+            var bill = NewBill(vendor.Id, ("Rent", 1, 300m, null));
+            bill.Date = today.AddDays(-2);
+            bill.Status = "Open";
+            var approved = await SaveBillOk(bill);
+            await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
+                new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 100m, Date = today, PaymentMethod = "Check", ReferenceNo = "CHK-9" }));
+
+            var toVoid = NewBill(vendor.Id, ("Entered twice", 1, 50m, null));
+            toVoid.Date = today.AddDays(-2);
+            toVoid.Status = "Open";
+            var second = await SaveBillOk(toVoid);
+            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={second.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
+
+            Assert.Equal(0m, (await CallTool("get_payables_aging", new { asOfDate = Iso(today.AddDays(-3)) })).GetProperty("data").GetProperty("total").GetDecimal());
+
+            // Yesterday both bills were owed in full: the payment and the void are dated today.
+            var dayBefore = (await CallTool("get_payables_aging", new { asOfDate = Iso(today.AddDays(-1)) })).GetProperty("data");
+            Assert.Equal(350m, dayBefore.GetProperty("total").GetDecimal());
+            Assert.Equal(2, dayBefore.GetProperty("documentCount").GetInt32());
+
+            var now = (await CallTool("get_payables_aging", new { asOfDate = Iso(today), vendorId = vendor.Id })).GetProperty("data");
+            Assert.Equal(200m, now.GetProperty("total").GetDecimal());
+            Assert.Equal(200m, (await CallTool("get_payables_aging", new { })).GetProperty("data").GetProperty("total").GetDecimal());
+
+            foreach (var (date, expected) in new[] { (today.AddDays(-1), 350m), (today, 200m) })
+            {
+                var sheet = await CallTool("get_balance_sheet", new { asOfDate = Iso(date) });
+                var payable = sheet.GetProperty("items").EnumerateArray()
+                    .Where(i => i.GetProperty("accountCode").GetString() == "20110")
+                    .Sum(i => Math.Abs(i.GetProperty("amount").GetDecimal()));
+                Assert.Equal(expected, payable);
+            }
+        }
+
+        [Fact]
+        public async Task AssistantTools_BooksChecks_PassOnCleanBooksAndFlagPlantedProblems()
+        {
+            var today = DateTime.UtcNow.Date;
+            string Iso(DateTime d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            var period = new { fromDate = Iso(today.AddDays(-10)), toDate = Iso(today) };
+            async Task<Dictionary<string, JsonElement>> Checks()
+            {
+                var result = await CallTool("get_books_checks", period);
+                Assert.Equal("Success", result.GetProperty("status").GetString());
+                return result.GetProperty("data").GetProperty("checks").EnumerateArray().ToDictionary(c => c.GetProperty("id").GetString());
+            }
+            string Status(Dictionary<string, JsonElement> checks, string id) => checks[id].GetProperty("status").GetString();
+
+            // Clean books: an invoice and a bill, both posted.
+            var invoice = await NewInvoice();
+            invoice.Status = "Open";
+            Assert.True((await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice)).IsSuccessStatusCode);
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Checks supplier" });
+            var bill = NewBill(vendor.Id, ("Rent", 1, 300m, null));
+            bill.VendorInvoiceNo = "RENT-1";
+            bill.Status = "Open";
+            await SaveBillOk(bill);
+
+            var clean = await Checks();
+            foreach (var id in new[] { "ledger.balanced", "sales.receivablesTieOut", "sales.unposted", "sales.duplicateNumbers",
+                         "purchases.payablesTieOut", "purchases.unposted", "purchases.duplicateVendorInvoice", "purchases.sameDayAmount",
+                         "journals.periodEnd", "journals.noMemo", "journals.controlAccounts", "journals.reversedAfterPeriodEnd" })
+                Assert.True(Status(clean, id) == "Pass", $"{id} was {Status(clean, id)}: {clean[id].GetRawText()}");
+            Assert.Equal(0m, clean["sales.receivablesTieOut"].GetProperty("amount").GetDecimal());
+            // The owner in this fixture may not view record history, so that check is reported as not checked.
+            Assert.Equal("NotChecked", Status(clean, "journals.postedByPreparer"));
+
+            // Planted: a second bill from the same vendor for the same date and amount (the app itself refuses a repeated
+            // vendor invoice number), and a manual journal straight to the receivables account.
+            var again = NewBill(vendor.Id, ("Rent", 1, 300m, null));
+            again.VendorInvoiceNo = "RENT-1A";
+            again.Status = "Open";
+            await SaveBillOk(again);
+            await PostJournal(today, ("10120", 1, 75m), ("40100", 2, 75m));
+
+            var planted = await Checks();
+            Assert.Equal("Pass", Status(planted, "purchases.duplicateVendorInvoice"));
+            var duplicate = planted["purchases.sameDayAmount"];
+            Assert.Equal("Review", duplicate.GetProperty("status").GetString());
+            Assert.Equal(1, duplicate.GetProperty("count").GetInt32());
+            Assert.Equal(2, duplicate.GetProperty("examples").GetArrayLength());
+
+            var tieOut = planted["sales.receivablesTieOut"];
+            Assert.Equal("Finding", tieOut.GetProperty("status").GetString());
+            Assert.Equal(75m, tieOut.GetProperty("amount").GetDecimal());
+            var control = planted["journals.controlAccounts"];
+            Assert.Equal("Review", control.GetProperty("status").GetString());
+            Assert.Equal(1, control.GetProperty("count").GetInt32());
+            Assert.Equal("Review", Status(planted, "journals.periodEnd"));
+            Assert.Equal("Pass", Status(planted, "purchases.payablesTieOut"));
+            Assert.Equal("Pass", Status(planted, "ledger.balanced"));
+
+            var bad = await McpRequest(new { jsonrpc = "2.0", id = 5, method = "tools/call",
+                @params = new { name = "get_books_checks", arguments = new { fromDate = Iso(today), toDate = Iso(today.AddDays(-1)) } } });
+            Assert.True(bad.GetProperty("result").GetProperty("isError").GetBoolean());
+        }
+
+        [Fact]
         public async Task AssistantTools_ReadBillsVendorsAndPayables()
         {
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Assistant supplier" });
@@ -160,6 +359,19 @@ namespace AccountGo.BackendTests
 
             var aging = (await CallTool("get_payables_aging", new { })).GetProperty("data");
             Assert.Equal(120m, aging.GetProperty("total").GetDecimal());
+
+            // Payments are listed by their own date, with the bill each one settled.
+            await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
+                new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 20m, Date = DateTime.UtcNow, PaymentMethod = "Check", ReferenceNo = "CHK-20" }));
+            var today = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            var payments = await CallTool("search_bill_payments", new { fromDate = today, toDate = today });
+            Assert.Equal(1, payments.GetProperty("totalCount").GetInt32());
+            var payment = payments.GetProperty("data").EnumerateArray().Single();
+            Assert.Equal(20m, payment.GetProperty("amount").GetDecimal());
+            Assert.Equal(approved.Id, payment.GetProperty("billId").GetInt32());
+            Assert.Equal("SUP-778", payment.GetProperty("vendorInvoiceNo").GetString());
+            var tomorrow = DateTime.UtcNow.Date.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Equal(0, (await CallTool("search_bill_payments", new { fromDate = tomorrow })).GetProperty("totalCount").GetInt32());
         }
 
         [Fact]
