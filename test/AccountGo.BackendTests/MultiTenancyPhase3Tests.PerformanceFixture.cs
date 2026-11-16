@@ -45,6 +45,10 @@ public abstract partial class MultiTenancyPhase3TestBase
 
 }
 
+/// <summary>
+/// Counts EF commands through process-wide diagnostics, so it must not run alongside other HTTP tests.
+/// </summary>
+[Collection("WorkspaceSetupHttp")]
 public sealed class MultiTenancyPhase3PerformanceFixtureTests : MultiTenancyPhase3TestBase
 {
     public MultiTenancyPhase3PerformanceFixtureTests(ITestOutputHelper output) : base(output) { }
