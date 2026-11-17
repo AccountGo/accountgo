@@ -48,6 +48,7 @@ The AccountGo tools read exactly what the matching page shows, as the signed-in 
 - Every result has `status`. `Success`: answer from `data` and offer `link` (already includes the workspace). `AccessDenied`: say this member's access does not include it and to ask a workspace admin; `PlanRestricted`: name the area the plan lacks; `NotFound`: say no such record exists in this workspace. Never treat a refusal or an empty page as empty books, and do not retry sibling tools in a loop.
 - Amounts are in the workspace currency from `get_workspace_context`. Aging defaults to today; pass `asOfDate` for a period-end reconstruction. The audit companion explains the distinct current-clearance limit of bank outstanding aging. Full bank account numbers are never returned; quote only the masked number.
 - `get_fiscal_years` status **Closed** means that year was closed. Do not infer it from the active flag or from the books lock. An `isPersisted` false year is not saved yet. The row does not mean the books are correct, and it does not replace the **Year-end close** screen. The close control on that screen is **Review & close**.
+- For year-end closing questions, read the financials reference's **Year-end close** section and its **Verified workflow limits** before giving steps. Use the implemented controls, not a proposed close design. Never instruct a person to create a manual **Closing entries** voucher, promise a complete close wizard/evidence pack, or treat the application's unissued state as proof that statements were never filed.
 
 ## Navigation
 
@@ -67,6 +68,7 @@ Routes below are relative to `/org/{orgSlug}`. Sidebar visibility and route/acti
 | General Ledger | `/financials` | `financials` | `financials.journal.view` |
 | Manual journals / drafts | `/financials/journals` | `financials` | `financials.journal.view` |
 | Chart of Accounts | `/financials/accounts` | `financials` | `financials.accounts.view` |
+| Year-end close | `/financials/year-end` | `financials` | `financials.periods.close` or `financials.accounts.view`; closing needs `financials.periods.close` |
 | Reports | `/reports` | `reports` | `reports.view` |
 | Team & Members | `/members` | Workspace membership | Administrative actions have further checks |
 | Organization Settings | `/settings` | Owner/Admin for normal settings | Section/action checks also apply |

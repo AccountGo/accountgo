@@ -2162,10 +2162,10 @@ namespace Api.Controllers
         [HttpGet]
         [Route("YearEnd")]
         [RequireModule("financials")]
-        [Authorize]
+        [RequireOperation(AccessOperationCatalog.FinancialsYearEndReview)]
         public IActionResult ListYearEndYears()
         {
-            if (!CanInspectYearEnd(out var denied))
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsYearEndReview, SystemPermissions.FinancialsAccountsView, out var denied))
                 return denied!;
 
             var years = _yearEndCloseService.ListYears();
@@ -2188,10 +2188,10 @@ namespace Api.Controllers
         [HttpGet]
         [Route("YearEnd/{code}")]
         [RequireModule("financials")]
-        [Authorize]
+        [RequireOperation(AccessOperationCatalog.FinancialsYearEndReview)]
         public IActionResult PreviewYearEnd(string code)
         {
-            if (!CanInspectYearEnd(out var denied))
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsYearEndReview, SystemPermissions.FinancialsAccountsView, out var denied))
                 return denied!;
 
             try
@@ -2374,22 +2374,6 @@ namespace Api.Controllers
             reopenBlockedReason = preview.ReopenBlockedReason,
             latestCloseRunId = preview.LatestCloseRunId
         };
-
-        private bool CanInspectYearEnd(out IActionResult? denied)
-        {
-            if (TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out _))
-            {
-                denied = null;
-                return true;
-            }
-            if (TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out _))
-            {
-                denied = null;
-                return true;
-            }
-            TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out denied);
-            return false;
-        }
 
         private bool ActorIsOwnerOrAdmin() =>
             _tenantContext.Role is CompanyMemberRole.Owner or CompanyMemberRole.Admin;

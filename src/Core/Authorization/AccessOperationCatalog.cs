@@ -31,6 +31,7 @@ namespace Core.Authorization
         public const string FinancialsJournalPostBatch = "financials.journal.post_batch";
         public const string LinkedEntriesCreate = "financials.linked_entries.create";
         public const string FinancialsPeriodsClose = "financials.periods.close";
+        public const string FinancialsYearEndReview = "financials.year_end.review";
         public const string FinancialsReportsView = "financials.reports.view";
         public const string ReportsView = "reports.view";
 
@@ -284,6 +285,12 @@ namespace Core.Authorization
                     permissionsAll: new[] { SystemPermissions.FinancialsJournalPost },
                     modulesAny: new[] { SystemModules.Financials },
                     description: "Create a linked journal pair while preserving each workspace's posting policy."),
+                Functional(
+                    FinancialsYearEndReview,
+                    "POL-FIN-YEAR-END-REVIEW",
+                    permissionsAny: new[] { SystemPermissions.FinancialsAccountsView, SystemPermissions.FinancialsPeriodsClose },
+                    modulesAny: new[] { SystemModules.Financials },
+                    description: "Review fiscal year-end readiness without granting close or source-document write permissions."),
                 Functional(
                     FinancialsPeriodsClose,
                     "POL-FIN-PERIOD-CLOSE",
