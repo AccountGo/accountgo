@@ -1,5 +1,7 @@
 # Settings, Members, Roles & Subscriptions Guide
 
+
+
 This reference covers user management under **Team & Members** (`/org/{orgSlug}/members`) and administration under **Organization Settings** (`/org/{orgSlug}/settings`).
 
 ---
@@ -82,10 +84,14 @@ Access & Billing
 - Group taxes into Tax Groups and Item Tax Groups for automatic calculation on invoice and bill line items.
 
 ### E. Financial Rules & Banking (`?tab=financials`)
-*(Available when the `financials` module is active)*
-- **Fiscal Years**: Define fiscal year start and end dates (e.g., Jan 1 - Dec 31). Mark the active year for ledger period reporting.
-- **Payment Terms Master**: Create or edit payment terms (*Net 15*, *Net 30*, *Due on Receipt*, etc.) and due day offsets.
-- **Cash & Bank Accounts**: Map bank accounts and petty cash funds to their corresponding General Ledger asset accounts.
+*(Available when the `financials` module is active. Personal books label this tab **Books**.)*
+
+Owner or Admin is required to open Settings. That title does not grant close permission. Closing and reopening need the close permission. A Member with that permission opens **Year-end close** in the sidebar (`/org/{orgSlug}/financials/year-end`). Without close permission the ended year says **View only — close permission required**.
+
+- **Year-end close**: Prepare a missing year with **Prepare fiscal years through next year**, then **Review & close** on an ended year. The button opens the preview. Warnings need a written reason. See the financials reference for equity targets, reopen, the close package, and prior-period adjustments. Do not send the person to create a **Closing entries** journal.
+- **Fiscal years**: The **Active Fiscal Reporting Year** cards list each year's dates and a status of **Open**, **Ended**, or **Closed**. **Closed** is a completed close, with who closed it and when. A year that is not current is not automatically Closed. A card that says **Not prepared yet** is only a calculated year; prepare it before closing. The active flag on the record is not the status.
+- Books lock sits on the same tab. Closing moves the lock to the year end when that date is later than the current lock. The lock date alone is not proof the year is closed; read `closedAt` / status from `get_fiscal_years`, and the lock from `get_workspace_context`.
+- Bank accounts are added on **Banking**, not by mapping them on this tab. Payment terms are under **Invoices**.
 
 ### F. Roles & Permissions (`?tab=roles`)
 - **Security Role Matrix**: Create custom roles (e.g., *Sales Rep*, *Accounts Payable Clerk*) and toggle granular permissions across Sales, Purchasing, General Ledger, Inventory, and Administration.

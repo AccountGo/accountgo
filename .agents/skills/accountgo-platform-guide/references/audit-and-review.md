@@ -1,5 +1,7 @@
 # Books review and audit support
 
+Do not say a passed checklist means the books are correct.
+
 Read for “review my books”, “are my books right”, “audit prep”, month-end or year-end checks, and an auditor's request. This programme reviews financial records; document change history is supporting evidence, not the programme itself.
 
 ## Role and limits
@@ -21,7 +23,7 @@ For personal books, call this a **books check**, load the personal books compani
 ## 1. Plan
 
 1. Call `get_workspace_context` for workspace, currency, entity type, year end, lock, journal workflow and permissions. Never substitute a remembered workspace or a slug from ordinary chat. If trusted context is unavailable, ask the person to open the intended workspace.
-2. Agree inclusive dates, basis and reporting framework; use the same basis throughout. `get_fiscal_years` returns dates and active flag, including a fallback; it has no closed/lock state. Read the books lock from workspace context.
+2. Agree inclusive dates, basis and reporting framework; use the same basis throughout. `get_fiscal_years` returns dates, an active flag, and status **Open**, **Ended**, or **Closed**, including an unsaved current-year fallback (`isPersisted` false). **Closed** means `closedAt` is set. Never treat the active flag or the books lock as closed. The lock still comes from workspace context. A fiscal-year row has no readiness findings and no close package.
 3. Agree **materiality** with the person/accountant. Without a figure, report amounts without material/immaterial labels; do not invent a percentage. Disclose any separate selection threshold.
 4. Date the review. A lock is a control, not proof of correct balances; unlocked figures can change.
 5. Single-user posting permits self-posting; inspect attribution before claiming an individual journal lacked independent review.
@@ -40,7 +42,7 @@ Use these alongside the existing reports, ledger, invoice, bill, journal and ban
 
 | Tool | Evidence and boundary |
 | --- | --- |
-| `get_fiscal_years` | Dates/active flag, no closed state. |
+| `get_fiscal_years` | Dates, active flag, status Open/Ended/Closed, `closedAt` (UTC offset), `closedBy`, `closingGeneralLedgerHeaderId`, `isPersisted`. Not the lock, not readiness, not a package, not proof the books are right. An unsaved year must be prepared on **Year-end close** before it can be closed. A closed year with no activity can have no closing transaction. |
 | `get_tax_report` | No dates: settings/periods/filings. Both `from`/`to`: period report, ledger check, warnings, filing comparison. Disclose `documentsTruncated`; request `includeAllDocuments` when needed. |
 | `get_equity_statement` | Equity rollforward, balance-sheet checks, comparison/partner columns; pass `basis`. |
 | `search_receipts` | Filtered list or `receiptId` detail; summaries omit posting/void status and allocations. |
@@ -121,4 +123,4 @@ For auditor schedules, use tool figures and returned links. Reports/ledger expor
 
 ## Current limits
 
-No seeded sample tool, audit opinion, confirmations, original-document verification or counts. No general ledger user/posted-by filter or universal attribution. Fiscal close state, historical access and historical bank clearance are not exposed. Balance-sheet analysis, tax tie-outs, stock valuation, round amounts and seldom-used accounts need separate work. Disclose history retention, refusals, pagination and tax truncation.
+No seeded sample tool, audit opinion, confirmations, original-document verification or counts. No general ledger user/posted-by filter or universal attribution. Historical access and historical bank clearance are not exposed. Fiscal close status is on `get_fiscal_years`; the close dialog's checklist is separate from historical aging. Reports has **Receivables & Payables Aging** at `?statement=aging&to=YYYY-MM-DD`, and the aging tools still accept `asOfDate`. Keep posted totals separate from `unpostedTotal`. A later rerun of a live report can change after a reopen. A year closed with **Review & close** keeps a downloadable close package; a year closed before that feature has no retained package. Statutory returns, payroll and fixed-asset registers stay outside these books: the person records any needed adjustment before close. Balance-sheet analysis, tax tie-outs, stock valuation, round amounts and seldom-used accounts need separate work. Disclose history retention, refusals, pagination and tax truncation. A passed books check or a closed year is not a statement that the books are correct.

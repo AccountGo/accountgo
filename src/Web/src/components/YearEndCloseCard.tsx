@@ -4,10 +4,14 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
   canEnableCloseButton,
+  closeResolutionUrl,
   fiscalYearStatusLabel,
   normalizeFiscalYearCloseStatus,
+  reviewAndCloseLabel,
+  warningCloseReady,
   type FiscalYearCloseStatusValue,
 } from '../lib/yearEndClose';
+import { PermissionDeniedCard, usePermissions, useTenantContext } from './Gating';
 import { ModalShell } from './ModalShell';
 
 interface YearEndYearRow {
@@ -47,6 +51,12 @@ interface YearEndPreview {
   partnerAllocations?: Array<{ partnerId: number; name: string; percent: number; profitShare: number; drawingsClosed: number; capitalAfterClose: number }>;
   partnerLossNotice?: string | null;
   canClose: boolean;
+  previewHash?: string;
+  packageNote?: string | null;
+  issuanceStatus?: string;
+  canReopen?: boolean;
+  reopenBlockedReason?: string | null;
+  latestCloseRunId?: number | null;
   currentBooksLockedThrough?: string | null;
   proposedBooksLockedThrough?: string | null;
   requiresLockAcknowledgement?: boolean;
@@ -84,9 +94,7 @@ function CheckList({
             {item.count > 1 ? ` (${item.count})` : ''}
           </span>
           {item.linkPath && (
-            <Link to={item.linkPath} className="font-semibold underline">
-              Review
-            </Link>
+            <ReviewLink path={item.linkPath} />
           )}
         </li>
       ))}
@@ -95,9 +103,20 @@ function CheckList({
 }
 
 /** Fiscal year-end close / reopen on Financial Rules (#455 Phase 2b-1). */
+function ReviewLink({ path }: { path: string }) {
+  const { currentOrg } = useTenantContext();
+  return (
+    <Link to={closeResolutionUrl(currentOrg.slug, path)} className="font-semibold underline">
+      Review
+    </Link>
+  );
+}
+
 export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean }> = ({ canClose, personal = false }) => {
   const { authFetch } = useAuth();
   const [years, setYears] = useState<YearEndYearRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
@@ -105,6 +124,8 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
     code: string;
     preview: YearEndPreview;
     acknowledgeWarnings: boolean;
+    warningReason: string;
+    stale: boolean;
   } | null>(null);
 
   const [reopenDialog, setReopenDialog] = useState<{ code: string; reason: string; preview: YearEndPreview; acknowledge: boolean } | null>(null);
@@ -114,10 +135,16 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
       const res = await authFetch('/api/Financials/YearEnd');
       if (res.ok) {
         const data = (await res.json()) as YearEndYearRow[];
-        setYears(data);
+        setYears(Array.isArray(data) ? data : []);
+        setLoadError(null);
+      } else {
+        setYears([]);
+        setLoadError('Could not load fiscal years.');
       }
     } catch (err) {
       console.error('Failed to load fiscal years for year-end close:', err);
+      setYears([]);
+      setLoadError(err instanceof Error ? err.message : 'Could not load fiscal years.');
     }
   }, [authFetch]);
 
@@ -150,10 +177,13 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
       if (!res.ok) {
         throw new Error(body?.message || 'Could not load year-end preview.');
       }
+      if (!idempotencyKey) setIdempotencyKey(crypto.randomUUID());
       setCloseDialog({
         code,
         preview: body as YearEndPreview,
         acknowledgeWarnings: false,
+        warningReason: '',
+        stale: false,
       });
     } catch (err) {
       setMessage({
@@ -167,9 +197,13 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
 
   const submitClose = async () => {
     if (!closeDialog || !canClose) return;
-    const { code, preview, acknowledgeWarnings } = closeDialog;
-    if (preview.warnings.length > 0 && !acknowledgeWarnings) {
-      setMessage({ kind: 'error', text: 'Acknowledge the warnings before closing the year.' });
+    const { code, preview, acknowledgeWarnings, warningReason } = closeDialog;
+    if (!warningCloseReady(preview.warnings.length, acknowledgeWarnings, warningReason)) {
+      setMessage({ kind: 'error', text: 'Acknowledge the warnings and enter a reason before closing the year.' });
+      return;
+    }
+    if (!preview.previewHash) {
+      setMessage({ kind: 'error', text: 'Refresh the review before closing the year.' });
       return;
     }
     setBusyCode(code);
@@ -177,14 +211,27 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
     try {
       const res = await authFetch(`/api/Financials/YearEnd/${encodeURIComponent(code)}/Close`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acknowledgeWarnings }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey || crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          acknowledgeWarnings,
+          warningExceptionReason: warningReason.trim(),
+          previewHash: preview.previewHash,
+        }),
       });
       const body = await res.json().catch(() => null);
+      if (res.status === 409 && body?.code === 'stale_year_end_preview') {
+        setCloseDialog({ ...closeDialog, acknowledgeWarnings: false, warningReason: '', stale: true });
+        setMessage({ kind: 'error', text: body.message || 'The review is out of date. Refresh it before closing.' });
+        return;
+      }
       if (!res.ok) {
         throw new Error(body?.message || 'Could not close the fiscal year.');
       }
       setCloseDialog(null);
+      setIdempotencyKey(null);
       setMessage({ kind: 'ok', text: `Fiscal year ${code} closed.` });
       await loadYears();
     } catch (err) {
@@ -245,7 +292,46 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
     }
   };
 
-  if (!years) return null;
+  const downloadPackage = async (code: string) => {
+    setMessage(null);
+    try {
+      const res = await authFetch(`/api/Financials/YearEnd/${encodeURIComponent(code)}/CloseRuns/latest/Package?format=json`);
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.message || 'Could not download the close package.');
+      const blob = new Blob([JSON.stringify(body, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `year-end-${code}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setMessage({ kind: 'error', text: err instanceof Error ? err.message : 'Could not download the close package.' });
+    }
+  };
+
+  const declareUnissued = async (code: string, reason: string) => {
+    if (!reason.trim()) {
+      setMessage({ kind: 'error', text: 'A reason is required to declare that the statements were not issued.' });
+      return;
+    }
+    const res = await authFetch(`/api/Financials/YearEnd/${encodeURIComponent(code)}/Issuance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Unissued', reason: reason.trim() }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.message || 'Could not record the declaration.');
+    setReopenDialog((current) => current ? { ...current, preview: body as YearEndPreview } : current);
+  };
+
+  if (!years) {
+    return (
+      <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] shadow-md">
+        <p className="text-sm text-[var(--text-secondary)]">Loading year-end close…</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -261,6 +347,13 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
             </div>
           </div>
         </div>
+
+        {loadError && (
+          <div role="alert" className="flex items-center justify-between gap-2 p-3 rounded-xl text-xs bg-rose-500/10 text-rose-400">
+            <span>{loadError}</span>
+            <button type="button" className="btn-secondary !h-8 !text-xs" onClick={() => void loadYears()}>Retry</button>
+          </div>
+        )}
 
         {message && (
           <div
@@ -327,7 +420,12 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
                       {busyCode === year.fiscalYearCode ? (
                         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                       ) : null}
-                      Close year
+                      {reviewAndCloseLabel}
+                    </button>
+                  )}
+                  {isClosed && (
+                    <button type="button" className="btn-secondary !h-9 !text-xs" onClick={() => void downloadPackage(year.fiscalYearCode)}>
+                      Download close package
                     </button>
                   )}
                   {showReopen && (
@@ -381,11 +479,28 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
                   className="mt-0.5"
                   checked={closeDialog.acknowledgeWarnings}
                   onChange={(e) =>
-                    setCloseDialog({ ...closeDialog, acknowledgeWarnings: e.target.checked })
+                    setCloseDialog({ ...closeDialog, acknowledgeWarnings: e.target.checked, stale: false })
                   }
                 />
                 <span>I acknowledge these warnings and want to proceed.</span>
               </label>
+            )}
+            {closeDialog.preview.warnings.length > 0 && canClose && (
+              <div>
+                <label htmlFor="year-end-warning-reason" className={labelClass}>Reason for closing with warnings</label>
+                <textarea
+                  id="year-end-warning-reason"
+                  className={inputClass + ' h-24 py-2'}
+                  maxLength={2000}
+                  value={closeDialog.warningReason}
+                  onChange={(e) => setCloseDialog({ ...closeDialog, warningReason: e.target.value })}
+                />
+              </div>
+            )}
+            {closeDialog.stale && (
+              <button type="button" className="btn-secondary !h-9 !text-xs" onClick={() => void openCloseDialog(closeDialog.code)}>
+                Refresh review
+              </button>
             )}
             {closeDialog.preview.closingLines.length > 0 && (
               <div className="overflow-x-auto">
@@ -426,12 +541,13 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
                     blockingCount: closeDialog.preview.blocking.length,
                     canClosePermission: canClose,
                   }) ||
-                  (closeDialog.preview.warnings.length > 0 && !closeDialog.acknowledgeWarnings) ||
+                  !warningCloseReady(closeDialog.preview.warnings.length, closeDialog.acknowledgeWarnings, closeDialog.warningReason) ||
+                  closeDialog.stale ||
                   busyCode === closeDialog.code
                 }
                 onClick={() => void submitClose()}
               >
-                {busyCode === closeDialog.code ? 'Closing…' : 'Close year'}
+                {busyCode === closeDialog.code ? 'Closing…' : reviewAndCloseLabel}
               </button>
             )}
           </div>
@@ -449,6 +565,20 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
           <h2 id="year-end-reopen-title" className="text-base font-bold text-[var(--text-main)]">
             Reopen fiscal year {reopenDialog.code}
           </h2>
+          {reopenDialog.preview.packageNote && (
+            <p className="text-sm text-[var(--text-secondary)]">{reopenDialog.preview.packageNote}</p>
+          )}
+          {reopenDialog.preview.issuanceStatus !== 'Unissued' && reopenDialog.preview.issuanceStatus !== 'Issued' && (
+            <div className="space-y-2">
+              <p className="text-sm text-[var(--text-secondary)]">Declare whether the annual financial statements were issued before this year can be reopened.</p>
+              <button type="button" className="btn-secondary !h-9 !text-xs" onClick={() => void declareUnissued(reopenDialog.code, reopenDialog.reason || 'Statements were not issued.').catch((err) => setMessage({ kind: 'error', text: err instanceof Error ? err.message : 'Could not record the declaration.' }))}>
+                Declare unissued
+              </button>
+            </div>
+          )}
+          {reopenDialog.preview.reopenBlockedReason && (
+            <p className="text-sm text-amber-700">{reopenDialog.preview.reopenBlockedReason}</p>
+          )}
           <p className="text-sm text-[var(--text-secondary)]">
             Current lock: {reopenDialog.preview.currentBooksLockedThrough ?? 'no lock'}. After reopening: {reopenDialog.preview.proposedBooksLockedThrough ?? 'no lock'}. A later lock will not be restored automatically.
           </p>
@@ -494,3 +624,17 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
     </>
   );
 };
+
+/** Close surface for a member who can review or close a year without organization administration. */
+export function YearEndClosePage() {
+  const { currentOrg } = useTenantContext();
+  const { hasPermission } = usePermissions();
+  const canInspect = hasPermission(['financials.periods.close', 'financials.accounts.view']);
+  if (!canInspect) return <PermissionDeniedCard permission="financials.periods.close" />;
+  return (
+    <div className="space-y-4">
+      <h1 className="text-lg font-bold text-[var(--text-main)]">Year-end close</h1>
+      <YearEndCloseCard canClose={hasPermission('financials.periods.close')} personal={!!currentOrg.isPersonalBooks} />
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Ban, CheckCircle2, FileEdit, Loader2, Plus, ReceiptText, RefreshCw, Search, Wallet, X } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { PurchasesTabs } from '../components/PurchasesTabs';
@@ -35,8 +35,16 @@ export const Bills: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<StatusFilter>('all');
+  const statusFromLink = searchParams.get('status');
+  const [filter, setFilter] = useState<StatusFilter>(
+    statusFromLink === 'draft' || statusFromLink === 'unpaid' || statusFromLink === 'overdue' || statusFromLink === 'paid' || statusFromLink === 'void'
+      ? statusFromLink
+      : 'all'
+  );
+  const [fromDate] = useState(searchParams.get('from') || '');
+  const [toDate] = useState(searchParams.get('to') || '');
   const [paying, setPaying] = useState<Bill | null>(null);
   const [voiding, setVoiding] = useState<Bill | null>(null);
   const [isVoiding, setIsVoiding] = useState(false);
@@ -110,10 +118,13 @@ export const Bills: React.FC = () => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return bills.filter((bill) => {
       if (!matchesFilter(bill, filter)) return false;
+      const day = (bill.date || '').slice(0, 10);
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
       const haystack = `${bill.vendorName ?? ''} ${bill.vendorInvoiceNo ?? ''} ${bill.no ?? ''} ${bill.referenceNo ?? ''}`.toLowerCase();
       return terms.every((t) => haystack.includes(t));
     });
-  }, [bills, filter, query]);
+  }, [bills, filter, query, fromDate, toDate]);
 
   const replaceBill = (updated: Bill) => setBills((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
 

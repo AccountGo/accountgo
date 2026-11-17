@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Download, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
@@ -36,6 +36,11 @@ export interface FinancialYear {
   startDate: string;
   endDate: string;
   isActive: boolean;
+  status?: 'Open' | 'Ended' | 'Closed';
+  closedAt?: string | null;
+  closedBy?: string | null;
+  closingGeneralLedgerHeaderId?: number | null;
+  isPersisted?: boolean;
 }
 
 interface Account {
@@ -112,7 +117,7 @@ export interface ReportData {
   accounts: Account[];
 }
 
-export type Statement = 'trialBalance' | 'income' | 'balanceSheet' | 'equity' | 'cashFlow';
+export type Statement = 'trialBalance' | 'income' | 'balanceSheet' | 'equity' | 'cashFlow' | 'aging';
 export type AccountingBasis = 'accrual' | 'cash';
 type Preset = 'month' | 'quarter' | 'year' | 'all' | 'custom';
 export interface DateRange { from: string; to: string }
@@ -137,6 +142,7 @@ const statements: { key: Statement; label: string }[] = [
   { key: 'balanceSheet', label: 'Balance Sheet' },
   { key: 'equity', label: 'Changes in Equity' },
   { key: 'cashFlow', label: 'Cash Flow' },
+  { key: 'aging', label: 'Receivables & Payables Aging' },
 ];
 const localDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -249,6 +255,7 @@ const byCode = <T extends { accountCode: string }>(rows: T[]): T[] =>
   [...rows].sort((a, b) => a.accountCode.localeCompare(b.accountCode, undefined, { numeric: true }));
 
 export function buildStatement(statement: Statement, data: ReportData, hideZero = true, personal = false): StatementRow[] {
+  if (statement === 'aging') return [];
   if (statement === 'trialBalance') {
     const rows: StatementRow[] = byCode(data.trialBalance).map(a => {
       const net = minorUnits(a.debit) - minorUnits(a.credit);
@@ -430,22 +437,52 @@ export function applyComparativeAmounts(
   return merged;
 }
 
+type AgingSection = {
+  denied?: boolean;
+  documentCount?: number;
+  current?: number;
+  days1To30?: number;
+  days31To60?: number;
+  days61To90?: number;
+  over90?: number;
+  postedTotal?: number;
+  unpostedTotal?: number;
+  glControlBalance?: number;
+  difference?: number;
+  reconciliationState?: string;
+};
+type AgingReport = { asOf: string; label: string; receivables: AgingSection; payables: AgingSection };
+
+function isIsoDate(value: string | null): value is string {
+  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 export default function Reports() {
   const { currentOrg, hasPermission, hasModule } = useTenantContext();
   const { authFetch } = useAuth();
+  const [params, setParams] = useSearchParams();
   const personal = !!currentOrg.isPersonalBooks;
   const allowed = hasPermission('reports.view');
   const showBankCloseStatus = hasModule('financials') && hasPermission('banking.accounts.view');
-  const [selectedStatement, setStatement] = useState<Statement>(personal ? 'balanceSheet' : 'trialBalance');
+  const requestedStatement = params.get('statement');
+  const [selectedStatement, setStatement] = useState<Statement>(
+    requestedStatement === 'aging' ? 'aging' : personal ? 'balanceSheet' : 'trialBalance'
+  );
   const statement = personal && selectedStatement === 'equity' ? 'balanceSheet' : selectedStatement;
   const [basis, setBasis] = useState<AccountingBasis>('accrual');
   const [preset, setPreset] = useState<Preset>('month');
-  const [range, setRange] = useState<DateRange>(() => getDateRange('month', new Date()));
+  const [range, setRange] = useState<DateRange>(() => {
+    const initial = getDateRange('month', new Date());
+    const to = params.get('to');
+    return requestedStatement === 'aging' && isIsoDate(to) ? { from: '', to } : initial;
+  });
   const [hideZero, setHideZero] = useState(true);
   const [compare, setCompare] = useState(readCompareToggle);
   const [revision, setRevision] = useState(0);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [aging, setAging] = useState<{ key: string; data: AgingReport } | null>(null);
+  const [agingError, setAgingError] = useState<string | null>(null);
   const [result, setResult] = useState<{ key: string; slug: string; data: ReportData; comparative?: ReportData; comparativeRange?: DateRange | null } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const validRange = !!range.to && (!range.from || range.from <= range.to);
@@ -458,13 +495,13 @@ export default function Reports() {
   const comparativeData = result?.key === key ? result.comparative : undefined;
   const activeCompareRange = result?.key === key ? result.comparativeRange : undefined;
   const error = failure?.key === key ? failure.message : null;
-  const loading = allowed && validRange && !data && !error;
+  const loading = allowed && validRange && statement !== 'aging' && !data && !error;
   const tenantData = result?.slug === currentOrg.slug ? result.data : null;
   const today = localDate(new Date());
   const activeYear = tenantData?.years.find(y => y.isActive && y.startDate.slice(0, 10) <= today && y.endDate.slice(0, 10) >= today);
 
   useEffect(() => {
-    if (!allowed || !validRange || loadedKey.current === key) return;
+    if (!allowed || !validRange || statement === 'aging' || loadedKey.current === key) return;
     let cancelled = false;
     (async () => {
       try {
@@ -512,10 +549,50 @@ export default function Reports() {
     return () => { cancelled = true; };
   }, [authFetch, allowed, validRange, key, range, basis, currentOrg.slug, compare, canCompare, preset, statement]);
 
+  useEffect(() => {
+    const requested = params.get('statement');
+    const to = params.get('to');
+    if (requested === 'aging') {
+      if (selectedStatement !== 'aging') setStatement('aging');
+      if (isIsoDate(to) && to !== range.to) {
+        setPreset('custom');
+        setRange({ from: '', to });
+      }
+    }
+  }, [params, selectedStatement, range.to]);
+
+  const agingKey = `${currentOrg.slug}|${range.to}|${revision}`;
+  useEffect(() => {
+    if (!allowed || statement !== 'aging' || !isIsoDate(range.to)) return;
+    let cancelled = false;
+    setAgingError(null);
+    authFetch(`/api/Financials/Aging?asOf=${encodeURIComponent(range.to)}&format=json`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Unable to load outstanding balances for that date.');
+        return await response.json() as AgingReport;
+      })
+      .then((data) => { if (!cancelled) setAging({ key: agingKey, data }); })
+      .catch((err) => { if (!cancelled) setAgingError(err instanceof Error ? err.message : 'Unable to load outstanding balances for that date.'); });
+    return () => { cancelled = true; };
+  }, [allowed, authFetch, statement, range.to, agingKey, currentOrg.slug]);
+
+  const chooseStatement = (next: Statement) => {
+    setStatement(next);
+    const query = new URLSearchParams(params);
+    if (next === 'aging') {
+      query.set('statement', 'aging');
+      if (isIsoDate(range.to)) query.set('to', range.to);
+    } else {
+      query.delete('statement');
+      query.delete('to');
+    }
+    setParams(query, { replace: false });
+  };
+
   if (!allowed) return <PermissionDeniedCard permission="reports.view" />;
 
   const showingCompare = !!(compare && canCompare && activeCompareRange && (statement === 'equity' ? data?.equity?.comparative : comparativeData));
-  const baseRows = data && statement !== 'equity' ? buildStatement(statement, data, hideZero, personal) : [];
+  const baseRows = data && statement !== 'equity' && statement !== 'aging' ? buildStatement(statement, data, hideZero, personal) : [];
   const rows = showingCompare && (statement === 'income' || statement === 'balanceSheet')
     ? applyComparativeAmounts(baseRows, buildStatement(statement, comparativeData!, hideZero, personal))
     : baseRows;
@@ -523,6 +600,7 @@ export default function Reports() {
     { key: 'balanceSheet' as const, label: 'Net worth (book value)' },
     { key: 'income' as const, label: 'Money in and out' },
     { key: 'cashFlow' as const, label: 'Cash movement' },
+    { key: 'aging' as const, label: 'Who owes what' },
     { key: 'trialBalance' as const, label: 'Trial balance' },
   ] : statements.filter(tab => tab.key !== 'equity' || showEquityStatement(personal));
   const title = visibleStatements.find(s => s.key === statement)!.label;
@@ -537,6 +615,23 @@ export default function Reports() {
   const difference = statement === 'trialBalance'
     ? (rows.at(-1)?.debit ?? 0) - (rows.at(-1)?.credit ?? 0)
     : rows.at(-1)?.amount ?? 0;
+  const downloadAgingCsv = async () => {
+    if (!isIsoDate(range.to)) return;
+    const response = await authFetch(`/api/Financials/Aging?asOf=${encodeURIComponent(range.to)}&format=csv`);
+    if (!response.ok) {
+      setAgingError('Unable to download the aging CSV.');
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentOrg.slug}-aging-${range.to}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const exportCsv = () => {
     if (!data || !validRange || error) return;
     const csv = statement === 'equity' && data.equity ? equityStatementCsv(data.equity) : personal && statement === 'cashFlow' && data.cashMovement
@@ -602,20 +697,14 @@ export default function Reports() {
           : loading ? 'Loading financial year...' : 'No active financial year available'}
         actions={<>
           <HeaderButton label="Refresh" icon={RefreshCw} disabled={loading || !validRange} onClick={() => setRevision(r => r + 1)} />
-          <HeaderButton label="Download PDF" icon={FileDown} busy={pdfBusy} disabled={!data || !validRange || !!error || pdfBusy} onClick={downloadPdf} />
-          <HeaderButton label="Export CSV" icon={Download} disabled={!data || !validRange || !!error} onClick={exportCsv} />
+          <HeaderButton label="Download PDF" icon={FileDown} busy={pdfBusy} disabled={statement === 'aging' || !data || !validRange || !!error || pdfBusy} onClick={downloadPdf} />
+          <HeaderButton label="Export CSV" icon={Download} disabled={statement === 'aging' ? !isIsoDate(range.to) : !data || !validRange || !!error} onClick={statement === 'aging' ? () => void downloadAgingCsv() : exportCsv} />
         </>}
       />
       {pdfError && <p role="alert" className="text-red-500">{pdfError}</p>}
       {showBankCloseStatus && <BankCloseStatusLoader orgSlug={currentOrg.slug} />}
       <div className="flex flex-wrap items-end gap-4 rounded-2xl bg-[var(--bg-surface)] p-4">
-        <label className="grid gap-1 text-xs text-[var(--text-secondary)]">Accounting Basis
-          <select className={inputClass} value={basis} onChange={event => setBasis(event.target.value as AccountingBasis)}>
-            <option value="accrual">Accrual</option>
-            <option value="cash">Cash</option>
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs text-[var(--text-secondary)]">Period
+        {statement !== 'aging' && <label className="grid gap-1 text-xs text-[var(--text-secondary)]">Period
           <select className={inputClass} value={preset} onChange={event => {
             const next = event.target.value as Preset;
             setPreset(next);
@@ -630,31 +719,48 @@ export default function Reports() {
             <option value="all">All Time / As-of Date</option>
             <option value="custom">Custom Range</option>
           </select>
-        </label>
-        <label className="grid gap-1 text-xs text-[var(--text-secondary)]">From
+        </label>}
+        {statement !== 'aging' && <label className="grid gap-1 text-xs text-[var(--text-secondary)]">Accounting Basis
+          <select className={inputClass} value={basis} onChange={event => setBasis(event.target.value as AccountingBasis)}>
+            <option value="accrual">Accrual</option>
+            <option value="cash">Cash</option>
+          </select>
+        </label>}
+        {statement !== 'aging' && <label className="grid gap-1 text-xs text-[var(--text-secondary)]">From
           <input type="date" className={inputClass} value={range.from} max={range.to} disabled={statement === 'balanceSheet'}
             onChange={event => { setPreset('custom'); setRange({ ...range, from: event.target.value }); }} />
+        </label>}
+        <label className="grid gap-1 text-xs text-[var(--text-secondary)]">{statement === 'balanceSheet' || statement === 'aging' ? 'As-of Date' : 'To'}
+          <input type="date" className={inputClass} value={range.to} min={statement === 'balanceSheet' || statement === 'aging' ? undefined : range.from} required
+            onChange={event => {
+              const to = event.target.value;
+              setPreset('custom');
+              setRange({ from: statement === 'balanceSheet' || statement === 'aging' ? '' : range.from, to });
+              if (statement === 'aging' && isIsoDate(to)) {
+                const query = new URLSearchParams(params);
+                query.set('statement', 'aging');
+                query.set('to', to);
+                setParams(query, { replace: false });
+              }
+            }} />
         </label>
-        <label className="grid gap-1 text-xs text-[var(--text-secondary)]">{statement === 'balanceSheet' ? 'As-of Date' : 'To'}
-          <input type="date" className={inputClass} value={range.to} min={statement === 'balanceSheet' ? undefined : range.from} required
-            onChange={event => { setPreset('custom'); setRange({ from: statement === 'balanceSheet' ? '' : range.from, to: event.target.value }); }} />
-        </label>
-        <label className="flex items-center gap-2 py-2 text-sm">
+        {statement !== 'aging' && <label className="flex items-center gap-2 py-2 text-sm">
           <input type="checkbox" checked={hideZero} onChange={event => setHideZero(event.target.checked)} className="accent-[var(--brand-primary)]" />
           Hide zero balances
-        </label>
+        </label>}
         {canCompare && <label className="flex items-center gap-2 py-2 text-sm">
           <input type="checkbox" checked={compare} onChange={event => setCompareAndPersist(event.target.checked)} className="accent-[var(--brand-primary)]" />
           Compare with previous period
         </label>}
       </div>
       <nav aria-label="Financial statements" className="flex flex-wrap gap-2">
-        {visibleStatements.map(tab => <Fragment key={tab.key}>{personal && tab.key === 'trialBalance' && <h3 className="text-sm font-semibold">Advanced</h3>}<button type="button" aria-pressed={statement === tab.key} onClick={() => setStatement(tab.key)}
+        {visibleStatements.map(tab => <Fragment key={tab.key}>{personal && tab.key === 'trialBalance' && <h3 className="text-sm font-semibold">Advanced</h3>}<button type="button" aria-pressed={statement === tab.key} onClick={() => chooseStatement(tab.key)}
           className={`rounded-lg px-4 py-2 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${statement === tab.key ? 'bg-[var(--brand-primary)] text-[var(--brand-text)]' : 'bg-[var(--bg-surface)] text-[var(--text-secondary)]'}`}>
           {tab.label}
         </button></Fragment>)}
       </nav>
       {!validRange ? <p role="alert" className="text-red-500">Select an end date on or after the start date.</p>
+        : statement === 'aging' ? <AgingView report={aging?.key === agingKey ? aging.data : null} error={agingError} loading={aging?.key !== agingKey && !agingError} currency={currentOrg.currency || DEFAULT_CURRENCY} personal={personal} />
         : error ? <p role="alert" className="text-red-500">{error} Use Refresh to retry.</p>
         : loading ? <div role="status" className="flex items-center gap-2 p-6"><Loader2 className="h-5 w-5 animate-spin" />Loading financial reports...</div>
         : data && <section aria-label={title} className="overflow-hidden rounded-2xl bg-[var(--bg-surface)]">
@@ -721,6 +827,54 @@ export default function Reports() {
             </table>
           </div>}
         </section>}
+    </div>
+  );
+}
+
+function AgingView({ report, error, loading, currency, personal }: {
+  report: AgingReport | null;
+  error: string | null;
+  loading: boolean;
+  currency: string;
+  personal: boolean;
+}) {
+  const format = (value?: number) => `${currencySymbol(currency)}${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (error) return <p role="alert" className="text-red-500">{error} Use Refresh to retry.</p>;
+  if (loading || !report) return <div role="status" className="flex items-center gap-2 p-6"><Loader2 className="h-5 w-5 animate-spin" />Loading outstanding balances...</div>;
+  return (
+    <section aria-label={personal ? 'Who owes what' : 'Receivables and payables aging'} className="space-y-4 rounded-2xl bg-[var(--bg-surface)] p-5">
+      <h2 className="text-lg font-semibold">{personal ? 'Who owes what' : 'Receivables & Payables Aging'}</h2>
+      <p className="text-sm text-[var(--text-secondary)]">{report.label}</p>
+      <AgingSectionView title={personal ? 'Money owed to you' : 'Receivables'} section={report.receivables} format={format} />
+      <AgingSectionView title={personal ? 'Money you owe' : 'Payables'} section={report.payables} format={format} />
+    </section>
+  );
+}
+
+function AgingSectionView({ title, section, format }: { title: string; section: AgingSection; format: (value?: number) => string }) {
+  if (section.denied) return <p className="text-sm text-[var(--text-secondary)]">{title}: you do not have permission to view this section.</p>;
+  const buckets: Array<[string, number | undefined]> = [
+    ['Current', section.current],
+    ['1–30 days', section.days1To30],
+    ['31–60 days', section.days31To60],
+    ['61–90 days', section.days61To90],
+    ['Over 90 days', section.over90],
+  ];
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <p className={section.reconciliationState === 'In balance' ? 'text-sm text-emerald-500' : 'text-sm text-red-500'}>
+        {section.reconciliationState || 'Out of balance'} · {section.documentCount ?? 0} documents
+      </p>
+      <table className="w-full text-sm">
+        <tbody>
+          {buckets.map(([label, amount]) => <tr key={label} className="border-t border-[var(--border-subtle)]"><th scope="row" className="p-2 text-left font-normal">{label}</th><td className="p-2 text-right tabular-nums">{format(amount)}</td></tr>)}
+          <tr className="border-t border-[var(--border-subtle)] font-semibold"><th scope="row" className="p-2 text-left">Posted total</th><td className="p-2 text-right tabular-nums">{format(section.postedTotal)}</td></tr>
+          <tr><th scope="row" className="p-2 text-left">Not on the ledger</th><td className="p-2 text-right tabular-nums">{format(section.unpostedTotal)}</td></tr>
+          <tr><th scope="row" className="p-2 text-left">Ledger control</th><td className="p-2 text-right tabular-nums">{format(section.glControlBalance)}</td></tr>
+          <tr><th scope="row" className="p-2 text-left">Difference</th><td className="p-2 text-right tabular-nums">{format(section.difference)}</td></tr>
+        </tbody>
+      </table>
     </div>
   );
 }

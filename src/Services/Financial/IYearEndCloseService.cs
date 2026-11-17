@@ -17,9 +17,39 @@ namespace Services.Financial
     public sealed class YearEndCheckItem
     {
         public string Code { get; set; } = "";
+        public string Tier { get; set; } = "";
+        public string State { get; set; } = "Fail";
         public string Message { get; set; } = "";
         public int Count { get; set; }
+        public decimal? Amount { get; set; }
         public string? LinkPath { get; set; }
+        public bool CanResolve { get; set; }
+        public string? RequiredPermission { get; set; }
+    }
+
+    public sealed class YearEndCloseCommand
+    {
+        public string? WarningExceptionReason { get; init; }
+        public string? PreviewHash { get; init; }
+        public string? IdempotencyKey { get; init; }
+        public bool RequirePreviewHash { get; init; }
+        public bool RequireWarningReason { get; init; }
+        public bool IndependentReviewerRequired { get; init; }
+        public bool ActorIsOwnerOrAdmin { get; init; }
+    }
+
+    public sealed class YearEndReopenCommand
+    {
+        public bool IndependentReviewerRequired { get; init; }
+        public bool ActorIsOwnerOrAdmin { get; init; }
+    }
+
+    public sealed class YearEndIssuanceCommand
+    {
+        public string Status { get; init; } = "";
+        public string? Reason { get; init; }
+        public DateTime? ExternalDate { get; init; }
+        public string? ExternalReference { get; init; }
     }
 
     public sealed class YearEndClosingLine
@@ -50,6 +80,14 @@ namespace Services.Financial
         public DateTime? NewlyUnlockedFrom { get; set; }
         public DateTime? NewlyUnlockedThrough { get; set; }
         public bool CanClose => Status != FiscalYearCloseStatus.Closed && Blocking.Count == 0;
+        public string PreviewHash { get; set; } = "";
+        public long AccountingRevision { get; set; }
+        public IReadOnlyList<YearEndCheckItem> Checks { get; set; } = Array.Empty<YearEndCheckItem>();
+        public string? PackageNote { get; set; }
+        public string IssuanceStatus { get; set; } = "Unknown";
+        public bool CanReopen { get; set; }
+        public string? ReopenBlockedReason { get; set; }
+        public int? LatestCloseRunId { get; set; }
     }
 
     public sealed class PartnerAllocationPreview
@@ -77,7 +115,8 @@ namespace Services.Financial
     {
         IReadOnlyList<YearEndYearSummary> ListYears();
         YearEndPreview Preview(string fiscalYearCode);
-        YearEndPreview Close(string fiscalYearCode, bool acknowledgeWarnings, string closedBy);
-        YearEndPreview Reopen(string fiscalYearCode, string reason, string reopenedBy, bool acknowledgeIndependentLock = false, DateTime? expectedLockThrough = null);
+        YearEndPreview Close(string fiscalYearCode, bool acknowledgeWarnings, string closedBy, YearEndCloseCommand? command = null);
+        YearEndPreview Reopen(string fiscalYearCode, string reason, string reopenedBy, bool acknowledgeIndependentLock = false, DateTime? expectedLockThrough = null, YearEndReopenCommand? command = null);
+        YearEndPreview DeclareIssuance(string fiscalYearCode, YearEndIssuanceCommand command, string actor);
     }
 }

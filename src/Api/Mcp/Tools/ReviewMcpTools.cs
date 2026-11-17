@@ -20,9 +20,9 @@ namespace Api.Mcp.Tools
     [McpServerToolType]
     public sealed class ReviewMcpTools(McpControllerReader reader, ITenantContext tenant) : WorkspaceMcpToolBase(reader, tenant)
     {
-        /// <summary>Reads fiscal-year boundaries without creating a fiscal year.</summary>
+        /// <summary>Reads fiscal-year boundaries and close status without creating a fiscal year.</summary>
         [McpServerTool(Name = "get_fiscal_years", Title = "Get Fiscal Years", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
-        [Description("Lists the workspace's fiscal years with code, name, start and end dates and active flag. Includes the page's current-year fallback. Does not report closed periods or books locks; use get_workspace_context for books lock settings. Available to authenticated workspace members.")]
+        [Description("Lists the workspace's fiscal years: code, name, start and end dates (yyyy-MM-dd), active flag, status (Open, Ended or Closed), closedAt (UTC timestamp with an explicit offset, or null), closedBy, closingGeneralLedgerHeaderId and isPersisted. Closed means the year was closed; the active flag does not mean closed or open. Includes the page's unsaved current-year fallback (isPersisted false) and does not create a fiscal year or invent a closing journal. A row does not include close readiness, a close package, the books lock, correction eligibility or whether the books are correct. Use get_workspace_context for the books lock. Available to authenticated workspace members.")]
         public Task<WorkspaceDataMcpResponse> GetFiscalYears(CancellationToken cancellationToken = default) =>
             RecordAsync<AdministrationController>("fiscalYears", nameof(AdministrationController.FinancialYears), c => c.FinancialYears(),
                 link: PagePath("settings"));

@@ -21,16 +21,24 @@ namespace AccountGo.BackendTests
 
         protected async Task CloseYearWithWarnings(string fyCode)
         {
-            var close = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
-                new { acknowledgeWarnings = false });
-            if (close.StatusCode == HttpStatusCode.BadRequest
-                && (await close.Content.ReadAsStringAsync()).Contains("Acknowledge", StringComparison.OrdinalIgnoreCase))
-            {
-                close = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
-                    new { acknowledgeWarnings = true });
-            }
-
+            var close = await CloseYear(fyCode, acknowledgeIfNeeded: true);
             Assert.True(close.IsSuccessStatusCode, await close.Content.ReadAsStringAsync());
+        }
+
+        protected async Task<HttpResponseMessage> CloseYear(string fyCode, bool acknowledgeIfNeeded)
+        {
+            var preview = await Send(HttpMethod.Get, $"/api/Financials/YearEnd/{fyCode}");
+            Assert.True(preview.IsSuccessStatusCode, await preview.Content.ReadAsStringAsync());
+            var body = await preview.Content.ReadFromJsonAsync<JsonElement>();
+            var warnings = body.GetProperty("warnings").GetArrayLength();
+            var acknowledge = acknowledgeIfNeeded && warnings > 0;
+            return await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
+                new
+                {
+                    acknowledgeWarnings = acknowledge,
+                    warningExceptionReason = acknowledge ? "Accepted for the year-end test." : null,
+                    previewHash = body.GetProperty("previewHash").GetString()
+                });
         }
     }
 
@@ -81,17 +89,7 @@ namespace AccountGo.BackendTests
             var previewBody = await preview.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(2, previewBody.GetProperty("status").GetInt32()); // Ended
 
-            var closeRefused = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
-                new { acknowledgeWarnings = false });
-            if (closeRefused.StatusCode == HttpStatusCode.BadRequest)
-            {
-                var msg = await closeRefused.Content.ReadAsStringAsync();
-                if (msg.Contains("Acknowledge", StringComparison.OrdinalIgnoreCase))
-                {
-                    closeRefused = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
-                        new { acknowledgeWarnings = true });
-                }
-            }
+            var closeRefused = await CloseYear(fyCode, acknowledgeIfNeeded: true);
 
             Assert.True(closeRefused.IsSuccessStatusCode, await closeRefused.Content.ReadAsStringAsync());
             var closedBody = await closeRefused.Content.ReadFromJsonAsync<JsonElement>();
@@ -215,9 +213,9 @@ namespace AccountGo.BackendTests
             var lockBefore = (DateTime?)null;
             WithDb(db => lockBefore = db.CompanySettings.Single().BooksLockedThrough);
 
-            var close = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Close",
-                new { acknowledgeWarnings = true });
-            Assert.Equal(HttpStatusCode.BadRequest, close.StatusCode);
+            var close = await CloseYear(fyCode, acknowledgeIfNeeded: true);
+            Assert.Equal(HttpStatusCode.Conflict, close.StatusCode);
+            Assert.Contains("year_end_blocked", await close.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
             Assert.Contains("message", await close.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
 
             WithDb(db =>

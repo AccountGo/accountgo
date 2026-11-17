@@ -8,6 +8,7 @@ import {
   Package,
   Landmark,
   BarChart3,
+  CalendarCheck,
   Percent,
   Settings,
   Users,
@@ -52,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     icon: React.ComponentType<{ className?: string }>;
     /** With several modules, any one of them shows the link. If omitted, link is always shown. */
     module?: ModuleKey | ModuleKey[];
-    permission?: string;
+    permission?: string | string[];
     badge?: string;
   }> = [
     {
@@ -95,6 +96,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: BookOpen,
       module: 'financials',
       permission: 'financials.journal.view',
+    },
+    {
+      name: 'Year-end close',
+      path: `/org/${currentOrg.slug}/financials/year-end`,
+      icon: CalendarCheck,
+      module: 'financials',
+      permission: ['financials.periods.close', 'financials.accounts.view'],
     },
     {
       name: 'Reports',

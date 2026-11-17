@@ -582,8 +582,16 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
         await CreatePostedInvoice(new DateTime(2025, 10, 10), (_vat12Id, 1000m, 120m));
         var before = await OkJson(await GetReport("2025-10-01", "2025-10-31"));
 
+        var previewRes = await _host.Send(HttpMethod.Get, "/api/Financials/YearEnd/2025", null, _owner.Token, Org);
+        var preview = await OkJson(previewRes);
+        var warnings = preview.GetProperty("warnings").GetArrayLength();
         var closeRes = await _host.Send(HttpMethod.Post, "/api/Financials/YearEnd/2025/Close",
-            new { acknowledgeWarnings = true }, _owner.Token, Org);
+            new
+            {
+                acknowledgeWarnings = warnings > 0,
+                warningExceptionReason = warnings > 0 ? "Accepted for the tax report test." : null,
+                previewHash = preview.GetProperty("previewHash").GetString()
+            }, _owner.Token, Org);
         Assert.True(closeRes.IsSuccessStatusCode, await closeRes.Content.ReadAsStringAsync());
 
         var after = await OkJson(await GetReport("2025-10-01", "2025-10-31"));

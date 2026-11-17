@@ -15,7 +15,7 @@ using Core.Tenancy;
 
 namespace Services.Financial
 {
-    public sealed class YearEndCloseService : IYearEndCloseService
+    public sealed partial class YearEndCloseService : IYearEndCloseService
     {
         private readonly IFinancialService _financial;
         private readonly IBooksLockGuard _booksLockGuard;
@@ -35,6 +35,16 @@ namespace Services.Financial
         private readonly IRepository<Partner>? _partners;
         private readonly IRepository<PartnerShare>? _partnerShares;
         private readonly bool _allowUnapprovedIndividualMapping;
+        private readonly TimeProvider _time;
+        private readonly IRepository<CompanyCloseState>? _closeStates;
+        private readonly IRepository<YearEndCloseRun>? _runs;
+        private readonly IRepository<YearEndCloseEvidence>? _evidence;
+        private readonly IRepository<YearEndLifecycleEvent>? _events;
+        private readonly IRepository<YearEndCommandReceipt>? _receipts;
+        private readonly IRepository<YearEndIssuanceDeclaration>? _issuances;
+        private readonly IRepository<Customer>? _customers;
+        private readonly IRepository<Vendor>? _vendors;
+        private readonly IRepository<LinkedEntryPair>? _linkedPairs;
 
         /// <param name="allowUnapprovedIndividualMapping">
         /// Disposable-fixture seam only. Dependency injection never supplies it, so production close and reopen for an
@@ -58,9 +68,29 @@ namespace Services.Financial
             IRepository<BooksLockChange> lockChanges,
             bool allowUnapprovedIndividualMapping = false,
             IRepository<Partner>? partners = null,
-            IRepository<PartnerShare>? partnerShares = null)
+            IRepository<PartnerShare>? partnerShares = null,
+            TimeProvider? time = null,
+            IRepository<CompanyCloseState>? closeStates = null,
+            IRepository<YearEndCloseRun>? runs = null,
+            IRepository<YearEndCloseEvidence>? evidence = null,
+            IRepository<YearEndLifecycleEvent>? events = null,
+            IRepository<YearEndCommandReceipt>? receipts = null,
+            IRepository<YearEndIssuanceDeclaration>? issuances = null,
+            IRepository<Customer>? customers = null,
+            IRepository<Vendor>? vendors = null,
+            IRepository<LinkedEntryPair>? linkedPairs = null)
         {
             _allowUnapprovedIndividualMapping = allowUnapprovedIndividualMapping;
+            _time = time ?? TimeProvider.System;
+            _closeStates = closeStates;
+            _runs = runs;
+            _evidence = evidence;
+            _events = events;
+            _receipts = receipts;
+            _issuances = issuances;
+            _customers = customers;
+            _vendors = vendors;
+            _linkedPairs = linkedPairs;
             _financial = financial;
             _booksLockGuard = booksLockGuard;
             _tenant = tenant;
@@ -82,7 +112,7 @@ namespace Services.Financial
 
         public IReadOnlyList<YearEndYearSummary> ListYears()
         {
-            var today = DateTime.UtcNow.Date;
+            var today = WorkspaceToday();
             return _fiscalYears.Table
                 .OrderBy(fy => fy.StartDate)
                 .ToList()
@@ -96,20 +126,38 @@ namespace Services.Financial
             return BuildPreview(year);
         }
 
-        public YearEndPreview Close(string fiscalYearCode, bool acknowledgeWarnings, string closedBy)
+        public YearEndPreview Close(string fiscalYearCode, bool acknowledgeWarnings, string closedBy, YearEndCloseCommand? command = null)
         {
             var year = RequireYear(fiscalYearCode);
+            if (TryReplay(year, acknowledgeWarnings, command, out var replayed))
+                return replayed!;
+
             if (year.ClosedAt != null)
-                throw new YearEndCloseException("This fiscal year is already closed.");
+                throw new YearEndCloseException("This fiscal year is already closed.", "already_closed");
 
             var preview = BuildPreview(year);
+            if (command?.RequirePreviewHash == true)
+            {
+                if (string.IsNullOrWhiteSpace(command.PreviewHash))
+                    throw new YearEndCloseException("A preview hash is required.", "validation");
+                if (!string.Equals(command.PreviewHash.Trim(), preview.PreviewHash, StringComparison.OrdinalIgnoreCase))
+                    throw new YearEndCloseException("The year-end preview is out of date. Refresh the review and try again.", "stale_year_end_preview");
+            }
             if (preview.Blocking.Count > 0)
-                throw new YearEndCloseException("Close is blocked until the checklist items are resolved.");
+                throw new YearEndCloseException("Close is blocked until the checklist items are resolved.", "year_end_blocked");
             if (preview.Warnings.Count > 0 && !acknowledgeWarnings)
-                throw new YearEndCloseException("Acknowledge the warnings before closing the year.");
+                throw new YearEndCloseException("Acknowledge the warnings before closing the year.", "validation");
+            var warningReason = command?.WarningExceptionReason?.Trim();
+            if (preview.Warnings.Count > 0 && command?.RequireWarningReason == true
+                && (string.IsNullOrEmpty(warningReason) || warningReason!.Length > 2000))
+                throw new YearEndCloseException("A reason of up to 2000 characters is required to close with warnings.", "validation");
+            if (preview.Warnings.Count > 0 && command?.IndependentReviewerRequired == true && !command.ActorIsOwnerOrAdmin)
+                throw new YearEndCloseException("An owner or admin must approve a close that has warnings.", "validation");
 
             var actor = string.IsNullOrWhiteSpace(closedBy) ? "system" : closedBy.Trim();
             int? closingGlId = null;
+            var evidenceLines = new List<string>();
+            evidenceLines.AddRange(StatementEvidence("pre", year));
 
             using (_booksLockGuard.Bypass())
             using (_financial.AllowClosingEntries())
@@ -165,10 +213,13 @@ namespace Services.Financial
                 });
             }
 
+            evidenceLines.AddRange(StatementEvidence("post", year));
+            evidenceLines.AddRange(AgingEvidence(year.EndDate.Date));
+            PersistClosePackage(year, preview, actor, closingGlId, previousLock, setting.BooksLockedThrough, warningReason, acknowledgeWarnings, command, evidenceLines);
             return BuildPreview(RequireYear(fiscalYearCode));
         }
 
-        public YearEndPreview Reopen(string fiscalYearCode, string reason, string reopenedBy, bool acknowledgeIndependentLock = false, DateTime? expectedLockThrough = null)
+        public YearEndPreview Reopen(string fiscalYearCode, string reason, string reopenedBy, bool acknowledgeIndependentLock = false, DateTime? expectedLockThrough = null, YearEndReopenCommand? command = null)
         {
             if (string.IsNullOrWhiteSpace(reason))
                 throw new YearEndCloseException("A reason is required to reopen a closed year.");
@@ -190,6 +241,7 @@ namespace Services.Financial
                 && setting.PartnerAccountsFrom.HasValue
                 && year.EndDate.Date < setting.PartnerAccountsFrom.Value.Date)
                 throw new YearEndCloseException("A fiscal year ending before partner account setup can't be reopened.");
+            EnsureReopenAllowed(year, setting, command);
             var (currentLock, nextLock, independentLock) = ReopenLockImpact(year, setting);
             if (independentLock && (!acknowledgeIndependentLock || expectedLockThrough?.Date != currentLock))
                 throw new YearEndCloseException("Acknowledge the independent lock change and confirm the current lock date before reopening.");
@@ -249,6 +301,7 @@ namespace Services.Financial
                 ChangedAt = DateTime.UtcNow
             });
 
+            AppendLifecycle(year, "Reopen", actor, reason.Trim(), previousLock, nextLock, null);
             return BuildPreview(RequireYear(fiscalYearCode));
         }
 
@@ -274,11 +327,11 @@ namespace Services.Financial
 
         private YearEndPreview BuildPreview(FinancialYear year)
         {
-            var today = DateTime.UtcNow.Date;
+            var setting = _settings.Table.FirstOrDefault();
+            var today = WorkspaceBusinessDate.Today(_time, setting?.Timezone);
             var status = ResolveStatus(year, today);
             var blocking = new List<YearEndCheckItem>();
             var warnings = new List<YearEndCheckItem>();
-            var setting = _settings.Table.FirstOrDefault();
             var partnerMode = setting?.EntityType == EntityType.Partnership && setting.PartnerAccountsFrom.HasValue;
             Dictionary<int, (decimal Debit, decimal Credit)>? fyTb = null;
             Dictionary<int, (decimal Debit, decimal Credit)>? throughEnd = null;
@@ -291,7 +344,7 @@ namespace Services.Financial
             if (status != FiscalYearCloseStatus.Closed)
             {
                 AddBlockingChecks(year, today, blocking, throughEnd);
-                AddWarningChecks(year, warnings);
+                AddWarningChecks(year, warnings, throughEnd);
             }
             var closingLines = status == FiscalYearCloseStatus.Closed
                 ? Array.Empty<YearEndClosingLine>()
@@ -302,6 +355,16 @@ namespace Services.Financial
             var partnerAllocations = partnerMode
                 ? BuildPartnerAllocations(year, fyTb!, throughEnd!, closingLines)
                 : Array.Empty<PartnerAllocationPreview>();
+            CollapseChecks(blocking);
+            CollapseChecks(warnings);
+            var notApplicable = NotApplicableReasons(setting, status);
+            var checks = YearEndCheckCatalog.Complete(blocking, warnings, notApplicable);
+            var revision = ReadRevision();
+            var (issuanceStatus, canReopen, reopenBlockedReason) = IssuanceEligibility(year, status);
+            var latestRunId = _runs?.Table.Where(r => r.FinancialYearId == year.Id).OrderByDescending(r => r.AttemptNo).Select(r => (int?)r.Id).FirstOrDefault();
+            var packageNote = status == FiscalYearCloseStatus.Closed && latestRunId == null
+                ? "No retained close package: closed before this feature"
+                : null;
             return new YearEndPreview
             {
                 CurrentBooksLockedThrough = impact.Current,
@@ -322,7 +385,27 @@ namespace Services.Financial
                 PartnerAllocations = partnerAllocations,
                 PartnerLossNotice = partnerAllocations.Sum(a => a.ProfitShare) < 0m
                     ? "Losses are shared in the same ratios."
-                    : null
+                    : null,
+                Checks = checks,
+                PreviewHash = YearEndPreviewHash.Compute(
+                    year.CompanyId,
+                    year.Id,
+                    revision,
+                    year.StartDate,
+                    year.EndDate,
+                    today,
+                    setting?.Timezone,
+                    (int)(setting?.EntityType ?? EntityType.Corporation),
+                    _glSettings.Table.Select(s => s.PermanentAccountId).FirstOrDefault(),
+                    setting?.BooksLockedThrough,
+                    checks,
+                    closingLines),
+                AccountingRevision = revision,
+                PackageNote = packageNote,
+                IssuanceStatus = issuanceStatus,
+                CanReopen = canReopen,
+                ReopenBlockedReason = reopenBlockedReason,
+                LatestCloseRunId = latestRunId
             };
         }
 
@@ -347,14 +430,14 @@ namespace Services.Financial
                 var valid = shares.Count >= 2 && shares.All(s => s.Percent > 0m && active.Any(p => p.Id == s.PartnerId))
                     && shares.Sum(s => s.Percent) == 100.0000m;
                 if (!valid)
-                    blocking.Add(new YearEndCheckItem { Code = "partner_shares_missing", Message = $"Profit-sharing ratios aren't set for {year.FiscalYearCode}.", Count = 1 });
+                    blocking.Add(new YearEndCheckItem { Code = "partner_equity_invalid", Message = $"Profit-sharing ratios aren't set for {year.FiscalYearCode}.", Count = 1 });
                 foreach (var code in new[] { "30100", "30800" })
                 {
                     var account = _accounts.Table.FirstOrDefault(a => a.AccountCode == code);
                     if (account == null) continue;
                     var tb = throughEnd ?? TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
                     if (tb.TryGetValue(account.Id, out var balance) && balance.Debit != balance.Credit)
-                        blocking.Add(new YearEndCheckItem { Code = "partner_unassigned_balance_" + code, Message = $"Unassigned partner capital or drawings: move the balance in {code} {account.AccountName} to a partner with a journal.", Count = 1 });
+                        blocking.Add(new YearEndCheckItem { Code = "partner_equity_invalid", Message = $"Unassigned partner capital or drawings: move the balance in {code} {account.AccountName} to a partner with a journal.", Count = 1 });
                 }
                 var archivedPartners = _partners?.Table.Where(p => p.ArchivedAt != null).ToList() ?? new List<Partner>();
                 foreach (var partner in archivedPartners)
@@ -363,7 +446,7 @@ namespace Services.Financial
                     var account = _accounts.Table.FirstOrDefault(a => a.Id == accountId);
                     var tb = throughEnd ?? TrialBalanceThrough(null, InclusiveEnd(year.EndDate));
                     if (account != null && tb.TryGetValue(account.Id, out var balance) && balance.Debit != balance.Credit)
-                        blocking.Add(new YearEndCheckItem { Code = "partner_archived_balance_" + partner.Id.ToString(CultureInfo.InvariantCulture) + "_" + account.AccountCode,
+                        blocking.Add(new YearEndCheckItem { Code = "partner_equity_invalid",
                             Message = $"{partner.Name} is archived but has a balance in {account.AccountCode}. Restore the partner or move the balance with a journal.", Count = 1 });
                 }
             }
@@ -437,7 +520,7 @@ namespace Services.Financial
                     Code = "draft_invoices",
                     Message = "Draft sales invoices dated in the fiscal year must be issued or deleted.",
                     Count = draftInvoices,
-                    LinkPath = "/sales/invoices"
+                    LinkPath = "/sales/invoices?status=draft&from=" + year.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&to=" + year.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 });
             }
 
@@ -453,7 +536,7 @@ namespace Services.Financial
                     Code = "draft_bills",
                     Message = "Draft bills dated in the fiscal year must be approved or deleted.",
                     Count = draftBills,
-                    LinkPath = "/purchasing/bills"
+                    LinkPath = "/purchases?status=draft&from=" + year.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&to=" + year.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 });
             }
 
@@ -468,12 +551,15 @@ namespace Services.Financial
                     Code = "unposted_journals",
                     Message = "Unposted journal entries dated in the fiscal year must be posted or deleted.",
                     Count = unpostedJournals,
-                    LinkPath = "/financials/journals"
+                    LinkPath = "/financials/journals?status=draft&from=" + year.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&to=" + year.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 });
             }
+
+            AddStructuralBlockers(year, blocking, throughEnd);
         }
 
-        private void AddWarningChecks(FinancialYear year, List<YearEndCheckItem> warnings)
+        private void AddWarningChecks(FinancialYear year, List<YearEndCheckItem> warnings,
+            Dictionary<int, (decimal Debit, decimal Credit)>? throughEnd)
         {
             var fyEnd = year.EndDate.Date;
             var banks = _banks.Table.Where(b => b.IsActive).ToList();
@@ -544,26 +630,19 @@ namespace Services.Financial
                 }
             }
 
-            var cutoff = fyEnd.AddDays(-365);
-            var staleAr = _salesInvoices.Table.Count(i =>
-                i.Status != SalesInvoiceStatus.Draft
-                && i.Status != SalesInvoiceStatus.Void
-                && i.Status != SalesInvoiceStatus.Closed
-                && i.Date.Date <= cutoff);
-            var staleAp = _purchaseInvoices.GetAllIncluding(i => i.PurchaseInvoiceLines, i => i.VendorPayments)
-                .AsEnumerable()
-                .Count(i => !i.IsDraft && !i.IsVoid && i.IsPayable && i.Date.Date <= cutoff && i.BalanceDue() > 0.005m);
-
-            var stale = staleAr + staleAp;
+            var stale = CountStaleOpenItems(fyEnd);
             if (stale > 0)
             {
                 warnings.Add(new YearEndCheckItem
                 {
-                    Code = "stale_ar_ap",
-                    Message = "Open AR/AP items are older than 365 days at fiscal year end.",
-                    Count = stale
+                    Code = "stale_ar_ap_as_of_cutoff",
+                    Message = "Open AR/AP items were more than 365 days past due at the fiscal year end. Age uses the due date, not the invoice date.",
+                    Count = stale,
+                    LinkPath = "/reports?statement=aging&to=" + fyEnd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 });
             }
+
+            AddWrongSideWarning(year, warnings, throughEnd);
         }
 
         private IReadOnlyList<YearEndClosingLine> BuildClosingLines(FinancialYear year,
@@ -573,11 +652,8 @@ namespace Services.Financial
             var accountRows = _accounts.Table.ToList();
             var accountsById = accountRows.ToDictionary(account => account.Id);
             var glSetting = _glSettings.Table.FirstOrDefault();
-            if (glSetting?.PermanentAccountId == null)
-                throw new YearEndCloseException("Permanent (retained earnings) account is not configured.");
-
-            var permanent = accountsById.GetValueOrDefault(glSetting.PermanentAccountId.Value)
-                ?? throw new YearEndCloseException("Permanent (retained earnings) account was not found.");
+            if (!TryResolvePermanentAccount(glSetting, accountRows, out var permanent, out _))
+                return Array.Empty<YearEndClosingLine>();
 
             var setting = _settings.Table.FirstOrDefault();
             var entityType = setting?.EntityType ?? EntityType.Corporation;
@@ -792,14 +868,14 @@ namespace Services.Financial
                 ClosedBy = year.ClosedBy
             };
 
-        private static FiscalYearCloseStatus ResolveStatus(FinancialYear year, DateTime today)
+        private DateTime WorkspaceToday()
         {
-            if (year.ClosedAt != null)
-                return FiscalYearCloseStatus.Closed;
-            if (year.EndDate.Date < today)
-                return FiscalYearCloseStatus.Ended;
-            return FiscalYearCloseStatus.Open;
+            var zone = _settings.Table.Select(s => s.Timezone).FirstOrDefault();
+            return WorkspaceBusinessDate.Today(_time, zone);
         }
+
+        private static FiscalYearCloseStatus ResolveStatus(FinancialYear year, DateTime today) =>
+            FiscalYearCloseStatusResolver.Resolve(year.ClosedAt, year.EndDate, today);
 
         private static DateTime InclusiveEnd(DateTime end) =>
             end.TimeOfDay == TimeSpan.Zero ? end.Date.AddDays(1).AddTicks(-1) : end;
@@ -807,6 +883,11 @@ namespace Services.Financial
 
     public sealed class YearEndCloseException : Exception
     {
-        public YearEndCloseException(string message) : base(message) { }
+        public string? ErrorCode { get; }
+
+        public YearEndCloseException(string message, string? errorCode = null) : base(message)
+        {
+            ErrorCode = errorCode;
+        }
     }
 }

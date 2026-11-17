@@ -45,6 +45,7 @@ import { EmailSettingsTab } from '../components/EmailSettingsTab';
 import { TaxSettingsTab } from '../components/TaxSettingsTab';
 import { AccountingPolicyCard } from '../components/AccountingPolicyCard';
 import { BooksLockCard } from '../components/BooksLockCard';
+import { fiscalYearReadStatusLabel } from '../lib/yearEndClose';
 import { YearEndCloseCard } from '../components/YearEndCloseCard';
 import { PartnersSettingsCard } from '../components/PartnersSettingsCard';
 import { SettingsNav, SettingsNavGroup } from '../components/SettingsNav';
@@ -61,6 +62,10 @@ interface LiveFinancialYear {
   startDate: string;
   endDate: string;
   isActive: boolean;
+  status?: 'Open' | 'Ended' | 'Closed' | string;
+  closedAt?: string | null;
+  closedBy?: string | null;
+  isPersisted?: boolean;
 }
 
 interface LivePaymentTerm {
@@ -342,15 +347,16 @@ export const Settings: React.FC = () => {
   };
 
   const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+    const date = match
+      ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+      : new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return dateStr;
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   };
 
   return (
@@ -875,12 +881,14 @@ export const Settings: React.FC = () => {
                           </span>
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              fy.isActive
+                              fiscalYearReadStatusLabel(fy.status) === 'Open'
                                 ? 'bg-emerald-500/15 text-emerald-400'
-                                : 'bg-slate-700 text-slate-300'
+                                : fiscalYearReadStatusLabel(fy.status) === 'Ended'
+                                  ? 'bg-amber-500/15 text-amber-400'
+                                  : 'bg-slate-700 text-slate-300'
                             }`}
                           >
-                            {fy.isActive ? 'Active Period' : 'Closed'}
+                            {fiscalYearReadStatusLabel(fy.status)}
                           </span>
                         </div>
                         <div className="text-xs text-[var(--text-muted)] font-mono">
@@ -891,6 +899,16 @@ export const Settings: React.FC = () => {
                           <span>&rarr;</span>
                           <span>{formatDate(fy.endDate)}</span>
                         </div>
+                        {fiscalYearReadStatusLabel(fy.status) === 'Closed' && (fy.closedBy || fy.closedAt) && (
+                          <div className="text-[11px] text-[var(--text-muted)]">
+                            Closed{fy.closedBy ? ` · ${fy.closedBy}` : ''}{fy.closedAt ? ` · ${fy.closedAt}` : ''}
+                          </div>
+                        )}
+                        {fy.isPersisted === false && (
+                          <div className="text-[11px] text-[var(--text-muted)]">
+                            Not prepared yet. Use Prepare fiscal years through next year before closing.
+                          </div>
+                        )}
                       </div>
                     ))
                   ) : (

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   canEnableCloseButton,
+  fiscalYearReadStatusLabel,
   fiscalYearStatusLabel,
   normalizeFiscalYearCloseStatus,
 } from '../src/lib/yearEndClose.ts';
@@ -34,4 +35,12 @@ test('canEnableCloseButton requires permission, non-closed status, and no blocke
 
 test('normalizeFiscalYearCloseStatus accepts enum names', () => {
   assert.equal(normalizeFiscalYearCloseStatus('Closed'), 3);
+});
+
+test('fiscalYearReadStatusLabel does not treat a missing status as Closed', () => {
+  assert.equal(fiscalYearReadStatusLabel('Open'), 'Open');
+  assert.equal(fiscalYearReadStatusLabel('Ended'), 'Ended');
+  assert.equal(fiscalYearReadStatusLabel('Closed'), 'Closed');
+  assert.equal(fiscalYearReadStatusLabel(undefined), 'Open');
+  assert.equal(fiscalYearReadStatusLabel('Active Period'), 'Open');
 });

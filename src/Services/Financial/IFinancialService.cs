@@ -70,6 +70,11 @@ namespace Services.Financial
             string search = null, decimal? minAmount = null, decimal? maxAmount = null);
         FinancialYear CurrentFiscalYear();
         /// <summary>
+        /// Fiscal years for Settings and assistant reads. Does not insert a year.
+        /// An unsaved year that contains the workspace-local business date is included with <c>IsPersisted</c> false.
+        /// </summary>
+        System.Collections.Generic.IReadOnlyList<Dto.Financial.FiscalYearSummaryDto> ListFiscalYearSummaries();
+        /// <summary>
         /// Creates every missing open fiscal year from the books start through the year containing <paramref name="date"/>.
         /// Idempotent: never duplicates or mutates existing years. No-op when <paramref name="date"/> is before the books start.
         /// </summary>

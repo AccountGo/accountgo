@@ -25,6 +25,7 @@ import { ProductsServices } from './pages/ProductsServices';
 import Inventory from './pages/Inventory';
 import GeneralLedger from './pages/GeneralLedger';
 import JournalEntries from './pages/JournalEntries';
+import { YearEndClosePage } from './components/YearEndCloseCard';
 import Reports from './pages/Reports';
 import { Tax } from './pages/Tax';
 import ChartOfAccounts from './pages/ChartOfAccounts';
@@ -172,6 +173,14 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="financials">
                 <JournalEntries />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'financials/year-end',
+            element: (
+              <RequiresModule module="financials">
+                <YearEndClosePage />
               </RequiresModule>
             ),
           },

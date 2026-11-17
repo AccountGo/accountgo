@@ -2,6 +2,7 @@ using Api.Authorization;
 using Api.Data;
 using Api.Filters;
 using Core.Authorization;
+using Core.Domain;
 using Core.Domain.Security;
 using Dto.Banking;
 using Dto.Financial;
@@ -2161,10 +2162,10 @@ namespace Api.Controllers
         [HttpGet]
         [Route("YearEnd")]
         [RequireModule("financials")]
-        [RequirePermission(SystemPermissions.FinancialsAccountsView)]
+        [Authorize]
         public IActionResult ListYearEndYears()
         {
-            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
+            if (!CanInspectYearEnd(out var denied))
                 return denied!;
 
             var years = _yearEndCloseService.ListYears();
@@ -2187,10 +2188,10 @@ namespace Api.Controllers
         [HttpGet]
         [Route("YearEnd/{code}")]
         [RequireModule("financials")]
-        [RequirePermission(SystemPermissions.FinancialsAccountsView)]
+        [Authorize]
         public IActionResult PreviewYearEnd(string code)
         {
-            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
+            if (!CanInspectYearEnd(out var denied))
                 return denied!;
 
             try
@@ -2200,13 +2201,15 @@ namespace Api.Controllers
             }
             catch (YearEndCloseException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return YearEndFailure(ex);
             }
         }
 
         public sealed class YearEndCloseRequest
         {
             public bool AcknowledgeWarnings { get; set; }
+            public string? WarningExceptionReason { get; set; }
+            public string? PreviewHash { get; set; }
         }
 
         [HttpPost]
@@ -2224,13 +2227,23 @@ namespace Api.Controllers
                 var preview = _yearEndCloseService.Close(
                     code,
                     request?.AcknowledgeWarnings ?? false,
-                    YearEndActor);
+                    YearEndActor,
+                    new YearEndCloseCommand
+                    {
+                        WarningExceptionReason = request?.WarningExceptionReason,
+                        PreviewHash = request?.PreviewHash,
+                        IdempotencyKey = Request.Headers["Idempotency-Key"].ToString(),
+                        RequirePreviewHash = true,
+                        RequireWarningReason = true,
+                        IndependentReviewerRequired = IndependentReviewerRequired(),
+                        ActorIsOwnerOrAdmin = ActorIsOwnerOrAdmin()
+                    });
                 tx.Commit();
                 return Ok(MapYearEndPreview(preview));
             }
             catch (YearEndCloseException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return YearEndFailure(ex);
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
@@ -2262,13 +2275,18 @@ namespace Api.Controllers
                     request?.Reason ?? "",
                     YearEndActor,
                     request?.AcknowledgeIndependentLock ?? false,
-                    request?.ExpectedLockThrough);
+                    request?.ExpectedLockThrough,
+                    new YearEndReopenCommand
+                    {
+                        IndependentReviewerRequired = IndependentReviewerRequired(),
+                        ActorIsOwnerOrAdmin = ActorIsOwnerOrAdmin()
+                    });
                 tx.Commit();
                 return Ok(MapYearEndPreview(preview));
             }
             catch (YearEndCloseException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return YearEndFailure(ex);
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
@@ -2337,8 +2355,180 @@ namespace Api.Controllers
             requiresLockAcknowledgement = preview.RequiresLockAcknowledgement,
             newlyUnlockedFrom = preview.NewlyUnlockedFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             newlyUnlockedThrough = preview.NewlyUnlockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            canClose = preview.CanClose
+            canClose = preview.CanClose,
+            previewHash = preview.PreviewHash,
+            accountingRevision = preview.AccountingRevision,
+            checks = preview.Checks.Select(item => new
+            {
+                code = item.Code,
+                tier = item.Tier,
+                state = item.State,
+                message = item.Message,
+                count = item.Count,
+                amount = item.Amount,
+                linkPath = item.LinkPath
+            }),
+            packageNote = preview.PackageNote,
+            issuanceStatus = preview.IssuanceStatus,
+            canReopen = preview.CanReopen,
+            reopenBlockedReason = preview.ReopenBlockedReason,
+            latestCloseRunId = preview.LatestCloseRunId
         };
+
+        private bool CanInspectYearEnd(out IActionResult? denied)
+        {
+            if (TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out _))
+            {
+                denied = null;
+                return true;
+            }
+            if (TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out _))
+            {
+                denied = null;
+                return true;
+            }
+            TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out denied);
+            return false;
+        }
+
+        private bool ActorIsOwnerOrAdmin() =>
+            _tenantContext.Role is CompanyMemberRole.Owner or CompanyMemberRole.Admin;
+
+        private bool IndependentReviewerRequired()
+        {
+            var rule = _db.WorkspaceApprovalRules
+                .Where(r => r.OperationKey == AccessOperationCatalog.FinancialsJournalPost)
+                .Select(r => (WorkspaceApprovalRuleKind?)r.RuleKind)
+                .FirstOrDefault();
+            return rule != WorkspaceApprovalRuleKind.SingleActorAllowed;
+        }
+
+        private IActionResult YearEndFailure(YearEndCloseException ex)
+        {
+            var body = new { code = ex.ErrorCode, message = ex.Message };
+            return ex.ErrorCode switch
+            {
+                "stale_year_end_preview" or "year_end_blocked" or "already_closed" or "idempotency_conflict"
+                    => Conflict(body),
+                "close_check_unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, body),
+                _ => BadRequest(body)
+            };
+        }
+
+        public sealed class YearEndIssuanceRequest
+        {
+            public string Status { get; set; }
+            public string Reason { get; set; }
+            public DateTime? ExternalDate { get; set; }
+            public string ExternalReference { get; set; }
+        }
+
+        [HttpPost]
+        [Route("YearEnd/{code}/Issuance")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
+        public IActionResult DeclareYearEndIssuance(string code, [FromBody] YearEndIssuanceRequest request)
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out var denied))
+                return denied!;
+            try
+            {
+                using var tx = BeginWriteTransaction();
+                var preview = _yearEndCloseService.DeclareIssuance(code, new YearEndIssuanceCommand
+                {
+                    Status = request?.Status,
+                    Reason = request?.Reason,
+                    ExternalDate = request?.ExternalDate,
+                    ExternalReference = request?.ExternalReference
+                }, YearEndActor);
+                tx.Commit();
+                return Ok(MapYearEndPreview(preview));
+            }
+            catch (YearEndCloseException ex)
+            {
+                return YearEndFailure(ex);
+            }
+        }
+
+        [HttpGet]
+        [Route("YearEnd/{code}/CloseRuns")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
+        public IActionResult ListYearEndCloseRuns(string code)
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out var denied))
+                return denied!;
+            var year = _db.FinancialYears.FirstOrDefault(y => y.FiscalYearCode == code);
+            if (year == null) return NotFound(new { message = "Fiscal year was not found." });
+            var runs = _db.YearEndCloseRuns.Where(r => r.FinancialYearId == year.Id)
+                .OrderBy(r => r.AttemptNo)
+                .Select(r => new { id = r.Id, attemptNo = r.AttemptNo, previewHash = r.PreviewHash, closedAtUtc = r.ClosedAtUtc, actor = r.Actor })
+                .ToList();
+            return Ok(new
+            {
+                packageNote = year.ClosedAt != null && runs.Count == 0
+                    ? "No retained close package: closed before this feature"
+                    : null,
+                runs
+            });
+        }
+
+        [HttpGet]
+        [Route("YearEnd/{code}/CloseRuns/{runId}/Package")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
+        public IActionResult DownloadYearEndPackage(string code, string runId, string format = "json")
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out var denied))
+                return denied!;
+            var year = _db.FinancialYears.FirstOrDefault(y => y.FiscalYearCode == code);
+            if (year == null) return NotFound(new { message = "Fiscal year was not found." });
+            var runQuery = _db.YearEndCloseRuns.Where(r => r.FinancialYearId == year.Id);
+            var run = string.Equals(runId, "latest", StringComparison.OrdinalIgnoreCase)
+                ? runQuery.OrderByDescending(r => r.AttemptNo).FirstOrDefault()
+                : int.TryParse(runId, out var id) ? runQuery.FirstOrDefault(r => r.Id == id) : null;
+            if (run == null)
+                return NotFound(new { code = "close_package_missing", message = year.ClosedAt != null
+                    ? "No retained close package: closed before this feature"
+                    : "This fiscal year has no close package." });
+            var evidence = _db.YearEndCloseEvidence.FirstOrDefault(e => e.YearEndCloseRunId == run.Id);
+            if (evidence == null)
+                return NotFound(new { code = "close_package_missing", message = "No retained close package: closed before this feature" });
+            var full = TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out _);
+            var body = full
+                ? evidence.Payload
+                : "redacted=1\nrun=" + run.Id.ToString(CultureInfo.InvariantCulture) + "\nhash=" + run.PreviewHash + "\ncanonicalDigest=" + evidence.ContentDigest;
+            var digest = full ? evidence.ContentDigest : YearEndPreviewHash.Hex(body);
+            if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
+            {
+                var csv = "section,value\nmanifest," + digest + "\n" + string.Join("\n",
+                    body.Split('\n').Select(line => "row,\"" + line.Replace("\"", "\"\"") + "\""));
+                return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "year-end-" + code + "-run-" + run.Id + ".csv");
+            }
+            return Ok(new { runId = run.Id, redacted = !full, contentDigest = digest, canonicalDigest = evidence.ContentDigest, payload = body });
+        }
+
+        /// <summary>Historical AR/AP aging. asOf is required; the report does not fall back to today.</summary>
+        [HttpGet]
+        [Route("Aging")]
+        [RequireModule("financials", "reports")]
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public IActionResult HistoricalAging(string asOf, string format = "json")
+        {
+            if (!TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out var denied))
+                return denied!;
+            if (!DateTime.TryParseExact(asOf, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+                return BadRequest(new { code = "validation", message = "asOf must be a date in yyyy-MM-dd form." });
+            var receivables = TryAuthorizeOperation(AccessOperationCatalog.SalesInvoicesView, SystemPermissions.SalesInvoicesView, out _);
+            var payables = TryAuthorizeOperation(AccessOperationCatalog.PurchasesBillsView, SystemPermissions.PurchasesBillsView, out _);
+            var aging = new Api.Service.HistoricalAgingService(_db);
+            if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
+            {
+                var csv = aging.ToCsv(day, receivables, payables);
+                return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "aging-" + asOf + ".csv");
+            }
+            return Ok(aging.Build(day, receivables, payables));
+        }
 
         #endregion
     }

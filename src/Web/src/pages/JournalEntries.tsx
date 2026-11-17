@@ -44,8 +44,12 @@ export function filterJournalEntries(
   entries: JournalEntry[],
   status: 'draft' | 'posted',
   sourceFilter: JournalSourceFilter,
+  range?: { from?: string; to?: string },
 ): JournalEntry[] {
   return entries.filter((entry) => {
+    const day = (entry.journalDate || '').slice(0, 10);
+    if (range?.from && day < range.from) return false;
+    if (range?.to && day > range.to) return false;
     if (!!entry.posted !== (status === 'posted')) return false;
     const isImported = Boolean(entry.sourceSystem);
     if (sourceFilter === 'imported') return isImported;
@@ -333,7 +337,10 @@ export default function JournalEntries() {
   const { currentOrg, hasPermission, canWrite } = useTenantContext();
   const { authFetch } = useAuth();
   const [params, setParams] = useSearchParams();
-  const [status, setStatus] = useState<'draft' | 'posted'>('draft');
+  const statusFromLink = params.get('status');
+  const [status, setStatus] = useState<'draft' | 'posted'>(statusFromLink === 'posted' ? 'posted' : 'draft');
+  const journalFrom = params.get('from') || '';
+  const journalTo = params.get('to') || '';
   const [sourceFilter, setSourceFilter] = useState<JournalSourceFilter>('all');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [batchBusy, setBatchBusy] = useState(false);
@@ -375,7 +382,7 @@ export default function JournalEntries() {
     journalEntryLines: [1, 2].map(drCr => ({ id: 0, accountId: 0, drCr, amount: 0, memo: '' })),
   } : selected;
   const flatten = (accounts: JournalAccount[]): JournalAccount[] => accounts.flatMap(account => [account, ...flatten(account.childAccounts || [])]);
-  const visibleEntries = data ? filterJournalEntries(data.entries, status, sourceFilter) : [];
+  const visibleEntries = data ? filterJournalEntries(data.entries, status, sourceFilter, { from: journalFrom, to: journalTo }) : [];
   const draftVisibleIds = status === 'draft' ? visibleEntries.filter(e => !e.posted).map(e => e.id) : [];
   const selectedDraftIds = selectedIds.filter(id => draftVisibleIds.includes(id));
   const toggleSelect = (id: number) =>

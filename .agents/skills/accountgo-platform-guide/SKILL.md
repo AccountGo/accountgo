@@ -37,7 +37,7 @@ The AccountGo tools read exactly what the matching page shows, as the signed-in 
 | Manual journals including drafts / one journal | `search_journal_entries` / `get_journal_entry` |
 | Products and services; tax rates | `search_items`; `get_tax_rates` |
 | Linked work and personal entries (Owner only) | `get_linked_entries` |
-| Fiscal years, tax reports/filings, equity rollforward | `get_fiscal_years`, `get_tax_report`, `get_equity_statement` |
+| Fiscal years (open, ended or closed), tax reports/filings, equity rollforward | `get_fiscal_years`, `get_tax_report`, `get_equity_statement` |
 | Receipts, bank outstanding aging, stock movements | `search_receipts`, `get_bank_outstanding_items`, `get_stock_movements` |
 | Current members/roles and recorded changes | `get_members_and_roles`, `get_record_history` |
 | Repeatable period checks before cycle review | `get_books_checks` |
@@ -47,6 +47,7 @@ The AccountGo tools read exactly what the matching page shows, as the signed-in 
 - Search first when you only have a name or text, then fetch the one record. Lists are paged: say how many matched (`totalCount`) and page with `skip`/`take` rather than claiming you saw everything.
 - Every result has `status`. `Success`: answer from `data` and offer `link` (already includes the workspace). `AccessDenied`: say this member's access does not include it and to ask a workspace admin; `PlanRestricted`: name the area the plan lacks; `NotFound`: say no such record exists in this workspace. Never treat a refusal or an empty page as empty books, and do not retry sibling tools in a loop.
 - Amounts are in the workspace currency from `get_workspace_context`. Aging defaults to today; pass `asOfDate` for a period-end reconstruction. The audit companion explains the distinct current-clearance limit of bank outstanding aging. Full bank account numbers are never returned; quote only the masked number.
+- `get_fiscal_years` status **Closed** means that year was closed. Do not infer it from the active flag or from the books lock. An `isPersisted` false year is not saved yet. The row does not mean the books are correct, and it does not replace the **Year-end close** screen. The close control on that screen is **Review & close**.
 
 ## Navigation
 

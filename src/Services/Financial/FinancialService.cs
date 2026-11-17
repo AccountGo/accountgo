@@ -36,6 +36,7 @@ namespace Services.Financial
         private readonly IRepository<JournalEntryLine> _journalEntryLineRepo;
         private readonly IRepository<GeneralLedgerLine> _generalLedgerLineRepository;
         private readonly IRepository<FinancialYear> _fiscalYearRepo;
+        private readonly TimeProvider _time;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<ItemTaxGroup> _itemTaxGroupRepo;
         private readonly IRepository<PaymentTerm> _paymentTermRepo;
@@ -111,7 +112,8 @@ namespace Services.Financial
             Core.Authorization.IWorkspaceApprovalPolicyResolver approvalPolicyResolver = null,
             Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
             IRepository<LinkedEntryPair> linkedEntryPairRepo = null,
-            IRepository<Partner> partnerRepo = null
+            IRepository<Partner> partnerRepo = null,
+            TimeProvider time = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -154,6 +156,7 @@ namespace Services.Financial
             _linkedEntryPairRepo = linkedEntryPairRepo;
             _partnerRepo = partnerRepo;
             _reconciledPeriodGuard = reconciledPeriodGuard;
+            _time = time ?? TimeProvider.System;
         }
 
         public const int GeneralLedgerDefaultPageSize = 100;
@@ -273,15 +276,37 @@ namespace Services.Financial
 
         public FinancialYear CurrentFiscalYear()
         {
-            var today = DateTime.UtcNow.Date;
             var setting = _companySettingRepo.Table.FirstOrDefault();
+            var today = WorkspaceBusinessDate.Today(_time, setting?.Timezone);
+            return ResolveCurrentFiscalYear(setting, today, loadedYears: null);
+        }
+
+        public System.Collections.Generic.IReadOnlyList<Dto.Financial.FiscalYearSummaryDto> ListFiscalYearSummaries()
+        {
+            var setting = _companySettingRepo.Table.FirstOrDefault();
+            var today = WorkspaceBusinessDate.Today(_time, setting?.Timezone);
+            var stored = _fiscalYearRepo.Table.OrderBy(fy => fy.StartDate).ToList();
+            var summaries = stored
+                .Select(year => FiscalYearSummaryProjection.Project(year, today, isPersisted: true))
+                .ToList();
+            var current = ResolveCurrentFiscalYear(setting, today, stored);
+            if (current != null && summaries.All(year => year.FiscalYearCode != current.FiscalYearCode))
+                summaries.Add(FiscalYearSummaryProjection.Project(current, today, isPersisted: false));
+            return summaries;
+        }
+
+        private FinancialYear ResolveCurrentFiscalYear(CompanySetting setting, DateTime today, System.Collections.Generic.IReadOnlyList<FinancialYear> loadedYears)
+        {
             if (setting == null)
                 return null;
             if (today < setting.BooksStartDate.Date)
                 return null;
 
-            var stored = _fiscalYearRepo.Table
-                .FirstOrDefault(fy => fy.IsActive
+            var stored = loadedYears != null
+                ? loadedYears.FirstOrDefault(fy => fy.IsActive
+                    && today >= fy.StartDate.Date
+                    && today <= fy.EndDate.Date)
+                : _fiscalYearRepo.Table.FirstOrDefault(fy => fy.IsActive
                     && today >= fy.StartDate.Date
                     && today <= fy.EndDate.Date);
             if (stored != null)
@@ -798,9 +823,18 @@ namespace Services.Financial
                 throw new InvalidOperationException(
                     "A prior-period adjustment must correct a closed fiscal year. The selected year is still open.");
 
+            if (adjustedYear.CompanyId != journalEntry.CompanyId && journalEntry.CompanyId != 0)
+                throw new InvalidOperationException(
+                    "A prior-period adjustment must correct a closed fiscal year in this workspace.");
+
             if (adjustedYear.EndDate.Date >= journalEntry.Date.Date)
                 throw new InvalidOperationException(
                     "A prior-period adjustment must correct a fiscal year that ended before the journal date.");
+
+            var lockedThrough = _companySettingRepo?.Table.Select(s => s.BooksLockedThrough).FirstOrDefault();
+            if (lockedThrough.HasValue && journalEntry.Date.Date <= lockedThrough.Value.Date)
+                throw new InvalidOperationException(
+                    "A prior-period adjustment must be posted in an open, unlocked period.");
 
             var lines = journalEntry.JournalEntryLines?.ToList() ?? new List<JournalEntryLine>();
             if (lines.Count == 0)
@@ -825,6 +859,16 @@ namespace Services.Financial
             {
                 throw new InvalidOperationException(
                     "A prior-period adjustment must include at least one line on account 30820 (Prior Period Adjustments).");
+            }
+
+            if (lines.Any(l =>
+                    byId.TryGetValue(l.AccountId, out var account)
+                    && account.AccountCode != "30820"
+                    && account.AccountClassId != 1
+                    && account.AccountClassId != 2))
+            {
+                throw new InvalidOperationException(
+                    "A prior-period adjustment can only use account 30820 against asset or liability accounts.");
             }
         }
 

@@ -542,8 +542,18 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         });
         await AssertOk(await Record(Line(100, date: postingDate)));
         await AssertOk(await Record(Line(-40, date: postingDate)));
+        var previewResponse = await _host.Send(HttpMethod.Get, "/api/Financials/YearEnd/2025", null, _user.Token, Org);
+        var previewText = await previewResponse.Content.ReadAsStringAsync();
+        Assert.True(previewResponse.IsSuccessStatusCode, previewText);
+        var preview = JsonSerializer.Deserialize<JsonElement>(previewText);
+        var warnings = preview.GetProperty("warnings").GetArrayLength();
         await AssertOk(await _host.Send(HttpMethod.Post, "/api/Financials/YearEnd/2025/Close",
-            new { acknowledgeWarnings = true }, _user.Token, Org));
+            new
+            {
+                acknowledgeWarnings = warnings > 0,
+                warningExceptionReason = warnings > 0 ? "Accepted for the owner-movement test." : null,
+                previewHash = preview.GetProperty("previewHash").GetString()
+            }, _user.Token, Org));
         using var scope = _host.Factory.Services.CreateScope();
         using var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, role: CompanyMemberRole.Owner);
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();

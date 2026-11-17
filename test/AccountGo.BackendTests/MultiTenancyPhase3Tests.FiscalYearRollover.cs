@@ -161,5 +161,89 @@ namespace AccountGo.BackendTests
 
             WithDb(db => Assert.Equal(countBefore, db.FinancialYears.Count()));
         }
+
+        [Fact]
+        public async Task FinancialYears_ExposeCloseStatusWithoutInsertingAYear()
+        {
+            var today = DateTime.UtcNow.Date;
+            int countBefore = 0;
+            string currentCode = null;
+            WithDb(db =>
+            {
+                var setting = db.CompanySettings.Single();
+                setting.Timezone = "UTC";
+                var computed = Core.Domain.FiscalYearCalculator.Containing(
+                    today, setting.FiscalYearPattern, setting.FiscalYearStartMonth);
+                currentCode = computed.Code;
+                db.FinancialYears.RemoveRange(db.FinancialYears.Where(y => y.FiscalYearCode == currentCode));
+                db.FinancialYears.Add(new Core.Domain.Financials.FinancialYear
+                {
+                    FiscalYearCode = "FY-CLOSED0",
+                    FiscalYearName = "Zero activity",
+                    StartDate = new DateTime(2019, 1, 1),
+                    EndDate = new DateTime(2019, 12, 31),
+                    IsActive = false,
+                    ClosedAt = new DateTime(2020, 1, 15, 18, 30, 0, DateTimeKind.Utc),
+                    ClosedBy = "ada@example.test",
+                    ClosingGeneralLedgerHeaderId = null
+                });
+                db.FinancialYears.Add(new Core.Domain.Financials.FinancialYear
+                {
+                    FiscalYearCode = "FY21-22",
+                    FiscalYearName = "Partial year",
+                    StartDate = new DateTime(2021, 4, 1),
+                    EndDate = new DateTime(2022, 3, 31),
+                    IsActive = true
+                });
+                db.SaveChanges();
+                countBefore = db.FinancialYears.Count();
+            });
+
+            var response = await Send(HttpMethod.Get, "/api/Administration/financialyears");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            var years = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var closed = Row(years, "FY-CLOSED0");
+            Assert.Equal("Closed", closed.GetProperty("status").GetString());
+            Assert.True(closed.GetProperty("isPersisted").GetBoolean());
+            Assert.False(closed.GetProperty("isActive").GetBoolean());
+            Assert.Equal("2019-01-01", closed.GetProperty("startDate").GetString());
+            Assert.Equal("2019-12-31", closed.GetProperty("endDate").GetString());
+            Assert.Equal("ada@example.test", closed.GetProperty("closedBy").GetString());
+            Assert.Equal(JsonValueKind.Null, closed.GetProperty("closingGeneralLedgerHeaderId").ValueKind);
+            Assert.EndsWith("+00:00", closed.GetProperty("closedAt").GetString(), StringComparison.Ordinal);
+            Assert.StartsWith("2020-01-15T18:30:00", closed.GetProperty("closedAt").GetString(), StringComparison.Ordinal);
+
+            var partial = Row(years, "FY21-22");
+            Assert.Equal("Ended", partial.GetProperty("status").GetString());
+            Assert.True(partial.GetProperty("isActive").GetBoolean());
+            Assert.Equal("2021-04-01", partial.GetProperty("startDate").GetString());
+
+            var current = Row(years, currentCode);
+            Assert.False(current.GetProperty("isPersisted").GetBoolean());
+            Assert.Equal(0, current.GetProperty("id").GetInt32());
+            Assert.Equal("Open", current.GetProperty("status").GetString());
+            Assert.Equal(JsonValueKind.Null, current.GetProperty("closedAt").ValueKind);
+            Assert.Equal(JsonValueKind.Null, current.GetProperty("closedBy").ValueKind);
+            Assert.Equal(JsonValueKind.Null, current.GetProperty("closingGeneralLedgerHeaderId").ValueKind);
+
+            var yearEnd = await Json(await Send(HttpMethod.Get, "/api/Financials/YearEnd"));
+            Assert.Equal(3, Row(yearEnd, "FY-CLOSED0").GetProperty("status").GetInt32());
+            Assert.Equal(2, Row(yearEnd, "FY21-22").GetProperty("status").GetInt32());
+            Assert.DoesNotContain(yearEnd.EnumerateArray(), y => y.GetProperty("fiscalYearCode").GetString() == currentCode);
+
+            var tool = await CallTool("get_fiscal_years", new { });
+            Assert.Equal("Success", tool.GetProperty("status").GetString());
+            Assert.True(JsonElement.DeepEquals(years, tool.GetProperty("data")));
+
+            await JoinOther();
+            var member = await CallTool("get_fiscal_years", new { }, _otherId);
+            Assert.Equal("Success", member.GetProperty("status").GetString());
+            Assert.True(JsonElement.DeepEquals(years, member.GetProperty("data")));
+
+            WithDb(db => Assert.Equal(countBefore, db.FinancialYears.Count()));
+        }
+
+        private static JsonElement Row(JsonElement years, string code) =>
+            Assert.Single(years.EnumerateArray(), y => y.GetProperty("fiscalYearCode").GetString() == code);
     }
 }

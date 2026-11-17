@@ -1029,7 +1029,7 @@ public class YearEndCloseTests
 
         var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
 
-        var blocker = Assert.Single(preview.Blocking, item => item.Code == "partner_archived_balance_" + avery.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "_30101");
+        var blocker = Assert.Single(preview.Blocking, item => item.Code == "partner_equity_invalid" && item.Message.Contains("Avery is archived"));
         Assert.Contains("Avery is archived but has a balance in 30101. Restore the partner or move the balance with a journal.", blocker.Message);
     }
 
@@ -1126,8 +1126,65 @@ public class YearEndCloseTests
 
         var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
 
-        Assert.Contains(preview.Blocking, item => item.Code == "partner_shares_missing");
+        Assert.Contains(preview.Blocking, item => item.Code == "partner_equity_invalid");
         Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Close(Harness.Fy2025Code, acknowledgeWarnings: true, closedBy: "closer"));
+    }
+
+    [Fact]
+    public void Close_rejects_a_preview_hash_that_no_longer_matches()
+    {
+        using var harness = new Harness();
+        harness.Post(D(2025, 6, 15), harness.CashId, harness.RevenueId, 1000m);
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+        Assert.False(string.IsNullOrWhiteSpace(preview.PreviewHash));
+
+        var stale = Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Close(
+            Harness.Fy2025Code,
+            acknowledgeWarnings: true,
+            closedBy: "tester",
+            command: new YearEndCloseCommand
+            {
+                RequirePreviewHash = true,
+                PreviewHash = new string('a', 64),
+                WarningExceptionReason = "Accepted in the test."
+            }));
+        Assert.Equal("stale_year_end_preview", stale.ErrorCode);
+
+        var closed = harness.YearEnd.Close(
+            Harness.Fy2025Code,
+            acknowledgeWarnings: preview.Warnings.Count > 0,
+            closedBy: "tester",
+            command: new YearEndCloseCommand
+            {
+                RequirePreviewHash = true,
+                RequireWarningReason = preview.Warnings.Count > 0,
+                PreviewHash = preview.PreviewHash,
+                WarningExceptionReason = preview.Warnings.Count > 0 ? "Accepted in the test." : null
+            });
+        Assert.Equal(FiscalYearCloseStatus.Closed, closed.Status);
+    }
+
+    [Fact]
+    public void Stale_open_item_uses_days_past_due_not_invoice_age()
+    {
+        using var harness = new Harness();
+        var invoice = new SalesInvoiceHeader
+        {
+            CompanyId = 1,
+            No = "OLD-DUE",
+            CustomerId = 1,
+            Date = D(2024, 1, 1),
+            DueDate = D(2025, 6, 1),
+            Status = SalesInvoiceStatus.Open,
+            SalesInvoiceLines = { new SalesInvoiceLine { CompanyId = 1, Amount = 50m, Quantity = 1, Discount = 0 } }
+        };
+        harness.SalesInvoices.Insert(invoice);
+        var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+        Assert.DoesNotContain(preview.Warnings, item => item.Code == "stale_ar_ap_as_of_cutoff");
+
+        invoice.DueDate = D(2024, 1, 15);
+        preview = harness.YearEnd.Preview(Harness.Fy2025Code);
+        Assert.Contains(preview.Warnings, item => item.Code == "stale_ar_ap_as_of_cutoff");
     }
 
     [Fact]
@@ -1142,8 +1199,8 @@ public class YearEndCloseTests
 
         var preview = harness.YearEnd.Preview(Harness.Fy2025Code);
 
-        Assert.Contains(preview.Blocking, item => item.Code == "partner_unassigned_balance_30100");
-        Assert.Contains(preview.Blocking, item => item.Code == "partner_unassigned_balance_30800");
+        Assert.Contains(preview.Blocking, item => item.Code == "partner_equity_invalid" && item.Message.Contains("30100"));
+        Assert.Contains(preview.Blocking, item => item.Code == "partner_equity_invalid" && item.Message.Contains("30800"));
     }
 
     [Fact]

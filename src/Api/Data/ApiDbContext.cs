@@ -18,7 +18,7 @@ using System.Threading.Tasks;
 
 namespace Api.Data
 {
-    public class ApiDbContext : DbContext
+    public partial class ApiDbContext : DbContext
     {
         private readonly ITenantContext? _tenantContext;
 
@@ -119,6 +119,8 @@ namespace Api.Data
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
             EnforceRecurringScheduleConsistency();
+            EnforceYearEndEvidenceImmutability();
+            AdvanceAccountingRevision();
             return base.SaveChanges(acceptAllChangesOnSuccess);
         }
 
@@ -131,6 +133,8 @@ namespace Api.Data
             EnforceReconciledLineImmutability();
             EnforceTenantSecurity();
             EnforceRecurringScheduleConsistency();
+            EnforceYearEndEvidenceImmutability();
+            AdvanceAccountingRevision();
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         }
 
@@ -539,6 +543,12 @@ namespace Api.Data
                 .HasDefaultValue(SessionTimeoutPolicy.DefaultIdleMinutes)
                 .HasSentinel(0);
             builder.Entity<CompanySetting>().Property(s => s.Timezone).IsRequired().HasMaxLength(50).HasDefaultValue("UTC");
+            builder.Entity<CompanyCloseState>().HasIndex(s => s.CompanyId).IsUnique();
+            builder.Entity<YearEndCloseRun>().HasIndex(r => new { r.CompanyId, r.FinancialYearId, r.AttemptNo }).IsUnique();
+            builder.Entity<YearEndCloseEvidence>().HasIndex(e => e.YearEndCloseRunId).IsUnique();
+            builder.Entity<YearEndCommandReceipt>().HasIndex(r => new { r.CompanyId, r.Operation, r.IdempotencyKey }).IsUnique();
+            builder.Entity<YearEndLifecycleEvent>().HasIndex(e => new { e.CompanyId, e.FinancialYearId, e.Id });
+            builder.Entity<YearEndIssuanceDeclaration>().HasIndex(e => new { e.CompanyId, e.FinancialYearId, e.Id });
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
             builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);
@@ -1315,6 +1325,12 @@ namespace Api.Data
         public virtual DbSet<Donor> Donors { get; set; }
         public virtual DbSet<EntitlementUsage> EntitlementUsages { get; set; }
         public virtual DbSet<FinancialYear> FinancialYears { get; set; }
+        public virtual DbSet<CompanyCloseState> CompanyCloseStates { get; set; }
+        public virtual DbSet<YearEndCloseRun> YearEndCloseRuns { get; set; }
+        public virtual DbSet<YearEndCloseEvidence> YearEndCloseEvidence { get; set; }
+        public virtual DbSet<YearEndLifecycleEvent> YearEndLifecycleEvents { get; set; }
+        public virtual DbSet<YearEndCommandReceipt> YearEndCommandReceipts { get; set; }
+        public virtual DbSet<YearEndIssuanceDeclaration> YearEndIssuanceDeclarations { get; set; }
         public virtual DbSet<GeneralLedgerHeader> GeneralLedgerHeaders { get; set; }
         public virtual DbSet<GeneralLedgerLine> GeneralLedgerLines { get; set; }
         public virtual DbSet<GeneralLedgerSetting> GeneralLedgerSettings { get; set; }

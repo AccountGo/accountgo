@@ -27,8 +27,13 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - You can undo an owner drawing or contribution from the matched statement line.
 - Bank statement lines that move money between you and your business can be recorded as an owner drawing or owner contribution wherever statement import is available, so they no longer count as expenses or income. Partnerships use partner wording.
 - Partnerships can set up each partner's capital and drawings accounts with profit-sharing ratios for each year. Bank statement lines can be recorded as a drawing or contribution for a chosen partner, with remembered suggestions and undo, and the statement of changes in equity shows a column for each partner. Closing the year splits the profit or loss between partners and closes each partner's drawings into their capital.
+- Year-end close now reviews the year before it closes. The button is **Review & close**. Warnings need a written reason. A closed year can download the retained close record, and a year closed before this record existed says that no package was kept.
+- Reports includes **Receivables & Payables Aging** for a chosen date. It shows outstanding balances and whether they agree with the ledger. The comparison uses the accrual ledger.
+- People who can review or close a year can open **Year-end close** without being an organization administrator.
 
 ### Changed
+- Fiscal years in Settings now show Open, Ended or Closed. A year that is not the current one is no longer labelled Closed, and an unsaved current year says it still needs to be prepared.
+- The assistant can see whether each fiscal year is open, ended or closed, who closed it and when. That status is not a books-lock date and does not mean the books are correct.
 - Assistant review guidance now uses tax filings, equity statements, receipt details, stock movements and record history, with explicit limits on historical evidence and sampling.
 - Unnumbered invoice drafts show the next number for their invoice date. The issue action checks the previewed number and asks for confirmation again if another invoice has taken it.
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.

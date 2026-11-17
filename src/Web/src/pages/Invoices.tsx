@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useOutletContext, Link, useNavigate } from 'react-router-dom';
+import { useOutletContext, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Receipt,
   Plus,
@@ -51,9 +51,17 @@ export const Invoices: React.FC = () => {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
-  // Filters
+  // Filters. Year-end links pass status, from and to.
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'unpaid' | 'overdue' | 'paid' | 'draft' | 'void'>('all');
+  const statusFromLink = searchParams.get('status');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'unpaid' | 'overdue' | 'paid' | 'draft' | 'void'>(
+    statusFromLink === 'draft' || statusFromLink === 'unpaid' || statusFromLink === 'overdue' || statusFromLink === 'paid' || statusFromLink === 'void'
+      ? statusFromLink
+      : 'all'
+  );
+  const [fromDate] = useState(searchParams.get('from') || '');
+  const [toDate] = useState(searchParams.get('to') || '');
 
   // Record Payment Modal State
   const [paymentModalInvoice, setPaymentModalInvoice] = useState<Invoice | null>(null);
@@ -159,6 +167,9 @@ export const Invoices: React.FC = () => {
       if (statusFilter === 'paid' && inv.status !== 'Paid') return false;
       if (statusFilter === 'void' && inv.status !== 'Void') return false;
       if (statusFilter === 'unpaid' && (inv.status === 'Paid' || inv.status === 'Draft' || inv.status === 'Void')) return false;
+      const day = (inv.invoiceDate || '').slice(0, 10);
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
 
       // 2. Query Search
       if (searchQuery.trim()) {
@@ -172,7 +183,7 @@ export const Invoices: React.FC = () => {
 
       return true;
     });
-  }, [invoices, statusFilter, searchQuery]);
+  }, [invoices, statusFilter, searchQuery, fromDate, toDate]);
 
   // Handle Record Payment Open
   const handleOpenPayment = (inv: Invoice) => {

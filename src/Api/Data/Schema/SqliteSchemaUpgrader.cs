@@ -151,6 +151,7 @@ namespace Api.Data.Schema
                 EnsureWorkspaceOperatingPolicy(connection);
                 EnsureRecordChanges(connection);
                 EnsureAuditEvidenceIntegrity(connection);
+                EnsureYearEndCloseEvidence(connection);
             }
             finally
             {
@@ -201,6 +202,102 @@ namespace Api.Data.Schema
                 command.ExecuteNonQuery();
             }
             transaction.Commit();
+        }
+
+        private static void EnsureYearEndCloseEvidence(DbConnection connection)
+        {
+            if (!TableExists(connection, "Company")) return;
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE IF NOT EXISTS "CompanyCloseState" (
+                    "Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    "CompanyId" INTEGER NOT NULL,
+                    "AccountingRevision" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_CompanyCloseState_CompanyId" ON "CompanyCloseState" ("CompanyId");
+                CREATE TABLE IF NOT EXISTS "YearEndCloseRun" (
+                    "Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    "CompanyId" INTEGER NOT NULL,
+                    "FinancialYearId" INTEGER NOT NULL,
+                    "AttemptNo" INTEGER NOT NULL,
+                    "PreviewHash" TEXT NOT NULL,
+                    "PolicyVersion" INTEGER NOT NULL,
+                    "SourceRevision" INTEGER NOT NULL,
+                    "Actor" TEXT NOT NULL,
+                    "ClosedAtUtc" TEXT NOT NULL,
+                    "BooksLockedThroughBefore" TEXT NULL,
+                    "BooksLockedThroughAfter" TEXT NULL,
+                    "ClosingGeneralLedgerHeaderId" INTEGER NULL,
+                    "WarningExceptionReason" TEXT NULL,
+                    "RecordedAuthority" TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_YearEndCloseRun_Attempt" ON "YearEndCloseRun" ("CompanyId", "FinancialYearId", "AttemptNo");
+                CREATE TABLE IF NOT EXISTS "YearEndCloseEvidence" (
+                    "Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    "CompanyId" INTEGER NOT NULL,
+                    "YearEndCloseRunId" INTEGER NOT NULL,
+                    "SchemaVersion" INTEGER NOT NULL,
+                    "ContentDigest" TEXT NOT NULL,
+                    "Payload" TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_YearEndCloseEvidence_Run" ON "YearEndCloseEvidence" ("YearEndCloseRunId");
+                CREATE TABLE IF NOT EXISTS "YearEndLifecycleEvent" (
+                    "Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    "CompanyId" INTEGER NOT NULL,
+                    "FinancialYearId" INTEGER NOT NULL,
+                    "YearEndCloseRunId" INTEGER NULL,
+                    "EventType" TEXT NOT NULL,
+                    "Actor" TEXT NOT NULL,
+                    "OccurredAtUtc" TEXT NOT NULL,
+                    "Reason" TEXT NULL,
+                    "ReversalGeneralLedgerHeaderId" INTEGER NULL,
+                    "BooksLockedThroughBefore" TEXT NULL,
+                    "BooksLockedThroughAfter" TEXT NULL
+                );
+                CREATE TABLE IF NOT EXISTS "YearEndCommandReceipt" (
+                    "Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    "CompanyId" INTEGER NOT NULL,
+                    "Operation" TEXT NOT NULL,
+                    "IdempotencyKey" TEXT NOT NULL,
+                    "RequestDigest" TEXT NOT NULL,
+                    "YearEndCloseRunId" INTEGER NULL,
+                    "CommittedAtUtc" TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_YearEndCommandReceipt_Key" ON "YearEndCommandReceipt" ("CompanyId", "Operation", "IdempotencyKey");
+                CREATE TABLE IF NOT EXISTS "YearEndIssuanceDeclaration" (
+                    "Id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    "CompanyId" INTEGER NOT NULL,
+                    "FinancialYearId" INTEGER NOT NULL,
+                    "YearEndCloseRunId" INTEGER NULL,
+                    "Status" TEXT NOT NULL,
+                    "Actor" TEXT NOT NULL,
+                    "DeclaredAtUtc" TEXT NOT NULL,
+                    "ExternalDate" TEXT NULL,
+                    "ExternalReference" TEXT NULL,
+                    "Reason" TEXT NULL
+                );
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndCloseEvidence_Update" BEFORE UPDATE ON "YearEndCloseEvidence"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndCloseEvidence_Delete" BEFORE DELETE ON "YearEndCloseEvidence"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndCloseRun_Update" BEFORE UPDATE ON "YearEndCloseRun"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndCloseRun_Delete" BEFORE DELETE ON "YearEndCloseRun"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndLifecycleEvent_Update" BEFORE UPDATE ON "YearEndLifecycleEvent"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndLifecycleEvent_Delete" BEFORE DELETE ON "YearEndLifecycleEvent"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndCommandReceipt_Update" BEFORE UPDATE ON "YearEndCommandReceipt"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndCommandReceipt_Delete" BEFORE DELETE ON "YearEndCommandReceipt"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndIssuanceDeclaration_Update" BEFORE UPDATE ON "YearEndIssuanceDeclaration"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS "TR_YearEndIssuanceDeclaration_Delete" BEFORE DELETE ON "YearEndIssuanceDeclaration"
+                BEGIN SELECT RAISE(ABORT, 'Year-end close evidence is append-only'); END;
+                """;
+            command.ExecuteNonQuery();
         }
 
         private static void EnsureLifecycleColumns(DbConnection connection)

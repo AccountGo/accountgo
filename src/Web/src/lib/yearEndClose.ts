@@ -17,6 +17,12 @@ export function fiscalYearStatusLabel(status: FiscalYearCloseStatusValue): strin
   return STATUS_LABELS[status] ?? 'Unknown';
 }
 
+/** Settings fiscal-year badge. Never treats a missing status or the active flag as Closed. */
+export function fiscalYearReadStatusLabel(status: string | null | undefined): 'Open' | 'Ended' | 'Closed' {
+  if (status === 'Open' || status === 'Ended' || status === 'Closed') return status;
+  return 'Open';
+}
+
 export function normalizeFiscalYearCloseStatus(status: FiscalYearCloseStatusValue): number {
   if (typeof status === 'number') return status;
   switch (status) {
@@ -29,6 +35,21 @@ export function normalizeFiscalYearCloseStatus(status: FiscalYearCloseStatusValu
     default:
       return 0;
   }
+}
+
+export const reviewAndCloseLabel = 'Review & close';
+
+/** Org-relative close links stay inside the current workspace. */
+export function closeResolutionUrl(orgSlug: string, path: string): string {
+  if (!orgSlug || path.charAt(0) !== '/' || path.startsWith('//') || path.includes('://')) {
+    throw new Error('Close links stay inside this workspace.');
+  }
+  return `/org/${encodeURIComponent(orgSlug)}${path}`;
+}
+
+export function warningCloseReady(warningCount: number, acknowledged: boolean, reason: string): boolean {
+  if (warningCount === 0) return true;
+  return acknowledged && reason.trim().length > 0 && reason.trim().length <= 2000;
 }
 
 export function canEnableCloseButton(options: {

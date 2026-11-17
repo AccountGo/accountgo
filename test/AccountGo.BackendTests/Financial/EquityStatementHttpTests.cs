@@ -122,7 +122,14 @@ public sealed class EquityStatementHttpTests : IAsyncLifetime
     }
     private async Task Close()
     {
-        var response = await Send("YearEnd/2025/Close", HttpMethod.Post, new { acknowledgeWarnings = true });
+        var preview = await Ok(await Send("YearEnd/2025"));
+        var warnings = preview.GetProperty("warnings").GetArrayLength();
+        var response = await Send("YearEnd/2025/Close", HttpMethod.Post, new
+        {
+            acknowledgeWarnings = warnings > 0,
+            warningExceptionReason = warnings > 0 ? "Accepted for the equity statement test." : null,
+            previewHash = preview.GetProperty("previewHash").GetString()
+        });
         await Ok(response);
     }
     private async Task AssertReconciles(JsonElement statement, string basis = "Accrual", DateTime? to = null)
