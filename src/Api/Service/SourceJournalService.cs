@@ -42,7 +42,8 @@ public sealed record SourceJournalDraftRequest(
     string? Memo,
     string? ReferenceNo,
     IReadOnlyList<SourceJournalDraftLine> Lines,
-    JournalVoucherTypes VoucherType = JournalVoucherTypes.Other);
+    JournalVoucherTypes VoucherType = JournalVoucherTypes.Other,
+    Func<bool>? VerifyOwnership = null);
 
 public sealed record SourceJournalDraftResult(
     int JournalId,
@@ -161,6 +162,17 @@ public sealed class SourceJournalService
             });
 
             _db.SaveChanges();
+
+            if (request.VerifyOwnership != null && !request.VerifyOwnership())
+            {
+                try { tx.Rollback(); } catch { /* ignore rollback errors */ }
+                _db.ChangeTracker.Clear();
+                throw new SourceJournalOperationException(
+                    "stale_review_conflict",
+                    $"Drafting lease for '{request.SourceKey}' expired or was released before journal commit.",
+                    409);
+            }
+
             tx.Commit();
 
             return new SourceJournalDraftResult(

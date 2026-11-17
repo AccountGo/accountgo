@@ -558,6 +558,11 @@ namespace Api.Controllers
                     return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, linkedFailure.Code, linkedFailure.Message,
                         Conflict(new { code = linkedFailure.Code, message = linkedFailure.Message }));
                 }
+                if (ex is Services.Financial.SourceJournalLockedException sourceLocked)
+                {
+                    return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, sourceLocked.Code, sourceLocked.Message,
+                        Conflict(new { code = sourceLocked.Code, message = sourceLocked.Message }));
+                }
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException)
                 {
                     if (rethrowMiddlewareExceptions)

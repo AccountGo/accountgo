@@ -65,6 +65,7 @@ namespace Services.Financial
         private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
         private readonly IRepository<Core.Domain.Auditing.AuditLog> _auditLogRepo;
         private readonly Microsoft.AspNetCore.Http.IHttpContextAccessor _httpContextAccessor;
+        private readonly IEnumerable<ISourceJournalPostingGuard> _sourcePostingGuards;
 
         public const string JournalPostingAuthorizationAuditTable = "__JournalPostingAuthorization";
 
@@ -113,10 +114,12 @@ namespace Services.Financial
             Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
             IRepository<LinkedEntryPair> linkedEntryPairRepo = null,
             IRepository<Partner> partnerRepo = null,
-            TimeProvider time = null
+            TimeProvider time = null,
+            IEnumerable<ISourceJournalPostingGuard> sourcePostingGuards = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
+            _sourcePostingGuards = sourcePostingGuards;
             _auth = auth;
             _approvalPolicyResolver = approvalPolicyResolver;
             _policyTransaction = policyTransaction;
@@ -1956,6 +1959,15 @@ namespace Services.Financial
                 throw new LinkedEntryOperationException("linked_entry_use_pair_reversal", "Linked journals must be corrected through the linked entry pair.");
             if (!posted && !string.IsNullOrWhiteSpace(journalEntry.SourceSystem))
                 throw new SourceJournalLockedException("source_journal_locked", "Imported journals can't be edited. Discard it and import it again instead.");
+            if (posted && !string.IsNullOrWhiteSpace(journalEntry.SourceSystem) && _sourcePostingGuards != null)
+            {
+                foreach (var guard in _sourcePostingGuards)
+                {
+                    var block = guard.CheckPostingAllowed(journalEntry.CompanyId, journalEntry.SourceSystem, journalEntry.SourceKey, journalEntry.Id);
+                    if (block != null)
+                        throw new SourceJournalLockedException(block.Code, block.Message);
+                }
+            }
             if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("Posted journal entries cannot be edited or posted again.");
 

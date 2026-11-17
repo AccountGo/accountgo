@@ -40,6 +40,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
 
 ### Fixed
+- Imported journals with source workflow checks cannot be posted while their source is stale, conflicted or awaiting recovery.
 - Issuing a sales invoice dated in a locked period or before the books start date is now refused before an invoice number is assigned, so failed attempts no longer consume a number.
 - Workspace automatic sign-out settings now apply per active workspace and no longer fall back to 15 minutes when unconfigured or when a member belongs to another workspace with a shorter timeout.
 - Recurring invoice statuses and cadence labels display correctly, restoring Run now, Skip and Pause actions for active schedules.
