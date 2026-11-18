@@ -67,11 +67,7 @@ public class AccountService : IAccountService
             }
         }
 
-        // Set default DrOrCrSide if not set (default to Dr)
-        if (newAccount.DrOrCrSide == Core.Domain.DrOrCrSide.NA)
-        {
-            newAccount.DrOrCrSide = Core.Domain.DrOrCrSide.Dr;
-        }
+        newAccount.DrOrCrSide = await ResolveNormalBalanceAsync(newAccount.AccountClassId, newAccount.IsContraAccount);
 
         // Check for duplicate account code
         var existingAccount = await _context.Accounts
@@ -145,8 +141,20 @@ public class AccountService : IAccountService
         if (updatedAccount.AccountName != null) account.AccountName = updatedAccount.AccountName;
         if (updatedAccount.Description != null) account.Description = updatedAccount.Description;
         account.IsCash = updatedAccount.IsCash;
+        var contraChanged = account.IsContraAccount != updatedAccount.IsContraAccount;
         account.IsContraAccount = updatedAccount.IsContraAccount;
         account.IsSuspenseOrClearing = updatedAccount.IsSuspenseOrClearing;
+
+        var normalSide = await ResolveNormalBalanceAsync(account.AccountClassId, account.IsContraAccount);
+        if (account.DrOrCrSide != normalSide)
+        {
+            var hasHistory = await _context.GeneralLedgerLines.AnyAsync(l => l.AccountId == account.Id)
+                || await _context.JournalEntryLines.AnyAsync(l => l.AccountId == account.Id);
+            if (!hasHistory)
+                account.DrOrCrSide = normalSide;
+            else if (contraChanged)
+                throw new InvalidOperationException("Cannot change account normal balance because this account has transaction history.");
+        }
 
         Account? proposedParent = null;
         if (account.ParentAccountId.HasValue)
@@ -166,6 +174,21 @@ public class AccountService : IAccountService
         _bankAccounts.SyncBankNameFromAccount(account);
 
         return account;
+    }
+
+    private async Task<DrOrCrSide> ResolveNormalBalanceAsync(int classId, bool isContra)
+    {
+        var accountClass = await _context.AccountClasses.SingleOrDefaultAsync(c => c.Id == classId)
+            ?? throw new InvalidOperationException($"Account class #{classId} not found.");
+        if (!Enum.TryParse<DrOrCrSide>(accountClass.NormalBalance, true, out var side)
+            || !Enum.IsDefined(side))
+            throw new InvalidOperationException($"Account class #{classId} has an invalid normal balance.");
+        return isContra ? side switch
+        {
+            DrOrCrSide.Dr => DrOrCrSide.Cr,
+            DrOrCrSide.Cr => DrOrCrSide.Dr,
+            _ => side
+        } : side;
     }
 
     public async Task<(bool isProtected, string? protectionReason, bool canDelete, string? deleteBlockedReason)> GetAccountProtectionInfoAsync(int accountId)

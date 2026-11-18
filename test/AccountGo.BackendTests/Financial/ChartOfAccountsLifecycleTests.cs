@@ -314,6 +314,92 @@ namespace AccountGo.BackendTests.Financial
             Assert.Equal(HttpStatusCode.Forbidden, structRes.StatusCode);
         }
 
+        [Theory]
+        [InlineData(1, false, DrOrCrSide.Dr)]
+        [InlineData(1, true, DrOrCrSide.Cr)]
+        [InlineData(2, false, DrOrCrSide.Cr)]
+        [InlineData(2, true, DrOrCrSide.Dr)]
+        [InlineData(3, false, DrOrCrSide.Cr)]
+        [InlineData(4, false, DrOrCrSide.Cr)]
+        [InlineData(4, true, DrOrCrSide.Dr)]
+        [InlineData(5, false, DrOrCrSide.Dr)]
+        [InlineData(5, true, DrOrCrSide.Cr)]
+        [InlineData(6, false, DrOrCrSide.NA)]
+        public async Task AddAccount_DerivesNormalBalanceFromClassAndContra(int classId, bool contra, DrOrCrSide expected)
+        {
+            var slug = $"normal-{classId}-{contra.ToString().ToLowerInvariant()}";
+            var owner = await _fixture.CreateUser(slug + "@example.com");
+            var companyId = await _fixture.CreateWorkspace(owner.Token, "Normal balance", slug);
+            var code = $"88{classId}{(contra ? 1 : 0)}";
+            var response = await _fixture.Send(HttpMethod.Post, "/api/Financials/AddAccount", new Dto.Financial.Account
+            {
+                AccountCode = code, AccountName = "Normal balance test", AccountClassId = classId, IsContraAccount = contra
+            }, owner.Token, slug);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            using var scope = _fixture.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var account = await db.Accounts.IgnoreQueryFilters().SingleAsync(a => a.CompanyId == companyId && a.AccountCode == code);
+            Assert.Equal(expected, account.DrOrCrSide);
+        }
+
+        [Fact]
+        public async Task UpdateAccount_UnusedLegacyDebitDefault_RepairsCreditNormalBalance()
+        {
+            var owner = await _fixture.CreateUser("repair-normal@example.com");
+            var companyId = await _fixture.CreateWorkspace(owner.Token, "Repair normal balance", "repair-normal");
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using var tenantScope = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>()
+                    .Impersonate(companyId, "repair-normal", CompanyMemberRole.Owner);
+                db.Accounts.Add(new Core.Domain.Financials.Account { CompanyId = companyId, AccountCode = "8899", AccountName = "Deferred receipts", AccountClassId = 2, DrOrCrSide = DrOrCrSide.Dr });
+                await db.SaveChangesAsync();
+            }
+            var response = await _fixture.Send(HttpMethod.Put, "/api/Financials/UpdateAccount/8899", new Dto.Financial.Account
+            {
+                AccountCode = "8899", AccountName = "Deferred receipts", AccountClassId = 2, IsContraAccount = false
+            }, owner.Token, "repair-normal");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var checkScope = _fixture.Factory.Services.CreateScope();
+            var checkDb = checkScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            Assert.Equal(DrOrCrSide.Cr, (await checkDb.Accounts.IgnoreQueryFilters().SingleAsync(a => a.CompanyId == companyId && a.AccountCode == "8899")).DrOrCrSide);
+        }
+
+        [Fact]
+        public async Task UpdateAccount_RenameWithJournalHistory_PreservesExistingNormalBalance()
+        {
+            var owner = await _fixture.CreateUser("history-normal@example.com");
+            var companyId = await _fixture.CreateWorkspace(owner.Token, "Historical normal balance", "history-normal");
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using var tenantScope = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>()
+                    .Impersonate(companyId, "history-normal", CompanyMemberRole.Owner);
+                var account = new Core.Domain.Financials.Account { CompanyId = companyId, AccountCode = "8898", AccountName = "Legacy debit balance", AccountClassId = 2, DrOrCrSide = DrOrCrSide.Dr };
+                var cash = await db.Accounts.SingleAsync(a => a.AccountCode == "10111");
+                db.JournalEntryHeaders.Add(new JournalEntryHeader
+                {
+                    CompanyId = companyId, Date = new DateTime(2026, 11, 1), Memo = "Historical draft", Posted = false,
+                    JournalEntryLines = new List<JournalEntryLine>
+                    {
+                        new() { CompanyId = companyId, Account = account, DrCr = DrOrCrSide.Dr, Amount = 10m },
+                        new() { CompanyId = companyId, Account = cash, DrCr = DrOrCrSide.Cr, Amount = 10m }
+                    }
+                });
+                await db.SaveChangesAsync();
+            }
+            var response = await _fixture.Send(HttpMethod.Put, "/api/Financials/UpdateAccount/8898", new Dto.Financial.Account
+            {
+                AccountCode = "8898", AccountName = "Renamed legacy account", AccountClassId = 2
+            }, owner.Token, "history-normal");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var checkScope = _fixture.Factory.Services.CreateScope();
+            var checkDb = checkScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var saved = await checkDb.Accounts.IgnoreQueryFilters().SingleAsync(a => a.CompanyId == companyId && a.AccountCode == "8898");
+            Assert.Equal("Renamed legacy account", saved.AccountName);
+            Assert.Equal(DrOrCrSide.Dr, saved.DrOrCrSide);
+        }
+
         private static async Task<JsonElement> Json(HttpResponseMessage response)
         {
             return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
