@@ -258,13 +258,13 @@ export function IntegrationsSettingsTab() {
           <td className="p-2">{d.eventType || 'Unknown event'}{d.isTest && <p className="text-xs">Test notification - not a real transfer or deposit</p>}
             {d.transferActivity && <div className="text-xs">
               <p>Transfer {d.transferActivity.transferId} / Profile {d.transferActivity.profileId}</p>
-              {d.transferActivity.currentState && <p>{d.transferActivity.previousState} -&gt; {d.transferActivity.currentState}</p>}
+              {d.transferActivity.currentState && <p>{d.transferActivity.previousState ? `${d.transferActivity.previousState} -> ` : ''}{d.transferActivity.currentState}</p>}
               {d.transferActivity.occurredAt && <p>Occurred: {new Date(d.transferActivity.occurredAt).toLocaleString()}</p>}
               {d.eventType === 'transfers#active-cases' && <p>Active cases: {d.transferActivity.activeCases.length ? d.transferActivity.activeCases.join(', ') : 'None reported'}</p>}
             </div>}
           </td><td className="p-2">{d.verification}</td>
           <td className="p-2">{d.status} ({d.attempts} attempts){d.lastError && <p className="text-xs">{d.lastError}</p>}</td>
-          <td>{d.verification === 'verified' && d.status === 'failed' && selected.status === 'active' && <button type="button" className={button} disabled={busy}
+          <td>{(d.verification === 'verified' || d.verification === 'malformed') && d.status === 'failed' && selected.status === 'active' && <button type="button" className={button} disabled={busy}
             onClick={() => void run(async () => {
               await request(`/api/integrations/connections/${selected.id}/deliveries/${d.id}/replay`, { method: 'POST' });
               setNotice('Delivery queued. Replay does not approve any accounting action.');
