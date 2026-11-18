@@ -182,6 +182,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Api.Service.SupplierCreditSettlementService>();
         builder.Services.AddScoped<Api.Service.RefundAndAdvanceService>();
         builder.Services.AddScoped<Api.Service.WriteOffService>();
+        builder.Services.AddScoped<Api.Service.ReturnsAndInventoryAdjustmentService>();
         builder.Services.AddAuthentication();
         builder.Services.ConfigureIdentity();
         builder.Services.ConfigureDataProtection(builder.Configuration, builder.Environment);

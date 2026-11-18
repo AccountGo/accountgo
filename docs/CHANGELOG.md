@@ -17,6 +17,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Supplier credit notes (including standalone supplier credits) and multi-bill batch applications with dated reversals (behind the per-workspace feature gate).
 - Customer and supplier cash refunds (including multi-source supplier inflows) and supplier advances with non-self-approval team review and bank reconciliation protection (behind the per-workspace feature gate).
 - Receivable write-offs with loss-allowance attribution, impairment shortfall recognition, bounded recoveries, and erroneous write-off reversals (behind the per-workspace feature gate).
+- Customer physical return receipts (at supported original issue cost and condition), supplier return dispatches with control-transfer clearing, and stock rebate allocations (behind the per-workspace feature gate).
 
 - Starter charts include accounts for payment processor clearing, payouts in transit, deferred revenue, related-party revenue, payment fees and foreign exchange gains and losses.
 
