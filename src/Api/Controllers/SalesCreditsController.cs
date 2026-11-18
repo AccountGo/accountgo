@@ -6,6 +6,7 @@ using System;
 using Api.Filters;
 using Api.Service;
 using Core.Domain.Security;
+using Core.Tenancy;
 using Dto.Sales;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Api.Controllers
 {
     [Authorize]
+    [TenantScoped]
     [ApiController]
     [Route("api/sales/credits")]
     public sealed class SalesCreditsController : ControllerBase

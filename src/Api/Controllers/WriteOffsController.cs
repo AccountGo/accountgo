@@ -5,6 +5,7 @@
 using Api.Filters;
 using Api.Service;
 using Core.Domain.Security;
+using Core.Tenancy;
 using Dto.Sales;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Api.Controllers
 {
     [Authorize]
+    [TenantScoped]
     [ApiController]
     [Route("api/sales/write-offs")]
     public sealed class WriteOffsController : ControllerBase

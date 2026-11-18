@@ -146,6 +146,8 @@ namespace Core.Domain.Purchases
                 return;
             if (IsDraft)
                 throw new InvalidOperationException("Only an approved bill can be voided. Delete a draft bill instead.");
+            if (VendorPayments.Any(p => !p.IsVoid) && CreditedAmount == 0 && AdvanceAppliedAmount == 0)
+                throw new InvalidOperationException("This bill has payments that aren't void, so it can't be voided. Void them first.");
             if (VendorPayments.Any(p => !p.IsVoid) || CreditedAmount > 0 || AdvanceAppliedAmount > 0)
                 throw new InvalidOperationException("This bill has active payments, credits, or advances, so it can't be voided. Reverse them first.");
         }

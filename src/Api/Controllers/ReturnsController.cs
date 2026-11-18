@@ -5,6 +5,7 @@
 using Api.Filters;
 using Api.Service;
 using Core.Domain.Security;
+using Core.Tenancy;
 using Dto.Inventory;
 using Dto.Sales;
 using Microsoft.AspNetCore.Authorization;
@@ -13,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Api.Controllers
 {
     [Authorize]
+    [TenantScoped]
     [ApiController]
     [Route("api/returns")]
     public sealed class ReturnsController : ControllerBase

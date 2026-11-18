@@ -6,6 +6,7 @@ using Api.Filters;
 using Api.Service;
 using Core.Domain;
 using Core.Domain.Security;
+using Core.Tenancy;
 using Dto.Financial;
 using Dto.Sales;
 using Microsoft.AspNetCore.Authorization;
@@ -14,6 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Api.Controllers
 {
     [Authorize]
+    [TenantScoped]
     [ApiController]
     [Route("api/settlements")]
     public sealed class RefundsAndAdvancesController : ControllerBase
