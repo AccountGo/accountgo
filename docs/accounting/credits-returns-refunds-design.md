@@ -2,7 +2,7 @@
 
 Status: proposed design and implementation contract; no production changes authorized by this document.  
 Prepared: 2026-11-18. Evidence baseline: core checkout `538167346b0bd834ded5405ad26c691b3c7dcd65`.  
-Parent: [commercial #65](https://github.com/AccountGo/accountgo-commercial/issues/65), G01/P1 and G02/P1.  
+Parent: ticket #65, G01/P1 and G02/P1.  
 Companions: [implementation plan](credits-returns-refunds-plan.md) and [engineer handoff](credits-returns-refunds-engineer-prompt.md).
 
 ## 1. Product decision

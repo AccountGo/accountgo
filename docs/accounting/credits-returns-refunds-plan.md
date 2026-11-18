@@ -2,7 +2,7 @@
 
 Status: proposed engineering work breakdown, 2026-11-18.  
 Authority: [joint design and acceptance contract](credits-returns-refunds-design.md).  
-Parent: [commercial #65](https://github.com/AccountGo/accountgo-commercial/issues/65).  
+Parent: ticket #65.  
 Handoff: [implementation engineer prompt](credits-returns-refunds-engineer-prompt.md).
 
 ## Delivery strategy

@@ -4,8 +4,7 @@ Use this as one work assignment for the implementation engineer or repository co
 
 ```text
 Act as AccountGo's implementation engineer. Implement the coordinated G01/P1 and
-G02/P1 scope from commercial parent issue #65:
-https://github.com/AccountGo/accountgo-commercial/issues/65
+G02/P1 scope from parent ticket #65.
 
 Read and follow:
 - AGENTS.md and any applicable local instructions.

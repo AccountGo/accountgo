@@ -236,7 +236,13 @@ namespace Services.Financial
                     .ToList()
                 : new List<CashBillInfo>();
 
-            var customerCredits = customerCreditRepo != null
+            var hasSettlementGl = glLines.Any(l =>
+                l.DocumentType == DocumentTypes.CustomerCreditNote
+                || l.DocumentType == DocumentTypes.SupplierCreditNote
+                || l.DocumentType == DocumentTypes.PartyRefund
+                || l.DocumentType == DocumentTypes.SettlementApplication);
+
+            var customerCredits = hasSettlementGl && customerCreditRepo != null
                 ? customerCreditRepo.Table
                     .Where(c => c.GeneralLedgerHeaderId.HasValue)
                     .Select(c => new CashCustomerCreditInfo(
@@ -248,7 +254,7 @@ namespace Services.Financial
                     .ToList()
                 : new List<CashCustomerCreditInfo>();
 
-            var supplierCredits = supplierCreditRepo != null
+            var supplierCredits = hasSettlementGl && supplierCreditRepo != null
                 ? supplierCreditRepo.Table
                     .Where(c => c.GeneralLedgerHeaderId.HasValue)
                     .Select(c => new CashSupplierCreditInfo(
@@ -259,7 +265,7 @@ namespace Services.Financial
                     .ToList()
                 : new List<CashSupplierCreditInfo>();
 
-            var partyRefunds = partyRefundRepo != null
+            var partyRefunds = hasSettlementGl && partyRefundRepo != null
                 ? partyRefundRepo.GetAllIncluding(r => r.Allocations)
                     .Where(r => r.GeneralLedgerHeaderId.HasValue
                         && (r.Status == SettlementDocumentStatus.Posted || r.Status == SettlementDocumentStatus.Reversed))
@@ -278,11 +284,11 @@ namespace Services.Financial
                     .ToList()
                 : new List<CashPartyRefundInfo>();
 
-            var reversedAppIds = settlementApplicationReversalRepo != null
+            var reversedAppIds = hasSettlementGl && settlementApplicationReversalRepo != null
                 ? settlementApplicationReversalRepo.Table.Select(r => r.SettlementApplicationId).ToHashSet()
                 : new HashSet<int>();
 
-            var advanceApplications = hasPurchaseInvoices && settlementApplicationRepo != null
+            var advanceApplications = hasSettlementGl && hasPurchaseInvoices && settlementApplicationRepo != null
                 ? settlementApplicationRepo.Table
                     .Where(a => a.SupplierAdvanceId.HasValue && a.PurchaseInvoiceHeaderId.HasValue)
                     .AsEnumerable()

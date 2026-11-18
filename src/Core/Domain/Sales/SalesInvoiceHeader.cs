@@ -200,9 +200,11 @@ namespace Core.Domain.Sales
         {
             if (Status == SalesInvoiceStatus.Draft)
                 throw new InvalidOperationException("Draft invoices cannot be voided. Delete the draft instead.");
+            if (IsPaid())
+                throw new InvalidOperationException("Cannot void a paid invoice.");
             if (TotalAllocated() > 0 || CreditedAmount > 0 || WrittenOffAmount > 0)
                 throw new InvalidOperationException("Cannot void an invoice with recorded payments, credits, or write-offs. Reverse them first.");
-            if (Status == SalesInvoiceStatus.Closed || IsPaid() || IsFullPaid())
+            if (Status == SalesInvoiceStatus.Closed || IsFullPaid())
                 throw new InvalidOperationException("Cannot void a paid invoice.");
         }
 
