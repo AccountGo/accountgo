@@ -14,6 +14,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 ### Added
 
 - Customer credit notes, settlement applications, and dated application/credit reversals with historical aging, tax-period, and close-readiness integration (behind the per-workspace feature gate).
+- Supplier credit notes (including standalone supplier credits) and multi-bill batch applications with dated reversals (behind the per-workspace feature gate).
 
 - Starter charts include accounts for payment processor clearing, payouts in transit, deferred revenue, related-party revenue, payment fees and foreign exchange gains and losses.
 
