@@ -115,8 +115,8 @@ namespace Api.Service
                         {
                             var origMove = _db.InventoryControlJournals.AsNoTracking()
                                 .FirstOrDefault(j => j.CompanyId == companyId && j.Id == invLine.InventoryControlJournalId.Value);
-                            if (origMove != null && origMove.OUTQty > 0)
-                                originalUnitCost = Math.Round(origMove.TotalCost / origMove.OUTQty, 4, MidpointRounding.AwayFromZero);
+                            if (origMove != null && (origMove.OUTQty ?? 0m) > 0)
+                                originalUnitCost = Math.Round((origMove.TotalCost ?? 0m) / origMove.OUTQty!.Value, 4, MidpointRounding.AwayFromZero);
                         }
                         if (originalUnitCost <= 0m)
                             originalUnitCost = item.Cost ?? item.AverageCost;
@@ -256,7 +256,7 @@ namespace Api.Service
                                 throw new SettlementCommandException(SettlementErrorCodes.SourceExhausted, $"Return would result in negative stock value for {item.Code}.", 409);
                             _db.SaveChanges();
 
-                            var cost = CurrencyPrecisionRules.RoundMoney(move.TotalCost, precision);
+                            var cost = CurrencyPrecisionRules.RoundMoney(move.TotalCost ?? 0m, precision);
                             if (cost > 0)
                             {
                                 glHeader.GeneralLedgerLines.Add(_financial.CreateGeneralLedgerLine(DrOrCrSide.Dr, clearingAccId!.Value, cost));
@@ -271,7 +271,7 @@ namespace Api.Service
                                 PurchaseInvoiceLineId = lineInput.PurchaseInvoiceLineId,
                                 ItemId = item.Id,
                                 Quantity = lineInput.Quantity,
-                                CarryingUnitCost = move.UnitCost,
+                                CarryingUnitCost = move.UnitCost ?? item.AverageCost,
                                 TotalCarryingCost = cost,
                                 InventoryControlJournalId = move.Id,
                                 InventoryAccountId = invAccId

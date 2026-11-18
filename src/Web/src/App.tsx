@@ -13,6 +13,7 @@ import Invitation from './pages/Invitation';
 import { Invoices } from './pages/Invoices';
 import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
+import { CreditsAndSettlements } from './pages/CreditsAndSettlements';
 import { RecurringSchedules } from './pages/RecurringSchedules';
 import { RecurringScheduleDetailPage } from './pages/RecurringScheduleDetail';
 import { RecurringScheduleEdit } from './pages/RecurringScheduleEdit';
@@ -313,6 +314,22 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="sales">
                 <RecurringScheduleEdit isEdit={true} />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/credits',
+            element: (
+              <RequiresModule module="sales">
+                <CreditsAndSettlements side="sales" />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'purchases/credits',
+            element: (
+              <RequiresModule module="purchases">
+                <CreditsAndSettlements side="purchasing" />
               </RequiresModule>
             ),
           },

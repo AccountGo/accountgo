@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #nullable enable
+using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Purchases;
 using Core.Domain.Sales;
@@ -13,6 +14,11 @@ namespace Api.Data
     {
         private static void ConfigureCreditsReturnsRefundsModel(ModelBuilder builder)
         {
+            builder.Entity<CompanySetting>(entity =>
+            {
+                entity.Property(e => e.CreditsReturnsRefundsEnabled).HasDefaultValue(false);
+            });
+
             builder.Entity<GeneralLedgerSetting>(entity =>
             {
                 entity.HasOne(e => e.CustomerCreditLiabilityAccount).WithMany().HasForeignKey(e => e.CustomerCreditLiabilityAccountId).OnDelete(DeleteBehavior.Restrict);
@@ -28,15 +34,17 @@ namespace Api.Data
 
             builder.Entity<SalesInvoiceHeader>(entity =>
             {
-                entity.Property(e => e.CreditedAmount).HasColumnType("decimal(18, 4)");
-                entity.Property(e => e.WrittenOffAmount).HasColumnType("decimal(18, 4)");
+                entity.Property(e => e.CreditedAmount).HasColumnType("decimal(18, 4)").HasDefaultValue(0m);
+                entity.Property(e => e.WrittenOffAmount).HasColumnType("decimal(18, 4)").HasDefaultValue(0m);
+                entity.Property(e => e.Version).HasDefaultValue(0L);
                 entity.HasOne(e => e.ReceivableAccount).WithMany().HasForeignKey(e => e.ReceivableAccountId).OnDelete(DeleteBehavior.Restrict);
             });
 
             builder.Entity<PurchaseInvoiceHeader>(entity =>
             {
-                entity.Property(e => e.CreditedAmount).HasColumnType("decimal(18, 4)");
-                entity.Property(e => e.AdvanceAppliedAmount).HasColumnType("decimal(18, 4)");
+                entity.Property(e => e.CreditedAmount).HasColumnType("decimal(18, 4)").HasDefaultValue(0m);
+                entity.Property(e => e.AdvanceAppliedAmount).HasColumnType("decimal(18, 4)").HasDefaultValue(0m);
+                entity.Property(e => e.Version).HasDefaultValue(0L);
             });
 
             builder.Entity<CustomerCreditNote>(entity =>

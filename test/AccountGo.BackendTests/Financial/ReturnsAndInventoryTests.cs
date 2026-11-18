@@ -22,6 +22,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Services.Inventory;
 using Xunit;
+using Item = Core.Domain.Items.Item;
+using Measurement = Core.Domain.Items.Measurement;
+using InventoryControlJournal = Core.Domain.Items.InventoryControlJournal;
 
 namespace AccountGo.BackendTests.Financial
 {
