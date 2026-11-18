@@ -108,6 +108,18 @@ namespace Services.Financial
                 }
 
                 var companyId = _tenant.RequireCompanyId();
+                var unpostedSettlements = CountUnpostedSettlementDocuments(end);
+                if (unpostedSettlements > 0)
+                {
+                    blocking.Add(new YearEndCheckItem
+                    {
+                        Code = "unposted_settlement_documents",
+                        Message = "Unposted credits, advances, refunds, or write-offs dated on or before the fiscal year end are waiting to be posted.",
+                        Count = unpostedSettlements,
+                        LinkPath = "/sales/credits"
+                    });
+                }
+
                 var pendingLinks = _linkedPairs == null ? 0 : _linkedPairs.Table.Count(p =>
                     p.SourceCompanyId == companyId && p.State == "PendingSource");
                 if (pendingLinks > 0)
@@ -173,15 +185,106 @@ namespace Services.Financial
             });
         }
 
+        private int CountUnpostedSettlementDocuments(DateTime endExclusive)
+        {
+            var count = 0;
+            if (_customerCreditNotes != null)
+                count += _customerCreditNotes.Table.Count(c =>
+                    (c.Status == SettlementDocumentStatus.Draft || c.Status == SettlementDocumentStatus.PendingReview) && c.Date < endExclusive);
+            if (_supplierCreditNotes != null)
+                count += _supplierCreditNotes.Table.Count(c =>
+                    (c.Status == SettlementDocumentStatus.Draft || c.Status == SettlementDocumentStatus.PendingReview) && c.EffectiveDate < endExclusive);
+            if (_supplierAdvances != null)
+                count += _supplierAdvances.Table.Count(a =>
+                    (a.Status == SettlementDocumentStatus.Draft || a.Status == SettlementDocumentStatus.PendingReview) && a.Date < endExclusive);
+            if (_partyRefunds != null)
+                count += _partyRefunds.Table.Count(r =>
+                    (r.Status == SettlementDocumentStatus.Draft || r.Status == SettlementDocumentStatus.PendingReview) && r.Date < endExclusive);
+            if (_receivableWriteOffs != null)
+                count += _receivableWriteOffs.Table.Count(w =>
+                    (w.Status == SettlementDocumentStatus.Draft || w.Status == SettlementDocumentStatus.PendingReview) && w.Date < endExclusive);
+            return count;
+        }
+
+        private int CountOpenReturnClearing(DateTime fyEnd)
+        {
+            if (_supplierReturnDispatches == null)
+                return 0;
+            var day = fyEnd.Date;
+            return _supplierReturnDispatches.Table
+                .Where(d => d.HasControlTransferred && d.Status == SettlementDocumentStatus.Posted && d.SupplierCreditNoteId == null)
+                .AsEnumerable()
+                .Count(d => (d.ControlTransferDate ?? d.DispatchDate).Date <= day);
+        }
+
+        private (Dictionary<int, decimal> InvoiceSettled, Dictionary<int, decimal> BillSettled) BuildSettlementAdjustmentsAsOf(DateTime asOf)
+        {
+            var day = asOf.Date;
+            var invoiceSettled = new Dictionary<int, decimal>();
+            var billSettled = new Dictionary<int, decimal>();
+
+            if (_settlementApplications != null)
+            {
+                var reversedAppIds = _settlementApplicationReversals != null
+                    ? _settlementApplicationReversals.Table
+                        .Where(r => r.ReversalDate <= day)
+                        .Select(r => r.SettlementApplicationId)
+                        .ToHashSet()
+                    : new HashSet<int>();
+
+                foreach (var app in _settlementApplications.Table.Where(a => a.EffectiveDate <= day).ToList())
+                {
+                    if (reversedAppIds.Contains(app.Id))
+                        continue;
+
+                    if (app.SalesInvoiceHeaderId.HasValue)
+                    {
+                        var id = app.SalesInvoiceHeaderId.Value;
+                        invoiceSettled[id] = invoiceSettled.GetValueOrDefault(id) + app.Amount;
+                    }
+                    else if (app.PurchaseInvoiceHeaderId.HasValue)
+                    {
+                        var id = app.PurchaseInvoiceHeaderId.Value;
+                        billSettled[id] = billSettled.GetValueOrDefault(id) + app.Amount;
+                    }
+                }
+            }
+
+            if (_receivableWriteOffs != null)
+            {
+                var writeOffs = _receivableWriteOffs
+                    .GetAllIncluding(w => w.VoidGeneralLedgerHeader)
+                    .Where(w => w.GeneralLedgerHeaderId != null
+                        && w.Status != SettlementDocumentStatus.Draft
+                        && w.Status != SettlementDocumentStatus.PendingReview
+                        && w.Date <= day)
+                    .ToList();
+
+                foreach (var wo in writeOffs)
+                {
+                    if (wo.Status == SettlementDocumentStatus.Reversed)
+                    {
+                        var revDate = wo.VoidGeneralLedgerHeader?.Date;
+                        if (revDate == null || revDate.Value.Date <= day)
+                            continue;
+                    }
+                    invoiceSettled[wo.SalesInvoiceHeaderId] = invoiceSettled.GetValueOrDefault(wo.SalesInvoiceHeaderId) + wo.Amount;
+                }
+            }
+
+            return (invoiceSettled, billSettled);
+        }
+
         private int CountStaleOpenItems(DateTime fyEnd)
         {
+            var (invoiceSettled, billSettled) = BuildSettlementAdjustmentsAsOf(fyEnd);
             var stale = 0;
-            foreach (var invoice in _salesInvoices.Table.ToList())
+            foreach (var invoice in _salesInvoices.GetAllIncluding(i => i.SalesInvoiceLines, i => i.CustomerAllocations, i => i.VoidGeneralLedgerHeader).ToList())
             {
                 if (invoice.Status == SalesInvoiceStatus.Draft || invoice.Date.Date > fyEnd) continue;
                 var due = invoice.DueDate?.Date ?? invoice.Date.Date.AddDays(30);
                 if ((fyEnd.Date - due).TotalDays <= 365) continue;
-                if (invoice.BalanceDueAsOf(fyEnd, invoice.VoidGeneralLedgerHeader?.Date) > TieTolerance)
+                if (invoice.BalanceDueAsOf(fyEnd, invoice.VoidGeneralLedgerHeader?.Date, invoiceSettled.GetValueOrDefault(invoice.Id)) > TieTolerance)
                     stale++;
             }
             foreach (var bill in _purchaseInvoices.GetAllIncluding(i => i.PurchaseInvoiceLines, i => i.VendorPayments, i => i.VoidGeneralLedgerHeader).ToList())
@@ -189,7 +292,7 @@ namespace Services.Financial
                 if (bill.IsDraft || bill.Date.Date > fyEnd) continue;
                 var due = bill.DueDate?.Date ?? bill.Date.Date.AddDays(30);
                 if ((fyEnd.Date - due).TotalDays <= 365) continue;
-                if (bill.BalanceDueAsOf(fyEnd) > TieTolerance)
+                if (bill.BalanceDueAsOf(fyEnd, billSettled.GetValueOrDefault(bill.Id)) > TieTolerance)
                     stale++;
             }
             return stale;
@@ -213,11 +316,24 @@ namespace Services.Financial
                 .Where(b => b.GeneralLedgerHeaderId != null && b.Date <= end)
                 .ToList();
 
+            foreach (var invAr in invoices.Where(i => i.ReceivableAccountId.HasValue).Select(i => i.ReceivableAccountId!.Value))
+            {
+                if (!arAccounts.Contains(invAr))
+                    arAccounts.Add(invAr);
+            }
+            foreach (var billAp in bills.Where(b => b.PayableAccountId.HasValue).Select(b => b.PayableAccountId!.Value))
+            {
+                if (!apAccounts.Contains(billAp))
+                    apAccounts.Add(billAp);
+            }
+
+            var (invoiceSettled, billSettled) = BuildSettlementAdjustmentsAsOf(end);
+
             decimal worst = 0m;
             var failed = 0;
-            if (!SideTied(arAccounts, invoices.Select(i => (AccountId: CustomerAr(i), Amount: SignedAr(i, end))), throughEnd, debitNormal: true, ref worst))
+            if (!SideTied(arAccounts, invoices.Select(i => (AccountId: CustomerAr(i), Amount: SignedAr(i, end, invoiceSettled.GetValueOrDefault(i.Id)))), throughEnd, debitNormal: true, ref worst))
                 failed++;
-            if (!SideTied(apAccounts, bills.Select(b => (AccountId: b.PayableAccountId ?? payableSetting, Amount: SignedAp(b, end))), throughEnd, debitNormal: false, ref worst))
+            if (!SideTied(apAccounts, bills.Select(b => (AccountId: b.PayableAccountId ?? payableSetting, Amount: SignedAp(b, end, billSettled.GetValueOrDefault(b.Id)))), throughEnd, debitNormal: false, ref worst))
                 failed++;
             amount = worst;
             message = failed == 0
@@ -261,21 +377,22 @@ namespace Services.Financial
 
         private int? CustomerAr(SalesInvoiceHeader invoice)
         {
+            if (invoice.ReceivableAccountId.HasValue) return invoice.ReceivableAccountId.Value;
             if (invoice.CustomerId == 0 || _customers == null) return null;
             return _customers.Table.Where(c => c.Id == invoice.CustomerId).Select(c => c.AccountsReceivableAccountId).FirstOrDefault();
         }
 
-        private static decimal SignedAr(SalesInvoiceHeader invoice, DateTime asOf)
+        private static decimal SignedAr(SalesInvoiceHeader invoice, DateTime asOf, decimal creditAndWriteOffAsOf = 0m)
         {
             var voidDate = invoice.VoidGeneralLedgerHeader?.Date;
             if (invoice.Status == SalesInvoiceStatus.Draft || invoice.Date.Date > asOf.Date) return 0m;
             if (invoice.Status == SalesInvoiceStatus.Void && (voidDate == null || voidDate.Value.Date <= asOf.Date)) return 0m;
             var allocated = (invoice.CustomerAllocations ?? new List<CustomerAllocation>())
                 .Where(a => a.Date.Date <= asOf.Date).Sum(a => a.Amount);
-            return Math.Round(invoice.GrandTotal() - allocated, 2, MidpointRounding.AwayFromZero);
+            return Math.Round(invoice.GrandTotal() - allocated - creditAndWriteOffAsOf, 2, MidpointRounding.AwayFromZero);
         }
 
-        private static decimal SignedAp(PurchaseInvoiceHeader bill, DateTime asOf)
+        private static decimal SignedAp(PurchaseInvoiceHeader bill, DateTime asOf, decimal creditAndAdvanceAsOf = 0m)
         {
             var day = asOf.Date;
             if (bill.IsDraft || bill.Date.Date > day) return 0m;
@@ -293,7 +410,7 @@ namespace Services.Financial
                     return paymentVoided != null && paymentVoided.Value.Date > day;
                 })
                 .Sum(p => p.Amount);
-            return Math.Round(bill.Total() - paid, 2, MidpointRounding.AwayFromZero);
+            return Math.Round(bill.Total() - paid - creditAndAdvanceAsOf, 2, MidpointRounding.AwayFromZero);
         }
 
         private bool TryResolvePermanentAccount(GeneralLedgerSetting? glSetting, IReadOnlyList<Account> accounts, out Account? permanent, out string? problem)

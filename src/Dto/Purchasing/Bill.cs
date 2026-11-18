@@ -32,7 +32,11 @@ namespace Dto.Purchasing
         public decimal TotalTax { get; set; }
         public decimal Total { get; set; }
         public decimal AmountPaid { get; set; }
+        public decimal CreditedAmount { get; set; }
+        public decimal AdvanceAppliedAmount { get; set; }
         public decimal BalanceDue { get; set; }
+        public string? SettlementSummary { get; set; }
+        public long Version { get; set; }
         /// <summary>
         /// Draft, Open, Overdue, Partially Paid, Paid or Void. When saving, "Open" approves the bill (which needs the
         /// post permission); anything else saves a draft.

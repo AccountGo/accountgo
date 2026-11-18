@@ -69,11 +69,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       permission: 'sales.invoices.view',
     },
     {
+      name: 'Customer Credits',
+      path: `/org/${currentOrg.slug}/sales/credits`,
+      icon: Receipt,
+      module: 'sales',
+      permission: ['sales.credits.view', 'sales.invoices.view'],
+    },
+    {
       name: currentOrg.isPersonalBooks ? 'Bills' : 'Purchases & Bills',
       path: `/org/${currentOrg.slug}/purchases`,
       icon: ShoppingBag,
       module: 'purchases',
       permission: 'purchases.bills.view',
+    },
+    {
+      name: 'Supplier Credits',
+      path: `/org/${currentOrg.slug}/purchases/credits`,
+      icon: ShoppingBag,
+      module: 'purchases',
+      permission: ['purchases.credits.view', 'purchases.bills.view'],
     },
     {
       name: currentOrg.isPersonalBooks ? 'Bank accounts' : 'Banking',

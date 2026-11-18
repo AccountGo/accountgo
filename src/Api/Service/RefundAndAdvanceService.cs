@@ -49,6 +49,7 @@ namespace Api.Service
                 request,
                 (companyId, setting) =>
                 {
+                    _coordinator.EnsureBankingPickerAccess();
                     var precision = CurrencyPrecisionRules.RequireSupportedPrecision(setting.Currency);
                     if (request.Amount <= 0 || !CurrencyPrecisionRules.HasValidPrecision(request.Amount, precision))
                         throw new SettlementCommandException(SettlementErrorCodes.Validation, "Advance amount must be positive and match currency precision.", 400);
@@ -142,7 +143,8 @@ namespace Api.Service
                         throw new SettlementCommandException(SettlementErrorCodes.StaleVersion, "Supplier advance changed concurrently.", 409);
 
                     var actor = _tenant.UserId ?? "system";
-                    _coordinator.EnsureReviewPolicyForPosting(companyId, adv.SubmittedBy, actor, requiresTeamReview: adv.Status == SettlementDocumentStatus.PendingReview);
+                    _coordinator.EnsureBankingPickerAccess();
+                    _coordinator.EnsureReviewPolicyForPosting(companyId, adv.SubmittedBy, actor, requiresTeamReview: true);
 
                     var bankAccId = _mappings.RequireActiveAccount(companyId, adv.BankAccountId, "Bank GL Account");
                     var advAccId = _mappings.RequireActiveAccount(companyId, adv.SupplierAdvanceAccountId, "Supplier Advances");
@@ -301,16 +303,19 @@ namespace Api.Service
 
         // --- Party Refunds ---
 
-        public PartyRefundDto SaveRefundDraft(SavePartyRefundDraftRequest request)
+        public PartyRefundDto SaveRefundDraft(SavePartyRefundDraftRequest request, PartyRefundDirection? expectedDirection = null)
         {
             return _coordinator.Execute(
                 "party_refund.save_draft",
                 request.IdempotencyKey,
-                request,
+                new { request, expectedDirection },
                 (companyId, setting) =>
                 {
+                    _coordinator.EnsureBankingPickerAccess();
                     var precision = CurrencyPrecisionRules.RequireSupportedPrecision(setting.Currency);
                     var direction = (PartyRefundDirection)request.Direction;
+                    if (expectedDirection.HasValue && direction != expectedDirection.Value)
+                        throw new SettlementCommandException(SettlementErrorCodes.Forbidden, "Refund direction does not match the authorized endpoint.", 403);
                     if (request.Allocations == null || request.Allocations.Count == 0)
                         throw new SettlementCommandException(SettlementErrorCodes.Validation, "At least one refund allocation is required.", 400);
 
@@ -447,16 +452,18 @@ namespace Api.Service
                 nameof(PartyRefund));
         }
 
-        public PartyRefundDto SubmitRefund(int id, string? idempotencyKey = null)
+        public PartyRefundDto SubmitRefund(int id, string? idempotencyKey = null, PartyRefundDirection? expectedDirection = null)
         {
             return _coordinator.Execute(
                 "party_refund.submit",
                 idempotencyKey,
-                new { id },
+                new { id, expectedDirection },
                 (companyId, _) =>
                 {
                     var refund = _db.PartyRefunds.FirstOrDefault(r => r.CompanyId == companyId && r.Id == id)
                         ?? throw new SettlementCommandException(SettlementErrorCodes.NotFound, "Refund not found.", 404);
+                    if (expectedDirection.HasValue && refund.Direction != expectedDirection.Value)
+                        throw new SettlementCommandException(SettlementErrorCodes.Forbidden, "Refund direction does not match the authorized endpoint.", 403);
                     if (refund.Status != SettlementDocumentStatus.Draft)
                         throw new SettlementCommandException(SettlementErrorCodes.InvalidState, "Only draft refunds can be submitted.", 409);
 
@@ -471,26 +478,29 @@ namespace Api.Service
                 nameof(PartyRefund));
         }
 
-        public PartyRefundDto PostRefund(int id, PostPartyRefundRequest request)
+        public PartyRefundDto PostRefund(int id, PostPartyRefundRequest request, PartyRefundDirection? expectedDirection = null)
         {
             return _coordinator.Execute(
                 "party_refund.post",
                 request.IdempotencyKey,
-                new { id, request },
+                new { id, request, expectedDirection },
                 (companyId, setting) =>
                 {
+                    _coordinator.EnsureBankingPickerAccess();
                     var precision = CurrencyPrecisionRules.RequireSupportedPrecision(setting.Currency);
                     var refund = _db.PartyRefunds.Include(r => r.Allocations)
                         .FirstOrDefault(r => r.CompanyId == companyId && r.Id == id)
                         ?? throw new SettlementCommandException(SettlementErrorCodes.NotFound, "Refund not found.", 404);
 
+                    if (expectedDirection.HasValue && refund.Direction != expectedDirection.Value)
+                        throw new SettlementCommandException(SettlementErrorCodes.Forbidden, "Refund direction does not match the authorized endpoint.", 403);
                     if (refund.Status is not (SettlementDocumentStatus.Draft or SettlementDocumentStatus.PendingReview))
                         throw new SettlementCommandException(SettlementErrorCodes.InvalidState, "Only draft or pending-review refunds can be posted.", 409);
                     if (request.ExpectedVersion.HasValue && refund.Version != request.ExpectedVersion.Value)
                         throw new SettlementCommandException(SettlementErrorCodes.StaleVersion, "Refund changed concurrently.", 409);
 
                     var actor = _tenant.UserId ?? "system";
-                    _coordinator.EnsureReviewPolicyForPosting(companyId, refund.SubmittedBy, actor, requiresTeamReview: refund.Status == SettlementDocumentStatus.PendingReview);
+                    _coordinator.EnsureReviewPolicyForPosting(companyId, refund.SubmittedBy, actor, requiresTeamReview: true);
 
                     var bankAccId = _mappings.RequireActiveAccount(companyId, refund.BankAccountId, "Bank GL Account");
                     refund.No ??= GenerateNumber("RFND", _db.PartyRefunds.Where(r => r.CompanyId == companyId && r.No != null).Select(r => r.No!));
@@ -556,12 +566,12 @@ namespace Api.Service
                 nameof(PartyRefund));
         }
 
-        public PartyRefundDto ReverseRefund(int id, ReverseSettlementRequest request)
+        public PartyRefundDto ReverseRefund(int id, ReverseSettlementRequest request, PartyRefundDirection? expectedDirection = null)
         {
             return _coordinator.Execute(
                 "party_refund.reverse",
                 request.IdempotencyKey,
-                new { id, request },
+                new { id, request, expectedDirection },
                 (companyId, setting) =>
                 {
                     var precision = CurrencyPrecisionRules.RequireSupportedPrecision(setting.Currency);
@@ -571,6 +581,8 @@ namespace Api.Service
                     var refund = _db.PartyRefunds.Include(r => r.Allocations)
                         .FirstOrDefault(r => r.CompanyId == companyId && r.Id == id)
                         ?? throw new SettlementCommandException(SettlementErrorCodes.NotFound, "Refund not found.", 404);
+                    if (expectedDirection.HasValue && refund.Direction != expectedDirection.Value)
+                        throw new SettlementCommandException(SettlementErrorCodes.Forbidden, "Refund direction does not match the authorized endpoint.", 403);
                     if (refund.Status != SettlementDocumentStatus.Posted || !refund.GeneralLedgerHeaderId.HasValue)
                         throw new SettlementCommandException(SettlementErrorCodes.InvalidState, "Only posted refunds can be reversed.", 409);
                     if (request.ReversalDate.Date < refund.Date.Date)

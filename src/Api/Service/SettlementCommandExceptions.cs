@@ -21,6 +21,7 @@ namespace Api.Service
         public const string ReconciliationProtection = "reconciliation_protection";
         public const string SelfApprovalForbidden = "self_approval_forbidden";
         public const string PermissionDenied = "permission_denied";
+        public const string Forbidden = PermissionDenied;
         public const string NotFound = "not_found";
         public const string Validation = "validation_error";
     }

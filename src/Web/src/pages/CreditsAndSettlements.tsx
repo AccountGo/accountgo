@@ -1,21 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PageHeader } from '../components/PageHeader';
+import { useSearchParams } from 'react-router-dom';
+import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { ModalShell } from '../components/ModalShell';
 import { useAuth } from '../auth/AuthContext';
+import { localToday } from '../lib/businessDays';
+import { Plus, CheckCircle2, ArrowRightLeft, Undo2, FileWarning, RotateCcw } from 'lucide-react';
 
 interface CreditNoteRow {
   id: number;
   no: string | null;
+  customerId?: number;
   customerName?: string;
+  vendorId?: number;
   vendorName?: string;
   vendorCreditNo?: string;
   date: string;
+  effectiveDate?: string;
   totalAmount: number;
   appliedAmount: number;
   refundedAmount: number;
   availableAmount: number;
   settlementState: string;
+  status: number;
   statusLabel: string;
   reason: string;
+  version: number;
 }
 
 interface AccountRolePreview {
@@ -38,21 +47,110 @@ interface MappingPreview {
   roles: AccountRolePreview[];
 }
 
+interface OpenDocItem {
+  id: number;
+  no: string | null;
+  partyId: number;
+  partyName: string;
+  balanceDue: number;
+}
+
+interface BankPickerOption {
+  id: number;
+  name: string;
+}
+
+type ActiveModal =
+  | null
+  | { type: 'createCredit' }
+  | { type: 'applyCredit'; credit: CreditNoteRow }
+  | { type: 'recordRefund'; credit: CreditNoteRow }
+  | { type: 'reverseCredit'; credit: CreditNoteRow }
+  | { type: 'writeOff' }
+  | { type: 'supplierAdvance' }
+  | { type: 'physicalReturn' };
+
+function newIdempotencyKey() {
+  return `ui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> = ({ side }) => {
   const { authFetch } = useAuth();
+  const [searchParams] = useSearchParams();
   const [credits, setCredits] = useState<CreditNoteRow[]>([]);
   const [mappings, setMappings] = useState<MappingPreview | null>(null);
+  const [openDocs, setOpenDocs] = useState<OpenDocItem[]>([]);
+  const [banks, setBanks] = useState<BankPickerOption[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState<ActiveModal>(null);
+
+  // Create credit form state
+  const [partyId, setPartyId] = useState<string>(
+    searchParams.get(side === 'sales' ? 'customerId' : 'vendorId') ?? ''
+  );
+  const [sourceDocId, setSourceDocId] = useState<string>(
+    searchParams.get(side === 'sales' ? 'invoiceId' : 'billId') ?? ''
+  );
+  const [vendorCreditNo, setVendorCreditNo] = useState('');
+  const [creditReason, setCreditReason] = useState('');
+  const [lineDesc, setLineDesc] = useState('Price adjustment');
+  const [lineQty, setLineQty] = useState('1');
+  const [linePrice, setLinePrice] = useState('0.00');
+  const [previewSummary, setPreviewSummary] = useState<string | null>(null);
+
+  // Apply credit form state
+  const [applyTargetId, setApplyTargetId] = useState<string>(
+    searchParams.get(side === 'sales' ? 'invoiceId' : 'billId') ?? ''
+  );
+  const [applyAmount, setApplyAmount] = useState('');
+
+  // External refund form state
+  const [refundBankId, setRefundBankId] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundMethod, setRefundMethod] = useState('Bank Transfer');
+  const [refundExtRef, setRefundExtRef] = useState('');
+
+  // Reverse form state
+  const [reverseReason, setReverseReason] = useState('');
+  const [reverseDate, setReverseDate] = useState(localToday());
+
+  // Write-off form state
+  const [woInvoiceId, setWoInvoiceId] = useState<string>(searchParams.get('invoiceId') ?? '');
+  const [woAmount, setWoAmount] = useState('');
+  const [woReason, setWoReason] = useState('');
+  const [woEvidence, setWoEvidence] = useState('');
+
+  // Supplier advance form state
+  const [advVendorId, setAdvVendorId] = useState<string>(searchParams.get('vendorId') ?? '');
+  const [advBankId, setAdvBankId] = useState('');
+  const [advAmount, setAdvAmount] = useState('');
+  const [advPurpose, setAdvPurpose] = useState('');
+
+  // Physical return form state
+  const [retDocId, setRetDocId] = useState<string>(
+    searchParams.get(side === 'sales' ? 'invoiceId' : 'billId') ?? ''
+  );
+  const [retLineId, setRetLineId] = useState('');
+  const [retItemId, setRetItemId] = useState('');
+  const [retQty, setRetQty] = useState('1');
+  const [retCondition, setRetCondition] = useState('1');
+  const [retReason, setRetReason] = useState('');
+  const [retControlTransferred, setRetControlTransferred] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const endpoint = side === 'sales' ? '/api/sales/credits' : '/api/purchasing/credits';
-      const [listRes, mapRes] = await Promise.all([
+      const docsEndpoint = side === 'sales' ? '/api/Sales/SalesInvoices' : '/api/Purchasing/Bills';
+      const [listRes, mapRes, docsRes, bankRes] = await Promise.all([
         authFetch(endpoint),
         authFetch('/api/sales/credits/mappings/preview'),
+        authFetch(docsEndpoint),
+        authFetch('/api/Banking/Accounts/Picker'),
       ]);
       if (listRes.ok) {
         setCredits(await listRes.json());
@@ -62,29 +160,462 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
       if (mapRes.ok) {
         setMappings(await mapRes.json());
       }
+      if (docsRes.ok) {
+        const rawDocs = await docsRes.json();
+        const list = Array.isArray(rawDocs) ? rawDocs : rawDocs.items ?? [];
+        setOpenDocs(
+          list
+            .filter((d: any) => (d.balanceDue ?? 0) > 0)
+            .map((d: any) => ({
+              id: d.id,
+              no: d.no ?? d.vendorInvoiceNo ?? `#${d.id}`,
+              partyId: side === 'sales' ? d.customerId : d.vendorId,
+              partyName: side === 'sales' ? d.customerName : d.vendorName ?? '',
+              balanceDue: Number(d.balanceDue ?? 0),
+            }))
+        );
+      }
+      if (bankRes.ok) {
+        const rawBanks = await bankRes.json();
+        const list = Array.isArray(rawBanks) ? rawBanks : rawBanks.accounts ?? [];
+        setBanks(list.map((b: any) => ({ id: b.id, name: b.name || b.accountName || `Bank #${b.id}` })));
+        if (list.length > 0 && !refundBankId) setRefundBankId(String(list[0].id));
+        if (list.length > 0 && !advBankId) setAdvBankId(String(list[0].id));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load credits.');
     } finally {
       setLoading(false);
     }
-  }, [authFetch, side]);
+  }, [authFetch, side, refundBankId, advBankId]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
-  const title = side === 'sales' ? 'Customer Credit Notes' : 'Supplier Credits & Advances';
+  const readProblem = async (res: Response) => {
+    try {
+      const body = await res.json();
+      return body.detail || body.message || body.title || `Request failed (${res.status})`;
+    } catch {
+      return `Request failed (${res.status})`;
+    }
+  };
+
+  const handlePreviewCredit = async () => {
+    setBusy(true);
+    setError(null);
+    setPreviewSummary(null);
+    try {
+      const url = side === 'sales' ? '/api/sales/credits/preview' : '/api/purchasing/credits/preview';
+      const payload =
+        side === 'sales'
+          ? {
+              customerId: Number(partyId),
+              sourceSalesInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
+              date: localToday(),
+              kind: 1,
+              reason: creditReason || 'Credit preview',
+              lines: [{ description: lineDesc, quantity: Number(lineQty), unitPrice: Number(linePrice) }],
+            }
+          : {
+              vendorId: Number(partyId),
+              sourcePurchaseInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
+              vendorCreditNo: vendorCreditNo || 'PREVIEW',
+              date: localToday(),
+              effectiveDate: localToday(),
+              kind: 1,
+              reason: creditReason || 'Credit preview',
+              lines: [{ description: lineDesc, quantity: Number(lineQty), unitCost: Number(linePrice) }],
+            };
+      const res = await authFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setError(await readProblem(res));
+        return;
+      }
+      const data = await res.json();
+      setPreviewSummary(
+        `Preview total: ${Number(data.totalAmount ?? 0).toFixed(2)} (Subtotal ${Number(data.subtotal ?? 0).toFixed(2)}, Tax ${Number(data.taxAmount ?? 0).toFixed(2)})`
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSaveCreditDraft = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const url = side === 'sales' ? '/api/sales/credits/drafts' : '/api/purchasing/credits/drafts';
+      const payload =
+        side === 'sales'
+          ? {
+              customerId: Number(partyId),
+              sourceSalesInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
+              date: localToday(),
+              kind: 1,
+              reason: creditReason,
+              lines: [{ description: lineDesc, quantity: Number(lineQty), unitPrice: Number(linePrice) }],
+              idempotencyKey: newIdempotencyKey(),
+            }
+          : {
+              vendorId: Number(partyId),
+              sourcePurchaseInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
+              vendorCreditNo,
+              date: localToday(),
+              effectiveDate: localToday(),
+              kind: 1,
+              reason: creditReason,
+              lines: [{ description: lineDesc, quantity: Number(lineQty), unitCost: Number(linePrice) }],
+              idempotencyKey: newIdempotencyKey(),
+            };
+      const res = await authFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setError(await readProblem(res));
+        return;
+      }
+      setNotice('Credit note draft saved.');
+      setModal(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCreditAction = async (credit: CreditNoteRow, action: 'submit' | 'post') => {
+    setBusy(true);
+    setError(null);
+    try {
+      const base = side === 'sales' ? '/api/sales/credits' : '/api/purchasing/credits';
+      const url = action === 'submit' ? `${base}/${credit.id}/submit?idempotencyKey=${newIdempotencyKey()}` : `${base}/${credit.id}/post`;
+      const res = await authFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: action === 'post' ? JSON.stringify({ expectedVersion: credit.version, idempotencyKey: newIdempotencyKey() }) : undefined,
+      });
+      if (!res.ok) {
+        setError(await readProblem(res));
+        return;
+      }
+      setNotice(action === 'submit' ? 'Submitted for review.' : 'Credit note posted to the general ledger.');
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleApplyCredit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (modal?.type !== 'applyCredit') return;
+    setBusy(true);
+    setError(null);
+    try {
+      const base = side === 'sales' ? '/api/sales/credits' : '/api/purchasing/credits';
+      const payload =
+        side === 'sales'
+          ? {
+              effectiveDate: localToday(),
+              expectedCreditVersion: modal.credit.version,
+              applications: [{ salesInvoiceHeaderId: Number(applyTargetId), amount: Number(applyAmount) }],
+              idempotencyKey: newIdempotencyKey(),
+            }
+          : {
+              effectiveDate: localToday(),
+              expectedCreditVersion: modal.credit.version,
+              applications: [{ purchaseInvoiceHeaderId: Number(applyTargetId), amount: Number(applyAmount) }],
+              idempotencyKey: newIdempotencyKey(),
+            };
+      const res = await authFetch(`${base}/${modal.credit.id}/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setError(await readProblem(res));
+        return;
+      }
+      setNotice('Credit applied.');
+      setModal(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRecordRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (modal?.type !== 'recordRefund') return;
+    setBusy(true);
+    setError(null);
+    try {
+      const isSales = side === 'sales';
+      const draftUrl = isSales ? '/api/settlements/refunds/drafts' : '/api/settlements/refunds/supplier/drafts';
+      const draftRes = await authFetch(draftUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          direction: isSales ? 1 : 2,
+          customerId: isSales ? modal.credit.customerId : null,
+          vendorId: !isSales ? modal.credit.vendorId : null,
+          date: localToday(),
+          bankId: Number(refundBankId),
+          paymentMethod: refundMethod,
+          externalReference: refundExtRef,
+          allocations: [
+            {
+              sourceType: isSales ? 1 : 2,
+              sourceId: modal.credit.id,
+              amount: Number(refundAmount),
+            },
+          ],
+          idempotencyKey: newIdempotencyKey(),
+        }),
+      });
+      if (!draftRes.ok) {
+        setError(await readProblem(draftRes));
+        return;
+      }
+      const draft = await draftRes.json();
+      const submitUrl = isSales
+        ? `/api/settlements/refunds/${draft.id}/submit?idempotencyKey=${newIdempotencyKey()}`
+        : `/api/settlements/refunds/supplier/${draft.id}/submit?idempotencyKey=${newIdempotencyKey()}`;
+      const subRes = await authFetch(submitUrl, { method: 'POST' });
+      if (!subRes.ok) {
+        setError(await readProblem(subRes));
+        return;
+      }
+      const submitted = await subRes.json();
+      const postUrl = isSales
+        ? `/api/settlements/refunds/${draft.id}/post`
+        : `/api/settlements/refunds/supplier/${draft.id}/post`;
+      const postRes = await authFetch(postUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: submitted.version, idempotencyKey: newIdempotencyKey() }),
+      });
+      if (!postRes.ok) {
+        setNotice('External refund saved and submitted for review (another reviewer must post under team policy).');
+      } else {
+        setNotice('External refund recorded and posted.');
+      }
+      setModal(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReverseCredit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (modal?.type !== 'reverseCredit') return;
+    setBusy(true);
+    setError(null);
+    try {
+      const base = side === 'sales' ? '/api/sales/credits' : '/api/purchasing/credits';
+      const res = await authFetch(`${base}/${modal.credit.id}/reverse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reversalDate: reverseDate,
+          reason: reverseReason,
+          idempotencyKey: newIdempotencyKey(),
+        }),
+      });
+      if (!res.ok) {
+        setError(await readProblem(res));
+        return;
+      }
+      setNotice('Credit note reversed.');
+      setModal(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleWriteOff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const reqRes = await authFetch('/api/sales/write-offs/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          salesInvoiceHeaderId: Number(woInvoiceId),
+          date: localToday(),
+          amount: Number(woAmount),
+          reason: woReason,
+          collectionEvidence: woEvidence,
+          idempotencyKey: newIdempotencyKey(),
+        }),
+      });
+      if (!reqRes.ok) {
+        setError(await readProblem(reqRes));
+        return;
+      }
+      const wo = await reqRes.json();
+      const postRes = await authFetch(`/api/sales/write-offs/${wo.id}/post`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: wo.version, idempotencyKey: newIdempotencyKey() }),
+      });
+      if (!postRes.ok) {
+        setNotice('Write-off requested and pending independent review.');
+      } else {
+        setNotice('Receivable write-off posted.');
+      }
+      setModal(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSupplierAdvance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const draftRes = await authFetch('/api/settlements/advances/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: Number(advVendorId),
+          date: localToday(),
+          bankId: Number(advBankId),
+          amount: Number(advAmount),
+          purpose: advPurpose,
+          isRefundable: true,
+          idempotencyKey: newIdempotencyKey(),
+        }),
+      });
+      if (!draftRes.ok) {
+        setError(await readProblem(draftRes));
+        return;
+      }
+      const adv = await draftRes.json();
+      await authFetch(`/api/settlements/advances/${adv.id}/submit?idempotencyKey=${newIdempotencyKey()}`, { method: 'POST' });
+      const postRes = await authFetch(`/api/settlements/advances/${adv.id}/post`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idempotencyKey: newIdempotencyKey() }),
+      });
+      setNotice(postRes.ok ? 'Supplier advance posted.' : 'Supplier advance submitted for review.');
+      setModal(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handlePhysicalReturn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const isSales = side === 'sales';
+      const url = isSales ? '/api/returns/customer' : '/api/returns/supplier/dispatch';
+      const payload = isSales
+        ? {
+            salesInvoiceHeaderId: Number(retDocId),
+            receiptDate: localToday(),
+            lines: [
+              {
+                salesInvoiceLineId: Number(retLineId),
+                quantity: Number(retQty),
+                condition: Number(retCondition),
+              },
+            ],
+            idempotencyKey: newIdempotencyKey(),
+          }
+        : {
+            vendorId: Number(partyId),
+            purchaseInvoiceHeaderId: retDocId ? Number(retDocId) : null,
+            dispatchDate: localToday(),
+            hasControlTransferred: retControlTransferred,
+            controlTransferDate: retControlTransferred ? localToday() : null,
+            reason: retReason,
+            lines: [
+              {
+                purchaseInvoiceLineId: retLineId ? Number(retLineId) : null,
+                itemId: Number(retItemId),
+                quantity: Number(retQty),
+              },
+            ],
+            idempotencyKey: newIdempotencyKey(),
+          };
+      const res = await authFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setError(await readProblem(res));
+        return;
+      }
+      setNotice(isSales ? 'Customer return receipt posted.' : 'Supplier return dispatch posted.');
+      setModal(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const title = side === 'sales' ? 'Customer Credits & Settlements' : 'Supplier Credits & Advances';
   const subtitle =
     side === 'sales'
-      ? 'Issue commercial credits, apply to open invoices, record external refunds, and manage receivable write-offs without altering original invoices.'
+      ? 'Issue commercial credits, apply to open invoices, record external refunds, record returns, and manage receivable write-offs without altering original invoices.'
       : 'Record supplier credits and advances, apply across bills, and track return clearing without altering approved bills.';
 
   return (
     <div className="space-y-6">
-      <PageHeader title={title} subtitle={subtitle} />
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <HeaderButton
+              label={side === 'sales' ? 'New customer credit' : 'New supplier credit'}
+              icon={Plus}
+              variant="primary"
+              onClick={() => {
+                setPreviewSummary(null);
+                setModal({ type: 'createCredit' });
+              }}
+            />
+            {side === 'sales' ? (
+              <>
+                <HeaderButton label="Write off invoice" icon={FileWarning} onClick={() => setModal({ type: 'writeOff' })} />
+                <HeaderButton label="Customer return" icon={RotateCcw} onClick={() => setModal({ type: 'physicalReturn' })} />
+              </>
+            ) : (
+              <>
+                <HeaderButton label="Supplier advance" icon={Plus} onClick={() => setModal({ type: 'supplierAdvance' })} />
+                <HeaderButton label="Supplier return dispatch" icon={RotateCcw} onClick={() => setModal({ type: 'physicalReturn' })} />
+              </>
+            )}
+          </div>
+        }
+      />
+
+      {notice && (
+        <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          {notice}
+        </div>
+      )}
 
       {error && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           {error}
         </div>
       )}
@@ -127,18 +658,19 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               <th className="px-4 py-3 text-right font-medium text-slate-600">Applied</th>
               <th className="px-4 py-3 text-right font-medium text-slate-600">Refunded</th>
               <th className="px-4 py-3 text-right font-medium text-slate-600">Available</th>
+              <th className="px-4 py-3 text-right font-medium text-slate-600">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={9} className="px-4 py-6 text-center text-slate-500">
                   Loading...
                 </td>
               </tr>
             ) : credits.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={9} className="px-4 py-6 text-center text-slate-500">
                   No credit notes recorded yet.
                 </td>
               </tr>
@@ -153,12 +685,549 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
                   <td className="px-4 py-3 text-right font-mono">{c.appliedAmount.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-mono">{c.refundedAmount.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">{c.availableAmount.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                    {c.statusLabel === 'Draft' && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleCreditAction(c, 'submit')}
+                        className="text-xs font-medium text-indigo-600 hover:underline"
+                      >
+                        Submit
+                      </button>
+                    )}
+                    {(c.statusLabel === 'Draft' || c.statusLabel === 'PendingReview') && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleCreditAction(c, 'post')}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Post
+                      </button>
+                    )}
+                    {c.statusLabel === 'Posted' && c.availableAmount > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setApplyAmount(c.availableAmount.toFixed(2));
+                            setModal({ type: 'applyCredit', credit: c });
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" /> Apply
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRefundAmount(c.availableAmount.toFixed(2));
+                            setModal({ type: 'recordRefund', credit: c });
+                          }}
+                          className="text-xs font-medium text-amber-700 hover:underline"
+                        >
+                          Record Refund
+                        </button>
+                      </>
+                    )}
+                    {c.statusLabel === 'Posted' && (
+                      <button
+                        type="button"
+                        onClick={() => setModal({ type: 'reverseCredit', credit: c })}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 hover:underline"
+                      >
+                        <Undo2 className="w-3.5 h-3.5" /> Reverse
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {modal?.type === 'createCredit' && (
+        <ModalShell open onClose={() => setModal(null)}>
+          <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900">
+              {side === 'sales' ? 'New Customer Credit Note' : 'New Supplier Credit Note'}
+            </h3>
+            <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+          <form onSubmit={handleSaveCreditDraft} className="space-y-4 p-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700">{side === 'sales' ? 'Customer ID' : 'Vendor ID'}</label>
+              <input
+                required
+                type="number"
+                value={partyId}
+                onChange={(e) => setPartyId(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">
+                {side === 'sales' ? 'Source Invoice (optional for standalone)' : 'Source Bill (optional for standalone)'}
+              </label>
+              <select
+                value={sourceDocId}
+                onChange={(e) => setSourceDocId(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Standalone credit (no source document)</option>
+                {openDocs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.no} — {d.partyName} (Due {d.balanceDue.toFixed(2)})
+                  </option>
+                ))}
+              </select>
+            </div>
+            {side === 'purchasing' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Vendor Credit Number</label>
+                <input
+                  required
+                  value={vendorCreditNo}
+                  onChange={(e) => setVendorCreditNo(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Reason / Evidence</label>
+              <input
+                required
+                value={creditReason}
+                onChange={(e) => setCreditReason(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Description</label>
+                <input
+                  required
+                  value={lineDesc}
+                  onChange={(e) => setLineDesc(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Qty</label>
+                <input
+                  required
+                  type="number"
+                  step="0.0001"
+                  value={lineQty}
+                  onChange={(e) => setLineQty(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Unit Price / Cost</label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  value={linePrice}
+                  onChange={(e) => setLinePrice(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            {previewSummary && <div className="rounded bg-slate-50 p-2 text-xs text-slate-700">{previewSummary}</div>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => void handlePreviewCredit()} className="rounded border px-3 py-2 text-sm">
+                Preview
+              </button>
+              <button type="submit" disabled={busy} className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
+                Save Draft
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
+      {modal?.type === 'applyCredit' && (
+        <ModalShell open onClose={() => setModal(null)}>
+          <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900">
+              {`Apply ${modal.credit.no ?? `Credit #${modal.credit.id}`}`}
+            </h3>
+            <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+          <form onSubmit={handleApplyCredit} className="space-y-4 p-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700">
+                {side === 'sales' ? 'Target Invoice' : 'Target Bill'}
+              </label>
+              <select
+                required
+                value={applyTargetId}
+                onChange={(e) => setApplyTargetId(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Select open document...</option>
+                {openDocs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.no} — {d.partyName} (Due {d.balanceDue.toFixed(2)})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Amount to Apply</label>
+              <input
+                required
+                type="number"
+                step="0.01"
+                value={applyAmount}
+                onChange={(e) => setApplyAmount(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="submit" disabled={busy} className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
+                Apply Credit
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
+      {modal?.type === 'recordRefund' && (
+        <ModalShell open onClose={() => setModal(null)}>
+          <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900">Record a refund already sent/received</h3>
+            <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+          <form onSubmit={handleRecordRefund} className="space-y-4 p-4">
+            <p className="text-xs text-slate-600">
+              Record a refund already sent/received outside AccountGo. This posts the cash movement against your selected bank account and reduces the credit balance.
+            </p>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Bank Account</label>
+              <select
+                required
+                value={refundBankId}
+                onChange={(e) => setRefundBankId(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              >
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Amount</label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Payment Method</label>
+                <input
+                  required
+                  value={refundMethod}
+                  onChange={(e) => setRefundMethod(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">External Bank Reference</label>
+              <input
+                required
+                value={refundExtRef}
+                onChange={(e) => setRefundExtRef(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="submit" disabled={busy} className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
+                Record Refund
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
+      {modal?.type === 'reverseCredit' && (
+        <ModalShell open onClose={() => setModal(null)}>
+          <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900">
+              {`Reverse ${modal.credit.no ?? `Credit #${modal.credit.id}`}`}
+            </h3>
+            <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+          <form onSubmit={handleReverseCredit} className="space-y-4 p-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Reversal Date</label>
+              <input
+                required
+                type="date"
+                value={reverseDate}
+                onChange={(e) => setReverseDate(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Reason</label>
+              <input
+                required
+                value={reverseReason}
+                onChange={(e) => setReverseReason(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button type="submit" disabled={busy} className="rounded bg-rose-600 px-4 py-2 text-sm font-medium text-white">
+                Confirm Reversal
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
+      {modal?.type === 'writeOff' && (
+        <ModalShell open onClose={() => setModal(null)}>
+          <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900">Receivable Write-Off</h3>
+            <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+          <form onSubmit={handleWriteOff} className="space-y-4 p-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Open Invoice</label>
+              <select
+                required
+                value={woInvoiceId}
+                onChange={(e) => setWoInvoiceId(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Select open invoice...</option>
+                {openDocs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.no} — {d.partyName} (Due {d.balanceDue.toFixed(2)})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Write-Off Amount</label>
+              <input
+                required
+                type="number"
+                step="0.01"
+                value={woAmount}
+                onChange={(e) => setWoAmount(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Reason</label>
+              <input
+                required
+                value={woReason}
+                onChange={(e) => setWoReason(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Collection Evidence</label>
+              <input
+                required
+                value={woEvidence}
+                onChange={(e) => setWoEvidence(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button type="submit" disabled={busy} className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
+                Submit Write-Off
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
+      {modal?.type === 'supplierAdvance' && (
+        <ModalShell open onClose={() => setModal(null)}>
+          <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900">Record Supplier Advance</h3>
+            <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+          <form onSubmit={handleSupplierAdvance} className="space-y-4 p-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Vendor ID</label>
+              <input
+                required
+                type="number"
+                value={advVendorId}
+                onChange={(e) => setAdvVendorId(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Bank Account</label>
+              <select
+                required
+                value={advBankId}
+                onChange={(e) => setAdvBankId(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              >
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Amount</label>
+              <input
+                required
+                type="number"
+                step="0.01"
+                value={advAmount}
+                onChange={(e) => setAdvAmount(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Purpose</label>
+              <input
+                required
+                value={advPurpose}
+                onChange={(e) => setAdvPurpose(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button type="submit" disabled={busy} className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
+                Save &amp; Submit Advance
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
+      {modal?.type === 'physicalReturn' && (
+        <ModalShell open onClose={() => setModal(null)}>
+          <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900">
+              {side === 'sales' ? 'Customer Return Receipt' : 'Supplier Return Dispatch'}
+            </h3>
+            <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+          <form onSubmit={handlePhysicalReturn} className="space-y-4 p-4">
+            {side === 'purchasing' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Vendor ID</label>
+                <input
+                  required
+                  type="number"
+                  value={partyId}
+                  onChange={(e) => setPartyId(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium text-slate-700">{side === 'sales' ? 'Source Invoice ID' : 'Source Bill ID'}</label>
+              <input
+                required={side === 'sales'}
+                type="number"
+                value={retDocId}
+                onChange={(e) => setRetDocId(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-700">{side === 'sales' ? 'Invoice Line ID' : 'Bill Line ID'}</label>
+                <input
+                  required={side === 'sales'}
+                  type="number"
+                  value={retLineId}
+                  onChange={(e) => setRetLineId(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              {side === 'purchasing' && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Item ID</label>
+                  <input
+                    required
+                    type="number"
+                    value={retItemId}
+                    onChange={(e) => setRetItemId(e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Quantity</label>
+                <input
+                  required
+                  type="number"
+                  step="0.0001"
+                  value={retQty}
+                  onChange={(e) => setRetQty(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            {side === 'sales' ? (
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Condition</label>
+                <select
+                  value={retCondition}
+                  onChange={(e) => setRetCondition(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="1">Saleable (Restore full proportional cost)</option>
+                  <option value="2">Damaged (Recoverable cost)</option>
+                  <option value="3">Zero Value (Track quantity only)</option>
+                </select>
+              </div>
+            ) : (
+              <>
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={retControlTransferred}
+                    onChange={(e) => setRetControlTransferred(e.target.checked)}
+                  />
+                  Control transferred to vendor (credit inventory &amp; debit Return Clearing)
+                </label>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Return Reason</label>
+                  <input
+                    required
+                    value={retReason}
+                    onChange={(e) => setRetReason(e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </>
+            )}
+            <div className="flex justify-end">
+              <button type="submit" disabled={busy} className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
+                Post Return
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
     </div>
   );
 };

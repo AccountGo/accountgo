@@ -803,6 +803,7 @@ namespace Services.Sales
                 _financialService.SaveGeneralLedgerEntry(glHeader);
                 allocation.GeneralLedgerHeaderId = glHeader.Id;
                 invoice.CustomerAllocations.Add(allocation);
+                invoice.Version++;
 
                 invoice.RefreshPaymentStatus();
 

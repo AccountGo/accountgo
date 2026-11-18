@@ -551,8 +551,12 @@ export const InvoiceDetail: React.FC = () => {
     switch (status) {
       case 'Paid':
         return <StatusPill tone="green" icon={CheckCircle2}>Paid</StatusPill>;
+      case 'Settled':
+        return <StatusPill tone="green" icon={CheckCircle2}>Settled</StatusPill>;
       case 'Partially Paid':
         return <StatusPill tone="amber" icon={Clock}>Partially paid</StatusPill>;
+      case 'Partially Settled':
+        return <StatusPill tone="amber" icon={Clock}>Partially settled</StatusPill>;
       case 'Overdue':
         return <StatusPill tone="red" icon={AlertTriangle}>Overdue</StatusPill>;
       case 'Draft':
@@ -629,7 +633,9 @@ export const InvoiceDetail: React.FC = () => {
         ? `${formatCurrency(invoice.balanceDue)} ${isOverdue && dueOn ? `overdue since ${dueOn}` : dueOn ? `due ${dueOn}` : 'due'}`
         : invoice.status === 'Paid'
           ? 'Paid in full'
-          : null;
+          : invoice.status === 'Settled'
+            ? invoice.settlementSummary || 'Settled'
+            : null;
 
   // Like the PDF, the tax column shows only when a line has tax.
   const showTax = invoice.salesInvoiceLines?.some((line) => (line.taxAmount ?? 0) !== 0) ?? false;
@@ -657,10 +663,14 @@ export const InvoiceDetail: React.FC = () => {
           </>
         }
         subtitle={[invoice.customerName, balanceSummary,
+          invoice.balanceDue > 0 && invoice.settlementSummary ? invoice.settlementSummary : null,
           invoice.status === 'Draft' && !invoice.no && canPreviewNumber && issueNumber ? `Next number: #${issueNumber}` : null,
         ].filter(Boolean).join(' · ')}
         actions={
           <>
+            {invoice.status !== 'Draft' && invoice.status !== 'Void' && (
+              <HeaderButton label="Credits & settlements" icon={Receipt} compact to={`/org/${orgSlug}/sales/credits?invoiceId=${invoice.id}`} />
+            )}
             {canEmail && (
               <HeaderButton
                 label="Email"

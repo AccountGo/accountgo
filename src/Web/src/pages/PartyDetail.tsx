@@ -187,6 +187,14 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
         subtitle={party.outstanding ? config.copy.owes(formatCurrency(party.outstanding)) : undefined}
         actions={
           <>
+            <HeaderButton
+              label={role === 'vendor' ? 'Credits & advances' : 'Credits & settlements'}
+              icon={FilePlus}
+              compact
+              to={role === 'vendor'
+                ? `/org/${currentOrg.slug}/purchases/credits?vendorId=${party.id}`
+                : `/org/${currentOrg.slug}/sales/credits?customerId=${party.id}`}
+            />
             {canManage && <HeaderButton label="Edit" icon={Pencil} compact onClick={() => setIsEditing(true)} />}
             {history.canShow && <RecordHistoryButton onClick={history.openPanel} />}
             {canManage && (

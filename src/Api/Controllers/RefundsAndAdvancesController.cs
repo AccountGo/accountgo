@@ -4,6 +4,7 @@
 #nullable enable
 using Api.Filters;
 using Api.Service;
+using Core.Domain;
 using Core.Domain.Security;
 using Dto.Financial;
 using Dto.Sales;
@@ -68,7 +69,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.SalesRefundsCreate)]
         public IActionResult SaveCustomerRefundDraft([FromBody] SavePartyRefundDraftRequest request)
         {
-            try { return Ok(_service.SaveRefundDraft(request)); }
+            try { return Ok(_service.SaveRefundDraft(request, PartyRefundDirection.CustomerPayout)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
@@ -76,7 +77,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.PurchasesRefundsCreate)]
         public IActionResult SaveSupplierRefundDraft([FromBody] SavePartyRefundDraftRequest request)
         {
-            try { return Ok(_service.SaveRefundDraft(request)); }
+            try { return Ok(_service.SaveRefundDraft(request, PartyRefundDirection.SupplierInflow)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
@@ -84,7 +85,15 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.SalesRefundsCreate)]
         public IActionResult SubmitRefund(int id, [FromQuery] string? idempotencyKey = null)
         {
-            try { return Ok(_service.SubmitRefund(id, idempotencyKey)); }
+            try { return Ok(_service.SubmitRefund(id, idempotencyKey, PartyRefundDirection.CustomerPayout)); }
+            catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
+        }
+
+        [HttpPost("refunds/supplier/{id:int}/submit")]
+        [RequirePermission(SystemPermissions.PurchasesRefundsCreate)]
+        public IActionResult SubmitSupplierRefund(int id, [FromQuery] string? idempotencyKey = null)
+        {
+            try { return Ok(_service.SubmitRefund(id, idempotencyKey, PartyRefundDirection.SupplierInflow)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
@@ -92,7 +101,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.SalesRefundsPost)]
         public IActionResult PostCustomerRefund(int id, [FromBody] PostPartyRefundRequest request)
         {
-            try { return Ok(_service.PostRefund(id, request)); }
+            try { return Ok(_service.PostRefund(id, request, PartyRefundDirection.CustomerPayout)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
@@ -100,7 +109,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.PurchasesRefundsPost)]
         public IActionResult PostSupplierRefund(int id, [FromBody] PostPartyRefundRequest request)
         {
-            try { return Ok(_service.PostRefund(id, request)); }
+            try { return Ok(_service.PostRefund(id, request, PartyRefundDirection.SupplierInflow)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
@@ -108,7 +117,15 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.SalesRefundsReverse)]
         public IActionResult ReverseRefund(int id, [FromBody] ReverseSettlementRequest request)
         {
-            try { return Ok(_service.ReverseRefund(id, request)); }
+            try { return Ok(_service.ReverseRefund(id, request, PartyRefundDirection.CustomerPayout)); }
+            catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
+        }
+
+        [HttpPost("refunds/supplier/{id:int}/reverse")]
+        [RequirePermission(SystemPermissions.PurchasesRefundsReverse)]
+        public IActionResult ReverseSupplierRefund(int id, [FromBody] ReverseSettlementRequest request)
+        {
+            try { return Ok(_service.ReverseRefund(id, request, PartyRefundDirection.SupplierInflow)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
     }

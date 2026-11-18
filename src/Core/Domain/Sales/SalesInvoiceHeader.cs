@@ -134,19 +134,20 @@ namespace Core.Domain.Sales
         /// counts from its own date, receipts from their allocation date, and a void from the date its reversal was posted.
         /// </summary>
         /// <param name="voidDate">The posting date of the void reversal, or null when a voided invoice never reached the ledger.</param>
-        public decimal BalanceDueAsOf(DateTime asOf, DateTime? voidDate)
+        /// <param name="creditAndWriteOffSettledAsOf">Net dated credit applications and write-offs (net of reversals) as of <paramref name="asOf"/>.</param>
+        public decimal BalanceDueAsOf(DateTime asOf, DateTime? voidDate, decimal creditAndWriteOffSettledAsOf = 0m)
         {
             var day = asOf.Date;
             var allocations = CustomerAllocations ?? new List<CustomerAllocation>();
             if (Date.Date > day)
                 return 0;
-            if (Status == SalesInvoiceStatus.Draft && allocations.Count == 0)
+            if (Status == SalesInvoiceStatus.Draft && allocations.Count == 0 && creditAndWriteOffSettledAsOf == 0m)
                 return 0;
             if (Status == SalesInvoiceStatus.Void && (voidDate == null || voidDate.Value.Date <= day))
                 return 0;
 
             var allocated = allocations.Where(a => a.Date.Date <= day).Sum(a => a.Amount);
-            return Math.Round(Math.Max(0, GrandTotal() - allocated), 2, MidpointRounding.AwayFromZero);
+            return Math.Round(Math.Max(0, GrandTotal() - allocated - creditAndWriteOffSettledAsOf), 2, MidpointRounding.AwayFromZero);
         }
 
         public bool IsFullPaid() =>
@@ -161,7 +162,33 @@ namespace Core.Domain.Sales
             Math.Round(ComputeTotalAmount() + ComputeTotalTax() + ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
 
         public bool IsPaid() =>
-            Status == SalesInvoiceStatus.Closed || (BalanceDue() <= 0.005m && TotalAllocated() > 0);
+            Status != SalesInvoiceStatus.Draft
+            && Status != SalesInvoiceStatus.Void
+            && BalanceDue() <= 0.005m
+            && TotalAllocated() > 0m;
+
+        public string DisplayStatus(DateTime dueDate, DateTime today)
+        {
+            if (Status == SalesInvoiceStatus.Void) return "Void";
+            if (Status == SalesInvoiceStatus.Draft) return "Draft";
+            var paid = TotalAllocated();
+            var settled = TotalSettled();
+            var balance = BalanceDue();
+            if (paid > 0m && balance <= 0.005m) return "Paid";
+            if (settled > 0m && balance <= 0.005m) return "Settled";
+            if (paid > 0m) return "Partially Paid";
+            if (settled > 0m) return "Partially Settled";
+            if (dueDate.Date < today.Date && balance > 0.005m) return "Overdue";
+            return "Open";
+        }
+
+        public string? SettlementSummary()
+        {
+            var cash = TotalAllocated();
+            if (cash <= 0m && CreditedAmount <= 0m && WrittenOffAmount <= 0m)
+                return null;
+            return $"Settled: cash {cash:0.00}, credits {CreditedAmount:0.00}, written off {WrittenOffAmount:0.00}";
+        }
 
         public void EnsureEditable()
         {
@@ -173,10 +200,10 @@ namespace Core.Domain.Sales
         {
             if (Status == SalesInvoiceStatus.Draft)
                 throw new InvalidOperationException("Draft invoices cannot be voided. Delete the draft instead.");
-            if (Status == SalesInvoiceStatus.Closed || IsPaid() || IsFullPaid())
-                throw new InvalidOperationException("Cannot void a paid invoice.");
             if (TotalAllocated() > 0 || CreditedAmount > 0 || WrittenOffAmount > 0)
                 throw new InvalidOperationException("Cannot void an invoice with recorded payments, credits, or write-offs. Reverse them first.");
+            if (Status == SalesInvoiceStatus.Closed || IsPaid() || IsFullPaid())
+                throw new InvalidOperationException("Cannot void a paid invoice.");
         }
 
         public void EnsureCanRecordPayment(decimal amount)

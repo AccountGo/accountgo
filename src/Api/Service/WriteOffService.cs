@@ -242,6 +242,8 @@ namespace Api.Service
                     if (request.Date.Date < wo.Date.Date)
                         throw new SettlementCommandException(SettlementErrorCodes.InvalidDate, "Recovery date cannot precede write-off date.", 400);
 
+                    var actor = _tenant.UserId ?? "system";
+                    _coordinator.EnsureBankingPickerAccess();
                     var remainingRecoverable = CurrencyPrecisionRules.RoundMoney(wo.Amount - wo.RecoveredAmount, precision);
                     if (request.Amount > remainingRecoverable)
                         throw new SettlementCommandException(SettlementErrorCodes.SourceExhausted, $"Recovery ({request.Amount}) exceeds remaining written-off amount ({remainingRecoverable}).", 409);
@@ -284,6 +286,50 @@ namespace Api.Service
 
                     recovery.GeneralLedgerHeaderId = glHeader.Id;
                     wo.RecoveredAmount = CurrencyPrecisionRules.RoundMoney(wo.RecoveredAmount + request.Amount, precision);
+                    wo.Version++;
+
+                    _db.SaveChanges();
+                    return BuildDto(companyId, wo.Id);
+                },
+                dto => dto.Id,
+                nameof(ReceivableWriteOff));
+        }
+
+        public ReceivableWriteOffDto ReverseRecovery(int writeOffId, int recoveryId, ReverseSettlementRequest request)
+        {
+            return _coordinator.Execute(
+                "write_off_recovery.reverse",
+                request.IdempotencyKey,
+                new { writeOffId, recoveryId, request },
+                (companyId, setting) =>
+                {
+                    var precision = CurrencyPrecisionRules.RequireSupportedPrecision(setting.Currency);
+                    if (string.IsNullOrWhiteSpace(request.Reason))
+                        throw new SettlementCommandException(SettlementErrorCodes.MissingEvidence, "A reversal reason is required.", 400);
+
+                    var wo = _db.ReceivableWriteOffs.FirstOrDefault(w => w.CompanyId == companyId && w.Id == writeOffId)
+                        ?? throw new SettlementCommandException(SettlementErrorCodes.NotFound, "Write-off not found.", 404);
+                    var recovery = _db.WriteOffRecoveries.FirstOrDefault(r => r.CompanyId == companyId && r.Id == recoveryId && r.ReceivableWriteOffId == writeOffId)
+                        ?? throw new SettlementCommandException(SettlementErrorCodes.NotFound, "Write-off recovery not found.", 404);
+                    if (recovery.Status != SettlementDocumentStatus.Posted || !recovery.GeneralLedgerHeaderId.HasValue)
+                        throw new SettlementCommandException(SettlementErrorCodes.InvalidState, "Only posted write-off recoveries can be reversed.", 409);
+                    if (request.ReversalDate.Date < recovery.Date.Date)
+                        throw new SettlementCommandException(SettlementErrorCodes.InvalidDate, "Reversal date cannot precede recovery date.", 400);
+
+                    var revGl = _financial.CreateReversingEntry(
+                        recovery.GeneralLedgerHeaderId.Value,
+                        $"Reverse Bad-Debt Recovery {recovery.No}: {request.Reason.Trim()}",
+                        request.ReversalDate.Date);
+                    _financial.SaveGeneralLedgerEntry(revGl);
+
+                    recovery.Status = SettlementDocumentStatus.Reversed;
+                    recovery.VoidGeneralLedgerHeaderId = revGl.Id;
+                    recovery.ReversedBy = _tenant.UserId ?? "system";
+                    recovery.ReversedAtUtc = DateTime.UtcNow;
+                    recovery.ReversalReason = request.Reason.Trim();
+                    recovery.Version++;
+
+                    wo.RecoveredAmount = CurrencyPrecisionRules.RoundMoney(Math.Max(0m, wo.RecoveredAmount - recovery.Amount), precision);
                     wo.Version++;
 
                     _db.SaveChanges();

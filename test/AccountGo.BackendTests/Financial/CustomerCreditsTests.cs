@@ -69,6 +69,11 @@ namespace AccountGo.BackendTests.Financial
                 setting.CreditsReturnsRefundsEnabled = true;
                 setting.BooksStartDate = new DateTime(2026, 1, 1);
             }
+            var opSetting = db.WorkspaceOperatingSettings.FirstOrDefault(w => w.CompanyId == company.Id);
+            if (opSetting == null)
+                db.WorkspaceOperatingSettings.Add(new WorkspaceOperatingSettings { CompanyId = company.Id, CollaborationState = WorkspaceCollaborationState.SoloActive });
+            else
+                opSetting.CollaborationState = WorkspaceCollaborationState.SoloActive;
             db.SaveChanges();
 
             if (!db.FinancialYears.Any(f => f.CompanyId == company.Id))

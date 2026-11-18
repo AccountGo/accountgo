@@ -181,8 +181,7 @@ namespace Api.Service
                         throw new SettlementCommandException(SettlementErrorCodes.StaleVersion, "Supplier credit changed concurrently.", 409);
 
                     var actor = _tenant.UserId ?? "system";
-                    if (note.Status == SettlementDocumentStatus.PendingReview)
-                        _coordinator.EnsureReviewPolicyForPosting(companyId, note.SubmittedBy, actor, requiresTeamReview: true);
+                    _coordinator.EnsureReviewPolicyForPosting(companyId, note.SubmittedBy, actor, requiresTeamReview: true);
 
                     var vendor = _db.Vendors.Include(v => v.Party).First(v => v.CompanyId == companyId && v.Id == note.VendorId);
                     PurchaseInvoiceHeader? bill = null;

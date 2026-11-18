@@ -221,8 +221,7 @@ namespace Api.Service
                         throw new SettlementCommandException(SettlementErrorCodes.StaleVersion, "Credit note was modified concurrently.", 409);
 
                     var actor = _tenant.UserId ?? "system";
-                    if (note.Status == SettlementDocumentStatus.PendingReview)
-                        _coordinator.EnsureReviewPolicyForPosting(companyId, note.SubmittedBy, actor, requiresTeamReview: true);
+                    _coordinator.EnsureReviewPolicyForPosting(companyId, note.SubmittedBy, actor, requiresTeamReview: true);
 
                     var customer = _db.Customers.Include(c => c.Party).First(c => c.CompanyId == companyId && c.Id == note.CustomerId);
                     SalesInvoiceHeader? invoice = null;

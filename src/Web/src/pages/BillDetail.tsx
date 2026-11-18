@@ -219,17 +219,23 @@ export const BillDetail: React.FC = () => {
         eyebrow={bill.no ? `Bill #${bill.no}` : 'Bill'}
         title={bill.vendorInvoiceNo ? `${bill.vendorInvoiceNo} · ${bill.vendorName}` : bill.vendorName ?? 'Bill'}
         badges={<InvoiceStatusBadge status={bill.status} />}
-        subtitle={
+        subtitle={[
           isVoid
             ? 'Void: what approving it posted has been reversed.'
             : isDraft
               ? 'Draft: not yet approved, so it is not counted as owed.'
               : bill.balanceDue > 0
                 ? `${formatCurrency(bill.balanceDue)} owed, due ${formatDate(bill.dueDate)}`
-                : 'Paid in full'
-        }
+                : bill.status === 'Settled'
+                  ? bill.settlementSummary || 'Settled'
+                  : 'Paid in full',
+          bill.balanceDue > 0 && bill.settlementSummary ? bill.settlementSummary : null,
+        ].filter(Boolean).join(' · ')}
         actions={
           <>
+            {!isDraft && !isVoid && (
+              <HeaderButton label="Credits & advances" icon={Wallet} compact to={`/org/${orgSlug}/purchases/credits?billId=${bill.id}`} />
+            )}
             {isDraft && canEdit && <HeaderButton label="Edit" icon={Pencil} compact to={`/org/${orgSlug}/purchases/${bill.id}/edit`} />}
             {history.canShow && <RecordHistoryButton onClick={history.openPanel} />}
             {(canCreate || canEdit || canVoid) && (

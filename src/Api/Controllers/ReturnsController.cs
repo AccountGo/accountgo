@@ -6,6 +6,7 @@ using Api.Filters;
 using Api.Service;
 using Core.Domain.Security;
 using Dto.Inventory;
+using Dto.Sales;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -28,11 +29,27 @@ namespace Api.Controllers
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
+        [HttpPost("customer/{id:int}/reverse")]
+        [RequirePermission(SystemPermissions.SalesReturnsReverse)]
+        public IActionResult ReverseCustomerReturn(int id, [FromBody] ReverseSettlementRequest request)
+        {
+            try { return Ok(_service.ReverseCustomerReturn(id, request)); }
+            catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
+        }
+
         [HttpPost("supplier/dispatch")]
         [RequirePermission(SystemPermissions.PurchasesReturnsPost)]
         public IActionResult PostSupplierReturnDispatch([FromBody] PostSupplierReturnDispatchRequest request)
         {
             try { return Ok(_service.PostSupplierReturnDispatch(request)); }
+            catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
+        }
+
+        [HttpPost("supplier/dispatch/{id:int}/reverse")]
+        [RequirePermission(SystemPermissions.PurchasesReturnsReverse)]
+        public IActionResult ReverseSupplierReturnDispatch(int id, [FromBody] ReverseSettlementRequest request)
+        {
+            try { return Ok(_service.ReverseSupplierReturnDispatch(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 

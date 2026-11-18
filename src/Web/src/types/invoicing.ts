@@ -1,6 +1,6 @@
 import type { PartyBase } from './parties';
 
-export type InvoiceStatus = 'Draft' | 'Open' | 'Partially Paid' | 'Paid' | 'Overdue' | 'Void';
+export type InvoiceStatus = 'Draft' | 'Open' | 'Partially Paid' | 'Partially Settled' | 'Paid' | 'Settled' | 'Overdue' | 'Void';
 
 export interface InvoiceLineItem {
   id?: number;
@@ -56,7 +56,11 @@ export interface Invoice {
   totalAmountAfterTax?: number;
   totalAllocatedAmount: number;
   paidAmount: number;
+  creditedAmount?: number;
+  writtenOffAmount?: number;
   balanceDue: number;
+  settlementSummary?: string | null;
+  version?: number;
   posted: boolean;
   status: InvoiceStatus;
   statusId?: number;

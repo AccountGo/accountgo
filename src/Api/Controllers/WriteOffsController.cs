@@ -51,5 +51,13 @@ namespace Api.Controllers
             try { return Ok(_service.RecordRecovery(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
+
+        [HttpPost("{writeOffId:int}/recoveries/{recoveryId:int}/reverse")]
+        [RequirePermission(SystemPermissions.SalesWriteOffsReverse)]
+        public IActionResult ReverseRecovery(int writeOffId, int recoveryId, [FromBody] ReverseSettlementRequest request)
+        {
+            try { return Ok(_service.ReverseRecovery(writeOffId, recoveryId, request)); }
+            catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
+        }
     }
 }

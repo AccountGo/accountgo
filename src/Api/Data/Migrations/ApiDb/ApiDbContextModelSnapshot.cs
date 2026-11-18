@@ -494,7 +494,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.Property<bool>("CreditsReturnsRefundsEnabled")
-                        .HasColumnType("bit");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Currency")
                         .IsRequired()
@@ -3081,7 +3083,9 @@ namespace Api.Data.Migrations.ApiDb
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("AdvanceAppliedAmount")
-                        .HasColumnType("decimal(18, 4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("datetime2");
@@ -3096,7 +3100,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.Property<decimal>("CreditedAmount")
-                        .HasColumnType("decimal(18, 4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
@@ -3137,7 +3143,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<int?>("VoidGeneralLedgerHeaderId")
                         .HasColumnType("int");
@@ -5126,7 +5134,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.Property<decimal>("CreditedAmount")
-                        .HasColumnType("decimal(18, 4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.Property<int>("CustomerId")
                         .HasColumnType("int");
@@ -5172,13 +5182,17 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<int?>("VoidGeneralLedgerHeaderId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("WrittenOffAmount")
-                        .HasColumnType("decimal(18, 4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.HasKey("Id");
 

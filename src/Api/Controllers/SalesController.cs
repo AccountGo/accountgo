@@ -1190,30 +1190,31 @@ namespace Api.Controllers
             _issueSnapshots.CaptureSellerAndBillToIfIssued(invoice);
 
         /// <summary>An invoice's totals, balance and status, the same in every view of it.</summary>
-        private sealed record InvoiceSummary(decimal TotalTax, decimal GrandTotal, decimal Allocated, decimal BalanceDue,
-            string Status, Core.Domain.SalesInvoiceStatus StatusId);
+        private sealed record InvoiceSummary(decimal TotalTax, decimal GrandTotal, decimal Allocated, decimal Credited, decimal WrittenOff,
+            decimal BalanceDue, string Status, Core.Domain.SalesInvoiceStatus StatusId, string? SettlementSummary, long Version);
 
         private InvoiceSummary Summarize(Core.Domain.Sales.SalesInvoiceHeader invoice, DateTime dueDate)
         {
             var tax = invoice.ComputeTotalTax();
             var grandTotal = invoice.GrandTotal();
-            var allocated = Math.Round(invoice.CustomerAllocations?.Sum(a => a.Amount) ?? 0, 2, MidpointRounding.AwayFromZero);
-            var balanceDue = Math.Round(Math.Max(0, grandTotal - allocated), 2, MidpointRounding.AwayFromZero);
-
-            // Status follows the lifecycle: void, paid, partly paid, draft, overdue, then open.
-            var (status, statusId) =
-                invoice.Status == Core.Domain.SalesInvoiceStatus.Void ? ("Void", Core.Domain.SalesInvoiceStatus.Void)
-                : invoice.Status == Core.Domain.SalesInvoiceStatus.Closed || (balanceDue <= 0.005m && allocated > 0) ? ("Paid", Core.Domain.SalesInvoiceStatus.Closed)
-                : allocated > 0 && balanceDue > 0.005m ? ("Partially Paid", Core.Domain.SalesInvoiceStatus.Open)
-                : invoice.Status == Core.Domain.SalesInvoiceStatus.Draft && allocated == 0 ? ("Draft", Core.Domain.SalesInvoiceStatus.Draft)
-                : dueDate.Date < DateTime.UtcNow.Date && balanceDue > 0.005m ? ("Overdue", Core.Domain.SalesInvoiceStatus.Overdue)
-                : ("Open", Core.Domain.SalesInvoiceStatus.Open);
+            var allocated = invoice.TotalAllocated();
+            var balanceDue = invoice.BalanceDue();
+            var status = invoice.DisplayStatus(dueDate, DateTime.UtcNow);
+            var statusId = status switch
+            {
+                "Void" => Core.Domain.SalesInvoiceStatus.Void,
+                "Draft" => Core.Domain.SalesInvoiceStatus.Draft,
+                "Paid" or "Settled" => Core.Domain.SalesInvoiceStatus.Closed,
+                "Overdue" => Core.Domain.SalesInvoiceStatus.Overdue,
+                _ => Core.Domain.SalesInvoiceStatus.Open,
+            };
 
             // A voided invoice is no longer owed, so nothing is due on it.
             if (statusId == Core.Domain.SalesInvoiceStatus.Void)
                 balanceDue = 0;
 
-            return new InvoiceSummary(tax, grandTotal, allocated, balanceDue, status, statusId);
+            return new InvoiceSummary(tax, grandTotal, allocated, invoice.CreditedAmount, invoice.WrittenOffAmount,
+                balanceDue, status, statusId, invoice.SettlementSummary(), invoice.Version);
         }
 
         private static void ApplySummary(Dto.Sales.SalesInvoice dto, InvoiceSummary summary)
@@ -1222,9 +1223,13 @@ namespace Api.Controllers
             dto.TotalAmountAfterTax = summary.GrandTotal;
             dto.TotalAllocatedAmount = summary.Allocated;
             dto.PaidAmount = summary.Allocated;
+            dto.CreditedAmount = summary.Credited;
+            dto.WrittenOffAmount = summary.WrittenOff;
             dto.BalanceDue = summary.BalanceDue;
             dto.Status = summary.Status;
             dto.StatusId = (int)summary.StatusId;
+            dto.SettlementSummary = summary.SettlementSummary;
+            dto.Version = summary.Version;
         }
 
         /// <summary>Shapes an invoice with its computed totals and status; null when it is not in this workspace.</summary>

@@ -95,7 +95,8 @@ namespace Core.Domain.Purchases
         /// from its own date, a payment from its date until the date its void was posted, and a bill void from the date
         /// its reversal was posted. Needs <see cref="VoidGeneralLedgerHeader"/> loaded on the bill and its payments.
         /// </summary>
-        public decimal BalanceDueAsOf(DateTime asOf)
+        /// <param name="creditAndAdvanceSettledAsOf">Net dated credit and advance applications (net of reversals) as of <paramref name="asOf"/>.</param>
+        public decimal BalanceDueAsOf(DateTime asOf, decimal creditAndAdvanceSettledAsOf = 0m)
         {
             var day = asOf.Date;
             if (IsDraft || Date.Date > day)
@@ -116,7 +117,7 @@ namespace Core.Domain.Purchases
                     return paymentVoided != null && paymentVoided.Value.Date > day;
                 })
                 .Sum(p => p.Amount);
-            return Math.Round(Math.Max(0, Total() - paid), 2, MidpointRounding.AwayFromZero);
+            return Math.Round(Math.Max(0, Total() - paid - creditAndAdvanceSettledAsOf), 2, MidpointRounding.AwayFromZero);
         }
 
         public void EnsureEditable()
@@ -183,6 +184,14 @@ namespace Core.Domain.Purchases
             if (IsDraft) return "Draft";
             if (dueDate.Date < today.Date && balance > 0.005m) return "Overdue";
             return "Open";
+        }
+
+        public string? SettlementSummary()
+        {
+            var cash = AmountPaid();
+            if (cash <= 0m && CreditedAmount <= 0m && AdvanceAppliedAmount <= 0m)
+                return null;
+            return $"Settled: cash {cash:0.00}, credits {CreditedAmount:0.00}, advances {AdvanceAppliedAmount:0.00}";
         }
 
         /// <summary>Records the vendor once, when the bill is approved.</summary>

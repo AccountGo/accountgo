@@ -21,11 +21,25 @@ namespace Api.Service
     {
         private readonly ApiDbContext _db;
         private readonly ITenantContext _tenant;
+        private readonly Core.Authorization.IAccessAuthorizationService? _auth;
 
-        public SettlementCommandCoordinator(ApiDbContext db, ITenantContext tenant)
+        public SettlementCommandCoordinator(
+            ApiDbContext db,
+            ITenantContext tenant,
+            Core.Authorization.IAccessAuthorizationService? auth = null)
         {
             _db = db;
             _tenant = tenant;
+            _auth = auth;
+        }
+
+        public void EnsureBankingPickerAccess()
+        {
+            if (_auth == null)
+                return;
+            var decision = _auth.AuthorizeRequirement(operationKey: Core.Authorization.AccessOperationCatalog.BankingAccountsPicker);
+            if (!decision.Allowed)
+                throw new SettlementCommandException(SettlementErrorCodes.Forbidden, decision.SafeMessage, decision.HttpStatus);
         }
 
         public CompanySetting EnsureFeatureEnabled(int companyId)
@@ -61,8 +75,15 @@ namespace Api.Service
                 return;
 
             // Team or unclassified workspaces enforce non-self-approval for review-required postings.
-            if (!string.IsNullOrWhiteSpace(submittedBy) &&
-                !string.IsNullOrWhiteSpace(actorUserId) &&
+            if (string.IsNullOrWhiteSpace(submittedBy))
+            {
+                throw new SettlementCommandException(
+                    SettlementErrorCodes.SelfApprovalForbidden,
+                    "Team operating policy requires submitting for independent review before posting.",
+                    403);
+            }
+
+            if (!string.IsNullOrWhiteSpace(actorUserId) &&
                 string.Equals(submittedBy.Trim(), actorUserId.Trim(), StringComparison.OrdinalIgnoreCase))
             {
                 throw new SettlementCommandException(

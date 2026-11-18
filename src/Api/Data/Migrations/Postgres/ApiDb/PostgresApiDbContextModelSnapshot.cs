@@ -493,7 +493,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("integer");
 
                     b.Property<bool>("CreditsReturnsRefundsEnabled")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Currency")
                         .IsRequired()
@@ -3079,7 +3081,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("AdvanceAppliedAmount")
-                        .HasColumnType("decimal(18, 4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("timestamp without time zone");
@@ -3094,7 +3098,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("integer");
 
                     b.Property<decimal>("CreditedAmount")
-                        .HasColumnType("decimal(18, 4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp without time zone");
@@ -3135,7 +3141,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<int?>("VoidGeneralLedgerHeaderId")
                         .HasColumnType("integer");
@@ -5122,7 +5130,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasColumnType("integer");
 
                     b.Property<decimal>("CreditedAmount")
-                        .HasColumnType("decimal(18, 4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.Property<int>("CustomerId")
                         .HasColumnType("integer");
@@ -5168,13 +5178,17 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<int?>("VoidGeneralLedgerHeaderId")
                         .HasColumnType("integer");
 
                     b.Property<decimal>("WrittenOffAmount")
-                        .HasColumnType("decimal(18, 4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.HasKey("Id");
 

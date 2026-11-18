@@ -44,7 +44,11 @@ namespace Dto.Sales
         public string? Status { get; set; }
         public int? StatusId { get; set; }
         public decimal PaidAmount { get; set; }
+        public decimal CreditedAmount { get; set; }
+        public decimal WrittenOffAmount { get; set; }
         public decimal BalanceDue { get; set; }
+        public string? SettlementSummary { get; set; }
+        public long Version { get; set; }
         public string? Notes { get; set; }
         public string? PaymentInstructions { get; set; }
         /// <summary>

@@ -43,6 +43,9 @@ namespace Services.TaxSystem
         private readonly ITenantContext _tenant;
         private readonly IRepository<CustomerCreditNote>? _customerCredits;
         private readonly IRepository<SupplierCreditNote>? _supplierCredits;
+        private readonly IRepository<PartyRefund>? _partyRefunds;
+        private readonly IRepository<SettlementApplication>? _settlementApplications;
+        private readonly IRepository<SettlementApplicationReversal>? _settlementApplicationReversals;
         private CompanySetting? _cachedSetting;
         private IReadOnlyList<TaxMeta>? _cachedTaxCatalog;
         private (CashBasisRecognitionInput Input, IReadOnlyList<CashRecognizedPosting> Postings)? _cachedCashRecognition;
@@ -63,7 +66,10 @@ namespace Services.TaxSystem
             IEntitlementService entitlements,
             ITenantContext tenant,
             IRepository<CustomerCreditNote>? customerCredits = null,
-            IRepository<SupplierCreditNote>? supplierCredits = null)
+            IRepository<SupplierCreditNote>? supplierCredits = null,
+            IRepository<PartyRefund>? partyRefunds = null,
+            IRepository<SettlementApplication>? settlementApplications = null,
+            IRepository<SettlementApplicationReversal>? settlementApplicationReversals = null)
         {
             _settings = settings;
             _taxes = taxes;
@@ -81,6 +87,9 @@ namespace Services.TaxSystem
             _tenant = tenant;
             _customerCredits = customerCredits;
             _supplierCredits = supplierCredits;
+            _partyRefunds = partyRefunds;
+            _settlementApplications = settlementApplications;
+            _settlementApplicationReversals = settlementApplicationReversals;
         }
 
         public TaxPeriodReport Build(DateTime from, DateTime to) => Build(from, to, DefaultDocumentLimit);
@@ -610,6 +619,104 @@ namespace Services.TaxSystem
             }
 
             // Unposted issued documents in the period (listed in warnings only, never in cash figures).
+            var customerRefunds = allPostings
+                .Where(p => p.Source == CashRecognitionSource.CustomerRefund && p.DocumentId.HasValue)
+                .GroupBy(p => p.DocumentId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var activeCustomerCreditIds = customerRefunds
+                .Where(kv => kv.Value.Any(p => p.Date.Date >= startDate && p.Date.Date <= endDate))
+                .Select(kv => kv.Key)
+                .ToList();
+
+            if (activeCustomerCreditIds.Count > 0 && _customerCredits != null)
+            {
+                var cnMetas = _customerCredits.Table
+                    .Where(h => activeCustomerCreditIds.Contains(h.Id))
+                    .Select(h => new CashDocMeta(
+                        h.Id,
+                        h.No ?? $"CN-{h.Id}",
+                        h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name : "",
+                        0m,
+                        h.Lines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.UnitPrice, 0m, l.TaxAmount)).ToList()))
+                    .ToDictionary(h => h.Id);
+
+                var cnTotals = (recognitionInput.CustomerCredits ?? Array.Empty<CashCustomerCreditInfo>())
+                    .Where(c => activeCustomerCreditIds.Contains(c.Id))
+                    .ToDictionary(c => c.Id, c => c.TotalAmount);
+
+                foreach (var cnId in activeCustomerCreditIds)
+                {
+                    if (!cnMetas.TryGetValue(cnId, out var meta))
+                        continue;
+
+                    AccumulateCashDoc(
+                        side: "output",
+                        kind: "customerRefund",
+                        meta: meta,
+                        docPostings: customerRefunds[cnId],
+                        taxAccountIds: salesTaxAccountIds,
+                        isDebitPositive: false,
+                        docDenominator: cnTotals.GetValueOrDefault(cnId),
+                        startDate: startDate,
+                        endDate: endDate,
+                        taxById: taxById,
+                        taxCatalog: taxCatalog,
+                        isSalesSide: true,
+                        acc: outputAcc,
+                        documents: allDocuments);
+                }
+            }
+
+            var supplierRefunds = allPostings
+                .Where(p => p.Source == CashRecognitionSource.SupplierRefund && p.DocumentId.HasValue)
+                .GroupBy(p => p.DocumentId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var activeSupplierCreditIds = supplierRefunds
+                .Where(kv => kv.Value.Any(p => p.Date.Date >= startDate && p.Date.Date <= endDate))
+                .Select(kv => kv.Key)
+                .ToList();
+
+            if (activeSupplierCreditIds.Count > 0 && _supplierCredits != null)
+            {
+                var scMetas = _supplierCredits.Table
+                    .Where(h => activeSupplierCreditIds.Contains(h.Id))
+                    .Select(h => new CashDocMeta(
+                        h.Id,
+                        h.No ?? h.VendorCreditNo ?? $"SCN-{h.Id}",
+                        h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name : "",
+                        0m,
+                        h.Lines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.UnitCost, 0m, l.TaxAmount)).ToList()))
+                    .ToDictionary(h => h.Id);
+
+                var scTotals = (recognitionInput.SupplierCredits ?? Array.Empty<CashSupplierCreditInfo>())
+                    .Where(c => activeSupplierCreditIds.Contains(c.Id))
+                    .ToDictionary(c => c.Id, c => c.TotalAmount);
+
+                foreach (var scId in activeSupplierCreditIds)
+                {
+                    if (!scMetas.TryGetValue(scId, out var meta))
+                        continue;
+
+                    AccumulateCashDoc(
+                        side: "input",
+                        kind: "supplierRefund",
+                        meta: meta,
+                        docPostings: supplierRefunds[scId],
+                        taxAccountIds: purchasingTaxAccountIds,
+                        isDebitPositive: true,
+                        docDenominator: scTotals.GetValueOrDefault(scId),
+                        startDate: startDate,
+                        endDate: endDate,
+                        taxById: taxById,
+                        taxCatalog: taxCatalog,
+                        isSalesSide: false,
+                        acc: inputAcc,
+                        documents: allDocuments);
+                }
+            }
+
             var unpostedWarnings = new List<TaxPeriodUnpostedWarning>();
             var unpostedSales = _salesInvoices.Table
                 .Where(h => h.Date >= startDate
@@ -1039,7 +1146,13 @@ namespace Services.TaxSystem
                 _customerAllocations,
                 _purchaseInvoices,
                 _vendors,
-                _vendorPayments);
+                _vendorPayments,
+                excludedGlHeaderIds: null,
+                customerCreditRepo: _customerCredits,
+                supplierCreditRepo: _supplierCredits,
+                partyRefundRepo: _partyRefunds,
+                settlementApplicationRepo: _settlementApplications,
+                settlementApplicationReversalRepo: _settlementApplicationReversals);
             var postings = CashBasisRecognition.Recognize(input);
             return (input, postings);
         }

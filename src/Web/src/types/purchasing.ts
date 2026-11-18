@@ -67,7 +67,11 @@ export interface Bill {
   totalTax: number;
   total: number;
   amountPaid: number;
+  creditedAmount?: number;
+  advanceAppliedAmount?: number;
   balanceDue: number;
+  settlementSummary?: string | null;
+  version?: number;
   status: BillStatus;
   approved: boolean;
   approvedBy?: string | null;

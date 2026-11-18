@@ -18,8 +18,43 @@ namespace Services.Financial
     {
         InvoiceSettlement,
         BillSettlement,
+        CustomerRefund,
+        SupplierRefund,
         Ledger
     }
+
+    public sealed record CashCustomerCreditInfo(
+        int Id,
+        int GlHeaderId,
+        decimal TotalAmount,
+        int? LiabilityAccountId,
+        int? ReceivableAccountId);
+
+    public sealed record CashSupplierCreditInfo(
+        int Id,
+        int GlHeaderId,
+        decimal TotalAmount,
+        int CreditAssetAccountId);
+
+    public sealed record CashPartyRefundAllocationInfo(
+        int? CustomerCreditNoteId,
+        int? SupplierCreditNoteId,
+        int? SupplierAdvanceId,
+        decimal Amount);
+
+    public sealed record CashPartyRefundInfo(
+        int Id,
+        PartyRefundDirection Direction,
+        DateTime Date,
+        int GlHeaderId,
+        int? VoidGeneralLedgerHeaderId,
+        IReadOnlyList<CashPartyRefundAllocationInfo> Allocations);
+
+    public sealed record CashAdvanceApplicationInfo(
+        int Id,
+        int BillId,
+        DateTime EffectiveDate,
+        decimal Amount);
 
     public sealed record CashRecognizedPosting(
         int AccountId,
@@ -82,7 +117,11 @@ namespace Services.Financial
         bool HasPurchaseInvoices,
         IReadOnlyDictionary<int, int?> VendorApAccounts,
         IReadOnlyList<CashVendorPaymentInfo> VendorPayments,
-        IReadOnlyList<CashBillInfo> Bills);
+        IReadOnlyList<CashBillInfo> Bills,
+        IReadOnlyList<CashCustomerCreditInfo>? CustomerCredits = null,
+        IReadOnlyList<CashSupplierCreditInfo>? SupplierCredits = null,
+        IReadOnlyList<CashPartyRefundInfo>? PartyRefunds = null,
+        IReadOnlyList<CashAdvanceApplicationInfo>? AdvanceApplications = null);
 
     public static class CashBasisRecognitionLoader
     {
@@ -97,7 +136,12 @@ namespace Services.Financial
             IRepository<PurchaseInvoiceHeader>? purchaseInvoiceRepo,
             IRepository<Vendor>? vendorRepo,
             IRepository<VendorPayment>? vendorPaymentRepo,
-            IReadOnlyCollection<int>? excludedGlHeaderIds = null)
+            IReadOnlyCollection<int>? excludedGlHeaderIds = null,
+            IRepository<CustomerCreditNote>? customerCreditRepo = null,
+            IRepository<SupplierCreditNote>? supplierCreditRepo = null,
+            IRepository<PartyRefund>? partyRefundRepo = null,
+            IRepository<SettlementApplication>? settlementApplicationRepo = null,
+            IRepository<SettlementApplicationReversal>? settlementApplicationReversalRepo = null)
         {
             var accounts = accountRepo.Table
                 .Select(a => new CashAccountInfo(a.Id, a.AccountClassId, a.AccountCode, a.AccountName))
@@ -192,6 +236,65 @@ namespace Services.Financial
                     .ToList()
                 : new List<CashBillInfo>();
 
+            var customerCredits = customerCreditRepo != null
+                ? customerCreditRepo.Table
+                    .Where(c => c.GeneralLedgerHeaderId.HasValue)
+                    .Select(c => new CashCustomerCreditInfo(
+                        c.Id,
+                        c.GeneralLedgerHeaderId!.Value,
+                        c.TotalAmount,
+                        c.CustomerCreditLiabilityAccountId,
+                        c.ReceivableAccountId))
+                    .ToList()
+                : new List<CashCustomerCreditInfo>();
+
+            var supplierCredits = supplierCreditRepo != null
+                ? supplierCreditRepo.Table
+                    .Where(c => c.GeneralLedgerHeaderId.HasValue)
+                    .Select(c => new CashSupplierCreditInfo(
+                        c.Id,
+                        c.GeneralLedgerHeaderId!.Value,
+                        c.TotalAmount,
+                        c.SupplierCreditAssetAccountId ?? 0))
+                    .ToList()
+                : new List<CashSupplierCreditInfo>();
+
+            var partyRefunds = partyRefundRepo != null
+                ? partyRefundRepo.GetAllIncluding(r => r.Allocations)
+                    .Where(r => r.GeneralLedgerHeaderId.HasValue
+                        && (r.Status == SettlementDocumentStatus.Posted || r.Status == SettlementDocumentStatus.Reversed))
+                    .AsEnumerable()
+                    .Select(r => new CashPartyRefundInfo(
+                        r.Id,
+                        r.Direction,
+                        r.Date,
+                        r.GeneralLedgerHeaderId!.Value,
+                        r.VoidGeneralLedgerHeaderId,
+                        r.Allocations.Select(a => new CashPartyRefundAllocationInfo(
+                            a.CustomerCreditNoteId,
+                            a.SupplierCreditNoteId,
+                            a.SupplierAdvanceId,
+                            a.Amount)).ToList()))
+                    .ToList()
+                : new List<CashPartyRefundInfo>();
+
+            var reversedAppIds = settlementApplicationReversalRepo != null
+                ? settlementApplicationReversalRepo.Table.Select(r => r.SettlementApplicationId).ToHashSet()
+                : new HashSet<int>();
+
+            var advanceApplications = hasPurchaseInvoices && settlementApplicationRepo != null
+                ? settlementApplicationRepo.Table
+                    .Where(a => a.SupplierAdvanceId.HasValue && a.PurchaseInvoiceHeaderId.HasValue)
+                    .AsEnumerable()
+                    .Where(a => !reversedAppIds.Contains(a.Id))
+                    .Select(a => new CashAdvanceApplicationInfo(
+                        a.Id,
+                        a.PurchaseInvoiceHeaderId!.Value,
+                        a.EffectiveDate,
+                        a.Amount))
+                    .ToList()
+                : new List<CashAdvanceApplicationInfo>();
+
             return new CashBasisRecognitionInput(
                 accounts,
                 glLines,
@@ -204,7 +307,11 @@ namespace Services.Financial
                 hasPurchaseInvoices,
                 vendorApAccounts,
                 vendorPayments,
-                bills);
+                bills,
+                customerCredits,
+                supplierCredits,
+                partyRefunds,
+                advanceApplications);
         }
     }
 
@@ -230,8 +337,14 @@ namespace Services.Financial
             var postings = new List<CashRecognizedPosting>();
 
             // Accrual customer-allocation journals reclassify Customer Advances to A/R; cash basis recognizes revenue directly against the receipt credit.
-            foreach (var allocLine in allGlLines.Where(l => l.DocumentType == DocumentTypes.CustomerAllocation))
-                suppressedLineAmounts[allocLine.Id] = allocLine.Amount;
+            // Credit notes, non-cash credit/advance applications, and receivable write-offs are non-cash accrual events and do not trigger cash recognition.
+            foreach (var nonCashLine in allGlLines.Where(l =>
+                l.DocumentType == DocumentTypes.CustomerAllocation
+                || l.DocumentType == DocumentTypes.CustomerCreditNote
+                || l.DocumentType == DocumentTypes.SupplierCreditNote
+                || l.DocumentType == DocumentTypes.SettlementApplication
+                || l.DocumentType == DocumentTypes.ReceivableWriteOff))
+                suppressedLineAmounts[nonCashLine.Id] = nonCashLine.Amount;
 
             void EmitPosting(
                 int accountId,
@@ -407,8 +520,11 @@ namespace Services.Financial
             if (input.HasPurchaseInvoices)
             {
                 var paymentsByBill = input.VendorPayments
+                    .Select(p => (p.BillId, p.Date, Id: p.Id, IsAdvance: false, GlHeaderId: p.GeneralLedgerHeaderId, p.Amount))
+                    .Concat((input.AdvanceApplications ?? Array.Empty<CashAdvanceApplicationInfo>())
+                        .Select(a => (a.BillId, Date: a.EffectiveDate, a.Id, IsAdvance: true, GlHeaderId: (int?)null, a.Amount)))
                     .GroupBy(p => p.BillId)
-                    .ToDictionary(g => g.Key, g => g.OrderBy(p => p.Date).ThenBy(p => p.Id).ToList());
+                    .ToDictionary(g => g.Key, g => g.OrderBy(p => p.Date).ThenBy(p => p.IsAdvance).ThenBy(p => p.Id).ToList());
 
                 foreach (var bill in input.Bills)
                 {
@@ -472,8 +588,9 @@ namespace Services.Financial
                         var recognitionDate = payment.Date;
                         int? paymentDrLineId = null;
                         decimal availablePaymentDebit = 0m;
-                        if (payment.GeneralLedgerHeaderId.HasValue
-                            && linesByHeader.TryGetValue(payment.GeneralLedgerHeaderId.Value, out var paymentLines))
+                        if (!payment.IsAdvance
+                            && payment.GlHeaderId.HasValue
+                            && linesByHeader.TryGetValue(payment.GlHeaderId.Value, out var paymentLines))
                         {
                             var paymentDrLine = paymentLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr && l.AccountId == apLine.AccountId)
                                 ?? paymentLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr);
@@ -524,6 +641,125 @@ namespace Services.Financial
                         }
 
                         cumulativePaid = nextCumulativePaid;
+                    }
+                }
+            }
+
+            if (input.PartyRefunds != null && input.PartyRefunds.Count > 0)
+            {
+                var customerCreditMap = (input.CustomerCredits ?? Array.Empty<CashCustomerCreditInfo>())
+                    .ToDictionary(c => c.Id);
+                var supplierCreditMap = (input.SupplierCredits ?? Array.Empty<CashSupplierCreditInfo>())
+                    .ToDictionary(c => c.Id);
+
+                foreach (var refund in input.PartyRefunds)
+                {
+                    if (!linesByHeader.TryGetValue(refund.GlHeaderId, out var refundLines))
+                        continue;
+
+                    if (refund.Direction == PartyRefundDirection.CustomerPayout)
+                    {
+                        foreach (var alloc in refund.Allocations.Where(a => a.CustomerCreditNoteId.HasValue && a.Amount > 0m))
+                        {
+                            if (!customerCreditMap.TryGetValue(alloc.CustomerCreditNoteId!.Value, out var cn)
+                                || cn.TotalAmount <= 0m
+                                || !linesByHeader.TryGetValue(cn.GlHeaderId, out var cnLines))
+                                continue;
+
+                            var offsetLines = cnLines.Where(l => l.DrCr == DrOrCrSide.Dr
+                                && l.AccountId != cn.LiabilityAccountId
+                                && l.AccountId != cn.ReceivableAccountId).ToList();
+                            if (offsetLines.Count == 0)
+                                continue;
+
+                            // Suppress the CustomerCreditsLiability debit on the refund GL and recognize the underlying return/tax reduction on the refund date.
+                            var toSuppress = alloc.Amount;
+                            foreach (var drLine in refundLines.Where(l => l.DrCr == DrOrCrSide.Dr))
+                            {
+                                if (toSuppress <= 0m) break;
+                                var avail = Math.Max(0m, drLine.Amount - suppressedLineAmounts.GetValueOrDefault(drLine.Id));
+                                if (avail <= 0m) continue;
+                                var take = Math.Min(toSuppress, avail);
+                                suppressedLineAmounts[drLine.Id] = suppressedLineAmounts.GetValueOrDefault(drLine.Id) + take;
+                                toSuppress -= take;
+                            }
+
+                            var running = 0m;
+                            for (var i = 0; i < offsetLines.Count; i++)
+                            {
+                                var share = i < offsetLines.Count - 1
+                                    ? Math.Round(offsetLines[i].Amount * alloc.Amount / cn.TotalAmount, 2, MidpointRounding.AwayFromZero)
+                                    : alloc.Amount - running;
+                                running += share;
+                                if (share > 0m)
+                                    EmitPosting(offsetLines[i].AccountId, DrOrCrSide.Dr, share, refund.Date, CashRecognitionSource.CustomerRefund, cn.Id, null);
+                            }
+
+                            if (refund.VoidGeneralLedgerHeaderId.HasValue
+                                && linesByHeader.TryGetValue(refund.VoidGeneralLedgerHeaderId.Value, out var voidLines))
+                            {
+                                var voidDate = voidLines[0].HeaderDate;
+                                var voidToSuppress = alloc.Amount;
+                                foreach (var crLine in voidLines.Where(l => l.DrCr == DrOrCrSide.Cr))
+                                {
+                                    if (voidToSuppress <= 0m) break;
+                                    var avail = Math.Max(0m, crLine.Amount - suppressedLineAmounts.GetValueOrDefault(crLine.Id));
+                                    if (avail <= 0m) continue;
+                                    var take = Math.Min(voidToSuppress, avail);
+                                    suppressedLineAmounts[crLine.Id] = suppressedLineAmounts.GetValueOrDefault(crLine.Id) + take;
+                                    voidToSuppress -= take;
+                                }
+
+                                running = 0m;
+                                for (var i = 0; i < offsetLines.Count; i++)
+                                {
+                                    var share = i < offsetLines.Count - 1
+                                        ? Math.Round(offsetLines[i].Amount * alloc.Amount / cn.TotalAmount, 2, MidpointRounding.AwayFromZero)
+                                        : alloc.Amount - running;
+                                    running += share;
+                                    if (share > 0m)
+                                        EmitPosting(offsetLines[i].AccountId, DrOrCrSide.Cr, share, voidDate, CashRecognitionSource.CustomerRefund, cn.Id, null);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        foreach (var alloc in refund.Allocations.Where(a => a.SupplierCreditNoteId.HasValue && a.Amount > 0m))
+                        {
+                            if (!supplierCreditMap.TryGetValue(alloc.SupplierCreditNoteId!.Value, out var sc)
+                                || sc.TotalAmount <= 0m
+                                || !linesByHeader.TryGetValue(sc.GlHeaderId, out var scLines))
+                                continue;
+
+                            var offsetLines = scLines.Where(l => l.DrCr == DrOrCrSide.Cr
+                                && l.AccountId != sc.CreditAssetAccountId
+                                && !IsCapitalizedAssetAccount(l.AccountId)).ToList();
+                            if (offsetLines.Count == 0)
+                                continue;
+
+                            var toSuppress = alloc.Amount;
+                            foreach (var crLine in refundLines.Where(l => l.DrCr == DrOrCrSide.Cr && l.AccountId == sc.CreditAssetAccountId))
+                            {
+                                if (toSuppress <= 0m) break;
+                                var avail = Math.Max(0m, crLine.Amount - suppressedLineAmounts.GetValueOrDefault(crLine.Id));
+                                if (avail <= 0m) continue;
+                                var take = Math.Min(toSuppress, avail);
+                                suppressedLineAmounts[crLine.Id] = suppressedLineAmounts.GetValueOrDefault(crLine.Id) + take;
+                                toSuppress -= take;
+                            }
+
+                            var running = 0m;
+                            for (var i = 0; i < offsetLines.Count; i++)
+                            {
+                                var share = i < offsetLines.Count - 1
+                                    ? Math.Round(offsetLines[i].Amount * alloc.Amount / sc.TotalAmount, 2, MidpointRounding.AwayFromZero)
+                                    : alloc.Amount - running;
+                                running += share;
+                                if (share > 0m)
+                                    EmitPosting(offsetLines[i].AccountId, DrOrCrSide.Cr, share, refund.Date, CashRecognitionSource.SupplierRefund, sc.Id, null);
+                            }
+                        }
                     }
                 }
             }

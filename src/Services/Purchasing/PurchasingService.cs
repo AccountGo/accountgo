@@ -595,6 +595,7 @@ namespace Services.Purchasing
             _vendorPaymentRepo.Insert(payment);
 
             bill.VendorPayments.Add(payment);
+            bill.Version++;
             bill.Status = bill.BalanceDue() <= 0.005m ? PurchaseInvoiceStatus.Paid : PurchaseInvoiceStatus.Open;
             _purchaseInvoiceRepo.Update(bill);
             return payment;

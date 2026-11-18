@@ -45,6 +45,14 @@ namespace Services.Financial
         private readonly IRepository<Customer>? _customers;
         private readonly IRepository<Vendor>? _vendors;
         private readonly IRepository<LinkedEntryPair>? _linkedPairs;
+        private readonly IRepository<SettlementApplication>? _settlementApplications;
+        private readonly IRepository<SettlementApplicationReversal>? _settlementApplicationReversals;
+        private readonly IRepository<ReceivableWriteOff>? _receivableWriteOffs;
+        private readonly IRepository<CustomerCreditNote>? _customerCreditNotes;
+        private readonly IRepository<SupplierCreditNote>? _supplierCreditNotes;
+        private readonly IRepository<SupplierAdvance>? _supplierAdvances;
+        private readonly IRepository<PartyRefund>? _partyRefunds;
+        private readonly IRepository<SupplierReturnDispatch>? _supplierReturnDispatches;
 
         /// <param name="allowUnapprovedIndividualMapping">
         /// Disposable-fixture seam only. Dependency injection never supplies it, so production close and reopen for an
@@ -78,7 +86,15 @@ namespace Services.Financial
             IRepository<YearEndIssuanceDeclaration>? issuances = null,
             IRepository<Customer>? customers = null,
             IRepository<Vendor>? vendors = null,
-            IRepository<LinkedEntryPair>? linkedPairs = null)
+            IRepository<LinkedEntryPair>? linkedPairs = null,
+            IRepository<SettlementApplication>? settlementApplications = null,
+            IRepository<SettlementApplicationReversal>? settlementApplicationReversals = null,
+            IRepository<ReceivableWriteOff>? receivableWriteOffs = null,
+            IRepository<CustomerCreditNote>? customerCreditNotes = null,
+            IRepository<SupplierCreditNote>? supplierCreditNotes = null,
+            IRepository<SupplierAdvance>? supplierAdvances = null,
+            IRepository<PartyRefund>? partyRefunds = null,
+            IRepository<SupplierReturnDispatch>? supplierReturnDispatches = null)
         {
             _allowUnapprovedIndividualMapping = allowUnapprovedIndividualMapping;
             _time = time ?? TimeProvider.System;
@@ -91,6 +107,14 @@ namespace Services.Financial
             _customers = customers;
             _vendors = vendors;
             _linkedPairs = linkedPairs;
+            _settlementApplications = settlementApplications;
+            _settlementApplicationReversals = settlementApplicationReversals;
+            _receivableWriteOffs = receivableWriteOffs;
+            _customerCreditNotes = customerCreditNotes;
+            _supplierCreditNotes = supplierCreditNotes;
+            _supplierAdvances = supplierAdvances;
+            _partyRefunds = partyRefunds;
+            _supplierReturnDispatches = supplierReturnDispatches;
             _financial = financial;
             _booksLockGuard = booksLockGuard;
             _tenant = tenant;
@@ -643,6 +667,18 @@ namespace Services.Financial
             }
 
             AddWrongSideWarning(year, warnings, throughEnd);
+
+            var openReturnClearing = CountOpenReturnClearing(fyEnd);
+            if (openReturnClearing > 0)
+            {
+                warnings.Add(new YearEndCheckItem
+                {
+                    Code = "open_return_clearing",
+                    Message = "Supplier return dispatches have transferred control and remain in return clearing awaiting vendor credit matching.",
+                    Count = openReturnClearing,
+                    LinkPath = "/purchases/credits"
+                });
+            }
         }
 
         private IReadOnlyList<YearEndClosingLine> BuildClosingLines(FinancialYear year,

@@ -158,6 +158,12 @@ namespace AccountGo.BackendTests.Financial
             var (conn, db, _, custCredits, _, refunds, customerId, _, bankId, taxId, _, salesAccId, arAccId, _) = Setup();
             using var _ = conn;
             using var __ = db;
+            var opSetting = db.WorkspaceOperatingSettings.FirstOrDefault(w => w.CompanyId == 1);
+            if (opSetting == null)
+                db.WorkspaceOperatingSettings.Add(new WorkspaceOperatingSettings { CompanyId = 1, CollaborationState = WorkspaceCollaborationState.SoloActive });
+            else
+                opSetting.CollaborationState = WorkspaceCollaborationState.SoloActive;
+            db.SaveChanges();
 
             var item = new Item { CompanyId = 1, Code = "SVC", Description = "Service", SalesAccountId = salesAccId };
             db.Items.Add(item);
@@ -222,7 +228,10 @@ namespace AccountGo.BackendTests.Financial
             // S02: Advance 300 before bill 550, apply 300
             var advDraft = refunds.SaveAdvanceDraft(new SaveSupplierAdvanceDraftRequest(
                 null, vendorId, null, new DateTime(2026, 11, 1), 300m, bankId, "Deposit for order", true, "WIRE-300", null));
+            refunds.SubmitAdvance(advDraft.Id);
+            tenant.UserId = "reviewer-2";
             var advPosted = refunds.PostAdvance(advDraft.Id, new PostPartyRefundRequest());
+            tenant.UserId = "user-1";
 
             var bill = new PurchaseInvoiceHeader { CompanyId = 1, VendorId = vendorId, No = "BILL-550", VendorInvoiceNo = "V-550", Date = new DateTime(2026, 11, 5), Status = PurchaseInvoiceStatus.Open, PayableAccountId = apAccId };
             bill.PurchaseInvoiceLines.Add(new PurchaseInvoiceLine { CompanyId = 1, ItemId = item.Id, AccountId = expAccId, Quantity = 1m, Amount = 550m });
@@ -239,7 +248,10 @@ namespace AccountGo.BackendTests.Financial
                 null, vendorId, null, "VCR-55", new DateTime(2026, 11, 4), new DateTime(2026, 11, 4),
                 (int)CreditNoteKind.Standalone, true, "Overcharge", "ACK-55",
                 new[] { new SupplierCreditLineInputDto(null, null, null, expAccId, null, false, "Overcharge", 1m, 55m) }));
+            suppCredits.SubmitForReview(scDraft.Id);
+            tenant.UserId = "reviewer-2";
             var scPosted = suppCredits.Post(scDraft.Id, new PostSupplierCreditRequest());
+            tenant.UserId = "user-1";
 
             // Test team non-self-approval (X08): submitter cannot post their own refund
             var mixedRefundDraft = refunds.SaveRefundDraft(new SavePartyRefundDraftRequest(

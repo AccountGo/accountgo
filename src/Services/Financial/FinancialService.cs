@@ -66,6 +66,11 @@ namespace Services.Financial
         private readonly IRepository<Core.Domain.Auditing.AuditLog> _auditLogRepo;
         private readonly Microsoft.AspNetCore.Http.IHttpContextAccessor _httpContextAccessor;
         private readonly IEnumerable<ISourceJournalPostingGuard> _sourcePostingGuards;
+        private readonly IRepository<CustomerCreditNote> _customerCreditRepo;
+        private readonly IRepository<SupplierCreditNote> _supplierCreditRepo;
+        private readonly IRepository<PartyRefund> _partyRefundRepo;
+        private readonly IRepository<SettlementApplication> _settlementApplicationRepo;
+        private readonly IRepository<SettlementApplicationReversal> _settlementApplicationReversalRepo;
 
         public const string JournalPostingAuthorizationAuditTable = "__JournalPostingAuthorization";
 
@@ -115,11 +120,21 @@ namespace Services.Financial
             IRepository<LinkedEntryPair> linkedEntryPairRepo = null,
             IRepository<Partner> partnerRepo = null,
             TimeProvider time = null,
-            IEnumerable<ISourceJournalPostingGuard> sourcePostingGuards = null
+            IEnumerable<ISourceJournalPostingGuard> sourcePostingGuards = null,
+            IRepository<CustomerCreditNote> customerCreditRepo = null,
+            IRepository<SupplierCreditNote> supplierCreditRepo = null,
+            IRepository<PartyRefund> partyRefundRepo = null,
+            IRepository<SettlementApplication> settlementApplicationRepo = null,
+            IRepository<SettlementApplicationReversal> settlementApplicationReversalRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
             _sourcePostingGuards = sourcePostingGuards;
+            _customerCreditRepo = customerCreditRepo;
+            _supplierCreditRepo = supplierCreditRepo;
+            _partyRefundRepo = partyRefundRepo;
+            _settlementApplicationRepo = settlementApplicationRepo;
+            _settlementApplicationReversalRepo = settlementApplicationReversalRepo;
             _auth = auth;
             _approvalPolicyResolver = approvalPolicyResolver;
             _policyTransaction = policyTransaction;
@@ -953,7 +968,12 @@ namespace Services.Financial
                 _purchaseInvoiceRepo,
                 _vendorRepo,
                 _vendorPaymentRepo,
-                closingIds);
+                closingIds,
+                _customerCreditRepo,
+                _supplierCreditRepo,
+                _partyRefundRepo,
+                _settlementApplicationRepo,
+                _settlementApplicationReversalRepo);
 
             var postings = CashBasisRecognition.Recognize(input);
             var totals = new Dictionary<int, (decimal Debit, decimal Credit)>();
