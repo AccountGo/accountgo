@@ -39,6 +39,10 @@ namespace Core.Domain.Purchases
         public int? VoidGeneralLedgerHeaderId { get; set; }
         /// <summary>The Accounts Payable account credited when the bill was approved.</summary>
         public int? PayableAccountId { get; set; }
+        public decimal CreditedAmount { get; set; }
+        public decimal AdvanceAppliedAmount { get; set; }
+        [ConcurrencyCheck]
+        public long Version { get; set; }
         public DateTime Date { get; set; }
         /// <summary>The workspace's own number, given when the bill is approved; null on drafts.</summary>
         public string? No { get; set; }
@@ -82,7 +86,9 @@ namespace Core.Domain.Purchases
 
         public decimal AmountPaid() => VendorPayments?.Where(p => !p.IsVoid).Sum(p => p.Amount) ?? 0;
 
-        public decimal BalanceDue() => Math.Max(0, Total() - AmountPaid());
+        public decimal TotalSettled() => AmountPaid() + CreditedAmount + AdvanceAppliedAmount;
+
+        public decimal BalanceDue() => Math.Max(0, Total() - TotalSettled());
 
         /// <summary>
         /// What was still owed on this bill at the end of <paramref name="asOf"/>, following ledger dates: the bill counts
@@ -139,8 +145,8 @@ namespace Core.Domain.Purchases
                 return;
             if (IsDraft)
                 throw new InvalidOperationException("Only an approved bill can be voided. Delete a draft bill instead.");
-            if (VendorPayments.Any(p => !p.IsVoid))
-                throw new InvalidOperationException("This bill has payments that aren't void, so it can't be voided. Void each payment first.");
+            if (VendorPayments.Any(p => !p.IsVoid) || CreditedAmount > 0 || AdvanceAppliedAmount > 0)
+                throw new InvalidOperationException("This bill has active payments, credits, or advances, so it can't be voided. Reverse them first.");
         }
 
         public void EnsureCanRecordPayment(decimal amount)
@@ -163,14 +169,17 @@ namespace Core.Domain.Purchases
         public DateTime ResolveDueDate(PaymentTerm? term) =>
             DueDate ?? Date.AddDays(term?.DueAfterDays ?? 30);
 
-        /// <summary>The status a bill shows: void, paid, partly paid, draft, overdue, then open.</summary>
+        /// <summary>The status a bill shows: void, paid, partly paid, settled, draft, overdue, then open.</summary>
         public string DisplayStatus(DateTime dueDate, DateTime today)
         {
             var paid = AmountPaid();
+            var settled = TotalSettled();
             var balance = BalanceDue();
             if (IsVoid) return "Void";
             if (paid > 0 && balance <= 0.005m) return "Paid";
+            if (settled > 0 && balance <= 0.005m) return "Settled";
             if (paid > 0) return "Partially Paid";
+            if (settled > 0) return "Partially Settled";
             if (IsDraft) return "Draft";
             if (dueDate.Date < today.Date && balance > 0.005m) return "Overdue";
             return "Open";

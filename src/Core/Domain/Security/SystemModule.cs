@@ -22,6 +22,21 @@ namespace Core.Domain.Security
         public const string SalesReceiptsView = "sales.receipts.view";
         public const string SalesReceiptsCreate = "sales.receipts.create";
         public const string SalesQuotationsView = "sales.quotations.view";
+        public const string SalesCreditsView = "sales.credits.view";
+        public const string SalesCreditsCreate = "sales.credits.create";
+        public const string SalesCreditsPost = "sales.credits.post";
+        public const string SalesCreditsReverse = "sales.credits.reverse";
+        public const string SalesReturnsView = "sales.returns.view";
+        public const string SalesReturnsPost = "sales.returns.post";
+        public const string SalesReturnsReverse = "sales.returns.reverse";
+        public const string SalesRefundsView = "sales.refunds.view";
+        public const string SalesRefundsCreate = "sales.refunds.create";
+        public const string SalesRefundsPost = "sales.refunds.post";
+        public const string SalesRefundsReverse = "sales.refunds.reverse";
+        public const string SalesWriteOffsView = "sales.write_offs.view";
+        public const string SalesWriteOffsCreate = "sales.write_offs.create";
+        public const string SalesWriteOffsPost = "sales.write_offs.post";
+        public const string SalesWriteOffsReverse = "sales.write_offs.reverse";
 
         // Financials
         public const string FinancialsAccountsView = "financials.accounts.view";
@@ -30,6 +45,8 @@ namespace Core.Domain.Security
         public const string FinancialsJournalCreate = "financials.journal.create";
         public const string FinancialsJournalPost = "financials.journal.post";
         public const string FinancialsPeriodsClose = "financials.periods.close";
+        public const string FinancialsSettlementsApply = "financials.settlements.apply";
+        public const string FinancialsSettlementsReverse = "financials.settlements.reverse";
 
         // Banking (#413)
         public const string BankingAccountsView = "banking.accounts.view";
@@ -46,6 +63,21 @@ namespace Core.Domain.Security
         public const string PurchasesBillsCreate = "purchases.bills.create";
         public const string PurchasesBillsPost = "purchases.bills.post";
         public const string PurchasesPaymentsCreate = "purchases.payments.create";
+        public const string PurchasesCreditsView = "purchases.credits.view";
+        public const string PurchasesCreditsCreate = "purchases.credits.create";
+        public const string PurchasesCreditsPost = "purchases.credits.post";
+        public const string PurchasesCreditsReverse = "purchases.credits.reverse";
+        public const string PurchasesReturnsView = "purchases.returns.view";
+        public const string PurchasesReturnsPost = "purchases.returns.post";
+        public const string PurchasesReturnsReverse = "purchases.returns.reverse";
+        public const string PurchasesAdvancesView = "purchases.advances.view";
+        public const string PurchasesAdvancesCreate = "purchases.advances.create";
+        public const string PurchasesAdvancesPost = "purchases.advances.post";
+        public const string PurchasesAdvancesReverse = "purchases.advances.reverse";
+        public const string PurchasesRefundsView = "purchases.refunds.view";
+        public const string PurchasesRefundsCreate = "purchases.refunds.create";
+        public const string PurchasesRefundsPost = "purchases.refunds.post";
+        public const string PurchasesRefundsReverse = "purchases.refunds.reverse";
 
         // Inventory
         public const string InventoryItemsView = "inventory.items.view";

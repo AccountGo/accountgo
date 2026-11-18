@@ -492,6 +492,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("CreditsReturnsRefundsEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Currency")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1663,10 +1666,19 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BadDebtRecoveryAccountId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("CustomerCreditLiabilityAccountId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("GoodsReceiptNoteClearingAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ImpairmentExpenseAccountId")
                         .HasColumnType("integer");
 
                     b.Property<int?>("IncomeSummaryAccountId")
@@ -1681,17 +1693,41 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int?>("PurchaseDiscountAccountId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ReceivableLossAllowanceAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ReturnValuationDifferenceAccountId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("SalesDiscountAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SalesReturnsAllowancesAccountId")
                         .HasColumnType("integer");
 
                     b.Property<int?>("ShippingChargeAccountId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("SupplierAdvanceAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SupplierCreditAssetAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SupplierReturnClearingAccountId")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("BadDebtRecoveryAccountId");
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("CustomerCreditLiabilityAccountId");
+
                     b.HasIndex("GoodsReceiptNoteClearingAccountId");
+
+                    b.HasIndex("ImpairmentExpenseAccountId");
 
                     b.HasIndex("IncomeSummaryAccountId");
 
@@ -1701,9 +1737,21 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.HasIndex("PurchaseDiscountAccountId");
 
+                    b.HasIndex("ReceivableLossAllowanceAccountId");
+
+                    b.HasIndex("ReturnValuationDifferenceAccountId");
+
                     b.HasIndex("SalesDiscountAccountId");
 
+                    b.HasIndex("SalesReturnsAllowancesAccountId");
+
                     b.HasIndex("ShippingChargeAccountId");
+
+                    b.HasIndex("SupplierAdvanceAccountId");
+
+                    b.HasIndex("SupplierCreditAssetAccountId");
+
+                    b.HasIndex("SupplierReturnClearingAccountId");
 
                     b.ToTable("GeneralLedgerSetting");
                 });
@@ -1900,6 +1948,353 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasIndex("PartnerId");
 
                     b.ToTable("PartnerShares", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.PartyRefund", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<int>("CurrencyPrecision")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ExternalReference")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("No")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("\"No\" IS NOT NULL");
+
+                    b.ToTable("PartyRefund");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.PartyRefundAllocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CustomerCreditNoteId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PartyRefundId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SourceAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SourceType")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SupplierAdvanceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SupplierCreditNoteId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerCreditNoteId");
+
+                    b.HasIndex("PartyRefundId");
+
+                    b.HasIndex("SupplierAdvanceId");
+
+                    b.HasIndex("SupplierCreditNoteId");
+
+                    b.ToTable("PartyRefundAllocation");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.SettlementApplication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<int?>("CustomerCreditNoteId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DestinationAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DestinationType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("EffectiveDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsReversed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("PurchaseInvoiceHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SalesInvoiceHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SourceAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SourceType")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SupplierAdvanceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SupplierCreditNoteId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerCreditNoteId");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PurchaseInvoiceHeaderId");
+
+                    b.HasIndex("SalesInvoiceHeaderId");
+
+                    b.HasIndex("SupplierAdvanceId");
+
+                    b.HasIndex("SupplierCreditNoteId");
+
+                    b.HasIndex("CompanyId", "PurchaseInvoiceHeaderId");
+
+                    b.HasIndex("CompanyId", "SalesInvoiceHeaderId");
+
+                    b.ToTable("SettlementApplication");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.SettlementApplicationReversal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("ReversalDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("SettlementApplicationId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("SettlementApplicationId")
+                        .IsUnique();
+
+                    b.ToTable("SettlementApplicationReversal");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.SettlementCommandReceipt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ResultEntityId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResultEntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "OperationKey", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SettlementCommandReceipt_Company_Op_Key");
+
+                    b.ToTable("SettlementCommandReceipt");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.YearEndCloseEvidence", b =>
@@ -2683,6 +3078,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal>("AdvanceAppliedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -2694,6 +3092,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("CreditedAmount")
+                        .HasColumnType("decimal(18, 4)");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp without time zone");
@@ -2731,6 +3132,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<string>("VendorInvoiceNo")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
 
                     b.Property<int?>("VoidGeneralLedgerHeaderId")
                         .HasColumnType("integer");
@@ -2998,6 +3403,525 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasIndex("PurchaseReceiptHeaderId");
 
                     b.ToTable("PurchaseReceiptLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierAdvance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("AppliedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<int>("CurrencyPrecision")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsRefundable")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("No")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("PurchaseOrderHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ReferenceNo")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<decimal>("RefundedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("SupplierAdvanceAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("VendorId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PurchaseOrderHeaderId");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("\"No\" IS NOT NULL");
+
+                    b.ToTable("SupplierAdvance");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierCreditNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AppliedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("BillFromJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<int>("CurrencyPrecision")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("EffectiveDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsStandalone")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("No")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("PayableAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("RefundedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("ReturnClearingAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("SourcePurchaseInvoiceHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("SupplierCreditAssetAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("ValuationDifferenceAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("VendorCreditNo")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("VendorId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PayableAccountId");
+
+                    b.HasIndex("ReturnClearingAccountId");
+
+                    b.HasIndex("SourcePurchaseInvoiceHeaderId");
+
+                    b.HasIndex("SupplierCreditAssetAccountId");
+
+                    b.HasIndex("ValuationDifferenceAccountId");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("\"No\" IS NOT NULL");
+
+                    b.ToTable("SupplierCreditNote");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierCreditNoteLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("ExpenseOrAssetAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MatchedReturnDispatchId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("SourcePurchaseInvoiceLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("SupplierCreditNoteId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TaxAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("TaxId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TaxRateSnapshot")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<bool>("TaxRecoverableSnapshot")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseOrAssetAccountId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("MatchedReturnDispatchId");
+
+                    b.HasIndex("SourcePurchaseInvoiceLineId");
+
+                    b.HasIndex("SupplierCreditNoteId");
+
+                    b.HasIndex("TaxAccountId");
+
+                    b.HasIndex("TaxId");
+
+                    b.ToTable("SupplierCreditNoteLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierReturnDispatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ControlTransferDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("DispatchDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("HasControlTransferred")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("No")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("PurchaseInvoiceHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PurchaseReceiptHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("ReturnClearingAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SupplierCreditNoteId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("VendorId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PurchaseInvoiceHeaderId");
+
+                    b.HasIndex("PurchaseReceiptHeaderId");
+
+                    b.HasIndex("ReturnClearingAccountId");
+
+                    b.HasIndex("SupplierCreditNoteId");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("\"No\" IS NOT NULL");
+
+                    b.ToTable("SupplierReturnDispatch");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierReturnDispatchLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("CarryingUnitCost")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("InventoryAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("InventoryControlJournalId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PurchaseInvoiceLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PurchaseReceiptLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("SupplierReturnDispatchId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalCarryingCost")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryAccountId");
+
+                    b.HasIndex("InventoryControlJournalId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("PurchaseInvoiceLineId");
+
+                    b.HasIndex("PurchaseReceiptLineId");
+
+                    b.HasIndex("SupplierReturnDispatchId");
+
+                    b.ToTable("SupplierReturnDispatchLine");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.Vendor", b =>
@@ -3540,6 +4464,495 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("CustomerAllocation");
                 });
 
+            modelBuilder.Entity("Core.Domain.Sales.CustomerCreditNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AppliedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("BillToJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<int>("CurrencyPrecision")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CustomerCreditLiabilityAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("No")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("ReceivableAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("RefundedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<bool>("ReturnGoodsWithoutRestock")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("SalesReturnsAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SellerJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourceReference")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("SourceSalesInvoiceHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerCreditLiabilityAccountId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("ReceivableAccountId");
+
+                    b.HasIndex("SalesReturnsAccountId");
+
+                    b.HasIndex("SourceSalesInvoiceHeaderId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("\"No\" IS NOT NULL");
+
+                    b.ToTable("CustomerCreditNote");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.CustomerCreditNoteLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CustomerCreditNoteId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<bool>("IsShippingLine")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("ItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("SourceSalesInvoiceLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("TaxAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("TaxId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("TaxInclusiveSnapshot")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("TaxRateSnapshot")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerCreditNoteId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("SourceSalesInvoiceLineId");
+
+                    b.HasIndex("TaxAccountId");
+
+                    b.HasIndex("TaxId");
+
+                    b.ToTable("CustomerCreditNoteLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.CustomerReturnReceipt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CustomerCreditNoteId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("No")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("ReceiptDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("SalesInvoiceHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerCreditNoteId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("SalesInvoiceHeaderId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("\"No\" IS NOT NULL");
+
+                    b.ToTable("CustomerReturnReceipt");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.CustomerReturnReceiptLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CogsAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Condition")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CustomerReturnReceiptId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("InventoryAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("InventoryControlJournalId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("OriginalUnitCost")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("RecoverableUnitCost")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("SalesInvoiceLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalRestoredCost")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CogsAccountId");
+
+                    b.HasIndex("CustomerReturnReceiptId");
+
+                    b.HasIndex("InventoryAccountId");
+
+                    b.HasIndex("InventoryControlJournalId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("SalesInvoiceLineId");
+
+                    b.ToTable("CustomerReturnReceiptLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.ReceivableWriteOff", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AllowanceAllocatedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("CollectionEvidence")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ImpairmentExpenseAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ImpairmentShortfallAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("LossAllowanceAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("No")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PolicySnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("ReceivableAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("RecoveredAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("SalesInvoiceHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("SalesInvoiceHeaderId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("\"No\" IS NOT NULL");
+
+                    b.ToTable("ReceivableWriteOff");
+                });
+
             modelBuilder.Entity("Core.Domain.Sales.SalesDeliveryHeader", b =>
                 {
                     b.Property<int>("Id")
@@ -3708,6 +5121,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("CreditedAmount")
+                        .HasColumnType("decimal(18, 4)");
+
                     b.Property<int>("CustomerId")
                         .HasColumnType("integer");
 
@@ -3735,6 +5151,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ReceivableAccountId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("text");
 
@@ -3747,14 +5166,23 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int?>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
                     b.Property<int?>("VoidGeneralLedgerHeaderId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("WrittenOffAmount")
+                        .HasColumnType("decimal(18, 4)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("ReceivableAccountId");
 
                     b.HasIndex("VoidGeneralLedgerHeaderId");
 
@@ -4092,6 +5520,95 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasIndex("SalesReceiptHeaderId");
 
                     b.ToTable("SalesReceiptLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.WriteOffRecovery", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("BadDebtRecoveryAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BankId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("No")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("ReceivableWriteOffId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReferenceNo")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("ReceivableWriteOffId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("\"No\" IS NOT NULL");
+
+                    b.ToTable("WriteOffRecovery");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityGroup", b =>
@@ -5155,15 +6672,30 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerSetting", b =>
                 {
+                    b.HasOne("Core.Domain.Financials.Account", "BadDebtRecoveryAccount")
+                        .WithMany()
+                        .HasForeignKey("BadDebtRecoveryAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Core.Domain.Company", "Company")
                         .WithMany()
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Core.Domain.Financials.Account", "CustomerCreditLiabilityAccount")
+                        .WithMany()
+                        .HasForeignKey("CustomerCreditLiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Core.Domain.Financials.Account", "GoodsReceiptNoteClearingAccount")
                         .WithMany()
                         .HasForeignKey("GoodsReceiptNoteClearingAccountId");
+
+                    b.HasOne("Core.Domain.Financials.Account", "ImpairmentExpenseAccount")
+                        .WithMany()
+                        .HasForeignKey("ImpairmentExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Core.Domain.Financials.Account", "IncomeSummaryAccount")
                         .WithMany()
@@ -5181,17 +6713,53 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .WithMany()
                         .HasForeignKey("PurchaseDiscountAccountId");
 
+                    b.HasOne("Core.Domain.Financials.Account", "ReceivableLossAllowanceAccount")
+                        .WithMany()
+                        .HasForeignKey("ReceivableLossAllowanceAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "ReturnValuationDifferenceAccount")
+                        .WithMany()
+                        .HasForeignKey("ReturnValuationDifferenceAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Core.Domain.Financials.Account", "SalesDiscountAccount")
                         .WithMany()
                         .HasForeignKey("SalesDiscountAccountId");
+
+                    b.HasOne("Core.Domain.Financials.Account", "SalesReturnsAllowancesAccount")
+                        .WithMany()
+                        .HasForeignKey("SalesReturnsAllowancesAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Core.Domain.Financials.Account", "ShippingChargeAccount")
                         .WithMany()
                         .HasForeignKey("ShippingChargeAccountId");
 
+                    b.HasOne("Core.Domain.Financials.Account", "SupplierAdvanceAccount")
+                        .WithMany()
+                        .HasForeignKey("SupplierAdvanceAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "SupplierCreditAssetAccount")
+                        .WithMany()
+                        .HasForeignKey("SupplierCreditAssetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "SupplierReturnClearingAccount")
+                        .WithMany()
+                        .HasForeignKey("SupplierReturnClearingAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("BadDebtRecoveryAccount");
+
                     b.Navigation("Company");
 
+                    b.Navigation("CustomerCreditLiabilityAccount");
+
                     b.Navigation("GoodsReceiptNoteClearingAccount");
+
+                    b.Navigation("ImpairmentExpenseAccount");
 
                     b.Navigation("IncomeSummaryAccount");
 
@@ -5201,9 +6769,21 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.Navigation("PurchaseDiscountAccount");
 
+                    b.Navigation("ReceivableLossAllowanceAccount");
+
+                    b.Navigation("ReturnValuationDifferenceAccount");
+
                     b.Navigation("SalesDiscountAccount");
 
+                    b.Navigation("SalesReturnsAllowancesAccount");
+
                     b.Navigation("ShippingChargeAccount");
+
+                    b.Navigation("SupplierAdvanceAccount");
+
+                    b.Navigation("SupplierCreditAssetAccount");
+
+                    b.Navigation("SupplierReturnClearingAccount");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.JournalEntryHeader", b =>
@@ -5278,6 +6858,142 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasForeignKey("PartnerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.PartyRefund", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Bank");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("Vendor");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.PartyRefundAllocation", b =>
+                {
+                    b.HasOne("Core.Domain.Sales.CustomerCreditNote", "CustomerCreditNote")
+                        .WithMany()
+                        .HasForeignKey("CustomerCreditNoteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.PartyRefund", "PartyRefund")
+                        .WithMany("Allocations")
+                        .HasForeignKey("PartyRefundId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Purchases.SupplierAdvance", "SupplierAdvance")
+                        .WithMany()
+                        .HasForeignKey("SupplierAdvanceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.SupplierCreditNote", "SupplierCreditNote")
+                        .WithMany()
+                        .HasForeignKey("SupplierCreditNoteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CustomerCreditNote");
+
+                    b.Navigation("PartyRefund");
+
+                    b.Navigation("SupplierAdvance");
+
+                    b.Navigation("SupplierCreditNote");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.SettlementApplication", b =>
+                {
+                    b.HasOne("Core.Domain.Sales.CustomerCreditNote", "CustomerCreditNote")
+                        .WithMany()
+                        .HasForeignKey("CustomerCreditNoteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Purchases.PurchaseInvoiceHeader", "PurchaseInvoiceHeader")
+                        .WithMany()
+                        .HasForeignKey("PurchaseInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoiceHeader")
+                        .WithMany()
+                        .HasForeignKey("SalesInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.SupplierAdvance", "SupplierAdvance")
+                        .WithMany()
+                        .HasForeignKey("SupplierAdvanceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.SupplierCreditNote", "SupplierCreditNote")
+                        .WithMany()
+                        .HasForeignKey("SupplierCreditNoteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CustomerCreditNote");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("PurchaseInvoiceHeader");
+
+                    b.Navigation("SalesInvoiceHeader");
+
+                    b.Navigation("SupplierAdvance");
+
+                    b.Navigation("SupplierCreditNote");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.SettlementApplicationReversal", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.SettlementApplication", "SettlementApplication")
+                        .WithOne("Reversal")
+                        .HasForeignKey("Core.Domain.Financials.SettlementApplicationReversal", "SettlementApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("SettlementApplication");
                 });
 
             modelBuilder.Entity("Core.Domain.Items.InventoryAdjustment", b =>
@@ -5591,6 +7307,259 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("PurchaseReceiptHeader");
                 });
 
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierAdvance", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.PurchaseOrderHeader", "PurchaseOrderHeader")
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Bank");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("PurchaseOrderHeader");
+
+                    b.Navigation("Vendor");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierCreditNote", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "PayableAccount")
+                        .WithMany()
+                        .HasForeignKey("PayableAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "ReturnClearingAccount")
+                        .WithMany()
+                        .HasForeignKey("ReturnClearingAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.PurchaseInvoiceHeader", "SourcePurchaseInvoiceHeader")
+                        .WithMany()
+                        .HasForeignKey("SourcePurchaseInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "SupplierCreditAssetAccount")
+                        .WithMany()
+                        .HasForeignKey("SupplierCreditAssetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "ValuationDifferenceAccount")
+                        .WithMany()
+                        .HasForeignKey("ValuationDifferenceAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("PayableAccount");
+
+                    b.Navigation("ReturnClearingAccount");
+
+                    b.Navigation("SourcePurchaseInvoiceHeader");
+
+                    b.Navigation("SupplierCreditAssetAccount");
+
+                    b.Navigation("ValuationDifferenceAccount");
+
+                    b.Navigation("Vendor");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierCreditNoteLine", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Account", "ExpenseOrAssetAccount")
+                        .WithMany()
+                        .HasForeignKey("ExpenseOrAssetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Items.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.SupplierReturnDispatch", "MatchedReturnDispatch")
+                        .WithMany()
+                        .HasForeignKey("MatchedReturnDispatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.PurchaseInvoiceLine", "SourcePurchaseInvoiceLine")
+                        .WithMany()
+                        .HasForeignKey("SourcePurchaseInvoiceLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.SupplierCreditNote", "SupplierCreditNote")
+                        .WithMany("Lines")
+                        .HasForeignKey("SupplierCreditNoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.Account", "TaxAccount")
+                        .WithMany()
+                        .HasForeignKey("TaxAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.TaxSystem.Tax", "Tax")
+                        .WithMany()
+                        .HasForeignKey("TaxId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ExpenseOrAssetAccount");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("MatchedReturnDispatch");
+
+                    b.Navigation("SourcePurchaseInvoiceLine");
+
+                    b.Navigation("SupplierCreditNote");
+
+                    b.Navigation("Tax");
+
+                    b.Navigation("TaxAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierReturnDispatch", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.PurchaseInvoiceHeader", "PurchaseInvoiceHeader")
+                        .WithMany()
+                        .HasForeignKey("PurchaseInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.PurchaseReceiptHeader", "PurchaseReceiptHeader")
+                        .WithMany()
+                        .HasForeignKey("PurchaseReceiptHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "ReturnClearingAccount")
+                        .WithMany()
+                        .HasForeignKey("ReturnClearingAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.SupplierCreditNote", "SupplierCreditNote")
+                        .WithMany()
+                        .HasForeignKey("SupplierCreditNoteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("PurchaseInvoiceHeader");
+
+                    b.Navigation("PurchaseReceiptHeader");
+
+                    b.Navigation("ReturnClearingAccount");
+
+                    b.Navigation("SupplierCreditNote");
+
+                    b.Navigation("Vendor");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierReturnDispatchLine", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Account", "InventoryAccount")
+                        .WithMany()
+                        .HasForeignKey("InventoryAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Items.InventoryControlJournal", "InventoryControlJournal")
+                        .WithMany()
+                        .HasForeignKey("InventoryControlJournalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Items.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Purchases.PurchaseInvoiceLine", "PurchaseInvoiceLine")
+                        .WithMany()
+                        .HasForeignKey("PurchaseInvoiceLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.PurchaseReceiptLine", "PurchaseReceiptLine")
+                        .WithMany()
+                        .HasForeignKey("PurchaseReceiptLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Purchases.SupplierReturnDispatch", "SupplierReturnDispatch")
+                        .WithMany("Lines")
+                        .HasForeignKey("SupplierReturnDispatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InventoryAccount");
+
+                    b.Navigation("InventoryControlJournal");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("PurchaseInvoiceLine");
+
+                    b.Navigation("PurchaseReceiptLine");
+
+                    b.Navigation("SupplierReturnDispatch");
+                });
+
             modelBuilder.Entity("Core.Domain.Purchases.Vendor", b =>
                 {
                     b.HasOne("Core.Domain.Financials.Account", "AccountsPayableAccount")
@@ -5837,6 +7806,219 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("SalesReceiptHeader");
                 });
 
+            modelBuilder.Entity("Core.Domain.Sales.CustomerCreditNote", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Account", "CustomerCreditLiabilityAccount")
+                        .WithMany()
+                        .HasForeignKey("CustomerCreditLiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "ReceivableAccount")
+                        .WithMany()
+                        .HasForeignKey("ReceivableAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "SalesReturnsAccount")
+                        .WithMany()
+                        .HasForeignKey("SalesReturnsAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SourceSalesInvoiceHeader")
+                        .WithMany()
+                        .HasForeignKey("SourceSalesInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerCreditLiabilityAccount");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("ReceivableAccount");
+
+                    b.Navigation("SalesReturnsAccount");
+
+                    b.Navigation("SourceSalesInvoiceHeader");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.CustomerCreditNoteLine", b =>
+                {
+                    b.HasOne("Core.Domain.Sales.CustomerCreditNote", "CustomerCreditNote")
+                        .WithMany("Lines")
+                        .HasForeignKey("CustomerCreditNoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Items.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.SalesInvoiceLine", "SourceSalesInvoiceLine")
+                        .WithMany()
+                        .HasForeignKey("SourceSalesInvoiceLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Financials.Account", "TaxAccount")
+                        .WithMany()
+                        .HasForeignKey("TaxAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.TaxSystem.Tax", "Tax")
+                        .WithMany()
+                        .HasForeignKey("TaxId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CustomerCreditNote");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("SourceSalesInvoiceLine");
+
+                    b.Navigation("Tax");
+
+                    b.Navigation("TaxAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.CustomerReturnReceipt", b =>
+                {
+                    b.HasOne("Core.Domain.Sales.CustomerCreditNote", "CustomerCreditNote")
+                        .WithMany()
+                        .HasForeignKey("CustomerCreditNoteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoiceHeader")
+                        .WithMany()
+                        .HasForeignKey("SalesInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerCreditNote");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("SalesInvoiceHeader");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.CustomerReturnReceiptLine", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Account", "CogsAccount")
+                        .WithMany()
+                        .HasForeignKey("CogsAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.CustomerReturnReceipt", "CustomerReturnReceipt")
+                        .WithMany("Lines")
+                        .HasForeignKey("CustomerReturnReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.Account", "InventoryAccount")
+                        .WithMany()
+                        .HasForeignKey("InventoryAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Items.InventoryControlJournal", "InventoryControlJournal")
+                        .WithMany()
+                        .HasForeignKey("InventoryControlJournalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Items.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Sales.SalesInvoiceLine", "SalesInvoiceLine")
+                        .WithMany()
+                        .HasForeignKey("SalesInvoiceLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CogsAccount");
+
+                    b.Navigation("CustomerReturnReceipt");
+
+                    b.Navigation("InventoryAccount");
+
+                    b.Navigation("InventoryControlJournal");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("SalesInvoiceLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.ReceivableWriteOff", b =>
+                {
+                    b.HasOne("Core.Domain.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoiceHeader")
+                        .WithMany()
+                        .HasForeignKey("SalesInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("SalesInvoiceHeader");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
+                });
+
             modelBuilder.Entity("Core.Domain.Sales.SalesDeliveryHeader", b =>
                 {
                     b.HasOne("Core.Domain.Sales.Customer", "Customer")
@@ -5908,6 +8090,11 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .WithMany()
                         .HasForeignKey("GeneralLedgerHeaderId");
 
+                    b.HasOne("Core.Domain.Financials.Account", "ReceivableAccount")
+                        .WithMany()
+                        .HasForeignKey("ReceivableAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
                         .WithMany()
                         .HasForeignKey("VoidGeneralLedgerHeaderId");
@@ -5915,6 +8102,8 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Customer");
 
                     b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("ReceivableAccount");
 
                     b.Navigation("VoidGeneralLedgerHeader");
                 });
@@ -6108,6 +8297,39 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("SalesInvoiceLine");
 
                     b.Navigation("SalesReceiptHeader");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.WriteOffRecovery", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.Bank", "Bank")
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Core.Domain.Sales.ReceivableWriteOff", "ReceivableWriteOff")
+                        .WithMany("Recoveries")
+                        .HasForeignKey("ReceivableWriteOffId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Bank");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("ReceivableWriteOff");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityPermission", b =>
@@ -6373,6 +8595,16 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("JournalEntryLines");
                 });
 
+            modelBuilder.Entity("Core.Domain.Financials.PartyRefund", b =>
+                {
+                    b.Navigation("Allocations");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.SettlementApplication", b =>
+                {
+                    b.Navigation("Reversal");
+                });
+
             modelBuilder.Entity("Core.Domain.Items.Item", b =>
                 {
                     b.Navigation("InventoryAdjustments");
@@ -6422,6 +8654,16 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("PurchaseReceiptLines");
                 });
 
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierCreditNote", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.SupplierReturnDispatch", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("Core.Domain.Purchases.Vendor", b =>
                 {
                     b.Navigation("PurchaseInvoices");
@@ -6453,6 +8695,21 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("SalesOrders");
 
                     b.Navigation("SalesReceipts");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.CustomerCreditNote", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.CustomerReturnReceipt", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.ReceivableWriteOff", b =>
+                {
+                    b.Navigation("Recoveries");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesDeliveryHeader", b =>

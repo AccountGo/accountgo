@@ -835,6 +835,417 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureRecurringScheduleTables(connection);
             EnsurePersonalBooksTables(connection);
             EnsureLinkedEntryPairs(connection);
+            EnsureCreditsReturnsRefundsSchema(connection);
+        }
+
+        private static void EnsureCreditsReturnsRefundsSchema(DbConnection connection)
+        {
+            AddColumnIfMissing(connection, "CompanySetting", "CreditsReturnsRefundsEnabled", "INTEGER NOT NULL DEFAULT 0");
+
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "CustomerCreditLiabilityAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "SalesReturnsAllowancesAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "SupplierCreditAssetAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "SupplierAdvanceAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "SupplierReturnClearingAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "ReturnValuationDifferenceAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "ReceivableLossAllowanceAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "ImpairmentExpenseAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "GeneralLedgerSetting", "BadDebtRecoveryAccountId", "INTEGER NULL");
+
+            AddColumnIfMissing(connection, "SalesInvoiceHeader", "ReceivableAccountId", "INTEGER NULL");
+            AddColumnIfMissing(connection, "SalesInvoiceHeader", "CreditedAmount", "TEXT NOT NULL DEFAULT '0'");
+            AddColumnIfMissing(connection, "SalesInvoiceHeader", "WrittenOffAmount", "TEXT NOT NULL DEFAULT '0'");
+            AddColumnIfMissing(connection, "SalesInvoiceHeader", "Version", "INTEGER NOT NULL DEFAULT 0");
+
+            AddColumnIfMissing(connection, "PurchaseInvoiceHeader", "CreditedAmount", "TEXT NOT NULL DEFAULT '0'");
+            AddColumnIfMissing(connection, "PurchaseInvoiceHeader", "AdvanceAppliedAmount", "TEXT NOT NULL DEFAULT '0'");
+            AddColumnIfMissing(connection, "PurchaseInvoiceHeader", "Version", "INTEGER NOT NULL DEFAULT 0");
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS ""CustomerCreditNote"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""CustomerId"" INTEGER NOT NULL,
+                    ""SourceSalesInvoiceHeaderId"" INTEGER NULL,
+                    ""No"" TEXT NULL,
+                    ""Date"" TEXT NOT NULL,
+                    ""CurrencyCode"" TEXT NOT NULL DEFAULT 'USD',
+                    ""CurrencyPrecision"" INTEGER NOT NULL DEFAULT 2,
+                    ""Kind"" INTEGER NOT NULL DEFAULT 1,
+                    ""ReturnGoodsWithoutRestock"" INTEGER NOT NULL DEFAULT 0,
+                    ""Reason"" TEXT NOT NULL DEFAULT '',
+                    ""SourceReference"" TEXT NULL,
+                    ""EvidenceReference"" TEXT NULL,
+                    ""SellerJson"" TEXT NULL,
+                    ""BillToJson"" TEXT NULL,
+                    ""CustomerCreditLiabilityAccountId"" INTEGER NULL,
+                    ""SalesReturnsAccountId"" INTEGER NULL,
+                    ""ReceivableAccountId"" INTEGER NULL,
+                    ""Subtotal"" TEXT NOT NULL DEFAULT '0',
+                    ""TaxAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""TotalAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""AppliedAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""RefundedAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""Status"" INTEGER NOT NULL DEFAULT 0,
+                    ""GeneralLedgerHeaderId"" INTEGER NULL,
+                    ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                    ""SubmittedBy"" TEXT NULL,
+                    ""SubmittedAtUtc"" TEXT NULL,
+                    ""ReviewedBy"" TEXT NULL,
+                    ""ReviewedAtUtc"" TEXT NULL,
+                    ""PostedBy"" TEXT NULL,
+                    ""PostedAtUtc"" TEXT NULL,
+                    ""ReversedBy"" TEXT NULL,
+                    ""ReversedAtUtc"" TEXT NULL,
+                    ""ReversalReason"" TEXT NULL,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CustomerCreditNote_CompanyId_No"" ON ""CustomerCreditNote"" (""CompanyId"", ""No"") WHERE ""No"" IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS ""CustomerCreditNoteLine"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""CustomerCreditNoteId"" INTEGER NOT NULL,
+                    ""SourceSalesInvoiceLineId"" INTEGER NULL,
+                    ""ItemId"" INTEGER NULL,
+                    ""TaxId"" INTEGER NULL,
+                    ""TaxAccountId"" INTEGER NULL,
+                    ""TaxRateSnapshot"" TEXT NOT NULL DEFAULT '0',
+                    ""TaxInclusiveSnapshot"" INTEGER NOT NULL DEFAULT 0,
+                    ""IsShippingLine"" INTEGER NOT NULL DEFAULT 0,
+                    ""Description"" TEXT NOT NULL DEFAULT '',
+                    ""Quantity"" TEXT NOT NULL DEFAULT '0',
+                    ""UnitPrice"" TEXT NOT NULL DEFAULT '0',
+                    ""DiscountAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""Subtotal"" TEXT NOT NULL DEFAULT '0',
+                    ""TaxAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""TotalAmount"" TEXT NOT NULL DEFAULT '0'
+                );
+
+                CREATE TABLE IF NOT EXISTS ""SupplierCreditNote"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""VendorId"" INTEGER NOT NULL,
+                    ""SourcePurchaseInvoiceHeaderId"" INTEGER NULL,
+                    ""No"" TEXT NULL,
+                    ""VendorCreditNo"" TEXT NOT NULL DEFAULT '',
+                    ""Date"" TEXT NOT NULL,
+                    ""EffectiveDate"" TEXT NOT NULL,
+                    ""CurrencyCode"" TEXT NOT NULL DEFAULT 'USD',
+                    ""CurrencyPrecision"" INTEGER NOT NULL DEFAULT 2,
+                    ""Kind"" INTEGER NOT NULL DEFAULT 1,
+                    ""IsStandalone"" INTEGER NOT NULL DEFAULT 0,
+                    ""Reason"" TEXT NOT NULL DEFAULT '',
+                    ""EvidenceReference"" TEXT NULL,
+                    ""BillFromJson"" TEXT NULL,
+                    ""SupplierCreditAssetAccountId"" INTEGER NULL,
+                    ""PayableAccountId"" INTEGER NULL,
+                    ""ReturnClearingAccountId"" INTEGER NULL,
+                    ""ValuationDifferenceAccountId"" INTEGER NULL,
+                    ""Subtotal"" TEXT NOT NULL DEFAULT '0',
+                    ""TaxAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""TotalAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""AppliedAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""RefundedAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""Status"" INTEGER NOT NULL DEFAULT 0,
+                    ""GeneralLedgerHeaderId"" INTEGER NULL,
+                    ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                    ""SubmittedBy"" TEXT NULL,
+                    ""SubmittedAtUtc"" TEXT NULL,
+                    ""ReviewedBy"" TEXT NULL,
+                    ""ReviewedAtUtc"" TEXT NULL,
+                    ""PostedBy"" TEXT NULL,
+                    ""PostedAtUtc"" TEXT NULL,
+                    ""ReversedBy"" TEXT NULL,
+                    ""ReversedAtUtc"" TEXT NULL,
+                    ""ReversalReason"" TEXT NULL,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SupplierCreditNote_CompanyId_No"" ON ""SupplierCreditNote"" (""CompanyId"", ""No"") WHERE ""No"" IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS ""SupplierCreditNoteLine"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""SupplierCreditNoteId"" INTEGER NOT NULL,
+                    ""SourcePurchaseInvoiceLineId"" INTEGER NULL,
+                    ""MatchedReturnDispatchId"" INTEGER NULL,
+                    ""ItemId"" INTEGER NULL,
+                    ""ExpenseOrAssetAccountId"" INTEGER NULL,
+                    ""TaxId"" INTEGER NULL,
+                    ""TaxAccountId"" INTEGER NULL,
+                    ""TaxRateSnapshot"" TEXT NOT NULL DEFAULT '0',
+                    ""TaxRecoverableSnapshot"" INTEGER NOT NULL DEFAULT 1,
+                    ""Description"" TEXT NOT NULL DEFAULT '',
+                    ""Quantity"" TEXT NOT NULL DEFAULT '0',
+                    ""UnitCost"" TEXT NOT NULL DEFAULT '0',
+                    ""Subtotal"" TEXT NOT NULL DEFAULT '0',
+                    ""TaxAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""TotalAmount"" TEXT NOT NULL DEFAULT '0'
+                );
+
+                CREATE TABLE IF NOT EXISTS ""SupplierAdvance"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""VendorId"" INTEGER NOT NULL,
+                    ""PurchaseOrderHeaderId"" INTEGER NULL,
+                    ""No"" TEXT NULL,
+                    ""Date"" TEXT NOT NULL,
+                    ""CurrencyCode"" TEXT NOT NULL DEFAULT 'USD',
+                    ""CurrencyPrecision"" INTEGER NOT NULL DEFAULT 2,
+                    ""Amount"" TEXT NOT NULL DEFAULT '0',
+                    ""AppliedAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""RefundedAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""BankId"" INTEGER NOT NULL,
+                    ""BankAccountId"" INTEGER NOT NULL,
+                    ""SupplierAdvanceAccountId"" INTEGER NOT NULL,
+                    ""Purpose"" TEXT NOT NULL DEFAULT '',
+                    ""IsRefundable"" INTEGER NOT NULL DEFAULT 1,
+                    ""ReferenceNo"" TEXT NULL,
+                    ""EvidenceReference"" TEXT NULL,
+                    ""Status"" INTEGER NOT NULL DEFAULT 0,
+                    ""GeneralLedgerHeaderId"" INTEGER NULL,
+                    ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                    ""SubmittedBy"" TEXT NULL,
+                    ""SubmittedAtUtc"" TEXT NULL,
+                    ""ReviewedBy"" TEXT NULL,
+                    ""ReviewedAtUtc"" TEXT NULL,
+                    ""PostedBy"" TEXT NULL,
+                    ""PostedAtUtc"" TEXT NULL,
+                    ""ReversedBy"" TEXT NULL,
+                    ""ReversedAtUtc"" TEXT NULL,
+                    ""ReversalReason"" TEXT NULL,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SupplierAdvance_CompanyId_No"" ON ""SupplierAdvance"" (""CompanyId"", ""No"") WHERE ""No"" IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS ""SettlementApplication"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""SourceType"" INTEGER NOT NULL,
+                    ""CustomerCreditNoteId"" INTEGER NULL,
+                    ""SupplierCreditNoteId"" INTEGER NULL,
+                    ""SupplierAdvanceId"" INTEGER NULL,
+                    ""DestinationType"" INTEGER NOT NULL,
+                    ""SalesInvoiceHeaderId"" INTEGER NULL,
+                    ""PurchaseInvoiceHeaderId"" INTEGER NULL,
+                    ""CurrencyCode"" TEXT NOT NULL DEFAULT 'USD',
+                    ""Amount"" TEXT NOT NULL DEFAULT '0',
+                    ""EffectiveDate"" TEXT NOT NULL,
+                    ""SourceAccountId"" INTEGER NOT NULL,
+                    ""DestinationAccountId"" INTEGER NOT NULL,
+                    ""GeneralLedgerHeaderId"" INTEGER NOT NULL,
+                    ""CreatedBy"" TEXT NOT NULL DEFAULT '',
+                    ""CreatedAtUtc"" TEXT NOT NULL,
+                    ""IsReversed"" INTEGER NOT NULL DEFAULT 0,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE IF NOT EXISTS ""SettlementApplicationReversal"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""SettlementApplicationId"" INTEGER NOT NULL,
+                    ""ReversalDate"" TEXT NOT NULL,
+                    ""Reason"" TEXT NOT NULL DEFAULT '',
+                    ""ReversedBy"" TEXT NOT NULL DEFAULT '',
+                    ""ReversedAtUtc"" TEXT NOT NULL,
+                    ""GeneralLedgerHeaderId"" INTEGER NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SettlementApplicationReversal_SettlementApplicationId"" ON ""SettlementApplicationReversal"" (""SettlementApplicationId"");
+
+                CREATE TABLE IF NOT EXISTS ""PartyRefund"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""Direction"" INTEGER NOT NULL,
+                    ""CustomerId"" INTEGER NULL,
+                    ""VendorId"" INTEGER NULL,
+                    ""No"" TEXT NULL,
+                    ""Date"" TEXT NOT NULL,
+                    ""CurrencyCode"" TEXT NOT NULL DEFAULT 'USD',
+                    ""CurrencyPrecision"" INTEGER NOT NULL DEFAULT 2,
+                    ""Amount"" TEXT NOT NULL DEFAULT '0',
+                    ""BankId"" INTEGER NOT NULL,
+                    ""BankAccountId"" INTEGER NOT NULL,
+                    ""PaymentMethod"" TEXT NOT NULL DEFAULT 'Bank Transfer',
+                    ""ExternalReference"" TEXT NULL,
+                    ""EvidenceReference"" TEXT NULL,
+                    ""Status"" INTEGER NOT NULL DEFAULT 0,
+                    ""GeneralLedgerHeaderId"" INTEGER NULL,
+                    ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                    ""SubmittedBy"" TEXT NULL,
+                    ""SubmittedAtUtc"" TEXT NULL,
+                    ""ReviewedBy"" TEXT NULL,
+                    ""ReviewedAtUtc"" TEXT NULL,
+                    ""PostedBy"" TEXT NULL,
+                    ""PostedAtUtc"" TEXT NULL,
+                    ""ReversedBy"" TEXT NULL,
+                    ""ReversedAtUtc"" TEXT NULL,
+                    ""ReversalReason"" TEXT NULL,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PartyRefund_CompanyId_No"" ON ""PartyRefund"" (""CompanyId"", ""No"") WHERE ""No"" IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS ""PartyRefundAllocation"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""PartyRefundId"" INTEGER NOT NULL,
+                    ""SourceType"" INTEGER NOT NULL,
+                    ""CustomerCreditNoteId"" INTEGER NULL,
+                    ""SupplierCreditNoteId"" INTEGER NULL,
+                    ""SupplierAdvanceId"" INTEGER NULL,
+                    ""SourceAccountId"" INTEGER NOT NULL,
+                    ""Amount"" TEXT NOT NULL DEFAULT '0'
+                );
+
+                CREATE TABLE IF NOT EXISTS ""CustomerReturnReceipt"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""CustomerId"" INTEGER NOT NULL,
+                    ""SalesInvoiceHeaderId"" INTEGER NOT NULL,
+                    ""CustomerCreditNoteId"" INTEGER NULL,
+                    ""No"" TEXT NULL,
+                    ""ReceiptDate"" TEXT NOT NULL,
+                    ""Notes"" TEXT NULL,
+                    ""Status"" INTEGER NOT NULL DEFAULT 0,
+                    ""GeneralLedgerHeaderId"" INTEGER NULL,
+                    ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                    ""PostedBy"" TEXT NULL,
+                    ""PostedAtUtc"" TEXT NULL,
+                    ""ReversedBy"" TEXT NULL,
+                    ""ReversedAtUtc"" TEXT NULL,
+                    ""ReversalReason"" TEXT NULL,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CustomerReturnReceipt_CompanyId_No"" ON ""CustomerReturnReceipt"" (""CompanyId"", ""No"") WHERE ""No"" IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS ""CustomerReturnReceiptLine"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""CustomerReturnReceiptId"" INTEGER NOT NULL,
+                    ""SalesInvoiceLineId"" INTEGER NOT NULL,
+                    ""ItemId"" INTEGER NOT NULL,
+                    ""Quantity"" TEXT NOT NULL DEFAULT '0',
+                    ""Condition"" INTEGER NOT NULL DEFAULT 1,
+                    ""OriginalUnitCost"" TEXT NOT NULL DEFAULT '0',
+                    ""RecoverableUnitCost"" TEXT NOT NULL DEFAULT '0',
+                    ""TotalRestoredCost"" TEXT NOT NULL DEFAULT '0',
+                    ""InventoryControlJournalId"" INTEGER NULL,
+                    ""InventoryAccountId"" INTEGER NULL,
+                    ""CogsAccountId"" INTEGER NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS ""SupplierReturnDispatch"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""VendorId"" INTEGER NOT NULL,
+                    ""PurchaseReceiptHeaderId"" INTEGER NULL,
+                    ""PurchaseInvoiceHeaderId"" INTEGER NULL,
+                    ""SupplierCreditNoteId"" INTEGER NULL,
+                    ""No"" TEXT NULL,
+                    ""DispatchDate"" TEXT NOT NULL,
+                    ""ControlTransferDate"" TEXT NULL,
+                    ""HasControlTransferred"" INTEGER NOT NULL DEFAULT 0,
+                    ""Reason"" TEXT NOT NULL DEFAULT '',
+                    ""EvidenceReference"" TEXT NULL,
+                    ""ReturnClearingAccountId"" INTEGER NULL,
+                    ""Status"" INTEGER NOT NULL DEFAULT 0,
+                    ""GeneralLedgerHeaderId"" INTEGER NULL,
+                    ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                    ""PostedBy"" TEXT NULL,
+                    ""PostedAtUtc"" TEXT NULL,
+                    ""ReversedBy"" TEXT NULL,
+                    ""ReversedAtUtc"" TEXT NULL,
+                    ""ReversalReason"" TEXT NULL,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SupplierReturnDispatch_CompanyId_No"" ON ""SupplierReturnDispatch"" (""CompanyId"", ""No"") WHERE ""No"" IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS ""SupplierReturnDispatchLine"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""SupplierReturnDispatchId"" INTEGER NOT NULL,
+                    ""PurchaseReceiptLineId"" INTEGER NULL,
+                    ""PurchaseInvoiceLineId"" INTEGER NULL,
+                    ""ItemId"" INTEGER NOT NULL,
+                    ""Quantity"" TEXT NOT NULL DEFAULT '0',
+                    ""CarryingUnitCost"" TEXT NOT NULL DEFAULT '0',
+                    ""TotalCarryingCost"" TEXT NOT NULL DEFAULT '0',
+                    ""InventoryControlJournalId"" INTEGER NULL,
+                    ""InventoryAccountId"" INTEGER NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS ""ReceivableWriteOff"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""CustomerId"" INTEGER NOT NULL,
+                    ""SalesInvoiceHeaderId"" INTEGER NOT NULL,
+                    ""No"" TEXT NULL,
+                    ""Date"" TEXT NOT NULL,
+                    ""CurrencyCode"" TEXT NOT NULL DEFAULT 'USD',
+                    ""Amount"" TEXT NOT NULL DEFAULT '0',
+                    ""AllowanceAllocatedAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""ImpairmentShortfallAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""RecoveredAmount"" TEXT NOT NULL DEFAULT '0',
+                    ""ReceivableAccountId"" INTEGER NULL,
+                    ""LossAllowanceAccountId"" INTEGER NULL,
+                    ""ImpairmentExpenseAccountId"" INTEGER NULL,
+                    ""Reason"" TEXT NOT NULL DEFAULT '',
+                    ""CollectionEvidence"" TEXT NOT NULL DEFAULT '',
+                    ""Status"" INTEGER NOT NULL DEFAULT 0,
+                    ""GeneralLedgerHeaderId"" INTEGER NULL,
+                    ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                    ""SubmittedBy"" TEXT NULL,
+                    ""SubmittedAtUtc"" TEXT NULL,
+                    ""ReviewedBy"" TEXT NULL,
+                    ""ReviewedAtUtc"" TEXT NULL,
+                    ""PolicySnapshotJson"" TEXT NULL,
+                    ""PostedBy"" TEXT NULL,
+                    ""PostedAtUtc"" TEXT NULL,
+                    ""ReversedBy"" TEXT NULL,
+                    ""ReversedAtUtc"" TEXT NULL,
+                    ""ReversalReason"" TEXT NULL,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_ReceivableWriteOff_CompanyId_No"" ON ""ReceivableWriteOff"" (""CompanyId"", ""No"") WHERE ""No"" IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS ""WriteOffRecovery"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""ReceivableWriteOffId"" INTEGER NOT NULL,
+                    ""No"" TEXT NULL,
+                    ""Date"" TEXT NOT NULL,
+                    ""Amount"" TEXT NOT NULL DEFAULT '0',
+                    ""BankId"" INTEGER NOT NULL,
+                    ""BankAccountId"" INTEGER NOT NULL,
+                    ""BadDebtRecoveryAccountId"" INTEGER NOT NULL,
+                    ""ReferenceNo"" TEXT NULL,
+                    ""EvidenceReference"" TEXT NULL,
+                    ""Status"" INTEGER NOT NULL DEFAULT 2,
+                    ""GeneralLedgerHeaderId"" INTEGER NULL,
+                    ""VoidGeneralLedgerHeaderId"" INTEGER NULL,
+                    ""PostedBy"" TEXT NULL,
+                    ""PostedAtUtc"" TEXT NULL,
+                    ""ReversedBy"" TEXT NULL,
+                    ""ReversedAtUtc"" TEXT NULL,
+                    ""ReversalReason"" TEXT NULL,
+                    ""Version"" INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WriteOffRecovery_CompanyId_No"" ON ""WriteOffRecovery"" (""CompanyId"", ""No"") WHERE ""No"" IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS ""SettlementCommandReceipt"" (
+                    ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ""CompanyId"" INTEGER NOT NULL,
+                    ""OperationKey"" TEXT NOT NULL,
+                    ""IdempotencyKey"" TEXT NOT NULL,
+                    ""PayloadHash"" TEXT NOT NULL,
+                    ""ResultEntityType"" TEXT NOT NULL,
+                    ""ResultEntityId"" INTEGER NOT NULL,
+                    ""ResultJson"" TEXT NOT NULL,
+                    ""CreatedAtUtc"" TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""UX_SettlementCommandReceipt_Company_Op_Key"" ON ""SettlementCommandReceipt"" (""CompanyId"", ""OperationKey"", ""IdempotencyKey"");
+            ";
+            cmd.ExecuteNonQuery();
         }
 
         private static void EnsurePartnerAccounts(DbConnection connection)

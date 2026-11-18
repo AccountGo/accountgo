@@ -1279,6 +1279,8 @@ namespace Api.Data
 
             #endregion
 
+            ConfigureCreditsReturnsRefundsModel(builder);
+
             builder.Seed();
             /* Medhat END */
         }
@@ -1381,6 +1383,22 @@ namespace Api.Data
         public virtual DbSet<RecurringSchedule> RecurringSchedules { get; set; }
         public virtual DbSet<RecurringScheduleLine> RecurringScheduleLines { get; set; }
         public virtual DbSet<RecurringOccurrence> RecurringOccurrences { get; set; }
+        public virtual DbSet<CustomerCreditNote> CustomerCreditNotes { get; set; }
+        public virtual DbSet<CustomerCreditNoteLine> CustomerCreditNoteLines { get; set; }
+        public virtual DbSet<CustomerReturnReceipt> CustomerReturnReceipts { get; set; }
+        public virtual DbSet<CustomerReturnReceiptLine> CustomerReturnReceiptLines { get; set; }
+        public virtual DbSet<ReceivableWriteOff> ReceivableWriteOffs { get; set; }
+        public virtual DbSet<WriteOffRecovery> WriteOffRecoveries { get; set; }
+        public virtual DbSet<SupplierCreditNote> SupplierCreditNotes { get; set; }
+        public virtual DbSet<SupplierCreditNoteLine> SupplierCreditNoteLines { get; set; }
+        public virtual DbSet<SupplierAdvance> SupplierAdvances { get; set; }
+        public virtual DbSet<SupplierReturnDispatch> SupplierReturnDispatches { get; set; }
+        public virtual DbSet<SupplierReturnDispatchLine> SupplierReturnDispatchLines { get; set; }
+        public virtual DbSet<SettlementApplication> SettlementApplications { get; set; }
+        public virtual DbSet<SettlementApplicationReversal> SettlementApplicationReversals { get; set; }
+        public virtual DbSet<PartyRefund> PartyRefunds { get; set; }
+        public virtual DbSet<PartyRefundAllocation> PartyRefundAllocations { get; set; }
+        public virtual DbSet<SettlementCommandReceipt> SettlementCommandReceipts { get; set; }
 
     }
 }

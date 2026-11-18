@@ -73,6 +73,12 @@ namespace Core.Domain
         /// <summary>Minutes without activity before members are signed out. See <see cref="SessionTimeoutPolicy"/>.</summary>
         public int IdleTimeoutMinutes { get; set; } = SessionTimeoutPolicy.DefaultIdleMinutes;
 
+        /// <summary>
+        /// Operational per-workspace gate for G01/G02 credits, returns, refunds, supplier advances, and write-offs.
+        /// Off by default; enabled explicitly for approved pilots and tests.
+        /// </summary>
+        public bool CreditsReturnsRefundsEnabled { get; set; } = false;
+
         public SalesInvoiceSettings GetSalesInvoiceSettings() => SalesInvoiceSettings.FromJson(SalesInvoiceSettingsJson);
 
         public void SetSalesInvoiceSettings(SalesInvoiceSettings settings) => SalesInvoiceSettingsJson = settings.ToJson();

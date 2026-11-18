@@ -33,6 +33,8 @@ namespace Core.Authorization
         public const string FinancialsPeriodsClose = "financials.periods.close";
         public const string FinancialsYearEndReview = "financials.year_end.review";
         public const string FinancialsReportsView = "financials.reports.view";
+        public const string FinancialsSettlementsApply = SystemPermissions.FinancialsSettlementsApply;
+        public const string FinancialsSettlementsReverse = SystemPermissions.FinancialsSettlementsReverse;
         public const string ReportsView = "reports.view";
 
         // --- Banking Operations ---
@@ -53,6 +55,21 @@ namespace Core.Authorization
         public const string SalesReceiptsView = SystemPermissions.SalesReceiptsView;
         public const string SalesReceiptsCreate = SystemPermissions.SalesReceiptsCreate;
         public const string SalesQuotationsView = SystemPermissions.SalesQuotationsView;
+        public const string SalesCreditsView = SystemPermissions.SalesCreditsView;
+        public const string SalesCreditsCreate = SystemPermissions.SalesCreditsCreate;
+        public const string SalesCreditsPost = SystemPermissions.SalesCreditsPost;
+        public const string SalesCreditsReverse = SystemPermissions.SalesCreditsReverse;
+        public const string SalesReturnsView = SystemPermissions.SalesReturnsView;
+        public const string SalesReturnsPost = SystemPermissions.SalesReturnsPost;
+        public const string SalesReturnsReverse = SystemPermissions.SalesReturnsReverse;
+        public const string SalesRefundsView = SystemPermissions.SalesRefundsView;
+        public const string SalesRefundsCreate = SystemPermissions.SalesRefundsCreate;
+        public const string SalesRefundsPost = SystemPermissions.SalesRefundsPost;
+        public const string SalesRefundsReverse = SystemPermissions.SalesRefundsReverse;
+        public const string SalesWriteOffsView = SystemPermissions.SalesWriteOffsView;
+        public const string SalesWriteOffsCreate = SystemPermissions.SalesWriteOffsCreate;
+        public const string SalesWriteOffsPost = SystemPermissions.SalesWriteOffsPost;
+        public const string SalesWriteOffsReverse = SystemPermissions.SalesWriteOffsReverse;
 
         // --- Purchasing Operations ---
         public const string PurchasesVendorsView = SystemPermissions.PurchasesVendorsView;
@@ -62,6 +79,21 @@ namespace Core.Authorization
         public const string PurchasesBillsPost = SystemPermissions.PurchasesBillsPost;
         public const string PurchasesPaymentsCreate = SystemPermissions.PurchasesPaymentsCreate;
         public const string PurchasesOrdersView = SystemPermissions.PurchasesOrdersView;
+        public const string PurchasesCreditsView = SystemPermissions.PurchasesCreditsView;
+        public const string PurchasesCreditsCreate = SystemPermissions.PurchasesCreditsCreate;
+        public const string PurchasesCreditsPost = SystemPermissions.PurchasesCreditsPost;
+        public const string PurchasesCreditsReverse = SystemPermissions.PurchasesCreditsReverse;
+        public const string PurchasesReturnsView = SystemPermissions.PurchasesReturnsView;
+        public const string PurchasesReturnsPost = SystemPermissions.PurchasesReturnsPost;
+        public const string PurchasesReturnsReverse = SystemPermissions.PurchasesReturnsReverse;
+        public const string PurchasesAdvancesView = SystemPermissions.PurchasesAdvancesView;
+        public const string PurchasesAdvancesCreate = SystemPermissions.PurchasesAdvancesCreate;
+        public const string PurchasesAdvancesPost = SystemPermissions.PurchasesAdvancesPost;
+        public const string PurchasesAdvancesReverse = SystemPermissions.PurchasesAdvancesReverse;
+        public const string PurchasesRefundsView = SystemPermissions.PurchasesRefundsView;
+        public const string PurchasesRefundsCreate = SystemPermissions.PurchasesRefundsCreate;
+        public const string PurchasesRefundsPost = SystemPermissions.PurchasesRefundsPost;
+        public const string PurchasesRefundsReverse = SystemPermissions.PurchasesRefundsReverse;
 
         // --- Inventory Operations ---
         public const string InventoryItemsView = SystemPermissions.InventoryItemsView;
@@ -403,6 +435,108 @@ namespace Core.Authorization
                     permissionsAll: new[] { SystemPermissions.SalesQuotationsView },
                     modulesAny: new[] { SystemModules.Sales },
                     description: "View sales quotations."),
+                Functional(
+                    SalesCreditsView,
+                    "POL-SLS-CRED-VIEW",
+                    permissionsAll: new[] { SystemPermissions.SalesCreditsView },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "View customer credit notes."),
+                Functional(
+                    SalesCreditsCreate,
+                    "POL-SLS-CRED-CREATE",
+                    permissionsAll: new[] { SystemPermissions.SalesCreditsCreate },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Create or edit draft customer credit notes."),
+                Functional(
+                    SalesCreditsPost,
+                    "POL-SLS-CRED-POST",
+                    permissionsAll: new[] { SystemPermissions.SalesCreditsPost },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Post customer credit notes."),
+                Functional(
+                    SalesCreditsReverse,
+                    "POL-SLS-CRED-REV",
+                    permissionsAll: new[] { SystemPermissions.SalesCreditsReverse },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Reverse posted customer credit notes."),
+                Functional(
+                    SalesReturnsView,
+                    "POL-SLS-RET-VIEW",
+                    permissionsAll: new[] { SystemPermissions.SalesReturnsView },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "View customer return receipts."),
+                Functional(
+                    SalesReturnsPost,
+                    "POL-SLS-RET-POST",
+                    permissionsAll: new[] { SystemPermissions.SalesReturnsPost, SystemPermissions.InventoryAdjustmentsPost },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Post customer return receipts."),
+                Functional(
+                    SalesReturnsReverse,
+                    "POL-SLS-RET-REV",
+                    permissionsAll: new[] { SystemPermissions.SalesReturnsReverse, SystemPermissions.InventoryAdjustmentsPost },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Reverse customer return receipts."),
+                Functional(
+                    SalesRefundsView,
+                    "POL-SLS-REF-VIEW",
+                    permissionsAll: new[] { SystemPermissions.SalesRefundsView },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "View customer refunds."),
+                Functional(
+                    SalesRefundsCreate,
+                    "POL-SLS-REF-CREATE",
+                    permissionsAll: new[] { SystemPermissions.SalesRefundsCreate },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Draft customer refunds."),
+                Functional(
+                    SalesRefundsPost,
+                    "POL-SLS-REF-POST",
+                    permissionsAll: new[] { SystemPermissions.SalesRefundsPost, SystemPermissions.BankingAccountsView },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Post customer refunds."),
+                Functional(
+                    SalesRefundsReverse,
+                    "POL-SLS-REF-REV",
+                    permissionsAll: new[] { SystemPermissions.SalesRefundsReverse },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Reverse customer refunds."),
+                Functional(
+                    SalesWriteOffsView,
+                    "POL-SLS-WO-VIEW",
+                    permissionsAll: new[] { SystemPermissions.SalesWriteOffsView },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "View receivable write-offs."),
+                Functional(
+                    SalesWriteOffsCreate,
+                    "POL-SLS-WO-CREATE",
+                    permissionsAll: new[] { SystemPermissions.SalesWriteOffsCreate },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Request receivable write-offs."),
+                Functional(
+                    SalesWriteOffsPost,
+                    "POL-SLS-WO-POST",
+                    permissionsAll: new[] { SystemPermissions.SalesWriteOffsPost },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Approve and post receivable write-offs and recoveries."),
+                Functional(
+                    SalesWriteOffsReverse,
+                    "POL-SLS-WO-REV",
+                    permissionsAll: new[] { SystemPermissions.SalesWriteOffsReverse },
+                    modulesAny: new[] { SystemModules.Sales },
+                    description: "Reverse erroneous receivable write-offs."),
+                Functional(
+                    FinancialsSettlementsApply,
+                    "POL-FIN-SETTLE-APPLY",
+                    permissionsAll: new[] { SystemPermissions.FinancialsSettlementsApply },
+                    modulesAny: new[] { SystemModules.Financials },
+                    description: "Apply credits or advances to open invoices or bills."),
+                Functional(
+                    FinancialsSettlementsReverse,
+                    "POL-FIN-SETTLE-REV",
+                    permissionsAll: new[] { SystemPermissions.FinancialsSettlementsReverse },
+                    modulesAny: new[] { SystemModules.Financials },
+                    description: "Reverse settlement applications."),
 
                 // --- Purchases ---
                 Functional(
@@ -447,6 +581,96 @@ namespace Core.Authorization
                     permissionsAll: new[] { SystemPermissions.PurchasesOrdersView },
                     modulesAny: new[] { SystemModules.Purchases },
                     description: "View purchase orders and receipts."),
+                Functional(
+                    PurchasesCreditsView,
+                    "POL-PUR-CRED-VIEW",
+                    permissionsAll: new[] { SystemPermissions.PurchasesCreditsView },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "View supplier credit notes."),
+                Functional(
+                    PurchasesCreditsCreate,
+                    "POL-PUR-CRED-CREATE",
+                    permissionsAll: new[] { SystemPermissions.PurchasesCreditsCreate },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Create or edit draft supplier credit notes."),
+                Functional(
+                    PurchasesCreditsPost,
+                    "POL-PUR-CRED-POST",
+                    permissionsAll: new[] { SystemPermissions.PurchasesCreditsPost },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Post supplier credit notes."),
+                Functional(
+                    PurchasesCreditsReverse,
+                    "POL-PUR-CRED-REV",
+                    permissionsAll: new[] { SystemPermissions.PurchasesCreditsReverse },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Reverse posted supplier credit notes."),
+                Functional(
+                    PurchasesReturnsView,
+                    "POL-PUR-RET-VIEW",
+                    permissionsAll: new[] { SystemPermissions.PurchasesReturnsView },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "View supplier return dispatches."),
+                Functional(
+                    PurchasesReturnsPost,
+                    "POL-PUR-RET-POST",
+                    permissionsAll: new[] { SystemPermissions.PurchasesReturnsPost, SystemPermissions.InventoryAdjustmentsPost },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Post supplier return dispatches."),
+                Functional(
+                    PurchasesReturnsReverse,
+                    "POL-PUR-RET-REV",
+                    permissionsAll: new[] { SystemPermissions.PurchasesReturnsReverse, SystemPermissions.InventoryAdjustmentsPost },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Reverse supplier return dispatches."),
+                Functional(
+                    PurchasesAdvancesView,
+                    "POL-PUR-ADV-VIEW",
+                    permissionsAll: new[] { SystemPermissions.PurchasesAdvancesView },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "View supplier advances."),
+                Functional(
+                    PurchasesAdvancesCreate,
+                    "POL-PUR-ADV-CREATE",
+                    permissionsAll: new[] { SystemPermissions.PurchasesAdvancesCreate },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Draft supplier advances."),
+                Functional(
+                    PurchasesAdvancesPost,
+                    "POL-PUR-ADV-POST",
+                    permissionsAll: new[] { SystemPermissions.PurchasesAdvancesPost, SystemPermissions.BankingAccountsView },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Post supplier advances."),
+                Functional(
+                    PurchasesAdvancesReverse,
+                    "POL-PUR-ADV-REV",
+                    permissionsAll: new[] { SystemPermissions.PurchasesAdvancesReverse },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Reverse supplier advances."),
+                Functional(
+                    PurchasesRefundsView,
+                    "POL-PUR-REF-VIEW",
+                    permissionsAll: new[] { SystemPermissions.PurchasesRefundsView },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "View supplier refunds."),
+                Functional(
+                    PurchasesRefundsCreate,
+                    "POL-PUR-REF-CREATE",
+                    permissionsAll: new[] { SystemPermissions.PurchasesRefundsCreate },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Draft supplier refunds."),
+                Functional(
+                    PurchasesRefundsPost,
+                    "POL-PUR-REF-POST",
+                    permissionsAll: new[] { SystemPermissions.PurchasesRefundsPost, SystemPermissions.BankingAccountsView },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Post supplier refunds."),
+                Functional(
+                    PurchasesRefundsReverse,
+                    "POL-PUR-REF-REV",
+                    permissionsAll: new[] { SystemPermissions.PurchasesRefundsReverse },
+                    modulesAny: new[] { SystemModules.Purchases },
+                    description: "Reverse supplier refunds."),
 
                 // --- Inventory ---
                 Functional(

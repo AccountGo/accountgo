@@ -31,6 +31,12 @@ namespace Core.Domain.Sales
         public int? GeneralLedgerHeaderId { get; set; }
         /// <summary>The entry that reversed the invoice's posting when it was voided.</summary>
         public int? VoidGeneralLedgerHeaderId { get; set; }
+        /// <summary>The Accounts Receivable account debited when the invoice was issued.</summary>
+        public int? ReceivableAccountId { get; set; }
+        public decimal CreditedAmount { get; set; }
+        public decimal WrittenOffAmount { get; set; }
+        [System.ComponentModel.DataAnnotations.ConcurrencyCheck]
+        public long Version { get; set; }
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal ShippingHandlingCharge{ get; set; }
@@ -57,6 +63,7 @@ namespace Core.Domain.Sales
         /// </summary>
         public SalesInvoiceOrigins? Origin { get; set; }
         public virtual Customer Customer { get; set; }
+        public virtual Account? ReceivableAccount { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
 
@@ -116,8 +123,11 @@ namespace Core.Domain.Sales
         public decimal TotalAllocated() =>
             Math.Round(CustomerAllocations?.Sum(a => a.Amount) ?? 0, 2, MidpointRounding.AwayFromZero);
 
+        public decimal TotalSettled() =>
+            Math.Round(TotalAllocated() + CreditedAmount + WrittenOffAmount, 2, MidpointRounding.AwayFromZero);
+
         public decimal BalanceDue() =>
-            Math.Round(Math.Max(0, GrandTotal() - TotalAllocated()), 2, MidpointRounding.AwayFromZero);
+            Math.Round(Math.Max(0, GrandTotal() - TotalSettled()), 2, MidpointRounding.AwayFromZero);
 
         /// <summary>
         /// What was still owed on this invoice at the end of <paramref name="asOf"/>, following ledger dates: the invoice
@@ -140,7 +150,7 @@ namespace Core.Domain.Sales
         }
 
         public bool IsFullPaid() =>
-            TotalAllocated() >= GrandTotal() - 0.005m;
+            TotalSettled() >= GrandTotal() - 0.005m;
 
         public decimal ComputeTotalAmount()
         {
@@ -165,8 +175,8 @@ namespace Core.Domain.Sales
                 throw new InvalidOperationException("Draft invoices cannot be voided. Delete the draft instead.");
             if (Status == SalesInvoiceStatus.Closed || IsPaid() || IsFullPaid())
                 throw new InvalidOperationException("Cannot void a paid invoice.");
-            if (TotalAllocated() > 0)
-                throw new InvalidOperationException("Cannot void an invoice with recorded payments. Please unallocate or refund payments first.");
+            if (TotalAllocated() > 0 || CreditedAmount > 0 || WrittenOffAmount > 0)
+                throw new InvalidOperationException("Cannot void an invoice with recorded payments, credits, or write-offs. Reverse them first.");
         }
 
         public void EnsureCanRecordPayment(decimal amount)

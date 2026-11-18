@@ -40,7 +40,16 @@ namespace Core.Domain
         CustomerAllocation,
         InventoryAdjustment,
         /// <summary>Bank register document (Phase 1: opening balance; Phase 2: money in/out, transfer, etc.).</summary>
-        BankTransaction = 17
+        BankTransaction = 17,
+        CustomerCreditNote = 18,
+        SupplierCreditNote = 19,
+        SupplierAdvance = 20,
+        SettlementApplication = 21,
+        PartyRefund = 22,
+        CustomerReturnReceipt = 23,
+        SupplierReturnDispatch = 24,
+        ReceivableWriteOff = 25,
+        WriteOffRecovery = 26
     }
 
     public enum AccountTypes
@@ -117,7 +126,15 @@ namespace Core.Domain
         Contact,
         DonationInvoice,
         InventoryAdjustment,
-        BankTransaction
+        BankTransaction,
+        CustomerCreditNote,
+        SupplierCreditNote,
+        SupplierAdvance,
+        PartyRefund,
+        CustomerReturnReceipt,
+        SupplierReturnDispatch,
+        ReceivableWriteOff,
+        WriteOffRecovery
     }
 
     /// <summary>Kinds for <see cref="Financials.BankTransaction"/> (D6).</summary>
@@ -313,5 +330,47 @@ namespace Core.Domain
         NonProfit = 5,
         /// <summary>Personal finances. Appended without renumbering prior values.</summary>
         Individual = 6
+    }
+
+    public enum SettlementDocumentStatus
+    {
+        Draft = 0,
+        PendingReview = 1,
+        Posted = 2,
+        Reversed = 3
+    }
+
+    public enum CreditNoteKind
+    {
+        PriceOrServiceAdjustment = 1,
+        GoodsReturn = 2,
+        Standalone = 3,
+        Rebate = 4
+    }
+
+    public enum ReturnCondition
+    {
+        Saleable = 1,
+        Damaged = 2,
+        ZeroValue = 3
+    }
+
+    public enum SettlementSourceType
+    {
+        CustomerCreditNote = 1,
+        SupplierCreditNote = 2,
+        SupplierAdvance = 3
+    }
+
+    public enum SettlementDestinationType
+    {
+        SalesInvoice = 1,
+        PurchaseInvoice = 2
+    }
+
+    public enum PartyRefundDirection
+    {
+        CustomerPayout = 1,
+        SupplierInflow = 2
     }
 }

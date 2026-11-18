@@ -95,6 +95,10 @@ namespace Api.Data
             GeneralLedgerHeader or GeneralLedgerLine or JournalEntryHeader or JournalEntryLine
             or FinancialYear or BooksLockChange or Account or GeneralLedgerSetting or CompanySetting
             or SalesInvoiceHeader or PurchaseInvoiceHeader or CustomerAllocation or VendorPayment
+            or CustomerCreditNote or CustomerCreditNoteLine or CustomerReturnReceipt or CustomerReturnReceiptLine
+            or ReceivableWriteOff or WriteOffRecovery
+            or SupplierCreditNote or SupplierCreditNoteLine or SupplierAdvance or SupplierReturnDispatch or SupplierReturnDispatchLine
+            or SettlementApplication or SettlementApplicationReversal or PartyRefund or PartyRefundAllocation
             or BankReconciliation or BankStatementLine or Partner or PartnerShare
             or YearEndIssuanceDeclaration;
 
