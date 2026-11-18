@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AccountGo.BackendTests.Migrations;
 using Api.Data;
 using Api.Data.Postgres;
 using Api.Data.Repositories;
@@ -73,7 +74,7 @@ namespace AccountGo.BackendTests.Financial
                     a.Authorize(Moq.It.IsAny<string>(), Moq.It.IsAny<AccessResourceContext>(), Moq.It.IsAny<AccessActorContext>())
                     == AccessDecision.Allow("test", "test", "test")));
 
-        [Fact]
+        [PostgresAuditFact]
         public async Task X01_Postgres_ConcurrentApplyAndRefund_CannotOverspendCreditCapacity()
         {
             using var pg = PostgresTestDatabase.CreateIfConfigured();
@@ -215,7 +216,7 @@ namespace AccountGo.BackendTests.Financial
             }
         }
 
-        [Fact]
+        [PostgresAuditFact]
         public void X10_Postgres_UpgradeFromPriorMigration_PreservesLegacyBillsAndPayments()
         {
             using var pg = PostgresTestDatabase.CreateIfConfigured();

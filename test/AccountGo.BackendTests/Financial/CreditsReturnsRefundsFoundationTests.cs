@@ -4,6 +4,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using AccountGo.BackendTests.Migrations;
 using Api.Data;
 using Api.Data.Postgres;
 using Api.Data.Schema;
@@ -60,7 +61,7 @@ namespace AccountGo.BackendTests.Financial
             RunCoordinatorAssertions(db);
         }
 
-        [Fact]
+        [PostgresAuditFact]
         public void PostgresMigration_And_Coordinator_FeatureGate_Idempotency_Rollback_Work()
         {
             using var pg = PostgresTestDatabase.CreateIfConfigured();

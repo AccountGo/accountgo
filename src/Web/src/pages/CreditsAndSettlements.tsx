@@ -4,7 +4,7 @@ import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { ModalShell } from '../components/ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
-import { Plus, CheckCircle2, ArrowRightLeft, Undo2, FileWarning, RotateCcw } from 'lucide-react';
+import { Plus, CheckCircle2, ArrowRightLeft, Undo2, FileWarning, RotateCcw, Save } from 'lucide-react';
 
 interface CreditNoteRow {
   id: number;
@@ -30,8 +30,10 @@ interface CreditNoteRow {
 interface AccountRolePreview {
   roleKey: string;
   roleLabel: string;
+  configuredAccountId: number | null;
   configuredAccountCode: string | null;
   configuredAccountName: string | null;
+  suggestedAccountId: number | null;
   suggestedAccountCode: string | null;
   suggestedAccountName: string | null;
   isArchived: boolean;
@@ -47,12 +49,31 @@ interface MappingPreview {
   roles: AccountRolePreview[];
 }
 
-interface OpenDocItem {
+interface DocOption {
   id: number;
   no: string | null;
   partyId: number;
   partyName: string;
   balanceDue: number;
+  status?: string;
+}
+
+interface PartyOption {
+  id: number;
+  name: string;
+}
+
+interface DocLineOption {
+  id: number;
+  itemId: number | null;
+  description: string;
+  quantity: number;
+}
+
+interface GlAccountOption {
+  id: number;
+  accountCode: string;
+  accountName: string;
 }
 
 interface BankPickerOption {
@@ -74,12 +95,28 @@ function newIdempotencyKey() {
   return `ui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+const ROLE_KEY_TO_REQUEST_FIELD: Record<string, string> = {
+  CustomerCreditLiability: 'customerCreditLiabilityAccountId',
+  SalesReturnsAllowances: 'salesReturnsAllowancesAccountId',
+  SupplierCreditAsset: 'supplierCreditAssetAccountId',
+  SupplierAdvance: 'supplierAdvanceAccountId',
+  SupplierReturnClearing: 'supplierReturnClearingAccountId',
+  ReturnValuationDifference: 'returnValuationDifferenceAccountId',
+  ReceivableLossAllowance: 'receivableLossAllowanceAccountId',
+  ImpairmentExpense: 'impairmentExpenseAccountId',
+  BadDebtRecovery: 'badDebtRecoveryAccountId',
+};
+
 export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> = ({ side }) => {
   const { authFetch } = useAuth();
   const [searchParams] = useSearchParams();
   const [credits, setCredits] = useState<CreditNoteRow[]>([]);
   const [mappings, setMappings] = useState<MappingPreview | null>(null);
-  const [openDocs, setOpenDocs] = useState<OpenDocItem[]>([]);
+  const [mappingSelections, setMappingSelections] = useState<Record<string, string>>({});
+  const [glAccounts, setGlAccounts] = useState<GlAccountOption[]>([]);
+  const [parties, setParties] = useState<PartyOption[]>([]);
+  const [allDocs, setAllDocs] = useState<DocOption[]>([]);
+  const [openDocs, setOpenDocs] = useState<DocOption[]>([]);
   const [banks, setBanks] = useState<BankPickerOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -133,6 +170,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
   const [retDocId, setRetDocId] = useState<string>(
     searchParams.get(side === 'sales' ? 'invoiceId' : 'billId') ?? ''
   );
+  const [retDocLines, setRetDocLines] = useState<DocLineOption[]>([]);
   const [retLineId, setRetLineId] = useState('');
   const [retItemId, setRetItemId] = useState('');
   const [retQty, setRetQty] = useState('1');
@@ -146,11 +184,14 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
     try {
       const endpoint = side === 'sales' ? '/api/sales/credits' : '/api/purchasing/credits';
       const docsEndpoint = side === 'sales' ? '/api/Sales/SalesInvoices' : '/api/Purchasing/Bills';
-      const [listRes, mapRes, docsRes, bankRes] = await Promise.all([
+      const partiesEndpoint = side === 'sales' ? '/api/Sales/Customers' : '/api/Purchasing/Vendors';
+      const [listRes, mapRes, docsRes, bankRes, partiesRes, accountsRes] = await Promise.all([
         authFetch(endpoint),
         authFetch('/api/sales/credits/mappings/preview'),
         authFetch(docsEndpoint),
         authFetch('/api/Banking/Accounts/Picker'),
+        authFetch(partiesEndpoint),
+        authFetch('/api/Financials/Accounts'),
       ]);
       if (listRes.ok) {
         setCredits(await listRes.json());
@@ -158,40 +199,117 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
         setError('Credits, returns, refunds, and write-offs are not enabled for this workspace or require additional permission.');
       }
       if (mapRes.ok) {
-        setMappings(await mapRes.json());
+        const preview: MappingPreview = await mapRes.json();
+        setMappings(preview);
+        const initial: Record<string, string> = {};
+        for (const r of preview.roles) {
+          const val = r.configuredAccountId ?? r.suggestedAccountId;
+          initial[r.roleKey] = val ? String(val) : '';
+        }
+        setMappingSelections(initial);
       }
       if (docsRes.ok) {
         const rawDocs = await docsRes.json();
         const list = Array.isArray(rawDocs) ? rawDocs : rawDocs.items ?? [];
-        setOpenDocs(
-          list
-            .filter((d: any) => (d.balanceDue ?? 0) > 0)
-            .map((d: any) => ({
-              id: d.id,
-              no: d.no ?? d.vendorInvoiceNo ?? `#${d.id}`,
-              partyId: side === 'sales' ? d.customerId : d.vendorId,
-              partyName: side === 'sales' ? d.customerName : d.vendorName ?? '',
-              balanceDue: Number(d.balanceDue ?? 0),
-            }))
-        );
+        const mapped: DocOption[] = list
+          .filter((d: any) => d.status !== 'Draft' && d.status !== 'Void')
+          .map((d: any) => ({
+            id: d.id,
+            no: d.no ?? d.vendorInvoiceNo ?? `#${d.id}`,
+            partyId: side === 'sales' ? d.customerId : d.vendorId,
+            partyName: side === 'sales' ? d.customerName : d.vendorName ?? '',
+            balanceDue: Number(d.balanceDue ?? 0),
+            status: d.status,
+          }));
+        setAllDocs(mapped);
+        setOpenDocs(mapped.filter((d) => d.balanceDue > 0));
       }
       if (bankRes.ok) {
         const rawBanks = await bankRes.json();
         const list = Array.isArray(rawBanks) ? rawBanks : rawBanks.accounts ?? [];
         setBanks(list.map((b: any) => ({ id: b.id, name: b.name || b.accountName || `Bank #${b.id}` })));
-        if (list.length > 0 && !refundBankId) setRefundBankId(String(list[0].id));
-        if (list.length > 0 && !advBankId) setAdvBankId(String(list[0].id));
+        if (list.length > 0) {
+          const firstId = String(list[0].id);
+          setRefundBankId((prev) => prev || firstId);
+          setAdvBankId((prev) => prev || firstId);
+        }
+      }
+      if (partiesRes.ok) {
+        const rawParties = await partiesRes.json();
+        const list = Array.isArray(rawParties) ? rawParties : rawParties.items ?? [];
+        const mappedParties: PartyOption[] = list.map((p: any) => ({
+          id: p.id,
+          name: p.name || p.partyName || `${side === 'sales' ? 'Customer' : 'Vendor'} #${p.id}`,
+        }));
+        setParties(mappedParties);
+        if (mappedParties.length > 0) {
+          const firstId = String(mappedParties[0].id);
+          setPartyId((prev) => prev || firstId);
+          setAdvVendorId((prev) => prev || firstId);
+        }
+      }
+      if (accountsRes.ok) {
+        const rawAccs = await accountsRes.json();
+        const list = Array.isArray(rawAccs) ? rawAccs : rawAccs.accounts ?? [];
+        setGlAccounts(
+          list.map((a: any) => ({
+            id: a.id,
+            accountCode: a.accountCode ?? '',
+            accountName: a.accountName ?? '',
+          }))
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load credits.');
     } finally {
       setLoading(false);
     }
-  }, [authFetch, side, refundBankId, advBankId]);
+  }, [authFetch, side]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Load lines when selecting a source invoice/bill for physical returns
+  useEffect(() => {
+    if (!retDocId) {
+      setRetDocLines([]);
+      setRetLineId('');
+      setRetItemId('');
+      return;
+    }
+    let cancelled = false;
+    const loadLines = async () => {
+      const url =
+        side === 'sales'
+          ? `/api/Sales/SalesInvoice?id=${encodeURIComponent(retDocId)}`
+          : `/api/Purchasing/Bill?id=${encodeURIComponent(retDocId)}`;
+      const res = await authFetch(url);
+      if (!res.ok || cancelled) return;
+      const doc = await res.json();
+      const rawLines = side === 'sales' ? doc.salesInvoiceLines ?? [] : doc.lines ?? [];
+      const mapped: DocLineOption[] = rawLines.map((l: any) => ({
+        id: l.id,
+        itemId: l.itemId ?? null,
+        description: l.itemDescription || l.description || `Line #${l.id}`,
+        quantity: Number(l.quantity ?? 1),
+      }));
+      if (cancelled) return;
+      setRetDocLines(mapped);
+      if (mapped.length > 0) {
+        setRetLineId(String(mapped[0].id));
+        setRetItemId(mapped[0].itemId ? String(mapped[0].itemId) : '');
+        setRetQty(String(mapped[0].quantity));
+      } else {
+        setRetLineId('');
+        setRetItemId('');
+      }
+    };
+    void loadLines();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, retDocId, side]);
 
   const readProblem = async (res: Response) => {
     try {
@@ -199,6 +317,31 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
       return body.detail || body.message || body.title || `Request failed (${res.status})`;
     } catch {
       return `Request failed (${res.status})`;
+    }
+  };
+
+  const handleSaveMappings = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const payload: Record<string, number | null> = {};
+      for (const [roleKey, field] of Object.entries(ROLE_KEY_TO_REQUEST_FIELD)) {
+        const raw = mappingSelections[roleKey];
+        payload[field] = raw ? Number(raw) : null;
+      }
+      const res = await authFetch('/api/sales/credits/mappings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setError(await readProblem(res));
+        return;
+      }
+      setMappings(await res.json());
+      setNotice('Control-account mappings saved.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -259,8 +402,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               sourceSalesInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
               date: localToday(),
               kind: 1,
+              isStandalone: !sourceDocId,
               reason: creditReason,
-              lines: [{ description: lineDesc, quantity: Number(lineQty), unitPrice: Number(linePrice) }],
+              lines: [{ description: lineDesc, quantity: Number(lineQty), unitPrice: Number(linePrice), discountAmount: 0 }],
               idempotencyKey: newIdempotencyKey(),
             }
           : {
@@ -270,6 +414,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               date: localToday(),
               effectiveDate: localToday(),
               kind: 1,
+              isStandalone: !sourceDocId,
               reason: creditReason,
               lines: [{ description: lineDesc, quantity: Number(lineQty), unitCost: Number(linePrice) }],
               idempotencyKey: newIdempotencyKey(),
@@ -622,13 +767,25 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
 
       {mappings && (
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">Control-Account Mapping Readiness</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Accounts are snapshotted at posting. Missing or archived mappings block posting until reviewed.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Control-Account Mapping Readiness</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Accounts are snapshotted at posting. Missing or archived mappings block posting until reviewed.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleSaveMappings()}
+              className="inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+            >
+              <Save className="w-3.5 h-3.5" /> Save Mappings
+            </button>
+          </div>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {mappings.roles.map((r) => (
-              <div key={r.roleKey} className="rounded border border-slate-100 bg-slate-50 p-2 text-xs">
+              <div key={r.roleKey} className="rounded border border-slate-100 bg-slate-50 p-2 text-xs space-y-1">
                 <div className="font-medium text-slate-800">{r.roleLabel}</div>
                 {r.configuredAccountCode ? (
                   <div className="text-emerald-700">
@@ -639,6 +796,21 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
                   <div className="text-amber-700">
                     Unconfigured{r.suggestedAccountCode ? ` (Suggested: ${r.suggestedAccountCode} ${r.suggestedAccountName})` : ''}
                   </div>
+                )}
+                {glAccounts.length > 0 && (
+                  <select
+                    aria-label={r.roleLabel}
+                    value={mappingSelections[r.roleKey] ?? ''}
+                    onChange={(e) => setMappingSelections((prev) => ({ ...prev, [r.roleKey]: e.target.value }))}
+                    className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    <option value="">Select account...</option>
+                    {glAccounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.accountCode} — {acc.accountName}
+                      </option>
+                    ))}
+                  </select>
                 )}
               </div>
             ))}
@@ -757,26 +929,41 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           </div>
           <form onSubmit={handleSaveCreditDraft} className="space-y-4 p-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700">{side === 'sales' ? 'Customer ID' : 'Vendor ID'}</label>
-              <input
+              <label htmlFor="credit-party" className="block text-xs font-medium text-slate-700">
+                {side === 'sales' ? 'Customer' : 'Vendor'}
+              </label>
+              <select
+                id="credit-party"
                 required
-                type="number"
                 value={partyId}
                 onChange={(e) => setPartyId(e.target.value)}
                 className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-              />
+              >
+                <option value="">Select {side === 'sales' ? 'customer' : 'vendor'}...</option>
+                {parties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">
+              <label htmlFor="credit-source-doc" className="block text-xs font-medium text-slate-700">
                 {side === 'sales' ? 'Source Invoice (optional for standalone)' : 'Source Bill (optional for standalone)'}
               </label>
               <select
+                id="credit-source-doc"
                 value={sourceDocId}
-                onChange={(e) => setSourceDocId(e.target.value)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSourceDocId(id);
+                  const found = allDocs.find((d) => String(d.id) === id);
+                  if (found) setPartyId(String(found.partyId));
+                }}
                 className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
               >
                 <option value="">Standalone credit (no source document)</option>
-                {openDocs.map((d) => (
+                {allDocs.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.no} — {d.partyName} (Due {d.balanceDue.toFixed(2)})
                   </option>
@@ -785,8 +972,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
             </div>
             {side === 'purchasing' && (
               <div>
-                <label className="block text-xs font-medium text-slate-700">Vendor Credit Number</label>
+                <label htmlFor="vendor-credit-no" className="block text-xs font-medium text-slate-700">Vendor Credit Number</label>
                 <input
+                  id="vendor-credit-no"
                   required
                   value={vendorCreditNo}
                   onChange={(e) => setVendorCreditNo(e.target.value)}
@@ -795,8 +983,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium text-slate-700">Reason / Evidence</label>
+              <label htmlFor="credit-reason" className="block text-xs font-medium text-slate-700">Reason / Evidence</label>
               <input
+                id="credit-reason"
                 required
                 value={creditReason}
                 onChange={(e) => setCreditReason(e.target.value)}
@@ -805,8 +994,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-xs font-medium text-slate-700">Description</label>
+                <label htmlFor="credit-line-desc" className="block text-xs font-medium text-slate-700">Description</label>
                 <input
+                  id="credit-line-desc"
                   required
                   value={lineDesc}
                   onChange={(e) => setLineDesc(e.target.value)}
@@ -814,8 +1004,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700">Qty</label>
+                <label htmlFor="credit-line-qty" className="block text-xs font-medium text-slate-700">Qty</label>
                 <input
+                  id="credit-line-qty"
                   required
                   type="number"
                   step="0.0001"
@@ -825,8 +1016,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700">Unit Price / Cost</label>
+                <label htmlFor="credit-line-price" className="block text-xs font-medium text-slate-700">Unit Price / Cost</label>
                 <input
+                  id="credit-line-price"
                   required
                   type="number"
                   step="0.01"
@@ -859,10 +1051,11 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           </div>
           <form onSubmit={handleApplyCredit} className="space-y-4 p-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700">
+              <label htmlFor="apply-target" className="block text-xs font-medium text-slate-700">
                 {side === 'sales' ? 'Target Invoice' : 'Target Bill'}
               </label>
               <select
+                id="apply-target"
                 required
                 value={applyTargetId}
                 onChange={(e) => setApplyTargetId(e.target.value)}
@@ -877,8 +1070,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Amount to Apply</label>
+              <label htmlFor="apply-amount" className="block text-xs font-medium text-slate-700">Amount to Apply</label>
               <input
+                id="apply-amount"
                 required
                 type="number"
                 step="0.01"
@@ -907,8 +1101,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               Record a refund already sent/received outside AccountGo. This posts the cash movement against your selected bank account and reduces the credit balance.
             </p>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Bank Account</label>
+              <label htmlFor="refund-bank" className="block text-xs font-medium text-slate-700">Bank Account</label>
               <select
+                id="refund-bank"
                 required
                 value={refundBankId}
                 onChange={(e) => setRefundBankId(e.target.value)}
@@ -923,8 +1118,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-medium text-slate-700">Amount</label>
+                <label htmlFor="refund-amount" className="block text-xs font-medium text-slate-700">Amount</label>
                 <input
+                  id="refund-amount"
                   required
                   type="number"
                   step="0.01"
@@ -934,8 +1130,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700">Payment Method</label>
+                <label htmlFor="refund-method" className="block text-xs font-medium text-slate-700">Payment Method</label>
                 <input
+                  id="refund-method"
                   required
                   value={refundMethod}
                   onChange={(e) => setRefundMethod(e.target.value)}
@@ -944,8 +1141,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">External Bank Reference</label>
+              <label htmlFor="refund-ext-ref" className="block text-xs font-medium text-slate-700">External Bank Reference</label>
               <input
+                id="refund-ext-ref"
                 required
                 value={refundExtRef}
                 onChange={(e) => setRefundExtRef(e.target.value)}
@@ -971,8 +1169,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           </div>
           <form onSubmit={handleReverseCredit} className="space-y-4 p-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700">Reversal Date</label>
+              <label htmlFor="reverse-date" className="block text-xs font-medium text-slate-700">Reversal Date</label>
               <input
+                id="reverse-date"
                 required
                 type="date"
                 value={reverseDate}
@@ -981,8 +1180,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Reason</label>
+              <label htmlFor="reverse-reason" className="block text-xs font-medium text-slate-700">Reason</label>
               <input
+                id="reverse-reason"
                 required
                 value={reverseReason}
                 onChange={(e) => setReverseReason(e.target.value)}
@@ -1006,8 +1206,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           </div>
           <form onSubmit={handleWriteOff} className="space-y-4 p-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700">Open Invoice</label>
+              <label htmlFor="wo-invoice" className="block text-xs font-medium text-slate-700">Open Invoice</label>
               <select
+                id="wo-invoice"
                 required
                 value={woInvoiceId}
                 onChange={(e) => setWoInvoiceId(e.target.value)}
@@ -1022,8 +1223,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Write-Off Amount</label>
+              <label htmlFor="wo-amount" className="block text-xs font-medium text-slate-700">Write-Off Amount</label>
               <input
+                id="wo-amount"
                 required
                 type="number"
                 step="0.01"
@@ -1033,8 +1235,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Reason</label>
+              <label htmlFor="wo-reason" className="block text-xs font-medium text-slate-700">Reason</label>
               <input
+                id="wo-reason"
                 required
                 value={woReason}
                 onChange={(e) => setWoReason(e.target.value)}
@@ -1042,8 +1245,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Collection Evidence</label>
+              <label htmlFor="wo-evidence" className="block text-xs font-medium text-slate-700">Collection Evidence</label>
               <input
+                id="wo-evidence"
                 required
                 value={woEvidence}
                 onChange={(e) => setWoEvidence(e.target.value)}
@@ -1067,18 +1271,26 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           </div>
           <form onSubmit={handleSupplierAdvance} className="space-y-4 p-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700">Vendor ID</label>
-              <input
+              <label htmlFor="adv-vendor" className="block text-xs font-medium text-slate-700">Vendor</label>
+              <select
+                id="adv-vendor"
                 required
-                type="number"
                 value={advVendorId}
                 onChange={(e) => setAdvVendorId(e.target.value)}
                 className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-              />
+              >
+                <option value="">Select vendor...</option>
+                {parties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Bank Account</label>
+              <label htmlFor="adv-bank" className="block text-xs font-medium text-slate-700">Bank Account</label>
               <select
+                id="adv-bank"
                 required
                 value={advBankId}
                 onChange={(e) => setAdvBankId(e.target.value)}
@@ -1092,8 +1304,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Amount</label>
+              <label htmlFor="adv-amount" className="block text-xs font-medium text-slate-700">Amount</label>
               <input
+                id="adv-amount"
                 required
                 type="number"
                 step="0.01"
@@ -1103,8 +1316,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700">Purpose</label>
+              <label htmlFor="adv-purpose" className="block text-xs font-medium text-slate-700">Purpose</label>
               <input
+                id="adv-purpose"
                 required
                 value={advPurpose}
                 onChange={(e) => setAdvPurpose(e.target.value)}
@@ -1131,52 +1345,79 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           <form onSubmit={handlePhysicalReturn} className="space-y-4 p-4">
             {side === 'purchasing' && (
               <div>
-                <label className="block text-xs font-medium text-slate-700">Vendor ID</label>
-                <input
+                <label htmlFor="ret-vendor" className="block text-xs font-medium text-slate-700">Vendor</label>
+                <select
+                  id="ret-vendor"
                   required
-                  type="number"
                   value={partyId}
                   onChange={(e) => setPartyId(e.target.value)}
                   className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                >
+                  <option value="">Select vendor...</option>
+                  {parties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium text-slate-700">{side === 'sales' ? 'Source Invoice ID' : 'Source Bill ID'}</label>
-              <input
+              <label htmlFor="ret-doc" className="block text-xs font-medium text-slate-700">
+                {side === 'sales' ? 'Source Invoice' : 'Source Bill'}
+              </label>
+              <select
+                id="ret-doc"
                 required={side === 'sales'}
-                type="number"
                 value={retDocId}
-                onChange={(e) => setRetDocId(e.target.value)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setRetDocId(id);
+                  const found = allDocs.find((d) => String(d.id) === id);
+                  if (found) setPartyId(String(found.partyId));
+                }}
                 className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-              />
+              >
+                <option value="">Select {side === 'sales' ? 'invoice' : 'bill'}...</option>
+                {allDocs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.no} — {d.partyName}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-medium text-slate-700">{side === 'sales' ? 'Invoice Line ID' : 'Bill Line ID'}</label>
-                <input
+                <label htmlFor="ret-line" className="block text-xs font-medium text-slate-700">
+                  {side === 'sales' ? 'Invoice Line' : 'Bill Line'}
+                </label>
+                <select
+                  id="ret-line"
                   required={side === 'sales'}
-                  type="number"
                   value={retLineId}
-                  onChange={(e) => setRetLineId(e.target.value)}
+                  onChange={(e) => {
+                    const lineId = e.target.value;
+                    setRetLineId(lineId);
+                    const found = retDocLines.find((l) => String(l.id) === lineId);
+                    if (found) {
+                      setRetItemId(found.itemId ? String(found.itemId) : '');
+                      setRetQty(String(found.quantity));
+                    }
+                  }}
                   className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                >
+                  <option value="">Select line...</option>
+                  {retDocLines.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.description} (Qty {l.quantity})
+                    </option>
+                  ))}
+                </select>
               </div>
-              {side === 'purchasing' && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-700">Item ID</label>
-                  <input
-                    required
-                    type="number"
-                    value={retItemId}
-                    onChange={(e) => setRetItemId(e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                  />
-                </div>
-              )}
               <div>
-                <label className="block text-xs font-medium text-slate-700">Quantity</label>
+                <label htmlFor="ret-qty" className="block text-xs font-medium text-slate-700">Quantity</label>
                 <input
+                  id="ret-qty"
                   required
                   type="number"
                   step="0.0001"
@@ -1188,8 +1429,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
             </div>
             {side === 'sales' ? (
               <div>
-                <label className="block text-xs font-medium text-slate-700">Condition</label>
+                <label htmlFor="ret-condition" className="block text-xs font-medium text-slate-700">Condition</label>
                 <select
+                  id="ret-condition"
                   value={retCondition}
                   onChange={(e) => setRetCondition(e.target.value)}
                   className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
@@ -1210,8 +1452,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
                   Control transferred to vendor (credit inventory &amp; debit Return Clearing)
                 </label>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700">Return Reason</label>
+                  <label htmlFor="ret-reason" className="block text-xs font-medium text-slate-700">Return Reason</label>
                   <input
+                    id="ret-reason"
                     required
                     value={retReason}
                     onChange={(e) => setRetReason(e.target.value)}
