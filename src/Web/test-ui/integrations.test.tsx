@@ -312,7 +312,8 @@ describe('shared integration experience', () => {
         transferActivity: { transferId: '2501885048', profileId: '17293386', occurredAt: '2026-11-18T03:21:32Z',
           previousState: null, currentState: 'incoming_payment_waiting', activeCases: [] } },
       { id: 'del-malformed', eventType: 'balances#update', receivedAt: '2026-11-18T03:22:43Z',
-        verification: 'malformed', status: 'failed', attempts: 0, lastError: "Unsupported Wise schema version '2.2.0'.", isTest: false },
+        verification: 'malformed', status: 'failed', attempts: 0, lastError: "Unsupported Wise schema version '2.2.0'.", isTest: false,
+        transferActivity: null },
     ];
     render(wrapper(<IntegrationsSettingsTab />));
     fireEvent.click(await screen.findByRole('button', { name: /Wise GBP/ }));
