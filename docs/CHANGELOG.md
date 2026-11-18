@@ -13,6 +13,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
+- Starter charts include accounts for payment processor clearing, payouts in transit, deferred revenue, related-party revenue, payment fees and foreign exchange gains and losses.
+
 - The assistant can review your books: it checks the reports, bank reconciliations, invoices, bills and manual journals for likely errors, lists what it found with links to each record, and says what it could not check. It can also help answer an accountant's or auditor's requests. This is a review of your own records, not an audit.
 - The assistant can run a set of checks over a period when you ask it to review your books: whether what clients and vendors owe agrees with the ledger, invoices and bills missing from the ledger, duplicate bills, manual journals worth a second look, and bank accounts not reconciled to the period end. Each result links to the records behind it.
 - The assistant can pick out ledger entries by amount or by text in the description or account, and for a manual journal can tell members who may view record history who prepared it, who posted it and when.
