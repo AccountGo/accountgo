@@ -162,6 +162,7 @@ namespace Services.Sales
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty, salesInvoice.Id);
             var customer = GetCustomerById(salesInvoice.CustomerId);
+            salesInvoice.ReceivableAccountId ??= customer.AccountsReceivableAccountId;
 
             foreach (var lineItem in salesInvoice.SalesInvoiceLines)
             {
@@ -1251,6 +1252,7 @@ namespace Services.Sales
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty, salesInvoice.Id);
             var customer = GetCustomerById(salesInvoice.CustomerId);
+            salesInvoice.ReceivableAccountId ??= customer.AccountsReceivableAccountId;
 
             foreach (var lineItem in salesInvoice.SalesInvoiceLines)
             {

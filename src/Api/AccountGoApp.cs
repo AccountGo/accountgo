@@ -178,6 +178,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Api.Service.WorkspaceInitializationApplicator>();
         builder.Services.AddScoped<Api.Service.SettlementAccountMappingService>();
         builder.Services.AddScoped<Api.Service.SettlementCommandCoordinator>();
+        builder.Services.AddScoped<Api.Service.CustomerCreditSettlementService>();
         builder.Services.AddAuthentication();
         builder.Services.ConfigureIdentity();
         builder.Services.ConfigureDataProtection(builder.Configuration, builder.Environment);

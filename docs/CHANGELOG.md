@@ -13,6 +13,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
+- Customer credit notes, settlement applications, and dated application/credit reversals with historical aging, tax-period, and close-readiness integration (behind the per-workspace feature gate).
+
 - Starter charts include accounts for payment processor clearing, payouts in transit, deferred revenue, related-party revenue, payment fees and foreign exchange gains and losses.
 
 - The assistant can review your books: it checks the reports, bank reconciliations, invoices, bills and manual journals for likely errors, lists what it found with links to each record, and says what it could not check. It can also help answer an accountant's or auditor's requests. This is a review of your own records, not an audit.

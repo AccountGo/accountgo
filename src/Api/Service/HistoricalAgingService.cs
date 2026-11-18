@@ -50,9 +50,27 @@ namespace Api.Service
                     .Include(i => i.SalesInvoiceLines).Include(i => i.CustomerAllocations).Include(i => i.VoidGeneralLedgerHeader)
                     .Where(i => i.Date < endExclusive && i.Status != SalesInvoiceStatus.Draft)
                     .ToList();
+                var appSettledByInvoice = _db.SettlementApplications.AsNoTracking()
+                    .Include(a => a.Reversal)
+                    .Where(a => a.DestinationType == SettlementDestinationType.SalesInvoice && a.SalesInvoiceHeaderId != null && a.EffectiveDate < endExclusive)
+                    .ToList()
+                    .Where(a => !a.IsReversed || (a.Reversal != null && a.Reversal.ReversalDate.Date > day))
+                    .GroupBy(a => a.SalesInvoiceHeaderId!.Value)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+                var writeOffsByInvoice = _db.ReceivableWriteOffs.AsNoTracking()
+                    .Include(w => w.VoidGeneralLedgerHeader)
+                    .Where(w => w.Status != SettlementDocumentStatus.Draft && w.Status != SettlementDocumentStatus.PendingReview && w.Date < endExclusive)
+                    .ToList()
+                    .Where(w => w.Status != SettlementDocumentStatus.Reversed || (w.VoidGeneralLedgerHeader != null && w.VoidGeneralLedgerHeader.Date.Date > day))
+                    .GroupBy(w => w.SalesInvoiceHeaderId)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+
                 foreach (var invoice in invoices)
                 {
-                    var amount = Signed(invoice.GrandTotal(), invoice.CustomerAllocations?.Where(a => a.Date.Date <= day).Sum(a => a.Amount) ?? 0m,
+                    var cashAlloc = invoice.CustomerAllocations?.Where(a => a.Date.Date <= day).Sum(a => a.Amount) ?? 0m;
+                    var creditSettled = appSettledByInvoice.TryGetValue(invoice.Id, out var cs) ? cs : 0m;
+                    var writtenOff = writeOffsByInvoice.TryGetValue(invoice.Id, out var wo) ? wo : 0m;
+                    var amount = Signed(invoice.GrandTotal(), cashAlloc + creditSettled + writtenOff,
                         invoice.Status == SalesInvoiceStatus.Void, invoice.VoidGeneralLedgerHeader?.Date, invoice.Date, day);
                     if (Math.Abs(amount) <= 0.005m) continue;
                     count++;
@@ -65,14 +83,26 @@ namespace Api.Service
             else
             {
                 var bills = _db.PurchaseInvoiceHeaders.AsNoTracking()
-                    .Include(b => b.PurchaseInvoiceLines).Include(b => b.VendorPayments).Include(b => b.VoidGeneralLedgerHeader)
+                    .Include(b => b.PurchaseInvoiceLines).Include(b => b.VendorPayments).ThenInclude(p => p.VoidGeneralLedgerHeader)
+                    .Include(b => b.VoidGeneralLedgerHeader)
                     .Where(b => b.Date < endExclusive)
                     .ToList();
+                var appSettledByBill = _db.SettlementApplications.AsNoTracking()
+                    .Include(a => a.Reversal)
+                    .Where(a => a.DestinationType == SettlementDestinationType.PurchaseInvoice && a.PurchaseInvoiceHeaderId != null && a.EffectiveDate < endExclusive)
+                    .ToList()
+                    .Where(a => !a.IsReversed || (a.Reversal != null && a.Reversal.ReversalDate.Date > day))
+                    .GroupBy(a => a.PurchaseInvoiceHeaderId!.Value)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+
                 foreach (var bill in bills)
                 {
                     if (bill.IsDraft) continue;
-                    var paid = (bill.VendorPayments ?? new List<VendorPayment>()).Where(p => p.Date.Date <= day && !p.IsVoid).Sum(p => p.Amount);
-                    var amount = Signed(bill.Total(), paid, bill.IsVoid, bill.VoidGeneralLedgerHeader?.Date ?? bill.VoidedAt, bill.Date, day);
+                    var paid = (bill.VendorPayments ?? new List<VendorPayment>())
+                        .Where(p => p.Date.Date <= day && (!p.IsVoid || ((p.VoidGeneralLedgerHeader?.Date ?? p.VoidedAt)?.Date > day)))
+                        .Sum(p => p.Amount);
+                    var settled = appSettledByBill.TryGetValue(bill.Id, out var bs) ? bs : 0m;
+                    var amount = Signed(bill.Total(), paid + settled, bill.IsVoid, bill.VoidGeneralLedgerHeader?.Date ?? bill.VoidedAt, bill.Date, day);
                     if (Math.Abs(amount) <= 0.005m) continue;
                     count++;
                     var bucket = Bucket(bill.DueDate?.Date ?? bill.Date.Date.AddDays(30), day);
@@ -83,8 +113,12 @@ namespace Api.Service
             }
 
             var controlIds = receivable
-                ? _db.Customers.AsNoTracking().Where(c => c.AccountsReceivableAccountId != null).Select(c => c.AccountsReceivableAccountId!.Value).Distinct().ToList()
-                : _db.Vendors.AsNoTracking().Where(v => v.AccountsPayableAccountId != null).Select(v => v.AccountsPayableAccountId!.Value).Distinct().ToList();
+                ? _db.Customers.AsNoTracking().Where(c => c.AccountsReceivableAccountId != null).Select(c => c.AccountsReceivableAccountId!.Value)
+                    .Concat(_db.SalesInvoiceHeaders.AsNoTracking().Where(i => i.ReceivableAccountId != null).Select(i => i.ReceivableAccountId!.Value))
+                    .Distinct().ToList()
+                : _db.Vendors.AsNoTracking().Where(v => v.AccountsPayableAccountId != null).Select(v => v.AccountsPayableAccountId!.Value)
+                    .Concat(_db.PurchaseInvoiceHeaders.AsNoTracking().Where(b => b.PayableAccountId != null).Select(b => b.PayableAccountId!.Value))
+                    .Distinct().ToList();
             var gl = ControlBalance(controlIds, endExclusive, receivable);
             var difference = gl - posted;
             return new

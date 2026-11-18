@@ -41,6 +41,8 @@ namespace Services.TaxSystem
         private readonly IRepository<VendorPayment> _vendorPayments;
         private readonly IEntitlementService _entitlements;
         private readonly ITenantContext _tenant;
+        private readonly IRepository<CustomerCreditNote>? _customerCredits;
+        private readonly IRepository<SupplierCreditNote>? _supplierCredits;
         private CompanySetting? _cachedSetting;
         private IReadOnlyList<TaxMeta>? _cachedTaxCatalog;
         private (CashBasisRecognitionInput Input, IReadOnlyList<CashRecognizedPosting> Postings)? _cachedCashRecognition;
@@ -59,7 +61,9 @@ namespace Services.TaxSystem
             IRepository<Vendor> vendors,
             IRepository<VendorPayment> vendorPayments,
             IEntitlementService entitlements,
-            ITenantContext tenant)
+            ITenantContext tenant,
+            IRepository<CustomerCreditNote>? customerCredits = null,
+            IRepository<SupplierCreditNote>? supplierCredits = null)
         {
             _settings = settings;
             _taxes = taxes;
@@ -75,6 +79,8 @@ namespace Services.TaxSystem
             _vendorPayments = vendorPayments;
             _entitlements = entitlements;
             _tenant = tenant;
+            _customerCredits = customerCredits;
+            _supplierCredits = supplierCredits;
         }
 
         public TaxPeriodReport Build(DateTime from, DateTime to) => Build(from, to, DefaultDocumentLimit);
@@ -298,6 +304,98 @@ namespace Services.TaxSystem
                     doc.Lines,
                     inputAcc,
                     allDocuments);
+            }
+
+            if (_customerCredits != null)
+            {
+                var custCredits = _customerCredits.Table
+                    .Where(c => (c.Status == SettlementDocumentStatus.Posted || c.Status == SettlementDocumentStatus.Reversed)
+                                && c.GeneralLedgerHeaderId != null
+                                && c.Date >= startDate && c.Date < endExclusive)
+                    .Select(c => new
+                    {
+                        c.Id,
+                        No = c.No ?? "",
+                        c.Date,
+                        c.GeneralLedgerHeaderId,
+                        PartyName = c.Customer != null && c.Customer.Party != null ? c.Customer.Party.Name : "",
+                        Lines = c.Lines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.UnitPrice, l.DiscountAmount, l.TaxAmount)).ToList()
+                    }).ToList();
+
+                foreach (var doc in custCredits)
+                {
+                    if (doc.GeneralLedgerHeaderId.HasValue)
+                        docGlHeaderIds.Add(doc.GeneralLedgerHeaderId.Value);
+                    AccumulateDocument("output", "customerCredit", doc.Id, doc.No, doc.Date, doc.PartyName ?? "", true, -1m, 0m, doc.Lines, outputAcc, allDocuments);
+                }
+
+                var custCreditRevs = _customerCredits.Table
+                    .Where(c => c.Status == SettlementDocumentStatus.Reversed
+                                && c.VoidGeneralLedgerHeaderId != null
+                                && c.VoidGeneralLedgerHeader != null
+                                && c.VoidGeneralLedgerHeader.Date >= startDate && c.VoidGeneralLedgerHeader.Date < endExclusive)
+                    .Select(c => new
+                    {
+                        c.Id,
+                        No = c.No ?? "",
+                        VoidDate = c.VoidGeneralLedgerHeader!.Date,
+                        c.VoidGeneralLedgerHeaderId,
+                        PartyName = c.Customer != null && c.Customer.Party != null ? c.Customer.Party.Name : "",
+                        Lines = c.Lines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.UnitPrice, l.DiscountAmount, l.TaxAmount)).ToList()
+                    }).ToList();
+
+                foreach (var doc in custCreditRevs)
+                {
+                    if (doc.VoidGeneralLedgerHeaderId.HasValue)
+                        docGlHeaderIds.Add(doc.VoidGeneralLedgerHeaderId.Value);
+                    AccumulateDocument("output", "customerCreditVoid", doc.Id, doc.No, doc.VoidDate, doc.PartyName ?? "", true, 1m, 0m, doc.Lines, outputAcc, allDocuments);
+                }
+            }
+
+            if (_supplierCredits != null)
+            {
+                var suppCredits = _supplierCredits.Table
+                    .Where(c => (c.Status == SettlementDocumentStatus.Posted || c.Status == SettlementDocumentStatus.Reversed)
+                                && c.GeneralLedgerHeaderId != null
+                                && c.EffectiveDate >= startDate && c.EffectiveDate < endExclusive)
+                    .Select(c => new
+                    {
+                        c.Id,
+                        No = c.No ?? "",
+                        c.EffectiveDate,
+                        c.GeneralLedgerHeaderId,
+                        PartyName = c.Vendor != null && c.Vendor.Party != null ? c.Vendor.Party.Name : "",
+                        Lines = c.Lines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.UnitCost, 0m, l.TaxAmount)).ToList()
+                    }).ToList();
+
+                foreach (var doc in suppCredits)
+                {
+                    if (doc.GeneralLedgerHeaderId.HasValue)
+                        docGlHeaderIds.Add(doc.GeneralLedgerHeaderId.Value);
+                    AccumulateDocument("input", "supplierCredit", doc.Id, doc.No, doc.EffectiveDate, doc.PartyName ?? "", true, -1m, 0m, doc.Lines, inputAcc, allDocuments);
+                }
+
+                var suppCreditRevs = _supplierCredits.Table
+                    .Where(c => c.Status == SettlementDocumentStatus.Reversed
+                                && c.VoidGeneralLedgerHeaderId != null
+                                && c.VoidGeneralLedgerHeader != null
+                                && c.VoidGeneralLedgerHeader.Date >= startDate && c.VoidGeneralLedgerHeader.Date < endExclusive)
+                    .Select(c => new
+                    {
+                        c.Id,
+                        No = c.No ?? "",
+                        VoidDate = c.VoidGeneralLedgerHeader!.Date,
+                        c.VoidGeneralLedgerHeaderId,
+                        PartyName = c.Vendor != null && c.Vendor.Party != null ? c.Vendor.Party.Name : "",
+                        Lines = c.Lines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.UnitCost, 0m, l.TaxAmount)).ToList()
+                    }).ToList();
+
+                foreach (var doc in suppCreditRevs)
+                {
+                    if (doc.VoidGeneralLedgerHeaderId.HasValue)
+                        docGlHeaderIds.Add(doc.VoidGeneralLedgerHeaderId.Value);
+                    AccumulateDocument("input", "supplierCreditVoid", doc.Id, doc.No, doc.VoidDate, doc.PartyName ?? "", true, 1m, 0m, doc.Lines, inputAcc, allDocuments);
+                }
             }
 
             var outputSummary = BuildSideSummary(outputAcc, taxById);
