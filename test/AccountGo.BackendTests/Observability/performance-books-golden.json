@@ -124,6 +124,18 @@
     },
     {
       "accountClassId": 1,
+      "accountCode": "10170",
+      "accountName": "Payment Processor Clearing",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
+      "accountCode": "10180",
+      "accountName": "Payouts in Transit",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 1,
       "accountCode": "10200",
       "accountName": "Noncurrent Assets",
       "amount": 0.0
@@ -246,6 +258,12 @@
       "accountClassId": 2,
       "accountCode": "20120",
       "accountName": "Customer Advances",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
+      "accountCode": "20130",
+      "accountName": "Deferred Revenue",
       "amount": 0.0
     },
     {
@@ -444,6 +462,12 @@
     },
     {
       "isExpense": false,
+      "accountCode": "40800",
+      "accountName": "Related-party Revenue",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
       "accountCode": "41000",
       "accountName": "Donations",
       "amount": 0.0
@@ -464,6 +488,12 @@
       "isExpense": false,
       "accountCode": "41250",
       "accountName": "Brothers In Christ",
+      "amount": 0.0
+    },
+    {
+      "isExpense": false,
+      "accountCode": "41300",
+      "accountName": "Foreign Exchange Gains",
       "amount": 0.0
     },
     {
@@ -602,6 +632,36 @@
       "isExpense": true,
       "accountCode": "50121",
       "accountName": "Bank Charges",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50122",
+      "accountName": "Payment Processing Fees",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50123",
+      "accountName": "Payment Currency Conversion Fees",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50124",
+      "accountName": "Subscription Billing Fees",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50125",
+      "accountName": "Non-recoverable Tax on Payment Fees",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50126",
+      "accountName": "Foreign Exchange Losses",
       "amount": 0.0
     },
     {
