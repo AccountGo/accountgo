@@ -2337,6 +2337,20 @@ namespace Services.Financial
 
                     _policyTransaction.Execute(journalEntry.CompanyId, guard =>
                     {
+                        if (!string.IsNullOrWhiteSpace(journalEntry.SourceSystem) && _sourcePostingGuards != null)
+                        {
+                            foreach (var postGuard in _sourcePostingGuards)
+                            {
+                                var block = postGuard.CheckPostingAllowed(
+                                    journalEntry.CompanyId,
+                                    journalEntry.SourceSystem,
+                                    journalEntry.SourceKey,
+                                    journalEntry.Id);
+                                if (block != null)
+                                    throw new SourceJournalLockedException(block.Code, block.Message);
+                            }
+                        }
+
                         executePosting();
 
                         if (guard.Settings.InitializedAtUtc.HasValue)
