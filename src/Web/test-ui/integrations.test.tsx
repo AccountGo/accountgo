@@ -304,6 +304,29 @@ describe('shared integration experience', () => {
       .toEqual({ sourceDeliveryId: 'transfer-issue', revision: 'revision-1' });
   });
 
+  it('renders initial transfer states without a leading arrow and allows replaying failed malformed deliveries', async () => {
+    connections = [{ ...endpoint, status: 'active' }];
+    deliveries = [
+      { id: 'del-initial', eventType: 'transfers#state-change', receivedAt: '2026-11-18T03:21:33Z',
+        verification: 'verified', status: 'processed', attempts: 0, lastError: null, isTest: false,
+        transferActivity: { transferId: '2501885048', profileId: '17293386', occurredAt: '2026-11-18T03:21:32Z',
+          previousState: null, currentState: 'incoming_payment_waiting', activeCases: [] } },
+      { id: 'del-malformed', eventType: 'balances#update', receivedAt: '2026-11-18T03:22:43Z',
+        verification: 'malformed', status: 'failed', attempts: 0, lastError: "Unsupported Wise schema version '2.2.0'.", isTest: false },
+    ];
+    render(wrapper(<IntegrationsSettingsTab />));
+    fireEvent.click(await screen.findByRole('button', { name: /Wise GBP/ }));
+    await screen.findByText('incoming_payment_waiting');
+    expect(screen.queryByText(/-> incoming_payment_waiting/)).toBeNull();
+
+    const replayButton = await screen.findByRole('button', { name: 'Replay' });
+    fireEvent.click(replayButton);
+    await screen.findByText(/Delivery queued/);
+    const replayCall = state.authFetch.mock.calls.find(c =>
+      c[0] === `/api/integrations/connections/${endpoint.id}/deliveries/del-malformed/replay` && c[1]?.method === 'POST');
+    expect(replayCall).toBeTruthy();
+  });
+
   it('lets a reviewer inspect the shared queue without any integration-management calls', async () => {
     manage = false;
     render(wrapper(<IncomingReview />, '1', false));

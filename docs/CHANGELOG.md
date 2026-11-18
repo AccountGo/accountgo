@@ -42,6 +42,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
 
 ### Fixed
+- Wise webhook integrations now accept initial transfer state notifications and additional balance update schema versions, show the failing event type and reason, and let you replay failed malformed deliveries.
 - Creating accounts now uses the correct debit or credit normal balance for their class and contra status. Editing unused accounts also corrects legacy defaults without changing accounts that have journal history.
 - Imported journals with source workflow checks cannot be posted while their source is stale, conflicted or awaiting recovery.
 - Issuing a sales invoice dated in a locked period or before the books start date is now refused before an invoice number is assigned, so failed attempts no longer consume a number.
