@@ -77,7 +77,7 @@ namespace Api.Service
             // A closed account is treated the same way so the address cannot be distinguished, and no code is sent.
             if (user == null || user.DeletedAt != null)
             {
-                _logger.LogInformation("OTP request for non-existent email {Email} from {IP} - running dummy hash compute.", RedactEmailForLog(normalizedEmail), ipAddress);
+                _logger.LogInformation("OTP request for non-existent email - running dummy hash compute.");
                 PerformDummyWork(normalizedEmail);
                 return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null, null);
             }
@@ -129,8 +129,8 @@ namespace Api.Service
             var payloadJson = JsonSerializer.Serialize(payload);
             await _userManager.SetAuthenticationTokenAsync(user, TokenProvider, TokenPurpose, payloadJson);
 
-            // Send Email Dispatch
-            var emailSubject = $"AccountGo Sign-In Code: {code}";
+            // Send Email Dispatch — keep the live OTP out of the subject (lock-screen / gateway / log leakage).
+            var emailSubject = "Your AccountGo sign-in verification code";
             var emailBody = $@"
 <div style=""font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;"">
   <div style=""text-align: center; margin-bottom: 24px;"">
@@ -163,7 +163,7 @@ namespace Api.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to deliver OTP email to {Email}", RedactEmailForLog(normalizedEmail));
+                _logger.LogError(ex, "Failed to deliver OTP email");
                 return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
             }
 
@@ -193,8 +193,8 @@ namespace Api.Service
             var payloadJson = JsonSerializer.Serialize(payload);
             await _userManager.SetAuthenticationTokenAsync(user, TokenProvider, TokenPurpose, payloadJson);
 
-            // Send Welcome Email Dispatch
-            var emailSubject = $"Welcome to AccountGo! Your verification code is {code}";
+            // Send Welcome Email Dispatch — keep the live OTP out of the subject (lock-screen / gateway / log leakage).
+            var emailSubject = "Welcome to AccountGo — verify your email";
             var orgText = !string.IsNullOrWhiteSpace(organizationName)
                 ? $"<p style=\"color: #334155; font-size: 15px; line-height: 1.5;\">Your workspace <strong>{System.Net.WebUtility.HtmlEncode(organizationName)}</strong> has been created and is ready for you.</p>"
                 : string.Empty;
@@ -232,7 +232,7 @@ namespace Api.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to deliver welcome OTP email to {Email}", RedactEmailForLog(normalizedEmail));
+                _logger.LogError(ex, "Failed to deliver welcome OTP email");
                 return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
             }
 
@@ -398,17 +398,6 @@ namespace Api.Service
             {
                 _logger.LogDebug(ex, "Security audit write failed for auth.otp.locked.");
             }
-        }
-
-        /// <summary>
-        /// Pseudonymizes an address for logs as <c>email#</c> + the first 12 hex chars of the SHA-256 of the
-        /// normalized (trimmed, lower-cased) address.
-        /// </summary>
-        internal static string RedactEmailForLog(string? email)
-        {
-            var normalized = (email ?? string.Empty).Trim().ToLowerInvariant();
-            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-            return "email#" + Convert.ToHexString(hash).Substring(0, 12).ToLowerInvariant();
         }
 
         private string ComputeHmac(string input)

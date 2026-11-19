@@ -214,7 +214,9 @@ namespace AccountGo.BackendTests
 
         protected string OtpCode()
         {
-            return Regex.Match(_emails.Messages.Last(m => m.Subject.StartsWith("Welcome to AccountGo!", StringComparison.Ordinal)).Subject, @"\d{6}").Value;
+            var message = _emails.Messages.Last(m =>
+                string.Equals(m.Subject, "Welcome to AccountGo — verify your email", StringComparison.Ordinal));
+            return Regex.Match(message.Html ?? string.Empty, @"letter-spacing:\s*8px[^>]*>\s*(\d{6})\s*<").Groups[1].Value;
         }
 
         protected int ViewerRoleId()

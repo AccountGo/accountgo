@@ -914,13 +914,11 @@ namespace AccountGo.BackendTests.Security
         private string OtpCodeFor(string email)
         {
             var message = _emails.Messages.Last(m =>
-                m.Subject.StartsWith("Welcome to AccountGo!", StringComparison.Ordinal)
+                string.Equals(m.Subject, "Welcome to AccountGo — verify your email", StringComparison.Ordinal)
                 && string.Equals(m.To, email, StringComparison.OrdinalIgnoreCase));
-            var code = Regex.Match(message.Subject, @"\d{6}").Value;
+            // Match the letter-spaced OTP block — body CSS also contains 6-digit hex colors like #334155.
+            var code = Regex.Match(message.Html ?? string.Empty, @"letter-spacing:\s*8px[^>]*>\s*(\d{6})\s*<").Groups[1].Value;
             Assert.False(string.IsNullOrEmpty(code), "a delivered OTP code was captured");
-            // Cross-check the same single-use code was rendered in the delivered body (the body also
-            // contains CSS hex colors like #334155, so match the code as delivered rather than any 6 digits).
-            Assert.Contains(code, message.Html ?? string.Empty, StringComparison.Ordinal);
             return code;
         }
 

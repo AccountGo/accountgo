@@ -1046,8 +1046,6 @@ namespace Services.Sales
                 }
             }
 
-            _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
-
             SaveSalesInvoice(salesInvoice, salesOrder);
 
             salesInvoiceDto.Id = salesInvoice.Id;
@@ -1108,8 +1106,6 @@ namespace Services.Sales
             {
                 salesInvoice.SalesInvoiceLines.Remove(line);
             }
-
-            _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
 
             SaveSalesInvoice(salesInvoice, salesOrder);
 
@@ -1189,7 +1185,6 @@ namespace Services.Sales
                 }
                 else
                 {
-                    _logger.LogInformation("Invoice " + salesInvoice.CustomerId + " is being updated.");
                     _salesInvoiceRepo.Update(salesInvoice);
                 }
 
@@ -1197,7 +1192,8 @@ namespace Services.Sales
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Failed to save sales invoice {InvoiceId} for customer {CustomerId}",
+                    salesInvoice.Id, salesInvoice.CustomerId);
                 throw; // Re-throw to let controller handle the error
             }
         }

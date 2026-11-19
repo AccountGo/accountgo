@@ -14,15 +14,13 @@ namespace Api.Controllers
     public class DonationsController : BaseController
     {
         private readonly IDonationsService _donationsService;
-        private readonly ILogger<DonationsController> _logger;
         private readonly IFinancialService _financialService;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
 
-        public DonationsController(IDonationsService donationsService, ILogger<DonationsController> logger, IFinancialService financialService,
+        public DonationsController(IDonationsService donationsService, IFinancialService financialService,
             Core.Tenancy.ITenantGuard tenantGuard)
         {
             _donationsService = donationsService;
-            _logger = logger;
             _financialService = financialService;
             _tenantGuard = tenantGuard;
         }
@@ -48,8 +46,6 @@ namespace Api.Controllers
         [Route("DonationInvoices")]
         public IActionResult DonationInvoices()
         {
-            _logger.LogInformation("Getting all donation invoices");
-
             var donationInvoices = _donationsService.GetDonationInvoices();
             IList<DonationInvoice> donationInvoicesDto = new List<DonationInvoice>();
 
@@ -99,8 +95,6 @@ namespace Api.Controllers
         [Route("DonationInvoice")]
         public IActionResult DonationInvoice(int id)
         {
-            _logger.LogInformation("Getting donation invoice with id: {Id}", id);
-
             var invoice = _donationsService.GetDonationInvoiceById(id);
 
             if (invoice == null)

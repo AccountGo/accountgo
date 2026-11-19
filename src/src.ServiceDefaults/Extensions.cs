@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,7 +53,17 @@ public static class Extensions
             })
             .WithTracing(tracing =>
             {
-                tracing.AddAspNetCoreInstrumentation()
+                tracing.AddAspNetCoreInstrumentation(options =>
+                    {
+                        // Strip query strings from exported spans — they may carry HMAC ?sig=, OAuth code/state, etc.
+                        // (Default OTEL redaction replaces values with "Redacted" but still records parameter names.)
+                        options.EnrichWithHttpRequest = static (activity, _) =>
+                        {
+                            activity.SetTag("url.query", null);
+                            StripQueryFromTag(activity, "url.full");
+                            StripQueryFromTag(activity, "http.url");
+                        };
+                    })
                     // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                     //.AddGrpcClientInstrumentation()
                     .AddHttpClientInstrumentation();
@@ -61,6 +72,15 @@ public static class Extensions
         builder.AddOpenTelemetryExporters();
 
         return builder;
+    }
+
+    private static void StripQueryFromTag(Activity activity, string tagName)
+    {
+        if (activity.GetTagItem(tagName) is not string value)
+            return;
+        var queryIndex = value.IndexOf('?');
+        if (queryIndex >= 0)
+            activity.SetTag(tagName, value[..queryIndex]);
     }
 
     private static IHostApplicationBuilder AddOpenTelemetryExporters(this IHostApplicationBuilder builder)
