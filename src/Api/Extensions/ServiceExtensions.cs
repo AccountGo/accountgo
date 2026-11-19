@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
@@ -195,20 +196,17 @@ namespace Api.Extensions
 
                 services.AddDbContext<ApiDbContext>((sp, options) =>
                 {
-                    options.UseSqlite(sqliteConnection);
+                    options.UseSqlite(sqliteConnection, o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SingleQuery));
                     options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>(),
                         sp.GetRequiredService<RecordChangeInterceptor>());
-                    if (environment.IsDevelopment())
-                    {
-                        options.EnableSensitiveDataLogging();
-                        options.EnableDetailedErrors();
-                    }
+                    ConfigureEfDiagnostics(options, configuration, environment);
                 });
 
                 services.AddDbContext<ApplicationIdentityDbContext>((sp, options) =>
                 {
-                    options.UseSqlite(sqliteConnection);
+                    options.UseSqlite(sqliteConnection, o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SingleQuery));
                     options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
+                    ConfigureEfDiagnostics(options, configuration, environment);
                 });
 
                 return;
@@ -227,23 +225,26 @@ namespace Api.Extensions
                 // Never retries (services open their own transactions); buffers results, see BufferingExecutionStrategy.
                 services.AddDbContext<ApiDbContext, PostgresApiDbContext>((sp, options) =>
                 {
-                    options.UseNpgsql(postgresConnection,
-                        npgsql => npgsql.ExecutionStrategy(d => new BufferingExecutionStrategy(d)));
+                    options.UseNpgsql(postgresConnection, npgsql =>
+                    {
+                        npgsql.ExecutionStrategy(d => new BufferingExecutionStrategy(d));
+                        npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SingleQuery);
+                    });
                     options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>(),
                         new WriteLockTransactionInterceptor(), sp.GetRequiredService<RecordChangeInterceptor>());
-                    if (environment.IsDevelopment())
-                    {
-                        options.EnableSensitiveDataLogging();
-                        options.EnableDetailedErrors();
-                    }
+                    ConfigureEfDiagnostics(options, configuration, environment);
                 });
 
                 services.AddDbContext<ApplicationIdentityDbContext, PostgresIdentityDbContext>((sp, options) =>
                 {
-                    options.UseNpgsql(postgresConnection,
-                        npgsql => npgsql.ExecutionStrategy(d => new BufferingExecutionStrategy(d)));
+                    options.UseNpgsql(postgresConnection, npgsql =>
+                    {
+                        npgsql.ExecutionStrategy(d => new BufferingExecutionStrategy(d));
+                        npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SingleQuery);
+                    });
                     options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>(),
                         new WriteLockTransactionInterceptor());
+                    ConfigureEfDiagnostics(options, configuration, environment);
                 });
 
                 return;
@@ -278,19 +279,43 @@ namespace Api.Extensions
                         sqlOptions.EnableRetryOnFailure();
                     });
                 options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
-
-                // Only enable sensitive logging for debugging purpose on ApiDbContext in development setting
-                if (environment.IsDevelopment())
-                {
-                    options.EnableSensitiveDataLogging();
-                    options.EnableDetailedErrors();
-                }
+                ConfigureEfDiagnostics(options, configuration, environment);
             });
 
             services.AddDbContext<ApplicationIdentityDbContext>((sp, options) =>
             {
                 options.UseSqlServer(connectionString: connectionString);
                 options.AddInterceptors(sp.GetRequiredService<ServerTimingDbCommandInterceptor>());
+                ConfigureEfDiagnostics(options, configuration, environment);
+            });
+        }
+
+        /// <summary>
+        /// Shared EF diagnostics: detailed errors in Development; sensitive-data logging only when
+        /// <c>EF_SENSITIVE_DATA_LOGGING=true</c>; suppress documented model warnings.
+        /// </summary>
+        static void ConfigureEfDiagnostics(
+            DbContextOptionsBuilder options,
+            IConfiguration configuration,
+            IHostEnvironment environment)
+        {
+            if (environment.IsDevelopment())
+                options.EnableDetailedErrors();
+
+            var sensitive =
+                string.Equals(configuration["EF_SENSITIVE_DATA_LOGGING"], "true", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Environment.GetEnvironmentVariable("EF_SENSITIVE_DATA_LOGGING"), "true", StringComparison.OrdinalIgnoreCase);
+            if (sensitive)
+                options.EnableSensitiveDataLogging();
+
+            options.ConfigureWarnings(warnings =>
+            {
+                // 10622: Company has soft-delete filter; CompanyMember/CompanyInvitation require Company.
+                // Checked call sites: org/auth lists join Companies (filter applies); membership APIs use
+                // CompanyId from the live tenant; SessionService uses IgnoreQueryFilters and
+                // m.Company.DeletedAt == null when navigating Company. No Include(m => m.Company) path
+                // loads a soft-deleted company through an inner join. Do not add query filters here.
+                warnings.Ignore(CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
             });
         }
     }
