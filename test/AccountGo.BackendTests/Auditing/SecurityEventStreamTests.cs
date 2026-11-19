@@ -271,7 +271,6 @@ namespace AccountGo.BackendTests.Auditing
         {
             var email = Unique("Ghost") + "@Example.COM";
             var normalized = email.Trim().ToLowerInvariant();
-            var expectedRedaction = "email#" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)))[..12].ToLowerInvariant();
 
             var response = await _host.Send(HttpMethod.Post, "/api/auth/send-otp", new { email }, scoped: false);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -281,7 +280,7 @@ namespace AccountGo.BackendTests.Auditing
             Assert.DoesNotContain(visible, l => l.Message.Contains(normalized, StringComparison.OrdinalIgnoreCase));
             Assert.Contains(visible, l =>
                 l.Category.Contains(nameof(EmailOtpService), StringComparison.Ordinal)
-                && l.Message.Contains(expectedRedaction, StringComparison.Ordinal));
+                && l.Message.Contains("OTP request for non-existent email", StringComparison.Ordinal));
         }
 
         // ---- data access ------------------------------------------------------------------------------

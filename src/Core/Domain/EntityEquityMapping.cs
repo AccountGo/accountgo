@@ -107,11 +107,18 @@ namespace Core.Domain
             return Profiles[EntityType.Corporation];
         }
 
+        private static readonly System.Threading.AsyncLocal<bool?> TestApprovalOverrideLocal = new();
+
         /// <summary>
-        /// Test-only override. Null uses the finance-approved default; set false in a disposable fixture to
-        /// exercise the closed gate without changing production source.
+        /// Test-only override scoped to the current async execution flow so parallel xUnit collections do not race.
+        /// Null uses the finance-approved default; set false in a disposable fixture to exercise the closed gate
+        /// without changing production source.
         /// </summary>
-        public static bool? TestApprovalOverride { get; set; }
+        public static bool? TestApprovalOverride
+        {
+            get => TestApprovalOverrideLocal.Value;
+            set => TestApprovalOverrideLocal.Value = value;
+        }
 
         /// <summary>
         /// Finance-approved Individual equity mapping for internal personal/household bookkeeping.
