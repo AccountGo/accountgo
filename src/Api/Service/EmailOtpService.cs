@@ -7,7 +7,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Api.Data;
-using Api.Observability;
 using Dto.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -78,7 +77,7 @@ namespace Api.Service
             // A closed account is treated the same way so the address cannot be distinguished, and no code is sent.
             if (user == null || user.DeletedAt != null)
             {
-                _logger.LogInformation("OTP request for non-existent email {Email} - running dummy hash compute.", RedactEmailForLog(normalizedEmail));
+                _logger.LogInformation("OTP request for non-existent email - running dummy hash compute.");
                 PerformDummyWork(normalizedEmail);
                 return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null, null);
             }
@@ -164,7 +163,7 @@ namespace Api.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to deliver OTP email to {Email}", RedactEmailForLog(normalizedEmail));
+                _logger.LogError(ex, "Failed to deliver OTP email");
                 return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
             }
 
@@ -233,7 +232,7 @@ namespace Api.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to deliver welcome OTP email to {Email}", RedactEmailForLog(normalizedEmail));
+                _logger.LogError(ex, "Failed to deliver welcome OTP email");
                 return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
             }
 
@@ -400,9 +399,6 @@ namespace Api.Service
                 _logger.LogDebug(ex, "Security audit write failed for auth.otp.locked.");
             }
         }
-
-        /// <summary>Delegates to <see cref="LogRedaction.RedactEmail"/>.</summary>
-        internal static string RedactEmailForLog(string? email) => LogRedaction.RedactEmail(email);
 
         private string ComputeHmac(string input)
         {

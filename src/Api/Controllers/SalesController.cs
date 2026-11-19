@@ -2098,6 +2098,14 @@ namespace Api.Controllers
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 if (InvoiceNumberProblem(ex) is { } numberProblem)
                     return StatusCode(numberProblem.Status, new[] { numberProblem.Message });
+                // Domain validation messages are safe for clients; database / unexpected failures are not.
+                if (ex is ArgumentException or InvalidOperationException)
+                {
+                    _logger.LogWarning(ex, "Sales invoice save rejected for customer {CustomerId}", salesInvoiceDto.CustomerId);
+                    errors = new string[1] { ex.Message };
+                    return new BadRequestObjectResult(errors);
+                }
+
                 _logger.LogError(ex, "Failed to save sales invoice for customer {CustomerId}", salesInvoiceDto.CustomerId);
                 errors = new string[1] { "An error occurred while saving the sales invoice." };
                 return new BadRequestObjectResult(errors);

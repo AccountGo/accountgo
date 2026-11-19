@@ -8,7 +8,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Api.Observability;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -46,7 +45,7 @@ namespace Api.Service
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                _logger.LogWarning("Resend API key is missing. Email to {To} will not be dispatched.", LogRedaction.RedactEmail(message.To));
+                _logger.LogWarning("Resend API key is missing. Email will not be dispatched.");
                 throw new InvalidOperationException("Resend API key is not configured.");
             }
 
@@ -139,7 +138,7 @@ namespace Api.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception encountered while dispatching email via Resend to {To}", LogRedaction.RedactEmail(message.To));
+                _logger.LogError(ex, "Exception encountered while dispatching email via Resend");
                 throw new EmailDeliveryException($"The email service could not be reached ({ex.GetType().Name}).", ex);
             }
 
@@ -151,8 +150,8 @@ namespace Api.Service
                 });
 
                 _logger.LogInformation(
-                    "Email dispatched successfully via Resend. ID: {EmailId}, To: {To}, Attachments: {AttachmentCount}",
-                    result?.Id, LogRedaction.RedactEmail(message.To), message.Attachments.Count);
+                    "Email dispatched successfully via Resend. ID: {EmailId}, Attachments: {AttachmentCount}",
+                    result?.Id, message.Attachments.Count);
                 return result?.Id ?? string.Empty;
             }
 

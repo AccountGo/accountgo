@@ -32,10 +32,8 @@ namespace Api.Service
                 return path;
             }).ToList();
 
-            var redactedTo = LogRedaction.RedactEmail(message.To);
             _logger.LogInformation(
-                "Email dispatched to {To} with {AttachmentCount} attachment(s)",
-                redactedTo,
+                "Email dispatched with {AttachmentCount} attachment(s)",
                 message.Attachments.Count);
 
             // Full body (OTP codes, invite URLs) only on the developer console — never in Production.
