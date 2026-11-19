@@ -64,7 +64,7 @@ namespace Services.Banking
             IFinancialService financial,
             IEntitlementService entitlements,
             ITenantContext tenant,
-            IBooksLockGuard booksLockGuard = null!)
+            IBooksLockGuard? booksLockGuard = null)
         {
             _banks = banks;
             _bankTransactions = bankTransactions;
@@ -80,7 +80,7 @@ namespace Services.Banking
             _vendorPayments = vendorPayments;
             _purchaseInvoices = purchaseInvoices;
             _journals = journals;
-            _booksLockGuard = booksLockGuard;
+            _booksLockGuard = booksLockGuard!;
             _customers = customers;
             _vendors = vendors;
             _parties = parties;

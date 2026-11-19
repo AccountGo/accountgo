@@ -411,6 +411,10 @@ namespace Api.Data
         {
             base.OnModelCreating(builder);
 
+            // SQL Server migrations keep Schema = "dbo"; SQLite has one namespace — clear it like Postgres.
+            if (Database.IsSqlite())
+                Postgres.PostgresModelConventions.UseDefaultSchema(builder);
+
             builder.Entity<RecordChange>(entity =>
             {
                 entity.ToTable("RecordChanges");
@@ -472,11 +476,12 @@ namespace Api.Data
                 .HasMaxLength(32)
                 .HasDefaultValue(CompanyActivationStates.Active);
             builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
-            builder.Entity<CompanySetting>().Property(s => s.AccountingBasis).HasDefaultValue(AccountingBasis.Accrual);
-            builder.Entity<CompanySetting>().Property(s => s.ReportingFramework).HasDefaultValue(ReportingFramework.IfrsForSmes);
+            // Sentinel 0: these enums start at 1, so 0 is never a real value (clears EF 20601).
+            builder.Entity<CompanySetting>().Property(s => s.AccountingBasis).HasDefaultValue(AccountingBasis.Accrual).HasSentinel((AccountingBasis)0);
+            builder.Entity<CompanySetting>().Property(s => s.ReportingFramework).HasDefaultValue(ReportingFramework.IfrsForSmes).HasSentinel((ReportingFramework)0);
             builder.Entity<CompanySetting>().Property(s => s.TaxRegime).HasDefaultValue(TaxRegime.None);
-            builder.Entity<CompanySetting>().Property(s => s.FiscalYearPattern).HasDefaultValue(FiscalYearPattern.Calendar);
-            builder.Entity<CompanySetting>().Property(s => s.TaxPeriodFrequency).HasDefaultValue(TaxPeriodFrequency.Quarterly);
+            builder.Entity<CompanySetting>().Property(s => s.FiscalYearPattern).HasDefaultValue(FiscalYearPattern.Calendar).HasSentinel((FiscalYearPattern)0);
+            builder.Entity<CompanySetting>().Property(s => s.TaxPeriodFrequency).HasDefaultValue(TaxPeriodFrequency.Quarterly).HasSentinel((TaxPeriodFrequency)0);
             builder.Entity<CompanySetting>().Property(s => s.BooksStartDate)
                 .HasColumnType("date")
                 .HasDefaultValue(new System.DateTime(1970, 1, 1));
@@ -502,8 +507,10 @@ namespace Api.Data
                 entity.HasOne<FinancialYear>().WithMany().HasForeignKey(s => s.FinancialYearId).OnDelete(DeleteBehavior.Cascade);
                 entity.HasOne<Partner>().WithMany().HasForeignKey(s => s.PartnerId).OnDelete(DeleteBehavior.Cascade);
             });
-            builder.Entity<CompanySetting>().Property(s => s.EntityType).HasDefaultValue(EntityType.Corporation);
-            builder.Entity<CompanySetting>().Property(s => s.IndustryTemplate).HasDefaultValue(IndustryTemplate.Services);
+            // TODO: code default and database default disagree; product decision pending.
+            // CompanySetting.EntityType code default is SoleProprietor; database default here is Corporation.
+            builder.Entity<CompanySetting>().Property(s => s.EntityType).HasDefaultValue(EntityType.Corporation).HasSentinel((EntityType)0);
+            builder.Entity<CompanySetting>().Property(s => s.IndustryTemplate).HasDefaultValue(IndustryTemplate.Services).HasSentinel((IndustryTemplate)0);
             builder.Entity<BooksLockChange>(entity =>
             {
                 entity.Property(e => e.PreviousLockedThrough).HasColumnType("date");
@@ -552,6 +559,8 @@ namespace Api.Data
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
             builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);
+            // Required owned navigation: all address columns remain nullable; clears EF 20606 when the model agrees.
+            builder.Entity<CompanySetting>().Navigation(s => s.BusinessAddress).IsRequired();
             builder.Entity<EntitlementUsage>(entity =>
             {
                 entity.Property(e => e.Resource).IsRequired().HasMaxLength(50);

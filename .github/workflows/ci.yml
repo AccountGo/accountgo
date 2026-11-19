@@ -109,11 +109,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Build solution (warnings as errors)
+        run: dotnet build accountgo.sln -c Release --no-incremental
+
       - name: Backend tests
-        run: dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj -c Release
+        run: dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj -c Release --no-build
 
       - name: Services tests
-        run: dotnet test test/AccountGo.ServicesTests/AccountGo.ServicesTests.csproj -c Release
+        run: dotnet test test/AccountGo.ServicesTests/AccountGo.ServicesTests.csproj -c Release --no-build
 
   api-tests-postgres:
     name: API tests (Postgres)

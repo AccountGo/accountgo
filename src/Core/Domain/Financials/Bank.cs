@@ -21,7 +21,7 @@ namespace Core.Domain.Financials
 
         [Required]
         [StringLength(200)]
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
 
         /// <summary>
         /// Required by the domain and enforced by SaveChanges / SQLite triggers.
@@ -30,12 +30,12 @@ namespace Core.Domain.Financials
         [Required]
         public int? AccountId { get; set; }
 
-        public string BankName { get; set; }
-        public string Number { get; set; }
-        public string Address { get; set; }
-        public string RoutingNumber { get; set; }
-        public string Iban { get; set; }
-        public string Swift { get; set; }
+        public string? BankName { get; set; }
+        public string? Number { get; set; }
+        public string? Address { get; set; }
+        public string? RoutingNumber { get; set; }
+        public string? Iban { get; set; }
+        public string? Swift { get; set; }
 
         /// <summary>Legacy single-default flag; backfilled into <see cref="IsDefaultForReceipts"/>.</summary>
         public bool IsDefault { get; set; }
@@ -53,8 +53,8 @@ namespace Core.Domain.Financials
 
         /// <summary>Null means the workspace currency (P2 multi-currency room).</summary>
         [StringLength(3)]
-        public string CurrencyCode { get; set; }
+        public string? CurrencyCode { get; set; }
 
-        public virtual Account Account { get; set; }
+        public virtual Account? Account { get; set; }
     }
 }

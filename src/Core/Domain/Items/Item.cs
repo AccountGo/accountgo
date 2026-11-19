@@ -42,11 +42,11 @@ namespace Core.Domain.Items
         public int? InventoryAccountId { get; set; }        
         public int? CostOfGoodsSoldAccountId { get; set; }
         public int? InventoryAdjustmentAccountId { get; set; }
-        public string No { get; set; }
-        public string Code { get; set; }
-        public string Description { get; set; }
-        public string PurchaseDescription { get; set; }
-        public string SellDescription { get; set; }
+        public string? No { get; set; }
+        public string? Code { get; set; }
+        public string? Description { get; set; }
+        public string? PurchaseDescription { get; set; }
+        public string? SellDescription { get; set; }
         public decimal? Cost { get; set; }
         public decimal? Price { get; set; }
         public decimal QuantityOnHand { get; set; }
@@ -55,33 +55,36 @@ namespace Core.Domain.Items
         public decimal StockValue { get; set; }
         /// <summary>When it was archived: hidden when picking an item for a line, past lines untouched. Null while active.</summary>
         public DateTime? ArchivedAt { get; set; }
-        public virtual ItemCategory ItemCategory { get; set; }
-        public virtual ItemTaxGroup ItemTaxGroup { get; set; }
-        public virtual Vendor PreferredVendor { get; set; }
-        public virtual Account InventoryAccount { get; set; }
-        public virtual Account SalesAccount { get; set; }
-        public virtual Account CostOfGoodsSoldAccount { get; set; }
-        public virtual Account InventoryAdjustmentAccount { get; set; }
-        public virtual Measurement SmallestMeasurement { get; set; }
-        public virtual Measurement SellMeasurement { get; set; }
-        public virtual Measurement PurchaseMeasurement { get; set; }
+        public virtual ItemCategory? ItemCategory { get; set; }
+        public virtual ItemTaxGroup? ItemTaxGroup { get; set; }
+        public virtual Vendor? PreferredVendor { get; set; }
+        public virtual Account? InventoryAccount { get; set; }
+        public virtual Account? SalesAccount { get; set; }
+        public virtual Account? CostOfGoodsSoldAccount { get; set; }
+        public virtual Account? InventoryAdjustmentAccount { get; set; }
+        public virtual Measurement? SmallestMeasurement { get; set; }
+        public virtual Measurement? SellMeasurement { get; set; }
+        public virtual Measurement? PurchaseMeasurement { get; set; }
 
-        public virtual ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; }
-        public virtual ICollection<PurchaseOrderLine> PurchaseOrderLines { get; set; }
-        public virtual ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; }
-        public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
-        public virtual ICollection<InventoryControlJournal> InventoryControlJournals { get; set; }
-        public virtual ICollection<InventoryAdjustment> InventoryAdjustments { get; set; }
+        public virtual ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; } = null!;
+        public virtual ICollection<PurchaseOrderLine> PurchaseOrderLines { get; set; } = null!;
+        public virtual ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; } = null!;
+        public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; } = null!;
+        public virtual ICollection<InventoryControlJournal> InventoryControlJournals { get; set; } = null!;
+        public virtual ICollection<InventoryAdjustment> InventoryAdjustments { get; set; } = null!;
 
         #region Not Mapped
         [NotMapped]
         public decimal ItemTaxAmountOutput { get { return ComputeItemTaxAmountOutput(); } }
         private decimal ComputeItemTaxAmountOutput()
         {
-            decimal totalItemTaxAmount = 0;            
+            decimal totalItemTaxAmount = 0;
+            if (ItemTaxGroup == null || !Price.HasValue)
+                return totalItemTaxAmount;
+            var price = Price.Value;
             foreach (var itemTaxGroup in ItemTaxGroup.ItemTaxGroupTax)
             {
-                decimal salesPrice = (Price.Value / (1 + (itemTaxGroup.Tax.Rate / 100)));
+                decimal salesPrice = (price / (1 + (itemTaxGroup.Tax.Rate / 100)));
                 var taxAmount = salesPrice * (itemTaxGroup.Tax.Rate / 100);
                 totalItemTaxAmount += taxAmount;
             }
@@ -93,9 +96,12 @@ namespace Core.Domain.Items
         private decimal ComputeItemTaxAmountInput()
         {
             decimal totalItemTaxAmount = 0;
+            if (ItemTaxGroup == null || !Cost.HasValue)
+                return totalItemTaxAmount;
+            var cost = Cost.Value;
             foreach (var itemTaxGroup in ItemTaxGroup.ItemTaxGroupTax)
             {
-                var taxAmount = Cost.Value * (itemTaxGroup.Tax.Rate / 100);
+                var taxAmount = cost * (itemTaxGroup.Tax.Rate / 100);
                 totalItemTaxAmount += taxAmount;
             }
             return totalItemTaxAmount;
@@ -111,10 +117,13 @@ namespace Core.Domain.Items
 
         public decimal ComputeDiscountedPrice()
         {
-            _discountedPrice = Price.Value;
+            if (!Price.HasValue)
+                return 0;
+            var price = Price.Value;
+            _discountedPrice = price;
             if (_discount != 0)
             {
-                _discountedPrice = Price.Value - ((_discount / 100) * Price.Value);
+                _discountedPrice = price - ((_discount / 100) * price);
             }
             return _discountedPrice;
         }

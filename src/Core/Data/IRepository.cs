@@ -39,6 +39,6 @@ namespace Core.Data
         IQueryable<T> Table { get; }
         IQueryable<T> TableNoTracking => Table;
 
-        IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties);
+        IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object?>>[] includeProperties);
     }
 }

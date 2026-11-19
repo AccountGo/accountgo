@@ -12,6 +12,6 @@ namespace Core.Domain
         public int FinancialYearId { get; set; }
         public int NextNumber { get; set; } = 1;
 
-        public virtual FinancialYear? FinancialYear { get; set; }
+        public virtual FinancialYear FinancialYear { get; set; } = null!;
     }
 }

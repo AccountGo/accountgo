@@ -26,24 +26,24 @@ namespace Core.Domain.Purchases
         public int? PurchaseInvoiceHeaderId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }
         public int? VoidGeneralLedgerHeaderId { get; set; }
-        public string No { get; set; }
+        public string? No { get; set; }
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
         /// <summary>The cash or bank account the payment was made from.</summary>
         public int? AccountId { get; set; }
-        public string PaymentMethod { get; set; }
-        public string ReferenceNo { get; set; }
-        public string Memo { get; set; }
-        public string VoidedBy { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? ReferenceNo { get; set; }
+        public string? Memo { get; set; }
+        public string? VoidedBy { get; set; }
         public DateTime? VoidedAt { get; set; }
-        public string VoidReason { get; set; }
+        public string? VoidReason { get; set; }
 
         public bool IsVoid => VoidedAt.HasValue;
 
-        public virtual Account Account { get; set; }
-        public virtual Vendor Vendor { get; set; }
-        public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
-        public virtual GeneralLedgerHeader VoidGeneralLedgerHeader { get; set; }
-        public virtual PurchaseInvoiceHeader PurchaseInvoiceHeader { get; set; }
+        public virtual Account? Account { get; set; }
+        public virtual Vendor Vendor { get; set; } = null!;
+        public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
+        public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
+        public virtual PurchaseInvoiceHeader? PurchaseInvoiceHeader { get; set; }
     }
 }

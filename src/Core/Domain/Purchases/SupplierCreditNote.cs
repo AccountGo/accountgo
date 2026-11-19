@@ -78,7 +78,7 @@ namespace Core.Domain.Purchases
         [ConcurrencyCheck]
         public long Version { get; set; }
 
-        public virtual Vendor? Vendor { get; set; }
+        public virtual Vendor Vendor { get; set; } = null!;
         public virtual PurchaseInvoiceHeader? SourcePurchaseInvoiceHeader { get; set; }
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
@@ -86,7 +86,7 @@ namespace Core.Domain.Purchases
         public virtual Account? PayableAccount { get; set; }
         public virtual Account? ReturnClearingAccount { get; set; }
         public virtual Account? ValuationDifferenceAccount { get; set; }
-        public virtual ICollection<SupplierCreditNoteLine> Lines { get; set; }
+        public virtual ICollection<SupplierCreditNoteLine> Lines { get; set; } = null!;
 
         [NotMapped]
         public decimal AvailableAmount => Math.Max(0m, TotalAmount - AppliedAmount - RefundedAmount);
@@ -117,7 +117,7 @@ namespace Core.Domain.Purchases
         public virtual SupplierCreditNote? SupplierCreditNote { get; set; }
         public virtual PurchaseInvoiceLine? SourcePurchaseInvoiceLine { get; set; }
         public virtual SupplierReturnDispatch? MatchedReturnDispatch { get; set; }
-        public virtual Item? Item { get; set; }
+        public virtual Item Item { get; set; } = null!;
         public virtual Account? ExpenseOrAssetAccount { get; set; }
         public virtual Tax? Tax { get; set; }
         public virtual Account? TaxAccount { get; set; }
@@ -175,9 +175,9 @@ namespace Core.Domain.Purchases
         [ConcurrencyCheck]
         public long Version { get; set; }
 
-        public virtual Vendor? Vendor { get; set; }
+        public virtual Vendor Vendor { get; set; } = null!;
         public virtual PurchaseOrderHeader? PurchaseOrderHeader { get; set; }
-        public virtual Bank? Bank { get; set; }
+        public virtual Bank Bank { get; set; } = null!;
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
 
@@ -228,14 +228,14 @@ namespace Core.Domain.Purchases
         [ConcurrencyCheck]
         public long Version { get; set; }
 
-        public virtual Vendor? Vendor { get; set; }
+        public virtual Vendor Vendor { get; set; } = null!;
         public virtual PurchaseReceiptHeader? PurchaseReceiptHeader { get; set; }
         public virtual PurchaseInvoiceHeader? PurchaseInvoiceHeader { get; set; }
         public virtual SupplierCreditNote? SupplierCreditNote { get; set; }
         public virtual Account? ReturnClearingAccount { get; set; }
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
-        public virtual ICollection<SupplierReturnDispatchLine> Lines { get; set; }
+        public virtual ICollection<SupplierReturnDispatchLine> Lines { get; set; } = null!;
     }
 
     [Table("SupplierReturnDispatchLine")]
@@ -252,10 +252,10 @@ namespace Core.Domain.Purchases
         public int? InventoryControlJournalId { get; set; }
         public int? InventoryAccountId { get; set; }
 
-        public virtual SupplierReturnDispatch? SupplierReturnDispatch { get; set; }
+        public virtual SupplierReturnDispatch SupplierReturnDispatch { get; set; } = null!;
         public virtual PurchaseReceiptLine? PurchaseReceiptLine { get; set; }
         public virtual PurchaseInvoiceLine? PurchaseInvoiceLine { get; set; }
-        public virtual Item? Item { get; set; }
+        public virtual Item Item { get; set; } = null!;
         public virtual InventoryControlJournal? InventoryControlJournal { get; set; }
         public virtual Account? InventoryAccount { get; set; }
     }

@@ -105,14 +105,14 @@ namespace Api.Controllers
             return new DonorDto
             {
                 Id = donor.Id,
-                DonorType = donor.DonorType,
-                FirstName = donor.FirstName,
-                LastName = donor.LastName,
-                CompanyName = donor.CompanyName,
-                Street = donor.Street,
-                Province = donor.Province,
-                PostalCode = donor.PostalCode,
-                Telephone = donor.Telephone,
+                DonorType = donor.DonorType!,
+                FirstName = donor.FirstName!,
+                LastName = donor.LastName!,
+                CompanyName = donor.CompanyName!,
+                Street = donor.Street!,
+                Province = donor.Province!,
+                PostalCode = donor.PostalCode!,
+                Telephone = donor.Telephone!,
                 Email = donor.Email
             };
         }

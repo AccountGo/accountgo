@@ -18,15 +18,15 @@ namespace Services
 {
     public abstract class BaseService
     {
-        private readonly IRepository<SequenceNumber> _sequenceNumberRepo;
-        private readonly IRepository<GeneralLedgerSetting> _generalLedgerSettingRepo;
-        private readonly IRepository<PaymentTerm> _paymentTermRepo;
-        private readonly IRepository<Bank> _bankRepo;
+        private readonly IRepository<SequenceNumber>? _sequenceNumberRepo;
+        private readonly IRepository<GeneralLedgerSetting>? _generalLedgerSettingRepo;
+        private readonly IRepository<PaymentTerm>? _paymentTermRepo;
+        private readonly IRepository<Bank>? _bankRepo;
 
-        internal BaseService(IRepository<SequenceNumber> sequenceNumberRepo,
-            IRepository<GeneralLedgerSetting> generalLedgerSettingRepo,
-            IRepository<PaymentTerm> paymentTermRepo,
-            IRepository<Bank> bankRepo)
+        internal BaseService(IRepository<SequenceNumber>? sequenceNumberRepo,
+            IRepository<GeneralLedgerSetting>? generalLedgerSettingRepo,
+            IRepository<PaymentTerm>? paymentTermRepo,
+            IRepository<Bank>? bankRepo)
         {
             _sequenceNumberRepo = sequenceNumberRepo;
             _generalLedgerSettingRepo = generalLedgerSettingRepo;
@@ -37,7 +37,7 @@ namespace Services
         protected int GetNextNumber(SequenceNumberTypes type)
         {
             int nextNumber = 1;
-            var sequence = (from n in _sequenceNumberRepo.Table
+            var sequence = (from n in _sequenceNumberRepo!.Table
                             where n.SequenceNumberType == type
                             select n).FirstOrDefault();
             if (sequence == null)
@@ -47,13 +47,13 @@ namespace Services
                 sequence.UsePrefix = false;
                 sequence.SequenceNumberType = type;
                 sequence.NextNumber = nextNumber + 1;
-                _sequenceNumberRepo.Insert(sequence);
+                _sequenceNumberRepo!.Insert(sequence);
             }
             else
             {
                 nextNumber = sequence.NextNumber;
                 sequence.NextNumber += 1;
-                _sequenceNumberRepo.Update(sequence);
+                _sequenceNumberRepo!.Update(sequence);
             }
             return nextNumber;
         }
@@ -61,17 +61,17 @@ namespace Services
         /// <summary>The next value of a sequence without taking it; 1 when the sequence doesn't exist yet.</summary>
         protected int PeekNextNumber(SequenceNumberTypes type)
         {
-            var sequence = _sequenceNumberRepo.Table.FirstOrDefault(n => n.SequenceNumberType == type);
+            var sequence = _sequenceNumberRepo!.Table.FirstOrDefault(n => n.SequenceNumberType == type);
             return Math.Max(sequence?.NextNumber ?? 1, 1);
         }
 
         /// <summary>Moves a sequence so its next value is <paramref name="nextNumber"/>. It only ever moves forward.</summary>
         protected void AdvanceNextNumber(SequenceNumberTypes type, int nextNumber)
         {
-            var sequence = _sequenceNumberRepo.Table.FirstOrDefault(n => n.SequenceNumberType == type);
+            var sequence = _sequenceNumberRepo!.Table.FirstOrDefault(n => n.SequenceNumberType == type);
             if (sequence == null)
             {
-                _sequenceNumberRepo.Insert(new SequenceNumber
+                _sequenceNumberRepo!.Insert(new SequenceNumber
                 {
                     Description = Enum.GetName(typeof(SequenceNumberTypes), type),
                     UsePrefix = false,
@@ -82,27 +82,27 @@ namespace Services
             else if (nextNumber > sequence.NextNumber)
             {
                 sequence.NextNumber = nextNumber;
-                _sequenceNumberRepo.Update(sequence);
+                _sequenceNumberRepo!.Update(sequence);
             }
         }
 
-        protected GeneralLedgerSetting GetGeneralLedgerSetting()
+        protected GeneralLedgerSetting? GetGeneralLedgerSetting()
         {
-            var query = from f in _generalLedgerSettingRepo.Table
+            var query = from f in _generalLedgerSettingRepo!.Table
                         select f;
             return query.FirstOrDefault();
         }
 
         //protected IEnumerable<PaymentTerm> GetPaymentTerms()
         //{
-        //    var query = from f in _paymentTermRepo.Table
+        //    var query = from f in _paymentTermRepo!.Table
         //                select f;
         //    return query;
         //}
 
         protected IEnumerable<Bank> GetCashAndBanks()
         {
-            var query = from b in _bankRepo.Table
+            var query = from b in _bankRepo!.Table
                         select b;
             return query;
         }

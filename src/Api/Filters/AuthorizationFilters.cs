@@ -153,7 +153,7 @@ namespace Api.Filters
                     string.Equals(action, "PostJournalEntry", StringComparison.Ordinal) &&
                     context.ActionArguments.Values.OfType<Dto.Financial.JournalEntry>().FirstOrDefault() is { Id: > 0 } journal &&
                     ApprovalEvidence.WasConsumedForJournal(db.AuditLogs.AsNoTracking(), tenantContext.CompanyId.Value,
-                        context.HttpContext.Request.Headers["X-Approval-Request-Id"].FirstOrDefault(), journal.Id))
+                        context.HttpContext.Request.Headers["X-Approval-Request-Id"].FirstOrDefault()!, journal.Id))
                 {
                     context.Result = new ConflictObjectResult(new { code = "approval_already_used", detail = "This approval was already used. Ask for a new approval." });
                     return;

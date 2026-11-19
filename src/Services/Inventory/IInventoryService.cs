@@ -26,11 +26,11 @@ namespace Services.Inventory
         void AddItem(Item item);
         void UpdateItem(Item item);
         void DeleteItem(int itemId);
-        Item GetItemById(int id);
-        Item GetItemByNo(string itemNo);
+        Item? GetItemById(int id);
+        Item? GetItemByNo(string itemNo);
         IEnumerable<Item> GetAllItems();
         /// <summary>The active item with this description (case-insensitive), without loading related data.</summary>
-        Item GetActiveItemByDescription(string description);
+        Item? GetActiveItemByDescription(string description);
         IEnumerable<Measurement> GetMeasurements();
         Measurement GetMeasurementById(int id);
         IEnumerable<ItemCategory> GetItemCategories();

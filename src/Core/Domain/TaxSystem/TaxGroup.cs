@@ -21,12 +21,12 @@ namespace Core.Domain.TaxSystem
             TaxGroupTax = new HashSet<TaxGroupTax>();
         }
         public int CompanyId { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
 
         [Display(Name = "Fully Exempt")]
         public bool TaxAppliedToShipping { get; set; }
         public bool IsActive { get; set; }
-        public virtual ICollection<TaxGroupTax> TaxGroupTax { get; set; }
+        public virtual ICollection<TaxGroupTax> TaxGroupTax { get; set; } = null!;
     }
 
     [Table("TaxGroupTax")]
@@ -35,7 +35,7 @@ namespace Core.Domain.TaxSystem
         public int CompanyId { get; set; }
         public int TaxId { get; set; }
         public int TaxGroupId { get; set; }
-        public virtual Tax Tax { get; set; }
-        public virtual TaxGroup TaxGroup { get; set; }
+        public virtual Tax Tax { get; set; } = null!;
+        public virtual TaxGroup TaxGroup { get; set; } = null!;
     }
 }

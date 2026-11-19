@@ -13,10 +13,10 @@ namespace Core.Domain.Donations
         public int MeasurementId { get; set; }
         [Precision(18, 2)] public decimal Quantity { get; set; }
         [Precision(18, 2)] public decimal Amount { get; set; }
-        public string Notes { get; set; }
+        public string? Notes { get; set; }
 
-        public virtual DonationInvoiceHeader DonationInvoiceHeader { get; set; }
-        public virtual Item Item { get; set; }
-        public virtual Measurement Measurement { get; set; }
+        public virtual DonationInvoiceHeader DonationInvoiceHeader { get; set; } = null!;
+        public virtual Item Item { get; set; } = null!;
+        public virtual Measurement Measurement { get; set; } = null!;
     }
 }

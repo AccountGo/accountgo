@@ -168,8 +168,8 @@ namespace Api.Controllers
                     return Problem(statusCode: 409, title: "You are already a workspace member");
 
                 var distinctRoles = roles.Distinct().ToList();
-                string? approvalRequestId = null;
-                string? approverUserId = null;
+                string approvalRequestId = null;
+                string approverUserId = null;
                 if (distinctRoles.Count > 0)
                 {
                     var inviterRoleIds = inviter.SecurityRoles.Select(sr => sr.SecurityRoleId).ToList();

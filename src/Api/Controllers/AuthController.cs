@@ -47,8 +47,8 @@ namespace Api.Controllers
         private readonly WorkspaceService _workspaces;
         private readonly AccountDeletionService _accountDeletion;
         private readonly IPlanCatalog _plans;
-        private readonly WorkspaceInitializationApplicator _workspaceInit;
-        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
+        private readonly WorkspaceInitializationApplicator? _workspaceInit;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
         private readonly ISecurityAuditService? _securityAudit;
         private readonly IGoogleIdTokenValidator _googleValidator;
         private readonly IGoogleSignInService _googleSignInService;
@@ -70,8 +70,8 @@ namespace Api.Controllers
             IPlanCatalog plans,
             IGoogleIdTokenValidator googleValidator,
             IGoogleSignInService googleSignInService,
-            WorkspaceInitializationApplicator workspaceInit = null,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
+            WorkspaceInitializationApplicator? workspaceInit = null,
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
             ISecurityAuditService? securityAudit = null)
         {
             _otpService = otpService;
@@ -689,7 +689,7 @@ namespace Api.Controllers
                 await AuditSignInFailureAsync("otp", "user_not_found");
                 return Unauthorized();
             }
-            result.Response.Organizations = (from m in _apiDb.CompanyMembers
+            result.Response!.Organizations = (from m in _apiDb.CompanyMembers
                                              join c in _apiDb.Companies on m.CompanyId equals c.Id
                                              where m.UserId == verifiedUser.Id && m.Status == Core.Domain.CompanyMemberStatus.Active
                                              select new OrganizationDto { Slug = c.Slug ?? "", Name = c.Name, Role = m.Role.ToString() }).ToList();
@@ -788,7 +788,7 @@ namespace Api.Controllers
                 }
             }
 
-            var permissions = _securityService.GetPermissionsForUser(domainUser);
+            var permissions = domainUser == null ? Array.Empty<string>() : _securityService.GetPermissionsForUser(domainUser);
 
             var userDto = new UserDto(
                 user.Id,
@@ -835,7 +835,7 @@ namespace Api.Controllers
                 if (request.LastName != null)
                     domainUser.Lastname = request.LastName.Trim();
 
-                _securityService.UpdateUser(domainUser, null);
+                _securityService.UpdateUser(domainUser, null!);
             }
 
             // Update ApplicationUser entity
@@ -866,7 +866,7 @@ namespace Api.Controllers
                 }
             }
 
-            var permissions = _securityService.GetPermissionsForUser(domainUser);
+            var permissions = domainUser == null ? Array.Empty<string>() : _securityService.GetPermissionsForUser(domainUser);
 
             var updatedDto = new UserDto(
                 user.Id,

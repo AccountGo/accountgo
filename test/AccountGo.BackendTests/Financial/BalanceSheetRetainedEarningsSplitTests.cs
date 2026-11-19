@@ -139,7 +139,7 @@ public class BalanceSheetRetainedEarningsSplitTests
         var profit = Assert.Single(sheet, r => r.AccountName == "Profit for the year");
         Assert.Equal(600m, opening.Amount);
         Assert.Equal(150m, profit.Amount);
-        Assert.DoesNotContain(sheet, r => r.AccountName.Contains("unclosed", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(sheet, r => r.AccountName != null && r.AccountName.Contains("unclosed", StringComparison.OrdinalIgnoreCase));
 
         var assets = sheet.Where(r => r.AccountClassId == 1).Sum(r => r.Amount);
         var liabilitiesAndEquity = sheet.Where(r => r.AccountClassId == 2 || r.AccountClassId == 3).Sum(r => r.Amount);

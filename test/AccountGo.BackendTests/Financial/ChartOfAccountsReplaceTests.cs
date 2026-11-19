@@ -118,7 +118,7 @@ namespace AccountGo.BackendTests.Financial
             var valJson = await Json(valRes);
             Assert.True(valJson.GetProperty("hasErrors").GetBoolean());
             var fileErrors = valJson.GetProperty("fileErrors").EnumerateArray().Select(e => e.GetString()).ToList();
-            Assert.Contains(fileErrors, e => e.Contains("cannot be replaced because it is linked to one or more Items"));
+            Assert.Contains(fileErrors, e => e != null && e.Contains("cannot be replaced because it is linked to one or more Items"));
         }
 
         [Fact]
@@ -150,7 +150,7 @@ namespace AccountGo.BackendTests.Financial
             Assert.Equal(HttpStatusCode.OK, statRes.StatusCode);
             var statJson = await Json(statRes);
             var roles = statJson.GetProperty("requiredControlRoles").EnumerateArray().Select(r => r.GetProperty("roleKey").GetString()).ToList();
-            Assert.Contains(roles, r => r.StartsWith("Tax_Sales_"));
+            Assert.Contains(roles, r => r != null && r.StartsWith("Tax_Sales_"));
         }
 
         [Fact]
@@ -186,7 +186,7 @@ namespace AccountGo.BackendTests.Financial
             var valJson = await Json(valRes);
             Assert.True(valJson.GetProperty("hasErrors").GetBoolean());
             var fileErrors = valJson.GetProperty("fileErrors").EnumerateArray().Select(e => e.GetString()).ToList();
-            Assert.Contains(fileErrors, e => e.Contains("requires workspace Owner role"));
+            Assert.Contains(fileErrors, e => e != null && e.Contains("requires workspace Owner role"));
 
             // Commit as non-owner is 403 Forbidden
             var comRes = await _fixture.SendJson(HttpMethod.Post, "/api/Financials/ImportAccounts/Commit?mode=replace", new { csvContent = csv, mode = "replace" }, member.Token, "rep-role");
@@ -333,7 +333,7 @@ namespace AccountGo.BackendTests.Financial
             var blockValJson = await Json(blockValRes);
             Assert.True(blockValJson.GetProperty("hasErrors").GetBoolean());
             var fileErrors = blockValJson.GetProperty("fileErrors").EnumerateArray().Select(e => e.GetString()).ToList();
-            Assert.Contains(fileErrors, e => e.Contains("protected control account"));
+            Assert.Contains(fileErrors, e => e != null && e.Contains("protected control account"));
         }
 
         private static async Task<JsonElement> Json(HttpResponseMessage response)
@@ -344,8 +344,8 @@ namespace AccountGo.BackendTests.Financial
         public class Fixture : IAsyncLifetime
         {
             public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "accountgo_coarep_" + Guid.NewGuid().ToString("N") + ".db");
-            public WebApplicationFactory<Program> Factory { get; private set; }
-            private HttpClient _client;
+            public WebApplicationFactory<Program> Factory { get; private set; } = null!;
+            private HttpClient _client = null!;
 
             public async Task InitializeAsync()
             {
@@ -384,7 +384,7 @@ namespace AccountGo.BackendTests.Financial
             {
                 var response = await Send(HttpMethod.Post, "/api/organizations", new { name, slug }, token, scoped: false);
                 Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-                var companyId = int.Parse((await Json(response)).GetProperty("id").GetString(), CultureInfo.InvariantCulture);
+                var companyId = int.Parse((await Json(response)).GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
                 using var scope = Factory.Services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 var ownerMember = db.CompanyMembers.Single(m => m.CompanyId == companyId && m.Role == CompanyMemberRole.Owner);
@@ -394,7 +394,7 @@ namespace AccountGo.BackendTests.Financial
                 return companyId;
             }
 
-            public async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, string org = null, bool scoped = true)
+            public async Task<HttpResponseMessage> Send(HttpMethod method, string path, object? body = null, string? token = null, string? org = null, bool scoped = true)
             {
                 using var request = new HttpRequestMessage(method, path);
                 if (!string.IsNullOrEmpty(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -403,7 +403,7 @@ namespace AccountGo.BackendTests.Financial
                 return await _client.SendAsync(request);
             }
 
-            public async Task<HttpResponseMessage> SendJson(HttpMethod method, string path, object body, string token = null, string org = null, bool scoped = true)
+            public async Task<HttpResponseMessage> SendJson(HttpMethod method, string path, object body, string? token = null, string? org = null, bool scoped = true)
             {
                 return await Send(method, path, body, token, org, scoped);
             }

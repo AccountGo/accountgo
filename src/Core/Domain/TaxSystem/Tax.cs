@@ -29,16 +29,16 @@ namespace Core.Domain.TaxSystem
         public int? PurchasingAccountId { get; set; }
         [Required]
         [StringLength(50)]
-        public string TaxName { get; set; }
+        public string TaxName { get; set; } = null!;
         [Required]
         [StringLength(16)]
-        public string TaxCode { get; set; }
+        public string TaxCode { get; set; } = null!;
         public decimal Rate { get; set; }
         public bool IsActive { get; set; }
-        public virtual Account SalesAccount { get; set; }
-        public virtual Account PurchasingAccount { get; set; }
+        public virtual Account? SalesAccount { get; set; }
+        public virtual Account? PurchasingAccount { get; set; }
 
-        public virtual ICollection<TaxGroupTax> TaxGroupTaxes { get; set; }
-        public virtual ICollection<ItemTaxGroupTax> ItemTaxGroupTaxes { get; set; }
+        public virtual ICollection<TaxGroupTax> TaxGroupTaxes { get; set; } = null!;
+        public virtual ICollection<ItemTaxGroupTax> ItemTaxGroupTaxes { get; set; } = null!;
     }
 }

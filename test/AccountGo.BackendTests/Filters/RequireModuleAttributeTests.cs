@@ -47,7 +47,7 @@ public class RequireModuleAttributeTests
         var http = new DefaultHttpContext { RequestServices = services };
         http.Request.Method = HttpMethods.Get;
         var context = new ActionExecutingContext(new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), controller: null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), controller: null!);
         var ran = false;
 
         await new RequireModuleAttribute("sales", "purchases").OnActionExecutionAsync(context, () =>
@@ -84,7 +84,7 @@ public class RequireModuleAttributeTests
         var http = new DefaultHttpContext { RequestServices = services };
         http.Request.Method = HttpMethods.Post;
         var context = new ActionExecutingContext(new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), controller: null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), controller: null!);
 
         await new RequireModuleAttribute(module).OnActionExecutionAsync(context, () =>
             Task.FromResult<ActionExecutedContext>(null!));
@@ -126,7 +126,7 @@ public class RequireModuleAttributeTests
         http.Request.Method = HttpMethods.Post;
         http.SetEndpoint(endpoint);
         var context = new ActionExecutingContext(new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), controller: null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), controller: null!);
         var ran = false;
 
         await new RequireModuleAttribute("inventory").OnActionExecutionAsync(context, () =>

@@ -479,7 +479,7 @@ public class BankTransactionServiceTests
             public System.Threading.Tasks.Task UpdateAsync(T entity) { Update(entity); return System.Threading.Tasks.Task.CompletedTask; }
             public void Delete(T entity) => _items.Remove(entity);
             public System.Threading.Tasks.Task DeleteAsync(T entity) { Delete(entity); return System.Threading.Tasks.Task.CompletedTask; }
-            public IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties) => Table;
+            public IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object?>>[] includeProperties) => Table;
         }
     }
 }

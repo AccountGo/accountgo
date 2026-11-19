@@ -36,7 +36,7 @@ namespace AccountGo.BackendTests
     {
         protected readonly string _path = Path.Combine(Path.GetTempPath(), "accountgo_p3_" + Guid.NewGuid().ToString("N") + ".db");
         protected readonly FakeEmailSender _emails = new FakeEmailSender();
-        protected PostgresTestDatabase? _postgres;
+        protected PostgresTestDatabase _postgres;
         protected WebApplicationFactory<Program> _factory;
         protected HttpClient _client;
         protected string _ownerToken;

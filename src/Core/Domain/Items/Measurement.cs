@@ -15,7 +15,7 @@ namespace Core.Domain.Items
     public partial class Measurement : BaseEntity, ICompanyOwned
     {
         public int CompanyId { get; set; }
-        public string Code { get; set; }
-        public string Description { get; set; }
+        public string? Code { get; set; }
+        public string? Description { get; set; }
     }
 }

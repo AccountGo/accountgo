@@ -15,9 +15,9 @@
     <RepositoryType>git</RepositoryType>
     <DebugType>embedded</DebugType>
     <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);NU5105;NU1901;NU1903</NoWarn>
+    <NoWarn>$(NoWarn);NU5105;NU1901;NU1903;NU1904</NoWarn>
 
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <UseAppHost>false</UseAppHost>
     <GenerateFullPaths Condition="'$(VSCODE_PID)' != ''">true</GenerateFullPaths>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).build\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>

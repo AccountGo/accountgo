@@ -131,7 +131,7 @@ namespace Api.Service
                     {
                         if (role?.SecurityRole != null && !claims.Any(c => c.Type == ClaimTypes.Role && c.Value == role.SecurityRole.Name))
                         {
-                            claims.Add(new Claim(ClaimTypes.Role, role.SecurityRole.Name));
+                            claims.Add(new Claim(ClaimTypes.Role, role.SecurityRole.Name!));
                         }
                     }
                 }

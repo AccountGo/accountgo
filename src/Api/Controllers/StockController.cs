@@ -227,7 +227,7 @@ namespace Api.Controllers
                     request.UnitCost,
                     request.Reason,
                     DateTime.SpecifyKind(request.Date.Value.Date, DateTimeKind.Utc),
-                    string.IsNullOrWhiteSpace(request.Memo) ? null : request.Memo.Trim());
+                    string.IsNullOrWhiteSpace(request.Memo) ? string.Empty : request.Memo.Trim());
                 _db.SaveChanges();
                 transaction.Commit();
 

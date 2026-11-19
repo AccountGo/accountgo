@@ -34,7 +34,7 @@ namespace Api.Controllers
         private readonly Api.Service.SalesInvoicePresentation _invoicePresentation;
         private readonly IConfiguration _configuration;
         private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
-        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
@@ -51,7 +51,7 @@ namespace Api.Controllers
             Api.Service.SalesInvoicePresentation invoicePresentation,
             IConfiguration configuration,
             Services.Financial.IBooksLockGuard booksLockGuard,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
             _adminService = adminService;
             _salesService = salesService;
@@ -137,19 +137,19 @@ namespace Api.Controllers
                 _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.TaxGroup>(customerDto.TaxGroupId.Value, nameof(customerDto.TaxGroupId));
 
             customer.No = customerDto.No;
-            customer.Party.Name = customerDto.Name;
-            customer.Party.Phone = customerDto.Phone;
-            customer.Party.Email = customerDto.Email;
-            customer.Party.Fax = customerDto.Fax;
-            customer.Party.Website = customerDto.Website;
-            customer.Party.CompanyStreet = customerDto.CompanyAddress?.Street1;
-            customer.Party.CompanyProvince = customerDto.CompanyAddress?.Province;
-            customer.Party.CompanyPostalCode = customerDto.CompanyAddress?.PostalCode;
-            customer.Party.CompanyCountry = customerDto.CompanyAddress?.Country;
-            customer.Party.ShippingStreet = customerDto.ShippingAddress?.Street1;
-            customer.Party.ShippingProvince = customerDto.ShippingAddress?.Province;
-            customer.Party.ShippingPostalCode = customerDto.ShippingAddress?.PostalCode;
-            customer.Party.ShippingCountry = customerDto.ShippingAddress?.Country;
+            customer.Party!.Name = customerDto.Name;
+            customer.Party!.Phone = customerDto.Phone;
+            customer.Party!.Email = customerDto.Email;
+            customer.Party!.Fax = customerDto.Fax;
+            customer.Party!.Website = customerDto.Website;
+            customer.Party!.CompanyStreet = customerDto.CompanyAddress?.Street1;
+            customer.Party!.CompanyProvince = customerDto.CompanyAddress?.Province;
+            customer.Party!.CompanyPostalCode = customerDto.CompanyAddress?.PostalCode;
+            customer.Party!.CompanyCountry = customerDto.CompanyAddress?.Country;
+            customer.Party!.ShippingStreet = customerDto.ShippingAddress?.Street1;
+            customer.Party!.ShippingProvince = customerDto.ShippingAddress?.Province;
+            customer.Party!.ShippingPostalCode = customerDto.ShippingAddress?.PostalCode;
+            customer.Party!.ShippingCountry = customerDto.ShippingAddress?.Country;
 
             var firstName = customerDto.PrimaryContact?.FirstName;
             var lastName = customerDto.PrimaryContact?.LastName;
@@ -159,13 +159,13 @@ namespace Api.Controllers
                 firstName = nameParts.FirstOrDefault() ?? "Customer";
                 lastName = nameParts.Length > 1 ? nameParts[1] : "Contact";
             }
-            customer.PrimaryContact.FirstName = firstName;
-            customer.PrimaryContact.LastName = lastName ?? "Contact";
-            customer.PrimaryContact.Party.Name = $"{customer.PrimaryContact.FirstName} {customer.PrimaryContact.LastName}".Trim();
-            customer.PrimaryContact.Party.Phone = customerDto.PrimaryContact?.Party?.Phone ?? customerDto.Phone;
-            customer.PrimaryContact.Party.Email = customerDto.PrimaryContact?.Party?.Email ?? customerDto.Email;
-            customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact?.Party?.Fax ?? customerDto.Fax;
-            customer.PrimaryContact.Party.Website = customerDto.PrimaryContact?.Party?.Website ?? customerDto.Website;
+            customer.PrimaryContact!.FirstName = firstName;
+            customer.PrimaryContact!.LastName = lastName ?? "Contact";
+            customer.PrimaryContact!.Party!.Name = $"{customer.PrimaryContact.FirstName} {customer.PrimaryContact.LastName}".Trim();
+            customer.PrimaryContact!.Party!.Phone = customerDto.PrimaryContact?.Party?.Phone ?? customerDto.Phone;
+            customer.PrimaryContact!.Party!.Email = customerDto.PrimaryContact?.Party?.Email ?? customerDto.Email;
+            customer.PrimaryContact!.Party!.Fax = customerDto.PrimaryContact?.Party?.Fax ?? customerDto.Fax;
+            customer.PrimaryContact!.Party!.Website = customerDto.PrimaryContact?.Party?.Website ?? customerDto.Website;
 
             // Safe auto-assign default accounts for Invoicing continuity if omitted
             if (customerDto.AccountsReceivableId.HasValue && customerDto.AccountsReceivableId.Value > 0)
@@ -229,7 +229,7 @@ namespace Api.Controllers
                     PaymentTermId = customer.PaymentTermId.GetValueOrDefault(),
                     TaxGroupId = customer.TaxGroupId.GetValueOrDefault()
                 };
-                customerDto.Name = customer.Party.Name;
+                customerDto.Name = customer.Party!.Name;
                 customerDto.Email = customer.Party.Email;
                 customerDto.Website = customer.Party.Website;
                 customerDto.Phone = customer.Party.Phone;
@@ -278,7 +278,7 @@ namespace Api.Controllers
         {
             var clients = _db.Customers.Include(c => c.Party)
                 .Where(c => c.Party != null)
-                .OrderBy(c => c.Party.Name)
+                .OrderBy(c => c.Party!.Name)
                 .AsEnumerable()
                 .Select(c => ToClient(c))
                 .ToList();
@@ -367,13 +367,13 @@ namespace Api.Controllers
                 customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == clientDto.Id);
             }
 
-            customer.Party.Name = name;
-            customer.Party.Email = email;
-            customer.Party.Phone = Blank(clientDto.Phone);
-            customer.Party.CompanyStreet = Blank(clientDto.Street);
-            customer.Party.CompanyProvince = Blank(clientDto.City);
-            customer.Party.CompanyPostalCode = Blank(clientDto.PostalCode);
-            customer.Party.CompanyCountry = Blank(clientDto.Country);
+            customer.Party!.Name = name;
+            customer.Party!.Email = email;
+            customer.Party!.Phone = Blank(clientDto.Phone);
+            customer.Party!.CompanyStreet = Blank(clientDto.Street);
+            customer.Party!.CompanyProvince = Blank(clientDto.City);
+            customer.Party!.CompanyPostalCode = Blank(clientDto.PostalCode);
+            customer.Party!.CompanyCountry = Blank(clientDto.Country);
             customer.PaymentTermId = paymentTermId;
             customer.ModifiedBy = GetUserNameFromRequestHeader();
 
@@ -729,7 +729,7 @@ namespace Api.Controllers
                         No = customer.No,
                     };
 
-                    customerDto.Name = customer.Party.Name;
+                    customerDto.Name = customer.Party!.Name;
                     customerDto.Email = customer.Party.Email;
                     customerDto.Website = customer.Party.Website;
                     customerDto.Phone = customer.Party.Phone;
@@ -769,12 +769,12 @@ namespace Api.Controllers
                         Id = salesOrder.Id,
                         PaymentTermId = salesOrder.PaymentTermId,
                         CustomerId = salesOrder.CustomerId!.Value,
-                        CustomerNo = salesOrder.Customer.No,
-                        CustomerName = salesOrder.Customer.Party.Name,
+                        CustomerNo = salesOrder.Customer!.No!,
+                        CustomerName = salesOrder.Customer!.Party!.Name!,
                         OrderDate = salesOrder.Date,
-                        ReferenceNo = salesOrder.ReferenceNo,
+                        ReferenceNo = salesOrder.ReferenceNo!,
                         StatusId = (int)salesOrder.Status.GetValueOrDefault(),
-                        No = salesOrder.No
+                        No = salesOrder.No!
                     };
 
                     foreach (var line in salesOrder.SalesOrderLines)
@@ -824,7 +824,7 @@ namespace Api.Controllers
                     CustomerName = salesOrder.Customer?.Party?.Name ?? "Unknown",
                     OrderDate = salesOrder.Date,
                     PaymentTermId = salesOrder.PaymentTermId ?? 0,
-                    ReferenceNo = salesOrder.ReferenceNo,
+                    ReferenceNo = salesOrder.ReferenceNo!,
                     StatusId = salesOrder.Status.HasValue ? (int)salesOrder.Status.Value : 0,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
@@ -1299,7 +1299,7 @@ namespace Api.Controllers
                     Id = quote.Id,
                     No = quote.No,
                     CustomerId = quote.CustomerId,
-                    CustomerName = quote.Customer.Party.Name,
+                    CustomerName = quote.Customer!.Party!.Name,
                     PaymentTermId = quote.PaymentTermId,
                     QuotationDate = quote.Date,
                     ReferenceNo = quote.ReferenceNo,
@@ -1339,7 +1339,7 @@ namespace Api.Controllers
             {
                 Id = quote.Id,
                 CustomerId = quote.CustomerId,
-                CustomerName = quote.Customer.Party.Name,
+                CustomerName = quote.Customer!.Party!.Name,
                 QuotationDate = quote.Date,
                 PaymentTermId = quote.PaymentTermId,
                 ReferenceNo = quote.ReferenceNo,
@@ -1483,7 +1483,7 @@ namespace Api.Controllers
                     Id = salesReceipt.Id,
                     ReceiptNo = salesReceipt.No,
                     CustomerId = salesReceipt.CustomerId,
-                    CustomerName = salesReceipt.Customer?.Party.Name,
+                    CustomerName = salesReceipt.Customer?.Party?.Name,
                     ReceiptDate = salesReceipt.Date,
                     Amount = salesReceipt.Amount,
                     RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate,
@@ -1515,7 +1515,7 @@ namespace Api.Controllers
                 Id = salesReceipt.Id,
                 ReceiptNo = salesReceipt.No,
                 CustomerId = salesReceipt.CustomerId,
-                CustomerName = salesReceipt.Customer?.Party.Name,
+                CustomerName = salesReceipt.Customer?.Party?.Name,
                 ReceiptDate = salesReceipt.Date,
                 Amount = salesReceipt.Amount,
                 RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate,
@@ -1963,7 +1963,7 @@ namespace Api.Controllers
                     _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto.Id, nameof(salesInvoiceDto.Id));
                     salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
 
-                    salesInvoice.EnsureEditable();
+                    salesInvoice!.EnsureEditable();
 
                     // Before the status changes: whether the number may still change depends on the stored status.
                     salesInvoice.No = Core.Domain.Sales.InvoiceNumber.ForSave(salesInvoice.No, salesInvoice.Status, exists: true, salesInvoiceDto.No);
@@ -2082,7 +2082,7 @@ namespace Api.Controllers
                 salesInvoice.ShippingHandlingCharge = Math.Round(salesInvoiceDto.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
                 var stockWarnings = _salesService.GetSalesInvoiceStockWarnings(salesInvoice);
                 CaptureIfIssued(salesInvoice);
-                _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
+                _salesService.SaveSalesInvoice(salesInvoice, salesOrder!);
                 if (CapturePaymentInstructionsIfIssued(salesInvoice))
                     _salesService.UpdateSalesInvoice(salesInvoice);
                 tx.Commit();
@@ -2284,7 +2284,7 @@ namespace Api.Controllers
             using var tx = _db.Database.BeginTransaction();
             var orderIds = _db.SalesInvoiceLines
                 .Where(l => l.SalesInvoiceHeaderId == id && l.SalesOrderLineId != null)
-                .Select(l => l.SalesOrderLine.SalesOrderHeaderId)
+                .Select(l => l.SalesOrderLine!.SalesOrderHeaderId)
                 .Distinct()
                 .ToList();
 
@@ -2347,7 +2347,7 @@ namespace Api.Controllers
                 {
                     var postError = TryPostSalesInvoice(invoice.Id);
                     invoice = _salesService.GetSalesInvoiceById(invoice.Id);
-                    if (!invoice.GeneralLedgerHeaderId.HasValue)
+                    if (!invoice!.GeneralLedgerHeaderId.HasValue)
                     {
                         return BadRequest(new { message = $"Cannot record payment: the invoice could not be posted to the general ledger. {postError}".Trim() });
                     }
@@ -2766,7 +2766,7 @@ namespace Api.Controllers
                 existingReceipt.Memo = receiptDto.Memo;
 
                 var customer = _salesService.GetCustomerById(receiptDto.CustomerId);
-                if (customer.CustomerAdvancesAccountId != receiptDto.AccountToCreditId)
+                if (customer!.CustomerAdvancesAccountId != receiptDto.AccountToCreditId)
                     throw new Exception("Invalid account.");
 
                 // Update the first receipt line

@@ -46,12 +46,12 @@ namespace Core.Domain.Sales
         /// saved before it was stored whose item had no description.
         /// </summary>
         public string? Description { get; set; }
-        public virtual SalesInvoiceHeader SalesInvoiceHeader { get; set; }
-        public virtual Item Item { get; set; }
-        public virtual Measurement Measurement { get; set; }
-        public virtual InventoryControlJournal InventoryControlJournal { get; set; }
-        public virtual SalesOrderLine SalesOrderLine { get; set; }
-        public virtual ICollection<SalesReceiptLine> SalesReceiptLines { get; set; }
+        public virtual SalesInvoiceHeader SalesInvoiceHeader { get; set; } = null!;
+        public virtual Item Item { get; set; } = null!;
+        public virtual Measurement Measurement { get; set; } = null!;
+        public virtual InventoryControlJournal? InventoryControlJournal { get; set; }
+        public virtual SalesOrderLine? SalesOrderLine { get; set; }
+        public virtual ICollection<SalesReceiptLine> SalesReceiptLines { get; set; } = null!;
 
         /// <summary>The text to store for a line: what was typed, or else the item's description.</summary>
         public static string? DescriptionFor(string? typed, Item? item) =>

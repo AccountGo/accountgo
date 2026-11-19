@@ -29,7 +29,7 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly IPurchasingService _purchasingService;
         private readonly IFinancialService _financialService;
-        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
         private readonly IInventoryService _inventoryService;
         private readonly IBankAccountService _bankAccounts;
         private readonly IDocumentLineAccountCatalog _lineAccounts;
@@ -50,7 +50,7 @@ namespace Api.Controllers
             Api.Data.ApiDbContext db,
             ILogger<PurchasingController> logger,
             Services.Financial.IBooksLockGuard booksLockGuard,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
             _adminService = adminService;
             _purchasingService = purchasingService;
@@ -94,7 +94,7 @@ namespace Api.Controllers
                     Id = purchaseOrder.Id,
                     No = purchaseOrder.No,
                     VendorId = purchaseOrder.VendorId!.Value,
-                    VendorName = purchaseOrder.Vendor.Party.Name,
+                    VendorName = purchaseOrder.Vendor!.Party!.Name,
                     OrderDate = purchaseOrder.Date,
                     ReferenceNo = purchaseOrder.ReferenceNo,
                     StatusId = (int)purchaseOrder.Status.GetValueOrDefault()
@@ -137,7 +137,7 @@ namespace Api.Controllers
             {
                 Id = purchaseOrder.Id,
                 VendorId = purchaseOrder.VendorId!.Value,
-                VendorName = purchaseOrder.Vendor.Party.Name,
+                VendorName = purchaseOrder.Vendor!.Party!.Name,
                 OrderDate = purchaseOrder.Date,
                 PaymentTermId = purchaseOrder.PaymentTermId,
                 ReferenceNo = purchaseOrder.ReferenceNo,
@@ -293,7 +293,7 @@ namespace Api.Controllers
         {
             var vendors = _db.Vendors.Include(v => v.Party)
                 .Where(v => v.Party != null)
-                .OrderBy(v => v.Party.Name)
+                .OrderBy(v => v.Party!.Name)
                 .AsEnumerable()
                 .Select(v => ToSupplier(v))
                 .ToList();
@@ -357,12 +357,12 @@ namespace Api.Controllers
             }
 
             // The address lives on the party, as a client's does; the vendor's own address fields follow it.
-            vendor.Party.Name = name;
-            vendor.Party.Email = email;
-            vendor.Party.Phone = Blank(supplierDto.Phone);
-            vendor.Party.CompanyStreet = vendor.Street1 = Blank(supplierDto.Street);
-            vendor.Party.CompanyProvince = vendor.City = Blank(supplierDto.City);
-            vendor.Party.CompanyPostalCode = vendor.PostalCode = Blank(supplierDto.PostalCode);
+            vendor.Party!.Name = name;
+            vendor.Party!.Email = email;
+            vendor.Party!.Phone = Blank(supplierDto.Phone);
+            vendor.Party!.CompanyStreet = vendor.Street1 = Blank(supplierDto.Street);
+            vendor.Party!.CompanyProvince = vendor.City = Blank(supplierDto.City);
+            vendor.Party!.CompanyPostalCode = vendor.PostalCode = Blank(supplierDto.PostalCode);
             vendor.Party.CompanyCountry = vendor.Country = Blank(supplierDto.Country);
             vendor.PaymentTermId = paymentTermId;
             vendor.ModifiedBy = GetUserNameFromRequestHeader();
@@ -942,8 +942,8 @@ namespace Api.Controllers
                     if (item?.ItemCategory?.ItemType == ItemTypes.Purchased && lineDto.Amount < 0)
                         return BadRequest(new { message = $"Stock item '{item.Description ?? item.Code ?? item.No}' cannot have a negative unit cost." });
 
-                    line.ItemId = item.Id;
-                    line.Description = string.IsNullOrWhiteSpace(lineDto.Description) ? item.Description : lineDto.Description.Trim();
+                    line.ItemId = item!.Id;
+                    line.Description = string.IsNullOrWhiteSpace(lineDto.Description) ? item!.Description : lineDto.Description.Trim();
                     line.Quantity = lineDto.Quantity;
                     line.Amount = lineDto.Amount;
                     line.Discount = lineDto.Discount is > 0 ? lineDto.Discount : null;

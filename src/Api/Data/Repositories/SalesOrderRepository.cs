@@ -22,7 +22,7 @@ namespace Api.Data
                 .Include(so => so.SalesOrderLines)
                 .ThenInclude(line => line.SalesInvoiceLines)
                 .Include(so => so.Customer)
-                .Include(so => so.Customer.Party);
+                .Include(so => so.Customer!.Party);
 
             return salesOrders;
         }

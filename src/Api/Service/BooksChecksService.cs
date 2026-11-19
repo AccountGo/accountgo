@@ -272,7 +272,7 @@ namespace Api.Service
                 .Where(i => i.No != null && i.No != "" && i.Status != SalesInvoiceStatus.Void && i.Status != SalesInvoiceStatus.Draft)
                 .Select(i => new { i.Id, i.No, i.Date })
                 .ToList();
-            var groups = rows.GroupBy(i => i.No.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).ToList();
+            var groups = rows.GroupBy(i => i.No!.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).ToList();
             var check = New("sales.duplicateNumbers", "sales", "real", "Invoice numbers used more than once");
             if (groups.Count == 0) return check;
             check.Status = BooksCheckStatus.Finding;
@@ -406,11 +406,11 @@ namespace Api.Service
             var journalIds = journals.Select(j => j.Id).ToList();
             var recordIds = journalIds.Select(id => id.ToString(CultureInfo.InvariantCulture)).ToList();
             var preparers = _db.AuditLogs.AsNoTracking()
-                .Where(a => a.CompanyId == companyId && a.TableName == "__JournalEntryPreparer" && recordIds.Contains(a.RecordId))
+                .Where(a => a.CompanyId == companyId && a.TableName == "__JournalEntryPreparer" && a.RecordId != null && recordIds.Contains(a.RecordId))
                 .Select(a => new { a.RecordId, a.UserName })
                 .ToList()
-                .GroupBy(a => a.RecordId)
-                .ToDictionary(g => g.Key, g => g.Select(a => a.UserName).ToHashSet(StringComparer.Ordinal));
+                .GroupBy(a => a.RecordId!)
+                .ToDictionary(g => g.Key, g => g.Select(a => a.UserName).Where(n => n != null).Cast<string>().ToHashSet(StringComparer.Ordinal));
             var posters = _db.RecordChanges.AsNoTracking()
                 .Where(c => c.CompanyId == companyId && c.EntityType == "JournalEntryHeader" && journalIds.Contains(c.EntityId)
                     && (c.Action == "Added" || c.Action == "Modified"))

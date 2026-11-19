@@ -69,9 +69,9 @@ namespace Core.Domain.Purchases
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
 
-        public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
-        public virtual ICollection<PurchaseOrderHeader> PurchaseOrders { get; set; }
-        public virtual ICollection<VendorPayment> VendorPayments { get; set; }
+        public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; } = null!;
+        public virtual ICollection<PurchaseOrderHeader> PurchaseOrders { get; set; } = null!;
+        public virtual ICollection<VendorPayment> VendorPayments { get; set; } = null!;
 
         public bool IsDraft => Status is null or PurchaseInvoiceStatus.Draft && GeneralLedgerHeaderId == null;
         public bool IsVoid => Status == PurchaseInvoiceStatus.Void;

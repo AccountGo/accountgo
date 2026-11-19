@@ -24,21 +24,21 @@ namespace Core.Domain
         public int CompanyId { get; set; }
 
         public PartyTypes PartyType { get; set; }
-        public string Name { get; set; }
-        public string Email { get; set; }
-        public string Website { get; set; }
-        public string Phone { get; set; }
-        public string Fax { get; set; }
+        public string? Name { get; set; }
+        public string? Email { get; set; }
+        public string? Website { get; set; }
+        public string? Phone { get; set; }
+        public string? Fax { get; set; }
         public bool IsActive { get; set; }
-        public string CompanyStreet { get; set; }
-        public string CompanyProvince { get; set; }
-        public string CompanyPostalCode { get; set; }
-        public string CompanyCountry { get; set; }
-        public string ShippingStreet { get; set; }
-        public string ShippingProvince { get; set; }
-        public string ShippingPostalCode { get; set; }
-        public string ShippingCountry { get; set; }
+        public string? CompanyStreet { get; set; }
+        public string? CompanyProvince { get; set; }
+        public string? CompanyPostalCode { get; set; }
+        public string? CompanyCountry { get; set; }
+        public string? ShippingStreet { get; set; }
+        public string? ShippingProvince { get; set; }
+        public string? ShippingPostalCode { get; set; }
+        public string? ShippingCountry { get; set; }
 
-        public virtual ICollection<Contact> Contacts { get; set; }
+        public virtual ICollection<Contact> Contacts { get; set; } = null!;
     }
 }

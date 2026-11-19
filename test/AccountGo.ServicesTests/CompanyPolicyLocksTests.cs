@@ -235,7 +235,7 @@ public class CompanyPolicyLocksTests : IDisposable
     public void FinancialService_RequiresCompanySettingRepository()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new Services.Financial.FinancialService(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
+            new Services.Financial.FinancialService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!));
     }
 
     private Services.Financial.FinancialService GuardedFinancialService(DateTime booksStart)
@@ -243,7 +243,7 @@ public class CompanyPolicyLocksTests : IDisposable
         var settings = new List<CompanySetting> { new() { CompanyId = 1, BooksStartDate = booksStart } };
         var repo = new Mock<IRepository<CompanySetting>>();
         repo.Setup(r => r.Table).Returns(settings.AsQueryable());
-        return new Services.Financial.FinancialService(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, repo.Object);
+        return new Services.Financial.FinancialService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, repo.Object);
     }
 
     [Fact]

@@ -35,24 +35,24 @@ namespace Api.Data.Repositories
             throw new NotImplementedException();
         }
 
-        public User? GetUser(string username)
+        public User GetUser(string username)
         {
             return _context.Users
                 .Include(u => u.Roles)
                 .ThenInclude(u => u.SecurityRole.Permissions)
                 .ThenInclude(u => u.SecurityPermission.Group)
                 .Where(u => u.UserName == username)
-                .FirstOrDefault();
+                .FirstOrDefault()!;
         }
 
-        public User? GetUserById(int id)
+        public User GetUserById(int id)
         {
             return _context.Users
                 .Include(u => u.Roles)
                 .ThenInclude(u => u.SecurityRole.Permissions)
                 .ThenInclude(u => u.SecurityPermission.Group)
                 .Where(u => u.Id == id)
-                .FirstOrDefault();
+                .FirstOrDefault()!;
         }
 
         public IEnumerable<User> GetAllUsers()

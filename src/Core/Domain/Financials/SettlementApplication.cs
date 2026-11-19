@@ -65,7 +65,7 @@ namespace Core.Domain.Financials
         public DateTime ReversedAtUtc { get; set; }
         public int GeneralLedgerHeaderId { get; set; }
 
-        public virtual SettlementApplication? SettlementApplication { get; set; }
+        public virtual SettlementApplication SettlementApplication { get; set; } = null!;
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
     }
 
@@ -123,10 +123,10 @@ namespace Core.Domain.Financials
 
         public virtual Customer? Customer { get; set; }
         public virtual Vendor? Vendor { get; set; }
-        public virtual Bank? Bank { get; set; }
+        public virtual Bank Bank { get; set; } = null!;
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
-        public virtual ICollection<PartyRefundAllocation> Allocations { get; set; }
+        public virtual ICollection<PartyRefundAllocation> Allocations { get; set; } = null!;
     }
 
     [Table("PartyRefundAllocation")]
@@ -141,7 +141,7 @@ namespace Core.Domain.Financials
         public int SourceAccountId { get; set; }
         public decimal Amount { get; set; }
 
-        public virtual PartyRefund? PartyRefund { get; set; }
+        public virtual PartyRefund PartyRefund { get; set; } = null!;
         public virtual CustomerCreditNote? CustomerCreditNote { get; set; }
         public virtual SupplierCreditNote? SupplierCreditNote { get; set; }
         public virtual SupplierAdvance? SupplierAdvance { get; set; }
