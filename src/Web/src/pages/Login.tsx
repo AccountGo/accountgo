@@ -572,7 +572,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
             </div>
 
             {typeof location.state?.notice === 'string' && (
-              <p role="status" className="p-3 rounded-xl bg-amber-500/10 text-amber-300 text-sm">
+              <p role="status" className="p-3 rounded-xl bg-amber-500/10 text-amber-300 [[data-scheme=light]_&]:bg-amber-100 [[data-scheme=light]_&]:text-amber-900 text-sm">
                 {location.state.notice}
               </p>
             )}
@@ -916,14 +916,14 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
 
             {/* Dev Mode Code Auto-Fill Banner */}
             {devCode && (
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between animate-fade-in">
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 [[data-scheme=light]_&]:bg-amber-100 [[data-scheme=light]_&]:border-amber-400 [[data-scheme=light]_&]:text-amber-900 text-xs flex items-center justify-between animate-fade-in">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <Sparkles className="w-4 h-4 text-amber-400 [[data-scheme=light]_&]:text-amber-600 flex-shrink-0" />
                   <span>
-                    Dev Code: <strong className="font-mono text-sm tracking-wider text-amber-200">{devCode}</strong>
+                    Dev Code: <strong className="font-mono text-sm tracking-wider text-amber-200 [[data-scheme=light]_&]:text-amber-950">{devCode}</strong>
                   </span>
                 </div>
-                <span className="text-[11px] bg-amber-500/20 px-2 py-0.5 rounded text-amber-200 font-medium">Auto-filled</span>
+                <span className="text-[11px] bg-amber-500/20 [[data-scheme=light]_&]:bg-amber-200 px-2 py-0.5 rounded text-amber-200 [[data-scheme=light]_&]:text-amber-900 font-medium">Auto-filled</span>
               </div>
             )}
 
