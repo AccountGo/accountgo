@@ -40,6 +40,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - People who can review or close a year can open **Year-end close** without being an organization administrator.
 
 ### Changed
+- The sign-in page now has Sign in and Create account tabs under the email field, with separate headings and wording for each. The verification code step has clearer wording, a centered layout, and a "Not your email?" link to go back and change it. The terms checkbox is now aligned with its text.
 - Moved Customer Credits & Settlements, Supplier Credits & Advances, and Year-end close out of the main sidebar into the Sales tabs, Purchases tabs, and General Ledger views navigation respectively.
 - Year-end assistant guidance uses the implemented close controls and explains current aging, close-record and correction limits.
 - Fiscal years in Settings now show Open, Ended or Closed. A year that is not the current one is no longer labelled Closed, and an unsaved current year says it still needs to be prepared.
