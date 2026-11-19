@@ -7,19 +7,22 @@ description: This skill should be used when a developer asks to "set up AccountG
 
 Bootstrap, build, and run the AccountGo Community Edition (.NET 10 API + React 19 / Vite Web SPA + SQLite) on a local workstation.
 
-## 1. Verify Prerequisites
+## 1. Verify Prerequisites (Check `.NET 10 SDK` First)
 
 Check required tools before cloning or building:
 
 ```bash
+dotnet --version   # .NET 10 SDK required (e.g. 10.0.x)
 git --version
-dotnet --version   # .NET 10 SDK required
 node --version     # Node.js 22.22.2+, 24.15.0+, or 26+
 pnpm --version     # pnpm 12
 openssl version
 ```
 
-Stop and report any missing prerequisite before proceeding.
+If `dotnet` is missing or older than `.NET 10`:
+- On macOS (Homebrew): `brew install --cask dotnet-sdk` (or use Microsoft's `dotnet-install.sh --channel 10.0`).
+- On Linux/WSL: install the `.NET 10 SDK` via your distro package manager or Microsoft's `dotnet-install.sh --channel 10.0`.
+- Stop and report any prerequisite that could not be installed before proceeding.
 
 ## 2. Clone Repository (If Not Already Cloned)
 
@@ -72,13 +75,13 @@ If the developer asks to run against PostgreSQL instead of SQLite:
 
 ## 5. Run API and Web Locally
 
-Check if ports `8001` or `3000` are already in use. Start both processes in the background (or separate terminals):
+Check if ports `8001` or `3000` are already in use (`lsof -i :8001` / `lsof -i :3000`). If an older instance is already running on those ports, stop it or confirm before reusing it. Start both processes in the background (or separate terminals):
 
 1. **API (`http://localhost:8001`)**:
    ```bash
-   ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile --project src/Api/Api.csproj --urls http://localhost:8001
+   ASPNETCORE_ENVIRONMENT=Development dotnet run --no-build --no-launch-profile --project src/Api/Api.csproj --urls http://localhost:8001
    ```
-   Wait until `http://localhost:8001/health` returns `200 OK` (`"status":"healthy"`). On first run, this creates and seeds `src/Api/accountgo.db`.
+   Wait up to **120 seconds** on first startup for `http://localhost:8001/health` to return `200 OK` (`"status":"healthy"`). On a fresh checkout, first-time SQLite schema creation and seeding (`src/Api/accountgo.db`) typically takes ~60–90 seconds.
 
 2. **Web SPA (`http://127.0.0.1:3000`)**:
    ```bash
