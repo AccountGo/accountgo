@@ -136,7 +136,11 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var accounts = await SeedAccounts(workId, personalId);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        await db.Database.ExecuteSqlAsync($"CREATE TRIGGER fail_mirror_journal BEFORE INSERT ON JournalEntryHeader WHEN NEW.CompanyId = {personalId} BEGIN SELECT RAISE(ABORT, 'injected mirror failure'); END;");
+        // SQLite triggers cannot bind parameters; personalId is an int so embedding it is safe.
+        var triggerSql = "CREATE TRIGGER fail_mirror_journal BEFORE INSERT ON JournalEntryHeader WHEN NEW.CompanyId = "
+            + personalId.ToString(CultureInfo.InvariantCulture)
+            + " BEGIN SELECT RAISE(ABORT, 'injected mirror failure'); END;";
+        await db.Database.ExecuteSqlRawAsync(triggerSql);
         var workHeadersBefore = await db.JournalEntryHeaders.IgnoreQueryFilters().CountAsync(h => h.CompanyId == workId);
         var mirrorHeadersBefore = await db.JournalEntryHeaders.IgnoreQueryFilters().CountAsync(h => h.CompanyId == personalId);
 

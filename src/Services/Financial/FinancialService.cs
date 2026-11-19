@@ -174,7 +174,7 @@ namespace Services.Financial
             _linkedEntryPairRepo = linkedEntryPairRepo!;
             _partnerRepo = partnerRepo!;
             _reconciledPeriodGuard = reconciledPeriodGuard;
-            _time = time!;
+            _time = time ?? TimeProvider.System;
         }
 
         public const int GeneralLedgerDefaultPageSize = 100;
