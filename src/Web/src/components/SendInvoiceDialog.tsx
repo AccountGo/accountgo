@@ -150,10 +150,10 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
       bare
       aria-labelledby={titleId}
       overlayClassName="no-print"
-      panelClassName="no-print w-full max-w-md max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl"
+      panelClassName="no-print w-full max-w-md max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] flex flex-col overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl"
     >
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <div className="flex items-start gap-3">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="shrink-0 px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-start gap-3">
             <span className="flex items-center justify-center w-10 h-10 shrink-0 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)]">
               <Mail className="w-5 h-5" />
             </span>
@@ -164,6 +164,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
               <p className="mt-0.5 text-sm text-[var(--text-secondary)]">{description}</p>
             </div>
           </div>
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-5">
 
           {lastSent && (
             <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 dark:text-amber-400">
@@ -392,7 +393,8 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
             </div>
           )}
 
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2">
+          </div>
+          <div className="shrink-0 px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2">
             <button
               type="button"
               disabled={busy}

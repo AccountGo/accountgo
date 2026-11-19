@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
+import { MODAL_BODY_CLASS, MODAL_FOOTER_CLASS, MODAL_HEADER_CLASS, MODAL_SURFACE_CLASS, ModalShell } from '../components/ModalShell';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { DEFAULT_CURRENCY } from '../lib/currency';
 import {
@@ -868,30 +869,38 @@ export const Tax: React.FC = () => {
         </>
       )}
       {filingDialogMode && report && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        <ModalShell
+          open
+          onClose={() => { if (!submittingFiling) setFilingDialogMode(null); }}
+          closeOnEscape={!submittingFiling}
+          closeOnBackdrop={!submittingFiling}
+          bare
+          aria-labelledby="tax-filing-dialog-title"
+          panelClassName={`${MODAL_SURFACE_CLASS} max-w-md`}
         >
-          <div className="w-full max-w-md rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-xl">
-            <h2 className="text-base font-semibold text-[var(--text-main)]">
-              {filingDialogMode === 'amend' ? 'Record amended filing' : 'Record filing'}
-            </h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              {periodDisplay} · Net {report.netTax < 0 ? 'refundable' : 'payable'}:{' '}
-              {formatMoney(Math.abs(report.netTax), currency)}
-            </p>
+          <div className={MODAL_HEADER_CLASS}>
+            <div>
+              <h2 id="tax-filing-dialog-title" className="text-base font-semibold text-[var(--text-main)]">
+                {filingDialogMode === 'amend' ? 'Record amended filing' : 'Record filing'}
+              </h2>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                {periodDisplay} · Net {report.netTax < 0 ? 'refundable' : 'payable'}:{' '}
+                {formatMoney(Math.abs(report.netTax), currency)}
+              </p>
+            </div>
+          </div>
 
-            {filingError && (
-              <div
-                role="alert"
-                className="mt-3 rounded-lg border border-rose-300/70 bg-rose-50/80 px-3 py-2 text-xs text-rose-900 dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-100"
-              >
-                {filingError}
-              </div>
-            )}
+          <form onSubmit={(e) => void handleSubmitFiling(e)} className="flex flex-col flex-1 min-h-0">
+            <div className={`${MODAL_BODY_CLASS} space-y-3`}>
+              {filingError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-rose-300/70 bg-rose-50/80 px-3 py-2 text-xs text-rose-900 dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-100"
+                >
+                  {filingError}
+                </div>
+              )}
 
-            <form onSubmit={(e) => void handleSubmitFiling(e)} className="mt-4 space-y-3">
               <label className="block text-xs font-medium text-[var(--text-main)]">
                 Filed on
                 <input
@@ -961,27 +970,27 @@ export const Tax: React.FC = () => {
                   </span>
                 </label>
               )}
+            </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setFilingDialogMode(null)}
-                  disabled={submittingFiling}
-                  className="rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-xs font-medium text-[var(--text-main)] hover:bg-[var(--bg-page)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingFiling}
-                  className="rounded-lg bg-[var(--accent-primary)] px-4 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-                >
-                  {submittingFiling ? 'Saving...' : 'Save filing'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className={MODAL_FOOTER_CLASS}>
+              <button
+                type="button"
+                onClick={() => setFilingDialogMode(null)}
+                disabled={submittingFiling}
+                className="rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-xs font-medium text-[var(--text-main)] hover:bg-[var(--bg-page)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingFiling}
+                className="rounded-lg bg-[var(--accent-primary)] px-4 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {submittingFiling ? 'Saving...' : 'Save filing'}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
       )}
     </div>
   );

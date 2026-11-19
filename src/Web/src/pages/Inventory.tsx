@@ -359,10 +359,10 @@ const AdjustStockDialog: React.FC<{
       closeOnBackdrop={!busy}
       bare
       aria-labelledby="adjust-stock-title"
-      panelClassName="max-h-[min(90vh,calc(100dvh-2rem))] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl"
+      panelClassName="max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] w-full max-w-lg flex flex-col overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl"
     >
-      <div>
-        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-6 py-4">
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="shrink-0 flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-4">
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-[var(--brand-primary)]" />
             <h2 id="adjust-stock-title" className="text-base font-bold text-[var(--text-main)]">Adjust stock</h2>
@@ -371,7 +371,8 @@ const AdjustStockDialog: React.FC<{
             <X className="h-5 w-5" />
           </button>
         </div>
-        <form onSubmit={submit} className="space-y-4 p-6">
+        <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 p-6">
           {error && <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-400">{error}</div>}
           {items.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">There are no active stock items to adjust.</p>
@@ -430,7 +431,8 @@ const AdjustStockDialog: React.FC<{
             </>
           )}
           <p className="text-xs text-[var(--text-muted)]">Posted adjustments can’t be edited. Correct a mistake with another adjustment.</p>
-          <div className="flex justify-end gap-2 border-t border-[var(--border-subtle)] pt-4">
+          </div>
+          <div className="shrink-0 flex justify-end gap-2 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-4">
             <button type="button" onClick={onClose} disabled={busy} className="h-9 rounded-lg border border-[var(--border-subtle)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]">Cancel</button>
             {items.length > 0 && <button type="submit" disabled={busy} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--brand-primary)] px-3.5 text-sm font-semibold text-[var(--brand-text)] disabled:opacity-50">{busy && <Loader2 className="h-4 w-4 animate-spin" />}Post adjustment</button>}
           </div>

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { localDateInputValue, percentageTotal, sharesForSubmission, splitPrefill, validatePartnerSetup, type PartnerSetupRow } from '../lib/partners';
+import { ModalShell } from './ModalShell';
 
 type PartnerRow = { id: number; name: string; capitalAccountCode: string; drawingsAccountCode: string; capitalBalance: number; drawingsBalance: number; archived: boolean; rowVersion: string };
 type PartnerData = { partnerAccountsFrom: string | null; capitalBalance: number; drawingsBalance: number; partners: PartnerRow[]; openYears: Array<{ fiscalYearCode: string; rowVersion: string; shares: Array<{ partnerId: number; percent: number }> }> };
@@ -79,6 +80,21 @@ export const PartnersSettingsCard: React.FC<{ canManage: boolean }> = ({ canMana
           <div className="flex flex-wrap gap-2"><input aria-label="New partner name" placeholder="Partner name" value={newPartnerName} onChange={e => setNewPartnerName(e.target.value)} className="rounded-lg p-2 text-sm"/><input aria-label="New partner share" type="number" step="0.0001" value={newPartnerPercent} onChange={e => setNewPartnerPercent(Number(e.target.value))} className="w-28 rounded-lg p-2 text-sm"/><button className="btn-secondary" disabled={!newPartnerName.trim()} onClick={() => void addPartner()}>Add partner with shares</button></div></>}</div>}
     </>}
     {message && <p role="status" className="text-sm">{message}</p>}
-    {confirm && <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"><div className="max-w-lg space-y-4 rounded-2xl bg-[var(--bg-surface)] p-6"><p className="text-sm">This posts a journal that moves your current partners' capital and drawings into each partner's own accounts. It can't be undone automatically; to correct it later, post a journal between partner accounts.</p><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setConfirm(false)}>Cancel</button><button className="btn-primary" onClick={() => void saveSetup()}>Confirm setup</button></div></div></div>}
+    <ModalShell
+      open={confirm}
+      onClose={() => setConfirm(false)}
+      maxWidthClassName="max-w-lg"
+      header={<h3 className="text-base font-semibold text-[var(--text-main)]">Confirm partner setup</h3>}
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={() => setConfirm(false)}>Cancel</button>
+          <button type="button" className="btn-primary" onClick={() => void saveSetup()}>Confirm setup</button>
+        </>
+      }
+    >
+      <p className="text-sm text-[var(--text-secondary)]">
+        This posts a journal that moves your current partners&apos; capital and drawings into each partner&apos;s own accounts. It can&apos;t be undone automatically; to correct it later, post a journal between partner accounts.
+      </p>
+    </ModalShell>
   </section>;
 };

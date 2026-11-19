@@ -50,6 +50,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
 
 ### Fixed
+- Overflow action menus (`...`) inside cards such as client and vendor contacts now render cleanly above surrounding sections instead of being clipped, and form dialogs keep their headers and action buttons pinned while long forms scroll.
 - Notices above the sign-in form, such as the message shown after you are signed out, are now readable in the light theme.
 - Wise webhook integrations now accept initial transfer state notifications and additional balance update schema versions, show the failing event type and reason, and let you replay failed malformed deliveries.
 - Creating accounts now uses the correct debit or credit normal balance for their class and contra status. Editing unused accounts also corrects legacy defaults without changing accounts that have journal history.

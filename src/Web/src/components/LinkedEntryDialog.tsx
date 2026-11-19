@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import type { BankStatementLine } from '../types/banking';
+import { MODAL_BODY_CLASS, MODAL_FOOTER_CLASS, MODAL_HEADER_CLASS, MODAL_SURFACE_CLASS, ModalShell } from './ModalShell';
 
 interface LinkedAccount { id: number; accountCode: string; accountName: string; accountClassId: number; isCash: boolean }
 interface LinkedAccountsResponse { accounts: LinkedAccount[]; workExpenseAccounts: LinkedAccount[]; personalCurrency: string }
@@ -72,38 +73,56 @@ export const LinkedEntryDialog: React.FC<{
   };
 
   const inputClass = 'w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)] px-3 py-2 text-sm';
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-safe-4" role="presentation">
-    <section role="dialog" aria-modal="true" aria-labelledby="linked-entry-title" className="w-full max-w-lg space-y-4 rounded-2xl bg-[var(--bg-surface)] p-5 shadow-xl">
-      <div><h2 id="linked-entry-title" className="text-lg font-semibold">Link this bank line</h2><p className="text-sm text-[var(--text-secondary)]">This creates a balanced journal in each workspace.</p></div>
-      <form className="space-y-4" onSubmit={event => void submit(event)}>
-        {initialKind === 'Personal' && <fieldset className="space-y-2"><legend className="text-sm font-medium">How did you use the money?</legend>
-          <label className="flex gap-2 text-sm"><input type="radio" checked={kind === 'Personal'} onChange={() => setKind('Personal')} /> Personal spending</label>
-          <label className="flex gap-2 text-sm"><input type="radio" checked={kind === 'MoveToPersonal'} onChange={() => setKind('MoveToPersonal')} /> Move to a personal bank account</label>
-        </fieldset>}
-        <label className="grid gap-1 text-sm">{kind === 'Personal' ? 'Household spending category' : 'Personal bank account'}
-          <select required className={inputClass} value={personalAccountId} onChange={e => setPersonalAccountId(e.target.value)}>
-            <option value="">Choose an account</option>{accountChoices.map(account => <option key={account.id} value={account.id}>{account.accountCode} · {account.accountName}</option>)}
-          </select>
-        </label>
-        <p className="text-sm text-[var(--text-secondary)]">Amount: {amount.toFixed(2)} {workCurrency}</p>
-        {accounts && accounts.personalCurrency !== workCurrency && <label className="grid gap-1 text-sm">Amount in {accounts.personalCurrency}
-          <input required min="0.01" step="0.01" type="number" className={inputClass} value={mirrorAmount} onChange={e => setMirrorAmount(e.target.value)} />
-        </label>}
-        {kind === 'Personal' && <div className="space-y-2 rounded-lg border border-[var(--border-subtle)] p-3">
-          <label className="flex gap-2 text-sm"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} /> Split part of this purchase as a work expense</label>
-          {split && <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm">Work expense category<select required className={inputClass} value={workExpenseAccountId} onChange={e => setWorkExpenseAccountId(e.target.value)}>
-              <option value="">Choose a category</option>{accounts?.workExpenseAccounts.map(a => <option key={a.id} value={a.id}>{a.accountCode} · {a.accountName}</option>)}
-            </select></label>
-            <label className="grid gap-1 text-sm">Work amount<input required type="number" min="0.01" step="0.01" max={(amount - 0.01).toFixed(2)} className={inputClass} value={workAmount} onChange={e => setWorkAmount(e.target.value)} /></label>
+  return (
+    <ModalShell
+      open
+      onClose={() => { if (!busy) onClose(); }}
+      closeOnEscape={!busy}
+      closeOnBackdrop={!busy}
+      bare
+      aria-labelledby="linked-entry-title"
+      panelClassName={`${MODAL_SURFACE_CLASS} max-w-lg`}
+    >
+      <div className={MODAL_HEADER_CLASS}>
+        <div>
+          <h2 id="linked-entry-title" className="text-base font-semibold text-[var(--text-main)]">Link this bank line</h2>
+          <p className="text-xs text-[var(--text-secondary)] mt-0.5">This creates a balanced journal in each workspace.</p>
+        </div>
+      </div>
+      <form className="flex flex-col flex-1 min-h-0" onSubmit={event => void submit(event)}>
+        <div className={`${MODAL_BODY_CLASS} space-y-4`}>
+          {initialKind === 'Personal' && <fieldset className="space-y-2"><legend className="text-sm font-medium">How did you use the money?</legend>
+            <label className="flex gap-2 text-sm"><input type="radio" checked={kind === 'Personal'} onChange={() => setKind('Personal')} /> Personal spending</label>
+            <label className="flex gap-2 text-sm"><input type="radio" checked={kind === 'MoveToPersonal'} onChange={() => setKind('MoveToPersonal')} /> Move to a personal bank account</label>
+          </fieldset>}
+          <label className="grid gap-1 text-sm">{kind === 'Personal' ? 'Household spending category' : 'Personal bank account'}
+            <select required className={inputClass} value={personalAccountId} onChange={e => setPersonalAccountId(e.target.value)}>
+              <option value="">Choose an account</option>{accountChoices.map(account => <option key={account.id} value={account.id}>{account.accountCode} · {account.accountName}</option>)}
+            </select>
+          </label>
+          <p className="text-sm text-[var(--text-secondary)]">Amount: {amount.toFixed(2)} {workCurrency}</p>
+          {accounts && accounts.personalCurrency !== workCurrency && <label className="grid gap-1 text-sm">Amount in {accounts.personalCurrency}
+            <input required min="0.01" step="0.01" type="number" className={inputClass} value={mirrorAmount} onChange={e => setMirrorAmount(e.target.value)} />
+          </label>}
+          {kind === 'Personal' && <div className="space-y-2 rounded-lg border border-[var(--border-subtle)] p-3">
+            <label className="flex gap-2 text-sm"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} /> Split part of this purchase as a work expense</label>
+            {split && <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">Work expense category<select required className={inputClass} value={workExpenseAccountId} onChange={e => setWorkExpenseAccountId(e.target.value)}>
+                <option value="">Choose a category</option>{accounts?.workExpenseAccounts.map(a => <option key={a.id} value={a.id}>{a.accountCode} · {a.accountName}</option>)}
+              </select></label>
+              <label className="grid gap-1 text-sm">Work amount<input required type="number" min="0.01" step="0.01" max={(amount - 0.01).toFixed(2)} className={inputClass} value={workAmount} onChange={e => setWorkAmount(e.target.value)} /></label>
+            </div>}
           </div>}
-        </div>}
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        {warning && <p role="status" className="text-sm text-amber-700">{warning}</p>}
-        <div className="flex justify-end gap-2"><button type="button" className="rounded-lg px-3 py-2 text-sm" onClick={onClose}>Cancel</button>
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          {warning && <p role="status" className="text-sm text-amber-700">{warning}</p>}
+        </div>
+        <div className={MODAL_FOOTER_CLASS}>
+          <button type="button" className="rounded-lg px-3 py-2 text-sm" onClick={onClose} disabled={busy}>Cancel</button>
           <button type="submit" disabled={busy || !personalAccountId || (split && (!workExpenseAccountId || Number(workAmount) <= 0 || Number(workAmount) >= amount)) || (!!accounts && accounts.personalCurrency !== workCurrency && Number(mirrorAmount) <= 0)} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            {busy ? 'Saving…' : 'Create linked entry'}</button></div>
+            {busy ? 'Saving…' : 'Create linked entry'}
+          </button>
+        </div>
       </form>
-    </section>
-  </div>;
+    </ModalShell>
+  );
 };

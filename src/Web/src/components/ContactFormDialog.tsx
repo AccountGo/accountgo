@@ -97,10 +97,10 @@ export function ContactFormDialog({
       closeOnBackdrop={!isSaving}
       bare
       aria-labelledby={titleId}
-      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl"
+      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] flex flex-col overflow-hidden border border-[var(--border-subtle)] shadow-2xl"
     >
-      <form onSubmit={handleSubmit} className="flex flex-col">
-        <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-[var(--border-subtle)]">
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <div className="shrink-0 flex items-start gap-3 px-5 pt-5 pb-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-subtle)] text-[var(--brand-primary)]">
             <User className="w-5 h-5" />
           </span>
@@ -123,7 +123,7 @@ export function ContactFormDialog({
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-4 overflow-y-auto">
+        <div className="flex-1 min-h-0 px-5 py-4 space-y-4 overflow-y-auto overscroll-contain">
           {error && (
             <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
               {error}
@@ -209,7 +209,7 @@ export function ContactFormDialog({
           </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-[var(--border-subtle)] flex justify-end gap-2">
+        <div className="shrink-0 px-5 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}

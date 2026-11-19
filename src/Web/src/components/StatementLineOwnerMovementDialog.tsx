@@ -62,12 +62,13 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
   return <>
     <ModalShell open onClose={() => { if (!busy) onClose(); }} closeOnEscape={!busy} closeOnBackdrop={!busy}
       bare aria-labelledby={titleId}
-      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl">
-      <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
+      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] flex flex-col overflow-hidden border border-[var(--border-subtle)] shadow-2xl">
+      <div className="shrink-0 px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-between">
         <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">{undo ? `Undo ${lines[0].matchedPartnerName ? `partner ${lines[0].matchedOwnerAction} – ${lines[0].matchedPartnerName}` : `owner ${lines[0].matchedOwnerAction}`}?` : action.label}{bulk ? ` (${lines.length})` : ''}</h3>
         <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="p-1 rounded-lg text-[var(--text-muted)]"><X className="w-5 h-5" /></button>
       </div>
-      <form onSubmit={e => void submit(e)} className="p-6 space-y-4">
+      <form onSubmit={e => void submit(e)} className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-4">
         {!undo && <><ul className="text-sm text-[var(--text-secondary)] space-y-1">
           {lines.map(line => <li key={line.id}>{String(line.postedDate).slice(0, 10)} · {line.payee || line.memo || 'Statement line'} · <span className="font-mono">{formatCurrency(line.amount)}</span></li>)}
         </ul>
@@ -93,7 +94,8 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
           <input type="checkbox" checked={rememberRule} onChange={e => setRememberRule(e.target.checked)} className="mt-1" />
           {bulk ? 'Always suggest this for these descriptions' : `Always suggest this for “${description}”`}
         </label>}
-        <div className="flex justify-end gap-2 pt-2">
+        </div>
+        <div className="shrink-0 px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex justify-end gap-2">
           <button type="button" disabled={busy} onClick={onClose} className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]">Cancel</button>
           <button type="submit" disabled={busy || (!undo && partnerMode && !partnerId)} className="h-10 px-4 rounded-xl text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50">{busy ? 'Saving…' : undo ? 'Undo' : 'Record'}</button>
         </div>

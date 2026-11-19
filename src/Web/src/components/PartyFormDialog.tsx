@@ -100,9 +100,9 @@ export function PartyFormDialog<T extends PartyBase>({
       closeOnBackdrop={!isSaving}
       bare
       aria-labelledby={titleId}
-      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl"
+      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] flex flex-col overflow-hidden border border-[var(--border-subtle)] shadow-2xl"
     >
-        <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
+        <div className="shrink-0 px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-[var(--brand-primary)]" />
             <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">
@@ -120,7 +120,8 @@ export function PartyFormDialog<T extends PartyBase>({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-4">
           {error && (
             <div role="alert" className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
               {error}
@@ -254,7 +255,8 @@ export function PartyFormDialog<T extends PartyBase>({
             </p>
           )}
 
-          <div className="pt-2 flex items-center justify-end gap-3">
+          </div>
+          <div className="shrink-0 px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}

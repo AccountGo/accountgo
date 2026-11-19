@@ -128,9 +128,9 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
       closeOnBackdrop={!busy}
       bare
       aria-labelledby={titleId}
-      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl"
+      panelClassName="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] flex flex-col overflow-hidden border border-[var(--border-subtle)] shadow-2xl"
     >
-      <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
+      <div className="shrink-0 px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Coins className="w-5 h-5 text-[var(--brand-primary)]" />
           <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">
@@ -148,7 +148,8 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
         </button>
       </div>
 
-      <form onSubmit={(e) => void submit(e)} className="p-6 space-y-4">
+      <form onSubmit={(e) => void submit(e)} className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-4">
         <p className="text-sm text-[var(--text-secondary)]">
           {String(line.postedDate).slice(0, 10)} · {line.payee || line.memo || 'Statement line'} ·{' '}
           <span className="font-mono font-semibold text-[var(--text-main)]">{formatCurrency(line.amount)}</span>
@@ -257,7 +258,8 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
           <input id={`${titleId}-memo`} value={memo} onChange={(e) => setMemo(e.target.value)} className={inputClass} />
         </div>
 
-        <div className="flex justify-end gap-2 pt-2">
+        </div>
+        <div className="shrink-0 px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex justify-end gap-2">
           <button
             type="button"
             disabled={busy}

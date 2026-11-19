@@ -1,4 +1,5 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, MoreHorizontal, type LucideIcon } from 'lucide-react';
 
@@ -117,6 +118,7 @@ export const HeaderMenu: React.FC<{ items: (HeaderMenuItem | false | null | unde
   label = 'More actions',
 }) => {
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -128,10 +130,46 @@ export const HeaderMenu: React.FC<{ items: (HeaderMenuItem | false | null | unde
     (item, i) => item !== 'separator' || (i > 0 && i < visible.length - 1 && visible[i - 1] !== 'separator'),
   );
 
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuStyle(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const menuHeight = menuRef.current?.offsetHeight ?? 0;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = menuHeight > 0 && spaceBelow < menuHeight + 12 && rect.top > menuHeight + 12;
+      const top = openUpward
+        ? Math.max(8, rect.top - menuHeight - 6)
+        : Math.min(window.innerHeight - 8, rect.bottom + 6);
+      const right = Math.max(8, window.innerWidth - rect.right);
+
+      setMenuStyle({
+        position: 'fixed',
+        top,
+        right,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, shown.length]);
+
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', onPointer);
     menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
@@ -190,51 +228,56 @@ export const HeaderMenu: React.FC<{ items: (HeaderMenuItem | false | null | unde
       >
         <MoreHorizontal className="h-4 w-4 text-[var(--text-secondary)]" />
       </button>
-      {open && (
-        <div
-          ref={menuRef}
-          id={menuId}
-          role="menu"
-          aria-label={label}
-          onKeyDown={onMenuKey}
-          className="absolute right-0 top-full z-30 mt-1.5 min-w-48 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1 shadow-xl"
-        >
-          {shown.map((item, i) => {
-            if (item === 'separator') {
-              return <div key={`sep-${i}`} role="separator" className="my-1 h-px bg-[var(--border-subtle)]" />;
-            }
-            const Icon = item.icon;
-            const inner = (
-              <>
-                {Icon && <Icon className={`h-4 w-4 ${item.danger ? '' : 'text-[var(--text-secondary)]'}`} />}
-                {item.label}
-              </>
-            );
-            return item.to ? (
-              <Link key={item.label} to={item.to} title={item.title} role="menuitem" tabIndex={-1} onClick={() => close(false)} className={itemClass(item.danger)}>
-                {inner}
-              </Link>
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                title={item.title}
-                disabled={item.disabled}
-                tabIndex={-1}
-                onClick={() => {
-                  if (item.disabled) return;
-                  close(false);
-                  item.onSelect?.();
-                }}
-                className={`${itemClass(item.danger)} ${item.disabled ? 'opacity-50 cursor-not-allowed hover:bg-transparent' : ''}`}
-              >
-                {inner}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {open &&
+        (() => {
+          const menuNode = (
+            <div
+              ref={menuRef}
+              id={menuId}
+              role="menu"
+              aria-label={label}
+              onKeyDown={onMenuKey}
+              style={menuStyle ?? { position: 'fixed', visibility: 'hidden' }}
+              className="z-[90] min-w-48 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1 shadow-xl"
+            >
+              {shown.map((item, i) => {
+                if (item === 'separator') {
+                  return <div key={`sep-${i}`} role="separator" className="my-1 h-px bg-[var(--border-subtle)]" />;
+                }
+                const Icon = item.icon;
+                const inner = (
+                  <>
+                    {Icon && <Icon className={`h-4 w-4 ${item.danger ? '' : 'text-[var(--text-secondary)]'}`} />}
+                    {item.label}
+                  </>
+                );
+                return item.to ? (
+                  <Link key={item.label} to={item.to} title={item.title} role="menuitem" tabIndex={-1} onClick={() => close(false)} className={itemClass(item.danger)}>
+                    {inner}
+                  </Link>
+                ) : (
+                  <button
+                    key={item.label}
+                    type="button"
+                    role="menuitem"
+                    title={item.title}
+                    disabled={item.disabled}
+                    tabIndex={-1}
+                    onClick={() => {
+                      if (item.disabled) return;
+                      close(false);
+                      item.onSelect?.();
+                    }}
+                    className={`${itemClass(item.danger)} ${item.disabled ? 'opacity-50 cursor-not-allowed hover:bg-transparent' : ''}`}
+                  >
+                    {inner}
+                  </button>
+                );
+              })}
+            </div>
+          );
+          return typeof document !== 'undefined' ? createPortal(menuNode, document.body) : menuNode;
+        })()}
     </div>
   );
 };

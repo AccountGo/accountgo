@@ -623,11 +623,11 @@ export const Invoices: React.FC = () => {
         closeOnEscape={!isSubmittingPayment}
         closeOnBackdrop={!isSubmittingPayment}
         bare
-        panelClassName="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto"
+        panelClassName="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] flex flex-col overflow-hidden"
       >
           {paymentModalInvoice && (
-          <div>
-            <div className="p-5 border-b border-[var(--border-subtle)] flex items-center justify-between">
+          <div className="flex flex-col flex-1 min-h-0">
+            <div className="shrink-0 p-5 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-[var(--text-primary)]">Record Payment</h3>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -644,7 +644,8 @@ export const Invoices: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitPayment} className="p-5 space-y-4 text-xs">
+            <form onSubmit={handleSubmitPayment} className="flex flex-col flex-1 min-h-0 text-xs">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-4">
               {paymentError && (
                 <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs">
                   {paymentError}
@@ -732,8 +733,9 @@ export const Invoices: React.FC = () => {
                 />
               </div>
 
+              </div>
               {/* Buttons */}
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="shrink-0 px-5 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setPaymentModalInvoice(null)}

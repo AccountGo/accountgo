@@ -45,10 +45,26 @@ function releaseScrollLock() {
   }
 }
 
+/** Shared Tailwind tokens for consistent pinned-header, scrollable-body, pinned-footer modals. */
+export const MODAL_SURFACE_CLASS =
+  'flex flex-col overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] shadow-2xl max-h-[min(90vh,calc(100dvh-2rem-var(--sat)-var(--sab)))] w-full';
+export const MODAL_HEADER_CLASS =
+  'shrink-0 flex items-center justify-between gap-3 px-5 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]';
+export const MODAL_BODY_CLASS =
+  'flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4';
+export const MODAL_FOOTER_CLASS =
+  'shrink-0 flex items-center justify-end gap-2 px-5 py-3.5 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]';
+
 export interface ModalShellProps {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  /** Optional pinned header rendered above the scrollable body (non-bare mode). */
+  header?: React.ReactNode;
+  /** Optional pinned footer rendered below the scrollable body (non-bare mode). */
+  footer?: React.ReactNode;
+  /** Extra classes on the scrollable body when header/footer slots are used. */
+  bodyClassName?: string;
   /** max-w-* Tailwind class for the panel (default max-w-lg). Ignored when bare. */
   maxWidthClassName?: string;
   /** Close when clicking the backdrop (default true) */
@@ -81,6 +97,9 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   open,
   onClose,
   children,
+  header,
+  footer,
+  bodyClassName = '',
   maxWidthClassName = 'max-w-lg',
   closeOnBackdrop = true,
   closeOnEscape = true,
@@ -107,6 +126,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     const focusFirst = () => {
       const panel = panelRef.current;
       if (!panel) return;
+      if (panel.contains(document.activeElement)) return;
       const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
       (focusable[0] ?? panel).focus();
     };
@@ -177,6 +197,8 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       ? 'items-end sm:items-start justify-center safe-x pt-[var(--sat)] sm:pt-[12vh]'
       : 'items-center justify-center p-safe-4';
 
+  const hasSlots = header !== undefined || footer !== undefined;
+
   const panel = bare ? (
     <div
       ref={panelRef}
@@ -189,6 +211,21 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       onMouseDown={(event) => event.stopPropagation()}
     >
       {children}
+    </div>
+  ) : hasSlots ? (
+    <div
+      ref={panelRef}
+      role={role}
+      aria-modal="true"
+      aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
+      tabIndex={-1}
+      className={`${MODAL_SURFACE_CLASS} ${maxWidthClassName} focus:outline-none ${panelClassName}`}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {header && <div className={MODAL_HEADER_CLASS}>{header}</div>}
+      <div className={`${MODAL_BODY_CLASS} ${bodyClassName}`}>{children}</div>
+      {footer && <div className={MODAL_FOOTER_CLASS}>{footer}</div>}
     </div>
   ) : (
     <div
