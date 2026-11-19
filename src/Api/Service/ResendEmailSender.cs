@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Api.Observability;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -45,7 +46,7 @@ namespace Api.Service
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                _logger.LogWarning("Resend API key is missing. Email to {To} will not be dispatched.", message.To);
+                _logger.LogWarning("Resend API key is missing. Email to {To} will not be dispatched.", LogRedaction.RedactEmail(message.To));
                 throw new InvalidOperationException("Resend API key is not configured.");
             }
 
@@ -138,7 +139,7 @@ namespace Api.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception encountered while dispatching email via Resend to {To}", message.To);
+                _logger.LogError(ex, "Exception encountered while dispatching email via Resend to {To}", LogRedaction.RedactEmail(message.To));
                 throw new EmailDeliveryException($"The email service could not be reached ({ex.GetType().Name}).", ex);
             }
 
@@ -149,13 +150,14 @@ namespace Api.Service
                     PropertyNameCaseInsensitive = true
                 });
 
-                _logger.LogInformation("✓ Email dispatched successfully via Resend. ID: {EmailId}, To: {To}, Subject: '{Subject}', Attachments: {AttachmentCount}",
-                    result?.Id, message.To, message.Subject, message.Attachments.Count);
+                _logger.LogInformation(
+                    "Email dispatched successfully via Resend. ID: {EmailId}, To: {To}, Attachments: {AttachmentCount}",
+                    result?.Id, LogRedaction.RedactEmail(message.To), message.Attachments.Count);
                 return result?.Id ?? string.Empty;
             }
 
-            _logger.LogWarning("Resend API rejected email dispatch. StatusCode: {StatusCode}, Response: {Response}",
-                response.StatusCode, responseContent);
+            _logger.LogWarning("Resend API rejected email dispatch. StatusCode: {StatusCode}, Reason: {Reason}",
+                response.StatusCode, ProviderReason(responseContent, (int)response.StatusCode));
 
             if (responseContent.Contains("domain is not verified", StringComparison.OrdinalIgnoreCase))
             {

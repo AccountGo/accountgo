@@ -63,6 +63,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - The unused audit settings API (`/api/Audit/Entity` and `/api/Audit/Attribute`) is gone. Its settings applied to every workspace on a server and never changed what the audit trail records.
 
 ### Security
+- Sign-in and welcome verification emails no longer put the live OTP in the subject line, and production email/dispatch logs no longer record recipient addresses, subjects, or raw provider response bodies. Dev console email dumps are gated to Development and redact invite tokens.
+- Operational text logs no longer include client IP or user-agent on OTP and refresh-token events (those stay in the security audit table), leftover sales/donation debug Information logs that could leak line descriptions were removed, API error responses no longer echo raw database exception text for sales invoice save/load failures, and OpenTelemetry ASP.NET spans strip `url.query` so signed PDF and OAuth query parameters are not exported.
 - CLI credentials can no longer create unrestricted web sessions. Signing out or revoking a session now prevents concurrent refresh requests and older refresh tokens from restoring it, and alternate spellings of sign-in URLs no longer bypass bot verification.
 
 ### Self-hosting

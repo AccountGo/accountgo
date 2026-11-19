@@ -446,13 +446,14 @@ public class SessionService : ISessionService
         EnsureFamilyId(trigger);
         var familyId = trigger.FamilyId;
 
+        // Text logs omit IP/user-agent (audit rows and session columns retain them).
+        _ = ipAddress;
+        _ = userAgent;
         _logger.LogWarning(
-            "SECURITY ALERT: {Reason}. Revoking refresh-token family. UserId={UserId} FamilyId={FamilyId} Ip={Ip} UserAgent={UserAgent}",
+            "SECURITY ALERT: {Reason}. Revoking refresh-token family. UserId={UserId} FamilyId={FamilyId}",
             reason,
             trigger.UserId,
-            familyId,
-            ipAddress,
-            userAgent);
+            familyId);
 
         var now = DateTime.UtcNow;
         var familySessions = await _identityContext.RefreshTokens

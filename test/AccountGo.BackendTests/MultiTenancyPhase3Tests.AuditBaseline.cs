@@ -50,7 +50,9 @@ public sealed class MultiTenancyPhase3AuditBaselineTests : MultiTenancyPhase3Tes
 
         using (var response = await Send(HttpMethod.Post, "/api/auth/send-otp", new { email = "phase3-owner@example.com" }, token: "", scoped: false))
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var otp = _emails.Messages.Last(m => m.Subject.StartsWith("AccountGo Sign-In Code: ", StringComparison.Ordinal)).Subject["AccountGo Sign-In Code: ".Length..].Trim();
+        var otpMessage = _emails.Messages.Last(m =>
+            string.Equals(m.Subject, "Your AccountGo sign-in verification code", StringComparison.Ordinal));
+        var otp = System.Text.RegularExpressions.Regex.Match(otpMessage.Html ?? string.Empty, @"letter-spacing:\s*8px[^>]*>\s*(\d{6})\s*<").Groups[1].Value;
         using (var response = await Send(HttpMethod.Post, "/api/auth/verify-otp", new { email = "phase3-owner@example.com", otp }, token: "", scoped: false))
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using (var response = await Send(HttpMethod.Get, "/api/Financials/trialbalance?from=2026-01-01&to=2026-12-31"))

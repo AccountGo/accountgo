@@ -112,7 +112,9 @@ public class SecurityHotfixesTests
             .Options;
         using var idContext = new ApplicationIdentityDbContext(idOptions);
 
-        var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object);
+        var env = new Mock<IHostEnvironment>();
+        env.Setup(e => e.EnvironmentName).Returns(Environments.Production);
+        var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object, env.Object);
         var authService = new Mock<IAuthenticationService>();
         var sessionService = new Mock<ISessionService>();
         var mfaGate = new Mock<IMfaGate>();
@@ -123,9 +125,6 @@ public class SecurityHotfixesTests
             ["SECRET_KEY"] = secret,
             ["Email:Provider"] = "Console"
         }).Build();
-
-        var env = new Mock<IHostEnvironment>();
-        env.Setup(e => e.EnvironmentName).Returns(Environments.Production);
 
         var logger = new Mock<ILogger<EmailOtpService>>();
 
@@ -163,7 +162,9 @@ public class SecurityHotfixesTests
             .Options;
         using var idContext = new ApplicationIdentityDbContext(idOptions);
 
-        var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object);
+        var env = new Mock<IHostEnvironment>();
+        env.Setup(e => e.EnvironmentName).Returns(Environments.Production);
+        var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object, env.Object);
         var authService = new Mock<IAuthenticationService>();
         var sessionService = new Mock<ISessionService>();
         var mfaGate = new Mock<IMfaGate>();
@@ -174,9 +175,6 @@ public class SecurityHotfixesTests
             ["SECRET_KEY"] = secret,
             ["Email:Provider"] = "Console"
         }).Build();
-
-        var env = new Mock<IHostEnvironment>();
-        env.Setup(e => e.EnvironmentName).Returns(Environments.Production);
 
         var logger = new Mock<ILogger<EmailOtpService>>();
 
@@ -215,7 +213,9 @@ public class SecurityHotfixesTests
             .Options;
         using var idContext = new ApplicationIdentityDbContext(idOptions);
 
-        var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object);
+        var env = new Mock<IHostEnvironment>();
+        env.Setup(e => e.EnvironmentName).Returns(Environments.Development);
+        var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object, env.Object);
         var authService = new Mock<IAuthenticationService>();
         var sessionService = new Mock<ISessionService>();
         var mfaGate = new Mock<IMfaGate>();
@@ -226,9 +226,6 @@ public class SecurityHotfixesTests
             ["SECRET_KEY"] = secret,
             ["Email:Provider"] = "Console"
         }).Build();
-
-        var env = new Mock<IHostEnvironment>();
-        env.Setup(e => e.EnvironmentName).Returns(Environments.Development);
 
         var logger = new Mock<ILogger<EmailOtpService>>();
 

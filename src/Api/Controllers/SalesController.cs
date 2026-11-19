@@ -852,8 +852,8 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogInformation(ex.ToString());
-                return new BadRequestObjectResult(new { error = "An error occurred while loading the sales order.", details = ex.Message });
+                _logger.LogError(ex, "Failed to load sales order {SalesOrderId}", id);
+                return new BadRequestObjectResult(new { error = "An error occurred while loading the sales order." });
             }
         }
 
@@ -1112,11 +1112,13 @@ namespace Api.Controllers
                 }
             }
 
+            var actorUserId = HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? HttpContext.User.FindFirst("sub")?.Value;
             _logger.LogInformation(
                 followUp
-                    ? "Invoice {InvoiceId} follow-up emailed by {Sender} for workspace {CompanyId}"
-                    : "Invoice {InvoiceId} emailed by {Sender} for workspace {CompanyId}",
-                id, senderEmail, _tenantContext.CompanyId);
+                    ? "Invoice {InvoiceId} follow-up emailed by {ActorUserId} for workspace {CompanyId}"
+                    : "Invoice {InvoiceId} emailed by {ActorUserId} for workspace {CompanyId}",
+                id, actorUserId, _tenantContext.CompanyId);
             return Ok(new { success = true, to, additionalRecipients = validAdditional, cc = validCc, bcc = message.Bcc,
                 dispatchId = dispatchResult.DispatchId, email = ToEmailItem(record) });
         }
@@ -1359,8 +1361,6 @@ namespace Api.Controllers
                     ItemDescription = line.Item.Description,
                     MeasurementDescription = line.Measurement.Description
                 };
-
-                _logger.LogInformation("Quotation line: " + lineDto.ItemDescription);
 
                 quoteDto.SalesQuotationLines.Add(lineDto);
             }
@@ -1742,8 +1742,6 @@ namespace Api.Controllers
         {
             string[]? errors = null;
 
-            _logger.LogInformation("PostSalesInvoice");
-
             Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
@@ -2077,8 +2075,6 @@ namespace Api.Controllers
                     }
                 }
 
-                _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
-
                 salesInvoice.ShippingHandlingCharge = Math.Round(salesInvoiceDto.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
                 var stockWarnings = _salesService.GetSalesInvoiceStockWarnings(salesInvoice);
                 CaptureIfIssued(salesInvoice);
@@ -2102,7 +2098,8 @@ namespace Api.Controllers
                 if (ex is Core.Tenancy.TenantException or Services.Banking.ReconciledPeriodConfirmationRequiredException) throw;
                 if (InvoiceNumberProblem(ex) is { } numberProblem)
                     return StatusCode(numberProblem.Status, new[] { numberProblem.Message });
-                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                _logger.LogError(ex, "Failed to save sales invoice for customer {CustomerId}", salesInvoiceDto.CustomerId);
+                errors = new string[1] { "An error occurred while saving the sales invoice." };
                 return new BadRequestObjectResult(errors);
             }
         }
@@ -2524,7 +2521,6 @@ namespace Api.Controllers
         public IActionResult SaveQuotation([FromBody] Dto.Sales.SalesQuotation quotationDto)
         {
             string[]? errors = null;
-            _logger.LogInformation("SaveQuotation");
 
             try
             {

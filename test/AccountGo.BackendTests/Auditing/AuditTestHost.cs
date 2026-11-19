@@ -229,8 +229,11 @@ namespace AccountGo.BackendTests.Auditing
             var before = Emails.Messages.Count;
             var response = await Send(HttpMethod.Post, "/api/auth/send-otp", new { email }, scoped: false);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var message = Emails.Messages.Skip(before).Last(m => m.Subject.StartsWith("AccountGo Sign-In Code: ", StringComparison.Ordinal));
-            return message.Subject["AccountGo Sign-In Code: ".Length..].Trim();
+            var message = Emails.Messages.Skip(before).Last(m =>
+                string.Equals(m.Subject, "Your AccountGo sign-in verification code", StringComparison.Ordinal));
+            var match = Regex.Match(message.Html ?? string.Empty, @"letter-spacing:\s*8px[^>]*>\s*(\d{6})\s*<", RegexOptions.CultureInvariant);
+            Assert.True(match.Success, "OTP code was not found in the delivered email body.");
+            return match.Groups[1].Value;
         }
 
         public Task<HttpResponseMessage> VerifyOtp(string email, string otp) =>

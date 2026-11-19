@@ -103,7 +103,7 @@ namespace Api.Data
             //    throw fail;
             //}
             catch (Exception ex) {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Repository operation failed for {EntityType}", typeof(T).Name);
                 throw;
             }
         }
@@ -137,7 +137,7 @@ namespace Api.Data
             //    throw fail;
             //}
             catch (Exception ex) {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Repository operation failed for {EntityType}", typeof(T).Name);
                 throw;
             }
         }
@@ -160,7 +160,7 @@ namespace Api.Data
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Repository operation failed for {EntityType}", typeof(T).Name);
                 throw;
             }
         }
@@ -191,7 +191,7 @@ namespace Api.Data
             //    throw fail;
             //}
             catch (Exception ex) {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Repository operation failed for {EntityType}", typeof(T).Name);
                 throw;
             }
         }
@@ -211,7 +211,7 @@ namespace Api.Data
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Repository operation failed for {EntityType}", typeof(T).Name);
                 throw;
             }
         }
@@ -244,7 +244,7 @@ namespace Api.Data
             //    throw fail;
             //}
             catch (Exception ex) {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Repository operation failed for {EntityType}", typeof(T).Name);
                 throw;
             }
         }
@@ -266,7 +266,7 @@ namespace Api.Data
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Repository operation failed for {EntityType}", typeof(T).Name);
                 throw;
             }
         }
@@ -300,7 +300,7 @@ namespace Api.Data
             //    throw fail;
             //}
             catch (Exception ex) {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Repository operation failed for {EntityType}", typeof(T).Name);
                 throw;
             }
         }
