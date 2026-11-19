@@ -7,19 +7,22 @@ description: This skill should be used when a developer asks to "set up AccountG
 
 Bootstrap, build, and run the AccountGo Community Edition (.NET 10 API + React 19 / Vite Web SPA + SQLite) on a local workstation.
 
-## 1. Verify Prerequisites
+## 1. Verify Prerequisites (Check `.NET 10 SDK` First)
 
 Check required tools before cloning or building:
 
 ```bash
+dotnet --version   # .NET 10 SDK required (e.g. 10.0.x)
 git --version
-dotnet --version   # .NET 10 SDK required
 node --version     # Node.js 22.22.2+, 24.15.0+, or 26+
 pnpm --version     # pnpm 12
 openssl version
 ```
 
-Stop and report any missing prerequisite before proceeding.
+If `dotnet` is missing or older than `.NET 10`:
+- On macOS (Homebrew): `brew install --cask dotnet-sdk` (or use Microsoft's `dotnet-install.sh --channel 10.0`).
+- On Linux/WSL: install the `.NET 10 SDK` via your distro package manager or Microsoft's `dotnet-install.sh --channel 10.0`.
+- Stop and report any prerequisite that could not be installed before proceeding.
 
 ## 2. Clone Repository (If Not Already Cloned)
 
