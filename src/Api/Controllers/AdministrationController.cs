@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using Services.Administration;
 using Services.Billing;
 using Services.Financial;
@@ -43,6 +44,7 @@ namespace Api.Controllers
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly IPlanCatalog _plans;
         private readonly Api.Service.ISecurityAuditService? _securityAudit;
+        private readonly ILoggerFactory _loggerFactory;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -53,6 +55,7 @@ namespace Api.Controllers
             UserManager<ApplicationUser> userManager,
             Core.Tenancy.ITenantContext tenantContext,
             IPlanCatalog plans,
+            ILoggerFactory loggerFactory,
             Api.Service.ISecurityAuditService? securityAudit = null)
         {
             _adminService = adminService;
@@ -64,6 +67,7 @@ namespace Api.Controllers
             _userManager = userManager;
             _tenantContext = tenantContext;
             _plans = plans;
+            _loggerFactory = loggerFactory;
             _securityAudit = securityAudit;
         }
 
@@ -156,7 +160,9 @@ namespace Api.Controllers
                 });
             }
 
-            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService, _plans);
+            Api.Data.Initializer initializer = new Data.Initializer(
+                _adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService, _plans,
+                _loggerFactory.CreateLogger<Data.Initializer>());
             bool success = initializer.Clear();
             if (success)
                 return Ok(new { message = "Database is cleared!" });

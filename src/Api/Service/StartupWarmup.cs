@@ -66,7 +66,7 @@ namespace Api.Service
                 var total = Stopwatch.StartNew();
                 await StepAsync("services", () => WarmServicesAsync(stoppingToken));
                 await StepAsync("http", () => WarmHttpAsync(stoppingToken));
-                _logger.LogWarning("Warm-up finished in {Ms} ms", total.ElapsedMilliseconds);
+                _logger.LogInformation("Warm-up finished in {Ms} ms", total.ElapsedMilliseconds);
             }
             catch (OperationCanceledException)
             {
@@ -91,7 +91,7 @@ namespace Api.Service
             try
             {
                 await step();
-                _logger.LogWarning("Warm-up {Step}: {Ms} ms", name, sw.ElapsedMilliseconds);
+                _logger.LogInformation("Warm-up {Step}: {Ms} ms", name, sw.ElapsedMilliseconds);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Api.Extensions
@@ -192,7 +193,7 @@ namespace Api.Extensions
                     ForeignKeys = true
                 }.ToString();
 
-                Console.WriteLine("[Database Provider] Using SQLite");
+                StartupDeferredLog.Add(LogLevel.Debug, "Database provider {Provider}", "SQLite");
 
                 services.AddDbContext<ApiDbContext>((sp, options) =>
                 {
@@ -220,7 +221,7 @@ namespace Api.Extensions
                     ?? throw new InvalidOperationException(
                         "DatabaseProvider is Postgres but ConnectionStrings:PostgresConnection is not set."));
 
-                Console.WriteLine("[Database Provider] Using PostgreSQL");
+                StartupDeferredLog.Add(LogLevel.Debug, "Database provider {Provider}", "PostgreSQL");
 
                 // Never retries (services open their own transactions); buffers results, see BufferingExecutionStrategy.
                 services.AddDbContext<ApiDbContext, PostgresApiDbContext>((sp, options) =>
@@ -266,7 +267,7 @@ namespace Api.Extensions
                     dbUserID, dbUserPassword, dbName);
             }
 
-            Console.WriteLine("[Database Provider] Using SQL Server");
+            StartupDeferredLog.Add(LogLevel.Debug, "Database provider {Provider}", "SQL Server");
 
             services.AddDbContext<ApiDbContext>((sp, options) =>
             {

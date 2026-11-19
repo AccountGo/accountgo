@@ -9,6 +9,8 @@ using Services.Security;
 using System.Reflection;
 using System.Text;
 using Core.Domain.Items;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Api.Data
 {
@@ -21,6 +23,7 @@ namespace Api.Data
         private readonly IInventoryService _inventoryService;
         private readonly ISecurityService _securityService;
         private readonly IPlanCatalog _plans;
+        private readonly ILogger _logger;
 
         public Initializer(IAdministrationService adminService,
             IFinancialService financialService,
@@ -28,7 +31,8 @@ namespace Api.Data
             IPurchasingService purchasingService,
             IInventoryService inventoryService,
             ISecurityService securityService,
-            IPlanCatalog plans)
+            IPlanCatalog plans,
+            ILogger logger)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -37,6 +41,7 @@ namespace Api.Data
             _inventoryService = inventoryService;
             _securityService = securityService;
             _plans = plans;
+            _logger = logger;
         }
         public bool Setup(Api.Service.CompanyProvisioningService provisioning)
         {
@@ -58,43 +63,43 @@ namespace Api.Data
             {
                 // 1.Company
                 var company = SetupCompany();
-                Console.WriteLine("SetupCompany() - Completed!");
+                _logger.LogDebug("SetupCompany() completed.");
 
                 provisioning.Provision(company, "PHP");
 
                 //6.Tax
                 SetupTax();
-                Console.WriteLine("SetupTax() - Completed!");
+                _logger.LogDebug("SetupTax() completed.");
 
                 // 7. Vendor
                 SetupVendor();
-                Console.WriteLine("SetupVendor() - Completed!");
+                _logger.LogDebug("SetupVendor() completed.");
 
                 //8.Customer
                 SetupCustomer();
-                Console.WriteLine("SetupCustomer() - Completed!");
+                _logger.LogDebug("SetupCustomer() completed.");
 
                 // 9.Items
                 SetupItems();
-                Console.WriteLine("SetupItems() - Completed!");
+                _logger.LogDebug("SetupItems() completed.");
 
                 //10.Banks
                 SetupBanks();
-                Console.WriteLine("SetupBanks() - Completed!");
+                _logger.LogDebug("SetupBanks() completed.");
 
                 //11.Security Roles
                 SetupSecurityRoles();
-                Console.WriteLine("SetupSecurityRoles() - Completed!");
+                _logger.LogDebug("SetupSecurityRoles() completed.");
 
                 //12.Dashboard demo data
                 SetupDashboardDemoData();
-                Console.WriteLine("SetupDashboardDemoData() - Completed!");
+                _logger.LogDebug("SetupDashboardDemoData() completed.");
 
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Setup() - An error occurred during initialization of database. Clear() method will be called to rollback any changes. Error Message = " + ex.Message);
+                _logger.LogError(ex, "Setup() failed during database initialization; Clear() will roll back changes.");
                 return false;
             }
         }
@@ -135,19 +140,19 @@ namespace Api.Data
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Clear() - An error occurred during clearing database. You may need to re-create the database and run Setup() again. Error Message = " + ex.Message);
+                _logger.LogError(ex, "Clear() failed while clearing the database; recreate the database and run Setup() again.");
                 return false;
             }
         }
 
         private Core.Domain.Company SetupCompany()
         {
-            // Console.WriteLine("Checking if there is already a default company.");
+            // _logger.LogDebug("Checking if there is already a default company.");
             // var defaultCompany = _adminService.GetDefaultCompany();
             // Console.WriteLine(defaultCompany == null ? "There is none." : "There is one.");
             // if (defaultCompany == null)
             // {
-            //     Console.WriteLine("Default company found. Returning it.");
+            //     _logger.LogDebug("Default company found. Returning it.");
             //     defaultCompany = new Core.Domain.Company
             //     {
             //         Id = 1,
@@ -162,16 +167,16 @@ namespace Api.Data
             // Console.WriteLine("Default company not found. Creating one.");
             // return defaultCompany;
 
-            Console.WriteLine("Checking if there is already a default company.");
+            _logger.LogDebug("Checking if there is already a default company.");
             var defaultCompany = _adminService.GetCompanyBySlug("ph-financials") ?? _adminService.GetCompanies().FirstOrDefault();
             if (defaultCompany != null)
             {
-                Console.WriteLine("Default company found. Returning it.");
+                _logger.LogDebug("Default company found. Returning it.");
                 return defaultCompany;
             }
             else
             {
-                Console.WriteLine("Default company not found. Creating it.");
+                _logger.LogDebug("Default company not found. Creating it.");
                 defaultCompany = new Core.Domain.Company
                 {
                     //Id = 1,
@@ -188,9 +193,10 @@ namespace Api.Data
             }
         }
 
-        public static IList<AccountClass> GetAccountClassesFromCsv()
+        public static IList<AccountClass> GetAccountClassesFromCsv(ILogger? logger = null)
         {
-            Console.WriteLine("SetupChartOfAccountsAndAccountClasses() starting.");
+            logger ??= NullLogger.Instance;
+            logger.LogDebug("SetupChartOfAccountsAndAccountClasses() starting.");
             IList<Core.Domain.Financials.AccountClass> accountClasses = new List<Core.Domain.Financials.AccountClass>();
             try
             {
@@ -312,14 +318,14 @@ namespace Api.Data
             }
             catch (System.Exception ex)
             {
-                Console.WriteLine("SetupChartOfAccountsAndAccountClasses() encounterd an Exception - " + ex.StackTrace);
+                logger.LogError(ex, "SetupChartOfAccountsAndAccountClasses() encountered an exception.");
                 throw;
             }
         }
 
         private void SetupChartOfAccountsAndAccountClasses()
         {
-            Console.WriteLine("SetupChartOfAccountsAndAccountClasses() starting.");
+            _logger.LogDebug("SetupChartOfAccountsAndAccountClasses() starting.");
             try
             {
                 IList<Core.Domain.Financials.AccountClass> accountClasses = new List<Core.Domain.Financials.AccountClass>();
@@ -441,7 +447,7 @@ namespace Api.Data
             }
             catch (System.Exception ex)
             {
-                Console.WriteLine("SetupChartOfAccountsAndAccountClasses() encountered an Exception - " + ex.StackTrace);
+                _logger.LogError(ex, "SetupChartOfAccountsAndAccountClasses() encountered an exception.");
                 throw;
             }
 
@@ -920,14 +926,14 @@ namespace Api.Data
 
         private void SetupSecurityRoles()
         {
-            Console.WriteLine("SetupSecurityRoles() - Started");
+            _logger.LogDebug("SetupSecurityRoles() started.");
             try
             {
                 _securityService.EnsureDefaultPermissionsAndRoles();
             }
             catch (System.Exception ex)
             {
-                Console.WriteLine(ex.Message + " - " + ex.StackTrace);
+                _logger.LogError(ex, "SetupSecurityRoles() failed.");
                 throw;
             }
         }
