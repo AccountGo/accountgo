@@ -22,6 +22,6 @@ namespace Core.Domain
         //public virtual string CreatedBy { get; set; }
         //public virtual System.DateTime? ModifiedOn { get; set; }
         [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-        public virtual string ModifiedBy { get; set; }
+        public virtual string? ModifiedBy { get; set; }
     }
 }

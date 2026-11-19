@@ -349,11 +349,11 @@ namespace Api.Controllers
             var profiles = emails.Count == 0
                 ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 : (await _db.Users.AsNoTracking()
-                    .Where(u => emails.Contains(u.EmailAddress))
+                    .Where(u => u.EmailAddress != null && emails.Contains(u.EmailAddress))
                     .Select(u => new { u.EmailAddress, u.Firstname, u.Lastname })
                     .ToListAsync())
                     .ToDictionary(
-                        u => u.EmailAddress,
+                        u => u.EmailAddress!,
                         u => $"{u.Firstname} {u.Lastname}".Trim(),
                         StringComparer.OrdinalIgnoreCase);
 

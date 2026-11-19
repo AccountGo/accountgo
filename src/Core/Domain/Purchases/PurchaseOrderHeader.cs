@@ -9,14 +9,14 @@ namespace Core.Domain.Purchases
     {
         public int CompanyId { get; set; }
         public int? VendorId { get; set; }
-        public string No { get; set; }
+        public string? No { get; set; }
         public DateTime Date { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public int? PaymentTermId { get; set; }
-        public string ReferenceNo { get; set; }
+        public string? ReferenceNo { get; set; }
         public PurchaseOrderStatus? Status { get; set; }
-        public virtual Vendor Vendor { get; set; }
-        public virtual ICollection<PurchaseOrderLine> PurchaseOrderLines { get; set; }
+        public virtual Vendor? Vendor { get; set; }
+        public virtual ICollection<PurchaseOrderLine> PurchaseOrderLines { get; set; } = null!;
 
         public PurchaseOrderHeader()
         {

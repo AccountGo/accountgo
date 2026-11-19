@@ -20,15 +20,15 @@ namespace Services.Purchasing
         void UpdatePurchaseOrder(PurchaseOrderHeader purchaseOrder);
         void AddPurchaseOrderReceipt(PurchaseReceiptHeader purchaseOrderReceipt);
         IEnumerable<Vendor> GetVendors();
-        Vendor GetVendorById(int id);
+        Vendor? GetVendorById(int id);
         IEnumerable<PurchaseOrderHeader> GetPurchaseOrders();
-        PurchaseOrderHeader GetPurchaseOrderById(int id);
-        PurchaseOrderLine GetPurchaseOrderLineById(int id);
-        PurchaseReceiptHeader GetPurchaseReceiptById(int id);
+        PurchaseOrderHeader? GetPurchaseOrderById(int id);
+        PurchaseOrderLine? GetPurchaseOrderLineById(int id);
+        PurchaseReceiptHeader? GetPurchaseReceiptById(int id);
         void AddVendor(Vendor vendor);
         void UpdateVendor(Vendor vendor);
         IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices();
-        PurchaseInvoiceHeader GetPurchaseInvoiceById(int id);
+        PurchaseInvoiceHeader? GetPurchaseInvoiceById(int id);
         /// <param name="preserveTaxAmounts">
         /// When true, keeps each line's supplied <see cref="PurchaseInvoiceLine.TaxAmount"/> instead of
         /// recalculating tax-on-top from the rate (needed for tax-inclusive bank amounts).

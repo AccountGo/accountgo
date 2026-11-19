@@ -36,8 +36,7 @@ namespace Core
 
         public static string GetMessage(string key, object[] args, string defaultMsg)
         {
-            string msgValue;
-            Messages.TryGetValue(key, out msgValue);
+            Messages.TryGetValue(key, out string? msgValue);
 
             if (string.IsNullOrEmpty(msgValue))
             {

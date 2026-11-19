@@ -21,7 +21,7 @@ namespace AccountGo.BackendTests.Financial
             IRepository<Account> accountRepo,
             IRepository<GeneralLedgerHeader> glHeaderRepo,
             IRepository<GeneralLedgerLine> glLineRepo,
-            IRepository<GeneralLedgerSetting> glSettingRepo = null)
+            IRepository<GeneralLedgerSetting>? glSettingRepo = null)
         {
             return new FinancialService(
                 Mock.Of<IInventoryService>(),

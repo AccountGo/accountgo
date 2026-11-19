@@ -593,7 +593,7 @@ public class SessionService : ISessionService
             }
         }
 
-        var permissions = _securityService.GetPermissionsForUser(domainUser);
+        var permissions = domainUser == null ? Array.Empty<string>() : _securityService.GetPermissionsForUser(domainUser);
 
         return new UserDto(
             user.Id,

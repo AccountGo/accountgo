@@ -175,7 +175,7 @@ namespace Services.Inventory
             var adjustmentDescription = string.IsNullOrWhiteSpace(memo) ? reason : memo;
             if (quantityChange > 0)
             {
-                movement = Receive(item, quantityChange, RoundUnitCost(unitCost.Value), DocumentTypes.InventoryAdjustment, null, date, adjustmentDescription);
+                movement = Receive(item, quantityChange, RoundUnitCost(unitCost!.Value), DocumentTypes.InventoryAdjustment, null, date, adjustmentDescription);
             }
             else
             {
@@ -189,7 +189,7 @@ namespace Services.Inventory
                 No = adjustmentNo,
                 Date = date,
                 QuantityChange = RoundQuantity(quantityChange),
-                UnitCost = quantityChange > 0 ? RoundUnitCost(unitCost.Value) : null,
+                UnitCost = quantityChange > 0 ? RoundUnitCost(unitCost!.Value) : null,
                 Reason = reason,
                 Memo = memo,
                 InventoryControlJournal = movement

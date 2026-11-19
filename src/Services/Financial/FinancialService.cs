@@ -24,7 +24,7 @@ namespace Services.Financial
 {
     public partial class FinancialService : BaseService, IFinancialService
     {
-        private readonly Core.Entitlements.IEntitlementService _entitlements;
+        private readonly Core.Entitlements.IEntitlementService? _entitlements;
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
 
@@ -54,17 +54,17 @@ namespace Services.Financial
         private readonly IRepository<VendorPayment> _vendorPaymentRepo;
         private readonly IRepository<CompanySetting> _companySettingRepo;
         private readonly IRepository<BankTransaction> _bankTransactionRepo;
-        private readonly IRepository<BankReconciliation> _bankReconciliationRepo;
-        private readonly IRepository<BankStatementLine> _bankStatementLineRepo;
+        private readonly IRepository<BankReconciliation>? _bankReconciliationRepo;
+        private readonly IRepository<BankStatementLine>? _bankStatementLineRepo;
         private readonly IRepository<LinkedEntryPair> _linkedEntryPairRepo;
         private readonly IRepository<Partner> _partnerRepo;
-        private readonly Services.Banking.IReconciledPeriodGuard _reconciledPeriodGuard;
-        private readonly IBooksLockGuard _booksLockGuard;
-        private readonly Core.Authorization.IAccessAuthorizationService _auth;
-        private readonly Core.Authorization.IWorkspaceApprovalPolicyResolver _approvalPolicyResolver;
-        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
-        private readonly IRepository<Core.Domain.Auditing.AuditLog> _auditLogRepo;
-        private readonly Microsoft.AspNetCore.Http.IHttpContextAccessor _httpContextAccessor;
+        private readonly Services.Banking.IReconciledPeriodGuard? _reconciledPeriodGuard;
+        private readonly IBooksLockGuard? _booksLockGuard;
+        private readonly Core.Authorization.IAccessAuthorizationService? _auth;
+        private readonly Core.Authorization.IWorkspaceApprovalPolicyResolver? _approvalPolicyResolver;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
+        private readonly IRepository<Core.Domain.Auditing.AuditLog>? _auditLogRepo;
+        private readonly Microsoft.AspNetCore.Http.IHttpContextAccessor? _httpContextAccessor;
         private readonly IEnumerable<ISourceJournalPostingGuard> _sourcePostingGuards;
         private readonly IRepository<CustomerCreditNote> _customerCreditRepo;
         private readonly IRepository<SupplierCreditNote> _supplierCreditRepo;
@@ -97,44 +97,44 @@ namespace Services.Financial
             IRepository<Item> itemRepo,
             IRepository<GeneralLedgerSetting> glSettingRepo,
             IRepository<CompanySetting> companySettingRepo,
-            IRepository<MainContraAccount> maincontraAccount = null,
-            IRepository<Customer> customerRepo = null,
-            IRepository<Vendor> vendorRepo = null,
-            IRepository<GeneralLedgerSetting> generalLedgerSettingRepo = null,
-            IRepository<SalesInvoiceHeader> salesInvoiceRepo = null,
-            IRepository<SalesReceiptHeader> salesReceiptRepo = null,
-            IRepository<CustomerAllocation> customerAllocationRepo = null,
-            IRepository<PurchaseInvoiceHeader> purchaseInvoiceRepo = null,
-            IRepository<VendorPayment> vendorPaymentRepo = null,
-            Core.Entitlements.IEntitlementService entitlements = null,
-            IRepository<BankTransaction> bankTransactionRepo = null,
-            IRepository<BankReconciliation> bankReconciliationRepo = null,
-            IRepository<BankStatementLine> bankStatementLineRepo = null,
-            Services.Banking.IReconciledPeriodGuard reconciledPeriodGuard = null,
-            IBooksLockGuard booksLockGuard = null,
-            Core.Authorization.IAccessAuthorizationService auth = null,
-            IRepository<Core.Domain.Auditing.AuditLog> auditLogRepo = null,
-            Microsoft.AspNetCore.Http.IHttpContextAccessor httpContextAccessor = null,
-            Core.Authorization.IWorkspaceApprovalPolicyResolver approvalPolicyResolver = null,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null,
-            IRepository<LinkedEntryPair> linkedEntryPairRepo = null,
-            IRepository<Partner> partnerRepo = null,
-            TimeProvider time = null,
-            IEnumerable<ISourceJournalPostingGuard> sourcePostingGuards = null,
-            IRepository<CustomerCreditNote> customerCreditRepo = null,
-            IRepository<SupplierCreditNote> supplierCreditRepo = null,
-            IRepository<PartyRefund> partyRefundRepo = null,
-            IRepository<SettlementApplication> settlementApplicationRepo = null,
-            IRepository<SettlementApplicationReversal> settlementApplicationReversalRepo = null
+            IRepository<MainContraAccount>? maincontraAccount = null,
+            IRepository<Customer>? customerRepo = null,
+            IRepository<Vendor>? vendorRepo = null,
+            IRepository<GeneralLedgerSetting>? generalLedgerSettingRepo = null,
+            IRepository<SalesInvoiceHeader>? salesInvoiceRepo = null,
+            IRepository<SalesReceiptHeader>? salesReceiptRepo = null,
+            IRepository<CustomerAllocation>? customerAllocationRepo = null,
+            IRepository<PurchaseInvoiceHeader>? purchaseInvoiceRepo = null,
+            IRepository<VendorPayment>? vendorPaymentRepo = null,
+            Core.Entitlements.IEntitlementService? entitlements = null,
+            IRepository<BankTransaction>? bankTransactionRepo = null,
+            IRepository<BankReconciliation>? bankReconciliationRepo = null,
+            IRepository<BankStatementLine>? bankStatementLineRepo = null,
+            Services.Banking.IReconciledPeriodGuard? reconciledPeriodGuard = null,
+            IBooksLockGuard? booksLockGuard = null,
+            Core.Authorization.IAccessAuthorizationService? auth = null,
+            IRepository<Core.Domain.Auditing.AuditLog>? auditLogRepo = null,
+            Microsoft.AspNetCore.Http.IHttpContextAccessor? httpContextAccessor = null,
+            Core.Authorization.IWorkspaceApprovalPolicyResolver? approvalPolicyResolver = null,
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
+            IRepository<LinkedEntryPair>? linkedEntryPairRepo = null,
+            IRepository<Partner>? partnerRepo = null,
+            TimeProvider? time = null,
+            IEnumerable<ISourceJournalPostingGuard>? sourcePostingGuards = null,
+            IRepository<CustomerCreditNote>? customerCreditRepo = null,
+            IRepository<SupplierCreditNote>? supplierCreditRepo = null,
+            IRepository<PartyRefund>? partyRefundRepo = null,
+            IRepository<SettlementApplication>? settlementApplicationRepo = null,
+            IRepository<SettlementApplicationReversal>? settlementApplicationReversalRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
-            _sourcePostingGuards = sourcePostingGuards;
-            _customerCreditRepo = customerCreditRepo;
-            _supplierCreditRepo = supplierCreditRepo;
-            _partyRefundRepo = partyRefundRepo;
-            _settlementApplicationRepo = settlementApplicationRepo;
-            _settlementApplicationReversalRepo = settlementApplicationReversalRepo;
+            _sourcePostingGuards = sourcePostingGuards!;
+            _customerCreditRepo = customerCreditRepo!;
+            _supplierCreditRepo = supplierCreditRepo!;
+            _partyRefundRepo = partyRefundRepo!;
+            _settlementApplicationRepo = settlementApplicationRepo!;
+            _settlementApplicationReversalRepo = settlementApplicationReversalRepo!;
             _auth = auth;
             _approvalPolicyResolver = approvalPolicyResolver;
             _policyTransaction = policyTransaction;
@@ -159,20 +159,20 @@ namespace Services.Financial
             _bankRepo = bankRepo;
             _itemRepo = itemRepo;
             _glSettingRepo = glSettingRepo;
-            _maincontraAccount = maincontraAccount;
-            _customerRepo = customerRepo;
-            _vendorRepo = vendorRepo;
-            _generalLedgerSettingRepo = generalLedgerSettingRepo;
-            _salesInvoiceRepo = salesInvoiceRepo;
-            _salesReceiptRepo = salesReceiptRepo;
-            _customerAllocationRepo = customerAllocationRepo;
-            _purchaseInvoiceRepo = purchaseInvoiceRepo;
-            _vendorPaymentRepo = vendorPaymentRepo;
-            _bankTransactionRepo = bankTransactionRepo;
+            _maincontraAccount = maincontraAccount!;
+            _customerRepo = customerRepo!;
+            _vendorRepo = vendorRepo!;
+            _generalLedgerSettingRepo = generalLedgerSettingRepo!;
+            _salesInvoiceRepo = salesInvoiceRepo!;
+            _salesReceiptRepo = salesReceiptRepo!;
+            _customerAllocationRepo = customerAllocationRepo!;
+            _purchaseInvoiceRepo = purchaseInvoiceRepo!;
+            _vendorPaymentRepo = vendorPaymentRepo!;
+            _bankTransactionRepo = bankTransactionRepo!;
             _bankReconciliationRepo = bankReconciliationRepo;
             _bankStatementLineRepo = bankStatementLineRepo;
-            _linkedEntryPairRepo = linkedEntryPairRepo;
-            _partnerRepo = partnerRepo;
+            _linkedEntryPairRepo = linkedEntryPairRepo!;
+            _partnerRepo = partnerRepo!;
             _reconciledPeriodGuard = reconciledPeriodGuard;
             _time = time ?? TimeProvider.System;
         }
@@ -182,9 +182,9 @@ namespace Services.Financial
 
         /// <inheritdoc />
         public Dto.Financial.GeneralLedgerTransactionPage GetGeneralLedgerTransactions(
-            DateTime? from = null, DateTime? to = null, string accountCode = null,
+            DateTime? from = null, DateTime? to = null, string? accountCode = null,
             int? transactionNo = null, DocumentTypes? documentType = null, int skip = 0, int take = GeneralLedgerDefaultPageSize,
-            string search = null, decimal? minAmount = null, decimal? maxAmount = null)
+            string? search = null, decimal? minAmount = null, decimal? maxAmount = null)
         {
             if (_auth == null)
                 return new Dto.Financial.GeneralLedgerTransactionPage { Items = new List<Dto.Financial.GeneralLedgerTransaction>(), TotalCount = 0 };
@@ -245,7 +245,7 @@ namespace Services.Financial
             // Bank register paths for the whole page in two lookups instead of one per row.
             var bankSourceIds = transactions
                 .Where(t => t.SourceDocumentId.HasValue && t.DocumentType == nameof(DocumentTypes.BankTransaction))
-                .Select(t => t.SourceDocumentId.Value).Distinct().ToList();
+                .Select(t => t.SourceDocumentId!.Value).Distinct().ToList();
             var bankIdBySource = new Dictionary<int, int>();
             if (bankSourceIds.Count > 0 && _bankTransactionRepo != null)
                 foreach (var row in _bankTransactionRepo.Table.Where(b => bankSourceIds.Contains(b.Id)).Select(b => new { b.Id, b.BankId }).ToList())
@@ -292,7 +292,7 @@ namespace Services.Financial
         private static DateTime InclusiveLedgerEnd(DateTime to) =>
             to.TimeOfDay == TimeSpan.Zero ? to.Date.AddDays(1).AddTicks(-1) : to;
 
-        public FinancialYear CurrentFiscalYear()
+        public FinancialYear? CurrentFiscalYear()
         {
             var setting = _companySettingRepo.Table.FirstOrDefault();
             var today = WorkspaceBusinessDate.Today(_time, setting?.Timezone);
@@ -313,7 +313,7 @@ namespace Services.Financial
             return summaries;
         }
 
-        private FinancialYear ResolveCurrentFiscalYear(CompanySetting setting, DateTime today, System.Collections.Generic.IReadOnlyList<FinancialYear> loadedYears)
+        private FinancialYear? ResolveCurrentFiscalYear(CompanySetting? setting, DateTime today, System.Collections.Generic.IReadOnlyList<FinancialYear>? loadedYears)
         {
             if (setting == null)
                 return null;
@@ -452,7 +452,7 @@ namespace Services.Financial
             return accounts;
         }
 
-        public Account GetAccount(int id)
+        public Account? GetAccount(int id)
         {
             if (_auth == null)
                 return null;
@@ -472,7 +472,7 @@ namespace Services.Financial
             return account;
         }
 
-        public Account GetAccountByAccountCode(string accountcode)
+        public Account? GetAccountByAccountCode(string accountcode)
         {
             if (_auth == null)
                 return null;
@@ -620,9 +620,9 @@ namespace Services.Financial
                     ?? $"Permission '{decision.MissingPermission ?? "financials.journal.post"}' is required for this action.");
             }
 
-            if (ValidateGeneralLedgerEntry(entry))
+            if (ValidateGeneralLedgerEntry(entry!))
             {
-                _generalLedgerRepository.Insert(entry);
+                _generalLedgerRepository.Insert(entry!);
             }
         }
 
@@ -664,7 +664,7 @@ namespace Services.Financial
                 throw new InvalidOperationException($"Permission '{decision.MissingPermission ?? "financials.journal.post"}' is required for this action.");
             }
 
-            _generalLedgerRepository.Update(entry);
+            _generalLedgerRepository.Update(entry!);
         }
 
         public bool ValidateGeneralLedgerEntry(GeneralLedgerHeader glEntry)
@@ -797,8 +797,8 @@ namespace Services.Financial
                     throw new InvalidOperationException(decision.SafeMessage ?? "Unauthorized to create journal entry.");
             }
 
-            ValidateJournalVoucherRules(journalEntry);
-            journalEntry.Posted = false;
+            ValidateJournalVoucherRules(journalEntry!);
+            journalEntry!.Posted = false;
 
             _journalEntryRepo.Insert(journalEntry);
         }
@@ -1026,8 +1026,7 @@ namespace Services.Financial
             var balanceSheet = accounts.Where(a => a.AccountClassId <= 3)
                 .Select(a =>
                 {
-                    TrialBalance balance;
-                    var net = balances.TryGetValue(a.Id, out balance) ? balance.Debit - balance.Credit : 0m;
+                    var net = balances.TryGetValue(a.Id, out var balance) ? balance.Debit - balance.Credit : 0m;
                     // 30820 is equity (class 3) from the books; keep it out of the computed RE split below
                     // (that split only sums class 4/5) and surface a stable statement label.
                     var name = a.AccountCode == "30820" ? "Prior period adjustments" : a.AccountName;
@@ -1104,8 +1103,7 @@ namespace Services.Financial
                 .ToList()
                 .Select(a =>
                 {
-                    TrialBalance balance;
-                    var net = balances.TryGetValue(a.Id, out balance) ? balance.Debit - balance.Credit : 0m;
+                    var net = balances.TryGetValue(a.Id, out var balance) ? balance.Debit - balance.Credit : 0m;
                     return new IncomeStatement
                     {
                         AccountId = a.Id,
@@ -1175,7 +1173,7 @@ namespace Services.Financial
             var netIncome = totalRevenue - totalExpense;
             result.NetIncome = netIncome;
 
-            var glSetting = GetGeneralLedgerSetting();
+            var glSetting = GetGeneralLedgerSetting()!;
 
             // Classify non-cash balance sheet accounts (RE and accum. depreciation are journal-split below)
             foreach (var account in accounts.Where(a => a.AccountClassId <= 3 && !IsCashAccount(a)).OrderBy(a => a.AccountCode))
@@ -1450,7 +1448,7 @@ namespace Services.Financial
 
             var closingGlHeaderIds = (_journalEntryRepo?.Table ?? Enumerable.Empty<JournalEntryHeader>().AsQueryable())
                 .Where(j => j.VoucherType == JournalVoucherTypes.ClosingEntries && j.GeneralLedgerHeaderId.HasValue)
-                .Select(j => j.GeneralLedgerHeaderId.Value)
+                .Select(j => j.GeneralLedgerHeaderId!.Value)
                 .ToHashSet();
 
             var lines = _generalLedgerLineRepository.Table.AsQueryable();
@@ -1638,7 +1636,7 @@ namespace Services.Financial
         {
             foreach (var item in incomeItems)
             {
-                if (item.Amount == 0m || !IsDisposalGainOrLossAccount(item.AccountName, item.IsExpense))
+                if (item.Amount == 0m || !IsDisposalGainOrLossAccount(item.AccountName ?? "", item.IsExpense))
                     continue;
 
                 if (!item.IsExpense)
@@ -1684,7 +1682,7 @@ namespace Services.Financial
 
         public ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
-            string accountCode = null,
+            string? accountCode = null,
             int? transactionNo = null)
         {
             if (_auth == null || !_auth.Authorize(Core.Authorization.AccessOperationCatalog.FinancialsJournalView).Allowed)
@@ -1859,7 +1857,8 @@ namespace Services.Financial
             return taxes;
         }
 
-        public GeneralLedgerSetting GetGeneralLedgerSetting()
+        // Public IFinancialService surface; base helper is protected and wired with a null repo here.
+        public new GeneralLedgerSetting? GetGeneralLedgerSetting()
         {
             return _glSettingRepo.Table.FirstOrDefault();
         }
@@ -1937,7 +1936,7 @@ namespace Services.Financial
             _accountRepo.Insert(account);
         }
 
-        public JournalEntryHeader GetJournalEntry(int id, bool fromGL = false)
+        public JournalEntryHeader? GetJournalEntry(int id, bool fromGL = false)
         {
             if (_auth == null)
                 return null;
@@ -1979,7 +1978,7 @@ namespace Services.Financial
                 throw new LinkedEntryOperationException("linked_entry_use_pair_reversal", "Linked journals must be corrected through the linked entry pair.");
             if (!posted && !string.IsNullOrWhiteSpace(journalEntry.SourceSystem))
                 throw new SourceJournalLockedException("source_journal_locked", "Imported journals can't be edited. Discard it and import it again instead.");
-            if (posted && !string.IsNullOrWhiteSpace(journalEntry.SourceSystem) && _sourcePostingGuards != null)
+            if (posted && !string.IsNullOrWhiteSpace(journalEntry.SourceSystem))
             {
                 foreach (var guard in _sourcePostingGuards)
                 {
@@ -1994,12 +1993,12 @@ namespace Services.Financial
             if (_auth == null)
                 throw new InvalidOperationException("Authorization service dependency is required.");
 
-            string aprHeader = null;
-            string approverHeader = null;
-            string entryFingerprint = null;
+            string? aprHeader = null;
+            string? approverHeader = null;
+            string? entryFingerprint = null;
             var preparerIds = new HashSet<string>(StringComparer.Ordinal);
-            string effectivePreparer = null;
-            Core.Authorization.AccessResourceContext postResource = null;
+            string? effectivePreparer = null;
+            Core.Authorization.AccessResourceContext? postResource = null;
             if (posted)
             {
                 if (journalEntry.VoucherType == JournalVoucherTypes.ClosingEntries && AllowClosingEntriesDepth.Value > 0)
@@ -2056,7 +2055,7 @@ namespace Services.Financial
                         journalEntry.SourceSystem,
                         journalEntry.SourceKey);
 
-                    if (_journalEntryRepo != null && journalEntry.Id > 0)
+                    if (journalEntry.Id > 0)
                     {
                         var storedDraft = _journalEntryRepo.GetById(journalEntry.Id);
                         if (storedDraft != null)
@@ -2127,7 +2126,7 @@ namespace Services.Financial
                         foreach (var row in pendingApprovals)
                         {
                             if (string.IsNullOrWhiteSpace(row.NewValue)) continue;
-                            Core.Authorization.PersistedAccessApprovalPayload p;
+                            Core.Authorization.PersistedAccessApprovalPayload? p;
                             try { p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(row.NewValue); }
                             catch (System.Text.Json.JsonException) { continue; }
                             if (p != null &&
@@ -2135,14 +2134,14 @@ namespace Services.Financial
                                 string.Equals(p.ResourceId, idStr, StringComparison.Ordinal))
                             {
                                 _auditLogRepo.Insert(Core.Authorization.ApprovalEvidence.State(
-                                    row, "Revoked", _auth.ResolveActorContext()?.UserId));
+                                    row, "Revoked", _auth?.ResolveActorContext()?.UserId));
                             }
                         }
                     }
                 }
             }
 
-            ValidateJournalVoucherRules(journalEntry);
+            ValidateJournalVoucherRules(journalEntry!);
 
             if (posted)
             {
@@ -2157,7 +2156,7 @@ namespace Services.Financial
                 Action executePosting = () =>
                 {
                     // Reload fresh state from DB under the coordination guard to prevent concurrent duplicate posts or stale content.
-                    if (journalEntry.Id > 0 && _journalEntryRepo != null)
+                    if (journalEntry.Id > 0)
                     {
                         var fresh = _journalEntryRepo.TableNoTracking
                             .FirstOrDefault(j => j.Id == journalEntry.Id);
@@ -2166,9 +2165,7 @@ namespace Services.Financial
                         if (fresh.Posted == true || fresh.GeneralLedgerHeaderId.HasValue)
                             throw new InvalidOperationException("Posted journal entries cannot be edited or posted again.");
 
-                        var freshLines = _journalEntryLineRepo != null
-                            ? _journalEntryLineRepo.TableNoTracking.Where(l => l.JournalEntryHeaderId == journalEntry.Id).ToList()
-                            : new List<JournalEntryLine>();
+                        var freshLines = _journalEntryLineRepo.TableNoTracking.Where(l => l.JournalEntryHeaderId == journalEntry.Id).ToList();
                         if (freshLines.Count == 0 && fresh.JournalEntryLines != null && fresh.JournalEntryLines.Count > 0)
                         {
                             freshLines = fresh.JournalEntryLines.ToList();
@@ -2195,7 +2192,7 @@ namespace Services.Financial
                             throw new InvalidOperationException("The in-memory journal entry content differs from the stored draft. Please reload and try again.");
                         }
                     }
-                    if (journalEntry.Id > 0 && _generalLedgerRepository != null)
+                    if (journalEntry.Id > 0)
                     {
                         if (_generalLedgerRepository.Table.Any(h => h.CompanyId == journalEntry.CompanyId && h.DocumentType == DocumentTypes.JournalEntry && h.SourceDocumentId == journalEntry.Id))
                             throw new InvalidOperationException("A general ledger header already exists for this journal entry.");
@@ -2236,7 +2233,7 @@ namespace Services.Financial
                         ApprovalRequestId = aprHeader
                     };
 
-                    Core.Authorization.EffectiveApprovalRule liveRule = null;
+                    Core.Authorization.EffectiveApprovalRule? liveRule = null;
                     if (!isClosingEntry && !isPartnerSetupEntry && _approvalPolicyResolver != null && journalEntry.CompanyId > 0)
                     {
                         liveRule = _approvalPolicyResolver.Resolve(
@@ -2279,7 +2276,7 @@ namespace Services.Financial
                         {
                             glEntry.GeneralLedgerLines.Add(new GeneralLedgerLine()
                             {
-                                Account = GetAccounts().Where(a => a.Id == je.AccountId).FirstOrDefault(),
+                                Account = GetAccounts().Where(a => a.Id == je.AccountId).FirstOrDefault()!,
                                 AccountId = je.AccountId,
                                 DrCr = je.DrCr,
                                 Amount = je.Amount,
@@ -2301,7 +2298,7 @@ namespace Services.Financial
                                     throw new InvalidOperationException("The independent approval for posting could not be found or is not in Approved state.");
                                 }
 
-                                var p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(approvalRow.NewValue);
+                                var p = System.Text.Json.JsonSerializer.Deserialize<Core.Authorization.PersistedAccessApprovalPayload>(approvalRow.NewValue!)!;
                                 if (!Core.Authorization.ApprovalEvidence.IsValidApproval(_auditLogRepo.TableNoTracking, approvalRow, p, journalEntry.CompanyId, DateTimeOffset.UtcNow, Core.Authorization.AccessOperationCatalog.FinancialsJournalPost))
                                 {
                                     throw new InvalidOperationException("The independent approval payload is invalid.");
@@ -2328,7 +2325,7 @@ namespace Services.Financial
                                     throw new InvalidOperationException("The independent approval content fingerprint does not match the journal entry being posted.");
                                 }
                                 _auditLogRepo.Insert(Core.Authorization.ApprovalEvidence.State(
-                                    approvalRow, "Consumed", _auth.ResolveActorContext()?.UserId));
+                                    approvalRow, "Consumed", _auth?.ResolveActorContext()?.UserId));
                             }
 
                             if (!isClosingEntry)
@@ -2337,9 +2334,9 @@ namespace Services.Financial
                                     journalEntry,
                                     entryFingerprint,
                                     effectivePreparer: effectivePreparer
-                                        ?? _auth.ResolveActorContext()?.UserId
+                                        ?? _auth?.ResolveActorContext()?.UserId
                                         ?? "system:draft-preparer",
-                                    posterUserId: _auth.ResolveActorContext()?.UserId,
+                                    posterUserId: _auth?.ResolveActorContext()?.UserId,
                                     independentApprovalRequestId: aprHeader,
                                     resolvedRule: liveRule,
                                     partnerSetupEntry: isPartnerSetupEntry);
@@ -2357,7 +2354,7 @@ namespace Services.Financial
 
                     _policyTransaction.Execute(journalEntry.CompanyId, guard =>
                     {
-                        if (!string.IsNullOrWhiteSpace(journalEntry.SourceSystem) && _sourcePostingGuards != null)
+                        if (!string.IsNullOrWhiteSpace(journalEntry.SourceSystem))
                         {
                             foreach (var postGuard in _sourcePostingGuards)
                             {
@@ -2380,7 +2377,7 @@ namespace Services.Financial
                             // transaction commits — whether this Execute owns it or joins a controller tx —
                             // by enqueuing the emission. A rollback discards both marker and emission.
                             var established = Core.Authorization.WorkspaceFirstActionEvidence.TryRecordFirstUsefulAction(
-                                _auditLogRepo,
+                                _auditLogRepo!,
                                 journalEntry.CompanyId,
                                 Core.Authorization.WorkspaceOperatingPolicyMetrics.ActionLabels.JournalPost,
                                 _auth?.ResolveActorContext()?.UserId,
@@ -2465,15 +2462,15 @@ namespace Services.Financial
             JournalEntryHeader journalEntry,
             string entryFingerprint,
             string effectivePreparer,
-            string posterUserId,
-            string independentApprovalRequestId,
-            Core.Authorization.EffectiveApprovalRule resolvedRule = null,
+            string? posterUserId,
+            string? independentApprovalRequestId,
+            Core.Authorization.EffectiveApprovalRule? resolvedRule = null,
             bool partnerSetupEntry = false)
         {
             if (_auditLogRepo == null || journalEntry.CompanyId <= 0 || journalEntry.Id <= 0)
                 return;
 
-            Core.Authorization.EffectiveApprovalRule rule = partnerSetupEntry ? null : resolvedRule;
+            Core.Authorization.EffectiveApprovalRule? rule = partnerSetupEntry ? null : resolvedRule;
             if (!partnerSetupEntry && rule == null && _approvalPolicyResolver != null)
             {
                 rule = _approvalPolicyResolver.Resolve(
@@ -2539,7 +2536,7 @@ namespace Services.Financial
             });
         }
 
-        public GeneralLedgerHeader GetGeneralLedgerHeader(int id)
+        public GeneralLedgerHeader? GetGeneralLedgerHeader(int id)
         {
             if (_auth == null)
                 return null;

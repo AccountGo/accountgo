@@ -235,7 +235,7 @@ namespace Api.Controllers
 
             if (string.Equals(opKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal))
             {
-                var journalProblem = ValidateJournalReviewApproval(companyId, request.ResourceId);
+                var journalProblem = ValidateJournalReviewApproval(companyId, request.ResourceId!);
                 if (journalProblem != null)
                     return journalProblem;
             }
@@ -281,7 +281,7 @@ namespace Api.Controllers
         /// A journal-post review approval must name an existing unposted draft, come from a reviewer who can
         /// actually post journals (permission + entitlement aware), and never from the entry's own preparer.
         /// </summary>
-        private IActionResult ValidateJournalReviewApproval(int companyId, string resourceId)
+        private IActionResult? ValidateJournalReviewApproval(int companyId, string resourceId)
         {
             if (!int.TryParse(resourceId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var journalId))
                 return Problem(statusCode: 400, title: "Journal entry required", detail: "A journal review approval must reference the journal entry id.");
@@ -316,10 +316,10 @@ namespace Api.Controllers
             var revoked = await AccessAuthorizationService.RevokeAuthenticatedApprovalAsync(_db, companyId, requestId, actorUserId: UserId);
             if (!revoked)
                 return NotFound();
-            string revokedOperation = null;
+            string revokedOperation = null!;
             if (!string.IsNullOrWhiteSpace(approvalJson))
             {
-                try { revokedOperation = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(approvalJson)?.OperationKey; }
+                try { revokedOperation = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(approvalJson)?.OperationKey ?? null!; }
                 catch (System.Text.Json.JsonException) { }
             }
             await AuditEventAsync("approval.revoke", "success", new { requestId, operation = revokedOperation });
@@ -342,7 +342,7 @@ namespace Api.Controllers
             if (transaction == null)
                 return Problem(statusCode: 503, title: "Policy service unavailable", detail: "Workspace policy coordination is unavailable.");
 
-            object roleChangeAudit = null;
+            object roleChangeAudit = null!;
             var updateResult = transaction.Execute<IActionResult>(companyId, guard =>
             {
                 var member = FindMember(memberId);
@@ -362,7 +362,7 @@ namespace Api.Controllers
                 if (request.SecurityRoleIds != null && !ValidSecurityRoles(_db, request.SecurityRoleIds))
                     return Problem(statusCode: 400, title: "Invalid workspace security roles");
 
-                List<int> addedRoleIds = null;
+                List<int> addedRoleIds = null!;
                 if (request.SecurityRoleIds != null)
                 {
                     var existingRoleIds = member.SecurityRoles.Select(sr => sr.SecurityRoleId).ToHashSet();
@@ -792,7 +792,7 @@ namespace Api.Controllers
             if (transaction == null)
                 return Problem(statusCode: 503, title: "Workspace policy coordination is unavailable.");
 
-            CompanyMember? targetMemberRef = null;
+            CompanyMember targetMemberRef = null!;
             object approveAudit = null;
             var result = transaction.Execute<IActionResult>(companyId, guard =>
             {

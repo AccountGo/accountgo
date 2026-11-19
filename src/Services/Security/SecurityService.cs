@@ -16,26 +16,26 @@ namespace Services.Security
         private readonly IRepository<SecurityRolePermission> _securityRolePermissionRepo;
         private readonly ISecurityRepository _securityRepository;
 
-        public SecurityService(ISecurityRepository securityRepository = null,
-            IRepository<User> userRepo = null,
-            IRepository<SecurityRole> securityRoleRepo = null,
-            IRepository<SecurityPermission> securityPermissionRepo = null,
-            IRepository<SecurityGroup> securityGroupRepo = null,
-            IRepository<SecurityUserRole> securityUserRoleRepo = null,
-            IRepository<SecurityRolePermission> securityRolePermissionRepo = null)
+        public SecurityService(ISecurityRepository? securityRepository = null,
+            IRepository<User>? userRepo = null,
+            IRepository<SecurityRole>? securityRoleRepo = null,
+            IRepository<SecurityPermission>? securityPermissionRepo = null,
+            IRepository<SecurityGroup>? securityGroupRepo = null,
+            IRepository<SecurityUserRole>? securityUserRoleRepo = null,
+            IRepository<SecurityRolePermission>? securityRolePermissionRepo = null)
         {
-            _userRepo = userRepo;
-            _securityRoleRepo = securityRoleRepo;
-            _securityPermissionRepo = securityPermissionRepo;
-            _securityGroupRepo = securityGroupRepo;
-            _securityUserRoleRepo = securityUserRoleRepo;
-            _securityRolePermissionRepo = securityRolePermissionRepo;
-            _securityRepository = securityRepository;
+            _userRepo = userRepo!;
+            _securityRoleRepo = securityRoleRepo!;
+            _securityPermissionRepo = securityPermissionRepo!;
+            _securityGroupRepo = securityGroupRepo!;
+            _securityUserRoleRepo = securityUserRoleRepo!;
+            _securityRolePermissionRepo = securityRolePermissionRepo!;
+            _securityRepository = securityRepository!;
         }
 
         public IEnumerable<SecurityRolePermission> GetPermissionsForRole(string rolename)
         {
-            var role = GetRole(rolename);
+            var role = GetRole(rolename)!;
 
             if (role.SysAdmin)
                 return _securityRolePermissionRepo.Table.AsEnumerable();
@@ -45,16 +45,16 @@ namespace Services.Security
 
         public IEnumerable<SecurityUserRole> GetRolesForUser(string username)
         {
-            var user = GetUser(username);
+            var user = GetUser(username)!;
             return user.Roles;
         }
 
-        public SecurityPermission GetSecurityPermission(int securityPermissionId)
+        public SecurityPermission? GetSecurityPermission(int securityPermissionId)
         {
             return _securityPermissionRepo.Table.Where(p => p.Id == securityPermissionId).FirstOrDefault();
         }
 
-        public SecurityRole GetSecurityRole(int securityRoleId)
+        public SecurityRole? GetSecurityRole(int securityRoleId)
         {
             return _securityRoleRepo.Table.Where(r => r.Id == securityRoleId).FirstOrDefault();
         }
@@ -64,19 +64,19 @@ namespace Services.Security
             return _securityRepository.GetAllRoles();
         }
 
-        public User GetUser(string username)
+        public User? GetUser(string username)
         {
             var user = _securityRepository.GetUser(username);
 
             return user;
         }
 
-        public SecurityRole GetRole(string rolename)
+        public SecurityRole? GetRole(string rolename)
         {
             return _securityRoleRepo.Table.Where(r => r.Name == rolename).FirstOrDefault();
         }
 
-        public IEnumerable<SecurityUserRole> GetUsersInSecurityRole(string securityRoleName)
+        public IEnumerable<SecurityUserRole>? GetUsersInSecurityRole(string securityRoleName)
         {
             var role = GetRole(securityRoleName);
 
@@ -98,7 +98,7 @@ namespace Services.Security
         {
             var itemToDelete = _securityUserRoleRepo.Table.ToList().Where(i => i.SecurityRoleId == roleId && i.UserId == userId).FirstOrDefault();
 
-            _securityUserRoleRepo.Delete(itemToDelete);
+            _securityUserRoleRepo.Delete(itemToDelete!);
         }
 
         public void AddPermissionToRole(int roleId, int permissionId)
@@ -115,7 +115,7 @@ namespace Services.Security
         public IEnumerable<string> GetPermissionsForUser(string username)
         {
             if (string.IsNullOrEmpty(username)) return Enumerable.Empty<string>();
-            return GetPermissionsForUser(GetUser(username));
+            return GetPermissionsForUser(GetUser(username)!);
         }
 
         public IEnumerable<string> GetPermissionsForUser(User user)
@@ -125,7 +125,7 @@ namespace Services.Security
 
             if (user.IsSysAdmin() || (user.Roles != null && user.Roles.Any(r => r?.SecurityRole?.Name == "SystemAdministrators" || r?.SecurityRole?.SysAdmin == true)))
             {
-                var permissionsSysAdmin = _securityPermissionRepo.Table.Select(p => p.Name).ToList();
+                var permissionsSysAdmin = _securityPermissionRepo.Table.Select(p => p.Name).Where(n => n != null).Select(n => n!).ToList();
                 if (permissionsSysAdmin.Count == 0)
                 {
                     return GetAllDefaultPermissionNames();
@@ -141,7 +141,7 @@ namespace Services.Security
                 .Where(r => r?.SecurityRole?.Permissions != null)
                 .SelectMany(r => r.SecurityRole.Permissions)
                 .Where(p => p?.SecurityPermission != null && !string.IsNullOrEmpty(p.SecurityPermission.Name))
-                .Select(p => p.SecurityPermission.Name)
+                .Select(p => p.SecurityPermission!.Name!)
                 .Distinct()
                 .ToList();
 

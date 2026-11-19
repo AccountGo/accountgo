@@ -8,9 +8,9 @@ namespace Core.Domain.Error
     {
         private readonly T? _value;
 
-        private Result(T value)
+        private Result(T? value)
         {
-            Value = value;
+            _value = value;
             IsSuccess = true;
             Error = Error.None;
         }
@@ -44,7 +44,7 @@ namespace Core.Domain.Error
         }
 
         public Error Error { get; }
-        public static Result<T> Success(T value) => new Result<T>(value);
+        public static Result<T> Success(T? value) => new Result<T>(value);
         public static Result<T> Failure(Error error) => new Result<T>(error);
     }
 }

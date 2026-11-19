@@ -37,14 +37,14 @@ namespace Core.Domain.Sales
         public decimal WrittenOffAmount { get; set; }
         [System.ComponentModel.DataAnnotations.ConcurrencyCheck]
         public long Version { get; set; }
-        public string No { get; set; }
+        public string? No { get; set; }
         public DateTime Date { get; set; }
         public decimal ShippingHandlingCharge{ get; set; }
         /// <summary>Null means custom terms: the due date was set by hand.</summary>
         public int? PaymentTermId { get; set; }
         /// <summary>Stored since due dates could be set by hand; null on invoices saved before that (see <see cref="ResolveDueDate"/>).</summary>
         public DateTime? DueDate { get; set; }
-        public string ReferenceNo { get; set; }
+        public string? ReferenceNo { get; set; }
         public string? Notes { get; set; }
         /// <summary>
         /// Null: never set (a draft prints the workspace's payment bank or default text; the text is stored when the
@@ -62,15 +62,15 @@ namespace Core.Domain.Sales
         /// for statement-recorded other income so a later sales-receipt document can find them.
         /// </summary>
         public SalesInvoiceOrigins? Origin { get; set; }
-        public virtual Customer Customer { get; set; }
+        public virtual Customer Customer { get; set; } = null!;
         public virtual Account? ReceivableAccount { get; set; }
-        public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
+        public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
 
-        public virtual ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; }
+        public virtual ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; } = null!;
         [NotMapped]
-        public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; }
-        public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
+        public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; } = null!;
+        public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; } = null!;
         /// <summary>Records the seller once, when the invoice is first issued; drafts and voided drafts keep following the workspace.</summary>
         public void CaptureSellerIfIssued(Company? company, CompanySetting? setting)
         {

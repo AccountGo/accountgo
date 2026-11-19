@@ -147,7 +147,7 @@ namespace Services.TaxSystem
                     h.Status,
                     h.GeneralLedgerHeaderId,
                     h.ShippingHandlingCharge,
-                    PartyName = h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name : "",
+                    PartyName = h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name! : "",
                     Lines = h.SalesInvoiceLines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.Amount, l.Discount, l.TaxAmount)).ToList()
                 })
                 .ToList();
@@ -166,7 +166,7 @@ namespace Services.TaxSystem
                     VoidDate = h.VoidGeneralLedgerHeader!.Date,
                     h.VoidGeneralLedgerHeaderId,
                     h.ShippingHandlingCharge,
-                    PartyName = h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name : "",
+                    PartyName = h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name! : "",
                     Lines = h.SalesInvoiceLines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.Amount, l.Discount, l.TaxAmount)).ToList()
                 })
                 .ToList();
@@ -186,7 +186,7 @@ namespace Services.TaxSystem
                     h.Date,
                     h.Status,
                     h.GeneralLedgerHeaderId,
-                    PartyName = h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name : "",
+                    PartyName = h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name! : "",
                     Lines = h.PurchaseInvoiceLines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.Amount, l.Discount, l.TaxAmount)).ToList()
                 })
                 .ToList();
@@ -204,7 +204,7 @@ namespace Services.TaxSystem
                     No = h.No ?? h.VendorInvoiceNo,
                     VoidDate = h.VoidGeneralLedgerHeader!.Date,
                     h.VoidGeneralLedgerHeaderId,
-                    PartyName = h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name : "",
+                    PartyName = h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name! : "",
                     Lines = h.PurchaseInvoiceLines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.Amount, l.Discount, l.TaxAmount)).ToList()
                 })
                 .ToList();
@@ -504,7 +504,7 @@ namespace Services.TaxSystem
                     .Select(h => new CashDocMeta(
                         h.Id,
                         h.No ?? "",
-                        h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name : "",
+                        h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name! : "",
                         h.ShippingHandlingCharge,
                         h.SalesInvoiceLines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.Amount, l.Discount, l.TaxAmount)).ToList()))
                     .ToDictionary(h => h.Id);
@@ -564,7 +564,7 @@ namespace Services.TaxSystem
                     .Select(h => new CashDocMeta(
                         h.Id,
                         h.No ?? h.VendorInvoiceNo,
-                        h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name : "",
+                        h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name! : "",
                         0m,
                         h.PurchaseInvoiceLines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.Amount, l.Discount, l.TaxAmount)).ToList()))
                     .ToDictionary(h => h.Id);
@@ -636,7 +636,7 @@ namespace Services.TaxSystem
                     .Select(h => new CashDocMeta(
                         h.Id,
                         h.No ?? $"CN-{h.Id}",
-                        h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name : "",
+                        h.Customer != null && h.Customer.Party != null ? h.Customer.Party.Name! : "",
                         0m,
                         h.Lines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.UnitPrice, 0m, l.TaxAmount)).ToList()))
                     .ToDictionary(h => h.Id);
@@ -685,7 +685,7 @@ namespace Services.TaxSystem
                     .Select(h => new CashDocMeta(
                         h.Id,
                         h.No ?? h.VendorCreditNo ?? $"SCN-{h.Id}",
-                        h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name : "",
+                        h.Vendor != null && h.Vendor.Party != null ? h.Vendor.Party.Name! : "",
                         0m,
                         h.Lines.Select(l => new LineProjection(l.TaxId, l.Quantity, l.UnitCost, 0m, l.TaxAmount)).ToList()))
                     .ToDictionary(h => h.Id);

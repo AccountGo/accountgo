@@ -22,8 +22,8 @@ namespace Core.Domain.Sales
         public decimal Quantity { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
-        public SalesQuoteHeader SalesQuoteHeader { get; set; }
-        public virtual Item Item { get; set; }
-        public virtual Measurement Measurement { get; set; }
+        public SalesQuoteHeader SalesQuoteHeader { get; set; } = null!;
+        public virtual Item Item { get; set; } = null!;
+        public virtual Measurement Measurement { get; set; } = null!;
     }
 }

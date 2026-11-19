@@ -40,6 +40,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - People who can review or close a year can open **Year-end close** without being an organization administrator.
 
 ### Changed
+- The sign-in page now has Sign in and Create account tabs under the email field, with separate headings and wording for each. The verification code step has clearer wording, a centered layout, and a "Not your email?" link to go back and change it. The terms checkbox is now aligned with its text.
 - Moved Customer Credits & Settlements, Supplier Credits & Advances, and Year-end close out of the main sidebar into the Sales tabs, Purchases tabs, and General Ledger views navigation respectively.
 - Year-end assistant guidance uses the implemented close controls and explains current aging, close-record and correction limits.
 - Fiscal years in Settings now show Open, Ended or Closed. A year that is not the current one is no longer labelled Closed, and an unsaved current year says it still needs to be prepared.
@@ -65,6 +66,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - CLI credentials can no longer create unrestricted web sessions. Signing out or revoking a session now prevents concurrent refresh requests and older refresh tokens from restoring it, and alternate spellings of sign-in URLs no longer bypass bot verification.
 
 ### Self-hosting
+- API startup logs are quieter by default: a short structured summary replaces the long Console dump. Raise `Microsoft.EntityFrameworkCore.Database.Command` to see SQL again; set `EF_SENSITIVE_DATA_LOGGING=true` for EF sensitive-data logging.
 - A database migration adds partner and profit-sharing tables and partner columns to bank statement description rules and company settings. It runs automatically when the API starts.
 - PostgreSQL deployments can run behind a transaction-mode connection pooler (such as Supabase's on port 6543), which lets more API instances share one database. The deployment guide lists the connection settings.
 - `SEED_DEMO_DATA=false` now also applies to a new SQLite database, so it starts without the demo books. The default is unchanged: new databases get the demo books.

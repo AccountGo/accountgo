@@ -527,6 +527,30 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
   };
 
   const isOtpComplete = otp.every((d) => d.length === 1);
+  const modeSwitch = (
+    <div role="tablist" aria-label="Authentication mode" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-[var(--bg-canvas)] ring-1 ring-white/10">
+      {([['signin', 'Sign in'], ['signup', 'Create account']] as const).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          role="tab"
+          aria-selected={mode === value}
+          onClick={() => {
+            if (mode === value) return;
+            setMode(value);
+            setErrorMessage(null);
+          }}
+          className={`py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+            mode === value
+              ? 'bg-[var(--brand-primary)] text-[var(--brand-text)] shadow'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[var(--bg-canvas)] flex items-center justify-center p-4 sm:p-6 transition-colors duration-200">
@@ -557,22 +581,16 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
             {/* Heading & Subtitle */}
             <div className="space-y-2 text-center">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-main)]">
-                {mode === 'signin' ? (
-                  <>
-                    Sign In to Account<span className="text-[var(--brand-primary)]">Go</span>
-                  </>
-                ) : (
+                {mode === 'signin' ? 'Welcome back' : (
                   <>
                     Join Account<span className="text-[var(--brand-primary)]">Go</span>
                   </>
                 )}
               </h1>
               <p className="text-sm text-[var(--text-secondary)]">
-                {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-                <button type="button" className="font-semibold text-[var(--text-main)] underline underline-offset-2" onClick={() => {
-                  setMode(mode === 'signin' ? 'signup' : 'signin');
-                  setErrorMessage(null);
-                }}>{mode === 'signin' ? 'Sign up' : 'Sign in'}</button>
+                {mode === 'signin'
+                  ? 'Sign in to your existing account. We will email you a verification code.'
+                  : 'New here? Create your account in under a minute.'}
               </p>
               {invitationToken && (
                 <p className="text-sm text-[var(--brand-primary)]">
@@ -687,6 +705,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                   </div>
                 </div>
 
+                {modeSwitch}
                 {/* Turnstile Bot Protection */}
                 <div className="flex justify-center pt-1">
                   <TurnstileWidget
@@ -708,9 +727,9 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                     required
                     checked={acceptedTerms}
                     onChange={(e) => setAcceptedTerms(e.target.checked)}
-                    className="mt-0.5 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0 accent-[var(--brand-primary)] cursor-pointer"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0 accent-[var(--brand-primary)] cursor-pointer"
                   />
-                  <span className="leading-relaxed">
+                  <span className="leading-5">
                     By signing in, you accept the <a href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--text-primary)]">Privacy Policy</a> and <a href={TERMS_OF_USE_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--text-primary)]">Terms of Use</a>.
                   </span>
                 </label>
@@ -773,6 +792,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                   </div>
                 </div>
 
+                {modeSwitch}
                 {/* Turnstile Bot Protection */}
                 <div className="flex justify-center pt-1">
                   <TurnstileWidget
@@ -794,9 +814,9 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                     required
                     checked={acceptedTerms}
                     onChange={(e) => setAcceptedTerms(e.target.checked)}
-                    className="mt-0.5 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0 accent-[var(--brand-primary)] cursor-pointer"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded bg-[var(--bg-canvas)] border-white/20 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] focus:ring-offset-0 accent-[var(--brand-primary)] cursor-pointer"
                   />
-                  <span className="leading-relaxed">
+                  <span className="leading-5">
                     By signing up, you accept the <a href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--text-primary)]">Privacy Policy</a> and <a href={TERMS_OF_USE_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--text-primary)]">Terms of Use</a>.
                   </span>
                 </label>
@@ -846,8 +866,8 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
         {/* Step 2: Verify Code */}
         {step === 2 && (
           <div className="space-y-6 animate-fade-in" onPaste={handlePaste}>
-            {/* Header: Brand Mark + Pill Badge */}
-            <div className="flex items-center justify-between">
+            {/* Brand Mark */}
+            <div className="flex justify-center">
               <div className="w-14 h-14 rounded-2xl bg-[var(--brand-primary)]/15 ring-1 ring-[var(--brand-ring)]/40 flex items-center justify-center shadow-lg shadow-[var(--brand-primary)]/20">
                 <img
                   src="/accountgo-mark.svg"
@@ -855,30 +875,30 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                   className="w-9 h-9 rounded-xl"
                 />
               </div>
-
-              {/* Pill badge with back navigation */}
-              <button
-                type="button"
-                onClick={() => {
-                  setStep(1);
-                  setErrorMessage(null);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[var(--brand-subtle)] text-[var(--brand-primary)] ring-1 ring-[var(--brand-ring)]/30 hover:bg-[var(--brand-subtle)]/80 transition-all cursor-pointer"
-                title="Change details"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>AccountGo™</span>
-              </button>
             </div>
-
             {/* Heading & Subtitle */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 text-center">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-main)]">
-                {mode === 'signup' ? 'Verify Your Account' : 'Verify Code'}
+                {mode === 'signup' ? 'Confirm your email' : 'Check your email'}
               </h1>
               <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                We sent a 6-digit verification code to{' '}
-                <span className="font-semibold text-[var(--text-main)] break-all">{email}</span>.
+                We sent a 6-digit code to{' '}
+                <span className="font-semibold text-[var(--text-main)] break-all">{email}</span>.{' '}
+                {mode === 'signup' ? 'Enter it below to create your account.' : 'Enter it below to sign in.'}
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                Not your email?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(1);
+                    setErrorMessage(null);
+                  }}
+                  className="font-semibold text-[var(--brand-primary)] underline underline-offset-2 cursor-pointer"
+                >
+                  Go back and change it
+                </button>
+                .
               </p>
             </div>
 
@@ -910,7 +930,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
             {/* 6-Digit OTP Boxes */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
-                <span>Enter 6-digit code</span>
+                <span>Verification code</span>
                 {expirySeconds > 0 ? (
                   <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1 font-mono">
                     <Clock className="w-3 h-3 text-[var(--text-muted)]" />
@@ -968,11 +988,11 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
               {isVerifying ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying Code...</span>
+                  <span>Verifying...</span>
                 </>
               ) : (
                 <>
-                  <span>{mode === 'signup' ? 'Complete Sign-Up & Enter' : 'Verify & Enter AccountGo'}</span>
+                  <span>{mode === 'signup' ? 'Create account' : 'Sign in'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -989,7 +1009,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                 className="flex items-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Change details</span>
+                <span>Change email</span>
               </button>
 
               <button

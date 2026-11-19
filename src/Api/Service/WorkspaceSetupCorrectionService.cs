@@ -150,7 +150,7 @@ public sealed class WorkspaceSetupCorrectionService
         if (pairs > 0) blockers.Add("This workspace has linked entries.");
         if (!equity.Any(a => a.Code == "30800")) blockers.Add("Account 30800 (drawings) is missing from the chart.");
 
-        return new WorkspaceSetupSnapshot(id, company.Slug, company.Name,
+        return new WorkspaceSetupSnapshot(id, company.Slug!, company.Name!,
             settings?.Purpose.ToString() ?? "Unspecified", settings?.CollaborationIntent.ToString() ?? "Unspecified",
             entityType?.ToString() ?? "Unspecified", posted, closedYears, isPersonalBooks, linkedAsWork, pairs, equity, blockers);
     }

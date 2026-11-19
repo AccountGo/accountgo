@@ -6,6 +6,9 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using System.Diagnostics;
+using Api.Observability;
+using Microsoft.Extensions.Logging;
 using Api.ActionFilters;
 using Api.Data;
 using Api.Data.Repositories;
@@ -35,6 +38,7 @@ public static class AccountGoApp
         ConfigureBuilder(builder, modules);
         configureBuilder?.Invoke(builder);
         var app = builder.Build();
+        StartupDeferredLog.Flush(app.Logger);
         ConfigureApp(app, modules);
         return app;
     }
@@ -56,9 +60,10 @@ public static class AccountGoApp
             return;
         }
 
-        InitializeDatabase(app, args);
+        var databaseInit = InitializeDatabase(app, args);
         foreach (var module in modules)
             module.InitializeDatabase(app);
+        LogStartupSummary(app, modules.Count, databaseInit);
 
         if (args.Contains("--prepare-schema"))
         {
@@ -140,12 +145,12 @@ public static class AccountGoApp
                 client.BaseAddress = new Uri("https://api.resend.com/");
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             });
-            Console.WriteLine("✓ ResendEmailSender registered as IEmailSender.");
+            StartupDeferredLog.Add(LogLevel.Debug, "ResendEmailSender registered as IEmailSender.");
         }
         else
         {
             builder.Services.AddScoped<IEmailSender, DevConsoleEmailSender>();
-            Console.WriteLine("ℹ DevConsoleEmailSender registered (configure RESEND_API_KEY in .env to enable Resend).");
+            StartupDeferredLog.Add(LogLevel.Debug, "DevConsoleEmailSender registered (configure RESEND_API_KEY in .env to enable Resend).");
         }
 
         builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
@@ -171,7 +176,7 @@ public static class AccountGoApp
         var googleClientId = builder.Configuration["Google:ClientId"];
         if (googleEnabled && string.IsNullOrWhiteSpace(googleClientId))
         {
-            Console.WriteLine("⚠ Google:Enabled is true but Google:ClientId is empty. Google sign-in will act as disabled.");
+            StartupDeferredLog.Add(LogLevel.Warning, "Google:Enabled is true but Google:ClientId is empty. Google sign-in will act as disabled.");
         }
         builder.Services.AddScoped<Core.Authorization.IWorkspaceReviewerEligibility, Api.Service.WorkspaceReviewerEligibility>();
         builder.Services.AddScoped<Core.Authorization.IWorkspaceOperatingPolicyService, Api.Service.WorkspaceOperatingPolicyService>();
@@ -496,7 +501,7 @@ public static class AccountGoApp
         // Module-specific service registrations
         foreach (var module in modules)
         {
-            Console.WriteLine($"Configuring module '{module.Name}'...");
+            StartupDeferredLog.Add(LogLevel.Debug, "Configuring module {ModuleName}...", module.Name);
             module.ConfigureServices(builder);
         }
 
@@ -702,17 +707,58 @@ public static class AccountGoApp
         // Module-specific endpoints
         foreach (var module in modules)
         {
-            Console.WriteLine($"Mapping endpoints for module '{module.Name}'...");
+            app.Logger.LogDebug("Mapping endpoints for module {ModuleName}...", module.Name);
             module.MapEndpoints(app);
         }
 
         Api.Filters.TenantEndpointValidator.ValidateAllEndpoints(typeof(Program).Assembly);
     }
 
-    public static void InitializeDatabase(WebApplication app, string[] args)
+    private sealed class DatabaseInitResult
+    {
+        public string SchemaStatus { get; init; } = "restored";
+        public long SchemaMs { get; init; }
+        public string SeedStatus { get; init; } = "skipped";
+        public long SeedMs { get; init; }
+    }
+
+    private static void LogStartupSummary(WebApplication app, int moduleCount, DatabaseInitResult databaseInit)
+    {
+        var log = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AccountGo.Startup");
+        var configuration = app.Configuration;
+        var provider = Environment.GetEnvironmentVariable("DBPROVIDER")
+            ?? configuration["DatabaseProvider"]
+            ?? "Sqlite";
+
+        var resendApiKey = configuration["RESEND_API_KEY"] ?? Environment.GetEnvironmentVariable("RESEND_API_KEY");
+        var emailProviderSetting = configuration["EMAIL_PROVIDER"]
+            ?? configuration["Email:Provider"]
+            ?? configuration["EMAIL__PROVIDER"];
+        var emailProvider = !string.IsNullOrWhiteSpace(resendApiKey)
+            || string.Equals(emailProviderSetting, "Resend", StringComparison.OrdinalIgnoreCase)
+            ? "Resend"
+            : "Console";
+
+        var googleEnabled = configuration.GetValue<bool>("Google:Enabled");
+        var googleClientId = configuration["Google:ClientId"];
+        var authProviders = googleEnabled && !string.IsNullOrWhiteSpace(googleClientId)
+            ? "Email OTP, Google"
+            : "Email OTP";
+
+        log.LogInformation("Environment {Environment}, database provider {Provider}",
+            app.Environment.EnvironmentName, provider);
+        log.LogInformation("Email provider {EmailProvider}; auth {AuthProviders}",
+            emailProvider, authProviders);
+        log.LogInformation("Schema {Status} in {Ms} ms", databaseInit.SchemaStatus, databaseInit.SchemaMs);
+        log.LogInformation("Seed {Status} in {Ms} ms", databaseInit.SeedStatus, databaseInit.SeedMs);
+        log.LogInformation("Loaded {Count} module(s)", moduleCount);
+    }
+
+    private static DatabaseInitResult InitializeDatabase(WebApplication app, string[] args)
     {
         using var scope = app.Services.CreateScope();
         var services = scope.ServiceProvider;
+        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("AccountGo.Startup");
         var tenantContext = services.GetRequiredService<Core.Tenancy.ITenantContext>();
         using (tenantContext.Impersonate(1, "ph-financials", Core.Domain.CompanyMemberRole.Owner))
         {
@@ -721,138 +767,182 @@ public static class AccountGoApp
                 var apiDbContext = services.GetRequiredService<ApiDbContext>();
                 var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
 
-                Console.WriteLine("====== Starting Database Initialization ======");
+                logger.LogDebug("Starting database initialization");
 
+                DatabaseInitResult result;
                 if (apiDbContext.Database.IsSqlite())
                 {
-                    var apiCreator = (RelationalDatabaseCreator)apiDbContext.GetService<IRelationalDatabaseCreator>();
-                    var identityCreator = (RelationalDatabaseCreator)identityDbContext.GetService<IRelationalDatabaseCreator>();
-
-                    bool isNewDatabase = !apiCreator.Exists() || !apiCreator.HasTables();
-                    if (!apiCreator.Exists())
-                    {
-                        apiCreator.Create();
-                        Console.WriteLine("✓ SQLite database file created.");
-                    }
-
-                    if (!apiCreator.HasTables())
-                    {
-                        Console.WriteLine("Creating SQLite tables for ApiDbContext...");
-                        apiCreator.CreateTables();
-                        Console.WriteLine("✓ ApiDbContext tables created.");
-                    }
-
-                    var connection = identityDbContext.Database.GetDbConnection();
-                    bool identityTablesExist = false;
-                    if (connection.State != System.Data.ConnectionState.Open)
-                        connection.Open();
-                    using (var cmd = connection.CreateCommand())
-                    {
-                        cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='AspNetUsers';";
-                        var count = Convert.ToInt32(cmd.ExecuteScalar());
-                        identityTablesExist = (count > 0);
-                    }
-
-                    if (!identityTablesExist)
-                    {
-                        Console.WriteLine("Creating SQLite tables for ApplicationIdentityDbContext...");
-                        identityCreator.CreateTables();
-                        Console.WriteLine("✓ ApplicationIdentityDbContext tables created.");
-                    }
-
-                    // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes, security tables)
-                    Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
-
-                    if (isNewDatabase && SeedDemoData(services))
-                    {
-                        var seeder = services.GetRequiredService<DatabaseSeeder>();
-                        Console.WriteLine("Seeding SQLite database...");
-                        seeder.Seed();
-                        Console.WriteLine("✓ SQLite database seeding completed successfully.");
-                    }
-
-                    EnsureSecurityDefaultsAndAdminUsers(services);
-
-                    // Run one-time post-seed membership and role backfill -> Version 2
-                    Api.Data.Schema.SqliteSchemaUpgrader.UpgradePostSeed(
-                        apiDbContext.Database.GetDbConnection(), platformOwnerEmail: PlatformOwnerEmail(services));
+                    result = InitializeSqlite(services, apiDbContext, identityDbContext, logger);
                 }
                 else if (apiDbContext.Database.IsNpgsql())
                 {
-                    InitializePostgres(services, apiDbContext, identityDbContext);
+                    result = InitializePostgres(services, apiDbContext, identityDbContext, logger);
                 }
                 else
                 {
-                    try
-                    {
-                        var dbCreator = apiDbContext.GetService<IRelationalDatabaseCreator>();
-                        var strategy = apiDbContext.Database.CreateExecutionStrategy();
-                        strategy.Execute(() =>
-                        {
-                            if (!dbCreator.Exists())
-                            {
-                                Console.WriteLine("Database does not exist. Creating...");
-                                dbCreator.Create();
-                                Console.WriteLine("✓ Database created successfully.");
-                            }
-                            else
-                            {
-                                Console.WriteLine("✓ Database already exists.");
-                            }
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"✗ ERROR: Failed to ensure database exists: {ex.Message}");
-                        throw;
-                    }
-
-                    try
-                    {
-                        Console.WriteLine("Applying ApiDb migrations...");
-                        apiDbContext.Database.Migrate();
-                        Console.WriteLine("✓ ApiDb migrations completed successfully.");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"✗ ERROR: ApiDb migrations failed: {ex.Message}");
-                        throw;
-                    }
-
-                    try
-                    {
-                        Console.WriteLine("Applying IdentityDb migrations...");
-                        identityDbContext.Database.Migrate();
-                        Console.WriteLine("✓ IdentityDb migrations completed successfully.");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"✗ ERROR: IdentityDb migrations failed: {ex.Message}");
-                        throw;
-                    }
-
-                    try
-                    {
-                        var seeder = services.GetRequiredService<DatabaseSeeder>();
-                        Console.WriteLine("Seeding database...");
-                        seeder.Seed();
-                        Console.WriteLine("✓ Database seeding completed successfully.");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"✗ ERROR: Database seeding failed: {ex.Message}");
-                        throw;
-                    }
+                    result = InitializeSqlServer(services, apiDbContext, identityDbContext, logger);
                 }
 
-                Console.WriteLine("====== Database Initialization Completed Successfully ======");
+                logger.LogDebug("Database initialization completed successfully");
+                return result;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ FATAL ERROR: Database initialization failed - Application startup aborted.");
-                Console.WriteLine($"Details: {ex}");
+                logger.LogError(ex, "Database initialization failed; application startup aborted");
                 throw;
             }
+        }
+    }
+
+    private static DatabaseInitResult InitializeSqlite(
+        IServiceProvider services,
+        ApiDbContext apiDbContext,
+        ApplicationIdentityDbContext identityDbContext,
+        ILogger logger)
+    {
+        var schemaSw = Stopwatch.StartNew();
+        var apiCreator = (RelationalDatabaseCreator)apiDbContext.GetService<IRelationalDatabaseCreator>();
+        var identityCreator = (RelationalDatabaseCreator)identityDbContext.GetService<IRelationalDatabaseCreator>();
+
+        bool isNewDatabase = !apiCreator.Exists() || !apiCreator.HasTables();
+        if (!apiCreator.Exists())
+        {
+            apiCreator.Create();
+            logger.LogDebug("SQLite database file created.");
+        }
+
+        if (!apiCreator.HasTables())
+        {
+            logger.LogDebug("Creating SQLite tables for ApiDbContext...");
+            apiCreator.CreateTables();
+            logger.LogDebug("ApiDbContext tables created.");
+        }
+
+        var connection = identityDbContext.Database.GetDbConnection();
+        bool identityTablesExist = false;
+        if (connection.State != System.Data.ConnectionState.Open)
+            connection.Open();
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='AspNetUsers';";
+            var count = Convert.ToInt32(cmd.ExecuteScalar());
+            identityTablesExist = (count > 0);
+        }
+
+        if (!identityTablesExist)
+        {
+            logger.LogDebug("Creating SQLite tables for ApplicationIdentityDbContext...");
+            identityCreator.CreateTables();
+            logger.LogDebug("ApplicationIdentityDbContext tables created.");
+        }
+
+        // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes, security tables)
+        Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
+        schemaSw.Stop();
+
+        var seedStatus = "skipped";
+        long seedMs = 0;
+        if (isNewDatabase && SeedDemoData(services))
+        {
+            var seeder = services.GetRequiredService<DatabaseSeeder>();
+            logger.LogDebug("Seeding SQLite database...");
+            var seedSw = Stopwatch.StartNew();
+            seeder.Seed();
+            seedMs = seedSw.ElapsedMilliseconds;
+            seedStatus = "done";
+            logger.LogDebug("SQLite database seeding completed successfully.");
+        }
+
+        EnsureSecurityDefaultsAndAdminUsers(services, logger);
+
+        // Run one-time post-seed membership and role backfill -> Version 2
+        Api.Data.Schema.SqliteSchemaUpgrader.UpgradePostSeed(
+            apiDbContext.Database.GetDbConnection(), platformOwnerEmail: PlatformOwnerEmail(services));
+
+        return new DatabaseInitResult
+        {
+            SchemaStatus = isNewDatabase ? "created" : "restored",
+            SchemaMs = schemaSw.ElapsedMilliseconds,
+            SeedStatus = seedStatus,
+            SeedMs = seedMs,
+        };
+    }
+
+    private static DatabaseInitResult InitializeSqlServer(
+        IServiceProvider services,
+        ApiDbContext apiDbContext,
+        ApplicationIdentityDbContext identityDbContext,
+        ILogger logger)
+    {
+        var schemaSw = Stopwatch.StartNew();
+        try
+        {
+            var dbCreator = apiDbContext.GetService<IRelationalDatabaseCreator>();
+            var strategy = apiDbContext.Database.CreateExecutionStrategy();
+            strategy.Execute(() =>
+            {
+                if (!dbCreator.Exists())
+                {
+                    logger.LogDebug("Database does not exist. Creating...");
+                    dbCreator.Create();
+                    logger.LogDebug("Database created successfully.");
+                }
+                else
+                {
+                    logger.LogDebug("Database already exists.");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to ensure database exists");
+            throw;
+        }
+
+        try
+        {
+            logger.LogDebug("Applying ApiDb migrations...");
+            apiDbContext.Database.Migrate();
+            logger.LogDebug("ApiDb migrations completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "ApiDb migrations failed");
+            throw;
+        }
+
+        try
+        {
+            logger.LogDebug("Applying IdentityDb migrations...");
+            identityDbContext.Database.Migrate();
+            logger.LogDebug("IdentityDb migrations completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "IdentityDb migrations failed");
+            throw;
+        }
+        schemaSw.Stop();
+
+        try
+        {
+            var seeder = services.GetRequiredService<DatabaseSeeder>();
+            logger.LogDebug("Seeding database...");
+            var seedSw = Stopwatch.StartNew();
+            seeder.Seed();
+            logger.LogDebug("Database seeding completed successfully.");
+            return new DatabaseInitResult
+            {
+                SchemaStatus = "migrated",
+                SchemaMs = schemaSw.ElapsedMilliseconds,
+                SeedStatus = "done",
+                SeedMs = seedSw.ElapsedMilliseconds,
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Database seeding failed");
+            throw;
         }
     }
 
@@ -864,43 +954,64 @@ public static class AccountGoApp
     private static bool SeedDemoData(IServiceProvider services) =>
         !string.Equals(services.GetRequiredService<IConfiguration>()["SEED_DEMO_DATA"], "false", StringComparison.OrdinalIgnoreCase);
 
-    private static void InitializePostgres(IServiceProvider services, ApiDbContext apiDbContext,
-        ApplicationIdentityDbContext identityDbContext)
+    private static DatabaseInitResult InitializePostgres(
+        IServiceProvider services,
+        ApiDbContext apiDbContext,
+        ApplicationIdentityDbContext identityDbContext,
+        ILogger logger)
     {
         bool isNewDatabase = !apiDbContext.Database.GetAppliedMigrations().Any();
 
-        Console.WriteLine("Applying ApiDb migrations (Postgres)...");
+        var schemaSw = Stopwatch.StartNew();
+        logger.LogDebug("Applying ApiDb migrations (Postgres)...");
         apiDbContext.Database.Migrate();
-        Console.WriteLine("Applying IdentityDb migrations (Postgres)...");
+        logger.LogDebug("Applying IdentityDb migrations (Postgres)...");
         identityDbContext.Database.Migrate();
-        Console.WriteLine("✓ Postgres migrations completed.");
-        Api.Data.Postgres.HostedApiLockdown.Apply(apiDbContext);
+        logger.LogDebug("Postgres migrations completed.");
+        Api.Data.Postgres.HostedApiLockdown.Apply(apiDbContext, logger);
+        schemaSw.Stop();
 
+        var seedStatus = "skipped";
+        long seedMs = 0;
         if (isNewDatabase)
         {
             if (SeedDemoData(services))
             {
-                Console.WriteLine("Seeding new Postgres database...");
+                logger.LogDebug("Seeding new Postgres database...");
+                var seedSw = Stopwatch.StartNew();
                 services.GetRequiredService<DatabaseSeeder>().Seed();
-                Console.WriteLine("✓ Postgres database seeding completed.");
+                seedMs = seedSw.ElapsedMilliseconds;
+                seedStatus = "done";
+                logger.LogDebug("Postgres database seeding completed.");
             }
 
-            EnsureSecurityDefaultsAndAdminUsers(services);
-            EnsureDemoMemberships(apiDbContext, identityDbContext, PlatformOwnerEmail(services));
+            EnsureSecurityDefaultsAndAdminUsers(services, logger);
+            EnsureDemoMemberships(apiDbContext, identityDbContext, PlatformOwnerEmail(services), logger);
         }
         else
         {
             services.GetRequiredService<Services.Security.ISecurityService>().EnsureDefaultPermissionsAndRoles();
-            Console.WriteLine("✓ Security permissions and default roles verified.");
+            logger.LogDebug("Security permissions and default roles verified.");
         }
+
+        return new DatabaseInitResult
+        {
+            SchemaStatus = "migrated",
+            SchemaMs = schemaSw.ElapsedMilliseconds,
+            SeedStatus = seedStatus,
+            SeedMs = seedMs,
+        };
     }
 
     /// <summary>
     /// The demo workspace memberships that SQLite gets from <c>SqliteSchemaUpgrader.UpgradePostSeed</c> (version 2), so
     /// the built-in users can sign in to a new Postgres database.
     /// </summary>
-    private static void EnsureDemoMemberships(ApiDbContext apiDbContext, ApplicationIdentityDbContext identityDbContext,
-        string? platformOwnerEmail)
+    private static void EnsureDemoMemberships(
+        ApiDbContext apiDbContext,
+        ApplicationIdentityDbContext identityDbContext,
+        string? platformOwnerEmail,
+        ILogger logger)
     {
         var members = new List<(string Email, Core.Domain.CompanyMemberRole Role)>
         {
@@ -937,7 +1048,7 @@ public static class AccountGoApp
         }
 
         apiDbContext.SaveChanges();
-        Console.WriteLine("✓ Demo workspace memberships verified.");
+        logger.LogDebug("Demo workspace memberships verified.");
     }
 
     /// <summary>
@@ -952,12 +1063,12 @@ public static class AccountGoApp
     }
 
     /// <summary>Default permissions and roles, plus the built-in admin users in Identity and the domain.</summary>
-    private static void EnsureSecurityDefaultsAndAdminUsers(IServiceProvider services)
+    private static void EnsureSecurityDefaultsAndAdminUsers(IServiceProvider services, ILogger logger)
     {
         // Ensure security permissions and roles are initialized
         var securityService = services.GetRequiredService<Services.Security.ISecurityService>();
         securityService.EnsureDefaultPermissionsAndRoles();
-        Console.WriteLine("✓ Security permissions and default roles verified.");
+        logger.LogDebug("Security permissions and default roles verified.");
 
         // Ensure admin users exist in Identity and Domain
         var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
@@ -988,7 +1099,7 @@ public static class AccountGoApp
                 var createResult = userManager.CreateAsync(newUser).GetAwaiter().GetResult();
                 if (createResult.Succeeded)
                 {
-                    Console.WriteLine($"✓ Admin user '{email}' initialized in Identity.");
+                    logger.LogDebug("Admin user {Email} initialized in Identity.", email);
                 }
             }
 
@@ -1011,7 +1122,7 @@ public static class AccountGoApp
                         secService.AddUserInRole(freshUser.Id, adminRole.Id);
                     }
                 }
-                Console.WriteLine($"✓ Domain user '{email}' initialized.");
+                logger.LogDebug("Domain user {Email} initialized.", email);
             }
         }
     }

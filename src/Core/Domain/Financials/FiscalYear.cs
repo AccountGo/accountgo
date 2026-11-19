@@ -20,11 +20,11 @@ namespace Core.Domain.Financials
 
         [Required]
         [StringLength(10)]
-        public string FiscalYearCode { get; set; }
+        public string FiscalYearCode { get; set; } = null!;
 
         [Required]
         [StringLength(100)]
-        public string FiscalYearName { get; set; }
+        public string FiscalYearName { get; set; } = null!;
 
         public DateTime StartDate { get; set; }
 

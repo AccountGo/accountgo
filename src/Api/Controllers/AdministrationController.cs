@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using Services.Administration;
 using Services.Billing;
 using Services.Financial;
@@ -43,6 +44,7 @@ namespace Api.Controllers
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly IPlanCatalog _plans;
         private readonly Api.Service.ISecurityAuditService? _securityAudit;
+        private readonly ILoggerFactory _loggerFactory;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -53,6 +55,7 @@ namespace Api.Controllers
             UserManager<ApplicationUser> userManager,
             Core.Tenancy.ITenantContext tenantContext,
             IPlanCatalog plans,
+            ILoggerFactory loggerFactory,
             Api.Service.ISecurityAuditService? securityAudit = null)
         {
             _adminService = adminService;
@@ -64,6 +67,7 @@ namespace Api.Controllers
             _userManager = userManager;
             _tenantContext = tenantContext;
             _plans = plans;
+            _loggerFactory = loggerFactory;
             _securityAudit = securityAudit;
         }
 
@@ -77,13 +81,13 @@ namespace Api.Controllers
                     .Where(srp => srp.SecurityRoleId == roleId && srp.SecurityPermission != null)
                     .Select(srp => new { srp.SecurityPermissionId, srp.SecurityPermission.Name })
                     .ToList()
-                    .ToDictionary(p => p.SecurityPermissionId, p => p.Name);
+                    .ToDictionary(p => p.SecurityPermissionId, p => p.Name!);
             }
             var role = _securityService.GetSecurityRole(roleId);
             return role?.Permissions?
                 .Where(p => p?.SecurityPermission != null)
                 .GroupBy(p => p.SecurityPermissionId)
-                .ToDictionary(g => g.Key, g => g.First().SecurityPermission.Name)
+                .ToDictionary(g => g.Key, g => g.First().SecurityPermission!.Name!)
                 ?? new Dictionary<int, string>();
         }
 
@@ -156,7 +160,9 @@ namespace Api.Controllers
                 });
             }
 
-            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService, _plans);
+            Api.Data.Initializer initializer = new Data.Initializer(
+                _adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService, _plans,
+                _loggerFactory.CreateLogger<Data.Initializer>());
             bool success = initializer.Clear();
             if (success)
                 return Ok(new { message = "Database is cleared!" });
@@ -328,8 +334,8 @@ namespace Api.Controllers
 
             var permissionNames = affectedCompanyIds.Count > 0 && reviewerEligibility != null && db != null
                 ? db.Set<Core.Domain.Security.SecurityPermission>()
-                    .Where(p => permissionIds.Contains(p.Id))
-                    .Select(p => p.Name)
+                    .Where(p => permissionIds.Contains(p.Id) && p.Name != null)
+                    .Select(p => p.Name!)
                     .ToList()
                 : null;
 
@@ -527,6 +533,8 @@ namespace Api.Controllers
         public IActionResult GetUser(string username)
         {
             var user = _securityService.GetUser(username);
+            if (user == null)
+                return NotFound();
             var userDto = new Dto.Security.User
             {
                 Id = user.Id,

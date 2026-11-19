@@ -38,7 +38,7 @@ public class RequireFeatureAttributeTests
         var http = new DefaultHttpContext { RequestServices = services };
         var context = new ActionExecutingContext(
             new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), controller: null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), controller: null!);
 
         await new RequireFeatureAttribute("mfa").OnActionExecutionAsync(context, () =>
             Task.FromResult<ActionExecutedContext>(null!));
@@ -70,7 +70,7 @@ public class RequireFeatureAttributeTests
         var http = new DefaultHttpContext { RequestServices = services };
         var context = new ActionExecutingContext(
             new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), controller: null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), controller: null!);
 
         await new RequireFeatureAttribute("mfa").OnActionExecutionAsync(context, () =>
             Task.FromResult<ActionExecutedContext>(null!));
@@ -121,7 +121,7 @@ public class RequireFeatureAttributeTests
         var http = new DefaultHttpContext { RequestServices = services };
         var context = new ActionExecutingContext(
             new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), controller: null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), controller: null!);
 
         await new RequireFeatureAttribute("mfa").OnActionExecutionAsync(context, () =>
             Task.FromResult<ActionExecutedContext>(null!));

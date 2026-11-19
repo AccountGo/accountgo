@@ -53,7 +53,7 @@ namespace Api.Service
                 .GroupBy(p => p.UserName, StringComparer.Ordinal)
                 .Select(g => new JournalActor
                 {
-                    UserId = g.Key,
+                    UserId = g.Key!,
                     Name = NameOf(g.Key),
                     FirstAt = g.Min(p => p.AuditEventDateUTC),
                     LastAt = g.Max(p => p.AuditEventDateUTC)
@@ -107,10 +107,10 @@ namespace Api.Service
             var profiles = emails.Count == 0
                 ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 : _db.Users.AsNoTracking()
-                    .Where(u => emails.Contains(u.EmailAddress))
+                    .Where(u => u.EmailAddress != null && emails.Contains(u.EmailAddress))
                     .Select(u => new { u.EmailAddress, u.Firstname, u.Lastname })
                     .ToList()
-                    .GroupBy(u => u.EmailAddress, StringComparer.OrdinalIgnoreCase)
+                    .GroupBy(u => u.EmailAddress!, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(g => g.Key, g => $"{g.First().Firstname} {g.First().Lastname}".Trim(), StringComparer.OrdinalIgnoreCase);
 
             foreach (var user in users)

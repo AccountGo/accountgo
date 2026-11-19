@@ -368,7 +368,8 @@ public class WorkspaceOperatingPolicyMigrationRehearsalTests
 
         // Verify Fixture 2 is confirmed Solo
         var solo102Pre = GetSettings(connection, 102);
-        Assert.Equal(1, solo102Pre.Value.CollaborationState);
+        Assert.True(solo102Pre.HasValue);
+        Assert.Equal(1, solo102Pre!.Value.CollaborationState);
         Assert.Equal(1, solo102Pre.Value.PolicyRevision);
 
         // -------------------------------------------------------------------------
@@ -387,14 +388,16 @@ public class WorkspaceOperatingPolicyMigrationRehearsalTests
 
         // 2. Fixture 2 confirmed Solo state was NOT overwritten by repeat startup
         var solo102Post = GetSettings(connection, 102);
-        Assert.Equal(1, solo102Post.Value.Purpose);
+        Assert.True(solo102Post.HasValue);
+        Assert.Equal(1, solo102Post!.Value.Purpose);
         Assert.Equal(1, solo102Post.Value.CollaborationIntent);
         Assert.Equal(1, solo102Post.Value.CollaborationState);
         Assert.Equal(1002, solo102Post.Value.ConfirmedOwnerMemberId);
         Assert.Equal(1, solo102Post.Value.PolicyRevision);
 
         var solo102RulePost = GetApprovalRule(connection, 102, "financials.journal.post");
-        Assert.Equal(1, solo102RulePost.Value.RuleKind); // SingleActorAllowed preserved
+        Assert.True(solo102RulePost.HasValue);
+        Assert.Equal(1, solo102RulePost!.Value.RuleKind); // SingleActorAllowed preserved
         Assert.Equal(1, solo102RulePost.Value.Provenance); // NewWorkspaceConfirmed preserved
 
         // 3. Zero new role grants

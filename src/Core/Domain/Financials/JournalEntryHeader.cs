@@ -29,17 +29,17 @@ namespace Core.Domain.Financials
         /// <summary>Closed fiscal year corrected by a <see cref="JournalVoucherTypes.PriorPeriodAdjustment"/> journal.</summary>
         public int? AdjustsFiscalYearId { get; set; }
         public DateTime Date { get; set; }
-        public string Memo { get; set; }
-        public string ReferenceNo { get; set; }
+        public string? Memo { get; set; }
+        public string? ReferenceNo { get; set; }
         public bool? Posted { get; set; }
         /// <summary>Lowercase identifier of the external source system for imported journal drafts, or null for manual journals.</summary>
         public string? SourceSystem { get; set; }
         /// <summary>Unique key within (<see cref="CompanyId"/>, <see cref="SourceSystem"/>) for idempotent draft creation, or null for manual journals.</summary>
         public string? SourceKey { get; set; }
-        public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
-        public virtual Party Party { get; set; }
-        public virtual FinancialYear AdjustsFiscalYear { get; set; }
+        public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
+        public virtual Party? Party { get; set; }
+        public virtual FinancialYear? AdjustsFiscalYear { get; set; }
 
-        public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; }
+        public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; } = null!;
     }
 }

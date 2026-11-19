@@ -38,11 +38,11 @@ namespace Core.Domain.Sales
         public string? PaymentMethod { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Memo { get; set; }
-        public virtual Customer? Customer { get; set; }
+        public virtual Customer Customer { get; set; } = null!;
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual Account? AccountToDebit { get; set; }
-        public virtual ICollection<SalesReceiptLine> SalesReceiptLines { get; set; }
-        public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
+        public virtual ICollection<SalesReceiptLine> SalesReceiptLines { get; set; } = null!;
+        public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; } = null!;
 
         [NotMapped]
         public decimal AvailableAmountToAllocate { get { return GetAvailableAmountToAllocate(); } }

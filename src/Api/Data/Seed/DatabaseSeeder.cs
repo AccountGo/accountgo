@@ -1,7 +1,10 @@
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 using System;
 using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
@@ -14,10 +17,12 @@ namespace Api.Data.Seed
     public class DatabaseSeeder
     {
         private readonly IServiceProvider _serviceProvider;
+        private readonly ILogger<DatabaseSeeder> _logger;
 
-        public DatabaseSeeder(IServiceProvider serviceProvider)
+        public DatabaseSeeder(IServiceProvider serviceProvider, ILogger<DatabaseSeeder> logger)
         {
             _serviceProvider = serviceProvider;
+            _logger = logger;
         }
 
         public void Seed()
@@ -39,6 +44,7 @@ namespace Api.Data.Seed
                 var purchasingService = scope.ServiceProvider.GetRequiredService<IPurchasingService>();
                 var inventoryService = scope.ServiceProvider.GetRequiredService<IInventoryService>();
                 var securityService = scope.ServiceProvider.GetRequiredService<ISecurityService>();
+                var initializerLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<Initializer>();
 
                 var initializer = new Initializer(
                     adminService,
@@ -47,7 +53,8 @@ namespace Api.Data.Seed
                     purchasingService,
                     inventoryService,
                     securityService,
-                    scope.ServiceProvider.GetRequiredService<Services.Billing.IPlanCatalog>()
+                    scope.ServiceProvider.GetRequiredService<Services.Billing.IPlanCatalog>(),
+                    initializerLogger
                 );
 
                 var success = initializer.Setup(scope.ServiceProvider.GetRequiredService<Api.Service.CompanyProvisioningService>());
@@ -56,18 +63,18 @@ namespace Api.Data.Seed
 
                 if (success)
                 {
-                    Console.WriteLine("Database seeding completed successfully.");
+                    _logger.LogDebug("Database seeding completed successfully.");
                 }
                 else
                 {
-                    Console.WriteLine("Database seeding failed. Check logs for details.");
+                    _logger.LogWarning("Database seeding failed. Check logs for details.");
                 }
 
                 SeedDonations(scope.ServiceProvider.GetRequiredService<ApiDbContext>());
             }
         }
 
-        private static void SeedDonations(ApiDbContext context)
+        private void SeedDonations(ApiDbContext context)
         {
             var samples = new[]
             {
@@ -110,7 +117,7 @@ namespace Api.Data.Seed
                 var account = context.Accounts.FirstOrDefault(entity => entity.AccountCode == sample.GlAccountCode);
                 if (donor == null || account == null)
                 {
-                    Console.WriteLine($"Skipped sample donation {sample.No}: its donor or GL account is missing.");
+                    _logger.LogDebug("Skipped sample donation {DonationNo}: its donor or GL account is missing.", sample.No);
                     continue;
                 }
 

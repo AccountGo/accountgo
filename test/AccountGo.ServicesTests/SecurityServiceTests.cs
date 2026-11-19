@@ -88,9 +88,9 @@ public class SecurityServiceTests
             .Callback<SecurityRolePermission>(rp => _rolePermissions.Remove(rp));
 
         _mockSecurityRepo.Setup(r => r.GetUser(It.IsAny<string>()))
-            .Returns<string>(u => _users.FirstOrDefault(x => x.UserName == u));
+            .Returns<string>(u => _users.FirstOrDefault(x => x.UserName == u)!);
         _mockSecurityRepo.Setup(r => r.GetUserById(It.IsAny<int>()))
-            .Returns<int>(id => _users.FirstOrDefault(x => x.Id == id));
+            .Returns<int>(id => _users.FirstOrDefault(x => x.Id == id)!);
         _mockSecurityRepo.Setup(r => r.GetAllUsers())
             .Returns(() => _users);
         _mockSecurityRepo.Setup(r => r.AddUser(It.IsAny<User>())).Callback<User>(u =>

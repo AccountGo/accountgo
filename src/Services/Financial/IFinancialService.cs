@@ -43,7 +43,7 @@ namespace Services.Financial
         /// <summary>Reconciles equity components over a period, using the workspace entity type and accounting basis.</summary>
         Dto.Financial.EquityStatementDto EquityStatement(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         CashFlowStatement CashFlow(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
-        ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null);
+        ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null, string? accountCode = null, int? transactionNo = null);
         /// <summary>
         /// Debit and credit totals per account and calendar month for ledger lines dated from <paramref name="periodStart"/>
         /// through <paramref name="periodEnd"/>, excluding year-end closing journals: the same lines the income statement
@@ -65,10 +65,10 @@ namespace Services.Financial
         /// <param name="maxAmount">Optional largest transaction total (total debits) to include.</param>
         /// <returns>Paged posted journals ordered by date and identifier descending.</returns>
         Dto.Financial.GeneralLedgerTransactionPage GetGeneralLedgerTransactions(
-            DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null,
+            DateTime? from = null, DateTime? to = null, string? accountCode = null, int? transactionNo = null,
             DocumentTypes? documentType = null, int skip = 0, int take = 100,
-            string search = null, decimal? minAmount = null, decimal? maxAmount = null);
-        FinancialYear CurrentFiscalYear();
+            string? search = null, decimal? minAmount = null, decimal? maxAmount = null);
+        FinancialYear? CurrentFiscalYear();
         /// <summary>
         /// Fiscal years for Settings and assistant reads. Does not insert a year.
         /// An unsaved year that contains the workspace-local business date is included with <c>IsPersisted</c> false.
@@ -85,19 +85,19 @@ namespace Services.Financial
         IEnumerable<Bank> GetCashAndBanks();
         List<KeyValuePair<int, decimal>> ComputeInputTax(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount);
         List<KeyValuePair<int, decimal>> ComputeOutputTax(int customerId, int itemId, decimal quantity, decimal amount, decimal discount);
-        GeneralLedgerSetting GetGeneralLedgerSetting();
+        GeneralLedgerSetting? GetGeneralLedgerSetting();
         void SaveGeneralLedgerSetting(GeneralLedgerSetting setting);
         void AddMainContraAccountSetting(int masterAccountId, int contraAccountId);
         void UpdateAccount(Account account);
-        JournalEntryHeader GetJournalEntry(int id, bool fromGL = false);
+        JournalEntryHeader? GetJournalEntry(int id, bool fromGL = false);
         void UpdateJournalEntry(JournalEntryHeader journalEntry, bool posted = false);
-        GeneralLedgerHeader GetGeneralLedgerHeader(int id);
+        GeneralLedgerHeader? GetGeneralLedgerHeader(int id);
         GeneralLedgerHeader CreateReversingEntry(int generalLedgerHeaderId, string description, DateTime reversalDate);
         /// <summary>Throws <see cref="Services.Banking.ReconciledTransactionException"/> when any line on the header is stamped by a finished reconciliation.</summary>
         void EnsureNotReconciled(int generalLedgerHeaderId);
         IEnumerable<GeneralLedgerLine> GetGeneralLedgerLines(int generalLedgerHeaderId);
-        Account GetAccountByAccountCode(string accountcode);
-        Account GetAccount(int id);
+        Account? GetAccountByAccountCode(string accountcode);
+        Account? GetAccount(int id);
         void AddAccount(Account account);
         void SaveAccountClasses(IList<AccountClass> accountClasses);
         void SaveFinancialYear(FinancialYear financialYear);

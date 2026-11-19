@@ -131,7 +131,7 @@ namespace AccountGo.ServicesTests
         {
             var existing = new DonationInvoiceHeader { Id = 12, Posted = true };
             existing.DonationInvoiceLines.Add(new DonationInvoiceLine { Id = 20, Amount = 10m, Quantity = 2m });
-            donations.Setup(repository => repository.GetAllIncluding(It.IsAny<Expression<Func<DonationInvoiceHeader, object>>[]>()))
+            donations.Setup(repository => repository.GetAllIncluding(It.IsAny<Expression<Func<DonationInvoiceHeader, object?>>[]>()))
                 .Returns(new[] { existing }.AsQueryable());
             var input = ValidDonation();
             input.Id = 12;
