@@ -60,7 +60,7 @@ public static class AccountGoApp
             return;
         }
 
-        var databaseInit = InitializeDatabase(app, args);
+        var databaseInit = InitializeDatabaseCore(app, args);
         foreach (var module in modules)
             module.InitializeDatabase(app);
         LogStartupSummary(app, modules.Count, databaseInit);
@@ -754,7 +754,10 @@ public static class AccountGoApp
         log.LogInformation("Loaded {Count} module(s)", moduleCount);
     }
 
-    private static DatabaseInitResult InitializeDatabase(WebApplication app, string[] args)
+    public static void InitializeDatabase(WebApplication app, string[] args) =>
+        _ = InitializeDatabaseCore(app, args);
+
+    private static DatabaseInitResult InitializeDatabaseCore(WebApplication app, string[] args)
     {
         using var scope = app.Services.CreateScope();
         var services = scope.ServiceProvider;
