@@ -37,6 +37,21 @@ Re-architected for modern cloud infrastructure, AccountGo combines a high-perfor
 
 ---
 
+## Quick Start with a Coding Agent
+
+Paste this prompt into **Gemini, Claude, Codex**, or your preferred coding agent to clone, configure (SQLite by default), build, and run AccountGo locally:
+
+```text
+Set up AccountGo for local development:
+1. If not already inside an AccountGo checkout (`src/Api/Api.csproj` and `src/Web/package.json`), clone `https://github.com/AccountGo/accountgo.git` and `cd accountgo`.
+2. Read and follow `.agents/skills/accountgo-local-dev/SKILL.md` (and `docs/readme/local-development.md` if needed) to verify prerequisites, install dependencies, build the API and Web app, configure `src/Api/.env` with local SQLite if missing, and start both the API (`http://localhost:8001`) and Web UI (`http://127.0.0.1:3000`).
+3. Verify `http://localhost:8001/health` is healthy and `http://127.0.0.1:3000/` returns HTTP 200, then report the running URLs and any errors.
+```
+
+Prefer manual setup? Follow [Run Locally: API, Web & DB](docs/readme/local-development.md).
+
+---
+
 ## Quick Navigation
 
 | Section | Description |
