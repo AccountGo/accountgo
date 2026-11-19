@@ -11,7 +11,7 @@ namespace Core.Domain.Security
         public int SecurityRoleId { get; set; }
         public int SecurityPermissionId { get; set; }
 
-        public virtual SecurityRole SecurityRole { get; set; }
-        public virtual SecurityPermission SecurityPermission { get; set; }
+        public virtual SecurityRole SecurityRole { get; set; } = null!;
+        public virtual SecurityPermission SecurityPermission { get; set; } = null!;
     }
 }

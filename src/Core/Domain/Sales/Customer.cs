@@ -26,7 +26,7 @@ namespace Core.Domain.Sales
         }
 
         public int CompanyId { get; set; }
-        public string No { get; set; }
+        public string? No { get; set; }
         public int? PartyId { get; set; }
         public int? PrimaryContactId { get; set; }
         /// <summary>Contact person printed under Bill To on invoices; null uses the company party alone.</summary>
@@ -45,22 +45,22 @@ namespace Core.Domain.Sales
         /// </summary>
         public bool IsSystem { get; set; }
 
-        public virtual Party Party { get; set; }
-        public virtual TaxGroup TaxGroup { get; set; }
-        public virtual Account AccountsReceivableAccount { get; set; }
-        public virtual Account SalesAccount { get; set; }
-        public virtual Account SalesDiscountAccount { get; set; }
-        public virtual Account PromptPaymentDiscountAccount { get; set; }
-        public virtual Contact PrimaryContact { get; set; }
-        public virtual Contact BillToContact { get; set; }
-        public virtual PaymentTerm PaymentTerm { get; set; }
-        public virtual Account CustomerAdvancesAccount { get; set; }
-        public virtual ICollection<SalesInvoiceHeader> SalesInvoices { get; set; }
-        public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; }
-        public virtual ICollection<SalesOrderHeader> SalesOrders { get; set; }
-        public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
+        public virtual Party? Party { get; set; }
+        public virtual TaxGroup? TaxGroup { get; set; }
+        public virtual Account? AccountsReceivableAccount { get; set; }
+        public virtual Account? SalesAccount { get; set; }
+        public virtual Account? SalesDiscountAccount { get; set; }
+        public virtual Account? PromptPaymentDiscountAccount { get; set; }
+        public virtual Contact? PrimaryContact { get; set; }
+        public virtual Contact? BillToContact { get; set; }
+        public virtual PaymentTerm? PaymentTerm { get; set; }
+        public virtual Account? CustomerAdvancesAccount { get; set; }
+        public virtual ICollection<SalesInvoiceHeader> SalesInvoices { get; set; } = null!;
+        public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; } = null!;
+        public virtual ICollection<SalesOrderHeader> SalesOrders { get; set; } = null!;
+        public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; } = null!;
 
-        public virtual IList<CustomerContact> CustomerContact { get; set; }
+        public virtual IList<CustomerContact> CustomerContact { get; set; } = null!;
 
         [NotMapped]
         public decimal Balance { get { return GetBalance(); } }

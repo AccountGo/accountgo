@@ -16,12 +16,12 @@ namespace Core.Domain
     {
         public int CompanyId { get; set; }
         public SequenceNumberTypes SequenceNumberType { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
         /// <summary>Obsolete: unused; replaced by <see cref="Format"/>.</summary>
-        public string Prefix { get; set; }
+        public string? Prefix { get; set; }
         public int NextNumber { get; set; }
         /// <summary>Obsolete: unused; replaced by <see cref="Format"/>.</summary>
         public bool UsePrefix { get; set; }
-        public string Format { get; set; }
+        public string? Format { get; set; }
     }
 }

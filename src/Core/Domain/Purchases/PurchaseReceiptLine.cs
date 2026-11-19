@@ -28,11 +28,11 @@ namespace Core.Domain.Purchases
         public decimal Cost { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
-        public virtual PurchaseReceiptHeader PurchaseReceiptHeader { get; set; }
-        public virtual Item Item { get; set; }
-        public virtual Measurement Measurement { get; set; }
-        public virtual InventoryControlJournal InventoryControlJournal { get; set; }
-        public virtual PurchaseInvoiceLine PurchaseInvoiceLine { get; set; }
+        public virtual PurchaseReceiptHeader PurchaseReceiptHeader { get; set; } = null!;
+        public virtual Item Item { get; set; } = null!;
+        public virtual Measurement Measurement { get; set; } = null!;
+        public virtual InventoryControlJournal? InventoryControlJournal { get; set; }
+        public virtual PurchaseInvoiceLine? PurchaseInvoiceLine { get; set; }
 
         [NotMapped]
         public decimal LineTaxAmount { get { return 0; } }

@@ -9,8 +9,8 @@ namespace Core.Domain
     {
         public int CompanyMemberId { get; set; }
         public int SecurityRoleId { get; set; }
-        public virtual CompanyMember? CompanyMember { get; set; }
-        public virtual Security.SecurityRole? SecurityRole { get; set; }
+        public virtual CompanyMember CompanyMember { get; set; } = null!;
+        public virtual Security.SecurityRole SecurityRole { get; set; } = null!;
 
         /// <summary>How this grant was created. Existing rows backfill to LegacyExplicit.</summary>
         public WorkspaceMemberGrantOrigin GrantOrigin { get; set; } = WorkspaceMemberGrantOrigin.LegacyExplicit;

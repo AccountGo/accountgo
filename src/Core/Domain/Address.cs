@@ -15,8 +15,8 @@ namespace Core.Domain
     public partial class Address : BaseEntity, ICompanyOwned
     {
         public int CompanyId { get; set; }
-        public string No { get; set; }
-        public string Street { get; set; }
-        public string City { get; set; }
+        public string? No { get; set; }
+        public string? Street { get; set; }
+        public string? City { get; set; }
     }
 }

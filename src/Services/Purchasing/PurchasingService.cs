@@ -27,7 +27,7 @@ namespace Services.Purchasing
 {
     public partial class PurchasingService : BaseService, IPurchasingService
     {
-        private readonly IEntitlementService _entitlements;
+        private readonly IEntitlementService? _entitlements;
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly IStockService _stockService;
@@ -69,7 +69,7 @@ namespace Services.Purchasing
             IRepository<Contact> contactRepo,
             IPurchaseOrderRepository purchaseOrderHeaderRepository,
             ILogger<PurchasingService> logger,
-            IEntitlementService entitlements = null
+            IEntitlementService? entitlements = null
             )
             : base(sequenceNumberRepo, generalLedgerSettingRepo, paymentTermRepo, bankRepo)
         {
@@ -124,13 +124,13 @@ namespace Services.Purchasing
 
             foreach (var lineItem in purchaseOrderReceipt.PurchaseReceiptLines)
             {
-                var item = _inventoryService.GetItemById(lineItem.ItemId);
+                var item = _inventoryService.GetItemById(lineItem.ItemId)!;
                 decimal lineItemTotalAmountAfterTax = lineItem.Amount - lineItem.LineTaxAmount;
 
-                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, lineItemTotalAmountAfterTax);
+                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount!.Id, lineItemTotalAmountAfterTax);
                 glLines.Add(debitInventory);
 
-                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, lineItemTotalAmountAfterTax);
+                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting()!.GoodsReceiptNoteClearingAccountId!.Value, lineItemTotalAmountAfterTax);
                 glLines.Add(creditGRNClearingAccount);
 
                 lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
@@ -164,10 +164,10 @@ namespace Services.Purchasing
 
         public IEnumerable<Vendor> GetVendors()
         {
-            System.Linq.Expressions.Expression<Func<Vendor, object>>[] includeProperties = {
+            System.Linq.Expressions.Expression<Func<Vendor, object?>>[] includeProperties = {
                 v => v.Party,
                 v => v.PrimaryContact,
-                v => v.PrimaryContact.Party,
+                v => v.PrimaryContact!.Party,
                 v => v.PaymentTerm,
                 v => v.PurchaseAccount,
                 v => v.PurchaseDiscountAccount,
@@ -185,21 +185,21 @@ namespace Services.Purchasing
             {
                 foreach (var invoice in vendor.PurchaseInvoices)
                 {
-                    invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id).PurchaseInvoiceLines;
+                    invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id)!.PurchaseInvoiceLines;
                 }
             }
 
             return vendors;
         }
 
-        public Vendor GetVendorById(int id)
+        public Vendor? GetVendorById(int id)
         {
             var vendor = _vendorRepo.GetAllIncluding(
                 v => v.Party,
                 v => v.PrimaryContact,
-                v => v.PrimaryContact.Party,
+                v => v.PrimaryContact!.Party,
                 v => v.BillToContact,
-                v => v.BillToContact.Party,
+                v => v.BillToContact!.Party,
                 v => v.PaymentTerm,
                 v => v.PurchaseAccount,
                 v => v.PurchaseDiscountAccount,
@@ -219,13 +219,13 @@ namespace Services.Purchasing
 
             foreach (var invoice in vendor.PurchaseInvoices)
             {
-                invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id).PurchaseInvoiceLines;
+                invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id)!.PurchaseInvoiceLines;
             }
 
             foreach (var vendorContact in vendor.VendorContact)
             {
                 var contact = GetContacyById(vendorContact.ContactId);
-                vendorContact.Contact = contact;
+                vendorContact.Contact = contact!;
             }
 
             return vendor;
@@ -237,7 +237,7 @@ namespace Services.Purchasing
             return query;
         }
 
-        public PurchaseOrderHeader GetPurchaseOrderById(int id)
+        public PurchaseOrderHeader? GetPurchaseOrderById(int id)
         {
             var purchOrder = GetPurchaseOrders()
                 .Where(po => po.Id == id)
@@ -246,7 +246,7 @@ namespace Services.Purchasing
             return purchOrder;
         }
 
-        public PurchaseOrderLine GetPurchaseOrderLineById(int id)
+        public PurchaseOrderLine? GetPurchaseOrderLineById(int id)
         {
             var purchaseOrderLine = _purchaseOrderLineRepo.GetAllIncluding(
                 line => line.PurhcaseOrderHeader,
@@ -258,7 +258,7 @@ namespace Services.Purchasing
             return purchaseOrderLine;
         }
 
-        public PurchaseReceiptHeader GetPurchaseReceiptById(int id)
+        public PurchaseReceiptHeader? GetPurchaseReceiptById(int id)
         {
             var purchReceipt = _purchaseReceiptRepo.GetAllIncluding(pr => pr.Vendor,
                 pr => pr.Vendor.Party,
@@ -288,19 +288,19 @@ namespace Services.Purchasing
         public IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices()
         {
             var query = _purchaseInvoiceRepo.GetAllIncluding(inv => inv.Vendor,
-                inv => inv.Vendor.Party,
+                inv => inv.Vendor!.Party,
                 inv => inv.VendorPayments,
                 inv => inv.PurchaseInvoiceLines,
                 inv => inv.GeneralLedgerHeader,
-                inv => inv.GeneralLedgerHeader.GeneralLedgerLines);
+                inv => inv.GeneralLedgerHeader!.GeneralLedgerLines);
 
             return query.AsEnumerable();
         }
 
-        public PurchaseInvoiceHeader GetPurchaseInvoiceById(int id)
+        public PurchaseInvoiceHeader? GetPurchaseInvoiceById(int id)
         {
             var invoice = _purchaseInvoiceRepo.GetAllIncluding(inv => inv.Vendor,
-                inv => inv.Vendor.Party,
+                inv => inv.Vendor!.Party,
                 inv => inv.PurchaseInvoiceLines,
                 inv => inv.VendorPayments)
                 .Where(inv => inv.Id == id)
@@ -362,7 +362,7 @@ namespace Services.Purchasing
         /// The account a line is booked to when none was picked: an inventory item's inventory account, or else the
         /// vendor's purchase account (Purchase A/C).
         /// </summary>
-        public int DefaultLineAccountId(int itemId, Vendor vendor)
+        public int DefaultLineAccountId(int itemId, Vendor? vendor)
         {
             var item = itemId > 0 ? _itemRepo.GetById(itemId) : null;
             if (item?.InventoryAccountId != null && item.ItemCategoryId.HasValue
@@ -392,7 +392,7 @@ namespace Services.Purchasing
                 ?? throw new InvalidOperationException($"Bill #{billId} was not found.");
             bill.EnsureCanBeApproved();
 
-            var vendor = GetVendorById(bill.VendorId!.Value);
+            var vendor = GetVendorById(bill.VendorId!.Value)!;
             if (vendor.ArchivedAt != null)
                 throw new InvalidOperationException($"Vendor '{vendor.Party?.Name ?? vendor.Id.ToString()}' is archived. Restore it before approving bills from it.");
 
@@ -521,7 +521,7 @@ namespace Services.Purchasing
                 {
                     var original = item.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId!.Value);
                     if (original != null && original.INQty.GetValueOrDefault() > 0)
-                        totalQtyReceived += original.INQty.Value;
+                        totalQtyReceived += original.INQty!.Value;
                 }
 
                 if (totalQtyReceived > 0 && item.QuantityOnHand < totalQtyReceived)
@@ -537,7 +537,7 @@ namespace Services.Purchasing
             foreach (var line in bill.PurchaseInvoiceLines.Where(l => l.InventoryControlJournalId.HasValue))
             {
                 var item = _inventoryService.GetItemById(line.ItemId);
-                var original = item?.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId.Value);
+                var original = item?.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId!.Value);
                 if (original == null)
                     continue;
 
@@ -569,7 +569,7 @@ namespace Services.Purchasing
             if (date.Date < bill.Date.Date)
                 throw new InvalidOperationException($"The payment date ({date:yyyy-MM-dd}) cannot be earlier than the bill date ({bill.Date:yyyy-MM-dd}).");
 
-            var vendor = GetVendorById(bill.VendorId!.Value);
+            var vendor = GetVendorById(bill.VendorId!.Value)!;
             var payableAccountId = bill.PayableAccountId
                 ?? throw new InvalidOperationException("This bill has no recorded Accounts Payable account.");
 
@@ -654,7 +654,7 @@ namespace Services.Purchasing
             // Banking PR 2B hook: refuse voiding payments already cleared or reconciled in a bank reconciliation.
         }
 
-        public Contact GetContacyById(int id)
+        public Contact? GetContacyById(int id)
         {
 
             var contact = _contactRepo.GetAllIncluding(q => q.Party)

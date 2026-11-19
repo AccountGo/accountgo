@@ -1,6 +1,7 @@
 using System;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Data.Postgres
 {
@@ -38,10 +39,10 @@ BEGIN
     END LOOP;
 END $$;";
 
-        public static void Apply(DbContext context)
+        public static void Apply(DbContext context, ILogger? logger = null)
         {
             context.Database.ExecuteSqlRaw(Sql);
-            Console.WriteLine("✓ Hosted Data API access to public tables revoked (if present).");
+            logger?.LogDebug("Hosted Data API access to public tables revoked (if present).");
         }
     }
 }

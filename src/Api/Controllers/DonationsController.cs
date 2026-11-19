@@ -58,19 +58,19 @@ namespace Api.Controllers
                 var invoiceDto = new DonationInvoice
                 {
                     Id = invoice.Id,
-                    No = invoice.No,
+                    No = invoice.No!,
                     DonorId = invoice.DonorId,
                     DonorName = GetDonorName(invoice.Donor),
                     Amount = invoice.Amount,
-                    PaymentType = invoice.PaymentType,
+                    PaymentType = invoice.PaymentType!,
                     GlAccountId = invoice.GlAccountId,
                     GlAccountCode = invoice.GlAccount?.AccountCode ?? string.Empty,
                     GlAccountName = invoice.GlAccount?.AccountName ?? string.Empty,
                     DonationDate = invoice.Date,
-                    ReferenceNo = invoice.ReferenceNo,
-                    Purpose = invoice.Purpose,
+                    ReferenceNo = invoice.ReferenceNo!,
+                    Purpose = invoice.Purpose!,
                     IsTaxReceiptIssued = invoice.IsTaxReceiptIssued,
-                    TaxReceiptNo = invoice.TaxReceiptNo,
+                    TaxReceiptNo = invoice.TaxReceiptNo!,
                     Posted = invoice.Posted
                 };
 
@@ -109,19 +109,19 @@ namespace Api.Controllers
             var invoiceDto = new DonationInvoice
             {
                 Id = invoice.Id,
-                No = invoice.No,
+                No = invoice.No!,
                 DonorId = invoice.DonorId,
                 DonorName = GetDonorName(invoice.Donor),
                 Amount = invoice.Amount,
-                PaymentType = invoice.PaymentType,
+                PaymentType = invoice.PaymentType!,
                 GlAccountId = invoice.GlAccountId,
                 GlAccountCode = invoice.GlAccount?.AccountCode ?? string.Empty,
                 GlAccountName = invoice.GlAccount?.AccountName ?? string.Empty,
                 DonationDate = invoice.Date,
-                ReferenceNo = invoice.ReferenceNo,
-                Purpose = invoice.Purpose,
+                ReferenceNo = invoice.ReferenceNo!,
+                Purpose = invoice.Purpose!,
                 IsTaxReceiptIssued = invoice.IsTaxReceiptIssued,
-                TaxReceiptNo = invoice.TaxReceiptNo,
+                TaxReceiptNo = invoice.TaxReceiptNo!,
                 Posted = invoice.Posted
             };
 
@@ -191,10 +191,12 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        private static string GetDonorName(Core.Domain.Donations.Donor donor)
+        private static string GetDonorName(Core.Domain.Donations.Donor? donor)
         {
             if (donor == null) return string.Empty;
-            return donor.DonorType == "Company" ? donor.CompanyName : (donor.FirstName + " " + donor.LastName).Trim();
+            return donor.DonorType == "Company"
+                ? (donor.CompanyName ?? string.Empty)
+                : ((donor.FirstName ?? string.Empty) + " " + (donor.LastName ?? string.Empty)).Trim();
         }
     }
 }

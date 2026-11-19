@@ -19,9 +19,9 @@ namespace Core.Domain.Financials
         public int AccountId { get; set; }
         public DrOrCrSide DrCr { get; set; }
         public decimal Amount { get; set; }
-        public string Memo { get; set; }
+        public string? Memo { get; set; }
 
-        public virtual JournalEntryHeader JournalEntryHeader { get; set; }
-        public virtual Account Account { get; set; }
+        public virtual JournalEntryHeader JournalEntryHeader { get; set; } = null!;
+        public virtual Account Account { get; set; } = null!;
     }
 }

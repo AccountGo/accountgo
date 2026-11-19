@@ -20,7 +20,7 @@ namespace Core.Authorization
                 !rows.Any(s => s.CompanyId == a.CompanyId && s.TableName == StateTable && s.RecordId == a.RecordId));
 
         public static bool IsValidApproval(IQueryable<AuditLog> rows, AuditLog grant, PersistedAccessApprovalPayload payload,
-            int companyId, DateTimeOffset now, string operationKey = null, string resourceId = null, string fingerprint = null) =>
+            int companyId, DateTimeOffset now, string? operationKey = null, string? resourceId = null, string? fingerprint = null) =>
             grant != null && payload != null && grant.CompanyId == companyId && grant.TableName == ApprovalTable &&
             grant.OriginalValue == "Approved" && payload.CompanyId == companyId &&
             payload.Status == "Approved" && payload.ExpiresAtUtc > now &&
@@ -50,7 +50,7 @@ namespace Core.Authorization
         /// </summary>
         public static bool IsApprovalStateUniqueViolation(Exception error)
         {
-            for (Exception current = error; current != null; current = current.InnerException)
+            for (Exception? current = error; current != null; current = current.InnerException)
             {
                 var type = current.GetType();
                 if (string.Equals(type.FullName, "Npgsql.PostgresException", StringComparison.Ordinal))
@@ -73,9 +73,9 @@ namespace Core.Authorization
             return false;
         }
 
-        public static AuditLog State(AuditLog grant, string status, string actorUserId)
+        public static AuditLog State(AuditLog grant, string status, string? actorUserId)
         {
-            PersistedAccessApprovalPayload payload = null;
+            PersistedAccessApprovalPayload? payload = null;
             try { if (!string.IsNullOrWhiteSpace(grant.NewValue)) payload = JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(grant.NewValue); }
             catch (JsonException) { }
             return new AuditLog

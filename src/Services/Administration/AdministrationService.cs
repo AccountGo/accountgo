@@ -64,7 +64,7 @@ namespace Services.Administration
             ISecurityRepository securityRepository,
             IMapper mapper,
             IPlanCatalog plans,
-            IRepository<Company> company = null,
+            IRepository<Company>? company = null,
             Core.Tenancy.ITenantContext? tenantContext = null,
             Core.Entitlements.IEntitlementService? entitlements = null,
             ILogger<AdministrationService>? logger = null
@@ -81,7 +81,7 @@ namespace Services.Administration
             _bankRepo = bankRepo;
             _genetalLedgerSetting = generalLedgerSetting;
             _taxRepo = taxRepo;
-            _company = company;
+            _company = company!;
             _accountRepo = accountRepo;
             _auditLogRepo = auditLogRepo;
             _salesInvoiceLineRepo = salesInvoiceLineRepo;
@@ -237,13 +237,13 @@ namespace Services.Administration
         {
             var standardRole = _securityRepository.GetAllRoles().Where(r => r.Name == "GeneralUsers").FirstOrDefault();
             var securityUserRole = new SecurityUserRole();
-            securityUserRole.SecurityRole = standardRole;
+            securityUserRole.SecurityRole = standardRole!;
             securityUserRole.User = user;
             user.Roles.Add(securityUserRole);
             _securityRepository.AddUser(user);
         }
 
-        public User GetUser(string username)
+        public User? GetUser(string username)
         {
             return _securityRepository.GetUser(username);
         }

@@ -254,7 +254,9 @@ namespace Api.Service
                 return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
-            var tokenJson = await _userManager.GetAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
+            // IsEligible is [NotNullWhen(true)]; after the guard above, user is non-null.
+            ApplicationUser eligibleUser = user;
+            var tokenJson = await _userManager.GetAuthenticationTokenAsync(eligibleUser, TokenProvider, TokenPurpose);
             if (string.IsNullOrEmpty(tokenJson))
             {
                 return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
@@ -267,27 +269,27 @@ namespace Api.Service
             }
             catch
             {
-                await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
+                await _userManager.RemoveAuthenticationTokenAsync(eligibleUser, TokenProvider, TokenPurpose);
                 return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             if (payload == null)
             {
-                await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
+                await _userManager.RemoveAuthenticationTokenAsync(eligibleUser, TokenProvider, TokenPurpose);
                 return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             // Expiry Check
             if (DateTime.UtcNow >= payload.ExpiresAt)
             {
-                await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
+                await _userManager.RemoveAuthenticationTokenAsync(eligibleUser, TokenProvider, TokenPurpose);
                 return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             // Failed Attempts Limit Check (Max 5 attempts)
             if (payload.FailedAttempts >= MaxFailedAttempts)
             {
-                await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
+                await _userManager.RemoveAuthenticationTokenAsync(eligibleUser, TokenProvider, TokenPurpose);
                 return new OtpVerificationResult(false, null, null, "Code locked due to too many failed attempts. Please request a new code.");
             }
 
@@ -302,31 +304,31 @@ namespace Api.Service
                 payload.FailedAttempts++;
                 if (payload.FailedAttempts >= MaxFailedAttempts)
                 {
-                    await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
-                    await AuditOtpLockedAsync(user.Id);
+                    await _userManager.RemoveAuthenticationTokenAsync(eligibleUser, TokenProvider, TokenPurpose);
+                    await AuditOtpLockedAsync(eligibleUser.Id);
                 }
                 else
                 {
-                    await _userManager.SetAuthenticationTokenAsync(user, TokenProvider, TokenPurpose, JsonSerializer.Serialize(payload));
+                    await _userManager.SetAuthenticationTokenAsync(eligibleUser, TokenProvider, TokenPurpose, JsonSerializer.Serialize(payload));
                 }
 
                 return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             // Successful match - Invalidate single-use code immediately
-            await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
+            await _userManager.RemoveAuthenticationTokenAsync(eligibleUser, TokenProvider, TokenPurpose);
 
-            if (!user.EmailConfirmed)
+            if (!eligibleUser.EmailConfirmed)
             {
-                user.EmailConfirmed = true;
-                await _userManager.UpdateAsync(user);
+                eligibleUser.EmailConfirmed = true;
+                await _userManager.UpdateAsync(eligibleUser);
             }
 
             // Ceremony hook: evaluate Factor B / enrollment
-            var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(user, "otp", agTdRawToken);
+            var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(eligibleUser, "otp", agTdRawToken);
             if (mfaDecision.Result == MfaGateResult.Challenge)
             {
-                var pendingToken = await _authService.CreateToken(user, purpose: "mfa_pending");
+                var pendingToken = await _authService.CreateToken(eligibleUser, purpose: "mfa_pending");
                 return new OtpVerificationResult(
                     Success: true,
                     Response: null,
@@ -340,7 +342,7 @@ namespace Api.Service
 
             if (mfaDecision.Result == MfaGateResult.Enrollment)
             {
-                var enrollToken = await _authService.CreateToken(user, purpose: "mfa_enroll");
+                var enrollToken = await _authService.CreateToken(eligibleUser, purpose: "mfa_enroll");
                 return new OtpVerificationResult(
                     Success: true,
                     Response: null,
@@ -353,7 +355,7 @@ namespace Api.Service
             }
 
             // Mint JWT & Session
-            var (sessSuccess, sessResp, sessRefresh, sessErr) = await _sessionService.CreateSessionForUserAsync(user, ipAddress, userAgent, amr: "otp");
+            var (sessSuccess, sessResp, sessRefresh, sessErr) = await _sessionService.CreateSessionForUserAsync(eligibleUser, ipAddress, userAgent, amr: "otp");
             if (!sessSuccess)
             {
                 return new OtpVerificationResult(false, null, null, sessErr ?? "Failed to create session.");

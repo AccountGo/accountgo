@@ -22,12 +22,12 @@ namespace Core.Domain.TaxSystem
         }
 
         public int CompanyId { get; set; }
-        public string Name { get; set; }
+        public string? Name { get; set; }
 
         [Display(Name = "Fully Exempt")]
         public bool IsFullyExempt { get; set; }
 
-        public virtual ICollection<ItemTaxGroupTax> ItemTaxGroupTax { get; set; }
+        public virtual ICollection<ItemTaxGroupTax> ItemTaxGroupTax { get; set; } = null!;
     }
 
     [Table("ItemTaxGroupTax")]
@@ -38,7 +38,7 @@ namespace Core.Domain.TaxSystem
         public int ItemTaxGroupId { get; set; }
         public bool IsExempt { get; set; }
         
-        public virtual Tax Tax { get; set; }
-        public virtual ItemTaxGroup ItemTaxGroup { get; set; }
+        public virtual Tax Tax { get; set; } = null!;
+        public virtual ItemTaxGroup ItemTaxGroup { get; set; } = null!;
     }
 }

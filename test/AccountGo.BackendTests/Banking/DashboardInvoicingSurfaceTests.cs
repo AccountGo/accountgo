@@ -44,7 +44,7 @@ public class DashboardInvoicingSurfaceTests
             financial
                 .Setup(f => f.IncomeStatement(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<AccountingBasis>()))
                 .Returns(new List<IncomeStatement>());
-            financial.Setup(f => f.CurrentFiscalYear()).Returns((FinancialYear?)null);
+            financial.Setup(f => f.CurrentFiscalYear()).Returns((FinancialYear)null!);
         }
 
         var sales = new Mock<ISalesService>(MockBehavior.Loose);
@@ -192,7 +192,7 @@ public class DashboardInvoicingSurfaceTests
         financial
             .Setup(f => f.IncomeStatement(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<AccountingBasis>()))
             .Returns(new List<IncomeStatement>());
-        financial.Setup(f => f.CurrentFiscalYear()).Returns((FinancialYear?)null);
+        financial.Setup(f => f.CurrentFiscalYear()).Returns((FinancialYear)null!);
 
         var summary = BuildService(
                 Array.Empty<SalesInvoiceHeader>(),

@@ -27,11 +27,11 @@ namespace Core.Domain.Purchases
         public int VendorId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }
         public DateTime Date { get; set; }
-        public string No { get; set; }
-        public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
-        public virtual Vendor Vendor { get; set; }
+        public string? No { get; set; }
+        public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
+        public virtual Vendor Vendor { get; set; } = null!;
 
-        public virtual ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; }
+        public virtual ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; } = null!;
 
         public decimal GetTotalTax()
         {

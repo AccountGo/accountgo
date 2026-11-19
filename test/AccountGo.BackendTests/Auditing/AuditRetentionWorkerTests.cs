@@ -56,7 +56,7 @@ public sealed class AuditRetentionWorkerTests
 
         using var api = harness.CreateApi();
         Assert.Equal(3, api.RecordChanges.IgnoreQueryFilters().Count());
-        Assert.Equal(2, api.AuditLogs.IgnoreQueryFilters().Count(a => a.TableName.StartsWith("__")));
+        Assert.Equal(2, api.AuditLogs.IgnoreQueryFilters().Count(a => a.TableName != null && a.TableName.StartsWith("__")));
     }
 
     [Fact]

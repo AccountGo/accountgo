@@ -1008,7 +1008,7 @@ namespace AccountGo.BackendTests.Security
                 var names = roleNames.ToList();
                 if (names.Count > 0)
                 {
-                    var roleIds = db.SecurityRoles.Where(r => names.Contains(r.Name)).Select(r => r.Id).ToList();
+                    var roleIds = db.SecurityRoles.Where(r => r.Name != null && names.Contains(r.Name)).Select(r => r.Id).ToList();
                     foreach (var roleId in roleIds)
                     {
                         db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole
@@ -1046,7 +1046,7 @@ namespace AccountGo.BackendTests.Security
                 var names = functionalRoleNames.ToList();
                 if (names.Count > 0)
                 {
-                    var roleIds = db.SecurityRoles.Where(r => names.Contains(r.Name)).Select(r => r.Id).ToList();
+                    var roleIds = db.SecurityRoles.Where(r => r.Name != null && names.Contains(r.Name)).Select(r => r.Id).ToList();
                     foreach (var roleId in roleIds)
                     {
                         db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole

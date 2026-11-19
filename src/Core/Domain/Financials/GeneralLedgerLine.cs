@@ -30,9 +30,9 @@ namespace Core.Domain.Financials
         /// <summary>Set when this line is cleared by a finished bank reconciliation (Phase 2B).</summary>
         public int? BankReconciliationId { get; set; }
 
-        public virtual Account Account { get; set; }
-        public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
-        public virtual BankReconciliation BankReconciliation { get; set; }
+        public virtual Account Account { get; set; } = null!;
+        public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; } = null!;
+        public virtual BankReconciliation? BankReconciliation { get; set; }
     }
 }
 

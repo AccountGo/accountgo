@@ -55,7 +55,7 @@ public class RequireStatementImportAttributeTests
         var http = new DefaultHttpContext { RequestServices = services };
         var context = new ActionExecutingContext(
             new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), controller: null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), controller: null!);
 
         await new RequireStatementImportAttribute().OnActionExecutionAsync(context, () =>
             Task.FromResult<ActionExecutedContext>(null!));
@@ -89,7 +89,7 @@ public class RequireStatementImportAttributeTests
         var http = new DefaultHttpContext { RequestServices = services };
         var context = new ActionExecutingContext(
             new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), controller: null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), controller: null!);
         var ran = false;
 
         await new RequireStatementImportAttribute().OnActionExecutionAsync(context, () =>
@@ -119,7 +119,7 @@ public class RequireStatementImportAttributeTests
         http.Request.Method = HttpMethods.Post;
         var context = new ActionExecutingContext(
             new ActionContext(http, new RouteData(), new ActionDescriptor()),
-            new List<IFilterMetadata>(), new Dictionary<string, object>(), null!);
+            new List<IFilterMetadata>(), new Dictionary<string, object?>(), null!);
         var ran = false;
 
         await new RequireStatementImportAttribute { ReadOnly = readOnly }.OnActionExecutionAsync(context, () =>

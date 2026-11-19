@@ -120,7 +120,7 @@ namespace Services.Inventory
             return items;
         }
 
-        public Item GetActiveItemByDescription(string description)
+        public Item? GetActiveItemByDescription(string description)
         {
             var lowered = description.Trim().ToLower();
             return _itemRepo.Table
@@ -129,7 +129,7 @@ namespace Services.Inventory
                 .FirstOrDefault();
         }
 
-        public Item GetItemById(int id)
+        public Item? GetItemById(int id)
         {
             var item = _itemRepo.GetAllIncluding(
                 i => i.CostOfGoodsSoldAccount,
@@ -170,7 +170,7 @@ namespace Services.Inventory
             return _icjRepo.GetAllIncluding(m => m.Measurement, i => i.Item).ToList();
         }
 
-        public Item GetItemByNo(string itemNo)
+        public Item? GetItemByNo(string itemNo)
         {
             var query = from item in _itemRepo.Table
                         where item.No == itemNo

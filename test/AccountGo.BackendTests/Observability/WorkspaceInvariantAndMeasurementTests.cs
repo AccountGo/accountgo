@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Api.Data;
 using Api.Service;
 using Api.Tenancy;
@@ -408,7 +409,7 @@ namespace AccountGo.BackendTests.Observability
         // ---- Recovery sweep -----------------------------------------------------------------------
 
         [Fact]
-        public void RecoverySweep_DetectsCrashLeftViolation_Once()
+        public async Task RecoverySweep_DetectsCrashLeftViolation_Once()
         {
             // Two violating workspaces plus one clean workspace.
             var c1 = SeedCompany("sweep-1", "o1", out _);
@@ -424,15 +425,13 @@ namespace AccountGo.BackendTests.Observability
 
             var services = new SingleDbServiceProvider(_db);
 
-            var first = WorkspaceInvariantRecoveryScanner.ScanAsync(services, batchSize: 50, CancellationToken.None)
-                .GetAwaiter().GetResult();
+            var first = await WorkspaceInvariantRecoveryScanner.ScanAsync(services, batchSize: 50, CancellationToken.None);
             Assert.Equal(3, first.Scanned);
             Assert.Equal(2, first.NewViolations); // c1 + c2 violate; c3 is clean
             Assert.Equal(0, first.ScannerErrors);
 
             // A second sweep of the same persisted violations must not re-count them.
-            var second = WorkspaceInvariantRecoveryScanner.ScanAsync(services, batchSize: 50, CancellationToken.None)
-                .GetAwaiter().GetResult();
+            var second = await WorkspaceInvariantRecoveryScanner.ScanAsync(services, batchSize: 50, CancellationToken.None);
             Assert.Equal(3, second.Scanned);
             Assert.Equal(0, second.NewViolations);
 

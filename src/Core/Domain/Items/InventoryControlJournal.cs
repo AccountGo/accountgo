@@ -26,10 +26,10 @@ namespace Core.Domain.Items
         public decimal? TotalCost { get; set; }
         public decimal? UnitCost { get; set; }
         public decimal? TotalAmount { get; set; }
-        public string Memo { get; set; }
+        public string? Memo { get; set; }
         public bool IsReverse { get; set; }
 
-        public virtual Item Item { get; set; }
-        public virtual Measurement Measurement { get; set; }
+        public virtual Item Item { get; set; } = null!;
+        public virtual Measurement Measurement { get; set; } = null!;
     }
 }

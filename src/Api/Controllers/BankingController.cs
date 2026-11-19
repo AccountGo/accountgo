@@ -35,7 +35,7 @@ namespace Api.Controllers
         private readonly IEntitlementService _entitlements;
         private readonly IBooksLockGuard _booksLockGuard;
         private readonly ApiDbContext _db;
-        private readonly Core.Authorization.IWorkspacePolicyTransaction _policyTransaction;
+        private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
 
         public BankingController(
             IBankAccountService banks,
@@ -49,7 +49,7 @@ namespace Api.Controllers
             IEntitlementService entitlements,
             IBooksLockGuard booksLockGuard,
             ApiDbContext db,
-            Core.Authorization.IWorkspacePolicyTransaction policyTransaction = null)
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
         {
             _banks = banks;
             _transactions = transactions;
@@ -873,8 +873,8 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 scope = _policyTransaction?.BeginExternalScope();
-                var result = _statementExpenses.BulkRecordExpense(request, GetUserNameFromRequestHeader() ?? string.Empty);
-                foreach (var lineId in request.LineIds) AuditStatementDecision(lineId, "record_expense");
+                var result = _statementExpenses.BulkRecordExpense(request!, GetUserNameFromRequestHeader() ?? string.Empty);
+                foreach (var lineId in request!.LineIds) AuditStatementDecision(lineId, "record_expense");
                 tx.Commit();
                 // Approved bills committed; dispose first so the drain sees no ambient transaction, then
                 // drain ONLY this scope's deferred telemetry. Never throws.
@@ -915,7 +915,7 @@ namespace Api.Controllers
             {
                 using var tx = BeginWriteTransaction();
                 scope = _policyTransaction?.BeginExternalScope();
-                var result = _statementExpenses.RecordExpense(id, request, GetUserNameFromRequestHeader() ?? string.Empty);
+                var result = _statementExpenses.RecordExpense(id, request!, GetUserNameFromRequestHeader() ?? string.Empty);
                 AuditStatementDecision(id, "record_expense");
                 tx.Commit();
                 // Approved bill committed; dispose first so the drain sees no ambient transaction, then
@@ -955,7 +955,7 @@ namespace Api.Controllers
             try
             {
                 using var tx = BeginWriteTransaction();
-                var result = _statementExpenses.RecordExpense(id, request, GetUserNameFromRequestHeader() ?? string.Empty, saveDraft: true);
+                var result = _statementExpenses.RecordExpense(id, request!, GetUserNameFromRequestHeader() ?? string.Empty, saveDraft: true);
                 AuditStatementDecision(id, "save_draft");
                 tx.Commit();
                 return Ok(result);

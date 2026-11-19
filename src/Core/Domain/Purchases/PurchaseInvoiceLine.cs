@@ -41,8 +41,8 @@ namespace Core.Domain.Purchases
         /// <summary>The line's own text; null on lines saved before it was stored, which show the item's.</summary>
         public string? Description { get; set; }
 
-        public virtual PurchaseInvoiceHeader? PurchaseInvoiceHeader { get; set; }
-        public virtual Item? Item { get; set; }
+        public virtual PurchaseInvoiceHeader PurchaseInvoiceHeader { get; set; } = null!;
+        public virtual Item Item { get; set; } = null!;
         public virtual Account? Account { get; set; }
         public virtual TaxSystem.Tax? Tax { get; set; }
         public virtual InventoryControlJournal? InventoryControlJournal { get; set; }

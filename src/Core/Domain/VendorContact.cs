@@ -17,8 +17,8 @@ namespace Core.Domain
 
         public int VendorId { get; set; }
 
-        public virtual Vendor Vendor { get; set; }
+        public virtual Vendor Vendor { get; set; } = null!;
 
-        public virtual Contact Contact { get; set; }
+        public virtual Contact Contact { get; set; } = null!;
     }
 }

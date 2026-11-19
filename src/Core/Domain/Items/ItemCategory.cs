@@ -30,14 +30,14 @@ namespace Core.Domain.Items
         public int? CostOfGoodsSoldAccountId { get; set; }
         public int? AdjustmentAccountId { get; set; }
         public int? AssemblyAccountId { get; set; }
-        public string Name { get; set; }
-        public virtual Measurement Measurement { get; set; }
-        public virtual Account SalesAccount { get; set; }
-        public virtual Account InventoryAccount { get; set; }
-        public virtual Account CostOfGoodsSoldAccount { get; set; }
-        public virtual Account AdjustmentAccount { get; set; }
-        public virtual Account AssemblyAccount { get; set; }
+        public string? Name { get; set; }
+        public virtual Measurement? Measurement { get; set; }
+        public virtual Account? SalesAccount { get; set; }
+        public virtual Account? InventoryAccount { get; set; }
+        public virtual Account? CostOfGoodsSoldAccount { get; set; }
+        public virtual Account? AdjustmentAccount { get; set; }
+        public virtual Account? AssemblyAccount { get; set; }
 
-        public virtual ICollection<Item> Items { get; set; }
+        public virtual ICollection<Item> Items { get; set; } = null!;
     }
 }

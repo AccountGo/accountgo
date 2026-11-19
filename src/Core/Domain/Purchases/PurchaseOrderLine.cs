@@ -26,9 +26,9 @@ namespace Core.Domain.Purchases
         public decimal Cost { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
-        public virtual PurchaseOrderHeader PurhcaseOrderHeader { get; set; }
-        public virtual Item Item { get; set; }
-        public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
+        public virtual PurchaseOrderHeader PurhcaseOrderHeader { get; set; } = null!;
+        public virtual Item Item { get; set; } = null!;
+        public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; } = null!;
 
         public PurchaseOrderLine()
         {

@@ -11,8 +11,8 @@ namespace Core.Domain.Financials
 
         [ForeignKey("MainAccountId")]
         [InverseProperty("ContraAccounts")]
-        public virtual Account MainAccount { get; set; }
+        public virtual Account MainAccount { get; set; } = null!;
         [ForeignKey("RelatedContraAccountId")]        
-        public virtual Account RelatedContraAccount { get; set; }
+        public virtual Account RelatedContraAccount { get; set; } = null!;
     }
 }

@@ -10,13 +10,13 @@ namespace Core.Domain.Donations
         public string DonorType { get; set; } = "Individual";
 
         [MaxLength(100)]
-        public string FirstName { get; set; } = string.Empty;
+        public string? FirstName { get; set; } = string.Empty;
 
         [MaxLength(100)]
-        public string LastName { get; set; } = string.Empty;
+        public string? LastName { get; set; } = string.Empty;
 
         [MaxLength(200)]
-        public string CompanyName { get; set; } = string.Empty;
+        public string? CompanyName { get; set; } = string.Empty;
 
         [Required, MaxLength(200)]
         public string Street { get; set; } = string.Empty;

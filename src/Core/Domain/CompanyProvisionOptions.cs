@@ -6,7 +6,7 @@ namespace Core.Domain
     public class CompanyProvisionOptions
     {
         public string Currency { get; set; } = "USD";
-        public string LegalName { get; set; }
+        public string? LegalName { get; set; }
         public ReportingFramework ReportingFramework { get; set; } = ReportingFramework.IfrsForSmes;
         public AccountingBasis AccountingBasis { get; set; } = AccountingBasis.Accrual;
         public FiscalYearPattern FiscalYearPattern { get; set; } = FiscalYearPattern.Calendar;
@@ -17,6 +17,6 @@ namespace Core.Domain
         public IndustryTemplate IndustryTemplate { get; set; } = IndustryTemplate.Services;
         public EntityType EntityType { get; set; } = EntityType.SoleProprietor;
         public InventoryCostingMethod InventoryCostingMethod { get; set; } = InventoryCostingMethod.None;
-        public string CoaTemplateId { get; set; }
+        public string? CoaTemplateId { get; set; }
     }
 }

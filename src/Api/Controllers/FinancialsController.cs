@@ -513,7 +513,7 @@ namespace Api.Controllers
             };
 
             if (companyId.HasValue && journalId > 0 &&
-                ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader, journalId))
+                ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader!, journalId))
             {
                 return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, "approval_already_used",
                     "This approval was already used. Ask for a new approval.", ApprovalAlreadyUsed());
@@ -573,7 +573,7 @@ namespace Api.Controllers
                     return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, code, ex.Message);
                 }
                 if (ex is DbUpdateException && companyId.HasValue && journalId > 0 &&
-                    ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader, journalId))
+                    ApprovalEvidence.WasConsumedForJournal(_db.AuditLogs.AsNoTracking(), companyId.Value, aprHeader!, journalId))
                 {
                     return new PostSingleResult(journalId, false, StatusCodes.Status409Conflict, "approval_already_used",
                         "This approval was already used. Ask for a new approval.", ApprovalAlreadyUsed());
@@ -1238,8 +1238,8 @@ namespace Api.Controllers
 
             var newAccount = new Core.Domain.Financials.Account
             {
-                AccountCode = newAccountDto.AccountCode,
-                AccountName = newAccountDto.AccountName,
+                AccountCode = newAccountDto.AccountCode!,
+                AccountName = newAccountDto.AccountName!,
                 AccountClassId = newAccountDto.AccountClassId,
                 ParentAccountId = newAccountDto.ParentAccountId,
                 Description = newAccountDto.Description,
@@ -1303,8 +1303,8 @@ namespace Api.Controllers
             {
                 updatedAccount = await _accountService.UpdateAccountAsync(accountCode, new Core.Domain.Financials.Account
                 {
-                    AccountCode = updatedAccountDto.AccountCode,
-                    AccountName = updatedAccountDto.AccountName,
+                    AccountCode = updatedAccountDto.AccountCode!,
+                    AccountName = updatedAccountDto.AccountName!,
                     AccountClassId = updatedAccountDto.AccountClassId,
                     ParentAccountId = updatedAccountDto.ParentAccountId,
                     Description = updatedAccountDto.Description,
@@ -2258,7 +2258,7 @@ namespace Api.Controllers
 
         public sealed class YearEndReopenRequest
         {
-            public string Reason { get; set; }
+            public string? Reason { get; set; }
             public bool AcknowledgeIndependentLock { get; set; }
             public DateTime? ExpectedLockThrough { get; set; }
         }
@@ -2406,10 +2406,10 @@ namespace Api.Controllers
 
         public sealed class YearEndIssuanceRequest
         {
-            public string Status { get; set; }
-            public string Reason { get; set; }
+            public string? Status { get; set; }
+            public string? Reason { get; set; }
             public DateTime? ExternalDate { get; set; }
-            public string ExternalReference { get; set; }
+            public string? ExternalReference { get; set; }
         }
 
         [HttpPost]
@@ -2425,10 +2425,10 @@ namespace Api.Controllers
                 using var tx = BeginWriteTransaction();
                 var preview = _yearEndCloseService.DeclareIssuance(code, new YearEndIssuanceCommand
                 {
-                    Status = request?.Status,
-                    Reason = request?.Reason,
+                    Status = request?.Status!,
+                    Reason = request?.Reason!,
                     ExternalDate = request?.ExternalDate,
-                    ExternalReference = request?.ExternalReference
+                    ExternalReference = request?.ExternalReference!
                 }, YearEndActor);
                 tx.Commit();
                 return Ok(MapYearEndPreview(preview));

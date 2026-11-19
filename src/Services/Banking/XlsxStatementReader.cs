@@ -34,13 +34,13 @@ namespace Services.Banking
             using var doc = SpreadsheetDocument.Open(stream, false, openSettings);
             var workbook = doc.WorkbookPart
                 ?? throw new InvalidOperationException("The Excel file has no workbook.");
-            var sheet = workbook.Workbook.Sheets?.Elements<Sheet>().FirstOrDefault()
+            var sheet = workbook.Workbook!.Sheets?.Elements<Sheet>().FirstOrDefault()
                 ?? throw new InvalidOperationException("The Excel file has no sheets.");
             var sheetId = sheet.Id?.Value
                 ?? throw new InvalidOperationException("The Excel sheet reference is missing.");
             var worksheet = (WorksheetPart)workbook.GetPartById(sheetId);
             var sharedCache = BuildSharedStringCache(workbook.SharedStringTablePart?.SharedStringTable);
-            var sheetData = worksheet.Worksheet.GetFirstChild<SheetData>()
+            var sheetData = worksheet.Worksheet!.GetFirstChild<SheetData>()
                 ?? throw new InvalidOperationException("The Excel sheet is empty.");
 
             var rows = new List<List<string>>();

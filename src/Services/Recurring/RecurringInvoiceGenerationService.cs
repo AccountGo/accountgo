@@ -284,7 +284,7 @@ namespace Services.Recurring
                     return Fail(occurrence, null, RecurringErrorCodes.InvalidSchedule, reason);
                 }
 
-                invoice = _salesService.GetSalesInvoiceById(createdId);
+                invoice = _salesService.GetSalesInvoiceById(createdId)!;
                 // Stamp the recurring origin so the document is identifiable for audit, reporting, and later
                 // lifecycle handling. The DTO path does not carry Origin, so set it on the saved header.
                 invoice.Origin = SalesInvoiceOrigins.RecurringSchedule;

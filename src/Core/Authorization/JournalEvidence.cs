@@ -15,7 +15,11 @@ namespace Core.Authorization
         {
             var recordId = journalId.ToString(CultureInfo.InvariantCulture);
             return rows.Where(a => a.CompanyId == companyId && a.TableName == "__JournalEntryPreparer" && a.RecordId == recordId)
-                .Select(a => a.UserName).Distinct().ToHashSet(StringComparer.Ordinal);
+                .Select(a => a.UserName)
+                .Where(u => u != null)
+                .Select(u => u!)
+                .Distinct()
+                .ToHashSet(StringComparer.Ordinal);
         }
     }
 }

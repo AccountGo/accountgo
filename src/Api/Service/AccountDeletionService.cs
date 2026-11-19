@@ -215,7 +215,7 @@ namespace Api.Service
                 .ToListAsync();
             var normalized = adminEmails
                 .Where(email => !string.IsNullOrWhiteSpace(email))
-                .Select(email => email.Trim().ToUpperInvariant())
+                .Select(email => email!.Trim().ToUpperInvariant())
                 .Distinct()
                 .ToList();
             if (!normalized.Contains(user.NormalizedEmail))

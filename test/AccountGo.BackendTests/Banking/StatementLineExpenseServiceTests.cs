@@ -168,8 +168,8 @@ public class StatementLineExpenseServiceTests
         Assert.Equal(49.99m, savedBill.PurchaseInvoiceLines.Single().Amount);
         Assert.Equal("bill", result.Bill.Kind);
         Assert.Equal(88, result.Bill.Id);
-        Assert.Equal("vendorPayment", result.Payment.Kind);
-        Assert.Equal(55, result.Payment.Id);
+        Assert.Equal("vendorPayment", result.Payment!.Kind);
+        Assert.Equal(55, result.Payment!.Id);
         Assert.True(result.Line.IsMatched);
         Assert.Equal(bankCr.Id, result.Line.MatchedGeneralLedgerLineId);
         purchasing.Verify(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()), Times.Once);
@@ -472,7 +472,7 @@ public class StatementLineExpenseServiceTests
         Assert.Equal(100m, billLine.Amount);
         Assert.Equal(12m, billLine.TaxAmount);
         Assert.Equal(gross, savedBill.Total());
-        Assert.Equal(56, result.Payment.Id);
+        Assert.Equal(56, result.Payment!.Id);
         purchasing.Verify(p => p.PayBill(90, bank.AccountId!.Value, gross, BankingTestHarness.Utc(2026, 6, 1).Date,
             It.IsAny<string?>(), "REF-1", It.IsAny<string?>()), Times.Once);
     }
