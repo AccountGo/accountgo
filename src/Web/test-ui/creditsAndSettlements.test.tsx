@@ -17,6 +17,7 @@ const { authFetch, hasPermission, outlet } = vi.hoisted(() => ({
 vi.mock('../src/auth/AuthContext', () => ({ useAuth: () => ({ authFetch }) }));
 vi.mock('../src/components/Gating', () => ({
   usePermissions: () => ({ hasPermission }),
+  useTenantContext: () => outlet,
   ReadOnlyModuleBanner: () => null,
 }));
 vi.mock('../src/lib/entitlements', () => ({
@@ -80,6 +81,7 @@ beforeEach(() => {
   authFetch.mockReset();
   authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
     if (url === '/api/sales/credits') return new Response(JSON.stringify(mockCredits), { status: 200 });
+    if (url === '/api/purchasing/credits') return new Response(JSON.stringify([]), { status: 200 });
     if (url === '/api/sales/credits/mappings/preview') return new Response(JSON.stringify(mockMappings), { status: 200 });
     if (url === '/api/sales/credits/mappings' && init?.method === 'PUT') return new Response(JSON.stringify(mockMappings), { status: 200 });
     if (url === '/api/Sales/SalesInvoices') {
@@ -208,5 +210,39 @@ describe('CreditsAndSettlements and InvoiceDetail settlement UX', () => {
     expect((await screen.findAllByText('Settled')).length).toBeGreaterThan(0);
     expect(screen.getByText(/Settled: cash 0\.00, credits 300\.00, written off 700\.00/)).toBeTruthy();
     expect(screen.queryByText('Paid in full')).toBeNull();
+  });
+
+  it('renders SalesTabs on sales credits page and PurchasesTabs on purchasing credits page', async () => {
+    render(
+      <MemoryRouter initialEntries={['/org/work/sales/credits']}>
+        <Routes>
+          <Route path="/org/:slug/sales/credits" element={<CreditsAndSettlements side="sales" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const salesNav = await screen.findByRole('navigation', { name: 'Sales' });
+    expect(within(salesNav).getByRole('link', { name: 'Invoices' }).getAttribute('href')).toBe('/org/work/sales');
+    expect(within(salesNav).getByRole('link', { name: 'Credits & settlements' }).getAttribute('href')).toBe('/org/work/sales/credits');
+    expect(within(salesNav).getByRole('link', { name: 'Clients' }).getAttribute('href')).toBe('/org/work/sales/clients');
+    expect(await screen.findByText('CCN-00001')).toBeTruthy();
+
+    cleanup();
+
+    render(
+      <MemoryRouter initialEntries={['/org/work/purchases/credits']}>
+        <Routes>
+          <Route path="/org/:slug/purchases/credits" element={<CreditsAndSettlements side="purchasing" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const purchasesNav = await screen.findByRole('navigation', { name: 'Purchases' });
+    expect(within(purchasesNav).getByRole('link', { name: 'Bills' }).getAttribute('href')).toBe('/org/work/purchases');
+    expect(within(purchasesNav).getByRole('link', { name: 'Credits & advances' }).getAttribute('href')).toBe('/org/work/purchases/credits');
+    expect(within(purchasesNav).getByRole('link', { name: 'Vendors' }).getAttribute('href')).toBe('/org/work/purchases/vendors');
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith('/api/purchasing/credits');
+    });
   });
 });

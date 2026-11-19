@@ -114,11 +114,11 @@ const inputClass = 'w-full rounded-lg border border-[var(--border-subtle)] bg-[v
 const PPA_HELP =
   'For a material error in a closed year whose statements were already filed. Post the correction against account 30820 and the balance-sheet accounts. Immaterial corrections go through this year\'s accounts as a normal entry. Unfiled closed years can be reopened under Year-end instead.';
 
-export function JournalEditor({ initial, accounts, closedYears, canCreate, canPost, fetcher, onSaved, onDiscarded, currency, independentReview = false, canReview = false }: {
+export function JournalEditor({ initial, accounts, closedYears, canCreate, canPost, fetcher, onSaved, onDiscarded, currency, orgSlug, independentReview = false, canReview = false }: {
   initial: JournalEntry; accounts: JournalAccount[]; closedYears: ClosedFiscalYear[];
   canCreate: boolean; canPost: boolean;
   fetcher: Fetcher; onSaved: (id: number) => void; onDiscarded?: () => void; currency: string | undefined;
-  independentReview?: boolean; canReview?: boolean;
+  orgSlug?: string; independentReview?: boolean; canReview?: boolean;
 }) {
   const [entry, setEntry] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -262,7 +262,17 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
             </select>
           </label>
           {closedYears.length === 0
-            ? <p className="text-sm text-[var(--text-secondary)] sm:col-span-2">Close a fiscal year under Year-end before posting a prior-period adjustment.</p>
+            ? (
+              <p className="text-sm text-[var(--text-secondary)] sm:col-span-2">
+                Close a fiscal year under{' '}
+                {orgSlug ? (
+                  <Link className="underline" to={`/org/${orgSlug}/financials/year-end`}>Year-end</Link>
+                ) : (
+                  'Year-end'
+                )}{' '}
+                before posting a prior-period adjustment.
+              </p>
+            )
             : <p className="text-sm text-[var(--text-secondary)] sm:col-span-2">{PPA_HELP}</p>}
         </>}
       </fieldset>
@@ -428,7 +438,7 @@ export default function JournalEntries() {
             closedYears={data.closedYears} canCreate={canCreate} canPost={canPost}
             independentReview={currentOrg.operatingPolicy?.journalWorkflow !== 'SingleActorAllowed'}
             canReview={canPost && (currentOrg.role === 'Owner' || currentOrg.role === 'Admin')}
-            fetcher={authFetch} currency={currentOrg.currency}
+            fetcher={authFetch} currency={currentOrg.currency} orgSlug={currentOrg.slug}
             onSaved={id => { setParams({ id: String(id) }); setRevision(r => r + 1); }}
             onDiscarded={() => { setParams({}); setRevision(r => r + 1); }} />
             : params.has('id') && <p role="alert">Journal entry not found in this workspace.</p>}

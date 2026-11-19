@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { SalesTabs } from '../components/SalesTabs';
+import { PurchasesTabs } from '../components/PurchasesTabs';
+import { useTenantContext } from '../components/Gating';
 import { ModalShell } from '../components/ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
@@ -109,6 +112,7 @@ const ROLE_KEY_TO_REQUEST_FIELD: Record<string, string> = {
 
 export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> = ({ side }) => {
   const { authFetch } = useAuth();
+  const { currentOrg } = useTenantContext();
   const [searchParams] = useSearchParams();
   const [credits, setCredits] = useState<CreditNoteRow[]>([]);
   const [mappings, setMappings] = useState<MappingPreview | null>(null);
@@ -752,6 +756,11 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           </div>
         }
       />
+      {side === 'sales' ? (
+        <SalesTabs orgSlug={currentOrg.slug} />
+      ) : (
+        <PurchasesTabs orgSlug={currentOrg.slug} />
+      )}
 
       {notice && (
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">

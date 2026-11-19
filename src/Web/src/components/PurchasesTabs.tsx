@@ -7,6 +7,7 @@ export const PurchasesTabs: React.FC<{ orgSlug: string }> = ({ orgSlug }) => {
   const { hasPermission } = usePermissions();
   const tabs = [
     ...(hasPermission('purchases.bills.view') ? [{ label: 'Bills', to: `/org/${orgSlug}/purchases`, end: true }] : []),
+    ...(hasPermission(['purchases.credits.view', 'purchases.bills.view']) ? [{ label: 'Credits & advances', to: `/org/${orgSlug}/purchases/credits`, end: false }] : []),
     ...(hasPermission('purchases.vendors.view') ? [{ label: 'Vendors', to: `/org/${orgSlug}/purchases/vendors`, end: false }] : []),
   ];
   if (tabs.length < 2) return null;

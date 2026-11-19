@@ -13,6 +13,7 @@ import {
 } from '../lib/yearEndClose';
 import { PermissionDeniedCard, usePermissions, useTenantContext } from './Gating';
 import { ModalShell } from './ModalShell';
+import { PageHeader } from './PageHeader';
 
 interface YearEndYearRow {
   fiscalYearCode: string;
@@ -633,7 +634,13 @@ export function YearEndClosePage() {
   if (!canInspect) return <PermissionDeniedCard permission="financials.periods.close" />;
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-bold text-[var(--text-main)]">Year-end close</h1>
+      <PageHeader
+        title="Year-end close"
+        back={{
+          to: `/org/${currentOrg.slug}/financials`,
+          label: currentOrg.isPersonalBooks ? 'Transactions' : 'General Ledger',
+        }}
+      />
       <YearEndCloseCard canClose={hasPermission('financials.periods.close')} personal={!!currentOrg.isPersonalBooks} />
     </div>
   );

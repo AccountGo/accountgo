@@ -284,6 +284,9 @@ export default function GeneralLedger() {
       <span aria-current="page" className="font-semibold">Posted transactions</span>
       <Link className="underline" to={`/org/${currentOrg.slug}/financials/journals`}>Manual journals / drafts</Link>
       {hasPermission('financials.accounts.view') && <Link className="underline" to={`/org/${currentOrg.slug}/financials/accounts`}>Chart of Accounts</Link>}
+      {hasPermission(['financials.periods.close', 'financials.accounts.view']) && (
+        <Link className="underline" to={`/org/${currentOrg.slug}/financials/year-end`}>Year-end close</Link>
+      )}
     </nav>
     <div className="flex flex-wrap items-end gap-4 rounded-2xl bg-[var(--bg-surface)] p-4">
       <label className="grid gap-1 text-xs">Period<select className={inputClass} value={preset} onChange={event => {
