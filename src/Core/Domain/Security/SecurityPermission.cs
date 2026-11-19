@@ -8,12 +8,12 @@ namespace Core.Domain.Security
     {
         //[Key]
         //public int SecurityPermissionId { get; set; }
-        public string Name { get; set; }
-        public string DisplayName { get; set; }
+        public string? Name { get; set; }
+        public string? DisplayName { get; set; }
         public int SecurityGroupId { get; set; }
 
-        public virtual SecurityGroup Group { get; set; }
-        public virtual ICollection<SecurityRolePermission> RolePermissions { get; set; }
+        public virtual SecurityGroup Group { get; set; } = null!;
+        public virtual ICollection<SecurityRolePermission> RolePermissions { get; set; } = null!;
 
         public SecurityPermission()
         {

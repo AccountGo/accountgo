@@ -278,6 +278,7 @@ public sealed class SourceJournalTests : IAsyncLifetime
 
         var created = svc.CreateDraft(MakeRequest(sourceKey: "test6:lock:v1"));
         var je = financial.GetJournalEntry(created.JournalId);
+        Assert.NotNull(je);
         je.Memo = "Attempted edit";
 
         var ex = Assert.Throws<SourceJournalLockedException>(() => financial.UpdateJournalEntry(je, posted: false));
@@ -441,7 +442,7 @@ public sealed class SourceJournalTests : IAsyncLifetime
                 using var __ = raceTenant.ImpersonateUser(_companyId, _user.Id, Org, CompanyMemberRole.Owner);
                 var fin = raceScope.ServiceProvider.GetRequiredService<Services.Financial.IFinancialService>();
                 var je = fin.GetJournalEntry(jid, false);
-                fin.UpdateJournalEntry(je, posted: true);
+                fin.UpdateJournalEntry(je!, posted: true);
             };
 
             using var discardScope = _host.Factory.Services.CreateScope();

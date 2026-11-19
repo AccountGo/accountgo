@@ -19,7 +19,7 @@ namespace Core.Domain.Financials
         {
         }
         public int CompanyId { get; set; }
-        public virtual Company Company { get; set; }
+        public virtual Company Company { get; set; } = null!;
 
         public int? PayableAccountId { get; set; }
         public int? PurchaseDiscountAccountId { get; set; }
@@ -38,21 +38,21 @@ namespace Core.Domain.Financials
         public int? ImpairmentExpenseAccountId { get; set; }
         public int? BadDebtRecoveryAccountId { get; set; }
 
-        public virtual Account PayableAccount { get; set; }
-        public virtual Account PurchaseDiscountAccount { get; set; }
-        public virtual Account GoodsReceiptNoteClearingAccount { get; set; }
-        public virtual Account SalesDiscountAccount { get; set; }
-        public virtual Account ShippingChargeAccount { get; set; }
-        public virtual Account PermanentAccount { get; set; }
-        public virtual Account IncomeSummaryAccount { get; set; }
-        public virtual Account CustomerCreditLiabilityAccount { get; set; }
-        public virtual Account SalesReturnsAllowancesAccount { get; set; }
-        public virtual Account SupplierCreditAssetAccount { get; set; }
-        public virtual Account SupplierAdvanceAccount { get; set; }
-        public virtual Account SupplierReturnClearingAccount { get; set; }
-        public virtual Account ReturnValuationDifferenceAccount { get; set; }
-        public virtual Account ReceivableLossAllowanceAccount { get; set; }
-        public virtual Account ImpairmentExpenseAccount { get; set; }
-        public virtual Account BadDebtRecoveryAccount { get; set; }
+        public virtual Account? PayableAccount { get; set; }
+        public virtual Account? PurchaseDiscountAccount { get; set; }
+        public virtual Account? GoodsReceiptNoteClearingAccount { get; set; }
+        public virtual Account? SalesDiscountAccount { get; set; }
+        public virtual Account? ShippingChargeAccount { get; set; }
+        public virtual Account? PermanentAccount { get; set; }
+        public virtual Account? IncomeSummaryAccount { get; set; }
+        public virtual Account? CustomerCreditLiabilityAccount { get; set; }
+        public virtual Account? SalesReturnsAllowancesAccount { get; set; }
+        public virtual Account? SupplierCreditAssetAccount { get; set; }
+        public virtual Account? SupplierAdvanceAccount { get; set; }
+        public virtual Account? SupplierReturnClearingAccount { get; set; }
+        public virtual Account? ReturnValuationDifferenceAccount { get; set; }
+        public virtual Account? ReceivableLossAllowanceAccount { get; set; }
+        public virtual Account? ImpairmentExpenseAccount { get; set; }
+        public virtual Account? BadDebtRecoveryAccount { get; set; }
     }
 }

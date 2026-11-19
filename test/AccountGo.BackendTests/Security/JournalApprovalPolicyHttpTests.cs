@@ -607,7 +607,7 @@ namespace AccountGo.BackendTests.Security
                 var requestId = body.GetProperty("approvalRequestId").GetString();
                 var rows = db.AuditLogs.IgnoreQueryFilters().Where(a => a.CompanyId == team.CompanyId && a.RecordId == requestId).ToList();
                 Assert.Contains(rows, a => a.TableName == "__AccessDelegationApprovalState" && a.OriginalValue == "Consumed");
-                var persisted = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(rows.Single(a => a.TableName == "__AccessDelegationApproval").NewValue)!;
+                var persisted = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(rows.Single(a => a.TableName == "__AccessDelegationApproval").NewValue!)!;
                 Assert.Equal(journalId.ToString(), persisted.ResourceId);
             }
             var retry = await PostJournal(team, journalId,

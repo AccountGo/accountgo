@@ -593,7 +593,7 @@ namespace Services.Recurring
                 .ToDictionary(p => p.Id, p => p.Name);
             var result = new Dictionary<int, string>();
             foreach (var c in customers)
-                if (c.PartyId.HasValue && partyNames.TryGetValue(c.PartyId.Value, out var name))
+                if (c.PartyId.HasValue && partyNames.TryGetValue(c.PartyId.Value, out var name) && name != null)
                     result[c.Id] = name;
             return result;
         }
@@ -613,7 +613,8 @@ namespace Services.Recurring
             if (ids.Count == 0) return new();
             return _itemRepo.Table.Where(i => ids.Contains(i.Id))
                 .Select(i => new { i.Id, i.No }).ToList()
-                .ToDictionary(i => i.Id, i => i.No);
+                .Where(i => i.No != null)
+                .ToDictionary(i => i.Id, i => i.No!);
         }
 
         /// <summary>

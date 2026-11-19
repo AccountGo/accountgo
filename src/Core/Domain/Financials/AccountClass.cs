@@ -21,8 +21,8 @@ namespace Core.Domain.Financials
             Accounts = new HashSet<Account>();
         }
 
-        public string Name { get; set; }
-        public string NormalBalance { get; set; }
-        public virtual ICollection<Account> Accounts { get; set; }
+        public string? Name { get; set; }
+        public string? NormalBalance { get; set; }
+        public virtual ICollection<Account> Accounts { get; set; } = null!;
     }
 }

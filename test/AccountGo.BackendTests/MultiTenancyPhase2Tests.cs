@@ -549,7 +549,7 @@ namespace AccountGo.BackendTests
             var tenantCtx = scope.ServiceProvider.GetRequiredService<ITenantContext>();
             using (tenantCtx.Impersonate(CompanyAId, SlugA, CompanyMemberRole.Owner))
             {
-                var created = await db.Customers.Include(c => c.Party).FirstOrDefaultAsync(c => c.Party.Name == "Brand New Customer Alpha");
+                var created = await db.Customers.Include(c => c.Party).FirstOrDefaultAsync(c => c.Party!.Name == "Brand New Customer Alpha");
                 Assert.NotNull(created);
                 Assert.Equal(CompanyAId, created.CompanyId);
             }

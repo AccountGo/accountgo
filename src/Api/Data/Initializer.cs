@@ -105,10 +105,12 @@ namespace Api.Data
             try
             {
                 // Security Roles
-                if (_securityService.GetRole("SystemAdministrators").Id > 0)
-                    _securityService.DeleteRole(_securityService.GetRole("SystemAdministrators").Id);
-                if (_securityService.GetRole("GeneralUsers").Id > 0)
-                    _securityService.DeleteRole(_securityService.GetRole("SystemAdministrators").Id);
+                var systemAdministrators = _securityService.GetRole("SystemAdministrators");
+                if (systemAdministrators != null && systemAdministrators.Id > 0)
+                    _securityService.DeleteRole(systemAdministrators.Id);
+                var generalUsers = _securityService.GetRole("GeneralUsers");
+                if (generalUsers != null && generalUsers.Id > 0)
+                    _securityService.DeleteRole(generalUsers.Id);
 
                 // Banks
 
@@ -551,7 +553,7 @@ namespace Api.Data
                     SalesDiscountAccount = _financialService.GetAccountByAccountCode("40400"),
                 };
             }
-            _financialService.SaveGeneralLedgerSetting(glSetting);
+            _financialService.SaveGeneralLedgerSetting(glSetting!);
         }
 
         private void SetupTax()
@@ -568,8 +570,8 @@ namespace Api.Data
                 TaxName = "Goods and Services Tax",
                 Rate = 5,
                 IsActive = true,
-                SalesAccountId = salesTaxAccount.Id,
-                PurchasingAccountId = purchaseTaxAccount.Id,
+                SalesAccountId = salesTaxAccount!.Id,
+                PurchasingAccountId = purchaseTaxAccount!.Id,
             };
 
             var hst = new Core.Domain.TaxSystem.Tax()
@@ -578,8 +580,8 @@ namespace Api.Data
                 TaxName = "Harmonized Sales Tax",
                 Rate = 12,
                 IsActive = true,
-                SalesAccountId = salesTaxAccount.Id,
-                PurchasingAccountId = purchaseTaxAccount.Id,
+                SalesAccountId = salesTaxAccount!.Id,
+                PurchasingAccountId = purchaseTaxAccount!.Id,
             };
 
             var pst = new Core.Domain.TaxSystem.Tax()
@@ -588,8 +590,8 @@ namespace Api.Data
                 TaxName = "Provincial Sales Tax",
                 Rate = 7,
                 IsActive = true,
-                SalesAccountId = salesTaxAccount.Id,
-                PurchasingAccountId = purchaseTaxAccount.Id,
+                SalesAccountId = salesTaxAccount!.Id,
+                PurchasingAccountId = purchaseTaxAccount!.Id,
             };
 
             var taxGroupGstHst = new Core.Domain.TaxSystem.TaxGroup()
@@ -674,9 +676,9 @@ namespace Api.Data
                 IsActive = true
             };
 
-            vendor.AccountsPayableAccountId = _financialService.GetAccountByAccountCode("20110").Id;
-            vendor.PurchaseAccountId = _financialService.GetAccountByAccountCode("50200").Id;
-            vendor.PurchaseDiscountAccountId = _financialService.GetAccountByAccountCode("50400").Id;
+            vendor.AccountsPayableAccountId = _financialService.GetAccountByAccountCode("20110")!.Id;
+            vendor.PurchaseAccountId = _financialService.GetAccountByAccountCode("50200")!.Id;
+            vendor.PurchaseDiscountAccountId = _financialService.GetAccountByAccountCode("50400")!.Id;
             vendor.Party = vendorParty;
 
             Core.Domain.Contact primaryContact = new Core.Domain.Contact
@@ -891,7 +893,7 @@ namespace Api.Data
 
             var bank1 = new Core.Domain.Financials.Bank
             {
-                AccountId = _financialService.GetAccountByAccountCode("10111").Id,
+                AccountId = _financialService.GetAccountByAccountCode("10111")!.Id,
                 Name = "General Fund",
                 Type = Core.Domain.BankTypes.CheckingAccount,
                 BankName = "GFB",
@@ -902,7 +904,7 @@ namespace Api.Data
             };
             var bank2 = new Core.Domain.Financials.Bank
             {
-                AccountId = _financialService.GetAccountByAccountCode("10113").Id,
+                AccountId = _financialService.GetAccountByAccountCode("10113")!.Id,
                 Name = "Petty Cash Account",
                 Type = Core.Domain.BankTypes.CashAccount,
                 IsDefault = false,
@@ -1010,10 +1012,10 @@ namespace Api.Data
         {
             var customer = new Core.Domain.Sales.Customer
             {
-                AccountsReceivableAccountId = _financialService.GetAccountByAccountCode("10120").Id,
-                SalesAccountId = _financialService.GetAccountByAccountCode("40100").Id,
-                CustomerAdvancesAccountId = _financialService.GetAccountByAccountCode("20120").Id,
-                SalesDiscountAccountId = _financialService.GetAccountByAccountCode("40400").Id,
+                AccountsReceivableAccountId = _financialService.GetAccountByAccountCode("10120")!.Id,
+                SalesAccountId = _financialService.GetAccountByAccountCode("40100")!.Id,
+                CustomerAdvancesAccountId = _financialService.GetAccountByAccountCode("20120")!.Id,
+                SalesDiscountAccountId = _financialService.GetAccountByAccountCode("40400")!.Id,
                 TaxGroupId = _financialService.GetTaxGroups().FirstOrDefault(tg => tg.Description == "GST/HST" && tg.IsActive)?.Id,
                 Party = new Core.Domain.Party
                 {
@@ -1042,9 +1044,9 @@ namespace Api.Data
         {
             var vendor = new Core.Domain.Purchases.Vendor
             {
-                AccountsPayableAccountId = _financialService.GetAccountByAccountCode("20110").Id,
-                PurchaseAccountId = _financialService.GetAccountByAccountCode("50200").Id,
-                PurchaseDiscountAccountId = _financialService.GetAccountByAccountCode("50400").Id,
+                AccountsPayableAccountId = _financialService.GetAccountByAccountCode("20110")!.Id,
+                PurchaseAccountId = _financialService.GetAccountByAccountCode("50200")!.Id,
+                PurchaseDiscountAccountId = _financialService.GetAccountByAccountCode("50400")!.Id,
                 Party = new Core.Domain.Party
                 {
                     Name = name,

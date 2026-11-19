@@ -116,7 +116,7 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
             var evidence = Assert.Single(db.AuditLogs.Where(a => a.CompanyId == _companyId
                 && a.TableName == Services.Financial.FinancialService.JournalPostingAuthorizationAuditTable
                 && a.RecordId == journal.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            using var document = JsonDocument.Parse(evidence.NewValue);
+            using var document = JsonDocument.Parse(evidence.NewValue!);
             var root = document.RootElement;
             Assert.Equal(Core.Authorization.AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, root.GetProperty("operationKey").GetString());
             Assert.Equal("Posted by " + _user.Id + " during partner account setup, authorized as an accounting policy change. Journal approval does not apply to this reclassification.", root.GetProperty("rendering").GetString());

@@ -315,7 +315,7 @@ namespace AccountGo.BackendTests.Financial
                 Id = 1,
                 AccountCode = "9999",
                 AccountName = "Unclassified Suspense",
-                AccountClass = null,
+                AccountClass = null!,
                 DrOrCrSide = DrOrCrSide.Dr,
                 GeneralLedgerLines = new List<GeneralLedgerLine>
                 {

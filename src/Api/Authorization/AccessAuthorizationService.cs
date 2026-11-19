@@ -533,7 +533,7 @@ namespace Api.Authorization
                 }
 
                 if (string.Equals(authType, "StaffSession", StringComparison.Ordinal) ||
-                    principal.HasClaim(c => c.Type == "staff_session_id"))
+                    principal!.HasClaim(c => c.Type == "staff_session_id"))
                 {
                     return new AccessActorContext
                     {
@@ -1300,7 +1300,7 @@ namespace Api.Authorization
                     .Select(srp => srp.SecurityPermission!.Name)
                     .Distinct()
                     .ToListAsync(cancellationToken);
-                requestedPermissions = new HashSet<string>(perms, StringComparer.OrdinalIgnoreCase);
+                requestedPermissions = new HashSet<string>(perms.Where(n => n != null).Cast<string>(), StringComparer.OrdinalIgnoreCase);
             }
 
             if (requestedPermissions.Count > 0 && !resource.IsWorkspaceInitialBootstrap)
@@ -1412,7 +1412,8 @@ namespace Api.Authorization
                     continue;
                 }
 
-                if (!Core.Authorization.ApprovalEvidence.IsValidApproval(_db.AuditLogs.AsNoTracking(), row, payload, companyId.Value, now, operationKey,
+                if (payload == null ||
+                    !Core.Authorization.ApprovalEvidence.IsValidApproval(_db.AuditLogs.AsNoTracking(), row, payload, companyId.Value, now, operationKey,
                         string.Equals(operationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) ? resource?.ResourceId : null,
                         string.Equals(operationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) ? resource?.ResourceFingerprint : null) ||
                     !string.Equals(payload.PolicyVersion, CatalogVersion, StringComparison.Ordinal))
@@ -1652,7 +1653,7 @@ namespace Api.Authorization
             if (row == null)
                 return false;
 
-            db.AuditLogs.Add(Core.Authorization.ApprovalEvidence.State(row, "Revoked", actorUserId));
+            db.AuditLogs.Add(Core.Authorization.ApprovalEvidence.State(row, "Revoked", actorUserId!));
 
             await db.SaveChangesAsync(cancellationToken);
             BumpGlobalSecurityRevision();
@@ -1681,7 +1682,7 @@ namespace Api.Authorization
                         string.Equals(p.OperationKey, operationKey, StringComparison.Ordinal) &&
                         string.Equals(p.ResourceId, resourceId, StringComparison.Ordinal))
                     {
-                        db.AuditLogs.Add(Core.Authorization.ApprovalEvidence.State(row, "Revoked", actorUserId));
+                        db.AuditLogs.Add(Core.Authorization.ApprovalEvidence.State(row, "Revoked", actorUserId!));
                         modified = true;
                     }
                 }
@@ -1733,7 +1734,8 @@ namespace Api.Authorization
                     continue;
                 }
 
-                if (!Core.Authorization.ApprovalEvidence.IsValidApproval(db.AuditLogs.AsNoTracking(), row, payload, companyId, now, operationKey))
+                if (payload == null ||
+                    !Core.Authorization.ApprovalEvidence.IsValidApproval(db.AuditLogs.AsNoTracking(), row, payload, companyId, now, operationKey))
                     continue;
 
                 if (!string.IsNullOrWhiteSpace(operationKey) &&
@@ -1767,7 +1769,7 @@ namespace Api.Authorization
                         continue;
                 }
 
-                var stateRow = Core.Authorization.ApprovalEvidence.State(row, "Consumed", actorUserId);
+                var stateRow = Core.Authorization.ApprovalEvidence.State(row, "Consumed", actorUserId!);
                 db.AuditLogs.Add(stateRow);
                 try
                 {

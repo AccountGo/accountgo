@@ -919,7 +919,7 @@ namespace Api.Controllers
         [TenantScoped]
         [RequireWorkspaceRole(CompanyMemberRole.Admin)]
         [HttpPut("current/sales-invoice-numbering")]
-        public IActionResult UpdateSalesInvoiceNumbering([FromBody] UpdateSalesInvoiceNumberingRequest? request) =>
+        public IActionResult UpdateSalesInvoiceNumbering([FromBody] UpdateSalesInvoiceNumberingRequest request) =>
             UpdateSalesInvoiceNumberingCore(request);
 
         public class AccountingPolicyModel
@@ -1226,7 +1226,7 @@ namespace Api.Controllers
             };
         }
 
-        private string? ResolvePendingPlanKey(Company company, string activationState)
+        private string ResolvePendingPlanKey(Company company, string activationState)
         {
             if (!CompanyActivationStates.IsPendingCheckout(activationState)
                 || string.IsNullOrWhiteSpace(company.PendingPlan))

@@ -200,7 +200,7 @@ namespace Api.Service
                 .Select(srp => new { srp.SecurityRoleId, srp.SecurityPermission!.Name })
                 .ToList()
                 .GroupBy(x => x.SecurityRoleId)
-                .ToDictionary(g => g.Key, g => new HashSet<string>(g.Select(x => x.Name), StringComparer.OrdinalIgnoreCase));
+                .ToDictionary(g => g.Key, g => new HashSet<string>(g.Select(x => x.Name).Where(n => n != null).Cast<string>(), StringComparer.OrdinalIgnoreCase));
 
             if (rolePermissionOverride.HasValue)
             {

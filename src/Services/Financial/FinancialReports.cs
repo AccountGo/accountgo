@@ -16,8 +16,8 @@ namespace Services.Financial
     public class TrialBalance
     {
         public int AccountId { get; set; }
-        public string AccountCode { get; set; }
-        public string AccountName { get; set; }
+        public string? AccountCode { get; set; }
+        public string? AccountName { get; set; }
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }
     }
@@ -26,8 +26,8 @@ namespace Services.Financial
     {
         public int AccountId { get; set; }
         public int AccountClassId { get; set; }
-        public string AccountCode { get; set; }
-        public string AccountName { get; set; }
+        public string? AccountCode { get; set; }
+        public string? AccountName { get; set; }
         public decimal Amount { get; set; }
     }
 
@@ -35,8 +35,8 @@ namespace Services.Financial
     {
         public int AccountId { get; set; }
         public bool IsExpense { get; set; }
-        public string AccountCode { get; set; }
-        public string AccountName { get; set; }
+        public string? AccountCode { get; set; }
+        public string? AccountName { get; set; }
         public decimal Amount { get; set; }
     }
 
@@ -62,7 +62,7 @@ namespace Services.Financial
         public ICollection<CashFlowLine> OperatingActivities { get; set; } = new List<CashFlowLine>();
         public ICollection<CashFlowLine> InvestingActivities { get; set; } = new List<CashFlowLine>();
         public ICollection<CashFlowLine> FinancingActivities { get; set; } = new List<CashFlowLine>();
-        public string Message { get; set; }
+        public string? Message { get; set; }
         public bool IsBalanced => AccountingBasis == AccountingBasis.Cash
             ? StartingCash + NetChangeInCash == EndingCash
             : OperatingCashFlow + InvestingCashFlow + FinancingCashFlow == NetChangeInCash;
@@ -80,9 +80,9 @@ namespace Services.Financial
     public class CashFlowLine
     {
         public int AccountId { get; set; }
-        public string AccountCode { get; set; }
-        public string AccountName { get; set; }
-        public string LineType { get; set; }
+        public string? AccountCode { get; set; }
+        public string? AccountName { get; set; }
+        public string? LineType { get; set; }
         public decimal Amount { get; set; }
     }
 
@@ -91,10 +91,10 @@ namespace Services.Financial
         public int Id { get; set; }
         public int AccountId { get; set; }
         public int CurrencyId { get; set; }
-        public string DocumentType { get; set; }
+        public string? DocumentType { get; set; }
         public int TransactionNo { get; set; }
-        public string AccountCode { get; set; }
-        public string AccountName { get; set; }
+        public string? AccountCode { get; set; }
+        public string? AccountName { get; set; }
         public DateTime Date { get; set; }
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }

@@ -81,7 +81,7 @@ public class YearEndCloseTests
 
         public System.Threading.Tasks.Task DeleteAsync(GeneralLedgerHeader entity) => _inner.DeleteAsync(entity);
 
-        public IQueryable<GeneralLedgerHeader> GetAllIncluding(params System.Linq.Expressions.Expression<Func<GeneralLedgerHeader, object>>[] includeProperties) =>
+        public IQueryable<GeneralLedgerHeader> GetAllIncluding(params System.Linq.Expressions.Expression<Func<GeneralLedgerHeader, object?>>[] includeProperties) =>
             _inner.GetAllIncluding(includeProperties);
     }
 
@@ -144,7 +144,7 @@ public class YearEndCloseTests
 
         public System.Threading.Tasks.Task DeleteAsync(JournalEntryHeader entity) => _inner.DeleteAsync(entity);
 
-        public IQueryable<JournalEntryHeader> GetAllIncluding(params System.Linq.Expressions.Expression<Func<JournalEntryHeader, object>>[] includeProperties) =>
+        public IQueryable<JournalEntryHeader> GetAllIncluding(params System.Linq.Expressions.Expression<Func<JournalEntryHeader, object?>>[] includeProperties) =>
             _inner.GetAllIncluding(includeProperties);
     }
 
@@ -532,7 +532,7 @@ public class YearEndCloseTests
         harness.GlSettings.Table.Single().GoodsReceiptNoteClearingAccountId = harness.ExpenseId;
         harness.Post(D(2025, 12, 10), harness.ExpenseId, harness.CashId, 75m);
         harness.Post(D(2026, 1, 10), harness.CashId, harness.ExpenseId, 75m);
-        var warning = Assert.Single(harness.YearEnd.Preview(Harness.Fy2025Code).Warnings.Where(w => w.Code == "suspense_clearing"));
+        var warning = Assert.Single(harness.YearEnd.Preview(Harness.Fy2025Code).Warnings, w => w.Code == "suspense_clearing");
         Assert.Contains("50100", warning.Message);
         Assert.Contains("75", warning.Message);
         Assert.Throws<YearEndCloseException>(() => harness.YearEnd.Close(Harness.Fy2025Code, false, "reviewer"));

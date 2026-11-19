@@ -103,7 +103,7 @@ public sealed class EquityStatementHttpTests : IAsyncLifetime
             var setting = db.GeneralLedgerSettings.First();
             setting.ShippingChargeAccountId ??= sales.Id;
             invoice.CustomerId = customer.Id;
-            invoice.SalesInvoiceLines.Add(new Dto.Sales.SalesInvoiceLine { ItemId = item.Id, Quantity = 1, Amount = 1000, MeasurementId = item.SmallestMeasurementId!.Value });
+            invoice.SalesInvoiceLines!.Add(new Dto.Sales.SalesInvoiceLine { ItemId = item.Id, Quantity = 1, Amount = 1000, MeasurementId = item.SmallestMeasurementId!.Value });
         });
         var response = await _host.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, _user.Token, Org);
         await Ok(response);

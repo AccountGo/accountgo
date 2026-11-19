@@ -24,10 +24,10 @@ namespace Core.Domain
         /// Check ContactyType to determine whether CompanyNo is Customer No or Vendor No
         /// </summary>
         public ContactTypes ContactType { get; set; }
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string MiddleName { get; set; }
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? MiddleName { get; set; }
         public int PartyId { get; set; }
-        public virtual Party Party { get; set; }
+        public virtual Party Party { get; set; } = null!;
     }
 }

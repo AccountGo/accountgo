@@ -652,7 +652,7 @@ namespace Api.Service
                 .OrderBy(a => a.EffectiveDate).ThenBy(a => a.Id)
                 .Select(a => new SettlementApplicationSummaryDto(
                     a.Id, note.Id, "CustomerCreditNote", a.SalesInvoiceHeaderId!.Value,
-                    a.SalesInvoiceHeader != null ? a.SalesInvoiceHeader.No : "",
+                    a.SalesInvoiceHeader != null ? a.SalesInvoiceHeader.No! : "",
                     a.Amount, a.EffectiveDate, a.GeneralLedgerHeaderId, a.IsReversed,
                     a.Reversal != null ? a.Reversal.ReversalDate : null,
                     a.Reversal != null ? a.Reversal.Reason : null))

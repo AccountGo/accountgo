@@ -70,7 +70,7 @@ public class PriorPeriodAdjustmentTests
         public System.Threading.Tasks.Task UpdateAsync(GeneralLedgerHeader entity) => _inner.UpdateAsync(entity);
         public void Delete(GeneralLedgerHeader entity) => _inner.Delete(entity);
         public System.Threading.Tasks.Task DeleteAsync(GeneralLedgerHeader entity) => _inner.DeleteAsync(entity);
-        public IQueryable<GeneralLedgerHeader> GetAllIncluding(params System.Linq.Expressions.Expression<Func<GeneralLedgerHeader, object>>[] includeProperties) =>
+        public IQueryable<GeneralLedgerHeader> GetAllIncluding(params System.Linq.Expressions.Expression<Func<GeneralLedgerHeader, object?>>[] includeProperties) =>
             _inner.GetAllIncluding(includeProperties);
     }
 
@@ -123,7 +123,7 @@ public class PriorPeriodAdjustmentTests
         }
         public void Delete(JournalEntryHeader entity) => _inner.Delete(entity);
         public System.Threading.Tasks.Task DeleteAsync(JournalEntryHeader entity) => _inner.DeleteAsync(entity);
-        public IQueryable<JournalEntryHeader> GetAllIncluding(params System.Linq.Expressions.Expression<Func<JournalEntryHeader, object>>[] includeProperties) =>
+        public IQueryable<JournalEntryHeader> GetAllIncluding(params System.Linq.Expressions.Expression<Func<JournalEntryHeader, object?>>[] includeProperties) =>
             _inner.GetAllIncluding(includeProperties);
     }
 

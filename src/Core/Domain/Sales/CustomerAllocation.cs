@@ -29,8 +29,8 @@ namespace Core.Domain.Sales
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
 
-        public virtual Customer Customer { get; set; }
-        public virtual SalesInvoiceHeader SalesInvoiceHeader { get; set; }
-        public virtual SalesReceiptHeader SalesReceiptHeader { get; set; }
+        public virtual Customer Customer { get; set; } = null!;
+        public virtual SalesInvoiceHeader SalesInvoiceHeader { get; set; } = null!;
+        public virtual SalesReceiptHeader SalesReceiptHeader { get; set; } = null!;
     }
 }

@@ -136,7 +136,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var accounts = await SeedAccounts(workId, personalId);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        await db.Database.ExecuteSqlRawAsync($"CREATE TRIGGER fail_mirror_journal BEFORE INSERT ON JournalEntryHeader WHEN NEW.CompanyId = {personalId} BEGIN SELECT RAISE(ABORT, 'injected mirror failure'); END;");
+        await db.Database.ExecuteSqlAsync($"CREATE TRIGGER fail_mirror_journal BEFORE INSERT ON JournalEntryHeader WHEN NEW.CompanyId = {personalId} BEGIN SELECT RAISE(ABORT, 'injected mirror failure'); END;");
         var workHeadersBefore = await db.JournalEntryHeaders.IgnoreQueryFilters().CountAsync(h => h.CompanyId == workId);
         var mirrorHeadersBefore = await db.JournalEntryHeaders.IgnoreQueryFilters().CountAsync(h => h.CompanyId == personalId);
 
@@ -696,7 +696,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         {
             if (key == PersonalBooksPlanKey)
             {
-                plan = new() { Key = PersonalBooksPlanKey, Name = "Household", IncludedModules = new() { "financials", "purchases", "reports" } };
+                plan = new() { Key = PersonalBooksPlanKey!, Name = "Household", IncludedModules = new() { "financials", "purchases", "reports" } };
                 return true;
             }
             return _community.TryResolvePlan(key, out plan);

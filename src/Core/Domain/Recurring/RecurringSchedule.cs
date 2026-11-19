@@ -100,6 +100,6 @@ public partial class RecurringSchedule : BaseEntity, ICompanyOwned
 
     // Navigation properties
     public virtual Company Company { get; set; } = null!;
-    public virtual ICollection<RecurringScheduleLine> Lines { get; set; }
-    public virtual ICollection<RecurringOccurrence> Occurrences { get; set; }
+    public virtual ICollection<RecurringScheduleLine> Lines { get; set; } = null!;
+    public virtual ICollection<RecurringOccurrence> Occurrences { get; set; } = null!;
 }

@@ -37,7 +37,7 @@ public class InvoicePaymentBankSettingsTests : IDisposable
         _company = new Company { Name = "Bank Co", Slug = "bank-co" };
         _db.Companies.Add(_company);
         _db.SaveChanges();
-        _tenant.SetTenant(_company.Id, _company.Slug, CompanyMemberRole.Owner, Array.Empty<string>());
+        _tenant.SetTenant(_company.Id, _company.Slug!, CompanyMemberRole.Owner, Array.Empty<string>());
     }
 
     public void Dispose()
@@ -70,7 +70,7 @@ public class InvoicePaymentBankSettingsTests : IDisposable
     private Bank AddBank(string name, DateTime? archivedAt = null, Company? owner = null)
     {
         var workspace = owner ?? _company;
-        _tenant.SetTenant(workspace.Id, workspace.Slug, CompanyMemberRole.Owner, Array.Empty<string>());
+        _tenant.SetTenant(workspace.Id, workspace.Slug!, CompanyMemberRole.Owner, Array.Empty<string>());
 
         var accountClass = _db.AccountClasses.FirstOrDefault() ?? _db.AccountClasses.Add(new AccountClass { Name = "Assets" }).Entity;
         var account = new Account
@@ -96,7 +96,7 @@ public class InvoicePaymentBankSettingsTests : IDisposable
         _db.Banks.Add(bank);
         _db.SaveChanges();
 
-        _tenant.SetTenant(_company.Id, _company.Slug, CompanyMemberRole.Owner, Array.Empty<string>());
+        _tenant.SetTenant(_company.Id, _company.Slug!, CompanyMemberRole.Owner, Array.Empty<string>());
         return bank;
     }
 

@@ -30,12 +30,12 @@ namespace Core.Domain.Financials
         public int CompanyId { get; set; }
         [Required]
         [StringLength(50)]
-        public string AccountCode { get; set; }
+        public string AccountCode { get; set; } = null!;
         [Required]
         [StringLength(200)]
-        public string AccountName { get; set; }
+        public string AccountName { get; set; } = null!;
         [StringLength(200)]
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public bool IsCash { get; set; }
         public bool IsContraAccount { get; set; }
         /// <summary>Include this account in the year-end suspense and clearing review.</summary>
@@ -44,15 +44,15 @@ namespace Core.Domain.Financials
         [Column(TypeName = "timestamp")]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
         [MaxLength(8)]
-        public byte[] RowVersion { get; set; }
-        public virtual Account ParentAccount { get; set; }
-        public virtual AccountClass AccountClass { get; set; }
-        public virtual Company Company { get; set; }
+        public byte[]? RowVersion { get; set; }
+        public virtual Account? ParentAccount { get; set; }
+        public virtual AccountClass AccountClass { get; set; } = null!;
+        public virtual Company Company { get; set; } = null!;
 
-        public virtual ICollection<Account> ChildAccounts { get; set; }
+        public virtual ICollection<Account> ChildAccounts { get; set; } = null!;
         // [NotMapped]
-        public virtual ICollection<MainContraAccount> ContraAccounts { get; set; }
-        public virtual ICollection<GeneralLedgerLine> GeneralLedgerLines { get; set; }
+        public virtual ICollection<MainContraAccount> ContraAccounts { get; set; } = null!;
+        public virtual ICollection<GeneralLedgerLine> GeneralLedgerLines { get; set; } = null!;
 
 
         [NotMapped]
@@ -62,7 +62,7 @@ namespace Core.Domain.Financials
         [NotMapped]
         public decimal CreditBalance { get { return GetDebitCreditBalance(DrOrCrSide.Cr); } }
         [NotMapped]
-        public string BalanceSide { get; set; }
+        public string? BalanceSide { get; set; }
 
         private decimal GetDebitCreditBalance(DrOrCrSide side)
         {

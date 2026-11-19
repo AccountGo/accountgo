@@ -52,7 +52,7 @@ namespace Services.Donations
             );
         }
 
-        public DonationInvoiceHeader GetDonationInvoiceById(int id)
+        public DonationInvoiceHeader? GetDonationInvoiceById(int id)
         {
             return _donationInvoiceRepo.GetAllIncluding(
                 d => d.Donor,
@@ -175,7 +175,7 @@ namespace Services.Donations
             if (_donorRepo.GetById(donation.DonorId) == null)
                 return Result<Dto.Donations.DonationInvoice>.Failure(new Error("INVALID_DONOR", "The selected donor does not exist. Select a donor from the Donors module."));
 
-            var account = _accountRepo.GetById(donation.GlAccountId.Value);
+            var account = _accountRepo.GetById(donation.GlAccountId!.Value);
             int accountCode;
             if (account == null || !int.TryParse(account.AccountCode, out accountCode) || accountCode < 41000 || accountCode > 41999)
                 return Result<Dto.Donations.DonationInvoice>.Failure(new Error("INVALID_GL_ACCOUNT", "Select a GL account with a code between 41000 and 41999."));

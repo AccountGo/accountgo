@@ -98,7 +98,7 @@ namespace Api.Mcp.Tools
                 var targetClass = accountClass.Trim();
                 query = query.Where(a =>
                     a.AccountClass != null &&
-                    a.AccountClass.Name.Contains(targetClass, StringComparison.OrdinalIgnoreCase));
+                    a.AccountClass!.Name != null && a.AccountClass.Name.Contains(targetClass, StringComparison.OrdinalIgnoreCase));
             }
 
             if (!includeZeroBalances)
@@ -201,8 +201,8 @@ namespace Api.Mcp.Tools
                 Items = rawItems.Select(i => new TrialBalanceItemMcp
                 {
                     AccountId = i.AccountId,
-                    AccountCode = i.AccountCode,
-                    AccountName = i.AccountName,
+                    AccountCode = i.AccountCode!,
+                    AccountName = i.AccountName!,
                     Debit = i.Debit,
                     Credit = i.Credit
                 }).ToList()
@@ -266,8 +266,8 @@ namespace Api.Mcp.Tools
                 {
                     AccountId = i.AccountId,
                     AccountClassId = i.AccountClassId,
-                    AccountCode = i.AccountCode,
-                    AccountName = i.AccountName,
+                    AccountCode = i.AccountCode!,
+                    AccountName = i.AccountName!,
                     Amount = i.Amount
                 }).ToList()
             };
@@ -330,8 +330,8 @@ namespace Api.Mcp.Tools
                 {
                     AccountId = i.AccountId,
                     IsExpense = i.IsExpense,
-                    AccountCode = i.AccountCode,
-                    AccountName = i.AccountName,
+                    AccountCode = i.AccountCode!,
+                    AccountName = i.AccountName!,
                     Amount = i.Amount
                 }).ToList()
             };
@@ -407,25 +407,25 @@ namespace Api.Mcp.Tools
                 OperatingActivities = operatingActivities.Select(a => new CashFlowLineMcp
                 {
                     AccountId = a.AccountId,
-                    AccountCode = a.AccountCode,
-                    AccountName = a.AccountName,
-                    LineType = a.LineType,
+                    AccountCode = a.AccountCode!,
+                    AccountName = a.AccountName!,
+                    LineType = a.LineType!,
                     Amount = a.Amount
                 }).ToList(),
                 InvestingActivities = investingActivities.Select(a => new CashFlowLineMcp
                 {
                     AccountId = a.AccountId,
-                    AccountCode = a.AccountCode,
-                    AccountName = a.AccountName,
-                    LineType = a.LineType,
+                    AccountCode = a.AccountCode!,
+                    AccountName = a.AccountName!,
+                    LineType = a.LineType!,
                     Amount = a.Amount
                 }).ToList(),
                 FinancingActivities = financingActivities.Select(a => new CashFlowLineMcp
                 {
                     AccountId = a.AccountId,
-                    AccountCode = a.AccountCode,
-                    AccountName = a.AccountName,
-                    LineType = a.LineType,
+                    AccountCode = a.AccountCode!,
+                    AccountName = a.AccountName!,
+                    LineType = a.LineType!,
                     Amount = a.Amount
                 }).ToList()
             };

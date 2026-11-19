@@ -21,7 +21,7 @@ namespace Api.Data
                 .Include(po => po.PurchaseOrderLines)
                 .ThenInclude(line => line.PurchaseInvoiceLines)
                 .Include(po => po.Vendor)
-                .Include(po => po.Vendor.Party);
+                .Include(po => po.Vendor!.Party);
 
             return purchaseOrders;
         }

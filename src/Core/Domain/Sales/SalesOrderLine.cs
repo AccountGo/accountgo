@@ -23,9 +23,9 @@ namespace Core.Domain.Sales
         public decimal Quantity { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
-        public virtual SalesOrderHeader SalesOrderHeader { get; set; }
-        public virtual Item Item { get; set; }
-        public virtual Measurement Measurement { get; set; }
+        public virtual SalesOrderHeader SalesOrderHeader { get; set; } = null!;
+        public virtual Item Item { get; set; } = null!;
+        public virtual Measurement Measurement { get; set; } = null!;
         public virtual System.Collections.Generic.ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; }
 
         public SalesOrderLine()

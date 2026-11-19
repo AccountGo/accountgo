@@ -54,7 +54,7 @@ namespace Services.Financial
 
         public static int CompareDays(DateTime dt1, DateTime dt2)
         {
-            return DateTime.Compare(DiscardTime(dt1).Value, DiscardTime(dt2).Value);
+            return DateTime.Compare(dt1.Date, dt2.Date);
         }
 
         public static DateTime? DiscardTime(DateTime? d)

@@ -47,7 +47,7 @@ public class EntitlementProblemFactoryTests
         var problem = EntitlementProblemFactory.FromDecision(decision, tenant.Object);
         var json = SerializeLikeAspNetProblemDetails(problem);
 
-        Assert.Equal(1, Regex.Matches(json, "\"status\"").Count);
+        Assert.Single(Regex.Matches(json, "\"status\""));
         Assert.Contains("\"status\":403", Regex.Replace(json, @"\s+", ""));
         Assert.True(problem.Extensions.ContainsKey("subscriptionStatus"));
         Assert.False(problem.Extensions.ContainsKey("status"));
@@ -80,7 +80,7 @@ public class EntitlementProblemFactoryTests
         };
         var problem = EntitlementProblemFactory.FromException(ex, tenant: null);
         var json = SerializeLikeAspNetProblemDetails(problem);
-        Assert.Equal(1, Regex.Matches(json, "\"status\"").Count);
+        Assert.Single(Regex.Matches(json, "\"status\""));
         Assert.False(problem.Extensions.ContainsKey("status"));
         Assert.Equal("active", problem.Extensions["subscriptionStatus"]);
     }

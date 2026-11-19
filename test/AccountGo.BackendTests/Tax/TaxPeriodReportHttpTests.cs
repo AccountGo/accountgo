@@ -413,7 +413,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
             CustomerId = _customerId,
             InvoiceDate = new DateTime(2026, 10, 10),
             Status = "Draft",
-            SalesInvoiceLines =
+            SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>
             {
                 new Dto.Sales.SalesInvoiceLine
                 {

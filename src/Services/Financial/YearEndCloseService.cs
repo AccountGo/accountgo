@@ -801,7 +801,7 @@ namespace Services.Financial
             {
                 lines.Add(new YearEndClosingLine
                 {
-                    AccountId = permanent.Id,
+                    AccountId = permanent!.Id,
                     AccountCode = permanent.AccountCode,
                     AccountName = permanent.AccountName,
                     DrCr = "Cr",
@@ -812,7 +812,7 @@ namespace Services.Financial
             {
                 lines.Add(new YearEndClosingLine
                 {
-                    AccountId = permanent.Id,
+                    AccountId = permanent!.Id,
                     AccountCode = permanent.AccountCode,
                     AccountName = permanent.AccountName,
                     DrCr = "Dr",

@@ -25,9 +25,9 @@ namespace Core.Domain.Sales
         public decimal Price { get; set; }
         public decimal Discount { get; set; }
 
-        public virtual SalesDeliveryHeader SalesDeliveryHeader { get; set; }
-        public virtual SalesInvoiceLine SalesInvoiceLine { get; set; }
-        public virtual Item Item { get; set; }
-        public virtual Measurement Measurement { get; set; }
+        public virtual SalesDeliveryHeader SalesDeliveryHeader { get; set; } = null!;
+        public virtual SalesInvoiceLine? SalesInvoiceLine { get; set; }
+        public virtual Item? Item { get; set; }
+        public virtual Measurement? Measurement { get; set; }
     }
 }

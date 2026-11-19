@@ -77,14 +77,14 @@ namespace Core.Domain.Sales
         [ConcurrencyCheck]
         public long Version { get; set; }
 
-        public virtual Customer? Customer { get; set; }
+        public virtual Customer Customer { get; set; } = null!;
         public virtual SalesInvoiceHeader? SourceSalesInvoiceHeader { get; set; }
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
         public virtual Account? CustomerCreditLiabilityAccount { get; set; }
         public virtual Account? SalesReturnsAccount { get; set; }
         public virtual Account? ReceivableAccount { get; set; }
-        public virtual ICollection<CustomerCreditNoteLine> Lines { get; set; }
+        public virtual ICollection<CustomerCreditNoteLine> Lines { get; set; } = null!;
 
         [NotMapped]
         public decimal AvailableAmount => Math.Max(0m, TotalAmount - AppliedAmount - RefundedAmount);
@@ -114,7 +114,7 @@ namespace Core.Domain.Sales
 
         public virtual CustomerCreditNote? CustomerCreditNote { get; set; }
         public virtual SalesInvoiceLine? SourceSalesInvoiceLine { get; set; }
-        public virtual Item? Item { get; set; }
+        public virtual Item Item { get; set; } = null!;
         public virtual Tax? Tax { get; set; }
         public virtual Account? TaxAccount { get; set; }
     }
@@ -154,12 +154,12 @@ namespace Core.Domain.Sales
         [ConcurrencyCheck]
         public long Version { get; set; }
 
-        public virtual Customer? Customer { get; set; }
-        public virtual SalesInvoiceHeader? SalesInvoiceHeader { get; set; }
+        public virtual Customer Customer { get; set; } = null!;
+        public virtual SalesInvoiceHeader SalesInvoiceHeader { get; set; } = null!;
         public virtual CustomerCreditNote? CustomerCreditNote { get; set; }
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
-        public virtual ICollection<CustomerReturnReceiptLine> Lines { get; set; }
+        public virtual ICollection<CustomerReturnReceiptLine> Lines { get; set; } = null!;
     }
 
     [Table("CustomerReturnReceiptLine")]
@@ -178,9 +178,9 @@ namespace Core.Domain.Sales
         public int? InventoryAccountId { get; set; }
         public int? CogsAccountId { get; set; }
 
-        public virtual CustomerReturnReceipt? CustomerReturnReceipt { get; set; }
-        public virtual SalesInvoiceLine? SalesInvoiceLine { get; set; }
-        public virtual Item? Item { get; set; }
+        public virtual CustomerReturnReceipt CustomerReturnReceipt { get; set; } = null!;
+        public virtual SalesInvoiceLine SalesInvoiceLine { get; set; } = null!;
+        public virtual Item Item { get; set; } = null!;
         public virtual InventoryControlJournal? InventoryControlJournal { get; set; }
         public virtual Account? InventoryAccount { get; set; }
         public virtual Account? CogsAccount { get; set; }
@@ -240,11 +240,11 @@ namespace Core.Domain.Sales
         [ConcurrencyCheck]
         public long Version { get; set; }
 
-        public virtual Customer? Customer { get; set; }
-        public virtual SalesInvoiceHeader? SalesInvoiceHeader { get; set; }
+        public virtual Customer Customer { get; set; } = null!;
+        public virtual SalesInvoiceHeader SalesInvoiceHeader { get; set; } = null!;
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
-        public virtual ICollection<WriteOffRecovery> Recoveries { get; set; }
+        public virtual ICollection<WriteOffRecovery> Recoveries { get; set; } = null!;
     }
 
     [Table("WriteOffRecovery")]
@@ -280,8 +280,8 @@ namespace Core.Domain.Sales
         [ConcurrencyCheck]
         public long Version { get; set; }
 
-        public virtual ReceivableWriteOff? ReceivableWriteOff { get; set; }
-        public virtual Bank? Bank { get; set; }
+        public virtual ReceivableWriteOff ReceivableWriteOff { get; set; } = null!;
+        public virtual Bank Bank { get; set; } = null!;
         public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
         public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
     }

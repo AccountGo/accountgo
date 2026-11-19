@@ -305,12 +305,12 @@ namespace Api.Data
             }
         }
 
-        public IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties)
+        public IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object?>>[] includeProperties)
         {
             IQueryable<T> queryable = Entities;
-            foreach (System.Linq.Expressions.Expression<Func<T, object>> includeProperty in includeProperties)
+            foreach (System.Linq.Expressions.Expression<Func<T, object?>> includeProperty in includeProperties)
             {
-                queryable = queryable.Include<T, object>(includeProperty);
+                queryable = queryable.Include(includeProperty);
             }
 
             return queryable;

@@ -10,14 +10,14 @@ namespace Core.Domain.Auditing
     {
         //[NotMapped]
         //public int AuditableEntityId { get; set; }
-        public string EntityName { get; set; }
+        public string? EntityName { get; set; }
         public bool EnableAudit { get; set; }
         //public override int Id
         //{
         //    get { return AuditableEntityId; }
         //    set { AuditableEntityId = value; }
         //}
-        public virtual ICollection<AuditableAttribute> AuditableAttributes { get; set; }
+        public virtual ICollection<AuditableAttribute> AuditableAttributes { get; set; } = null!;
 
         public AuditableEntity()
         {

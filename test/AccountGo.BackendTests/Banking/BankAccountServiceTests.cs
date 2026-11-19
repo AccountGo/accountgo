@@ -938,7 +938,7 @@ public class BankAccountServiceTests
             return System.Threading.Tasks.Task.CompletedTask;
         }
 
-        public IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties) =>
+        public IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object?>>[] includeProperties) =>
             Table;
     }
 }

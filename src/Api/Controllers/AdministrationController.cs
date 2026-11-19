@@ -77,13 +77,13 @@ namespace Api.Controllers
                     .Where(srp => srp.SecurityRoleId == roleId && srp.SecurityPermission != null)
                     .Select(srp => new { srp.SecurityPermissionId, srp.SecurityPermission.Name })
                     .ToList()
-                    .ToDictionary(p => p.SecurityPermissionId, p => p.Name);
+                    .ToDictionary(p => p.SecurityPermissionId, p => p.Name!);
             }
             var role = _securityService.GetSecurityRole(roleId);
             return role?.Permissions?
                 .Where(p => p?.SecurityPermission != null)
                 .GroupBy(p => p.SecurityPermissionId)
-                .ToDictionary(g => g.Key, g => g.First().SecurityPermission.Name)
+                .ToDictionary(g => g.Key, g => g.First().SecurityPermission!.Name!)
                 ?? new Dictionary<int, string>();
         }
 
@@ -328,8 +328,8 @@ namespace Api.Controllers
 
             var permissionNames = affectedCompanyIds.Count > 0 && reviewerEligibility != null && db != null
                 ? db.Set<Core.Domain.Security.SecurityPermission>()
-                    .Where(p => permissionIds.Contains(p.Id))
-                    .Select(p => p.Name)
+                    .Where(p => permissionIds.Contains(p.Id) && p.Name != null)
+                    .Select(p => p.Name!)
                     .ToList()
                 : null;
 
@@ -527,6 +527,8 @@ namespace Api.Controllers
         public IActionResult GetUser(string username)
         {
             var user = _securityService.GetUser(username);
+            if (user == null)
+                return NotFound();
             var userDto = new Dto.Security.User
             {
                 Id = user.Id,
