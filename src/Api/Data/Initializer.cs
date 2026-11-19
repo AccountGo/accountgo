@@ -99,7 +99,7 @@ namespace Api.Data
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Setup() failed during database initialization; Clear() will roll back changes.");
+                _logger.LogError(ex, "Setup() failed during database initialization.");
                 return false;
             }
         }
@@ -147,12 +147,12 @@ namespace Api.Data
 
         private Core.Domain.Company SetupCompany()
         {
-            // _logger.LogDebug("Checking if there is already a default company.");
+            // Console.WriteLine("Checking if there is already a default company.");
             // var defaultCompany = _adminService.GetDefaultCompany();
             // Console.WriteLine(defaultCompany == null ? "There is none." : "There is one.");
             // if (defaultCompany == null)
             // {
-            //     _logger.LogDebug("Default company found. Returning it.");
+            //     Console.WriteLine("Default company found. Returning it.");
             //     defaultCompany = new Core.Domain.Company
             //     {
             //         Id = 1,
@@ -955,7 +955,7 @@ namespace Api.Data
                 .FirstOrDefault(i => i.ItemCategory != null && i.ItemCategory.ItemType == Core.Domain.ItemTypes.Purchased);
             var paymentTermId = _adminService.GetPaymentTerms().FirstOrDefault()?.Id;
 
-            if (bank?.AccountId == null || purchasedItem == null)
+            if (bank?.AccountId == null || purchasedItem == null || !purchasedItem.GLAccountsValidated())
             {
                 return;
             }
