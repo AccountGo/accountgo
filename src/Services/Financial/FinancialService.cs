@@ -1859,7 +1859,8 @@ namespace Services.Financial
             return taxes;
         }
 
-        public GeneralLedgerSetting GetGeneralLedgerSetting()
+        // Public IFinancialService surface; base helper is protected and wired with a null repo here.
+        public new GeneralLedgerSetting GetGeneralLedgerSetting()
         {
             return _glSettingRepo.Table.FirstOrDefault();
         }
