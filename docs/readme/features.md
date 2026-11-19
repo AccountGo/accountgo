@@ -1,0 +1,26 @@
+# Core Capabilities & Features
+
+- **Multi-Tenancy & Workspace Switching**: Complete tenant isolation, custom branding, localized currencies (PHP, USD, CAD, EUR, etc.), and independent fiscal years.
+- **Enterprise Security & Authentication**:
+  - ASP.NET Core Identity with custom SQLite / SQL Server / PostgreSQL storage.
+  - Passwordless 6-digit Email OTP / Magic Code authentication.
+  - JWT access tokens + secure, HTTP-only refresh tokens.
+  - Sliding-window and fixed-window rate limiters on sensitive auth endpoints.
+  - Concurrent session tracking with remote session revocation.
+- **Financial Accounting**:
+  - Hierarchical Chart of Accounts (Assets, Liabilities, Equity, Revenue, Expenses).
+  - Double-entry Journal Entries with balanced debit/credit validation.
+  - Bank Accounts and Cash Management.
+  - Fiscal year closing and period controls.
+- **Sales & Accounts Receivable (AR)**:
+  - Customers, Sales Quotations, Sales Invoices, and Payment Receipts.
+  - Customer Aging reports.
+- **Purchasing & Accounts Payable (AP)**:
+  - Vendors, Purchase Orders, Bills, and Vendor Aging.
+- **Inventory & Warehousing**:
+  - Item Master, Categories, Units of Measure, and Inventory Adjustments.
+- **Donations & Non-Profit Features**:
+  - Donor tracking, Payment Methods (Cash, Cheque, Credit Card, E-Transfer).
+  - Official Tax Receipt generation and dedicated GL account attribution.
+- **Audit Trails**:
+  - Comprehensive entity auditing and security event logging.
