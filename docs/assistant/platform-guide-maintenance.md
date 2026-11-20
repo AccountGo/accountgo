@@ -41,6 +41,10 @@ Source paths below are relative to the repository root. Re-read the implementati
 
 For fully personalized answers, the runtime must expose an authenticated current-state read or a server-derived policy/permission snapshot with trustworthy ownership. The local skill already supports conditional help and UI-based verification when that is unavailable. Merely adding client context variables would not establish trustworthy policy state. Agent Builder promotion/history described in architecture docs is not proof of the currently deployed version.
 
+## Anter size budget
+
+The upload puts `SKILL.md` and every reference in one agent spec. `SKILL.md` becomes skill `accountgo-platform-guide`, and each `references/<name>.md` becomes companion skill `accountgo-guide-<name>`. Links between files are rewritten to the companion skill name. Anter rejects a skill over 16,384 characters and a whole spec over 131,072 bytes. On 2026-11-20 the spec measured 128,680 bytes, so the guide has about 2 KB of room. Before adding text, remove a repeated statement elsewhere. Keep each fact in one reference and point to it from the others. Year-end close lives in `financials-and-gl.md`.
+
 ## Behavioral review cases
 
 Use these when reviewing changes; judge the actual decision, not exact phrasing:
