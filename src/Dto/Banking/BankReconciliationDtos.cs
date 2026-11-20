@@ -18,7 +18,9 @@ namespace Dto.Banking
 
     public class UpdateBankReconciliationItemsRequest
     {
+        [PublicId("gll")]
         public IReadOnlyList<int> Add { get; set; } = Array.Empty<int>();
+        [PublicId("gll")]
         public IReadOnlyList<int> Remove { get; set; } = Array.Empty<int>();
         public long Version { get; set; }
     }

@@ -289,7 +289,8 @@ export const InvoiceDetail: React.FC = () => {
         paymentMethod: paymentMethod,
         referenceNo: paymentReference.trim() || undefined,
         notes: paymentNotes.trim() || undefined,
-        bankAccountId: depositBankId === '' ? undefined : depositBankId,
+        // Cash accounts without a bank record have no bank id to send; the server then uses the default deposit account.
+        bankAccountId: depositBankId === '' || depositBankId.startsWith('cash:') ? undefined : depositBankId,
       };
 
       const res = await authFetch(withConfirmReconciledPeriod('/api/Sales/RecordPayment', confirmReconciledPeriod), {
@@ -1200,7 +1201,7 @@ export const InvoiceDetail: React.FC = () => {
                     className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                   >
                     {depositBanks.map((b) => (
-                      <option key={b.id ?? b.name} value={b.id ?? ''}>
+                      <option key={b.id ?? b.name} value={b.id ?? `cash:${b.accountId ?? b.name}`}>
                         {b.name}
                         {b.accountNumberMasked ? ` · ${b.accountNumberMasked}` : ''}
                         {b.isDefaultForReceipts ? ' (default)' : ''}

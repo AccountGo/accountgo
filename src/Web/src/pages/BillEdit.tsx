@@ -261,7 +261,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: isEdit ? billId : 0,
+          id: isEdit ? billId : '',
           vendorId,
           vendorInvoiceNo: vendorInvoiceNo.trim() || null,
           referenceNo: referenceNo.trim() || null,

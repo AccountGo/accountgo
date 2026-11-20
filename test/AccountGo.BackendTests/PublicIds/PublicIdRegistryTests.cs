@@ -160,4 +160,44 @@ public sealed class PublicIdRegistryTests
         Assert.True(new PublicIdRegistry().TryGetPrefixForTypeName(kind, out var actual));
         Assert.Equal(prefix, actual);
     }
+
+    /// <summary>
+    /// A DTO id that carries no <c>[PublicId]</c> attribute travels as a bare integer on the wire, and the test helpers
+    /// serialize with the same attributes as the API, so the gap is invisible to round-trip tests. Every id-like integer
+    /// on a wire type must be annotated or be a known non-entity code.
+    /// </summary>
+    [Fact]
+    public void Dtos_EveryIdLikeIntegerCarriesAPublicIdAttribute()
+    {
+        var nonEntityCodes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "SalesOrder.StatusId", "SalesInvoice.StatusId", "SalesQuotation.StatusId", "PurchaseOrder.StatusId",
+            "MasterGeneralLedger.GroupId", "Account.AccountClassId", "Status.Id",
+            // Internal report row, not returned by any controller; and a classification code on a COA import preview.
+            "MasterGeneralLedger.CurrencyId", "CoaImportRowPreviewDto.AccountClassId"
+        };
+        var assembly = typeof(Dto.Common.PublicIdAttribute).Assembly;
+        var missing = new List<string>();
+        foreach (var type in assembly.GetTypes().Where(t => t.IsClass && t.IsPublic && !t.IsAbstract))
+        {
+            foreach (var property in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly))
+            {
+                var pt = property.PropertyType;
+                var isInt = pt == typeof(int) || pt == typeof(int?);
+                var isIntList = pt == typeof(int[])
+                    || (pt.IsGenericType && pt.GetGenericArguments().Length == 1
+                        && (pt.GetGenericArguments()[0] == typeof(int) || pt.GetGenericArguments()[0] == typeof(int?))
+                        && typeof(System.Collections.IEnumerable).IsAssignableFrom(pt));
+                var idLike = property.Name == "Id" || property.Name.EndsWith("Id", StringComparison.Ordinal) || property.Name.EndsWith("Ids", StringComparison.Ordinal);
+                if (!(isInt && idLike || isIntList)) continue;
+                if (property.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), true).Length > 0
+                    || property.GetCustomAttributes(typeof(Newtonsoft.Json.JsonIgnoreAttribute), true).Length > 0) continue;
+                var annotated = property.GetCustomAttributes(typeof(Dto.Common.PublicIdAttribute), true).Length > 0
+                    || property.GetCustomAttributes(typeof(Dto.Common.PublicIdByTypeAttribute), true).Length > 0;
+                if (!annotated && !nonEntityCodes.Contains($"{type.Name}.{property.Name}"))
+                    missing.Add($"{type.FullName}.{property.Name}");
+            }
+        }
+        Assert.True(missing.Count == 0, "Wire DTO ids without a [PublicId] attribute:\n" + string.Join("\n", missing));
+    }
 }
