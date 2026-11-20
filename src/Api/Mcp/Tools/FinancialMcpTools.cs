@@ -520,6 +520,8 @@ namespace Api.Mcp.Tools
                 minAmount, maxAmount);
 
             var items = page?.Items ?? new List<Dto.Financial.GeneralLedgerTransaction>();
+            // Source links carry integer keys from the service; rewrite them to public ids like the HTTP endpoint does.
+            Api.Controllers.FinancialsController.RewriteGeneralLedgerSourcePaths(page, _ids);
             if (_ids != null && _idRegistry != null)
             {
                 // Same graph walk as the HTTP path: gl, gll, acct and the polymorphic source document ids, one query per prefix.

@@ -178,7 +178,7 @@ namespace Api.Controllers
                 result.Add(new
                 {
                     id = movement.PublicId,
-                    itemId = itemPublicIds.TryGetValue(movement.ItemId, out var itemPubId) ? itemPubId : string.Empty,
+                    itemId = itemPublicIds.TryGetValue(movement.ItemId, out var itemPubId) ? itemPubId : null,
                     itemName = itemNames.TryGetValue(movement.ItemId, out var itemName) ? itemName : string.Empty,
                     date = movement.Date,
                     type,

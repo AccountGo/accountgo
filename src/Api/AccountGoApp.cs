@@ -259,7 +259,8 @@ public static class AccountGoApp
             options.ModelBinderProviders.Insert(0, new Api.PublicIds.PublicIdModelBinderProvider());
             options.Filters.Add<Api.PublicIds.PublicIdErrorFilter>(order: -3000);
             options.Filters.Add<Api.PublicIds.PublicIdPrefetchFilter>();
-            options.Filters.Add<Api.Filters.TenantEndpointFilter>();
+            // Resolves the workspace first (400 when the header is missing), ahead of the authorization attributes at -4000/-3500.
+            options.Filters.Add<Api.Filters.TenantEndpointFilter>(order: -5000);
             options.Filters.Add<Api.Filters.ReconciledPeriodConfirmationFilter>();
         })
         .AddNewtonsoftJson(options =>

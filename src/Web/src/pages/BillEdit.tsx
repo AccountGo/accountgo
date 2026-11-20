@@ -13,6 +13,7 @@ import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { addBusinessDays, businessDaysBetween, isValidDate, localToday as today } from '../lib/businessDays';
 import { archivedTaxMessage, firstArchivedTax, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
+import { shortRef } from '../lib/shortRef';
 
 interface LineDraft {
   /** Stable React key; the id is empty until a line is saved. */
@@ -593,7 +594,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                                 <option value="">Default (50200 · Purchase A/C)</option>
                                 {line.accountId && !accounts.some((a) => a.id === line.accountId) && (
                                   <option value={line.accountId}>
-                                    Account #{line.accountId}
+                                    Account {shortRef(line.accountId)}
                                   </option>
                                 )}
                                 <optgroup label="Expenses">

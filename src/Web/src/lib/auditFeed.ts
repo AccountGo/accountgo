@@ -1,4 +1,5 @@
 import { auditEntityName, isAuditLineEntity, type AuditChangeRow } from './auditLabels';
+import { shortRef } from './shortRef';
 
 /** One row of GET /api/organizations/current/activity. */
 export interface ActivityItem extends AuditChangeRow {
@@ -193,10 +194,10 @@ export function groupHistoryBySave(items: readonly ActivityItem[]): HistoryGroup
 export function activityRecordLabel(item: ActivityItem, personal: boolean): string {
   const line = item.entityId ? `Line ${item.entityId}` : 'Line';
   if (item.parentEntityType && item.parentEntityId) {
-    return `${auditEntityName(item.parentEntityType, personal)} #${item.parentEntityId} · ${line}`;
+    return `${auditEntityName(item.parentEntityType, personal)} ${shortRef(item.parentEntityId)} · ${line}`;
   }
   return item.entityId
-    ? `${auditEntityName(item.entityType, personal)} #${item.entityId}`
+    ? `${auditEntityName(item.entityType, personal)} ${shortRef(item.entityId)}`
     : auditEntityName(item.entityType, personal);
 }
 

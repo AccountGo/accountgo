@@ -50,6 +50,7 @@ import type {
   BankStatementResolveMapping,
   StatementLineStatus,
 } from '../types/banking';
+import { shortRef } from '../lib/shortRef';
 
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
 const inputClass =
@@ -1097,7 +1098,7 @@ const BankStatementImportPage: React.FC = () => {
                           <button type="button" disabled={busy} onClick={() => { setSelectedIds([]); setExpenseMode('draft'); setExpenseFor(line); }}
                             className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)]">Save bill draft</button>
                         )}
-                        {line.draftBillId && <Link className="text-xs underline" to={`/org/${currentOrg.slug}/purchases/${line.draftBillId}`}>Review linked bill #{line.draftBillId}</Link>}
+                        {line.draftBillId && <Link className="text-xs underline" to={`/org/${currentOrg.slug}/purchases/${line.draftBillId}`}>Review linked bill {shortRef(line.draftBillId)}</Link>}
                         {!early && line.amount > 0 && (canApplyOpenInvoice || canRecordOtherIncome) && (
                           <>
                             {canApplyOpenInvoice && (

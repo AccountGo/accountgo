@@ -821,9 +821,12 @@ namespace Api.Controllers
             }
         }
 
-        private void RewriteGeneralLedgerSourcePaths(Dto.Financial.GeneralLedgerTransactionPage page)
+        private void RewriteGeneralLedgerSourcePaths(Dto.Financial.GeneralLedgerTransactionPage page) =>
+            RewriteGeneralLedgerSourcePaths(page, HttpContext?.RequestServices?.GetService<Api.PublicIds.IPublicIdResolver>());
+
+        /// <summary>Rewrites each ledger row's source link from integer keys to public ids; shared with the assistant tool.</summary>
+        internal static void RewriteGeneralLedgerSourcePaths(Dto.Financial.GeneralLedgerTransactionPage? page, Api.PublicIds.IPublicIdResolver? resolver)
         {
-            var resolver = HttpContext?.RequestServices?.GetService<Api.PublicIds.IPublicIdResolver>();
             if (resolver == null || page?.Items == null || page.Items.Count == 0)
                 return;
 

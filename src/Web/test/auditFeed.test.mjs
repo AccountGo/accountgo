@@ -110,12 +110,12 @@ test('line detection uses the parent columns or the line record types', () => {
 });
 
 test('activity record labels name the document for a line', () => {
-  assert.equal(activityRecordLabel(row({}), false), 'Invoice #inv_10');
+  assert.equal(activityRecordLabel(row({}), false), 'Invoice inv_10');
   assert.equal(
     activityRecordLabel(row({ entityType: 'JournalEntryLine', entityId: 'jel_3', parentEntityType: 'JournalEntryHeader', parentEntityId: 'je_8' }), true),
-    'Transaction #je_8 · Line jel_3',
+    'Transaction je_8 · Line jel_3',
   );
-  assert.equal(activityRecordLabel(row({ entityType: 'SalesInvoiceLine', entityId: 'il_3' }), false), 'Invoice line #il_3');
+  assert.equal(activityRecordLabel(row({ entityType: 'SalesInvoiceLine', entityId: 'il_3' }), false), 'Invoice line il_3');
   // A record type without a public id still gets a label, with no id.
   assert.equal(activityRecordLabel(row({ entityType: 'CompanySetting', entityId: null }), false), 'Workspace settings');
 });

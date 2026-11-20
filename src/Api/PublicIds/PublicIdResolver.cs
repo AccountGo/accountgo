@@ -78,9 +78,8 @@ namespace Api.PublicIds
 
             var lookup = SyncToPublicDelegates.GetOrAdd(reg.EntityType, BuildSyncToPublicDelegate);
             var publicId = lookup(this, id);
+            // Outbound lookups ignore the workspace filter, so they must not seed the scoped inbound cache (_publicToInt).
             _intToPublic[(prefix, id)] = publicId;
-            if (!string.IsNullOrEmpty(publicId))
-                _publicToInt[(prefix, publicId)] = id;
             return publicId;
         }
 
@@ -90,7 +89,14 @@ namespace Api.PublicIds
                 return null;
             var publicId = ToPublic(prefix, id);
             if (string.IsNullOrEmpty(publicId))
-                throw new InvalidOperationException($"Public ID lookup failed: no '{prefix}' row found for integer ID {id}.");
+            {
+                // Loud in development and tests. In production a row can briefly lack an id (an older instance during a
+                // rolling deploy), and one such row must not fail a whole response; it is logged for the repair command.
+                if (_environment.IsDevelopment() || _environment.IsEnvironment("Testing"))
+                    throw new InvalidOperationException($"Public ID lookup failed: no '{prefix}' row found for integer ID {id}.");
+                _logger.LogError("No public id for '{Prefix}' row {Id}; emitting null. Run --backfill-public-ids.", prefix, id);
+                return null;
+            }
             return publicId;
         }
 
@@ -128,8 +134,6 @@ namespace Api.PublicIds
                     {
                         found.TryGetValue(id, out var pubId);
                         _intToPublic[(prefix, id)] = pubId;
-                        if (!string.IsNullOrEmpty(pubId))
-                            _publicToInt[(prefix, pubId)] = id;
                     }
                 }
             }

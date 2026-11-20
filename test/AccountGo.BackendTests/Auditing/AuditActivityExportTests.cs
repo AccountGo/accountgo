@@ -90,6 +90,32 @@ namespace AccountGo.BackendTests.Auditing
         }
 
         [Fact]
+        public async Task Activity_ForeignKeyValuesInChanges_AreShownAsPublicIds()
+        {
+            var workspace = await CreateWorkspace("hist-fk");
+            var (inv1Id, inv1Pub, _, _, _, _, _) = await SeedTwoInvoicesWithLines(workspace.CompanyId);
+            int customerId;
+            using (var scope = _host.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<Api.Data.ApiDbContext>();
+                db.SuppressTenantSecurityCheck = true;
+                customerId = db.SalesInvoiceHeaders.IgnoreQueryFilters().Single(i => i.Id == inv1Id).CustomerId;
+            }
+            var customerPub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Sales.Customer>(_host.Factory.Services, customerId);
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceHeader", entityId: inv1Id,
+                changesJson: "{\"CustomerId\":[null," + customerId + "],\"Memo\":[\"a\",\"b\"]}");
+
+            var body = await Host.Json(await _host.Send(HttpMethod.Get, ActivityPath + $"?entityType=SalesInvoiceHeader&entityId={inv1Pub}",
+                token: workspace.Viewer.Token, org: workspace.Slug));
+            var changes = body.GetProperty("items").EnumerateArray()
+                .Select(i => i.GetProperty("changes"))
+                .First(c => c.ValueKind == System.Text.Json.JsonValueKind.Object && c.TryGetProperty("CustomerId", out _));
+            Assert.Equal(customerPub, changes.GetProperty("CustomerId")[1].GetString());
+            Assert.DoesNotContain(customerId.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]", changes.GetRawText());
+            Assert.Equal("b", changes.GetProperty("Memo")[1].GetString());
+        }
+
+        [Fact]
         public async Task Activity_IncludeChildren_PageOfFifty_StaysWithinQueryBudget()
         {
             var workspace = await CreateWorkspace("hist-budget");

@@ -25,6 +25,7 @@ import {
   type TaxPeriodReport,
   type TaxPeriodSideSummary,
 } from '../lib/taxReport';
+import { shortRef } from '../lib/shortRef';
 
 function formatMoney(amount: number, currency: string): string {
   const abs = Math.abs(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -664,7 +665,7 @@ export const Tax: React.FC = () => {
                     {report.warnings.unposted.map((u) => (
                       <li key={`${u.kind}-${u.id}`}>
                         <Link to={docLink(u.kind, u.id)} className="underline">
-                          {u.kind === 'invoice' ? 'Invoice' : 'Bill'} {u.no || `#${u.id}`} ({u.date})
+                          {u.kind === 'invoice' ? 'Invoice' : 'Bill'} {u.no || `${shortRef(u.id)}`} ({u.date})
                         </Link>
                       </li>
                     ))}
@@ -736,7 +737,7 @@ export const Tax: React.FC = () => {
                                   to={docLink(doc.kind, doc.id)}
                                   className="font-medium text-[var(--accent-primary)] hover:underline"
                                 >
-                                  {doc.no || `#${doc.id}`}
+                                  {doc.no || `${shortRef(doc.id)}`}
                                 </Link>
                                 {kindLabel && (
                                   <span

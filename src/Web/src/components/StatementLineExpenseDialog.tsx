@@ -11,6 +11,7 @@ import type {
   StatementExpenseCategories,
   StatementExpenseCategory,
 } from '../types/banking';
+import { shortRef } from '../lib/shortRef';
 
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
 const inputClass =
@@ -419,7 +420,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
               <option value="">Select bill…</option>
               {bills.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.no || `#${b.id}`} · {b.vendorName || 'Vendor'} · due {formatCurrency(b.balanceDue)}
+                  {b.no || `${shortRef(b.id)}`} · {b.vendorName || 'Vendor'} · due {formatCurrency(b.balanceDue)}
                 </option>
               ))}
             </select>

@@ -39,6 +39,7 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { addBusinessDays, businessDaysBetween, isValidDate, localToday } from '../lib/businessDays';
 import { carriedOverPaymentInstructions, paymentInstructionsPayload } from '../lib/paymentBank';
 import { archivedTaxMessage, firstArchivedTax, invoiceLineAmounts, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
+import { shortRef } from '../lib/shortRef';
 
 interface InvoiceEditProps {
   isEdit?: boolean;
@@ -302,7 +303,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       const loadInvoice = async () => {
         try {
           const res = await authFetch(`/api/Sales/SalesInvoice?id=${invoiceId}`);
-          if (!res.ok) throw new Error(`Could not load invoice #${invoiceId}`);
+          if (!res.ok) throw new Error(`Could not load invoice ${shortRef(invoiceId)}`);
           const data: Invoice = await res.json();
 
           if (data.status !== 'Draft') {
@@ -1076,7 +1077,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                                 <option value="">Default (40100 · Sales)</option>
                                 {line.salesAccountId && !salesAccounts.some((a) => a.id === line.salesAccountId) && (
                                   <option value={line.salesAccountId}>
-                                    {line.salesAccountCode ? `${line.salesAccountCode} · ${line.salesAccountName}` : `Account #${line.salesAccountId}`}
+                                    {line.salesAccountCode ? `${line.salesAccountCode} · ${line.salesAccountName}` : `Account ${shortRef(line.salesAccountId)}`}
                                   </option>
                                 )}
                                 {salesAccounts.map((acc) => (

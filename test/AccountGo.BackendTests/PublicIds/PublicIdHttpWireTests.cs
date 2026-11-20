@@ -60,6 +60,13 @@ public sealed class PublicIdHttpWireTests
                 && endpoint.Contains("/activity", StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            // A link built on the server must carry the public id too: /sales/12 or ...?id=5 is an integer key on the wire.
+            if (val is JsonValue linkValue && linkValue.TryGetValue<string>(out var linkText)
+                && System.Text.RegularExpressions.Regex.IsMatch(linkText, @"^/[A-Za-z][A-Za-z0-9_-]*(/[A-Za-z0-9_-]+)*(/\d+(/|\?|$)|[?&]id=\d+)"))
+            {
+                Assert.Fail($"Integer key in a link on the wire at {endpoint} -> {path}.{key} = {linkText}");
+            }
+
             var isIdKey = string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
                 || key.EndsWith("Id", StringComparison.Ordinal);
             var isIdsKey = key.EndsWith("Ids", StringComparison.Ordinal);

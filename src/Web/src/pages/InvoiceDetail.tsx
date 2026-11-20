@@ -46,6 +46,7 @@ import { recoverPendingEmail, sendInvoiceEmailRequest } from '../lib/invoiceEmai
 import type { PendingEmailAttempt } from '../lib/customEmail';
 import { useEmailCapabilities } from '../lib/useEmailCapabilities';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
+import { shortRef } from '../lib/shortRef';
 
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -129,7 +130,7 @@ export const InvoiceDetail: React.FC = () => {
     try {
       const res = await authFetch(`/api/Sales/SalesInvoice?id=${invoiceId}`);
       if (!res.ok) {
-        throw new Error(`Failed to load invoice #${invoiceId} (${res.status})`);
+        throw new Error(`Failed to load invoice ${shortRef(invoiceId)} (${res.status})`);
       }
       const data: Invoice = await res.json();
       setInvoice(data);
@@ -587,7 +588,7 @@ export const InvoiceDetail: React.FC = () => {
           Invoice Not Found
         </h2>
         <p className="text-sm text-[var(--text-secondary)] mb-6">
-          The requested invoice #{invoiceId} could not be retrieved.
+          The requested invoice {shortRef(invoiceId)} could not be retrieved.
         </p>
         <Link
           to={`/org/${orgSlug}/sales`}

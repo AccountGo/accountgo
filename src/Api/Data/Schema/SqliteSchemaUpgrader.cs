@@ -152,6 +152,8 @@ namespace Api.Data.Schema
                 EnsureRecordChanges(connection);
                 EnsureAuditEvidenceIntegrity(connection);
                 EnsureYearEndCloseEvidence(connection);
+                // Last, so every table the steps above create already exists and gets its PublicId column.
+                EnsurePublicIds(connection, logger);
             }
             finally
             {
@@ -2514,7 +2516,6 @@ WHERE NOT EXISTS (
                 cmd.ExecuteNonQuery();
             }
 
-            EnsurePublicIds(connection, logger);
         }
 
         private static void EnsurePublicIds(DbConnection connection, ILogger? logger)
@@ -2549,6 +2550,19 @@ WHERE NOT EXISTS (
                 alter.CommandText = $"ALTER TABLE \"{tableName}\" ADD COLUMN \"PublicId\" TEXT NOT NULL DEFAULT '';";
                 alter.ExecuteNonQuery();
                 added = 1;
+            }
+
+            // Nothing to repair: skip the write (and the AuditLog trigger swap) on the common startup path.
+            using (var probe = connection.CreateCommand())
+            {
+                probe.CommandText = $"SELECT 1 FROM \"{tableName}\" WHERE \"PublicId\" = '' LIMIT 1;";
+                if (probe.ExecuteScalar() is null)
+                {
+                    using var index = connection.CreateCommand();
+                    index.CommandText = $"CREATE UNIQUE INDEX IF NOT EXISTS \"IX_{tableName}_PublicId\" ON \"{tableName}\" (\"PublicId\") WHERE \"PublicId\" <> '';";
+                    index.ExecuteNonQuery();
+                    return added;
+                }
             }
 
             var hadAuditEvidenceTrigger = false;

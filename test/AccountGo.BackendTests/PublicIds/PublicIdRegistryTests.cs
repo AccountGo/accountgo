@@ -200,4 +200,30 @@ public sealed class PublicIdRegistryTests
         }
         Assert.True(missing.Count == 0, "Wire DTO ids without a [PublicId] attribute:\n" + string.Join("\n", missing));
     }
+
+    /// <summary>
+    /// The by-type object converter writes properties itself, so property-level serializer settings are not applied to a
+    /// DTO that has a [PublicIdByType] property. Keep those DTOs plain until the converter honours them.
+    /// </summary>
+    [Fact]
+    public void ByTypeDtos_DoNotUsePropertyLevelSerializerSettings()
+    {
+        var assembly = typeof(Dto.Common.PublicIdAttribute).Assembly;
+        var offenders = new List<string>();
+        foreach (var type in assembly.GetTypes().Where(t => t.IsClass))
+        {
+            var props = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (!props.Any(p => p.GetCustomAttributes(typeof(Dto.Common.PublicIdByTypeAttribute), true).Length > 0)) continue;
+            foreach (var p in props)
+            {
+                var jp = (Newtonsoft.Json.JsonPropertyAttribute?)p.GetCustomAttributes(typeof(Newtonsoft.Json.JsonPropertyAttribute), true).FirstOrDefault();
+                if (p.GetCustomAttributes(typeof(Newtonsoft.Json.JsonConverterAttribute), true).Length > 0
+                    || (jp != null && (jp.NullValueHandling != Newtonsoft.Json.NullValueHandling.Include || jp.DefaultValueHandling != Newtonsoft.Json.DefaultValueHandling.Include || jp.Order != 0)))
+                    offenders.Add($"{type.FullName}.{p.Name}");
+            }
+            foreach (var m in type.GetMethods().Where(m => m.Name.StartsWith("ShouldSerialize", StringComparison.Ordinal)))
+                offenders.Add($"{type.FullName}.{m.Name}");
+        }
+        Assert.True(offenders.Count == 0, "Not applied by the by-type converter:\n" + string.Join("\n", offenders));
+    }
 }

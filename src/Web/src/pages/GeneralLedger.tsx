@@ -6,6 +6,7 @@ import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { currencySymbol } from '../lib/currency';
 import { getDateRange, reportQuery, type FinancialYear } from './Reports';
+import { shortRef } from '../lib/shortRef';
 
 export const LEDGER_DEFAULT_PAGE_SIZE = 100;
 export const LEDGER_MAX_PAGE_SIZE = 500;
@@ -135,16 +136,16 @@ export function LedgerRows({ entries, slug, formatAmount }: {
                 return next;
               })}>
               {open ? <ChevronDown aria-hidden="true" size={16} /> : <ChevronRight aria-hidden="true" size={16} />}
-              {entry.date.slice(0, 10)} / #{entry.id}
+              {entry.date.slice(0, 10)} / {shortRef(entry.id)}
             </button>
           </th>
           <td className="p-4">{entry.documentTypeLabel}</td>
           <td className="p-4">{entry.description || '\u2014'}
-            {entry.reversedGeneralLedgerHeaderId != null && <div className="text-amber-600">Reversal of <Link className="underline" to={`/org/${slug}/financials?${new URLSearchParams({ transactionNo: String(entry.reversedGeneralLedgerHeaderId), from: '', to: '' })}`}>#{entry.reversedGeneralLedgerHeaderId}</Link></div>}
+            {entry.reversedGeneralLedgerHeaderId != null && <div className="text-amber-600">Reversal of <Link className="underline" to={`/org/${slug}/financials?${new URLSearchParams({ transactionNo: String(entry.reversedGeneralLedgerHeaderId), from: '', to: '' })}`}>{shortRef(entry.reversedGeneralLedgerHeaderId)}</Link></div>}
             {!balanced && <p role="alert" className="text-red-500">Out of balance: review this posted transaction.</p>}
           </td>
-          <td className="p-4">{entry.sourcePath ? <Link className="text-[var(--brand-primary)] underline" to={`/org/${slug}${entry.sourcePath}`}>Open source #{entry.sourceDocumentId}</Link>
-            : entry.sourceDocumentId ? `${entry.documentTypeLabel} #${entry.sourceDocumentId}` : '\u2014'}</td>
+          <td className="p-4">{entry.sourcePath ? <Link className="text-[var(--brand-primary)] underline" to={`/org/${slug}${entry.sourcePath}`}>Open source {shortRef(entry.sourceDocumentId)}</Link>
+            : entry.sourceDocumentId ? `${entry.documentTypeLabel} ${shortRef(entry.sourceDocumentId)}` : '\u2014'}</td>
           <td className="p-4 text-right tabular-nums">{formatAmount(entry.totalDebit)}</td>
           <td className="p-4 text-right tabular-nums">{formatAmount(entry.totalCredit)}</td>
         </tr>
@@ -153,7 +154,7 @@ export function LedgerRows({ entries, slug, formatAmount }: {
             <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-xs overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-[var(--text-main)]">Transaction #{entry.id} account lines</span>
+                  <span className="text-xs font-semibold text-[var(--text-main)]">Transaction {shortRef(entry.id)} account lines</span>
                   <span className="text-[11px] text-[var(--text-muted)] font-mono">({entry.lines.length} {entry.lines.length === 1 ? 'line' : 'lines'})</span>
                 </div>
                 <span
@@ -169,7 +170,7 @@ export function LedgerRows({ entries, slug, formatAmount }: {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <caption className="sr-only">Transaction #{entry.id} account lines</caption>
+                  <caption className="sr-only">Transaction {shortRef(entry.id)} account lines</caption>
                   <thead>
                     <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 text-[var(--text-secondary)] font-medium">
                       <th scope="col" className="py-2.5 px-4 w-32 font-medium">Account code</th>
@@ -219,7 +220,7 @@ export default function GeneralLedger() {
   const valid = (!filters.from || /^\d{4}-\d{2}-\d{2}$/.test(filters.from))
     && (!filters.to || /^\d{4}-\d{2}-\d{2}$/.test(filters.to))
     && (!filters.from || !filters.to || filters.from <= filters.to)
-    && (!filters.transactionNo || /^[1-9]\d*$/.test(filters.transactionNo));
+    && (!filters.transactionNo || /^gl_[0-9a-z]{26}$/.test(filters.transactionNo.trim()));
   const query = ledgerQuery(filters);
   const key = JSON.stringify([currentOrg.slug, query, revision]);
   const data = result?.key === key ? result : null;
@@ -315,7 +316,7 @@ export default function GeneralLedger() {
         <option value="">All document types</option>{documentTypes.map(type => <option key={type} value={type}>{type.replace(/([a-z])([A-Z])/g, '$1 $2')}</option>)}
       </select></label>
       <label className="grid gap-1 text-xs">Account code<input className={inputClass} value={filters.accountCode} onChange={event => update({ accountCode: event.target.value })} /></label>
-      <label className="grid gap-1 text-xs">Transaction #<input type="number" min="1" step="1" className={inputClass} value={filters.transactionNo} onChange={event => update({ transactionNo: event.target.value })} /></label>
+      <label className="grid gap-1 text-xs">Transaction ID<input className={inputClass} placeholder="gl_…" value={filters.transactionNo} onChange={event => update({ transactionNo: event.target.value })} /></label>
       <label className="grid gap-1 text-xs">Search<input type="search" className={inputClass} placeholder="Transaction, description, account" value={search} onChange={event => setSearch(event.target.value)} /></label>
     </div>
     {!filters.from && !filters.to && <p role="status" className="text-sm text-[var(--text-secondary)]">All-time view is paged ({filters.take} transactions per page). Narrow the period when possible.</p>}

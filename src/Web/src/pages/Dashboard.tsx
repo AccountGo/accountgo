@@ -31,6 +31,7 @@ import {
 } from '../lib/dashboardProduct';
 import type { DashboardBankBalance } from '../lib/moneyInBank';
 import type { BankCloseStatus } from '../types/banking';
+import { shortRef } from '../lib/shortRef';
 
 interface DashboardSummary {
   surface?: 'Accounting' | 'Invoicing' | string;
@@ -664,7 +665,7 @@ export const Dashboard: React.FC = () => {
                   >
                     <div>
                       <div className="font-semibold text-[var(--text-main)]">{cust.customerName}</div>
-                      <div className="text-[10px] text-[var(--text-muted)]">Customer #{cust.customerId}</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">Customer {shortRef(cust.customerId)}</div>
                     </div>
                     <div className="font-mono font-bold text-[var(--brand-primary)]">
                       {formatMetric(cust.balance, receivablesAvailable)}

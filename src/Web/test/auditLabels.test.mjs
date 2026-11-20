@@ -285,7 +285,7 @@ test('personal books drop business-only record filters', () => {
 });
 
 test('created bank transaction activity identifies its bank', () => {
-  const sentences = describeChange({ entityType: 'BankTransaction', entityId: 42, action: 'Added', changes: { BankId: 7, No: 'BT-42', Amount: 25 } }, false);
-  assert.ok(sentences.includes('Bank account #7'));
+  const sentences = describeChange({ entityType: 'BankTransaction', entityId: 'bt_42', action: 'Added', changes: { BankId: 'ba_7', No: 'BT-42', Amount: 25 } }, false);
+  assert.ok(sentences.includes('Bank account ba_7'));
   assert.ok(sentences.some((sentence) => sentence.includes('BT-42')));
 });

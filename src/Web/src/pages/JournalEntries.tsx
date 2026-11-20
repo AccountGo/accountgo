@@ -15,6 +15,7 @@ import {
 import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
 import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 import { getDateRange } from './Reports';
+import { shortRef } from '../lib/shortRef';
 
 interface JournalLine { id: string; accountId: string; drCr: number; amount: number; memo: string | null }
 export interface JournalEntry {
@@ -214,7 +215,7 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
   return <>
   <section aria-label="Journal entry" className="space-y-4 rounded-2xl bg-[var(--bg-surface)] p-5">
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h2 className="text-lg font-semibold">{entry.id ? `Journal #${entry.id}` : 'New Journal Entry'} - {entry.posted ? 'Posted (read-only)' : isImported ? 'Imported draft (read-only)' : 'Draft'}</h2>
+      <h2 className="text-lg font-semibold">{entry.id ? `Journal ${shortRef(entry.id)}` : 'New Journal Entry'} - {entry.posted ? 'Posted (read-only)' : isImported ? 'Imported draft (read-only)' : 'Draft'}</h2>
       {isImported && <span className="inline-flex items-center rounded-full border border-[var(--border-subtle)] px-2.5 py-0.5 text-xs font-medium">Imported · {entry.sourceSystem}</span>}
     </div>
     {isImported && (
@@ -330,7 +331,7 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
   {confirmDiscard && (
     <ConfirmDialog
       title="Discard imported journal?"
-      message={`This removes draft #${entry.id} (${entry.sourceSystem}: ${entry.sourceKey ?? ''}) and frees its source key so it can be imported again.`}
+      message={`This removes draft ${shortRef(entry.id)} (${entry.sourceSystem}: ${entry.sourceKey ?? ''}) and frees its source key so it can be imported again.`}
       confirmLabel="Discard draft"
       destructive
       busy={busy}
@@ -470,7 +471,7 @@ export default function JournalEntries() {
               Batch post finished: {batchResults.filter(r => r.posted).length} posted, {batchResults.filter(r => !r.posted).length} failed.
             </p>
             {batchResults.filter(r => !r.posted).map(r => (
-              <p key={r.id} className="text-red-500">Journal #{r.id}: {r.message || r.code || 'Failed to post.'}</p>
+              <p key={r.id} className="text-red-500">Journal {shortRef(r.id)}: {r.message || r.code || 'Failed to post.'}</p>
             ))}
           </div>
         )}
@@ -490,7 +491,7 @@ export default function JournalEntries() {
             <tbody>{visibleEntries.map(entry => <tr key={entry.id} className="border-t border-[var(--border-subtle)]">
               {status === 'draft' && canPost && (
                 <td className="p-4">
-                  <input type="checkbox" aria-label={`Select journal #${entry.id}`}
+                  <input type="checkbox" aria-label={`Select journal ${shortRef(entry.id)}`}
                     checked={selectedDraftIds.includes(entry.id)}
                     disabled={batchBusy}
                     onChange={() => toggleSelect(entry.id)} />
@@ -498,7 +499,7 @@ export default function JournalEntries() {
               )}
               <th scope="row" className="p-4 text-left">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Link className="underline" to={`?id=${entry.id}`}>Open #{entry.id}</Link>
+                  <Link className="underline" to={`?id=${entry.id}`}>Open {shortRef(entry.id)}</Link>
                   {entry.sourceSystem && (
                     <span className="inline-flex items-center rounded-full border border-[var(--border-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--text-secondary)]">
                       Imported · {entry.sourceSystem}

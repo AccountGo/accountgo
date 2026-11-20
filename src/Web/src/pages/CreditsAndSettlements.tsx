@@ -8,6 +8,7 @@ import { ModalShell } from '../components/ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
 import { Plus, CheckCircle2, ArrowRightLeft, Undo2, FileWarning, RotateCcw, Save } from 'lucide-react';
+import { shortRef } from '../lib/shortRef';
 
 interface CreditNoteRow {
   id: string;
@@ -219,7 +220,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           .filter((d: any) => d.status !== 'Draft' && d.status !== 'Void')
           .map((d: any) => ({
             id: d.id,
-            no: d.no ?? d.vendorInvoiceNo ?? `#${d.id}`,
+            no: d.no ?? d.vendorInvoiceNo ?? `${shortRef(d.id)}`,
             partyId: side === 'sales' ? d.customerId : d.vendorId,
             partyName: side === 'sales' ? d.customerName : d.vendorName ?? '',
             balanceDue: Number(d.balanceDue ?? 0),
@@ -231,7 +232,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
       if (bankRes.ok) {
         const rawBanks = await bankRes.json();
         const list = Array.isArray(rawBanks) ? rawBanks : rawBanks.accounts ?? [];
-        setBanks(list.map((b: any) => ({ id: b.id, name: b.name || b.accountName || `Bank #${b.id}` })));
+        setBanks(list.map((b: any) => ({ id: b.id, name: b.name || b.accountName || `Bank ${shortRef(b.id)}` })));
         if (list.length > 0) {
           const firstId = String(list[0].id);
           setRefundBankId((prev) => prev || firstId);
@@ -243,7 +244,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
         const list = Array.isArray(rawParties) ? rawParties : rawParties.items ?? [];
         const mappedParties: PartyOption[] = list.map((p: any) => ({
           id: p.id,
-          name: p.name || p.partyName || `${side === 'sales' ? 'Customer' : 'Vendor'} #${p.id}`,
+          name: p.name || p.partyName || `${side === 'sales' ? 'Customer' : 'Vendor'} ${shortRef(p.id)}`,
         }));
         setParties(mappedParties);
         if (mappedParties.length > 0) {
@@ -295,7 +296,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
       const mapped: DocLineOption[] = rawLines.map((l: any) => ({
         id: l.id,
         itemId: l.itemId ?? null,
-        description: l.itemDescription || l.description || `Line #${l.id}`,
+        description: l.itemDescription || l.description || `Line ${shortRef(l.id)}`,
         quantity: Number(l.quantity ?? 1),
       }));
       if (cancelled) return;
@@ -858,7 +859,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
             ) : (
               credits.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-900">{c.no ?? `Draft #${c.id}`}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900">{c.no ?? `Draft ${shortRef(c.id)}`}</td>
                   <td className="px-4 py-3 text-slate-700">{c.customerName ?? c.vendorName ?? ''}</td>
                   <td className="px-4 py-3 text-slate-600">{c.date.slice(0, 10)}</td>
                   <td className="px-4 py-3 text-slate-700">{c.settlementState}</td>
@@ -1054,7 +1055,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
         <ModalShell open onClose={() => setModal(null)}>
           <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
             <h3 className="text-base font-semibold text-slate-900">
-              {`Apply ${modal.credit.no ?? `Credit #${modal.credit.id}`}`}
+              {`Apply ${modal.credit.no ?? `Credit ${shortRef(modal.credit.id)}`}`}
             </h3>
             <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
           </div>
@@ -1172,7 +1173,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
         <ModalShell open onClose={() => setModal(null)}>
           <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
             <h3 className="text-base font-semibold text-slate-900">
-              {`Reverse ${modal.credit.no ?? `Credit #${modal.credit.id}`}`}
+              {`Reverse ${modal.credit.no ?? `Credit ${shortRef(modal.credit.id)}`}`}
             </h3>
             <button type="button" onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
           </div>

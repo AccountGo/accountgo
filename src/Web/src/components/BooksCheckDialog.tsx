@@ -4,6 +4,7 @@ import { BookCheck } from 'lucide-react';
 import { getOrgSlugFromLocation, useAuth } from '../auth/AuthContext';
 import { BOOKS_NOT_READY_EVENT, type BooksNotReadyProblem, type UnpostedDocument } from '../lib/entitlementEvents';
 import { ModalShell } from './ModalShell';
+import { shortRef } from '../lib/shortRef';
 
 type PostResult = { id: string; number?: string | null; posted: boolean; error?: string | null };
 
@@ -15,7 +16,7 @@ function documentHref(slug: string | null, doc: UnpostedDocument): string | null
 
 function documentLabel(doc: UnpostedDocument): string {
   const kind = doc.type === 'invoice' ? 'Invoice' : 'Bill';
-  return doc.number ? `${kind} ${doc.number}` : `${kind} #${doc.id}`;
+  return doc.number ? `${kind} ${doc.number}` : `${kind} ${shortRef(doc.id)}`;
 }
 
 function formatDate(value: string): string {

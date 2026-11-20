@@ -91,8 +91,92 @@ namespace Api.Controllers
                 if (r.ParentEntityId.HasValue && r.ParentEntityId.Value > 0 && _registry.TryGetPrefixForTypeName(r.ParentEntityType, out var pp))
                     pairs.Add((pp, r.ParentEntityId.Value));
             }
+            foreach (var r in rows)
+                foreach (var (prefix, id) in ForeignKeyValues(r))
+                    pairs.Add((prefix, id));
             if (pairs.Count > 0)
                 await _publicIds.PrefetchAsync(pairs);
+        }
+
+        private static readonly object ForeignKeyMapLock = new();
+        private static Dictionary<(string Type, string Property), string>? _foreignKeyMap;
+
+        /// <summary>Maps (entity type name, foreign key property) to the prefix of the row it points at, from the EF model.</summary>
+        private Dictionary<(string Type, string Property), string> ForeignKeyMap()
+        {
+            if (_foreignKeyMap != null) return _foreignKeyMap;
+            lock (ForeignKeyMapLock)
+            {
+                if (_foreignKeyMap != null) return _foreignKeyMap;
+                var map = new Dictionary<(string, string), string>();
+                foreach (var entity in _db.Model.GetEntityTypes())
+                {
+                    foreach (var key in entity.GetForeignKeys())
+                    {
+                        if (key.Properties.Count != 1) continue;
+                        if (!_registry.TryGetByType(key.PrincipalEntityType.ClrType, out var principal)) continue;
+                        map[(entity.ClrType.Name, key.Properties[0].Name)] = principal.Prefix;
+                    }
+                }
+                _foreignKeyMap = map;
+                return map;
+            }
+        }
+
+        /// <summary>The foreign key values a change row records, as (prefix, integer id), so they can be shown as public ids.</summary>
+        private IEnumerable<(string Prefix, int Id)> ForeignKeyValues(RecordChange row)
+        {
+            if (string.IsNullOrWhiteSpace(row.ChangesJson) || row.ChangesJson[0] != '{') yield break;
+            JObject obj;
+            try { obj = JObject.Parse(row.ChangesJson); }
+            catch (Newtonsoft.Json.JsonException) { yield break; }
+            var map = ForeignKeyMap();
+            foreach (var property in obj.Properties())
+            {
+                if (!map.TryGetValue((row.EntityType, property.Name), out var prefix)) continue;
+                foreach (var token in ChangeValueTokens(property.Value))
+                    if (token.Type == JTokenType.Integer && token.Value<long>() is > 0 and <= int.MaxValue)
+                        yield return (prefix, (int)token.Value<long>());
+            }
+        }
+
+        private static IEnumerable<JToken> ChangeValueTokens(JToken value)
+        {
+            if (value is JArray { Count: >= 2 } pair) { yield return pair[0]; yield return pair[1]; yield break; }
+            if (value is JObject named)
+            {
+                if (named.TryGetValue("old", StringComparison.OrdinalIgnoreCase, out var o)) yield return o;
+                if (named.TryGetValue("new", StringComparison.OrdinalIgnoreCase, out var n)) yield return n;
+                yield break;
+            }
+            yield return value;
+        }
+
+        /// <summary>
+        /// The change JSON with foreign key values shown as public ids. The stored evidence keeps the integers; only what is
+        /// returned changes. A value whose row is gone shows as e.g. cus_deleted rather than an internal number or a blank.
+        /// </summary>
+        private string? PublicChangesJson(RecordChange row)
+        {
+            if (string.IsNullOrWhiteSpace(row.ChangesJson) || row.ChangesJson[0] != '{') return row.ChangesJson;
+            JObject obj;
+            try { obj = JObject.Parse(row.ChangesJson); }
+            catch (Newtonsoft.Json.JsonException) { return row.ChangesJson; }
+            var map = ForeignKeyMap();
+            var changed = false;
+            foreach (var property in obj.Properties())
+            {
+                if (!map.TryGetValue((row.EntityType, property.Name), out var prefix)) continue;
+                foreach (var token in ChangeValueTokens(property.Value).ToList())
+                {
+                    if (token.Type != JTokenType.Integer) continue;
+                    var id = token.Value<long>();
+                    var publicId = id is > 0 and <= int.MaxValue ? _publicIds.ToPublic(prefix, (int)id) : null;
+                    token.Replace(new JValue(publicId ?? $"{prefix}_deleted"));
+                    changed = true;
+                }
+            }
+            return changed ? obj.ToString(Newtonsoft.Json.Formatting.None) : row.ChangesJson;
         }
 
         [RequirePermission(SystemPermissions.AuditLogsView)]
@@ -152,7 +236,7 @@ namespace Api.Controllers
                 parentEntityType = r.ParentEntityType,
                 parentEntityId = FormatRecordChangeEntityId(r.ParentEntityType, r.ParentEntityId),
                 action = r.Action,
-                changes = ParseChanges(r.ChangesJson),
+                changes = ParseChanges(PublicChangesJson(r)),
                 actorUserId = r.ActorUserId,
                 actorName = r.ActorUserId != null && names.TryGetValue(r.ActorUserId, out var n) ? n : null,
                 actorKind = r.ActorKind,
@@ -197,7 +281,7 @@ namespace Api.Controllers
 
             var names = await ResolveActorNames(rows.Select(p => p.ActorUserId).Where(id => !string.IsNullOrWhiteSpace(id))!);
             await PrefetchRecordChangeIdsAsync(rows);
-            var csv = BuildActivityCsv(rows, names, r => FormatRecordChangeEntityId(r.EntityType, r.EntityId) ?? string.Empty);
+            var csv = BuildActivityCsv(rows, names, r => FormatRecordChangeEntityId(r.EntityType, r.EntityId) ?? string.Empty, PublicChangesJson);
             var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray();
             return File(bytes, "text/csv; charset=utf-8", "activity-export.csv");
         }
@@ -293,7 +377,7 @@ namespace Api.Controllers
             return query;
         }
 
-        private static string BuildActivityCsv(IReadOnlyList<RecordChange> rows, IReadOnlyDictionary<string, string> names, Func<RecordChange, string> formatEntityId)
+        private static string BuildActivityCsv(IReadOnlyList<RecordChange> rows, IReadOnlyDictionary<string, string> names, Func<RecordChange, string> formatEntityId, Func<RecordChange, string?> changesJson)
         {
             var builder = new StringBuilder();
             builder.AppendLine("occurredAt,actor,actorKind,entityType,entityId,action,field,oldValue,newValue,correlationId");
@@ -304,7 +388,7 @@ namespace Api.Controllers
                     : row.ActorUserId ?? string.Empty;
                 var occurredAt = DateTime.SpecifyKind(row.OccurredAt, DateTimeKind.Utc)
                     .ToString("o", CultureInfo.InvariantCulture);
-                foreach (var field in ExpandChangeFields(row.ChangesJson))
+                foreach (var field in ExpandChangeFields(changesJson(row)))
                 {
                     builder.Append(Csv(occurredAt)).Append(',')
                         .Append(Csv(actor)).Append(',')

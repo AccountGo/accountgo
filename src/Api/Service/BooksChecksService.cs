@@ -458,7 +458,7 @@ namespace Api.Service
             check.Count = open.Count;
             check.Examples = open.Take(MaxExamples)
                 .Select(b => Example(b.ReconciledThrough.HasValue ? $"{b.Name} (reconciled through {b.ReconciledThrough:yyyy-MM-dd})" : $"{b.Name} (never reconciled)",
-                    $"/banking/{(bankPublicIds.TryGetValue(b.BankId, out var pub) ? pub : string.Empty)}/reconcile", b.ReconciledThrough, null)).ToList();
+                    bankPublicIds.TryGetValue(b.BankId, out var pub) ? $"/banking/{pub}/reconcile" : "/banking", b.ReconciledThrough, null)).ToList();
             return check;
         }
 
