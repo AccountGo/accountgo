@@ -103,7 +103,7 @@ namespace AccountGo.BackendTests.Auditing
             }
             var customerPub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Sales.Customer>(_host.Factory.Services, customerId);
             await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceHeader", entityId: inv1Id,
-                changesJson: "{\"CustomerId\":[null," + customerId + "],\"Memo\":[\"a\",\"b\"]}");
+                changesJson: "{\"CustomerId\":[null," + customerId + "],\"GeneralLedgerHeaderId\":[null,-2147482647],\"Memo\":[\"a\",\"b\"]}");
 
             var body = await Host.Json(await _host.Send(HttpMethod.Get, ActivityPath + $"?entityType=SalesInvoiceHeader&entityId={inv1Pub}",
                 token: workspace.Viewer.Token, org: workspace.Slug));
@@ -113,6 +113,8 @@ namespace AccountGo.BackendTests.Auditing
             Assert.Equal(customerPub, changes.GetProperty("CustomerId")[1].GetString());
             Assert.DoesNotContain(customerId.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]", changes.GetRawText());
             Assert.Equal("b", changes.GetProperty("Memo")[1].GetString());
+            // An insert-time placeholder key is not a row: shown as blank, not as a deleted record.
+            Assert.Equal(System.Text.Json.JsonValueKind.Null, changes.GetProperty("GeneralLedgerHeaderId")[1].ValueKind);
         }
 
         [Fact]

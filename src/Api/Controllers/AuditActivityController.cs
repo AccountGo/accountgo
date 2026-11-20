@@ -171,7 +171,14 @@ namespace Api.Controllers
                 {
                     if (token.Type != JTokenType.Integer) continue;
                     var id = token.Value<long>();
-                    var publicId = id is > 0 and <= int.MaxValue ? _publicIds.ToPublic(prefix, (int)id) : null;
+                    // A value of zero or below is a placeholder key from insert time, not a row, so it shows as blank.
+                    if (id <= 0 || id > int.MaxValue)
+                    {
+                        token.Replace(JValue.CreateNull());
+                        changed = true;
+                        continue;
+                    }
+                    var publicId = _publicIds.ToPublic(prefix, (int)id);
                     token.Replace(new JValue(publicId ?? $"{prefix}_deleted"));
                     changed = true;
                 }
