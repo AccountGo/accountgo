@@ -155,6 +155,10 @@ Operators are responsible for meeting local legal requirements; these are operat
 
 A single daily background run deletes expired rows in batches. On Postgres, parallel API instances use an advisory lock so only one run proceeds. Each purge that deletes anything writes one `audit.retention.purge` security event with counts and cutoffs (no event content).
 
+### Public ID repair
+
+Upgrading backfills a public ID for every existing record. After rolling the API back to an older build and forward again, rows created in between have no public ID. Run `dotnet Api.dll --backfill-public-ids` once to fill them in; it only touches rows with no ID, prints the number of rows updated, and exits without serving requests.
+
 ### Reading Server-Timing (latency)
 
 When `SERVER_TIMING_ENABLED` is on (default), each API response carries a `Server-Timing` header that **appends** a segment per hop (never overwrites earlier hops):

@@ -40,6 +40,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - People who can review or close a year can open **Year-end close** without being an organization administrator.
 
 ### Changed
+
+- Records are now identified everywhere by a prefixed ID that says what it is, such as `inv_…` for an invoice, `bill_…` for a bill, `cus_…` for a client and `acct_…` for an account, instead of a number. This applies to page addresses, the API and the assistant. Existing records are given an ID automatically when you upgrade. Old links and bookmarks that use numbers no longer open, and API calls must send the new IDs.
 - The sign-in page now has Sign in and Create account tabs under the email field, with separate headings and wording for each. The verification code step has clearer wording, a centered layout, and a "Not your email?" link to go back and change it. The terms checkbox is now aligned with its text.
 - Moved Customer Credits & Settlements, Supplier Credits & Advances, and Year-end close out of the main sidebar into the Sales tabs, Purchases tabs, and General Ledger views navigation respectively.
 - Year-end assistant guidance uses the implemented close controls and explains current aging, close-record and correction limits.

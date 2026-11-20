@@ -126,6 +126,10 @@ src/Web/src/
    - Built-in roles: `SystemAdministrators`, `GeneralUsers`, `Accountant`, `Sales Representative`, `Purchasing Agent`, `Auditor / Viewer`.
    - Granular permission matrix controlling read, write, post, and delete privileges across Sales, Purchases, Financials, and Administration.
 
+### Public IDs
+
+Records keep integer primary and foreign keys inside the database. Every record whose ID leaves the server also has a stored `PublicId` such as `inv_01jd3k9x4m7q2w8e5r6t0y1u2i` (a permanent type prefix and 26 characters), assigned on insert and never changed. The API, assistant tools and web URLs use public IDs only. Translation happens at the boundary, so services and posting logic keep using integers. See [PUBLIC_IDS.md](system-architecture/PUBLIC_IDS.md) for the prefix registry, exemptions and the rules for adding a record type.
+
 ---
 
 ## 6. Persistence & Storage Abstraction
