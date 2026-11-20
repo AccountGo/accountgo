@@ -47,6 +47,16 @@ namespace Dto.Banking
         public int? AccountId { get; set; }
     }
 
+    /// <summary>A postable cash account no bank record uses yet, offered when adding a bank account.</summary>
+    public class EligiblePostingAccountDto
+    {
+        [PublicId("acct")]
+        public int Id { get; set; }
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+        public decimal Balance { get; set; }
+    }
+
     public class UnassignedCashDto
     {
         [PublicId("acct")]

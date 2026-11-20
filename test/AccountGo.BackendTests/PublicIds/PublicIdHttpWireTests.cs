@@ -195,6 +195,53 @@ public sealed class PublicIdHttpWireTests
         return await client.SendAsync(req);
     }
 
+    /// <summary>
+    /// Calls every parameterless GET endpoint on the demo workspace and walks the response. Endpoints that return anonymous
+    /// objects have no DTO attribute for a test to scan, so this is what catches an integer key they let through.
+    /// </summary>
+    [Fact]
+    public async Task HttpWire_EveryParameterlessGet_CarriesNoNumericIds()
+    {
+        var (factory, client, token, org1, _, sqlitePath) = await CreateHostAsync();
+        try
+        {
+            var provider = factory.Services.GetRequiredService<Microsoft.AspNetCore.Mvc.ApiExplorer.IApiDescriptionGroupCollectionProvider>();
+            var paths = provider.ApiDescriptionGroups.Items.SelectMany(g => g.Items)
+                .Where(d => string.Equals(d.HttpMethod, "GET", StringComparison.OrdinalIgnoreCase)
+                    && d.RelativePath != null && d.RelativePath.StartsWith("api/", StringComparison.OrdinalIgnoreCase)
+                    && !d.RelativePath.Contains('{'))
+                .Select(d => "/" + d.RelativePath!.Split('?')[0])
+                .Where(path => !path.Contains("/export", StringComparison.OrdinalIgnoreCase)
+                    && !path.Contains("/auth/", StringComparison.OrdinalIgnoreCase)
+                    && !path.Contains("/stream", StringComparison.OrdinalIgnoreCase)
+                    && !path.Contains("/pdf", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            Assert.True(paths.Count > 50, $"Expected many GET endpoints, found {paths.Count}.");
+
+            var failures = new List<string>();
+            foreach (var path in paths)
+            {
+                using var response = await SendAsync(client, token, org1, HttpMethod.Get, path);
+                if (!response.IsSuccessStatusCode) continue;
+                var text = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(text) || (text[0] != '{' && text[0] != '[')) continue;
+                try { AssertNoNumericIdsOnWire(JsonNode.Parse(text), path); }
+                catch (Exception ex) when (ex.GetType().Name.Contains("Assert", StringComparison.Ordinal) || ex is Xunit.Sdk.XunitException)
+                {
+                    failures.Add(ex.Message.Split('\n')[0]);
+                }
+            }
+            Assert.True(failures.Count == 0, string.Join("\n", failures));
+        }
+        finally
+        {
+            factory.Dispose();
+            try { File.Delete(sqlitePath); } catch { }
+        }
+    }
+
     [Fact]
     public async Task HttpWire_AllMainEndpointsEmitPublicIds_InvoiceFlowWorks_AndErrorsMatchSpec()
     {

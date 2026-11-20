@@ -62,6 +62,7 @@ public static class PublicIdExemptions
     {
         ["*:accountClassId"] = "Fixed 1-5 AccountClass enum-like classification lookup.",
         ["*:statusId"] = "Fixed document status enum-like lookup.",
+        ["/api/Common/PaymentMethods:id"] = "Fixed 1-5 payment method lookup (enum-like), not a table row.",
         ["/api/organizations/current/activity:id"] = "Append-only RecordChange long audit row ID (exempt in design §4).",
         ["/api/organizations/current/security-events:id"] = "Append-only SecurityAuditEvent audit row ID (exempt per c-050).",
         ["/api/Administration/roles:id"] = "SystemAdministrators-only SecurityPermission IDs (exempt per c-050).",

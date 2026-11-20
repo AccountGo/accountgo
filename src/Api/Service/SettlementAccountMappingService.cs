@@ -17,10 +17,10 @@ namespace Api.Service
     public sealed record SettlementAccountRolePreviewDto(
         string RoleKey,
         string RoleLabel,
-        int? ConfiguredAccountId,
+        [property: Dto.Common.PublicId("acct")] int? ConfiguredAccountId,
         string? ConfiguredAccountCode,
         string? ConfiguredAccountName,
-        int? SuggestedAccountId,
+        [property: Dto.Common.PublicId("acct")] int? SuggestedAccountId,
         string? SuggestedAccountCode,
         string? SuggestedAccountName,
         bool IsArchived,

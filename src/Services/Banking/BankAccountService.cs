@@ -208,7 +208,7 @@ namespace Services.Banking
             return result.OrderBy(r => r.AccountCode ?? r.Description).ToList();
         }
 
-        public IReadOnlyList<object> EligiblePostingAccounts()
+        public IReadOnlyList<EligiblePostingAccountDto> EligiblePostingAccounts()
         {
             EnsureCompany();
             var bankedAccountIds = _banks.Table
@@ -219,9 +219,9 @@ namespace Services.Banking
             return PostableCashAccounts()
                 .Where(a => !bankedAccountIds.Contains(a.Id))
                 .OrderBy(a => a.AccountCode)
-                .Select(a => (object)new
+                .Select(a => new EligiblePostingAccountDto
                 {
-                    a.Id,
+                    Id = a.Id,
                     Code = a.AccountCode,
                     Name = a.AccountName,
                     Balance = BookBalance(a)

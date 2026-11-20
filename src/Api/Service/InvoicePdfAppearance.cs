@@ -232,7 +232,7 @@ public sealed record InvoiceBrandingSettingsModel(
 
 /// <summary>What the current organization may do with invoice PDF appearance.</summary>
 public sealed record InvoiceBrandingCapabilities(
-    int CompanyId,
+    [property: Dto.Common.PublicId("ws")] int CompanyId,
     bool CanCustomizeInvoiceAppearance,
     bool CanHideAccountGoBranding,
     bool CanManageSettings,
