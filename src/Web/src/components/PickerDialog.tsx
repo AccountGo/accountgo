@@ -15,7 +15,7 @@ export interface PickerColumn<T> {
  * arrows to move, Enter to choose, Escape or a click outside to close. A dialog rather than an inline dropdown: the
  * list has room for its columns, nothing is clipped by a scrolling container, and it becomes a bottom sheet on phones.
  */
-export function PickerDialog<T extends { id: number }>({
+export function PickerDialog<T extends { id: string }>({
   title,
   icon: Icon,
   items,
@@ -36,7 +36,7 @@ export function PickerDialog<T extends { id: number }>({
   /** Text a search matches against; every word typed must appear in it. */
   searchText: (item: T) => string;
   searchPlaceholder: string;
-  selectedId?: number | null;
+  selectedId?: string | null;
   selectedLabel?: string;
   /** Singular and plural, for the "3 of 12 clients" count. */
   noun: [string, string];

@@ -9,12 +9,12 @@ export function percentageTotal(percentages: number[]): number {
   return Math.round(percentages.reduce((sum, value) => sum + Math.round(value * 10_000), 0)) / 10_000;
 }
 
-export function sharesForSubmission(shares: Array<{ partnerId: number; percent: number }>): Array<{ partnerId: number; percent: number }> {
+export function sharesForSubmission(shares: Array<{ partnerId: string; percent: number }>): Array<{ partnerId: string; percent: number }> {
   return shares.filter(share => share.percent > 0);
 }
 
 
-export function splitAmount(amount: number, shares: Array<{ id: number; percent: number }>): number[] {
+export function splitAmount(amount: number, shares: Array<{ id: string; percent: number }>): number[] {
   const sign = amount < 0 ? -1 : 1;
   const cents = Math.round(Math.abs(amount) * 100);
   const allocations = shares.map((share, index) => {
@@ -23,7 +23,7 @@ export function splitAmount(amount: number, shares: Array<{ id: number; percent:
     return { index, id: share.id, cents: floor, remainder: exact - floor };
   });
   let left = cents - allocations.reduce((sum, item) => sum + item.cents, 0);
-  for (const item of [...allocations].sort((a, b) => b.remainder - a.remainder || a.id - b.id).slice(0, left)) item.cents++;
+  for (const item of [...allocations].sort((a, b) => b.remainder - a.remainder || a.index - b.index).slice(0, left)) item.cents++;
   return allocations.map(item => sign * item.cents / 100);
 }
 

@@ -51,7 +51,7 @@ export const Tax: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [docsOpen, setDocsOpen] = useState(false);
-  const [expandedLedgerAccounts, setExpandedLedgerAccounts] = useState<Record<number, boolean>>({});
+  const [expandedLedgerAccounts, setExpandedLedgerAccounts] = useState<Record<string, boolean>>({});
   const [filingDialogMode, setFilingDialogMode] = useState<'new' | 'amend' | null>(null);
   const [filedOnInput, setFiledOnInput] = useState(() => new Date().toISOString().slice(0, 10));
   const [referenceInput, setReferenceInput] = useState('');
@@ -216,7 +216,7 @@ export const Tax: React.FC = () => {
   );
   const periodDisplay = report?.periodLabel || activeRange?.label || 'this period';
 
-  const docLink = (kind: string, id: number) => {
+  const docLink = (kind: string, id: string) => {
     if (!orgSlug) return '#';
     if (kind === 'invoice' || kind === 'invoiceVoid' || kind === 'invoicePayment') {
       return `/org/${orgSlug}/sales/${id}`;
@@ -224,7 +224,7 @@ export const Tax: React.FC = () => {
     return `/org/${orgSlug}/purchases/${id}`;
   };
 
-  const toggleLedgerRow = (accountId: number) => {
+  const toggleLedgerRow = (accountId: string) => {
     setExpandedLedgerAccounts((prev) => ({ ...prev, [accountId]: !prev[accountId] }));
   };
 

@@ -33,7 +33,7 @@ export const BOOKS_NOT_READY_EVENT = 'accountgo:books-not-ready';
 
 export interface UnpostedDocument {
   type: 'invoice' | 'bill';
-  id: number;
+  id: string;
   number?: string | null;
   date: string;
 }

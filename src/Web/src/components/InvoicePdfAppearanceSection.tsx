@@ -19,7 +19,7 @@ export interface InvoicePdfPalette {
 }
 
 export interface InvoiceBrandingCapabilities {
-  companyId: number;
+  companyId: string;
   canCustomizeInvoiceAppearance: boolean;
   canHideAccountGoBranding: boolean;
   canManageSettings: boolean;

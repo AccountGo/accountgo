@@ -11,22 +11,22 @@ export const LEDGER_DEFAULT_PAGE_SIZE = 100;
 export const LEDGER_MAX_PAGE_SIZE = 500;
 
 export interface GlLine {
-  id: number;
-  accountId: number;
+  id: string;
+  accountId: string;
   accountCode: string;
   accountName: string;
   debit: number;
   credit: number;
 }
 export interface GlTransaction {
-  id: number;
+  id: string;
   date: string;
   documentType: string;
   documentTypeLabel: string;
   description: string | null;
-  sourceDocumentId: number | null;
+  sourceDocumentId: string | null;
   sourcePath: string | null;
-  reversedGeneralLedgerHeaderId: number | null;
+  reversedGeneralLedgerHeaderId: string | null;
   totalDebit: number;
   totalCredit: number;
   lines: GlLine[];
@@ -109,7 +109,7 @@ export function parseLedgerPage(payload: unknown): GlTransactionPage {
 export function LedgerRows({ entries, slug, formatAmount }: {
   entries: GlTransaction[]; slug: string; formatAmount: (value: number) => string;
 }) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   return <table className="w-full text-sm">
     <caption className="sr-only">Posted General Ledger transactions with debit and credit totals</caption>
     <thead>

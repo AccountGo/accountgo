@@ -211,7 +211,7 @@ export function formatAuditValue(entityType: string, field: string, value: unkno
 
 export interface AuditChangeRow {
   entityType: string;
-  entityId?: number;
+  entityId?: string | null;
   action: string;
   /** `{ Field: [old, new] }` for Modified; `{ Field: value }` for Added/Deleted. */
   changes: unknown;

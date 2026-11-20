@@ -56,7 +56,7 @@ import { useOptionalCapabilities } from '../lib/entitlements';
 import { activityTabMode, auditAccessLevel } from '../lib/auditAccess';
 
 interface LiveFinancialYear {
-  id: number;
+  id: string;
   fiscalYearCode: string;
   fiscalYearName: string;
   startDate: string;
@@ -69,7 +69,7 @@ interface LiveFinancialYear {
 }
 
 interface LivePaymentTerm {
-  id: number;
+  id: string;
   description: string;
   paymentType: string;
   dueAfterDays?: number;
@@ -139,7 +139,7 @@ export const Settings: React.FC = () => {
   const isWorkspaceAdmin = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
 
   // 1. General Profile State (bound to live database Company table)
-  const [companyId, setCompanyId] = useState<number>(Number(currentOrg.id) || 0);
+  const [companyId, setCompanyId] = useState<string>(currentOrg.id || '');
   const [ledgerFrozen, setLedgerFrozen] = useState(true);
   useEffect(() => {
     if (!personal) return;
@@ -187,7 +187,7 @@ export const Settings: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         if (data) {
-          setCompanyId(data.id || 0);
+          setCompanyId(data.id || '');
           setOrgName(data.name || '');
           setShortName(data.shortName || '');
           setCompanyCode(data.companyCode || '');
@@ -300,7 +300,7 @@ export const Settings: React.FC = () => {
       }
 
       const updated = await res.json() as { id: string; name: string; slug: string };
-      setCompanyId(Number(updated.id));
+      setCompanyId(updated.id);
       setOrgSlug(updated.slug);
       setPersistedOrgSlug(updated.slug);
       updateCurrentOrg({ name: orgName.trim(), slug: updated.slug, currency });

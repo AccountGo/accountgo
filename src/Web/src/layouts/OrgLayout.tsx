@@ -142,7 +142,7 @@ export const OrgLayout: React.FC = () => {
         }
         if (!currentResponse.ok) throw new Error('Could not load current workspace');
         const current = await currentResponse.json() as {
-          id: number;
+          id: string;
           name: string;
           slug: string;
           shortName?: string;

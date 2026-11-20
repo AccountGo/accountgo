@@ -21,7 +21,7 @@ const ReconciliationHistoryPage: React.FC = () => {
   const canUndo = hasPermission('banking.reconcile.undo');
 
   const [banks, setBanks] = useState<BankAccount[]>([]);
-  const [bankId, setBankId] = useState<number | ''>('');
+  const [bankId, setBankId] = useState<string>('');
   const [items, setItems] = useState<BankReconciliationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +172,7 @@ const ReconciliationHistoryPage: React.FC = () => {
         </label>
         <select
           value={bankId}
-          onChange={(e) => setBankId(e.target.value ? Number(e.target.value) : '')}
+          onChange={(e) => setBankId(e.target.value)}
           className="h-10 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-sm min-w-[16rem]"
         >
           <option value="">Select…</option>

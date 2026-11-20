@@ -16,12 +16,12 @@ import { withConfirmReconciledPeriod } from '../lib/reconciledPeriod';
 import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 import { getDateRange } from './Reports';
 
-interface JournalLine { id: number; accountId: number; drCr: number; amount: number; memo: string | null }
+interface JournalLine { id: string; accountId: string; drCr: number; amount: number; memo: string | null }
 export interface JournalEntry {
-  id: number;
+  id: string;
   journalDate: string;
   voucherType: number;
-  adjustsFiscalYearId?: number | null;
+  adjustsFiscalYearId?: string | null;
   adjustsFiscalYearCode?: string | null;
   referenceNo: string | null;
   memo: string | null;
@@ -34,7 +34,7 @@ export interface JournalEntry {
 export type JournalSourceFilter = 'all' | 'imported' | 'manual';
 
 export interface PostBatchItemResult {
-  id: number;
+  id: string;
   posted: boolean;
   code?: string | null;
   message?: string | null;
@@ -57,8 +57,8 @@ export function filterJournalEntries(
     return true;
   });
 }
-interface JournalAccount { id: number; accountCode: string; accountName: string; canPost: boolean; archived?: boolean; childAccounts: JournalAccount[] }
-interface ClosedFiscalYear { id: number; fiscalYearCode: string; status: number | string }
+interface JournalAccount { id: string; accountCode: string; accountName: string; canPost: boolean; archived?: boolean; childAccounts: JournalAccount[] }
+interface ClosedFiscalYear { id: string; fiscalYearCode: string; status: number | string }
 type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 export function journalTotals(entry: JournalEntry) {
@@ -69,7 +69,7 @@ export function journalTotals(entry: JournalEntry) {
 export function canPostJournal(entry: JournalEntry) {
   const totals = journalTotals(entry);
   return !entry.posted && entry.journalEntryLines.length >= 2 && totals.debit > 0 && totals.debit === totals.credit
-    && entry.journalEntryLines.every(line => line.accountId > 0 && Number.isFinite(line.amount) && line.amount > 0 && [1, 2].includes(line.drCr));
+    && entry.journalEntryLines.every(line => !!line.accountId && Number.isFinite(line.amount) && line.amount > 0 && [1, 2].includes(line.drCr));
 }
 
 export function emptyJournalMessage(status: 'draft' | 'posted', sourceFilter: 'all' | 'imported' | 'manual'): string {
@@ -117,7 +117,7 @@ const PPA_HELP =
 export function JournalEditor({ initial, accounts, closedYears, canCreate, canPost, fetcher, onSaved, onDiscarded, currency, orgSlug, independentReview = false, canReview = false }: {
   initial: JournalEntry; accounts: JournalAccount[]; closedYears: ClosedFiscalYear[];
   canCreate: boolean; canPost: boolean;
-  fetcher: Fetcher; onSaved: (id: number) => void; onDiscarded?: () => void; currency: string | undefined;
+  fetcher: Fetcher; onSaved: (id: string) => void; onDiscarded?: () => void; currency: string | undefined;
   orgSlug?: string; independentReview?: boolean; canReview?: boolean;
 }) {
   const [entry, setEntry] = useState(initial);
@@ -162,7 +162,7 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
         return;
       }
       if (!response.ok) throw new Error(`Journal request failed (HTTP ${response.status}): ${await problemText(response)}`);
-      const result: { id: number } = await response.json();
+      const result: { id: string } = await response.json();
       onSaved(post ? entry.id : result.id);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to save journal.');
@@ -256,7 +256,7 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
               required
               disabled={!editable || closedYears.length === 0}
               value={entry.adjustsFiscalYearId ?? ''}
-              onChange={event => update({ ...entry, adjustsFiscalYearId: Number(event.target.value) || null })}>
+              onChange={event => update({ ...entry, adjustsFiscalYearId: event.target.value || null })}>
               <option value="">{closedYears.length === 0 ? 'No closed years yet' : 'Select closed year'}</option>
               {closedYears.map(year => <option key={year.id} value={year.id}>{year.fiscalYearCode}</option>)}
             </select>
@@ -282,7 +282,7 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
           <thead><tr>{['Account', 'Side', 'Amount', 'Line memo', 'Actions'].map(label => <th scope="col" className="p-2 text-left" key={label}>{label}</th>)}</tr></thead>
           <tbody>{entry.journalEntryLines.map((line, index) => <tr key={index}>
             <td className="min-w-56 p-2"><select aria-label={`Account line ${index + 1}`} required disabled={!editable} className={inputClass} value={line.accountId || ''}
-              onChange={event => updateLine(index, { accountId: Number(event.target.value) })}>
+              onChange={event => updateLine(index, { accountId: event.target.value })}>
               <option value="">Select account</option>{accounts.filter(a => (a.canPost || a.id === line.accountId) && (!a.archived || a.id === line.accountId)).map(account =>
                 <option key={account.id} value={account.id}>{account.accountCode} - {account.accountName}</option>)}
             </select></td>
@@ -296,7 +296,7 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
           </tr>)}</tbody>
         </table>
       </div>
-      {editable && <HeaderButton label="Add line" icon={Plus} onClick={() => update({ ...entry, journalEntryLines: [...entry.journalEntryLines, { id: 0, accountId: 0, drCr: 1, amount: 0, memo: '' }] })} />}
+      {editable && <HeaderButton label="Add line" icon={Plus} onClick={() => update({ ...entry, journalEntryLines: [...entry.journalEntryLines, { id: '', accountId: '', drCr: 1, amount: 0, memo: '' }] })} />}
       <p role="status" className={totals.debit === totals.credit ? 'text-emerald-600' : 'text-red-500'}>
         Debit {money(totals.debit)} / Credit {money(totals.credit)} - {totals.debit === totals.credit ? 'In balance' : 'Out of balance'}
       </p>
@@ -352,7 +352,7 @@ export default function JournalEntries() {
   const journalFrom = params.get('from') || '';
   const journalTo = params.get('to') || '';
   const [sourceFilter, setSourceFilter] = useState<JournalSourceFilter>('all');
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchError, setBatchError] = useState('');
   const [batchResults, setBatchResults] = useState<PostBatchItemResult[] | null>(null);
@@ -387,15 +387,15 @@ export default function JournalEntries() {
   const isNew = params.has('new');
   const selected = data?.entries.find(entry => String(entry.id) === params.get('id'));
   const initial: JournalEntry | undefined = isNew ? {
-    id: 0, journalDate: getDateRange('all', new Date()).to, memo: '', referenceNo: '', voucherType: 6,
+    id: '', journalDate: getDateRange('all', new Date()).to, memo: '', referenceNo: '', voucherType: 6,
     adjustsFiscalYearId: null, posted: false,
-    journalEntryLines: [1, 2].map(drCr => ({ id: 0, accountId: 0, drCr, amount: 0, memo: '' })),
+    journalEntryLines: [1, 2].map(drCr => ({ id: '', accountId: '', drCr, amount: 0, memo: '' })),
   } : selected;
   const flatten = (accounts: JournalAccount[]): JournalAccount[] => accounts.flatMap(account => [account, ...flatten(account.childAccounts || [])]);
   const visibleEntries = data ? filterJournalEntries(data.entries, status, sourceFilter, { from: journalFrom, to: journalTo }) : [];
   const draftVisibleIds = status === 'draft' ? visibleEntries.filter(e => !e.posted).map(e => e.id) : [];
   const selectedDraftIds = selectedIds.filter(id => draftVisibleIds.includes(id));
-  const toggleSelect = (id: number) =>
+  const toggleSelect = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const toggleSelectAll = () =>
     setSelectedIds(prev => selectedDraftIds.length === draftVisibleIds.length ? prev.filter(id => !draftVisibleIds.includes(id)) : Array.from(new Set([...prev, ...draftVisibleIds])));

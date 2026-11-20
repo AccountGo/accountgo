@@ -3,8 +3,8 @@ import { useAuth } from '../auth/AuthContext';
 import { localDateInputValue, percentageTotal, sharesForSubmission, splitPrefill, validatePartnerSetup, type PartnerSetupRow } from '../lib/partners';
 import { ModalShell } from './ModalShell';
 
-type PartnerRow = { id: number; name: string; capitalAccountCode: string; drawingsAccountCode: string; capitalBalance: number; drawingsBalance: number; archived: boolean; rowVersion: string };
-type PartnerData = { partnerAccountsFrom: string | null; capitalBalance: number; drawingsBalance: number; partners: PartnerRow[]; openYears: Array<{ fiscalYearCode: string; rowVersion: string; shares: Array<{ partnerId: number; percent: number }> }> };
+type PartnerRow = { id: string; name: string; capitalAccountCode: string; drawingsAccountCode: string; capitalBalance: number; drawingsBalance: number; archived: boolean; rowVersion: string };
+type PartnerData = { partnerAccountsFrom: string | null; capitalBalance: number; drawingsBalance: number; partners: PartnerRow[]; openYears: Array<{ fiscalYearCode: string; rowVersion: string; shares: Array<{ partnerId: string; percent: number }> }> };
 
 export const PartnersSettingsCard: React.FC<{ canManage: boolean }> = ({ canManage }) => {
   const { authFetch } = useAuth();
@@ -16,7 +16,7 @@ export const PartnersSettingsCard: React.FC<{ canManage: boolean }> = ({ canMana
   const [selectedYear, setSelectedYear] = useState('');
   const [newPartnerName, setNewPartnerName] = useState('');
   const [newPartnerPercent, setNewPartnerPercent] = useState(0);
-  const [renameId, setRenameId] = useState<number | null>(null);
+  const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
 
   const reload = useCallback(async () => { const response = await authFetch(`/api/Financials/Partners?asOf=${encodeURIComponent(date)}`); if (response.ok) { const result = await response.json() as PartnerData; setData(result); setSelectedYear(current => current || result.openYears[0]?.fiscalYearCode || ''); } }, [authFetch, date]);
@@ -31,7 +31,7 @@ export const PartnersSettingsCard: React.FC<{ canManage: boolean }> = ({ canMana
     if (!response.ok) { setMessage((await response.json()).message ?? 'Could not set up partners.'); return; }
     setConfirm(false); setMessage('Partner accounts are set up.'); await reload();
   };
-  const saveShares = async (shares: Array<{ partnerId: number; percent: number }>) => {
+  const saveShares = async (shares: Array<{ partnerId: string; percent: number }>) => {
     const submittedShares = sharesForSubmission(shares);
     if (shares.some(x => x.percent < 0) || submittedShares.length < 2 || percentageTotal(submittedShares.map(x => x.percent)) !== 100) { setMessage('Profit-sharing ratios must total 100%.'); return; }
     const response = await authFetch(`/api/Financials/Partners/Shares/${encodeURIComponent(selectedYear)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': selected?.rowVersion ?? '' }, body: JSON.stringify(submittedShares) });

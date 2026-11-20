@@ -18,7 +18,7 @@ function Dialog({ fetcher }: { fetcher: typeof fetch }) {
     pendingCustomSend={pending} busy={busy} error={error} onCancel={() => {}} onIssueOnly={() => {}}
     onSend={async (followUp, attachPdf, additionalRecipients = [], cc = [], approvedSenderId) => {
       setBusy(true); setError(null);
-      try { await sendInvoiceEmailRequest(fetcher, sessionStorage, { companyId: '1', invoiceId: 42, followUp, attachPdf,
+      try { await sendInvoiceEmailRequest(fetcher, sessionStorage, { companyId: '1', invoiceId: '42', followUp, attachPdf,
         additionalRecipients, cc, approvedSenderId }, setPending); }
       catch (err) { setError((err as Error).message); }
       finally { setBusy(false); }

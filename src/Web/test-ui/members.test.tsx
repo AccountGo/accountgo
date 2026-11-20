@@ -39,7 +39,7 @@ it('lets a sole owner add their own functional roles', async () => {
     if (options?.method === 'POST') return new Response(null, { status: 200 });
     const value = url === '/api/organizations/current' ? { role: 'Owner' }
       : url.endsWith('/access-setup/status') ? { ownerCanManageOwnAccess: true, isEligibleForBootstrap: false }
-      : url.endsWith('/security-roles') ? [{ id: 3, name: 'Accountant', displayName: 'Accountant' }]
+      : url.endsWith('/security-roles') ? [{ id: '3', name: 'Accountant', displayName: 'Accountant' }]
       : [];
     return new Response(JSON.stringify(value), { status: 200 });
   });
@@ -49,7 +49,7 @@ it('lets a sole owner add their own functional roles', async () => {
   fireEvent.click(screen.getByLabelText('Accountant'));
   fireEvent.click(screen.getByRole('button', { name: 'Save and activate roles' }));
   await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/owner-access-setup',
-    expect.objectContaining({ method: 'POST', body: JSON.stringify({ securityRoleIds: [3] }) })));
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ securityRoleIds: ['3'] }) })));
 });
 
 it('lets an owner select Admin when inviting a member', async () => {
@@ -191,7 +191,7 @@ it('offers return to solo and executes return-to-solo endpoint with policy revis
 });
 
 const reviewerMember = {
-  memberId: 11, userId: 'reviewer', email: 'reviewer@example.com', firstName: 'Rae', lastName: 'Viewer',
+  memberId: '11', userId: 'reviewer', email: 'reviewer@example.com', firstName: 'Rae', lastName: 'Viewer',
   role: 'Admin', status: 'Active', joinedAt: '2026-01-01T00:00:00Z', securityRoles: [],
 };
 
@@ -243,11 +243,11 @@ it('shows the reviewer conflict without a policy-change offer to an Admin', asyn
 });
 
 const ROLE_ROWS = [
-  { id: 1, name: 'WorkspaceFullAccess.v1', displayName: 'Full workspace access', permissions: ['financials.journal.post', 'sales.invoices.post'] },
-  { id: 2, name: 'Accountant', displayName: 'Accountant', permissions: ['financials.journal.post', 'sales.invoices.post', 'purchases.bills.post', 'reports.view'] },
-  { id: 3, name: 'Sales Representative', displayName: 'Sales Representative', permissions: ['sales.invoices.create', 'sales.invoices.view'] },
-  { id: 4, name: 'Purchasing Agent', displayName: 'Purchasing Agent', permissions: ['purchases.bills.create'] },
-  { id: 5, name: 'Auditor / Viewer', displayName: 'Auditor / Viewer', permissions: ['reports.view', 'financials.journal.view', 'audit.logs.view'] },
+  { id: '1', name: 'WorkspaceFullAccess.v1', displayName: 'Full workspace access', permissions: ['financials.journal.post', 'sales.invoices.post'] },
+  { id: '2', name: 'Accountant', displayName: 'Accountant', permissions: ['financials.journal.post', 'sales.invoices.post', 'purchases.bills.post', 'reports.view'] },
+  { id: '3', name: 'Sales Representative', displayName: 'Sales Representative', permissions: ['sales.invoices.create', 'sales.invoices.view'] },
+  { id: '4', name: 'Purchasing Agent', displayName: 'Purchasing Agent', permissions: ['purchases.bills.create'] },
+  { id: '5', name: 'Auditor / Viewer', displayName: 'Auditor / Viewer', permissions: ['reports.view', 'financials.journal.view', 'audit.logs.view'] },
 ];
 
 function mockWorkspace(handlers: { invitations?: object[]; onPost?: (url: string, options: RequestInit) => Response | undefined } = {}) {
@@ -287,7 +287,7 @@ it('maps the Read-only accountant preset to the Auditor / Viewer role and previe
 
   fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
   await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/invitations',
-    expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: 'new@example.com', role: 'Member', securityRoleIds: [5] }) })));
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: 'new@example.com', role: 'Member', securityRoleIds: ['5'] }) })));
 });
 
 it('maps the Bookkeeper preset to the post and AR/AP oriented seeded roles', async () => {
@@ -300,7 +300,7 @@ it('maps the Bookkeeper preset to the post and AR/AP oriented seeded roles', asy
   fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
 
   await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/organizations/current/invitations',
-    expect.objectContaining({ body: JSON.stringify({ email: 'new@example.com', role: 'Member', securityRoleIds: [2, 3, 4] }) })));
+    expect.objectContaining({ body: JSON.stringify({ email: 'new@example.com', role: 'Member', securityRoleIds: ['2', '3', '4'] }) })));
 });
 
 it('marks a preset as plan-limited when the workspace lacks some of its modules, and keeps the custom list', async () => {
@@ -333,7 +333,7 @@ it('shows the server detail and reason code when an invitation is refused', asyn
 });
 
 const staleInvitation = {
-  id: 31, email: 'late@example.com', role: 'Member', securityRoleIds: [5],
+  id: '31', email: 'late@example.com', role: 'Member', securityRoleIds: ['5'],
   expiresAt: '2026-01-01T00:00:00Z', expired: true, policyChanged: true,
 };
 
@@ -356,7 +356,7 @@ it('lists expired and policy-changed invitations and resends only after explicit
 
 it('offers reconfirmation when a plain resend is refused because the policy changed', async () => {
   mockWorkspace({
-    invitations: [{ ...staleInvitation, id: 32, expired: false, policyChanged: false }],
+    invitations: [{ ...staleInvitation, id: '32', expired: false, policyChanged: false }],
     onPost: (url, options) => url.endsWith('/32/resend') && !options.body
       ? new Response(JSON.stringify({
         detail: 'Workspace journal approval policy changed since this invitation was issued.',

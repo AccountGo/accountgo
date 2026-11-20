@@ -2,17 +2,17 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 
 export interface IntegrationCapabilities {
-  companyId: number;
+  companyId: string;
   canManage: boolean;
   canReview: boolean;
 }
 
 export interface IncomingSummary {
-  companyId: number;
+  companyId: string;
   pendingCount: number;
   purchasePendingCount: number;
   unreadCount: number;
-  latestLineId: number;
+  latestLineId: string;
 }
 
 export interface Connection {
@@ -21,7 +21,7 @@ export interface Connection {
   environment: string;
   label: string;
   status: string;
-  bankId: number;
+  bankId: string;
   bankAccountName: string;
   currency: string;
   providerAccountRef: string | null;
@@ -57,8 +57,8 @@ export interface SetupIdentity {
 }
 
 export interface IncomingItem {
-  lineId: number;
-  bankId: number;
+  lineId: string;
+  bankId: string;
   bankName: string;
   currency: string;
   postedDate: string;
@@ -67,8 +67,8 @@ export interface IncomingItem {
   memo: string | null;
   reference: string | null;
   externalId: string | null;
-  draftBillId: number | null;
-  matchedGeneralLedgerLineId: number | null;
+  draftBillId: string | null;
+  matchedGeneralLedgerLineId: string | null;
   state: 'needs_review' | 'draft_linked' | 'matched' | 'excluded';
   source: { provider: string; connectionId: string; label: string; providerAccountRef: string | null } | null;
 }

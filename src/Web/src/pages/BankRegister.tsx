@@ -21,7 +21,7 @@ import type { BankAccount, BankRegister as BankRegisterDto } from '../types/bank
 import { bankTypeLabel } from '../types/banking';
 import { BankLiveFeed } from '../components/BankLiveFeed';
 
-function sourcePath(orgSlug: string, type: string, id: number): string | null {
+function sourcePath(orgSlug: string, type: string, id: string): string | null {
   switch (type) {
     case 'SalesReceipt':
     case 'SalesInvoice':
@@ -38,7 +38,7 @@ function sourcePath(orgSlug: string, type: string, id: number): string | null {
 
 const BankRegisterPage: React.FC = () => {
   const { bankId } = useParams<{ bankId: string }>();
-  const id = Number(bankId);
+  const id = bankId ?? '';
   const navigate = useNavigate();
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
@@ -74,7 +74,7 @@ const BankRegisterPage: React.FC = () => {
   );
 
   const load = useCallback(async () => {
-    if (!Number.isFinite(id)) return;
+    if (!id) return;
     setLoading(true);
     setError(null);
     try {

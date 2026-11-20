@@ -43,7 +43,7 @@ export interface ControlRoleMapping {
   roleKey: string;
   roleTitle: string;
   category: string;
-  currentAccountId: number;
+  currentAccountId: string;
   currentAccountCode: string;
   currentAccountName: string;
   targetAccountCode?: string | null;
@@ -96,7 +96,7 @@ export interface CoaImportCommitResult {
 }
 
 export interface ApiAccount {
-  id: number;
+  id: string;
   accountClassId: number;
   accountCode: string;
   accountName: string;
@@ -112,7 +112,7 @@ export interface ApiAccount {
   protectionReason?: string | null;
   canDelete?: boolean;
   deleteBlockedReason?: string | null;
-  parentAccountId?: number | null;
+  parentAccountId?: string | null;
   description?: string | null;
   // Signed on the account class's normal side, so contra accounts come back negative.
   balance: number;
@@ -125,7 +125,7 @@ interface Row {
   level: number;
   rollup: number;
   hasChildren: boolean;
-  parentId: number | null;
+  parentId: string | null;
 }
 
 // Statement order: balance sheet first, then income statement, then closing accounts.
@@ -146,7 +146,7 @@ const isAbnormal = (a: ApiAccount, rollup: number) => (a.isContraAccount ? -roll
 const sortByCode = (list: ApiAccount[]) =>
   [...list].sort((x, y) => x.accountCode.localeCompare(y.accountCode, undefined, { numeric: true }));
 
-function flatten(accounts: ApiAccount[], level = 1, parentId: number | null = null, out: Row[] = []): Row[] {
+function flatten(accounts: ApiAccount[], level = 1, parentId: string | null = null, out: Row[] = []): Row[] {
   for (const account of sortByCode(accounts)) {
     const children = account.childAccounts || [];
     out.push({ account, level, rollup: rollupOf(account), hasChildren: children.length > 0, parentId });
@@ -169,14 +169,14 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
 
   const [accounts, setAccounts] = useState<ApiAccount[]>([]);
   /** GL account id → bank account id for linked cash accounts. */
-  const [bankByAccountId, setBankByAccountId] = useState<Map<number, number>>(new Map());
+  const [bankByAccountId, setBankByAccountId] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState('');
   const [classFilter, setClassFilter] = useState<number | null>(null);
   const [hideZero, setHideZero] = useState(false);
   const [hideArchived, setHideArchived] = useState(false);
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableSectionElement>(null);
@@ -192,7 +192,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
     accountCode: '',
     accountName: '',
     accountClassId: 1,
-    parentAccountId: '' as number | '',
+    parentAccountId: '' as string,
     description: '',
     isCash: false,
     isContraAccount: false,
@@ -242,9 +242,9 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
         setChartStatus(s);
       }
 
-      const linked = new Map<number, number>();
+      const linked = new Map<string, string>();
       if (banksRes && banksRes.ok) {
-        const list = await banksRes.json() as { accounts?: Array<{ id: number; accountId?: number | null }> };
+        const list = await banksRes.json() as { accounts?: Array<{ id: string; accountId?: string | null }> };
         for (const bank of list.accounts ?? []) {
           if (bank.accountId != null) linked.set(bank.accountId, bank.id);
         }
@@ -278,7 +278,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
   const visibleIds = useMemo(() => {
     const q = query.trim().toLowerCase();
     const byId = new Map(allRows.map((r) => [r.account.id, r]));
-    const keep = new Set<number>();
+    const keep = new Set<string>();
     for (const row of allRows) {
       const a = row.account;
       if (classFilter !== null && a.accountClassId !== classFilter) continue;
@@ -295,7 +295,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
   const filtering = query.trim() !== '' || hideZero || hideArchived;
 
   const rows = useMemo(() => {
-    const hiddenUnder = new Set<number>();
+    const hiddenUnder = new Set<string>();
     return allRows.filter((row) => {
       if (row.parentId !== null && hiddenUnder.has(row.parentId)) {
         hiddenUnder.add(row.account.id);
@@ -312,7 +312,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
     [accounts]
   );
 
-  const toggle = (id: number, open?: boolean) =>
+  const toggle = (id: string, open?: boolean) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
       const isOpen = !next.has(id);
@@ -643,7 +643,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
         accountCode: code,
         accountName: name,
         accountClassId: Number(formData.accountClassId),
-        parentAccountId: formData.parentAccountId === '' ? null : Number(formData.parentAccountId),
+        parentAccountId: formData.parentAccountId === '' ? null : formData.parentAccountId,
         description: formData.description.trim() || null,
         isCash: formData.isCash,
         isContraAccount: formData.isContraAccount,
@@ -1185,7 +1185,7 @@ export const ChartOfAccounts: React.FC<{ initialChartStatus?: ChartOfAccountsSta
                 </label>
                 <select
                   value={formData.parentAccountId}
-                  onChange={(e) => setFormData({ ...formData, parentAccountId: e.target.value === '' ? '' : Number(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, parentAccountId: e.target.value })}
                   className="w-full h-8 px-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[var(--text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
                 >
                   <option value="">None (Top level account under class)</option>

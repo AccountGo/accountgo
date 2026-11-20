@@ -9,7 +9,7 @@ vi.mock('../src/auth/AuthContext', () => ({ useAuth: () => ({ authFetch, complet
 afterEach(() => cleanup());
 
 const capabilities = (overrides: Partial<InvoiceBrandingCapabilities> = {}): InvoiceBrandingCapabilities => ({
-  companyId: 1,
+  companyId: '1',
   canCustomizeInvoiceAppearance: true,
   canHideAccountGoBranding: true,
   canManageSettings: true,

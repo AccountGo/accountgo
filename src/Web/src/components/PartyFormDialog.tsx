@@ -37,7 +37,7 @@ export function PartyFormDialog<T extends PartyBase>({
   const [city, setCity] = useState(party?.city ?? '');
   const [postalCode, setPostalCode] = useState(party?.postalCode ?? '');
   const [country, setCountry] = useState(party?.country ?? '');
-  const [paymentTermId, setPaymentTermId] = useState<number | ''>(party?.paymentTermId ?? '');
+  const [paymentTermId, setPaymentTermId] = useState<string>(party?.paymentTermId ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -64,7 +64,7 @@ export function PartyFormDialog<T extends PartyBase>({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: party?.id ?? 0,
+          id: party?.id ?? null,
           name: name.trim(),
           email: email.trim() || null,
           phone: phone.trim() || null,
@@ -237,7 +237,7 @@ export function PartyFormDialog<T extends PartyBase>({
             <select
               id={`${titleId}-terms`}
               value={paymentTermId}
-              onChange={(e) => setPaymentTermId(e.target.value ? Number(e.target.value) : '')}
+              onChange={(e) => setPaymentTermId(e.target.value)}
               className={inputClass}
             >
               <option value="">Workspace default</option>

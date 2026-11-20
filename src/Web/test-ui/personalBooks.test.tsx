@@ -13,9 +13,9 @@ vi.mock('../src/auth/AuthContext', () => ({ useAuth: () => ({
 vi.mock('../src/themes/ThemeContext', () => ({ useTheme: () => ({ theme: 'light', setTheme: vi.fn() }) }));
 
 const work: OrgDetails = { id: '1', name: 'Consulting', slug: 'consulting', currency: 'EUR', role: 'Owner',
-  linkedPersonalCompanyId: 2, canAddPersonalBooks: false };
+  linkedPersonalCompanyId: '2', canAddPersonalBooks: false };
 const personal: OrgDetails = { id: '2', name: 'Pat', slug: 'pat-personal', isPersonalBooks: true,
-  linkedWorkCompanyIds: [1], canAddPersonalBooks: false };
+  linkedWorkCompanyIds: ['1'], canAddPersonalBooks: false };
 const other: OrgDetails = { id: '3', name: 'Other', slug: 'other', canAddPersonalBooks: false };
 function Location() { return <output data-testid="location">{useLocation().pathname}</output>; }
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
@@ -59,7 +59,7 @@ describe('Personal books switcher', () => {
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/org/pat-home/dashboard'));
     const [url, request] = authFetch.mock.calls[0];
     expect(url).toBe('/api/organizations/personal');
-    expect(JSON.parse(request.body)).toEqual({ name: 'Pat — Personal', currency: 'EUR', linkWorkCompanyId: 1 });
+    expect(JSON.parse(request.body)).toEqual({ name: 'Pat — Personal', currency: 'EUR', linkWorkCompanyId: '1' });
   });
 
   it('shows server errors without switching or closing the form', async () => {

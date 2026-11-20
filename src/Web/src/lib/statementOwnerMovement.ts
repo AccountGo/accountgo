@@ -4,7 +4,7 @@ type OwnerLine = Pick<BankStatementLine, 'amount' | 'postedDate' | 'isMatched' |
 
 /** Prefer the linked Personal books workflow when the workspace and user can use it. */
 export function ownerButtonSet({ linkedPersonalCompanyId, canCreateLinkedEntry, ownerActionsAvailable, partnerMode = false }: {
-  linkedPersonalCompanyId?: number | null;
+  linkedPersonalCompanyId?: string | null;
   canCreateLinkedEntry: boolean;
   ownerActionsAvailable: boolean;
   partnerMode?: boolean;

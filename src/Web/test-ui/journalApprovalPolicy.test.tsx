@@ -73,20 +73,20 @@ it('builds approval headers only when both ids are present', () => {
 });
 
 const savedDraft: JournalEntry = {
-  id: 9,
+  id: '9',
   journalDate: '2026-04-01T00:00:00',
   voucherType: 6,
   referenceNo: 'ADJ-9',
   memo: 'Adjustment',
   posted: false,
   journalEntryLines: [
-    { id: 1, accountId: 12, drCr: 1, amount: 10, memo: '' },
-    { id: 2, accountId: 40, drCr: 2, amount: 10, memo: '' },
+    { id: '1', accountId: '12', drCr: 1, amount: 10, memo: '' },
+    { id: '2', accountId: '40', drCr: 2, amount: 10, memo: '' },
   ],
 };
 const accounts = [
-  { id: 12, accountCode: '10120', accountName: 'Receivables', canPost: true, childAccounts: [] },
-  { id: 40, accountCode: '40100', accountName: 'Sales', canPost: true, childAccounts: [] },
+  { id: '12', accountCode: '10120', accountName: 'Receivables', canPost: true, childAccounts: [] },
+  { id: '40', accountCode: '40100', accountName: 'Sales', canPost: true, childAccounts: [] },
 ];
 
 function renderEditor(overrides: { canReview?: boolean } = {}) {
@@ -107,7 +107,7 @@ function renderEditor(overrides: { canReview?: boolean } = {}) {
 }
 
 it('posts a journal with the reviewer approval headers under independent review', async () => {
-  authFetch.mockResolvedValue(new Response(JSON.stringify({ id: 9 }), { status: 200 }));
+  authFetch.mockResolvedValue(new Response(JSON.stringify({ id: '9' }), { status: 200 }));
   renderEditor();
 
   fireEvent.change(screen.getByLabelText('Approval request ID'), { target: { value: 'req-77' } });

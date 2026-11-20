@@ -136,7 +136,7 @@ export const BillDetail: React.FC = () => {
     }
   };
 
-  const handleVoidPayment = async (paymentId: number, date: string, reason: string) => {
+  const handleVoidPayment = async (paymentId: string, date: string, reason: string) => {
     if (!bill) return;
     setBusy('void');
     setError(null);

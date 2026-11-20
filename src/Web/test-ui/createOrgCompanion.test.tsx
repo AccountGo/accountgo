@@ -117,7 +117,7 @@ describe('companion personal books', () => {
     await submit(); await screen.findByText('Your workspace is ready');
     const personal = authFetch.mock.calls.filter(([url]) => url === '/api/organizations/personal');
     expect(personal).toHaveLength(1);
-    expect(JSON.parse(personal[0][1].body)).toEqual({ name: 'Pat — Personal', currency: 'EUR', linkWorkCompanyId: 42 });
+    expect(JSON.parse(personal[0][1].body)).toEqual({ name: 'Pat — Personal', currency: 'EUR', linkWorkCompanyId: '42' });
     expect(calls).toEqual(['/api/organizations', '/api/organizations/personal']);
   });
   it('keeps work success and explains how to retry when personal creation fails', async () => {
@@ -144,7 +144,7 @@ describe('companion personal books', () => {
     params.set('continue', 'work'); await submit(); await screen.findByText('Your workspace is ready');
     expect(calls).toEqual(['/api/organizations/current/initialize', '/api/organizations/current/accounting-policy', '/api/organizations/personal']);
     const personal = authFetch.mock.calls.find(([url]) => url === '/api/organizations/personal')!;
-    expect(JSON.parse(personal[1].body).linkWorkCompanyId).toBe(42);
+    expect(JSON.parse(personal[1].body).linkWorkCompanyId).toBe('42');
   });
   it('opens personal-only setup without a link checkbox and navigates to its dashboard', async () => {
     localStorage.clear(); render(<CreateOrgPage />);

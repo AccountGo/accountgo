@@ -29,7 +29,7 @@ export const PayBillDialog: React.FC<{
   const [glAccounts, setGlAccounts] = useState<BillAccount[] | null>(null);
   /** Bank id, or `gl:{accountId}` for Accounting "Other cash accounts". */
   const [payFromKey, setPayFromKey] = useState('');
-  const [accountId, setAccountId] = useState<number | ''>('');
+  const [accountId, setAccountId] = useState<string>('');
   const [amount, setAmount] = useState(bill.balanceDue.toFixed(2));
   const [date, setDate] = useState(localToday);
   const [method, setMethod] = useState('Bank Transfer');
@@ -108,9 +108,9 @@ export const PayBillDialog: React.FC<{
           billId: bill.id,
           amount: value,
           date,
-          bankAccountId: usingBank && !glFromPicker && payFromKey ? Number(payFromKey) : null,
+          bankAccountId: usingBank && !glFromPicker && payFromKey ? payFromKey : null,
           accountId: glFromPicker
-            ? Number(payFromKey.slice(3))
+            ? payFromKey.slice(3)
             : !usingBank
               ? accountId || null
               : null,
@@ -233,7 +233,7 @@ export const PayBillDialog: React.FC<{
                 {banks!
                   .filter((b) => !b.group)
                   .map((b) => (
-                    <option key={b.id} value={b.id}>
+                    <option key={b.id ?? b.name} value={b.id ?? ''}>
                       {b.name}
                       {b.accountNumberMasked ? ` · ${b.accountNumberMasked}` : ''}
                       {b.isDefaultForPayments ? ' (default)' : ''}
@@ -255,7 +255,7 @@ export const PayBillDialog: React.FC<{
               <select
                 id={`${titleId}-account`}
                 value={accountId}
-                onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : '')}
+                onChange={(e) => setAccountId(e.target.value)}
                 className={inputClass}
               >
                 {glAccounts.map((a) => (

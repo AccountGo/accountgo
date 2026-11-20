@@ -3,9 +3,9 @@ import type { PartyBase } from './parties';
 export type InvoiceStatus = 'Draft' | 'Open' | 'Partially Paid' | 'Partially Settled' | 'Paid' | 'Settled' | 'Overdue' | 'Void';
 
 export interface InvoiceLineItem {
-  id?: number;
-  itemId?: number | null;
-  measurementId?: number | null;
+  id?: string;
+  itemId?: string | null;
+  measurementId?: string | null;
   itemDescription?: string;
   measurementDescription?: string;
   quantity: number;
@@ -13,15 +13,15 @@ export interface InvoiceLineItem {
   discount: number;
   lineTotal?: number;
   taxRate?: number;
-  taxId?: number | null;
+  taxId?: string | null;
   taxAmount?: number;
-  salesAccountId?: number | null;
+  salesAccountId?: string | null;
   salesAccountCode?: string | null;
   salesAccountName?: string | null;
 }
 
 export interface InvoicePaymentItem {
-  id: number;
+  id: string;
   receiptNo?: string;
   date: string;
   amount: number;
@@ -31,10 +31,10 @@ export interface InvoicePaymentItem {
 }
 
 export interface Invoice {
-  id: number;
+  id: string;
   /** Null while a draft has no number; it is numbered when issued. */
   no: string | null;
-  customerId: number;
+  customerId: string;
   customerName: string;
   /** Attention line under the company name, e.g. "Attn: Jane Doe". */
   customerAttention?: string;
@@ -48,7 +48,7 @@ export interface Invoice {
   customerAddress?: string;
   invoiceDate: string;
   dueDate?: string;
-  paymentTermId?: number | null;
+  paymentTermId?: string | null;
   referenceNo?: string;
   amount: number;
   totalTax?: number;
@@ -80,7 +80,7 @@ export interface Invoice {
 export interface InvoiceEmailItem {
   dispatchId?: string | null;
   fromEmail?: string | null;
-  id: number;
+  id: string;
   kind: 'Invoice' | 'FollowUp' | string;
   to: string;
   sentAt: string;
@@ -115,7 +115,7 @@ export interface SalesInvoiceSettings {
   defaultNotes: string | null;
   defaultPaymentInstructions: string | null;
   /** Bank account whose details print as payment instructions; null uses the free-text default. */
-  paymentBankId: number | null;
+  paymentBankId: string | null;
 }
 
 export interface PostalAddress {
@@ -143,23 +143,23 @@ export interface InvoicingKPIs {
 }
 
 export interface RecordPaymentPayload {
-  invoiceId: number;
+  invoiceId: string;
   amount: number;
   paymentDate: string;
   paymentMethod: string;
   referenceNo?: string;
   notes?: string;
   /** Deposit-to bank account; omitted when the workspace has no banks. */
-  bankAccountId?: number | null;
+  bankAccountId?: string | null;
 }
 
 /** A client or vendor as a picker lists it. */
 export interface CustomerOption {
-  id: number;
+  id: string;
   name: string;
   email?: string;
   phone?: string;
-  paymentTermId?: number;
+  paymentTermId?: string;
   /** Archived parties are left out when picking one for a new document. */
   archived?: boolean;
 }
@@ -172,22 +172,22 @@ export interface Client extends PartyBase {
 }
 
 export interface PaymentTermOption {
-  id: number;
+  id: string;
   description: string;
   dueAfterDays?: number;
 }
 
 export interface ItemOption {
-  id: number;
+  id: string;
   code?: string;
   description: string;
   price?: number;
-  sellMeasurementId?: number;
+  sellMeasurementId?: string;
   trackStock?: boolean;
-  inventoryAccountId?: number | null;
+  inventoryAccountId?: string | null;
   quantityOnHand?: number;
   averageCost?: number;
-  salesAccountId?: number | null;
+  salesAccountId?: string | null;
   salesAccountCode?: string | null;
   salesAccountName?: string | null;
   /** Archived items are left out when picking an item for a line. */
@@ -196,7 +196,7 @@ export interface ItemOption {
 
 /** A product or service as the Products & services page shows and edits it (api/Catalog/Item). */
 export interface CatalogItem {
-  id: number;
+  id: string;
   name: string;
   code?: string | null;
   /** Default selling price; null when there is none. */
@@ -205,9 +205,9 @@ export interface CatalogItem {
   cost?: number | null;
   archived: boolean;
   trackStock: boolean;
-  inventoryAccountId?: number | null;
+  inventoryAccountId?: string | null;
   /** The account credited when this item is sold; defaults to 40100 (Sales). */
-  salesAccountId?: number | null;
+  salesAccountId?: string | null;
   salesAccountCode?: string | null;
   salesAccountName?: string | null;
   quantityOnHand: number;

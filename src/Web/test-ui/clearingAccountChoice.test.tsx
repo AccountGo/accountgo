@@ -10,7 +10,7 @@ afterEach(() => { cleanup(); fetcher.mockReset(); });
 it('saves the year-end clearing classification chosen for a new account', async () => {
   let posted: any;
   fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
-    if (init?.method === 'POST') { posted = JSON.parse(String(init.body)); return { ok: true, json: async () => ({ id: 3 }) }; }
+    if (init?.method === 'POST') { posted = JSON.parse(String(init.body)); return { ok: true, json: async () => ({ id: '3' }) }; }
     if (url.includes('Accounts?')) return { ok: true, json: async () => ({ accounts: [] }) };
     if (url.endsWith('/Accounts')) return { ok: true, json: async () => [] };
     return { ok: false, json: async () => ({}) };

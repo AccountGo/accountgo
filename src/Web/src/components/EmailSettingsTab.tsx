@@ -12,7 +12,7 @@ interface EmailDomain {
 }
 interface Sender { id: string; domainId: string; address: string; displayName: string; approved: boolean }
 interface Settings { domains: EmailDomain[]; senders: Sender[] }
-interface Dispatch { id: string; invoiceId: number; fromEmail: string; status: string; attempts: number; createdAt: number }
+interface Dispatch { id: string; invoiceId: string; fromEmail: string; status: string; attempts: number; createdAt: number }
 
 const inputClass = 'w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-[var(--text-main)]';
 const buttonClass = 'rounded-xl border border-[var(--border-subtle)] px-3 py-2 text-xs font-medium disabled:opacity-40 hover:bg-[var(--bg-subtle)]';

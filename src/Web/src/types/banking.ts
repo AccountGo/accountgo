@@ -3,7 +3,7 @@
 export type BankAccountType = 1 | 2 | 3;
 
 export interface BankAccount {
-  id: number;
+  id: string;
   name: string;
   type: number;
   accountNumberMasked?: string | null;
@@ -12,7 +12,7 @@ export interface BankAccount {
   routingNumber?: string | null;
   iban?: string | null;
   swift?: string | null;
-  accountId?: number | null;
+  accountId?: string | null;
   accountCode?: string | null;
   accountName?: string | null;
   isDefaultForReceipts: boolean;
@@ -26,17 +26,18 @@ export interface BankAccount {
 }
 
 export interface BankAccountPickerItem {
-  id: number;
+  /** The bank record's public id; null for a cash account that has no bank record yet. */
+  id: string | null;
   name: string;
   accountNumberMasked?: string | null;
   isDefaultForReceipts: boolean;
   isDefaultForPayments: boolean;
   group?: string | null;
-  accountId?: number | null;
+  accountId?: string | null;
 }
 
 export interface UnassignedCash {
-  accountId: number;
+  accountId: string;
   accountCode?: string | null;
   accountName?: string | null;
   description: string;
@@ -63,8 +64,8 @@ export interface CreateBankAccountPayload {
   isDefaultForPayments?: boolean;
   openingBalance?: number | null;
   openingBalanceDate?: string | null;
-  adoptAccountId?: number | null;
-  postingAccountId?: number | null;
+  adoptAccountId?: string | null;
+  postingAccountId?: string | null;
   currencyCode?: string | null;
   leaveCashHistoryUnassigned?: boolean;
 }
@@ -79,7 +80,7 @@ export interface UpdateBankAccountPayload {
   swift?: string | null;
   isDefaultForReceipts?: boolean;
   isDefaultForPayments?: boolean;
-  postingAccountId?: number | null;
+  postingAccountId?: string | null;
   currencyCode?: string | null;
   openingBalance?: number | null;
   openingBalanceDate?: string | null;
@@ -87,13 +88,13 @@ export interface UpdateBankAccountPayload {
 
 export interface BankRegisterSourceDoc {
   type: string;
-  id: number;
+  id: string;
   no?: string | null;
 }
 
 export interface BankRegisterLine {
-  lineId: number;
-  headerId: number;
+  lineId: string;
+  headerId: string;
   date: string;
   type: string;
   payee?: string | null;
@@ -102,7 +103,7 @@ export interface BankRegisterLine {
   in: number;
   out: number;
   balance: number;
-  reconciliationId?: number | null;
+  reconciliationId?: string | null;
 }
 
 export interface BankRegister {
@@ -114,7 +115,7 @@ export interface BankRegister {
 }
 
 export interface EligiblePostingAccount {
-  id: number;
+  id: string;
   code?: string;
   name?: string;
   accountCode?: string;
@@ -145,36 +146,36 @@ export const BANK_TRANSACTION_KIND_LABELS: Record<number, string> = {
 };
 
 export interface BankTransaction {
-  id: number;
+  id: string;
   kind: number;
   kindLabel: string;
-  bankId: number;
+  bankId: string;
   bankName?: string | null;
-  toBankId?: number | null;
+  toBankId?: string | null;
   toBankName?: string | null;
   date: string;
   amount: number;
-  contraAccountId?: number | null;
+  contraAccountId?: string | null;
   contraAccountCode?: string | null;
   contraAccountName?: string | null;
-  partyId?: number | null;
+  partyId?: string | null;
   partyName?: string | null;
   no: string;
   referenceNo?: string | null;
   memo?: string | null;
-  generalLedgerHeaderId?: number | null;
+  generalLedgerHeaderId?: string | null;
   isVoid: boolean;
-  voidGeneralLedgerHeaderId?: number | null;
+  voidGeneralLedgerHeaderId?: string | null;
 }
 
 export interface CreateBankTransactionPayload {
   kind: number;
-  bankId: number;
-  toBankId?: number | null;
+  bankId: string;
+  toBankId?: string | null;
   date: string;
   amount: number;
-  contraAccountId?: number | null;
-  partyId?: number | null;
+  contraAccountId?: string | null;
+  partyId?: string | null;
   referenceNo?: string | null;
   memo?: string | null;
   increaseBalance?: boolean | null;
@@ -185,8 +186,8 @@ export interface BankTransactionList {
 }
 
 export interface BankReconciliationCandidateLine {
-  lineId: number;
-  headerId: number;
+  lineId: string;
+  headerId: string;
   date: string;
   type: string;
   payee?: string | null;
@@ -198,8 +199,8 @@ export interface BankReconciliationCandidateLine {
 }
 
 export interface BankReconciliationListItem {
-  id: number;
-  bankId: number;
+  id: string;
+  bankId: string;
   bankName?: string | null;
   statementEndDate: string;
   statementEndingBalance: number;
@@ -214,8 +215,8 @@ export interface BankReconciliationListItem {
 }
 
 export interface BankReconciliation {
-  id: number;
-  bankId: number;
+  id: string;
+  bankId: string;
   bankName?: string | null;
   statementEndDate: string;
   statementEndingBalance: number;
@@ -255,7 +256,7 @@ export interface OutstandingAgingBucket {
 }
 
 export interface OutstandingAging {
-  bankId: number;
+  bankId: string;
   asOfDate: string;
   buckets: OutstandingAgingBucket[];
   totalCount: number;
@@ -266,7 +267,7 @@ export interface OutstandingAging {
 }
 
 export interface BankCloseStatusBank {
-  bankId: number;
+  bankId: string;
   name: string;
   reconciledThrough?: string | null;
   isReconciled: boolean;
@@ -282,8 +283,8 @@ export interface BankCloseStatus {
 }
 
 export interface BankBalanceCheckLine {
-  lineId: number;
-  headerId: number;
+  lineId: string;
+  headerId: string;
   date: string;
   type: string;
   payee?: string | null;
@@ -294,7 +295,7 @@ export interface BankBalanceCheckLine {
 }
 
 export interface BankBalanceCheck {
-  bankId: number;
+  bankId: string;
   asOfDate: string;
   bankBalance: number;
   bookBalance: number;
@@ -404,7 +405,7 @@ export interface BankStatementResolveMapping {
 }
 
 export interface BankStatementCommitResult {
-  importId: number;
+  importId: string;
   imported: number;
   duplicates: number;
   errors: number;
@@ -423,8 +424,8 @@ export interface BankStatementCommitResult {
 }
 
 export interface BankStatementMatchCandidate {
-  generalLedgerLineId: number;
-  generalLedgerHeaderId: number;
+  generalLedgerLineId: string;
+  generalLedgerHeaderId: string;
   date: string;
   description?: string | null;
   amount: number;
@@ -433,14 +434,14 @@ export interface BankStatementMatchCandidate {
 export interface BankStatementLine {
   matchedOwnerAction?: 'drawing' | 'contribution' | null;
   suggestedOwnerAction?: 'drawing' | 'contribution' | null;
-  matchedPartnerId?: number | null;
+  matchedPartnerId?: string | null;
   matchedPartnerName?: string | null;
-  suggestedPartnerId?: number | null;
+  suggestedPartnerId?: string | null;
   suggestedPartnerName?: string | null;
-  draftBillId?: number | null;
-  id: number;
-  bankId: number;
-  bankStatementImportId: number;
+  draftBillId?: string | null;
+  id: string;
+  bankId: string;
+  bankStatementImportId: string;
   source: number;
   externalId?: string | null;
   postedDate: string;
@@ -448,7 +449,7 @@ export interface BankStatementLine {
   payee?: string | null;
   memo?: string | null;
   reference?: string | null;
-  matchedGeneralLedgerLineId?: number | null;
+  matchedGeneralLedgerLineId?: string | null;
   isMatched: boolean;
   isExcluded?: boolean;
   excludedAt?: string | null;
@@ -483,7 +484,7 @@ export const STATEMENT_EXCLUSION_REASONS = [
 ] as const;
 
 export interface StatementExpenseCategory {
-  accountId: number;
+  accountId: string;
   name: string;
   curated: boolean;
 }
@@ -495,12 +496,12 @@ export interface StatementExpenseCategories {
 
 export interface StatementLineDocumentLink {
   kind: string;
-  id: number;
+  id: string;
   no?: string | null;
 }
 
 export interface StatementOwnerAction {
-  accountId: number;
+  accountId: string;
   accountCode: string;
   accountName: string;
   label: string;
@@ -511,7 +512,7 @@ export interface StatementOwnerActions {
   partners?: StatementPartnerOwnerActions[] | null;
 }
 export interface StatementPartnerOwnerActions {
-  partnerId: number;
+  partnerId: string;
   name: string;
   drawing: StatementOwnerAction | null;
   contribution: StatementOwnerAction | null;

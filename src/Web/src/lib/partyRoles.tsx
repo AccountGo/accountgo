@@ -11,7 +11,7 @@ export type PartyRole = 'client' | 'vendor';
 
 /** A client's invoice or a vendor's bill, as the party's page lists it. */
 export interface PartyDocumentRow {
-  id: number;
+  id: string;
   /** The number to show; null for a draft that has none yet. */
   number: string | null;
   status: InvoiceStatus;
@@ -34,23 +34,23 @@ export interface PartyRoleConfig {
     list: string;
     get: (id: string | number) => string;
     save: string;
-    archive: (id: number, archived: boolean) => string;
-    remove: (id: number) => string;
+    archive: (id: string, archived: boolean) => string;
+    remove: (id: string) => string;
     documents: (id: string | number) => string;
-    saveContact: (partyId: number) => string;
-    setBillToContact: (partyId: number, contactId: number) => string;
-    setPrimaryContact: (partyId: number, contactId: number) => string;
-    removeContact: (partyId: number, contactId: number) => string;
+    saveContact: (partyId: string) => string;
+    setBillToContact: (partyId: string, contactId: string) => string;
+    setPrimaryContact: (partyId: string, contactId: string) => string;
+    removeContact: (partyId: string, contactId: string) => string;
   };
   viewPermission: string;
   managePermission: string;
   createDocumentPermission: string;
   listPath: (orgSlug: string) => string;
-  detailPath: (orgSlug: string, id: number) => string;
+  detailPath: (orgSlug: string, id: string) => string;
   /** Where to start a new document for the party; null where documents can't be written yet. */
-  newDocumentPath: ((orgSlug: string, id: number) => string) | null;
+  newDocumentPath: ((orgSlug: string, id: string) => string) | null;
   /** A document's own page; null where there is none yet. */
-  documentPath: ((orgSlug: string, documentId: number) => string) | null;
+  documentPath: ((orgSlug: string, documentId: string) => string) | null;
   lastDocumentDate: (party: PartyBase) => string | null | undefined;
   toDocumentRow: (document: any) => PartyDocumentRow;
   Tabs: React.FC<{ orgSlug: string }>;

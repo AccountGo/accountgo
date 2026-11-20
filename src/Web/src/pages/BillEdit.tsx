@@ -15,17 +15,17 @@ import { addBusinessDays, businessDaysBetween, isValidDate, localToday as today 
 import { archivedTaxMessage, firstArchivedTax, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
 
 interface LineDraft {
-  /** Stable React key; ids are 0 until a line is saved. */
+  /** Stable React key; the id is empty until a line is saved. */
   key: number;
-  id: number;
-  itemId: number | null;
+  id: string;
+  itemId: string | null;
   description: string;
-  accountId: number | '';
+  accountId: string | '';
   isStockItem: boolean;
   quantity: number;
   amount: number;
   discount: number;
-  taxId: number | '';
+  taxId: string | '';
 }
 
 const fieldClass =
@@ -58,7 +58,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const orgSlug = currentOrg.slug;
   const listPath = `/org/${orgSlug}/purchases`;
   const duplicateOf = isEdit ? null : searchParams.get('from');
-  const presetVendor = isEdit ? null : Number(searchParams.get('vendor')) || null;
+  const presetVendor = isEdit ? null : searchParams.get('vendor') || null;
 
   // Ledger accounts on lines follow the Financials module, whatever the plan is called.
   const showLedgerAccounts = hasModule('financials');
@@ -70,11 +70,11 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const [catalog, setCatalog] = useState<ItemOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [vendorId, setVendorId] = useState<number | null>(presetVendor);
+  const [vendorId, setVendorId] = useState<string | null>(presetVendor);
   const [vendorInvoiceNo, setVendorInvoiceNo] = useState('');
   const [referenceNo, setReferenceNo] = useState('');
   const [date, setDate] = useState(today());
-  const [paymentTermId, setPaymentTermId] = useState<number | ''>('');
+  const [paymentTermId, setPaymentTermId] = useState<string>('');
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([]);
@@ -97,13 +97,13 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   // New lines are booked to Purchase A/C unless another account is picked, the same default the server applies.
   const defaultAccountId = useMemo(() => accounts.find((a) => a.code === '50200')?.id ?? '', [accounts]);
   const blankLine = useCallback(
-    (): LineDraft => ({ key: nextKey++, id: 0, itemId: null, description: '', accountId: defaultAccountId, isStockItem: false, quantity: 1, amount: 0, discount: 0, taxId: '' }),
+    (): LineDraft => ({ key: nextKey++, id: '', itemId: null, description: '', accountId: defaultAccountId, isStockItem: false, quantity: 1, amount: 0, discount: 0, taxId: '' }),
     [defaultAccountId]
   );
 
   const toLine = (line: Bill['lines'][number], keepId: boolean): LineDraft => ({
     key: nextKey++,
-    id: keepId ? line.id : 0,
+    id: keepId ? line.id : '',
     itemId: line.itemId ?? null,
     description: line.description ?? '',
     accountId: line.accountId ?? '',
@@ -178,7 +178,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           }
         } else {
           const defaultAccount = accountList.find((a) => a.code === '50200')?.id ?? '';
-          setLines([{ key: nextKey++, id: 0, itemId: null, description: '', accountId: defaultAccount, isStockItem: false, quantity: 1, amount: 0, discount: 0, taxId: '' }]);
+          setLines([{ key: nextKey++, id: '', itemId: null, description: '', accountId: defaultAccount, isStockItem: false, quantity: 1, amount: 0, discount: 0, taxId: '' }]);
         }
       } catch (err: any) {
         if (!cancelled) setError(err.message || 'The bill form could not be loaded.');
@@ -204,7 +204,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   }, [vendor?.id, paymentTerms]);
 
   // Terms count business days, as on invoices. A term sets the due date; a date that no term fits is custom.
-  const applyTerm = (termId: number | '', from = date) => {
+  const applyTerm = (termId: string | '', from = date) => {
     setPaymentTermId(termId);
     const term = paymentTerms.find((t) => t.id === termId);
     if (term && isValidDate(from)) setDueDate(addBusinessDays(from, term.dueAfterDays ?? 0));
@@ -214,7 +214,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const updateLine = (index: number, changes: Partial<LineDraft>) =>
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...changes } : line)));
 
-  const taxRate = (taxId: number | '') => taxes.find((t) => t.id === taxId)?.rate ?? 0;
+  const taxRate = (taxId: string | '') => taxes.find((t) => t.id === taxId)?.rate ?? 0;
   const totals = useMemo(() => {
     let subtotal = 0;
     let tax = 0;
@@ -261,7 +261,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: isEdit ? Number(billId) : 0,
+          id: isEdit ? billId : 0,
           vendorId,
           vendorInvoiceNo: vendorInvoiceNo.trim() || null,
           referenceNo: referenceNo.trim() || null,
@@ -460,7 +460,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
               <label htmlFor="bill-terms" className={labelClass}>
                 Payment terms
               </label>
-              <select id="bill-terms" value={paymentTermId} onChange={(e) => applyTerm(e.target.value ? Number(e.target.value) : '')} className={fieldClass}>
+              <select id="bill-terms" value={paymentTermId} onChange={(e) => applyTerm(e.target.value)} className={fieldClass}>
                 <option value="">Custom</option>
                 {paymentTerms.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -587,7 +587,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                               <select
                                 aria-label={`Line ${idx + 1} account`}
                                 value={line.accountId}
-                                onChange={(e) => updateLine(idx, { accountId: e.target.value ? Number(e.target.value) : '' })}
+                                onChange={(e) => updateLine(idx, { accountId: e.target.value })}
                                 className="h-6 px-1.5 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-muted)] hover:text-[var(--text-main)] focus:text-[var(--text-main)] focus:ring-1 focus:ring-[var(--brand-ring)] focus:outline-none transition max-w-[220px]"
                               >
                                 <option value="">Default (50200 · Purchase A/C)</option>
@@ -652,7 +652,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                         <select
                           aria-label={`Line ${idx + 1} tax`}
                           value={line.taxId}
-                          onChange={(e) => updateLine(idx, { taxId: e.target.value ? Number(e.target.value) : '' })}
+                          onChange={(e) => updateLine(idx, { taxId: e.target.value })}
                           className={cellClass}
                         >
                           <option value="">No tax</option>

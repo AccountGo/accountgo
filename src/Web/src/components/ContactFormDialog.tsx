@@ -18,7 +18,7 @@ export function ContactFormDialog({
   onClose,
 }: {
   role: PartyRole;
-  partyId: number;
+  partyId: string;
   /** Omit to add a contact. */
   contact?: ContactPerson;
   onSaved: (party: PartyBase) => void;
@@ -62,7 +62,7 @@ export function ContactFormDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: contact?.id ?? 0,
+          id: contact?.id ?? null,
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim() || null,

@@ -16,9 +16,9 @@ it.each([1, 0])('updates the map and retains skipped details with %i ready rows'
     if (url.endsWith('/Preview')) { submitted = JSON.parse(String(init?.body)); return response({ totalRows: 2, readyRows, duplicateRows: 0, errorRows: 0, skippedRows: 1, rows: [] }); }
     if (url.endsWith('/StatementImports')) { submitted = JSON.parse(String(init?.body)); return response({ imported: readyRows, duplicates: 0, errors: 0, skipped: 1, autoMatched: 0, skippedRowDetails: [{ rowNumber: 3, error: 'neutral conversion skipped' }] }); }
     if (url.includes('/StatementLines')) return response({ lines: [], totalCount: 0, page: 1, pageSize: 100, unmatchedCount: 0, matchedCount: 0, booksStartDate: "2024-01-01", beforeBooksStartCount: 1 });
-    return response({ id: 1, name: 'Wise', currencyCode: 'USD' });
+    return response({ id: '1', name: 'Wise', currencyCode: 'USD' });
   });
-  render(<MemoryRouter initialEntries={['/bank/1']}><Routes><Route element={<Outlet context={{ currentOrg: { id: 1, slug: 'books', currency: 'USD' } }} />}><Route path="/bank/:bankId" element={<BankStatementImportPage />} /></Route></Routes></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/bank/1']}><Routes><Route element={<Outlet context={{ currentOrg: { id: '1', slug: 'books', currency: 'USD' } }} />}><Route path="/bank/:bankId" element={<BankStatementImportPage />} /></Route></Routes></MemoryRouter>);
   const input = await screen.findByLabelText('Statement file');
   const data = new TextEncoder().encode('date,direction,amount,signed_amount\n2024-01-01,out,10,-10');
   const file = new File([data], 'wise.csv', { type: 'text/csv' });
@@ -51,9 +51,9 @@ it.each(['ofx', 'xml', 'mt940', 'qif'])('allows preview of %s after an unresolve
   fetcher.mockImplementation(async (url: string) => {
     if (url.includes('ResolveMapping')) return response({ mappingSource: 'preset', columnMap: { hasHeaderRow: true, dateColumn: 0, directionColumn: 1, amountColumn: 3, amountCarriesSign: true, invertSign: false } });
     if (url.includes('/StatementLines')) return response({ lines: [], totalCount: 0, page: 1, pageSize: 100, unmatchedCount: 0, matchedCount: 0 });
-    return response({ id: 1, name: 'Wise', currencyCode: 'USD' });
+    return response({ id: '1', name: 'Wise', currencyCode: 'USD' });
   });
-  render(<MemoryRouter initialEntries={['/bank/1']}><Routes><Route element={<Outlet context={{ currentOrg: { id: 1, slug: 'books', currency: 'USD' } }} />}><Route path="/bank/:bankId" element={<BankStatementImportPage />} /></Route></Routes></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/bank/1']}><Routes><Route element={<Outlet context={{ currentOrg: { id: '1', slug: 'books', currency: 'USD' } }} />}><Route path="/bank/:bankId" element={<BankStatementImportPage />} /></Route></Routes></MemoryRouter>);
   const input = await screen.findByLabelText('Statement file');
   const data = new TextEncoder().encode('date,direction,amount,signed_amount,custom\n2024-01-01,out,10,-10,10');
   const csv = new File([data], 'wise.csv');

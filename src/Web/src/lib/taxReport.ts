@@ -11,7 +11,7 @@ export interface TaxPeriodSettings {
 
 export interface TaxFilingDiffRow {
   side: 'output' | 'input';
-  taxId: number | null;
+  taxId: string | null;
   taxCode: string;
   filed: number;
   current: number;
@@ -25,7 +25,7 @@ export interface TaxChangedSinceFiling {
 }
 
 export interface TaxPeriodFilingSummary {
-  id: number;
+  id: string;
   sequence: number;
   filedOn: string;
   reference: string | null;
@@ -34,14 +34,14 @@ export interface TaxPeriodFilingSummary {
 }
 
 export interface TaxFilingRecord {
-  id: number;
+  id: string;
   periodStart: string;
   periodEnd: string;
   periodLabel: string;
   frequency: string;
   basis: string;
   sequence: number;
-  amendsFilingId: number | null;
+  amendsFilingId: string | null;
   amendmentReason: string | null;
   filedOn: string;
   reference: string | null;
@@ -63,7 +63,7 @@ export interface TaxPeriodItem {
 }
 
 export interface TaxPeriodTaxRow {
-  taxId: number | null;
+  taxId: string | null;
   taxCode: string;
   taxName: string;
   rate: number | null;
@@ -81,11 +81,11 @@ export interface TaxPeriodSideSummary {
 export interface TaxPeriodDocumentRow {
   side: 'output' | 'input';
   kind: 'invoice' | 'invoiceVoid' | 'invoicePayment' | 'bill' | 'billVoid' | 'billPayment';
-  id: number;
+  id: string;
   no: string;
   date: string;
   party: string;
-  taxId: number | null;
+  taxId: string | null;
   taxable: number;
   tax: number;
   posted: boolean;
@@ -93,13 +93,13 @@ export interface TaxPeriodDocumentRow {
 
 export interface TaxPeriodUnpostedWarning {
   kind: 'invoice' | 'bill';
-  id: number;
+  id: string;
   no: string;
   date: string;
 }
 
 export interface TaxPeriodLedgerOtherEntry {
-  glHeaderId: number;
+  glHeaderId: string;
   date: string;
   description: string;
   documentType: string;
@@ -107,7 +107,7 @@ export interface TaxPeriodLedgerOtherEntry {
 }
 
 export interface TaxPeriodLedgerAccount {
-  accountId: number;
+  accountId: string;
   code: string;
   name: string;
   positiveSide: 'credit' | 'debit';
@@ -263,7 +263,7 @@ export function buildTaxReportCsv(
         ? 'Accrual (by invoice and bill date)'
         : report.basis;
 
-  const taxCodeById = new Map<number, string>();
+  const taxCodeById = new Map<string, string>();
   for (const row of report.output.rows) {
     if (row.taxId !== null) taxCodeById.set(row.taxId, row.taxCode);
   }

@@ -14,7 +14,7 @@ const round = (numerator: bigint, denominator: bigint) => {
 };
 
 export interface WorkspaceTax {
-  id: number;
+  id: string;
   taxCode?: string | null;
   taxName: string;
   rate: number;
@@ -29,9 +29,9 @@ export const taxChoiceLabel = (tax: { taxName: string; rate: number; isActive?: 
   tax.isActive === false ? `${tax.taxName} (archived)` : `${tax.taxName} (${tax.rate}%)`;
 
 /** Selectable rates, plus the archived rate already stored on this line. */
-export const lineTaxChoices = <T extends { id: number; taxCode?: string | null; isActive?: boolean }>(
+export const lineTaxChoices = <T extends { id: string; taxCode?: string | null; isActive?: boolean }>(
   taxes: T[],
-  selectedId: number | ''
+  selectedId: string | ''
 ): T[] => {
   const selectable = taxes.filter(isSelectableTax);
   if (selectedId === '') return selectable;
@@ -44,9 +44,9 @@ export const lineTaxChoices = <T extends { id: number; taxCode?: string | null; 
 export const archivedTaxMessage = (taxName: string) =>
   `${taxName} is archived. Pick another tax for this line.`;
 
-export const firstArchivedTax = <T extends { id: number; taxName: string; isActive?: boolean }>(
+export const firstArchivedTax = <T extends { id: string; taxName: string; isActive?: boolean }>(
   taxes: T[],
-  selectedIds: Array<number | ''>
+  selectedIds: Array<string>
 ): T | undefined =>
   selectedIds
     .map((id) => (id === '' ? undefined : taxes.find((tax) => tax.id === id)))

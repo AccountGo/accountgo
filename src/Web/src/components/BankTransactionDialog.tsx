@@ -8,7 +8,7 @@ import { useReconciledPeriodConfirm } from '../lib/useReconciledPeriodConfirm';
 import type { BankAccount, BankReconciliation, CreateBankTransactionPayload } from '../types/banking';
 
 interface PostableAccount {
-  id: number;
+  id: string;
   accountCode: string;
   accountName: string;
   canPost: boolean;
@@ -46,7 +46,7 @@ interface BankTransactionDialogProps {
   /** When true, Fee / Interest / Adjustment only (reconciliation adjustment). */
   adjustmentOnly?: boolean;
   /** When set with adjustmentOnly, posts via Reconciliations/{id}/Adjustments. */
-  reconciliation?: { id: number; version: number };
+  reconciliation?: { id: string; version: number };
   onSaved: (updatedRecon?: BankReconciliation) => void | Promise<void>;
   onClose: () => void;
 }
@@ -127,7 +127,7 @@ export const BankTransactionDialog: React.FC<BankTransactionDialogProps> = ({
             kind,
             amount: parsedAmount,
             date,
-            contraAccountId: contraAccountId ? Number(contraAccountId) : null,
+            contraAccountId: contraAccountId ? contraAccountId : null,
             increaseBalance: kind === 6 ? increaseBalance : null,
             memo: memo.trim() || null,
             referenceNo: referenceNo.trim() || null,
@@ -151,8 +151,8 @@ export const BankTransactionDialog: React.FC<BankTransactionDialogProps> = ({
         memo: memo.trim() || null,
         referenceNo: referenceNo.trim() || null,
       };
-      if (kind === 3) payload.toBankId = Number(toBankId);
-      if (contraAccountId) payload.contraAccountId = Number(contraAccountId);
+      if (kind === 3) payload.toBankId = toBankId;
+      if (contraAccountId) payload.contraAccountId = contraAccountId;
       if (kind === 6) payload.increaseBalance = increaseBalance;
 
       const res = await authFetch(withConfirmReconciledPeriod('/api/Banking/Transactions', confirmReconciledPeriod), {

@@ -13,7 +13,7 @@ export function AdoptPersonalBooksDialog({ org, onClose, onAdopted }: {
   async function confirm() {
     setSaving(true); setError('');
     try {
-      const response = await authFetch(`/api/organizations/personal/adopt/${Number(org.id)}`, { method: 'POST' });
+      const response = await authFetch(`/api/organizations/personal/adopt/${org.id}`, { method: 'POST' });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.detail || 'Could not use this workspace as your personal books.');

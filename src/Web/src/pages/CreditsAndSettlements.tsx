@@ -10,11 +10,11 @@ import { localToday } from '../lib/businessDays';
 import { Plus, CheckCircle2, ArrowRightLeft, Undo2, FileWarning, RotateCcw, Save } from 'lucide-react';
 
 interface CreditNoteRow {
-  id: number;
+  id: string;
   no: string | null;
-  customerId?: number;
+  customerId?: string;
   customerName?: string;
-  vendorId?: number;
+  vendorId?: string;
   vendorName?: string;
   vendorCreditNo?: string;
   date: string;
@@ -33,10 +33,10 @@ interface CreditNoteRow {
 interface AccountRolePreview {
   roleKey: string;
   roleLabel: string;
-  configuredAccountId: number | null;
+  configuredAccountId: string | null;
   configuredAccountCode: string | null;
   configuredAccountName: string | null;
-  suggestedAccountId: number | null;
+  suggestedAccountId: string | null;
   suggestedAccountCode: string | null;
   suggestedAccountName: string | null;
   isArchived: boolean;
@@ -53,34 +53,34 @@ interface MappingPreview {
 }
 
 interface DocOption {
-  id: number;
+  id: string;
   no: string | null;
-  partyId: number;
+  partyId: string;
   partyName: string;
   balanceDue: number;
   status?: string;
 }
 
 interface PartyOption {
-  id: number;
+  id: string;
   name: string;
 }
 
 interface DocLineOption {
-  id: number;
-  itemId: number | null;
+  id: string;
+  itemId: string | null;
   description: string;
   quantity: number;
 }
 
 interface GlAccountOption {
-  id: number;
+  id: string;
   accountCode: string;
   accountName: string;
 }
 
 interface BankPickerOption {
-  id: number;
+  id: string;
   name: string;
 }
 
@@ -328,10 +328,10 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
     setBusy(true);
     setError(null);
     try {
-      const payload: Record<string, number | null> = {};
+      const payload: Record<string, string | null> = {};
       for (const [roleKey, field] of Object.entries(ROLE_KEY_TO_REQUEST_FIELD)) {
         const raw = mappingSelections[roleKey];
-        payload[field] = raw ? Number(raw) : null;
+        payload[field] = raw || null;
       }
       const res = await authFetch('/api/sales/credits/mappings', {
         method: 'PUT',
@@ -358,16 +358,16 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
       const payload =
         side === 'sales'
           ? {
-              customerId: Number(partyId),
-              sourceSalesInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
+              customerId: partyId,
+              sourceSalesInvoiceHeaderId: sourceDocId ? sourceDocId : null,
               date: localToday(),
               kind: 1,
               reason: creditReason || 'Credit preview',
               lines: [{ description: lineDesc, quantity: Number(lineQty), unitPrice: Number(linePrice) }],
             }
           : {
-              vendorId: Number(partyId),
-              sourcePurchaseInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
+              vendorId: partyId,
+              sourcePurchaseInvoiceHeaderId: sourceDocId ? sourceDocId : null,
               vendorCreditNo: vendorCreditNo || 'PREVIEW',
               date: localToday(),
               effectiveDate: localToday(),
@@ -402,8 +402,8 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
       const payload =
         side === 'sales'
           ? {
-              customerId: Number(partyId),
-              sourceSalesInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
+              customerId: partyId,
+              sourceSalesInvoiceHeaderId: sourceDocId ? sourceDocId : null,
               date: localToday(),
               kind: 1,
               isStandalone: !sourceDocId,
@@ -412,8 +412,8 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
               idempotencyKey: newIdempotencyKey(),
             }
           : {
-              vendorId: Number(partyId),
-              sourcePurchaseInvoiceHeaderId: sourceDocId ? Number(sourceDocId) : null,
+              vendorId: partyId,
+              sourcePurchaseInvoiceHeaderId: sourceDocId ? sourceDocId : null,
               vendorCreditNo,
               date: localToday(),
               effectiveDate: localToday(),
@@ -474,13 +474,13 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           ? {
               effectiveDate: localToday(),
               expectedCreditVersion: modal.credit.version,
-              applications: [{ salesInvoiceHeaderId: Number(applyTargetId), amount: Number(applyAmount) }],
+              applications: [{ salesInvoiceHeaderId: applyTargetId, amount: Number(applyAmount) }],
               idempotencyKey: newIdempotencyKey(),
             }
           : {
               effectiveDate: localToday(),
               expectedCreditVersion: modal.credit.version,
-              applications: [{ purchaseInvoiceHeaderId: Number(applyTargetId), amount: Number(applyAmount) }],
+              applications: [{ purchaseInvoiceHeaderId: applyTargetId, amount: Number(applyAmount) }],
               idempotencyKey: newIdempotencyKey(),
             };
       const res = await authFetch(`${base}/${modal.credit.id}/apply`, {
@@ -516,7 +516,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
           customerId: isSales ? modal.credit.customerId : null,
           vendorId: !isSales ? modal.credit.vendorId : null,
           date: localToday(),
-          bankId: Number(refundBankId),
+          bankId: refundBankId,
           paymentMethod: refundMethod,
           externalReference: refundExtRef,
           allocations: [
@@ -600,7 +600,7 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          salesInvoiceHeaderId: Number(woInvoiceId),
+          salesInvoiceHeaderId: woInvoiceId,
           date: localToday(),
           amount: Number(woAmount),
           reason: woReason,
@@ -639,9 +639,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          vendorId: Number(advVendorId),
+          vendorId: advVendorId,
           date: localToday(),
-          bankId: Number(advBankId),
+          bankId: advBankId,
           amount: Number(advAmount),
           purpose: advPurpose,
           isRefundable: true,
@@ -676,11 +676,11 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
       const url = isSales ? '/api/returns/customer' : '/api/returns/supplier/dispatch';
       const payload = isSales
         ? {
-            salesInvoiceHeaderId: Number(retDocId),
+            salesInvoiceHeaderId: retDocId,
             receiptDate: localToday(),
             lines: [
               {
-                salesInvoiceLineId: Number(retLineId),
+                salesInvoiceLineId: retLineId,
                 quantity: Number(retQty),
                 condition: Number(retCondition),
               },
@@ -688,16 +688,16 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
             idempotencyKey: newIdempotencyKey(),
           }
         : {
-            vendorId: Number(partyId),
-            purchaseInvoiceHeaderId: retDocId ? Number(retDocId) : null,
+            vendorId: partyId,
+            purchaseInvoiceHeaderId: retDocId ? retDocId : null,
             dispatchDate: localToday(),
             hasControlTransferred: retControlTransferred,
             controlTransferDate: retControlTransferred ? localToday() : null,
             reason: retReason,
             lines: [
               {
-                purchaseInvoiceLineId: retLineId ? Number(retLineId) : null,
-                itemId: Number(retItemId),
+                purchaseInvoiceLineId: retLineId ? retLineId : null,
+                itemId: retItemId,
                 quantity: Number(retQty),
               },
             ],

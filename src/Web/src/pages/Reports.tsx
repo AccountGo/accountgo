@@ -39,18 +39,18 @@ export interface FinancialYear {
   status?: 'Open' | 'Ended' | 'Closed';
   closedAt?: string | null;
   closedBy?: string | null;
-  closingGeneralLedgerHeaderId?: number | null;
+  closingGeneralLedgerHeaderId?: string | null;
   isPersisted?: boolean;
 }
 
 interface Account {
-  id: number;
+  id: string;
   accountName: string;
   childAccounts: Account[];
 }
 
 interface TrialBalanceRow {
-  accountId: number;
+  accountId: string;
   accountCode: string;
   accountName: string;
   debit: number;
@@ -58,7 +58,7 @@ interface TrialBalanceRow {
 }
 
 interface IncomeRow {
-  accountId: number;
+  accountId: string;
   accountCode: string;
   accountName: string;
   amount: number;
@@ -66,7 +66,7 @@ interface IncomeRow {
 }
 
 interface BalanceRow {
-  accountId: number;
+  accountId: string;
   accountClassId: number;
   accountCode: string;
   accountName: string;
@@ -74,7 +74,7 @@ interface BalanceRow {
 }
 
 export interface CashFlowLineDto {
-  accountId: number;
+  accountId: string;
   accountCode: string;
   accountName: string;
   lineType: string;
@@ -100,7 +100,7 @@ export interface CashFlowStatementDto {
 
 interface CashMovement {
   openingCash: number;
-  lines: { date: string; generalLedgerHeaderId: number; description: string; accountName: string; counterpartAccountName: string; moneyIn: number; moneyOut: number }[];
+  lines: { date: string; generalLedgerHeaderId: string; description: string; accountName: string; counterpartAccountName: string; moneyIn: number; moneyOut: number }[];
   totalIn: number;
   totalOut: number;
   closingCash: number;
@@ -133,7 +133,7 @@ export interface StatementRow {
   change?: number;
   /** Percent change; null when the comparative amount is 0. */
   changePercent?: number | null;
-  accountId?: number;
+  accountId?: string;
 }
 
 const statements: { key: Statement; label: string }[] = [
@@ -292,7 +292,7 @@ export function buildStatement(statement: Statement, data: ReportData, hideZero 
     const spending = section('Spending', data.income.filter(a => a.isExpense));
     rows.push({ code: '', label: 'Net', kind: 'total', amount: earned + freelanceAmount - spending });
   } else if (statement === 'income') {
-    const costIds = new Set<number>();
+    const costIds = new Set<string>();
     const visit = (accounts: Account[], isCost = false) => {
       for (const account of accounts) {
         const cost = isCost || /\b(cost of (goods sold|sales)|direct costs?|purchases?)\b/i.test(account.accountName);

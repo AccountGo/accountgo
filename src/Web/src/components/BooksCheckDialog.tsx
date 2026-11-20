@@ -5,7 +5,7 @@ import { getOrgSlugFromLocation, useAuth } from '../auth/AuthContext';
 import { BOOKS_NOT_READY_EVENT, type BooksNotReadyProblem, type UnpostedDocument } from '../lib/entitlementEvents';
 import { ModalShell } from './ModalShell';
 
-type PostResult = { id: number; number?: string | null; posted: boolean; error?: string | null };
+type PostResult = { id: string; number?: string | null; posted: boolean; error?: string | null };
 
 function documentHref(slug: string | null, doc: UnpostedDocument): string | null {
   if (!slug) return null;
@@ -44,7 +44,7 @@ export const BooksCheckDialogView: React.FC<{ problem: BooksNotReadyProblem; onC
   const closeRef = useRef<HTMLButtonElement>(null);
   const [invoices, setInvoices] = useState<UnpostedDocument[]>(problem.unpostedInvoices);
   const [bills, setBills] = useState<UnpostedDocument[]>(problem.unpostedBills);
-  const [errors, setErrors] = useState<Record<number, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const slug = typeof window === 'undefined' ? null : getOrgSlugFromLocation();
@@ -65,7 +65,7 @@ export const BooksCheckDialogView: React.FC<{ problem: BooksNotReadyProblem; onC
         unpostedInvoices: UnpostedDocument[];
         unpostedBills: UnpostedDocument[];
       };
-      const nextErrors: Record<number, string> = {};
+      const nextErrors: Record<string, string> = {};
       for (const result of body.results ?? []) {
         if (!result.posted && result.error) nextErrors[result.id] = result.error;
       }

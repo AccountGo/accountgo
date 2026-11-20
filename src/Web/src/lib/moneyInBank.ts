@@ -1,5 +1,5 @@
 export interface DashboardBankBalance {
-  bankId: number;
+  bankId: string;
   name: string;
   balance: number;
   /** An archived bank that still holds a balance. */
@@ -23,7 +23,7 @@ export interface MoneyInBankRow {
 const CENTS_PER_UNIT = 100;
 
 /** Bank register path for the workspace; the list page when no bank is given (unassigned cash). */
-export function bankRegisterPath(orgSlug: string, bankId?: number): string {
+export function bankRegisterPath(orgSlug: string, bankId?: string): string {
   return bankId === undefined ? `/org/${orgSlug}/banking` : `/org/${orgSlug}/banking/${bankId}`;
 }
 

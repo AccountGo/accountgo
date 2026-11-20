@@ -11,11 +11,11 @@ export interface PaymentBankOption {
  */
 export function paymentBankChoice(
   pickerItems: BankAccountPickerItem[],
-  selectedId: number | null,
+  selectedId: string | null,
   pickerLoaded = true,
 ): PaymentBankOption[] {
-  // Cash accounts without a bank record come back with id 0; they have no bank details to print.
-  const banks = pickerItems.filter((item) => item.id > 0);
+  // Cash accounts without a bank record come back with no id; they have no bank details to print.
+  const banks = pickerItems.filter((item): item is BankAccountPickerItem & { id: string } => !!item.id);
   const options: PaymentBankOption[] = [{ value: '', label: 'None, use the default text' }];
   for (const bank of banks) {
     options.push({

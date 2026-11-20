@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useIntegrations, type IncomingItem } from '../lib/integrations';
 
-export function IncomingProvenance({ companyId, bankId, lineId }: { companyId: string; bankId: number; lineId: number }) {
+export function IncomingProvenance({ companyId, bankId, lineId }: { companyId: string; bankId: string; lineId: string }) {
   const { capabilities } = useIntegrations();
   const { authFetch } = useAuth();
   const [item, setItem] = useState<IncomingItem | null>(null);

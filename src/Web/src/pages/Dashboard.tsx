@@ -61,12 +61,12 @@ interface DashboardSummary {
   monthlySales: Array<{ label: string; amount: number }>;
   monthlyExpenses: Array<{ label: string; amount: number }>;
   topReceivables: Array<{
-    customerId: number;
+    customerId: string;
     customerName: string;
     balance: number;
   }>;
   upcomingPayables: Array<{
-    purchaseInvoiceId: number;
+    purchaseInvoiceId: string;
     vendorName: string;
     invoiceNo: string;
     remainingAmount: number;

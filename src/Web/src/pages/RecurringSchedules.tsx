@@ -31,7 +31,7 @@ export const RecurringSchedules: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const canPost = hasPermission('sales.invoices.post') && salesWritable;
-  const [running, setRunning] = useState<number | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const initialFilter = (searchParams.get('filter') as FilterKey) || 'all';

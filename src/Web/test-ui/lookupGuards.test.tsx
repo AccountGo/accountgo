@@ -78,7 +78,7 @@ describe('Lookup guards for unentitled features', () => {
       caps.canStatementImport = false;
       render(
         <MemoryRouter>
-          <BillStatementSources billId={42} orgSlug="acme" />
+          <BillStatementSources billId="42" orgSlug="acme" />
         </MemoryRouter>
       );
 
@@ -92,7 +92,7 @@ describe('Lookup guards for unentitled features', () => {
       hasPermission.mockImplementation((p: string) => p !== 'banking.accounts.view');
       render(
         <MemoryRouter>
-          <BillStatementSources billId={42} orgSlug="acme" />
+          <BillStatementSources billId="42" orgSlug="acme" />
         </MemoryRouter>
       );
 
@@ -106,7 +106,7 @@ describe('Lookup guards for unentitled features', () => {
       hasPermission.mockReturnValue(true);
       render(
         <MemoryRouter>
-          <BillStatementSources billId={42} orgSlug="acme" />
+          <BillStatementSources billId="42" orgSlug="acme" />
         </MemoryRouter>
       );
 

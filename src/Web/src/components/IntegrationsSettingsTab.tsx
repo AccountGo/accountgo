@@ -41,7 +41,7 @@ export function IntegrationsSettingsTab() {
   const [notice, setNotice] = useState('');
   const [confirm, setConfirm] = useState<{ action: string; title: string; message: string } | null>(null);
   const selected = connections.find(c => c.id === selectedId);
-  const associatedBank = banks.find(b => b.id === Number(bankId));
+  const associatedBank = banks.find(b => b.id === bankId);
 
   useEffect(() => {
     setBalanceCurrency(associatedBank?.currencyCode || '');
@@ -103,7 +103,7 @@ export function IntegrationsSettingsTab() {
   const create = (event: React.FormEvent) => {
     event.preventDefault();
     void run(async () => {
-      const bank = banks.find(b => b.id === Number(bankId));
+      const bank = banks.find(b => b.id === bankId);
       if (!bank)
         throw new Error('Select a workspace bank account.');
       if (!bank.currencyCode)
@@ -114,7 +114,7 @@ export function IntegrationsSettingsTab() {
         throw new Error('Enter both existing balance-update identifiers, or leave both empty.');
       const data = await request('/api/integrations/connections', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, label, bankId: Number(bankId), environment, setupOnly: true,
+        body: JSON.stringify({ provider, label, bankId: bankId, environment, setupOnly: true,
           providerAccountRef: profile && balance ? `profile:${profile}:balance:${balance}` : undefined,
           balanceCurrency: balanceCurrency.toUpperCase() }),
       });

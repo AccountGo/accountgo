@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import type { BankStatementLine } from '../types/banking';
 
 interface OpenInvoice {
-  id: number;
+  id: string;
   no?: string | null;
   customerName?: string | null;
   balanceDue?: number;
@@ -80,7 +80,7 @@ export const StatementLineApplyInvoiceDialog: React.FC<StatementLineApplyInvoice
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invoiceId: Number(invoiceId),
+          invoiceId: invoiceId,
           memo: memo.trim() || null,
         }),
       });

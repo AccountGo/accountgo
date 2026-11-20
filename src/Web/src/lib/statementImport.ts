@@ -269,8 +269,8 @@ export function normalizePayeeName(value: string | null | undefined): string {
 /** Prefer an exact vendor name match for the bank description; otherwise null. */
 export function matchVendorIdByPayee(
   payee: string | null | undefined,
-  vendors: { id: number; name?: string | null }[],
-): number | null {
+  vendors: { id: string; name?: string | null }[],
+): string | null {
   const needle = normalizePayeeName(payee);
   if (!needle) return null;
   const exact = vendors.find((v) => normalizePayeeName(v.name) === needle);

@@ -15,7 +15,7 @@ export interface AccessPresetDefinition {
 }
 
 export interface AccessPreset extends AccessPresetDefinition {
-  roleIds: number[];
+  roleIds: string[];
   /** True when every area granted by this preset is outside the workspace's enabled modules. */
   unavailable: boolean;
   /** True when part of the preset is outside the workspace's enabled modules and will have no effect. */
@@ -96,7 +96,7 @@ export function describePermissions(permissionNames: string[]): AccessAreaSummar
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-export function permissionsForRoles(roles: RoleItem[], roleIds: number[]): string[] {
+export function permissionsForRoles(roles: RoleItem[], roleIds: string[]): string[] {
   const selected = new Set(roleIds);
   const names = new Set<string>();
   for (const role of roles) {
@@ -144,9 +144,9 @@ export function buildAccessPresets(
 }
 
 /** The preset whose role set exactly matches the selection, or the custom key. */
-export function matchPresetKey(presets: AccessPreset[], selectedRoleIds: number[]): AccessPresetKey | typeof CUSTOM_PRESET_KEY | '' {
+export function matchPresetKey(presets: AccessPreset[], selectedRoleIds: string[]): AccessPresetKey | typeof CUSTOM_PRESET_KEY | '' {
   if (selectedRoleIds.length === 0) return '';
-  const selected = [...selectedRoleIds].sort((a, b) => a - b).join(',');
-  const match = presets.find(preset => [...preset.roleIds].sort((a, b) => a - b).join(',') === selected);
+  const selected = [...selectedRoleIds].sort().join(',');
+  const match = presets.find(preset => [...preset.roleIds].sort().join(',') === selected);
   return match ? match.key : CUSTOM_PRESET_KEY;
 }

@@ -46,7 +46,7 @@ export const StatementLineOwnerMovementDialog: React.FC<Props> = ({ lines, actio
       const route = undo ? `${lines[0].id}/UndoOwnerMovement` : bulk ? 'BulkRecordOwnerMovement' : `${lines[0].id}/RecordOwnerMovement`;
       const response = await authFetch(withConfirmReconciledPeriod(`/api/Banking/StatementLines/${route}`, confirmed), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(undo ? { reason: memo.trim() || null } : { ...(bulk ? { lineIds: lines.map(l => l.id) } : {}), memo: memo.trim() || null, rememberRule, ...(partnerMode ? { partnerId: partnerId ? Number(partnerId) : null } : {}) }),
+        body: JSON.stringify(undo ? { reason: memo.trim() || null } : { ...(bulk ? { lineIds: lines.map(l => l.id) } : {}), memo: memo.trim() || null, rememberRule, ...(partnerMode ? { partnerId: partnerId ? partnerId : null } : {}) }),
       });
       if (await periodConfirm.handleConflict(response, () => void submit(null, true))) return;
       if (!response.ok) {

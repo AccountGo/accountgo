@@ -6,7 +6,7 @@ import { isSelectableTax, taxChoiceLabel, type WorkspaceTax } from '../lib/invoi
 import type { BankStatementLine } from '../types/banking';
 
 interface IncomeCategory {
-  accountId: number;
+  accountId: string;
   name: string;
   curated: boolean;
 }
@@ -17,7 +17,7 @@ interface IncomeCategories {
 }
 
 interface ClientOption {
-  id: number;
+  id: string;
   name?: string | null;
 }
 
@@ -99,9 +99,9 @@ export const StatementLineOtherIncomeDialog: React.FC<StatementLineOtherIncomeDi
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customerId: customerId ? Number(customerId) : null,
-          incomeAccountId: Number(incomeAccountId),
-          taxId: taxId ? Number(taxId) : null,
+          customerId: customerId ? customerId : null,
+          incomeAccountId: incomeAccountId,
+          taxId: taxId ? taxId : null,
           description: line.payee || line.memo || null,
           memo: memo.trim() || null,
         }),

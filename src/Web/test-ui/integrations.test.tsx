@@ -27,7 +27,7 @@ vi.mock('../src/lib/entitlements', () => ({
 const response = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 const endpoint = {
   id: 'endpoint-1', label: 'Wise GBP', provider: 'wise', environment: 'sandbox', status: 'setup_required',
-  bankId: 3, bankAccountName: 'GBP account', currency: 'GBP', providerAccountRef: 'profile:123:balance:456' as string | null,
+  bankId: '3', bankAccountName: 'GBP account', currency: 'GBP', providerAccountRef: 'profile:123:balance:456' as string | null,
   providerSubscriptionRef: null, revision: 'revision-1', lastDeliveryAt: null,
 };
 let connections: typeof endpoint[] = [];
@@ -40,7 +40,7 @@ let banks: BankAccount[] = [];
 function defaultFetch(url: string, init?: RequestInit) {
   const method = init?.method || 'GET';
   if (url === '/api/integrations/capabilities') return response({ companyId: Number(state.companyId), canManage: manage, canReview: true });
-  if (url.includes('/review/pending-count')) return response({ companyId: Number(state.companyId), pendingCount: 2, purchasePendingCount: 1, unreadCount: read ? 0 : 1, latestLineId: 22 });
+  if (url.includes('/review/pending-count')) return response({ companyId: Number(state.companyId), pendingCount: 2, purchasePendingCount: 1, unreadCount: read ? 0 : 1, latestLineId: '22' });
   if (url.endsWith('/activity/read')) { read = true; return response(null, 204); }
   if (url.endsWith('/providers')) return response([
     { slug: 'wise', displayName: 'Wise', category: 'Payments', description: 'Incoming account movements', isAvailable: true },
@@ -68,16 +68,16 @@ function defaultFetch(url: string, init?: RequestInit) {
   if (url.endsWith('/review/options')) return response({ companyId: Number(state.companyId), connections: [], banks: [] });
   if (url.includes('/review/items')) return response({
     companyId: Number(state.companyId), totalCount: 1, page: 1, pageSize: 25,
-    items: [{ lineId: 22, bankId: 3, bankName: 'GBP account', currency: 'GBP', postedDate: '2026-11-01',
+    items: [{ lineId: '22', bankId: '3', bankName: 'GBP account', currency: 'GBP', postedDate: '2026-11-01',
       amount: -50, payee: null, reference: null, memo: null, draftBillId: null, state: 'needs_review',
       source: { provider: 'wise', label: 'Wise GBP', providerAccountRef: 'profile:123:balance:456' } }],
   });
-  if (url.endsWith('/StatementExpenseCategories')) return response({ curated: [{ accountId: 7, name: 'Software' }], more: [] });
-  if (url.endsWith('/Vendors')) return response([{ id: 8, name: 'Chosen vendor' }]);
+  if (url.endsWith('/StatementExpenseCategories')) return response({ curated: [{ accountId: '7', name: 'Software' }], more: [] });
+  if (url.endsWith('/Vendors')) return response([{ id: '8', name: 'Chosen vendor' }]);
   if (url.endsWith('/Bills')) return response([]);
   if (url.includes('/StatementDescriptionRule')) return response(null, 204);
   if (url.endsWith('/Taxes')) return response({ taxes: [] });
-  if (url.endsWith('/DraftExpense')) return response({ line: { draftBillId: 99 }, bill: { id: 99 }, payment: null });
+  if (url.endsWith('/DraftExpense')) return response({ line: { draftBillId: '99' }, bill: { id: '99' }, payment: null });
   throw new Error(`Unexpected request: ${method} ${url}`);
 }
 
@@ -93,7 +93,7 @@ beforeEach(() => {
   state.companyId = '1';
   state.permissions = new Set(['banking.accounts.manage', 'purchases.bills.create']);
   connections = []; read = false; manage = true; setupIdentity = null; deliveries = [];
-  banks = [{ id: 3, name: 'GBP account', type: 1, currencyCode: 'GBP', archivedAt: null,
+  banks = [{ id: '3', name: 'GBP account', type: 1, currencyCode: 'GBP', archivedAt: null,
     accountNumberMasked: '**** 1234', isDefaultForReceipts: false, isDefaultForPayments: false, bookBalance: 0 }];
   localStorage.clear();
 });
@@ -157,7 +157,7 @@ describe('shared integration experience', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate callback URL' }));
     await screen.findByLabelText('One-time callback URL');
     const create = state.authFetch.mock.calls.find(c => c[0] === '/api/integrations/connections' && c[1]?.method === 'POST')!;
-    expect(JSON.parse(create[1].body)).toEqual(expect.objectContaining({ bankId: 3, balanceCurrency: 'USD' }));
+    expect(JSON.parse(create[1].body)).toEqual(expect.objectContaining({ bankId: '3', balanceCurrency: 'USD' }));
   });
 
   it('distinguishes an unset workspace bank currency from a genuine currency mismatch', async () => {
@@ -356,13 +356,13 @@ describe('shared integration experience', () => {
     state.companyId = '2';
     view.rerender(wrapper(<IncomingActivity orgSlug="workspace-2" />, '2'));
     fireEvent.click(await screen.findByRole('button', { name: 'Incoming activity: 1 unread' }));
-    await act(async () => { resolveOld(response({ companyId: 1, canManage: true, canReview: true })); });
+    await act(async () => { resolveOld(response({ companyId: '1', canManage: true, canReview: true })); });
     expect(screen.getByRole('link', { name: '2 transactions need review' }).getAttribute('href')).toContain('/org/workspace-2/');
   });
 
-  it.each([{ additionalLineIds: [] }, { additionalLineIds: [23, 24] }])('saves only the focused draft with create permission, even with selected lines: $additionalLineIds', async ({ additionalLineIds }) => {
+  it.each([{ additionalLineIds: [] }, { additionalLineIds: ['23', '24'] }])('saves only the focused draft with create permission, even with selected lines: $additionalLineIds', async ({ additionalLineIds }) => {
     const onSaved = vi.fn();
-    const line = { id: 22, bankId: 3, amount: -50, postedDate: '2026-11-01', payee: null, memo: null } as BankStatementLine;
+    const line = { id: '22', bankId: '3', amount: -50, postedDate: '2026-11-01', payee: null, memo: null } as BankStatementLine;
     render(<StatementLineExpenseDialog line={line} additionalLineIds={additionalLineIds} initialMode="draft" bankAccountName="GBP account"
       formatCurrency={amount => `GBP ${amount}`} onSaved={onSaved} onClose={() => {}} />);
     fireEvent.change(await screen.findByLabelText('Vendor'), { target: { value: '8' } });

@@ -25,10 +25,10 @@ export const ItemFormDialog: React.FC<{
   /** Whether this workspace can create stock-tracked items. */
   hasInventoryModule: boolean;
   currencySymbol: string;
-  salesAccounts?: { id: number; code: string; name: string }[];
+  salesAccounts?: { id: string; code: string; name: string }[];
   /** The item after it was added, edited, archived or restored. */
   onSaved: (item: CatalogItem) => void;
-  onDeleted?: (id: number) => void;
+  onDeleted?: (id: string) => void;
   onClose: () => void;
 }> = ({ item, showPrice, showCost, hasInventoryModule, currencySymbol, salesAccounts: propSalesAccounts, onSaved, onDeleted, onClose }) => {
   const { authFetch } = useAuth();
@@ -36,10 +36,10 @@ export const ItemFormDialog: React.FC<{
   const [code, setCode] = useState(item?.code ?? '');
   const [price, setPrice] = useState(item?.price != null ? String(item.price) : '');
   const [cost, setCost] = useState(item?.cost != null ? String(item.cost) : '');
-  const [salesAccounts, setSalesAccounts] = useState<{ id: number; code: string; name: string }[]>(
+  const [salesAccounts, setSalesAccounts] = useState<{ id: string; code: string; name: string }[]>(
     propSalesAccounts ?? []
   );
-  const [salesAccountId, setSalesAccountId] = useState<number | ''>(
+  const [salesAccountId, setSalesAccountId] = useState<string>(
     item?.salesAccountId ?? ''
   );
   const [trackStock, setTrackStock] = useState(item?.trackStock ?? false);
@@ -120,13 +120,13 @@ export const ItemFormDialog: React.FC<{
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: item?.id ?? 0,
+          id: item?.id ?? null,
           name: name.trim(),
           code: code.trim() || null,
           // Hidden fields keep their value.
           price: showPrice ? amountOrNull(price) : item?.price ?? null,
           cost: showCost ? amountOrNull(cost) : item?.cost ?? null,
-          salesAccountId: showPrice && salesAccountId !== '' ? Number(salesAccountId) : item?.salesAccountId ?? null,
+          salesAccountId: showPrice && salesAccountId !== '' ? salesAccountId : item?.salesAccountId ?? null,
           trackStock,
           openingQuantity: trackStock && !item ? amountOrNull(openingQuantity) : null,
           openingUnitCost: trackStock && !item ? amountOrNull(openingCostEdited ? openingUnitCost : cost) : null,
@@ -280,7 +280,7 @@ export const ItemFormDialog: React.FC<{
               <select
                 id={`${titleId}-sales-account`}
                 value={salesAccountId}
-                onChange={(e) => setSalesAccountId(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={(e) => setSalesAccountId(e.target.value)}
                 className={inputClass}
               >
                 {salesAccounts.map((a) => (

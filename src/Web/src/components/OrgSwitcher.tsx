@@ -77,9 +77,9 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
   const added = new Set<string>();
   for (const org of availableOrgs) {
     if (added.has(org.id)) continue;
-    const personal = org.isPersonalBooks ? org : availableOrgs.find(p => Number(p.id) === org.linkedPersonalCompanyId);
+    const personal = org.isPersonalBooks ? org : availableOrgs.find(p => p.id === org.linkedPersonalCompanyId);
     if (personal) {
-      for (const work of availableOrgs.filter(w => w.linkedPersonalCompanyId === Number(personal.id))) {
+      for (const work of availableOrgs.filter(w => w.linkedPersonalCompanyId === personal.id)) {
         if (!added.has(work.id)) { groupedOrgs.push(work); added.add(work.id); }
       }
       if (!added.has(personal.id)) { groupedOrgs.push(personal); added.add(personal.id); }

@@ -8,7 +8,7 @@ export const CatalogPickerDialog: React.FC<{
   items: ItemOption[];
   /** The amount column's heading: the selling price on invoices, the cost on bills. */
   priceLabel?: string;
-  selectedId?: number | null;
+  selectedId?: string | null;
   formatPrice: (value: number) => string;
   onPick: (item: ItemOption) => void;
   /** Omitted when the user can't add items. */

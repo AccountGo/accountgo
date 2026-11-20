@@ -46,7 +46,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
   const [isLoadingRefs, setIsLoadingRefs] = useState(true);
 
   // Form fields
-  const [customerId, setCustomerId] = useState<number | ''>('');
+  const [customerId, setCustomerId] = useState<string>('');
   const [name, setName] = useState('');
   const [cadence, setCadence] = useState<RecurringCadence>('Monthly');
   const [interval, setInterval] = useState(1);
@@ -56,7 +56,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
   const [maxOccurrences, setMaxOccurrences] = useState<number | ''>('');
   const [action, setAction] = useState<RecurringAction>('CreateDraft');
   const [servicePeriodMode, setServicePeriodMode] = useState<RecurringServicePeriodMode>('CurrentMonth');
-  const [paymentTermId, setPaymentTermId] = useState<number | ''>('');
+  const [paymentTermId, setPaymentTermId] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [paymentInstructions, setPaymentInstructions] = useState('');
   const [lines, setLines] = useState<RecurringLineInput[]>([emptyLine()]);
@@ -214,7 +214,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
     setPickerLine(null);
   };
 
-  const selectedCustomer = customers.find((c) => c.id === Number(customerId));
+  const selectedCustomer = customers.find((c) => c.id === customerId);
 
   const save = async () => {
     setError(null);
@@ -226,8 +226,8 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
     if (meaningful.length === 0) { setError('Add at least one line.'); return; }
 
     const payload: RecurringScheduleInput = {
-      id: isEdit && scheduleId ? Number(scheduleId) : undefined,
-      customerId: Number(customerId),
+      id: isEdit && scheduleId ? scheduleId : undefined,
+      customerId: customerId,
       name: name.trim(),
       cadence,
       interval: Number(interval) || 1,
@@ -237,7 +237,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
       maxOccurrences: maxOccurrences ? Number(maxOccurrences) : null,
       action,
       servicePeriodMode,
-      paymentTermId: paymentTermId ? Number(paymentTermId) : null,
+      paymentTermId: paymentTermId ? paymentTermId : null,
       notes: notes.trim() || null,
       paymentInstructions: paymentInstructions.trim() || null,
       lines: meaningful.map((l, i) => ({
@@ -248,7 +248,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
         amount: Number(l.amount) || 0,
         discount: Number(l.discount) || 0,
         discountType: l.discountType,
-        taxId: l.taxId === '' || l.taxId == null ? null : Number(l.taxId),
+        taxId: l.taxId === '' || l.taxId == null ? null : l.taxId,
         accountId: l.accountId ?? null,
         sortOrder: i,
       })),
@@ -266,7 +266,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
         const data = await res.json().catch(() => null);
         throw new Error(data?.message || 'The schedule could not be saved.');
       }
-      const targetId = isEdit ? Number(scheduleId) : (await res.json())?.id;
+      const targetId = isEdit ? scheduleId : (await res.json())?.id;
       setSuccess('Schedule saved.');
       setTimeout(() => navigate(`/org/${orgSlug}/sales/recurring/${targetId}`), 500);
     } catch (err: any) {
@@ -330,9 +330,9 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
           </div>
           <div>
             <label className={labelClass}>Client</label>
-            <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value ? Number(e.target.value) : '')}>
+            <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
               <option value="">Select a client…</option>
-              {customers.filter((c) => !c.archived || c.id === Number(customerId)).map((c) => (
+              {customers.filter((c) => !c.archived || c.id === customerId).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}{c.archived ? ' (archived)' : ''}</option>
               ))}
             </select>
@@ -500,7 +500,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
                       <select
                         aria-label={`Line ${idx + 1} tax`}
                         value={line.taxId}
-                        onChange={(e) => setLine(idx, { taxId: e.target.value ? Number(e.target.value) : '' })}
+                        onChange={(e) => setLine(idx, { taxId: e.target.value })}
                         className={`${inputClass} text-right`}
                       >
                         <option value="">No tax</option>
@@ -530,7 +530,7 @@ export const RecurringScheduleEdit: React.FC<Props> = ({ isEdit = false }) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Payment terms</label>
-            <select className={inputClass} value={paymentTermId} onChange={(e) => setPaymentTermId(e.target.value ? Number(e.target.value) : '')}>
+            <select className={inputClass} value={paymentTermId} onChange={(e) => setPaymentTermId(e.target.value)}>
               <option value="">Default</option>
               {paymentTerms.map((t) => <option key={t.id} value={t.id}>{t.description}</option>)}
             </select>

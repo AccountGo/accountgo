@@ -46,10 +46,10 @@ const mockMappings = {
     {
       roleKey: 'CustomerCreditLiability',
       roleLabel: 'Customer Credits Liability',
-      configuredAccountId: 201,
+      configuredAccountId: '201',
       configuredAccountCode: '20410',
       configuredAccountName: 'Customer Credits Liability',
-      suggestedAccountId: 201,
+      suggestedAccountId: '201',
       suggestedAccountCode: '20410',
       suggestedAccountName: 'Customer Credits Liability',
       isArchived: false,
@@ -60,9 +60,9 @@ const mockMappings = {
 
 const mockCredits = [
   {
-    id: 10,
+    id: '10',
     no: 'CCN-00001',
-    customerId: 5,
+    customerId: '5',
     customerName: 'Acme Corp',
     date: '2026-11-10T00:00:00Z',
     totalAmount: 150,
@@ -85,24 +85,24 @@ beforeEach(() => {
     if (url === '/api/sales/credits/mappings/preview') return new Response(JSON.stringify(mockMappings), { status: 200 });
     if (url === '/api/sales/credits/mappings' && init?.method === 'PUT') return new Response(JSON.stringify(mockMappings), { status: 200 });
     if (url === '/api/Sales/SalesInvoices') {
-      return new Response(JSON.stringify([{ id: 77, no: 'INV-077', customerId: 5, customerName: 'Acme Corp', balanceDue: 500, status: 'Open' }]), { status: 200 });
+      return new Response(JSON.stringify([{ id: '77', no: 'INV-077', customerId: '5', customerName: 'Acme Corp', balanceDue: 500, status: 'Open' }]), { status: 200 });
     }
-    if (url === '/api/Sales/Customers') return new Response(JSON.stringify([{ id: 5, name: 'Acme Corp' }]), { status: 200 });
-    if (url === '/api/Banking/Accounts/Picker') return new Response(JSON.stringify([{ id: 3, name: 'Main Checking' }]), { status: 200 });
-    if (url === '/api/Financials/Accounts') return new Response(JSON.stringify([{ id: 201, accountCode: '20410', accountName: 'Customer Credits Liability' }]), { status: 200 });
+    if (url === '/api/Sales/Customers') return new Response(JSON.stringify([{ id: '5', name: 'Acme Corp' }]), { status: 200 });
+    if (url === '/api/Banking/Accounts/Picker') return new Response(JSON.stringify([{ id: '3', name: 'Main Checking' }]), { status: 200 });
+    if (url === '/api/Financials/Accounts') return new Response(JSON.stringify([{ id: '201', accountCode: '20410', accountName: 'Customer Credits Liability' }]), { status: 200 });
     if (url === '/api/sales/credits/preview') return new Response(JSON.stringify({ subtotal: 100, taxAmount: 10, totalAmount: 110 }), { status: 200 });
-    if (url === '/api/sales/credits/drafts') return new Response(JSON.stringify({ id: 11, version: 1 }), { status: 200 });
-    if (url === '/api/settlements/refunds/drafts') return new Response(JSON.stringify({ id: 31, version: 1 }), { status: 200 });
-    if (url.includes('/api/settlements/refunds/31/submit')) return new Response(JSON.stringify({ id: 31, version: 2 }), { status: 200 });
-    if (url === '/api/settlements/refunds/31/post') return new Response(JSON.stringify({ id: 31, version: 3 }), { status: 200 });
-    if (url === '/api/sales/write-offs/requests') return new Response(JSON.stringify({ id: 41, version: 1 }), { status: 200 });
-    if (url === '/api/sales/write-offs/41/post') return new Response(JSON.stringify({ id: 41, version: 2 }), { status: 200 });
+    if (url === '/api/sales/credits/drafts') return new Response(JSON.stringify({ id: '11', version: 1 }), { status: 200 });
+    if (url === '/api/settlements/refunds/drafts') return new Response(JSON.stringify({ id: '31', version: 1 }), { status: 200 });
+    if (url.includes('/api/settlements/refunds/31/submit')) return new Response(JSON.stringify({ id: '31', version: 2 }), { status: 200 });
+    if (url === '/api/settlements/refunds/31/post') return new Response(JSON.stringify({ id: '31', version: 3 }), { status: 200 });
+    if (url === '/api/sales/write-offs/requests') return new Response(JSON.stringify({ id: '41', version: 1 }), { status: 200 });
+    if (url === '/api/sales/write-offs/41/post') return new Response(JSON.stringify({ id: '41', version: 2 }), { status: 200 });
     if (url.startsWith('/api/Sales/SalesInvoice?id=99')) {
       return new Response(
         JSON.stringify({
-          id: 99,
+          id: '99',
           no: 'INV-099',
-          customerId: 5,
+          customerId: '5',
           customerName: 'Acme Corp',
           date: '2026-11-01T00:00:00Z',
           dueDate: '2026-11-30T00:00:00Z',
@@ -115,7 +115,7 @@ beforeEach(() => {
           settlementSummary: 'Settled: cash 0.00, credits 300.00, written off 700.00',
           posted: true,
           status: 'Settled',
-          salesInvoiceLines: [{ id: 1, itemDescription: 'Consulting', quantity: 1, amount: 1000, discount: 0, lineTotal: 1000 }],
+          salesInvoiceLines: [{ id: '1', itemDescription: 'Consulting', quantity: 1, amount: 1000, discount: 0, lineTotal: 1000 }],
           payments: [],
         }),
         { status: 200 }

@@ -85,8 +85,8 @@ export interface WorkspacePolicyMutationResult {
 
 export interface PersonalBooksMetadata {
   isPersonalBooks?: boolean;
-  linkedPersonalCompanyId?: number | null;
-  linkedWorkCompanyIds?: number[];
+  linkedPersonalCompanyId?: string | null;
+  linkedWorkCompanyIds?: string[];
   canAddPersonalBooks?: boolean;
   /** An existing personal-purpose workspace the caller can record as their personal books. */
   canUseAsPersonalBooks?: boolean;
@@ -146,13 +146,13 @@ export interface UserProfile {
 export type SidebarMode = 'expanded' | 'collapsed' | 'closed';
 
 export interface RolePermissionItem {
-  id: number;
+  id: string;
   name: string;
   displayName?: string;
 }
 
 export interface RoleItem {
-  id: number;
+  id: string;
   name: string;
   displayName: string;
   sysAdmin?: boolean;
@@ -162,7 +162,7 @@ export interface RoleItem {
 export type WorkspaceRole = 'Owner' | 'Admin' | 'Member';
 
 export interface WorkspaceMember {
-  memberId: number;
+  memberId: string;
   userId: string;
   email: string;
   firstName: string;
@@ -174,10 +174,10 @@ export interface WorkspaceMember {
 }
 
 export interface WorkspaceInvitation {
-  id: number;
+  id: string;
   email: string;
   role: Exclude<WorkspaceRole, 'Owner'>;
-  securityRoleIds: number[];
+  securityRoleIds: string[];
   expiresAt: string;
   /** True once the link has expired; the invitation can still be resent (renewed) or revoked. */
   expired?: boolean;
@@ -189,10 +189,10 @@ export interface WorkspaceAccessRequestItem {
   requestId: string;
   requesterUserId: string;
   requesterEmail?: string;
-  targetMemberId: number;
+  targetMemberId: string;
   targetUserId: string;
   targetEmail?: string;
-  requestedRoleIds: number[];
+  requestedRoleIds: string[];
   requestedRoleNames: string[];
   reason?: string;
   status: 'Pending' | 'Approved' | 'Applied' | 'Rejected' | 'Cancelled' | 'Expired';
@@ -215,7 +215,7 @@ export interface AccessSetupStatus {
 }
 
 export interface PendingInvitation {
-  id: number;
+  id: string;
   workspaceName: string;
   slug: string;
   role: Exclude<WorkspaceRole, 'Owner'>;
