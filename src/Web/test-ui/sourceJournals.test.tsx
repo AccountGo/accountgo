@@ -117,8 +117,8 @@ it('filters to imported drafts, posts selected drafts in batch, and renders per-
   expect(screen.getByText('Imported entry')).toBeTruthy();
 
   fireEvent.click(screen.getByRole('button', { name: 'All' }));
-  fireEvent.click(screen.getByLabelText('Select journal #11'));
-  fireEvent.click(screen.getByLabelText('Select journal #12'));
+  fireEvent.click(screen.getByLabelText('Select journal 11'));
+  fireEvent.click(screen.getByLabelText('Select journal 12'));
 
   const postButton = screen.getByRole('button', { name: 'Post selected (2)' });
   fireEvent.click(postButton);
@@ -135,7 +135,7 @@ it('filters to imported drafts, posts selected drafts in batch, and renders per-
 
   const summary = await screen.findByText(/1 posted, 1 failed/);
   expect(summary).toBeTruthy();
-  expect(await screen.findByText('Journal #12: This accounting period is locked.')).toBeTruthy();
+  expect(await screen.findByText('Journal 12: This accounting period is locked.')).toBeTruthy();
 });
 
 it('renders imported draft read-only without Save and discards via ConfirmDialog', async () => {
