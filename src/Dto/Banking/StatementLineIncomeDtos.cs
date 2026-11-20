@@ -3,12 +3,14 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Banking
 {
     public class StatementIncomeCategoryDto
     {
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public string Name { get; set; } = string.Empty;
         public bool Curated { get; set; }
@@ -23,8 +25,11 @@ namespace Dto.Banking
     public class RecordOtherIncomeFromStatementLineRequest
     {
         /// <summary>Optional. When omitted, the workspace "Other income" customer is used.</summary>
+        [PublicId("cus")]
         public int? CustomerId { get; set; }
+        [PublicId("acct")]
         public int IncomeAccountId { get; set; }
+        [PublicId("tax")]
         public int? TaxId { get; set; }
         public string? Description { get; set; }
         public string? PaymentMethod { get; set; }

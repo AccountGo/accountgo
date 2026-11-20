@@ -257,7 +257,7 @@ public static class AccountGoApp
         builder.Services.AddControllers(options =>
         {
             options.ModelBinderProviders.Insert(0, new Api.PublicIds.PublicIdModelBinderProvider());
-            options.Filters.Add<Api.PublicIds.PublicIdErrorFilter>();
+            options.Filters.Add<Api.PublicIds.PublicIdErrorFilter>(order: -3000);
             options.Filters.Add<Api.PublicIds.PublicIdPrefetchFilter>();
             options.Filters.Add<Api.Filters.TenantEndpointFilter>();
             options.Filters.Add<Api.Filters.ReconciledPeriodConfirmationFilter>();

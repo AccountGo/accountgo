@@ -49,7 +49,8 @@ namespace AccountGo.BackendTests.Settings
             Assert.False(tax.GetProperty("inUse").GetBoolean());
             Assert.Equal("20300", tax.GetProperty("salesAccountCode").GetString());
             Assert.Equal("10160", tax.GetProperty("purchaseAccountCode").GetString());
-            var id = tax.GetProperty("id").GetInt32();
+            var id = tax.GetProperty("id").GetString();
+            Assert.StartsWith("tax_", id);
 
             var list = await Json(await _fixture.Send(HttpMethod.Get, "/api/Tax", token: owner.Token, org: "tax-co"));
             Assert.Contains(list.EnumerateArray(), row => row.GetProperty("taxCode").GetString() == "VAT");
@@ -62,14 +63,14 @@ namespace AccountGo.BackendTests.Settings
             var archived = await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "VAT", taxCode = "VAT", rate = 7.5, isActive = false }, owner.Token, "tax-co");
             Assert.False((await Json(archived)).GetProperty("isActive").GetBoolean());
             var legacy = await Json(await _fixture.Send(HttpMethod.Get, "/api/Tax/Taxes", token: owner.Token, org: "tax-co"));
-            var legacyRow = legacy.GetProperty("taxes").EnumerateArray().Single(row => row.GetProperty("id").GetInt32() == id);
+            var legacyRow = legacy.GetProperty("taxes").EnumerateArray().Single(row => row.GetProperty("id").GetString() == id);
             Assert.False(legacyRow.GetProperty("isActive").GetBoolean());
 
             var restored = await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "VAT", taxCode = "VAT", rate = 7.5, isActive = true }, owner.Token, "tax-co");
             Assert.True((await Json(restored)).GetProperty("isActive").GetBoolean());
             Assert.Equal(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/" + id, token: owner.Token, org: "tax-co")).StatusCode);
             var after = await Json(await _fixture.Send(HttpMethod.Get, "/api/Tax", token: owner.Token, org: "tax-co"));
-            Assert.DoesNotContain(after.EnumerateArray(), row => row.GetProperty("id").GetInt32() == id);
+            Assert.DoesNotContain(after.EnumerateArray(), row => row.GetProperty("id").GetString() == id);
         }
 
         [Fact]
@@ -79,22 +80,22 @@ namespace AccountGo.BackendTests.Settings
             var companyA = await _fixture.CreateWorkspace(owner.Token, "Alpha", "tax-alpha");
             await _fixture.CreateWorkspace(owner.Token, "Beta", "tax-beta");
             var created = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Alpha VAT", taxCode = "AVAT", rate = 10 }, owner.Token, "tax-alpha"));
-            var id = created.GetProperty("id").GetInt32();
-            int foreignAccount;
+            var id = created.GetProperty("id").GetString();
+            string foreignAccount;
             using (var scope = _fixture.Factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                foreignAccount = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == companyA && a.AccountCode == "20300").Id;
+                foreignAccount = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == companyA && a.AccountCode == "20300").PublicId;
             }
 
             var listed = await Json(await _fixture.Send(HttpMethod.Get, "/api/Tax", token: owner.Token, org: "tax-beta"));
-            Assert.DoesNotContain(listed.EnumerateArray(), row => row.GetProperty("id").GetInt32() == id);
+            Assert.DoesNotContain(listed.EnumerateArray(), row => row.GetProperty("id").GetString() == id);
             Assert.Equal(HttpStatusCode.NotFound, (await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "Alpha VAT", taxCode = "AVAT", rate = 11, isActive = true }, owner.Token, "tax-beta")).StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/" + id, token: owner.Token, org: "tax-beta")).StatusCode);
 
             var rejected = await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Beta VAT", taxCode = "BVAT", rate = 10, salesAccountId = foreignAccount }, owner.Token, "tax-beta");
-            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
-            Assert.Contains("not in this workspace", (await Json(rejected)).GetProperty("message").GetString());
+            Assert.Equal(HttpStatusCode.NotFound, rejected.StatusCode);
+            Assert.Equal("unknown_id", (await Json(rejected)).GetProperty("code").GetString());
         }
 
         [Fact]
@@ -103,7 +104,7 @@ namespace AccountGo.BackendTests.Settings
             var owner = await _fixture.CreateUser("dup-owner@example.com");
             await _fixture.CreateWorkspace(owner.Token, "Dup", "tax-dup");
             var created = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Goods Tax", taxCode = "gst", rate = 5 }, owner.Token, "tax-dup"));
-            var id = created.GetProperty("id").GetInt32();
+            var id = created.GetProperty("id").GetString();
 
             var sameName = await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "goods tax", taxCode = "GST2", rate = 5 }, owner.Token, "tax-dup");
             Assert.Equal(HttpStatusCode.BadRequest, sameName.StatusCode);
@@ -121,11 +122,11 @@ namespace AccountGo.BackendTests.Settings
         {
             var owner = await _fixture.CreateUser("acct-owner@example.com");
             var companyId = await _fixture.CreateWorkspace(owner.Token, "Accounts", "tax-acct");
-            int revenue, liabilityHeader, assetHeader, expense;
+            string revenue, liabilityHeader, assetHeader, expense;
             using (var scope = _fixture.Factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                int Id(string code) => db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == companyId && a.AccountCode == code).Id;
+                string Id(string code) => db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == companyId && a.AccountCode == code).PublicId;
                 revenue = Id("40100");
                 liabilityHeader = Id("20100");
                 assetHeader = Id("10100");
@@ -154,15 +155,15 @@ namespace AccountGo.BackendTests.Settings
         {
             var owner = await _fixture.CreateUser("keep-owner@example.com");
             var companyId = await _fixture.CreateWorkspace(owner.Token, "Keep", "tax-keep");
-            int expense;
+            string expense;
             using (var scope = _fixture.Factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                expense = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == companyId && a.AccountCode == "50700").Id;
+                expense = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == companyId && a.AccountCode == "50700").PublicId;
             }
 
             var created = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Kept", taxCode = "KEPT", rate = 7.25m, purchaseAccountId = expense }, owner.Token, "tax-keep"));
-            var id = created.GetProperty("id").GetInt32();
+            var id = created.GetProperty("id").GetString();
             Assert.Equal("20300", created.GetProperty("salesAccountCode").GetString());
             Assert.Equal("50700", created.GetProperty("purchaseAccountCode").GetString());
 
@@ -190,9 +191,10 @@ namespace AccountGo.BackendTests.Settings
             var owner = await _fixture.CreateUser("save-owner@example.com");
             var companyId = await _fixture.CreateWorkspace(owner.Token, "Save", "tax-save");
             var created = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "VAT 12", taxCode = "VAT12", rate = 12 }, owner.Token, "tax-save"));
-            var id = created.GetProperty("id").GetInt32();
+            var taxPubId = created.GetProperty("id").GetString();
+            var id = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.TaxSystem.Tax>(_fixture.Factory.Services, taxPubId);
             var vendor = await Json(await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveVendor", new { name = "Paper Co" }, owner.Token, "tax-save"));
-            var vendorId = vendor.GetProperty("id").GetInt32();
+            var vendorId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Vendor>(_fixture.Factory.Services, vendor.GetProperty("id").GetString());
             var bill = new Dto.Purchasing.Bill
             {
                 VendorId = vendorId,
@@ -200,33 +202,37 @@ namespace AccountGo.BackendTests.Settings
                 Status = "Draft",
                 Lines = { new Dto.Purchasing.BillLine { Description = "Paper", Quantity = 1, Amount = 100, TaxId = id } }
             };
-            var savedBill = await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, owner.Token, "tax-save");
+            var savedBill = await _fixture.SendDto(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, companyId, owner.Token, "tax-save");
             var savedBillJson = await Json(savedBill);
             Assert.True(savedBill.IsSuccessStatusCode, savedBillJson.ToString());
 
-            var archived = await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "VAT 12", taxCode = "VAT12", rate = 12, isActive = false }, owner.Token, "tax-save");
+            var archived = await _fixture.Send(HttpMethod.Put, "/api/Tax/" + taxPubId, new { taxName = "VAT 12", taxCode = "VAT12", rate = 12, isActive = false }, owner.Token, "tax-save");
             Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
 
             const string archivedMessage = "VAT 12 is archived. Pick another tax for this line.";
-            bill.Id = savedBillJson.GetProperty("id").GetInt32();
-            bill.Lines[0].Id = savedBillJson.GetProperty("lines")[0].GetProperty("id").GetInt32();
-            var resave = await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, owner.Token, "tax-save");
+            bill.Id = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<PurchaseInvoiceHeader>(_fixture.Factory.Services, savedBillJson.GetProperty("id").GetString());
+            bill.Lines[0].Id = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<PurchaseInvoiceLine>(_fixture.Factory.Services, savedBillJson.GetProperty("lines")[0].GetProperty("id").GetString());
+            var resave = await _fixture.SendDto(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, companyId, owner.Token, "tax-save");
             Assert.Equal(HttpStatusCode.BadRequest, resave.StatusCode);
             Assert.Equal(archivedMessage, (await Json(resave)).GetProperty("message").GetString());
 
             var invoice = await NewInvoice(companyId, "tax-save");
             invoice.SalesInvoiceLines.Single().TaxId = id;
             invoice.Status = "Open";
-            var issued = await _fixture.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, owner.Token, "tax-save");
+            var issued = await _fixture.SendDto(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, companyId, owner.Token, "tax-save");
             Assert.Equal(HttpStatusCode.BadRequest, issued.StatusCode);
             Assert.Contains(archivedMessage, await issued.Content.ReadAsStringAsync());
 
-            bill.Id = 0;
-            bill.Lines[0].Id = 0;
-            bill.Lines[0].TaxId = int.MaxValue;
-            var unknown = await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, owner.Token, "tax-save");
-            Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
-            Assert.Contains("not found", await unknown.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+            var unknownTaxBill = new
+            {
+                vendorId = vendor.GetProperty("id").GetString(),
+                date = "2026-10-24",
+                status = "Draft",
+                lines = new[] { new { description = "Paper", quantity = 1, amount = 100, taxId = PublicIdGenerator.New("tax") } }
+            };
+            var unknown = await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveBill", unknownTaxBill, owner.Token, "tax-save");
+            Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+            Assert.Equal("unknown_id", (await Json(unknown)).GetProperty("code").GetString());
 
             using var scope = _fixture.Factory.Services.CreateScope();
             using (scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>().Impersonate(companyId, "tax-save", CompanyMemberRole.Owner))
@@ -248,25 +254,27 @@ namespace AccountGo.BackendTests.Settings
             var owner = await _fixture.CreateUser("use-owner@example.com");
             var companyId = await _fixture.CreateWorkspace(owner.Token, "In Use", "tax-use");
             var created = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Used", taxCode = "USED", rate = 12 }, owner.Token, "tax-use"));
-            var id = created.GetProperty("id").GetInt32();
+            var taxPubId = created.GetProperty("id").GetString();
+            var id = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.TaxSystem.Tax>(_fixture.Factory.Services, taxPubId);
             var invoice = await NewInvoice(companyId, "tax-use");
             invoice.SalesInvoiceLines.Single().TaxId = id;
             invoice.Status = "Open";
-            var saved = await _fixture.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, owner.Token, "tax-use");
+            var saved = await _fixture.SendDto(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, companyId, owner.Token, "tax-use");
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var issued = await saved.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var issued = await AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ReadDtoAsync<Dto.Sales.SalesInvoice>(_fixture.Factory.Services, companyId, saved);
             var taxAmount = issued.SalesInvoiceLines.Single().TaxAmount;
             var total = issued.TotalAmountAfterTax;
             Assert.Equal(12m, taxAmount);
 
-            var blocked = await _fixture.Send(HttpMethod.Delete, "/api/Tax/" + id, token: owner.Token, org: "tax-use");
+            var blocked = await _fixture.Send(HttpMethod.Delete, "/api/Tax/" + taxPubId, token: owner.Token, org: "tax-use");
             Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
             Assert.Equal("This tax is used on invoices or bills. Archive it instead.", (await Json(blocked)).GetProperty("message").GetString());
 
-            var archived = await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "Used", taxCode = "USED", rate = 20, isActive = false }, owner.Token, "tax-use");
+            var archived = await _fixture.Send(HttpMethod.Put, "/api/Tax/" + taxPubId, new { taxName = "Used", taxCode = "USED", rate = 20, isActive = false }, owner.Token, "tax-use");
             Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
-            var again = await _fixture.Send(HttpMethod.Get, "/api/Sales/SalesInvoice?id=" + issued.Id, token: owner.Token, org: "tax-use");
-            var reread = await again.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var issuedPubId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<SalesInvoiceHeader>(_fixture.Factory.Services, issued.Id);
+            var again = await _fixture.Send(HttpMethod.Get, "/api/Sales/SalesInvoice?id=" + issuedPubId, token: owner.Token, org: "tax-use");
+            var reread = await AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ReadDtoAsync<Dto.Sales.SalesInvoice>(_fixture.Factory.Services, companyId, again);
             Assert.Equal(taxAmount, reread.SalesInvoiceLines.Single().TaxAmount);
             Assert.Equal(total, reread.TotalAmountAfterTax);
             using (var scope = _fixture.Factory.Services.CreateScope())
@@ -277,7 +285,7 @@ namespace AccountGo.BackendTests.Settings
             }
 
             var systemId = (await Json(await _fixture.Send(HttpMethod.Get, "/api/Tax", token: owner.Token, org: "tax-use")))
-                .EnumerateArray().Single(row => row.GetProperty("taxCode").GetString() == "NONE").GetProperty("id").GetInt32();
+                .EnumerateArray().Single(row => row.GetProperty("taxCode").GetString() == "NONE").GetProperty("id").GetString();
             var editSystem = await _fixture.Send(HttpMethod.Put, "/api/Tax/" + systemId, new { taxName = "Changed", taxCode = "NONE", rate = 1, isActive = true }, owner.Token, "tax-use");
             var deleteSystem = await _fixture.Send(HttpMethod.Delete, "/api/Tax/" + systemId, token: owner.Token, org: "tax-use");
             Assert.Equal(HttpStatusCode.BadRequest, editSystem.StatusCode);
@@ -307,7 +315,7 @@ namespace AccountGo.BackendTests.Settings
             Assert.Equal(HttpStatusCode.OK, (await _fixture.Send(HttpMethod.Get, "/api/Tax", token: member.Token, org: "tax-perm")).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Nope", taxCode = "NOPE", rate = 1 }, member.Token, "tax-perm")).StatusCode);
             var created = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Books", taxCode = "BOOK", rate = 3 }, accountant.Token, "tax-perm"));
-            var id = created.GetProperty("id").GetInt32();
+            var id = created.GetProperty("id").GetString();
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "Books", taxCode = "BOOK", rate = 4, isActive = true }, member.Token, "tax-perm")).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/" + id, token: member.Token, org: "tax-perm")).StatusCode);
         }
@@ -443,7 +451,7 @@ namespace AccountGo.BackendTests.Settings
             {
                 var response = await Send(HttpMethod.Post, "/api/organizations", new { name, slug }, token, scoped: false);
                 Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-                var companyId = int.Parse((await Json(response)).GetProperty("id").GetString(), CultureInfo.InvariantCulture);
+                var companyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(Factory.Services, (await Json(response)).GetProperty("id").GetString()!);
                 using var scope = Factory.Services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 var ownerMember = db.CompanyMembers.Single(m => m.CompanyId == companyId && m.Role == CompanyMemberRole.Owner);
@@ -451,6 +459,15 @@ namespace AccountGo.BackendTests.Settings
                 db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = ownerMember.Id, SecurityRoleId = accountantRoleId });
                 await db.SaveChangesAsync();
                 return companyId;
+            }
+
+            public async Task<HttpResponseMessage> SendDto(HttpMethod method, string path, object body, int companyId, string token = null, string org = null, bool scoped = true)
+            {
+                using var request = new HttpRequestMessage(method, path);
+                if (!string.IsNullOrEmpty(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                if (scoped) request.Headers.Add("X-AccountGo-Org", org ?? "tax-co");
+                request.Content = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ToJsonContent(Factory.Services, companyId, body);
+                return await _client.SendAsync(request);
             }
 
             public async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body = null, string token = null, string org = null, bool scoped = true)

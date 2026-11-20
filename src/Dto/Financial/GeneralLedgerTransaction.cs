@@ -1,5 +1,6 @@
 #nullable disable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Financial
@@ -8,6 +9,7 @@ namespace Dto.Financial
     public class GeneralLedgerTransaction
     {
         /// <summary>Gets or sets the posted transaction number.</summary>
+        [PublicId("gl")]
         public int Id { get; set; }
         /// <summary>Gets or sets the posting date.</summary>
         public DateTime Date { get; set; }
@@ -18,10 +20,12 @@ namespace Dto.Financial
         /// <summary>Gets or sets the journal narration.</summary>
         public string Description { get; set; }
         /// <summary>Gets or sets the originating document identifier.</summary>
+        [PublicIdByType("DocumentType")]
         public int? SourceDocumentId { get; set; }
         /// <summary>Gets or sets an optional SPA path relative to the organization.</summary>
         public string SourcePath { get; set; }
         /// <summary>Gets or sets the original journal number for a reversal.</summary>
+        [PublicId("gl")]
         public int? ReversedGeneralLedgerHeaderId { get; set; }
         /// <summary>Gets or sets total debits in major currency units.</summary>
         public decimal TotalDebit { get; set; }
@@ -35,8 +39,10 @@ namespace Dto.Financial
     public class GeneralLedgerTransactionLine
     {
         /// <summary>Gets or sets the ledger line identifier.</summary>
+        [PublicId("gll")]
         public int Id { get; set; }
         /// <summary>Gets or sets the account identifier.</summary>
+        [PublicId("acct")]
         public int AccountId { get; set; }
         /// <summary>Gets or sets the account code.</summary>
         public string AccountCode { get; set; }

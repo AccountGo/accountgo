@@ -18,7 +18,7 @@ namespace Api.PublicIds
 
     public sealed record PublicIdBindingError(string Code, string Message, string? ParameterName = null);
 
-    public sealed class PublicIdSerializationException : Exception
+    public sealed class PublicIdSerializationException : Newtonsoft.Json.JsonSerializationException
     {
         public string Code { get; }
 

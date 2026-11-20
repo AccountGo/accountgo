@@ -1,4 +1,5 @@
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Purchasing
@@ -9,9 +10,11 @@ namespace Dto.Purchasing
     /// </summary>
     public class Bill
     {
+        [PublicId("bill")]
         public int Id { get; set; }
         /// <summary>The workspace's own number, given when the bill is approved.</summary>
         public string? No { get; set; }
+        [PublicId("ven")]
         public int VendorId { get; set; }
         /// <summary>The vendor as recorded when the bill was approved, or as it is now on drafts.</summary>
         public string? VendorName { get; set; }
@@ -23,6 +26,7 @@ namespace Dto.Purchasing
         public DateTime Date { get; set; }
         /// <summary>When saving: a due date set by hand, or null to follow the payment term.</summary>
         public DateTime? DueDate { get; set; }
+        [PublicId("term")]
         public int? PaymentTermId { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Notes { get; set; }
@@ -55,11 +59,14 @@ namespace Dto.Purchasing
     public class BillLine
     {
         /// <summary>The line's id when editing a draft; 0 for a new line.</summary>
+        [PublicId("bl")]
         public int Id { get; set; }
         /// <summary>A catalog item, or null for a line typed without one.</summary>
+        [PublicId("item")]
         public int? ItemId { get; set; }
         public string? Description { get; set; }
         /// <summary>The account the line is booked to; null for the default (the vendor's purchase account).</summary>
+        [PublicId("acct")]
         public int? AccountId { get; set; }
         public string? AccountName { get; set; }
         /// <summary>Whether this line is for a stock item and must use its Inventory account.</summary>
@@ -69,6 +76,7 @@ namespace Dto.Purchasing
         public decimal Amount { get; set; }
         /// <summary>Percent off.</summary>
         public decimal? Discount { get; set; }
+        [PublicId("tax")]
         public int? TaxId { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal Subtotal { get; set; }
@@ -76,10 +84,12 @@ namespace Dto.Purchasing
 
     public class BillPayment
     {
+        [PublicId("vpay")]
         public int Id { get; set; }
         public string? No { get; set; }
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
+        [PublicId("acct")]
         public int? AccountId { get; set; }
         /// <summary>The cash or bank account it was paid from.</summary>
         public string? AccountName { get; set; }
@@ -94,7 +104,9 @@ namespace Dto.Purchasing
 
     public class VoidPaymentDto
     {
+        [PublicId("vpay")]
         public int Id { get; set; }
+        [PublicId("vpay")]
         public int PaymentId { get => Id; set => Id = value; }
         public DateTime Date { get; set; }
         public string Reason { get; set; } = string.Empty;
@@ -102,6 +114,7 @@ namespace Dto.Purchasing
 
     public class VoidBillDto
     {
+        [PublicId("bill")]
         public int Id { get; set; }
         public DateTime Date { get; set; }
         public string Reason { get; set; } = string.Empty;
@@ -110,12 +123,15 @@ namespace Dto.Purchasing
     /// <summary>A payment on one bill.</summary>
     public class PayBill
     {
+        [PublicId("bill")]
         public int BillId { get; set; }
         public decimal Amount { get; set; }
         public DateTime? Date { get; set; }
         /// <summary>Pay-from bank account (Bank.Id). Preferred over <see cref="AccountId"/> when set.</summary>
+        [PublicId("ba")]
         public int? BankAccountId { get; set; }
         /// <summary>Accounting only (Financials module): any postable cash GL account when <see cref="BankAccountId"/> is null.</summary>
+        [PublicId("acct")]
         public int? AccountId { get; set; }
         public string? PaymentMethod { get; set; }
         public string? ReferenceNo { get; set; }
@@ -125,6 +141,7 @@ namespace Dto.Purchasing
     /// <summary>An account a bill line can be booked to, or a payment made from.</summary>
     public class BillAccount
     {
+        [PublicId("acct")]
         public int Id { get; set; }
         public string? Code { get; set; }
         public string? Name { get; set; }

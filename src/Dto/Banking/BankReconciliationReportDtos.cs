@@ -3,12 +3,14 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Banking
 {
     public class BankReconciliationReportDto
     {
+        [PublicId("rec")]
         public int ReconciliationId { get; set; }
         public string CompanyName { get; set; } = string.Empty;
         public string BankName { get; set; } = string.Empty;
@@ -52,6 +54,7 @@ namespace Dto.Banking
         public decimal In { get; set; }
         public decimal Out { get; set; }
         public int AgeDays { get; set; }
+        [PublicId("gl")]
         public int HeaderId { get; set; }
     }
 }

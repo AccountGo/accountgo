@@ -34,16 +34,16 @@ namespace Api.Controllers
             return FromOutcome(await _adminService.CreateTaxSettingAsync(write));
         }
 
-        [HttpPut("{id:int}")]
+        [HttpPut("{id}")]
         [RequirePermission(SystemPermissions.AdminTaxesManage)]
-        public async Task<IActionResult> Update(int id, [FromBody] TaxSettingWrite write)
+        public async Task<IActionResult> Update([Dto.Common.PublicId("tax")] int id, [FromBody] TaxSettingWrite write)
         {
             return FromOutcome(await _adminService.UpdateTaxSettingAsync(id, write));
         }
 
-        [HttpDelete("{id:int}")]
+        [HttpDelete("{id}")]
         [RequirePermission(SystemPermissions.AdminTaxesManage)]
-        public async Task<IActionResult> Delete(int id)
+        public async Task<IActionResult> Delete([Dto.Common.PublicId("tax")] int id)
         {
             return FromOutcome(await _adminService.DeleteTaxSettingAsync(id));
         }
@@ -71,7 +71,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("GetTax")]
         [RequireOperation(AccessOperationCatalog.TaxSettingsView)]
-        public IActionResult GetTax(int itemId, int partyId, int type = 0)
+        public IActionResult GetTax([Dto.Common.PublicId("item")] int itemId, [Dto.Common.PublicId("pty")] int partyId, int type = 0)
         {
             //var taxes = _taxService.GetIntersectionTaxes(itemId, partyId);
             //var taxesDto = new List<Tax>();
@@ -193,7 +193,6 @@ namespace Api.Controllers
                 {
                     var taxDto = new TaxGroupTax()
                     {
-                        Id = tax.Id,
                         TaxId = tax.TaxId,
                         TaxGroupId = tax.TaxGroupId
                     };
@@ -222,7 +221,6 @@ namespace Api.Controllers
                 {
                     var taxDto = new ItemTaxGroupTax()
                     {
-                        Id = tax.Id,
                         TaxId = tax.TaxId,
                         ItemTaxGroupId = tax.ItemTaxGroupId
                     };
@@ -241,7 +239,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.AdminTaxesManage)]
         [HttpDelete]
         [Route("deletetaxgroup")]
-        public async Task<IActionResult> DeleteTaxGroup([FromQuery] int id)
+        public async Task<IActionResult> DeleteTaxGroup([FromQuery] [Dto.Common.PublicId("txg")] int id)
         {
             var result = await _adminService.DeleteTaxGroupAsync(id);
 
@@ -256,7 +254,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.AdminTaxesManage)]
         [HttpDelete]
         [Route("deleteitemtaxgroup")]
-        public async Task<IActionResult> DeleteItemTaxGroup([FromQuery] int id)
+        public async Task<IActionResult> DeleteItemTaxGroup([FromQuery] [Dto.Common.PublicId("itg")] int id)
         {
             var result = await _adminService.DeleteItemTaxGroupAsync(id);
 

@@ -63,16 +63,40 @@ namespace Api.Data
                 .ToList();
         }
 
-        public static string UpdateStatement(PublicIdSqlDialect dialect, string tableName, string prefix) => dialect switch
+        public static string UpdateStatement(PublicIdSqlDialect dialect, string tableName, string prefix)
         {
-            PublicIdSqlDialect.Sqlite =>
-                $"UPDATE \"{tableName}\" SET \"PublicId\" = '{prefix}_' || lower(hex(randomblob(13))) WHERE \"PublicId\" = '';",
-            PublicIdSqlDialect.Postgres =>
-                $"UPDATE \"{tableName}\" SET \"PublicId\" = '{prefix}_' || substr(replace(gen_random_uuid()::text,'-',''),1,26) WHERE \"PublicId\" = '';",
-            PublicIdSqlDialect.SqlServer =>
-                $"UPDATE [{tableName}] SET [PublicId] = '{prefix}_' + LOWER(LEFT(REPLACE(CAST(NEWID() AS varchar(36)), '-', ''), 26)) WHERE [PublicId] = '';",
-            _ => throw new ArgumentOutOfRangeException(nameof(dialect), dialect, null)
-        };
+            if (dialect == PublicIdSqlDialect.Postgres && string.Equals(tableName, "AuditLog", StringComparison.Ordinal))
+            {
+                return """
+                    DO $$
+                    DECLARE has_trig boolean;
+                    BEGIN
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_trigger
+                            WHERE tgname = 'TR_AuditLog_Evidence' AND tgrelid = '"AuditLog"'::regclass
+                        ) INTO has_trig;
+                        IF has_trig THEN
+                            ALTER TABLE "AuditLog" DISABLE TRIGGER "TR_AuditLog_Evidence";
+                        END IF;
+                        UPDATE "AuditLog" SET "PublicId" = 'alog_' || substr(replace(gen_random_uuid()::text,'-',''),1,26) WHERE "PublicId" = '';
+                        IF has_trig THEN
+                            ALTER TABLE "AuditLog" ENABLE TRIGGER "TR_AuditLog_Evidence";
+                        END IF;
+                    END $$;
+                    """;
+            }
+
+            return dialect switch
+            {
+                PublicIdSqlDialect.Sqlite =>
+                    $"UPDATE \"{tableName}\" SET \"PublicId\" = '{prefix}_' || lower(hex(randomblob(13))) WHERE \"PublicId\" = '';",
+                PublicIdSqlDialect.Postgres =>
+                    $"UPDATE \"{tableName}\" SET \"PublicId\" = '{prefix}_' || substr(replace(gen_random_uuid()::text,'-',''),1,26) WHERE \"PublicId\" = '';",
+                PublicIdSqlDialect.SqlServer =>
+                    $"UPDATE [{tableName}] SET [PublicId] = '{prefix}_' + LOWER(LEFT(REPLACE(CAST(NEWID() AS varchar(36)), '-', ''), 26)) WHERE [PublicId] = '';",
+                _ => throw new ArgumentOutOfRangeException(nameof(dialect), dialect, null)
+            };
+        }
 
         public static IReadOnlyList<string> For(string? providerName, IEnumerable<PublicIdTableSpec> tables)
         {

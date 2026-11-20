@@ -55,7 +55,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("BOOKS_NOT_READY", problem.GetProperty("code").GetString());
             var unposted = problem.GetProperty("unpostedInvoices").EnumerateArray().ToList();
             Assert.Single(unposted);
-            Assert.Equal(draftId, unposted[0].GetProperty("id").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId), unposted[0].GetProperty("id").GetString());
             Assert.Empty(problem.GetProperty("unpostedBills").EnumerateArray());
 
             var post = await Send(HttpMethod.Post, "/api/Sales/PostUnpostedInvoices");

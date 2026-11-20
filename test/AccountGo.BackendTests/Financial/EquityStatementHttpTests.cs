@@ -105,7 +105,12 @@ public sealed class EquityStatementHttpTests : IAsyncLifetime
             invoice.CustomerId = customer.Id;
             invoice.SalesInvoiceLines!.Add(new Dto.Sales.SalesInvoiceLine { ItemId = item.Id, Quantity = 1, Amount = 1000, MeasurementId = item.SmallestMeasurementId!.Value });
         });
-        var response = await _host.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, _user.Token, Org);
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/Sales/SaveSalesInvoice");
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _user.Token);
+        req.Headers.Add("X-AccountGo-Org", Org);
+        req.Content = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ToJsonContent(_host.Factory.Services, _companyId, invoice);
+        using var client = _host.Factory.CreateClient();
+        var response = await client.SendAsync(req);
         await Ok(response);
     }
     private async Task Seed(EntityType type)
@@ -328,7 +333,7 @@ public sealed class EquityStatementHttpTests : IAsyncLifetime
         };
         var json = await Ok(await Send("Partners/Setup", HttpMethod.Post, payload));
         return json.GetProperty("partners").EnumerateArray().Select(p => (
-            p.GetProperty("id").GetInt32(),
+            AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.Financials.Partner>(_host.Factory.Services, p.GetProperty("id").GetString()!),
             p.GetProperty("name").GetString()!,
             p.GetProperty("capitalAccountCode").GetString()!,
             p.GetProperty("drawingsAccountCode").GetString()!

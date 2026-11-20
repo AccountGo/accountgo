@@ -93,7 +93,8 @@ namespace AccountGo.BackendTests
             var response = await Send(HttpMethod.Post, "/api/organizations", new { name = "Phase Three", slug = _slug }, scoped: false);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
             var created = await Json(response);
-            _companyId = int.Parse(created.GetProperty("id").GetString());
+            var companyPublicId = created.GetProperty("id").GetString()!;
+            _companyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, companyPublicId);
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -133,6 +134,15 @@ namespace AccountGo.BackendTests
             }
         }
 
+        protected string PubId<TEntity>(int id) where TEntity : BaseEntity, IHasPublicId =>
+            AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<TEntity>(_factory.Services, id);
+
+        protected int IntId<TEntity>(string publicId) where TEntity : BaseEntity, IHasPublicId =>
+            AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<TEntity>(_factory.Services, publicId);
+
+        protected Task<T> ReadDto<T>(HttpResponseMessage response) =>
+            AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ReadDtoAsync<T>(_factory.Services, _companyId, response);
+
         protected async Task<int> SaveDraft(string number = null)
         {
             var invoice = await NewInvoice();
@@ -140,12 +150,12 @@ namespace AccountGo.BackendTests
             invoice.No = number;
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            return (await Json(saved)).GetProperty("id").GetInt32();
+            return IntId<SalesInvoiceHeader>((await Json(saved)).GetProperty("id").GetString());
         }
 
         protected async Task<string> Issue(int id)
         {
-            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={id}");
+            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(id)}");
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
             return (await Json(issued)).GetProperty("no").GetString();
         }
@@ -167,9 +177,9 @@ namespace AccountGo.BackendTests
 
         protected async Task<Dto.Sales.SalesInvoice> GetInvoice(int id)
         {
-            var response = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={id}");
+            var response = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(id)}");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            return await ReadDto<Dto.Sales.SalesInvoice>(response);
         }
 
         protected Task<decimal> OutstandingReceivables() => DashboardKpi("outstandingReceivables");
@@ -195,9 +205,10 @@ namespace AccountGo.BackendTests
 
         protected async Task<int> Invite(string email, string role = "Member", int[] securityRoleIds = null)
         {
-            var response = await Send(HttpMethod.Post, Current + "/invitations", new { email, role, securityRoleIds = securityRoleIds ?? new int[0] });
+            var rolePubIds = (securityRoleIds ?? Array.Empty<int>()).Select(PubId<Core.Domain.Security.SecurityRole>).ToArray();
+            var response = await Send(HttpMethod.Post, Current + "/invitations", new { email, role, securityRoleIds = rolePubIds });
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            return (await Json(response)).GetProperty("id").GetInt32();
+            return IntId<CompanyInvitation>((await Json(response)).GetProperty("id").GetString());
         }
 
         protected async Task JoinOther(string role = "Member")
@@ -241,30 +252,30 @@ namespace AccountGo.BackendTests
         {
             var response = await Send(HttpMethod.Post, "/api/Catalog/SaveItem", item);
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Inventory.CatalogItem>();
+            return await ReadDto<Dto.Inventory.CatalogItem>(response);
         }
 
         protected async Task<Dto.Sales.Client> SaveClient(Dto.Sales.Client client)
         {
             var response = await Send(HttpMethod.Post, "/api/Sales/SaveClient", client);
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            return await ReadDto<Dto.Sales.Client>(response);
         }
 
         protected async Task<Dto.Sales.Client> GetClient(int id)
         {
-            var response = await Send(HttpMethod.Get, $"/api/Sales/Client?id={id}");
+            var response = await Send(HttpMethod.Get, $"/api/Sales/Client?id={PubId<Customer>(id)}");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            return await ReadDto<Dto.Sales.Client>(response);
         }
 
         protected async Task<List<Dto.Sales.Client>> Clients() =>
-            await (await Send(HttpMethod.Get, "/api/Sales/Clients")).Content.ReadFromJsonAsync<List<Dto.Sales.Client>>();
+            await ReadDto<List<Dto.Sales.Client>>(await Send(HttpMethod.Get, "/api/Sales/Clients"));
 
         protected async Task<int> FirstPaymentTermId()
         {
             var terms = await Json(await Send(HttpMethod.Get, "/api/Common/PaymentTerms"));
-            return terms[0].GetProperty("id").GetInt32();
+            return IntId<PaymentTerm>(terms[0].GetProperty("id").GetString());
         }
 
         protected async Task EditCustomer(int customerId, string name, string email, string street)
@@ -359,7 +370,7 @@ namespace AccountGo.BackendTests
                         request.Headers.Add(kvp.Key, kvp.Value);
                     }
                 }
-                if (body != null) request.Content = JsonContent.Create(body);
+                if (body != null) request.Content = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ToJsonContent(_factory.Services, _companyId, body);
                 return await _client.SendAsync(request);
             }
         }
@@ -512,7 +523,7 @@ namespace AccountGo.BackendTests
         {
             var hosting = await SaveItem(new Dto.Inventory.CatalogItem { Name = "Hosting", Price = 15 });
             var archived = await SaveItem(new Dto.Inventory.CatalogItem { Name = "Old plan", Price = 9 });
-            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={archived.Id}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={PubId<Item>(archived.Id)}")).IsSuccessStatusCode);
 
             var invoice = await NewInvoice();
             invoice.Status = "Draft";
@@ -523,7 +534,7 @@ namespace AccountGo.BackendTests
             };
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var lines = (await GetInvoice((await Json(saved)).GetProperty("id").GetInt32())).SalesInvoiceLines;
+            var lines = (await GetInvoice(IntId<SalesInvoiceHeader>((await Json(saved)).GetProperty("id").GetString()))).SalesInvoiceLines;
             Assert.Equal(hosting.Id, lines.Single(l => l.ItemDescription == "hosting").ItemId);
             // An archived item isn't matched; the line goes to the general item.
             Assert.NotEqual(archived.Id, lines.Single(l => l.ItemDescription == "Old plan").ItemId);
@@ -535,13 +546,13 @@ namespace AccountGo.BackendTests
             var created = await SaveItem(new Dto.Inventory.CatalogItem { Name = "  Annual support ", Code = "SUP-1", Price = 1200, Cost = 300 });
             Assert.Equal("Annual support", created.Name);
             Assert.True(created.CanDelete);
-            var listed = await (await Send(HttpMethod.Get, "/api/Catalog/Items")).Content.ReadFromJsonAsync<List<Dto.Inventory.CatalogItem>>();
+            var listed = await ReadDto<List<Dto.Inventory.CatalogItem>>(await Send(HttpMethod.Get, "/api/Catalog/Items"));
             Assert.Contains(listed, i => i.Id == created.Id && i.Code == "SUP-1" && i.Price == 1200 && i.Cost == 300);
 
             Assert.Equal(HttpStatusCode.Conflict, (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", new Dto.Inventory.CatalogItem { Name = "Other", Code = "sup-1" })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", new Dto.Inventory.CatalogItem { Name = " " })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", new Dto.Inventory.CatalogItem { Name = "Refund", Price = -1 })).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Catalog/Item?id=999999")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Catalog/Item?id=item_00000000000000000000000001")).StatusCode);
 
             // Used on an invoice, then renamed: the invoice line keeps its text, and the item can only be archived.
             var invoice = await NewInvoice();
@@ -549,7 +560,7 @@ namespace AccountGo.BackendTests
             invoice.SalesInvoiceLines.Single().ItemDescription = "Annual support";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(saved)).GetProperty("id").GetString());
 
             created.Name = "Premium support";
             created.Price = 1500;
@@ -558,23 +569,24 @@ namespace AccountGo.BackendTests
             Assert.False(edited.CanDelete);
             Assert.Equal("Annual support", (await GetInvoice(invoiceId)).SalesInvoiceLines.Single().ItemDescription);
 
-            var refused = await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={created.Id}");
+            var refused = await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={PubId<Item>(created.Id)}");
             Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
             Assert.Contains("Archive it instead", await refused.Content.ReadAsStringAsync());
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={created.Id}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={PubId<Item>(created.Id)}")).IsSuccessStatusCode);
             var picker = await Json(await Send(HttpMethod.Get, "/api/Common/Items"));
-            Assert.True(picker.EnumerateArray().Single(i => i.GetProperty("id").GetInt32() == created.Id).GetProperty("archived").GetBoolean());
-            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={created.Id}&archived=false")).IsSuccessStatusCode);
+            Assert.True(picker.EnumerateArray().Single(i => i.GetProperty("id").GetString() == PubId<Item>(created.Id)).GetProperty("archived").GetBoolean());
+            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={PubId<Item>(created.Id)}&archived=false")).IsSuccessStatusCode);
 
             var unused = await SaveItem(new Dto.Inventory.CatalogItem { Name = "Typo item" });
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={unused.Id}")).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Catalog/Item?id={unused.Id}")).StatusCode);
+            var unusedPub = PubId<Item>(unused.Id);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={unusedPub}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Catalog/Item?id={unusedPub}")).StatusCode);
 
             // Members without "Manage Items" can't change the catalog.
             await JoinOther();
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", created, _otherToken)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={created.Id}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={PubId<Item>(created.Id)}", token: _otherToken)).StatusCode);
         }
 
         [Fact]
@@ -584,7 +596,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Draft";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
             var payment = new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 100, PaymentDate = DateTime.UtcNow };
 
             var onDraft = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", payment);
@@ -592,16 +604,16 @@ namespace AccountGo.BackendTests
             Assert.Equal("Draft", (await GetInvoice(invoiceId)).Status);
             Assert.Equal(0m, await DashboardKpi("moneyInBank"));
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={invoiceId}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(invoiceId)}")).IsSuccessStatusCode);
             var onIssued = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", payment);
             Assert.True(onIssued.IsSuccessStatusCode, await onIssued.Content.ReadAsStringAsync());
             Assert.Equal("Paid", (await GetInvoice(invoiceId)).Status);
 
             var voided = await NewInvoice();
             voided.Status = "Draft";
-            var voidedId = (await (await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", voided)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={voidedId}")).IsSuccessStatusCode);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voidedId}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            var voidedId = IntId<SalesInvoiceHeader>((await (await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", voided)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(voidedId)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<SalesInvoiceHeader>(voidedId)}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = voidedId, Amount = 100, PaymentDate = DateTime.UtcNow })).StatusCode);
         }
@@ -613,7 +625,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 100, PaymentDate = DateTime.UtcNow });
@@ -642,7 +654,7 @@ namespace AccountGo.BackendTests
             invoice.PaymentInstructions = "Bank: Example Bank\nAccount: 0001-2345";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            invoice.Id = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            invoice.Id = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             var created = await GetInvoice(invoice.Id);
             Assert.Equal("Thank you!\nSee you next month.", created.Notes);
@@ -685,7 +697,7 @@ namespace AccountGo.BackendTests
             var neverSet = await NewInvoice();
             neverSet.Status = "Draft";
             neverSet.PaymentInstructions = null;
-            var neverSetId = (await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", neverSet))).GetProperty("id").GetInt32();
+            var neverSetId = IntId<SalesInvoiceHeader>((await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", neverSet))).GetProperty("id").GetString());
             var draft = await GetInvoice(neverSetId);
             Assert.Null(draft.PaymentInstructions);
             Assert.Equal("Pay at the counter", draft.PaymentInstructionsToPrint());
@@ -694,7 +706,7 @@ namespace AccountGo.BackendTests
             var cleared = await NewInvoice();
             cleared.Status = "Draft";
             cleared.PaymentInstructions = "";
-            var clearedId = (await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", cleared))).GetProperty("id").GetInt32();
+            var clearedId = IntId<SalesInvoiceHeader>((await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", cleared))).GetProperty("id").GetString());
             var clearedDraft = await GetInvoice(clearedId);
             Assert.Equal("", clearedDraft.PaymentInstructions);
             Assert.True(string.IsNullOrEmpty(clearedDraft.PaymentInstructionsToPrint()));
@@ -720,7 +732,7 @@ namespace AccountGo.BackendTests
             var invoice = await NewInvoice();
             invoice.Status = "Draft";
             invoice.PaymentInstructions = null;
-            var id = (await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice))).GetProperty("id").GetInt32();
+            var id = IntId<SalesInvoiceHeader>((await Json(await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice))).GetProperty("id").GetString());
             await Issue(id);
 
             SetDefaultPaymentInstructions("Added after issue");
@@ -751,7 +763,7 @@ namespace AccountGo.BackendTests
             withTerm.PaymentTermId = termId;
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", withTerm);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var created = await GetInvoice((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32());
+            var created = await GetInvoice(IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString()));
             Assert.Equal(BusinessDays.Add(friday, termDays), created.DueDate!.Value.Date);
             Assert.Equal(termId, created.PaymentTermId);
 
@@ -858,11 +870,11 @@ namespace AccountGo.BackendTests
             var second = await SaveDraft();
             var shown = await NextNumber();
 
-            var ok = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={second}&expectedNo={shown}");
+            var ok = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(second)}&expectedNo={shown}");
             Assert.True(ok.IsSuccessStatusCode, await ok.Content.ReadAsStringAsync());
 
             // The first was confirmed against the same number; it is refused and stays an unnumbered draft.
-            var stale = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={first}&expectedNo={shown}");
+            var stale = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(first)}&expectedNo={shown}");
             Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
             var problem = await Json(stale);
             Assert.Equal("number_changed", problem.GetProperty("code").GetString());
@@ -877,12 +889,12 @@ namespace AccountGo.BackendTests
         {
             var issued = await SaveDraft();
             var number = await Issue(issued);
-            var refused = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={issued}");
+            var refused = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={PubId<SalesInvoiceHeader>(issued)}");
             Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
             Assert.Equal(number, (await GetInvoice(issued)).No);
 
             var draft = await SaveDraft();
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={draft}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={PubId<SalesInvoiceHeader>(draft)}")).StatusCode);
         }
 
         [Fact]
@@ -930,20 +942,20 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
             var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 40, PaymentDate = DateTime.UtcNow });
             Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
 
-            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId}");
+            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={PubId<SalesInvoiceHeader>(invoiceId)}");
             Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
             Assert.Equal("application/pdf", pdf.Content.Headers.ContentType.MediaType);
             Assert.StartsWith("Invoice-", pdf.Content.Headers.ContentDisposition.FileName.Trim('"'));
             var bytes = await pdf.Content.ReadAsByteArrayAsync();
             Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(bytes, 0, 4));
 
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId + 999}")).StatusCode);
-            Assert.False((await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId}", token: _otherToken)).IsSuccessStatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Sales/SalesInvoicePdf?id=inv_00000000000000000000000001")).StatusCode);
+            Assert.False((await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={PubId<SalesInvoiceHeader>(invoiceId)}", token: _otherToken)).IsSuccessStatusCode);
         }
 
         [Fact]
@@ -953,11 +965,11 @@ namespace AccountGo.BackendTests
             invoice.Status = "Draft";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
-            var path = $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}";
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
+            var path = $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}";
 
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, path)).StatusCode);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={invoiceId}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(invoiceId)}")).IsSuccessStatusCode);
 
             var sent = await Send(HttpMethod.Post, path);
             Assert.True(sent.IsSuccessStatusCode, await sent.Content.ReadAsStringAsync());
@@ -983,7 +995,7 @@ namespace AccountGo.BackendTests
             _emails.Fail = true;
             Assert.Equal(HttpStatusCode.BadGateway, (await Send(HttpMethod.Post, path)).StatusCode);
             _emails.Fail = false;
-            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();
+            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(invoiceId)}")).Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("Open", reloaded.GetProperty("status").GetString());
 
             // Only the send the provider accepted is on record, and the invoice shows it.
@@ -1023,7 +1035,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             using (var scope = _factory.Services.CreateScope())
             {
@@ -1038,7 +1050,7 @@ namespace AccountGo.BackendTests
                 }
             }
 
-            var path = $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}";
+            var path = $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}";
             Assert.True((await Send(HttpMethod.Post, path)).IsSuccessStatusCode);
             var count = _emails.Messages.Count;
             Assert.Equal((HttpStatusCode)429, (await Send(HttpMethod.Post, path)).StatusCode);
@@ -1054,9 +1066,9 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
-            var response = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}");
+            var response = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}");
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             Assert.Contains("no valid email", await response.Content.ReadAsStringAsync());
         }
@@ -1068,11 +1080,11 @@ namespace AccountGo.BackendTests
             invoice.Status = "Draft";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
-            var path = $"/api/Sales/SendSalesInvoiceFollowUpEmail?id={invoiceId}";
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
+            var path = $"/api/Sales/SendSalesInvoiceFollowUpEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}";
 
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, path)).StatusCode);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={invoiceId}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(invoiceId)}")).IsSuccessStatusCode);
 
             var sent = await Send(HttpMethod.Post, path);
             Assert.True(sent.IsSuccessStatusCode, await sent.Content.ReadAsStringAsync());
@@ -1084,7 +1096,7 @@ namespace AccountGo.BackendTests
             Assert.Contains("View invoice", message.Html);
             Assert.Contains("/api/public/invoices/pdf?", message.Html);
 
-            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();
+            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(invoiceId)}")).Content.ReadFromJsonAsync<JsonElement>();
             var emails = reloaded.GetProperty("emails");
             Assert.Equal(1, emails.GetArrayLength());
             Assert.Equal("FollowUp", emails[0].GetProperty("kind").GetString());
@@ -1098,20 +1110,20 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             // > 2 additional recipients (total > 3) is rejected
-            var tooMany = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=one@example.com&additionalRecipients=two@example.com&additionalRecipients=three@example.com");
+            var tooMany = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}&additionalRecipients=one@example.com&additionalRecipients=two@example.com&additionalRecipients=three@example.com");
             Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
             Assert.Contains("maximum of 3 recipients", await tooMany.Content.ReadAsStringAsync());
 
             // Invalid email is rejected
-            var invalid = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=not-an-email");
+            var invalid = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}&additionalRecipients=not-an-email");
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
             Assert.Contains("not a valid email", await invalid.Content.ReadAsStringAsync());
 
             // Valid 2 additional recipients (total 3) succeeds and is dispatched on demand
-            var path = $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=ap@customer.example&additionalRecipients=cfo@customer.example";
+            var path = $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}&additionalRecipients=ap@customer.example&additionalRecipients=cfo@customer.example";
             var sent = await Send(HttpMethod.Post, path);
             Assert.True(sent.IsSuccessStatusCode, await sent.Content.ReadAsStringAsync());
 
@@ -1126,10 +1138,10 @@ namespace AccountGo.BackendTests
             Assert.Contains("cfo@customer.example", payload);
 
             // Cc counts toward the cap and is sent as a real copy, not another To.
-            var ccTooMany = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=ap@customer.example&additionalRecipients=cfo@customer.example&cc=jane@customer.example");
+            var ccTooMany = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}&additionalRecipients=ap@customer.example&additionalRecipients=cfo@customer.example&cc=jane@customer.example");
             Assert.Equal(HttpStatusCode.BadRequest, ccTooMany.StatusCode);
 
-            var withCc = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&additionalRecipients=ap@customer.example&cc=jane@customer.example");
+            var withCc = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}&additionalRecipients=ap@customer.example&cc=jane@customer.example");
             Assert.True(withCc.IsSuccessStatusCode, await withCc.Content.ReadAsStringAsync());
             var ccMessage = _emails.Messages.Last().Raw;
             Assert.Equal(new[] { "ap@customer.example" }, ccMessage.AdditionalTo);
@@ -1141,12 +1153,12 @@ namespace AccountGo.BackendTests
             }
 
             // A Cc that is already the To address is sent once, as To.
-            var ccIsTo = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}&cc=billing@customer.example");
+            var ccIsTo = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={PubId<SalesInvoiceHeader>(invoiceId)}&cc=billing@customer.example");
             Assert.True(ccIsTo.IsSuccessStatusCode, await ccIsTo.Content.ReadAsStringAsync());
             Assert.Empty(_emails.Messages.Last().Raw.Cc);
 
             // Database invoice recipient email is NOT changed (remains on-demand only)
-            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();
+            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(invoiceId)}")).Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("billing@customer.example", reloaded.GetProperty("recipientEmail").GetString());
         }
 
@@ -1245,7 +1257,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Draft";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             // No settings yet: same output as before the feature.
             var before = await GetInvoice(invoiceId);
@@ -1282,7 +1294,7 @@ namespace AccountGo.BackendTests
             // The flags only affect rendering; the editor still receives the invoice's own values.
             Assert.Equal("Note", after.Notes);
 
-            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId}");
+            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={PubId<SalesInvoiceHeader>(invoiceId)}");
             Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
             Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(await pdf.Content.ReadAsByteArrayAsync(), 0, 4));
 
@@ -1304,13 +1316,13 @@ namespace AccountGo.BackendTests
             var issuedDto = await NewInvoice();
             var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", issuedDto);
             Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
-            var issuedId = (await issuedResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var issuedId = IntId<SalesInvoiceHeader>((await issuedResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             var draftDto = await NewInvoice();
             draftDto.Status = "Draft";
             var draftResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", draftDto);
             Assert.True(draftResponse.IsSuccessStatusCode, await draftResponse.Content.ReadAsStringAsync());
-            var draftId = (await draftResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var draftId = IntId<SalesInvoiceHeader>((await draftResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             // The business moves and switches back to its trading name.
             Assert.True((await Send(HttpMethod.Put, Current + "/business-profile", profile("9 New St"))).IsSuccessStatusCode);
@@ -1331,7 +1343,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(new[] { "1 Old St", "Makati" }, (await GetInvoice(issuedId)).Seller.AddressLines);
 
             // A draft records the seller when it is issued, not when it was drafted.
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(draftId)}")).IsSuccessStatusCode);
             Assert.True((await Send(HttpMethod.Put, Current + "/business-profile", profile("5 Later St"))).IsSuccessStatusCode);
             Assert.Equal(new[] { "9 New St", "Makati" }, (await GetInvoice(draftId)).Seller.AddressLines);
 
@@ -1339,7 +1351,7 @@ namespace AccountGo.BackendTests
             Assert.True((await Send(HttpMethod.Put, Current + "/sales-invoice-settings", new { showSellerAddress = false })).IsSuccessStatusCode);
             Assert.Empty((await GetInvoice(issuedId)).Seller.AddressLines);
 
-            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={issuedId}");
+            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={PubId<SalesInvoiceHeader>(issuedId)}");
             Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
         }
 
@@ -1382,7 +1394,7 @@ namespace AccountGo.BackendTests
             var members = await Json(await Send(HttpMethod.Get, Current + "/members"));
             var other = members.EnumerateArray().Single(m => m.GetProperty("userId").GetString() == _otherId);
             Assert.Equal("Member", other.GetProperty("role").GetString());
-            Assert.Equal(roleId, other.GetProperty("securityRoles")[0].GetProperty("id").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Security.SecurityRole>(roleId), other.GetProperty("securityRoles")[0].GetProperty("id").GetString());
             Assert.Equal(HttpStatusCode.Conflict, (await Send(HttpMethod.Post, Current + "/invitations", new { email = "phase3-other@example.com", role = "Member" })).StatusCode);
         }
 
@@ -1394,7 +1406,7 @@ namespace AccountGo.BackendTests
             var id = await Invite("phase3-other@example.com");
             var token = InvitationToken();
             if (state == "revoked")
-                Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, Current + "/invitations/" + id)).StatusCode);
+                Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, Current + "/invitations/" + PubId<CompanyInvitation>(id))).StatusCode);
             else
                 using (var scope = _factory.Services.CreateScope())
                 {
@@ -1414,10 +1426,10 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/invitations/" + first, token: "", scoped: false)).StatusCode);
             var previous = InvitationToken();
             for (var i = 0; i < 5; i++)
-                Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Post, Current + "/invitations/" + id + "/resend")).StatusCode);
+                Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Post, Current + "/invitations/" + PubId<CompanyInvitation>(id) + "/resend")).StatusCode);
             Assert.NotEqual(previous, InvitationToken());
             Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/invitations/" + previous, token: "", scoped: false)).StatusCode);
-            Assert.Equal(HttpStatusCode.TooManyRequests, (await Send(HttpMethod.Post, Current + "/invitations/" + id + "/resend")).StatusCode);
+            Assert.Equal(HttpStatusCode.TooManyRequests, (await Send(HttpMethod.Post, Current + "/invitations/" + PubId<CompanyInvitation>(id) + "/resend")).StatusCode);
         }
 
         [Fact]
@@ -1431,11 +1443,11 @@ namespace AccountGo.BackendTests
         [Fact]
         public async Task LastOwner_LeaveRemoveDemote_Conflict_TransferRevokesGovernanceImmediately()
         {
-            var ownerMemberId = MemberId(_ownerId);
+            var ownerMemberId = PubId<CompanyMember>(MemberId(_ownerId));
             Assert.Equal(HttpStatusCode.Conflict, (await Send(HttpMethod.Delete, Current + "/members/" + ownerMemberId)).StatusCode);
             Assert.Equal(HttpStatusCode.Conflict, (await Send(HttpMethod.Patch, Current + "/members/" + ownerMemberId, new { role = "Member" })).StatusCode);
             await JoinOther();
-            var target = MemberId(_otherId);
+            var target = PubId<CompanyMember>(MemberId(_otherId));
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Post, Current + "/transfer-ownership", new { memberId = target })).StatusCode);
             var current = await Json(await Send(HttpMethod.Get, Current));
             Assert.Equal("Admin", current.GetProperty("role").GetString());
@@ -1453,31 +1465,32 @@ namespace AccountGo.BackendTests
             var third = await CreateUser("third@example.com");
             await Invite("third@example.com");
             await Send(HttpMethod.Post, "/api/invitations/" + InvitationToken() + "/accept", token: third.Item1, scoped: false);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(third.Item2),
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<CompanyMember>(MemberId(third.Item2)),
                 new { role = "Admin" }, token: _otherToken)).StatusCode);
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(third.Item2),
-                new { securityRoleIds = new[] { ViewerRoleId() } }, token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<CompanyMember>(MemberId(third.Item2)),
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(ViewerRoleId()) } }, token: _otherToken)).StatusCode);
         }
 
         [Fact]
         public async Task MembershipChanges_RemovePermissionsAndAccessOnNextRequest()
         {
             await JoinOther("Admin");
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
+            var otherMemPub = PubId<CompanyMember>(MemberId(_otherId));
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + otherMemPub,
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(RoleId("Sales Representative")) } })).StatusCode);
             var invoice = await NewInvoice();
             Assert.True((await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice, _otherToken)).IsSuccessStatusCode);
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { role = "Member", securityRoleIds = new[] { ViewerRoleId() } })).StatusCode);
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { ViewerRoleId() } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + otherMemPub,
+                new { role = "Member", securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(ViewerRoleId()) } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + otherMemPub,
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(ViewerRoleId()) } })).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice, _otherToken)).StatusCode);
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, Current + "/members", token: _otherToken)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, Current + "/invitations", token: _otherToken)).StatusCode);
             // The other member has no journal review permission, so removing them does not remove a
             // usable reviewer. Preserve the independent rule instead of inferring a single-actor grant.
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete,
-                Current + "/members/" + MemberId(_otherId))).StatusCode);
+                Current + "/members/" + otherMemPub)).StatusCode);
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -1497,14 +1510,14 @@ namespace AccountGo.BackendTests
             using (var scope = _factory.Services.CreateScope())
                 globalRole = scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.Single(r => r.Name == "SystemAdministrators").Id;
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, Current + "/invitations",
-                new { email = "phase3-other@example.com", role = "Member", securityRoleIds = new[] { globalRole } })).StatusCode);
+                new { email = "phase3-other@example.com", role = "Member", securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(globalRole) } })).StatusCode);
             var otherOrg = await Json(await Send(HttpMethod.Post, "/api/organizations", new { name = "Second", slug = "second" }, token: _otherToken, scoped: false));
-            var secondId = int.Parse(otherOrg.GetProperty("id").GetString());
-            int memberId;
+            var secondId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, otherOrg.GetProperty("id").GetString());
+            string memberPub;
             using (var scope = _factory.Services.CreateScope())
-                memberId = scope.ServiceProvider.GetRequiredService<ApiDbContext>().CompanyMembers.Single(m => m.CompanyId == secondId).Id;
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Delete, Current + "/members/" + memberId)).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Patch, Current + "/members/" + memberId, new { role = "Member" })).StatusCode);
+                memberPub = scope.ServiceProvider.GetRequiredService<ApiDbContext>().CompanyMembers.Single(m => m.CompanyId == secondId).PublicId;
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Delete, Current + "/members/" + memberPub)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Patch, Current + "/members/" + memberPub, new { role = "Member" })).StatusCode);
         }
 
         [Fact]
@@ -1578,8 +1591,9 @@ namespace AccountGo.BackendTests
             Assert.Equal(0, auth.GetProperty("organizations").GetArrayLength());
             var accessToken = auth.GetProperty("accessToken").GetString();
             var pending = await Json(await Send(HttpMethod.Get, "/api/invitations/pending", token: accessToken, scoped: false));
-            Assert.Equal(id, pending[0].GetProperty("id").GetInt32());
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/invitations/pending/" + id + "/accept", token: accessToken, scoped: false)).StatusCode);
+            var invPub = PubId<CompanyInvitation>(id);
+            Assert.Equal(invPub, pending[0].GetProperty("id").GetString());
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/invitations/pending/" + invPub + "/accept", token: accessToken, scoped: false)).StatusCode);
             using (var scope = _factory.Services.CreateScope())
                 Assert.False(scope.ServiceProvider.GetRequiredService<ApiDbContext>().Companies.Any(c => c.Slug == "must-not-exist"));
         }
@@ -1679,10 +1693,11 @@ namespace AccountGo.BackendTests
 
             var roles = (await Json(await Send(HttpMethod.Get, Current + "/security-roles"))).EnumerateArray().ToList();
             Assert.DoesNotContain(roles, r => r.GetProperty("name").GetString() == "SystemAdministrators");
-            var viewer = roles.Single(r => r.GetProperty("id").GetInt32() == viewerId);
+            var viewerPub = PubId<Core.Domain.Security.SecurityRole>(viewerId);
+            var viewer = roles.Single(r => r.GetProperty("id").GetString() == viewerPub);
             Assert.Equal(1, viewer.GetProperty("memberCount").GetInt32());
             Assert.True(viewer.GetProperty("permissions").GetArrayLength() > 0);
-            Assert.All(roles.Where(r => r.GetProperty("id").GetInt32() != viewerId),
+            Assert.All(roles.Where(r => r.GetProperty("id").GetString() != viewerPub),
                 r => Assert.Equal(0, r.GetProperty("memberCount").GetInt32()));
         }
 
@@ -1762,7 +1777,7 @@ namespace AccountGo.BackendTests
             issuedDto.SalesInvoiceLines[0].ItemDescription = "Consulting, March";
             var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", issuedDto);
             Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
-            var issuedId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
+            var issuedId = IntId<SalesInvoiceHeader>((await Json(issuedResponse)).GetProperty("id").GetString());
 
             // A draft for the same customer, its line left blank: it takes the item's description as it is now.
             var draftDto = new Dto.Sales.SalesInvoice
@@ -1775,7 +1790,7 @@ namespace AccountGo.BackendTests
             };
             var draftResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", draftDto);
             Assert.True(draftResponse.IsSuccessStatusCode, await draftResponse.Content.ReadAsStringAsync());
-            var draftId = (await Json(draftResponse)).GetProperty("id").GetInt32();
+            var draftId = IntId<SalesInvoiceHeader>((await Json(draftResponse)).GetProperty("id").GetString());
 
             await EditCustomer(issuedDto.CustomerId, "New Name Inc", "new@example.com", "9 New St");
             await EditItem(issuedDto.SalesInvoiceLines[0].ItemId.Value, "Advisory");
@@ -1787,7 +1802,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("Consulting, March", issued.SalesInvoiceLines.Single().ItemDescription);
             // Emails go to the address on file now.
             Assert.Equal("new@example.com", issued.RecipientEmail);
-            var listed = (await (await Send(HttpMethod.Get, "/api/Sales/SalesInvoices")).Content.ReadFromJsonAsync<List<Dto.Sales.SalesInvoice>>())
+            var listed = (await ReadDto<List<Dto.Sales.SalesInvoice>>(await Send(HttpMethod.Get, "/api/Sales/SalesInvoices")))
                 .Single(i => i.Id == issuedId);
             Assert.Equal("Consulting, March", listed.SalesInvoiceLines.Single().ItemDescription);
 
@@ -1797,7 +1812,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("9 New St, Makati", draft.CustomerAddress);
             Assert.Equal("Consulting", draft.SalesInvoiceLines.Single().ItemDescription);
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(draftId)}")).IsSuccessStatusCode);
             await EditCustomer(issuedDto.CustomerId, "Newest Name Co", "newest@example.com", "5 Later St");
             draft = await GetInvoice(draftId);
             Assert.Equal("New Name Inc", draft.CustomerName);
@@ -1915,7 +1930,7 @@ namespace AccountGo.BackendTests
             Assert.Null(loaded.BillToContactId);
             Assert.Contains(loaded.Contacts, c => c.IsPrimary);
 
-            var saved = await (await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={client.Id}", new Dto.Common.ContactPersonDto
+            var saved = await ReadDto<Dto.Sales.Client>(await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={PubId<Customer>(client.Id)}", new Dto.Common.ContactPersonDto
             {
                 FirstName = "Jane",
                 LastName = "Doe",
@@ -1924,7 +1939,7 @@ namespace AccountGo.BackendTests
                 City = "Quezon City",
                 Country = "PH",
                 IsBillTo = true,
-            })).Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            }));
             Assert.NotNull(saved.BillToContactId);
             Assert.Contains(saved.Contacts, c => c.IsBillTo && c.FirstName == "Jane" && c.Email == "jane@acme.test");
 
@@ -1932,7 +1947,7 @@ namespace AccountGo.BackendTests
             invoice.CustomerId = client.Id;
             var issued = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(issued)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(issued)).GetProperty("id").GetString());
             var printed = await GetInvoice(invoiceId);
             Assert.Equal("Acme Corp", printed.CustomerName);
             Assert.Equal("Attn: Jane Doe", printed.CustomerAttention);
@@ -1942,15 +1957,14 @@ namespace AccountGo.BackendTests
             Assert.Equal("billing@acme.test", printed.RecipientEmail);
             Assert.Equal("jane@acme.test", printed.RecipientCcEmail);
 
-            var other = await (await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={client.Id}", new Dto.Common.ContactPersonDto
+            var other = await ReadDto<Dto.Sales.Client>(await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={PubId<Customer>(client.Id)}", new Dto.Common.ContactPersonDto
             {
                 FirstName = "Bob",
                 LastName = "Smith",
                 Email = "bob@acme.test",
-            })).Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            }));
             var bobId = other.Contacts.Single(c => c.FirstName == "Bob").Id;
-            var switched = await (await Send(HttpMethod.Post, $"/api/Sales/SetClientBillToContact?clientId={client.Id}&contactId={bobId}"))
-                .Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            var switched = await ReadDto<Dto.Sales.Client>(await Send(HttpMethod.Post, $"/api/Sales/SetClientBillToContact?clientId={PubId<Customer>(client.Id)}&contactId={PubId<Contact>(bobId)}"));
             Assert.Equal(bobId, switched.BillToContactId);
             // The issued invoice still names Jane, so she stays the one copied.
             var afterSwitch = await GetInvoice(invoiceId);
@@ -1958,13 +1972,12 @@ namespace AccountGo.BackendTests
             Assert.Equal("jane@acme.test", afterSwitch.RecipientCcEmail);
 
             var janeId = switched.Contacts.Single(c => c.FirstName == "Jane").Id;
-            var afterDelete = await (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClientContact?clientId={client.Id}&contactId={janeId}"))
-                .Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            var afterDelete = await ReadDto<Dto.Sales.Client>(await Send(HttpMethod.Delete, $"/api/Sales/DeleteClientContact?clientId={PubId<Customer>(client.Id)}&contactId={PubId<Contact>(janeId)}"));
             Assert.DoesNotContain(afterDelete.Contacts, c => c.Id == janeId);
             Assert.Equal(bobId, afterDelete.BillToContactId);
 
             var bob = afterDelete.Contacts.Single(c => c.Id == bobId);
-            var cleared = await (await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={client.Id}", new Dto.Common.ContactPersonDto
+            var cleared = await ReadDto<Dto.Sales.Client>(await Send(HttpMethod.Post, $"/api/Sales/ClientContact?clientId={PubId<Customer>(client.Id)}", new Dto.Common.ContactPersonDto
             {
                 Id = bob.Id,
                 FirstName = bob.FirstName,
@@ -1972,7 +1985,7 @@ namespace AccountGo.BackendTests
                 Email = bob.Email,
                 IsBillTo = false,
                 IsPrimary = bob.IsPrimary,
-            })).Content.ReadFromJsonAsync<Dto.Sales.Client>();
+            }));
             Assert.Null(cleared.BillToContactId);
             Assert.DoesNotContain(cleared.Contacts, c => c.IsBillTo);
 
@@ -1999,7 +2012,7 @@ namespace AccountGo.BackendTests
             Assert.Contains(await Clients(), c => c.Id == created.Id && c.City == "Makati" && !c.Archived);
 
             // The invoice picker gets the client's default terms.
-            var picker = await (await Send(HttpMethod.Get, "/api/Sales/Customers")).Content.ReadFromJsonAsync<List<Dto.Sales.Customer>>();
+            var picker = await ReadDto<List<Dto.Sales.Customer>>(await Send(HttpMethod.Get, "/api/Sales/Customers"));
             Assert.Equal(created.PaymentTermId, picker.Single(c => c.Id == created.Id).PaymentTermId);
 
             // Issue an invoice to it, then edit the client: the invoice keeps its bill-to, and the client can't be deleted.
@@ -2007,7 +2020,7 @@ namespace AccountGo.BackendTests
             invoice.CustomerId = created.Id;
             var issued = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(issued)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(issued)).GetProperty("id").GetString());
 
             created.Name = "Acme Corporation";
             created.Email = "";
@@ -2027,16 +2040,16 @@ namespace AccountGo.BackendTests
             Assert.Equal("billing@acme.test", printed.RecipientEmail);
 
             // Archived: still listed and still on its invoices, flagged for the picker; restoring clears it.
-            var archived = await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={created.Id}");
+            var archived = await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={PubId<Customer>(created.Id)}");
             Assert.True(archived.IsSuccessStatusCode, await archived.Content.ReadAsStringAsync());
             Assert.True((await GetClient(created.Id)).Archived);
-            picker = await (await Send(HttpMethod.Get, "/api/Sales/Customers")).Content.ReadFromJsonAsync<List<Dto.Sales.Customer>>();
+            picker = await ReadDto<List<Dto.Sales.Customer>>(await Send(HttpMethod.Get, "/api/Sales/Customers"));
             Assert.True(picker.Single(c => c.Id == created.Id).Archived);
             Assert.Equal("Acme Corp", (await GetInvoice(invoiceId)).CustomerName);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={created.Id}&archived=false")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={PubId<Customer>(created.Id)}&archived=false")).IsSuccessStatusCode);
             Assert.False((await GetClient(created.Id)).Archived);
 
-            var refused = await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={created.Id}");
+            var refused = await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={PubId<Customer>(created.Id)}");
             Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
             Assert.Contains("Archive it instead", await refused.Content.ReadAsStringAsync());
         }
@@ -2047,14 +2060,14 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/SaveClient", new Dto.Sales.Client { Name = "  " })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/SaveClient", new Dto.Sales.Client { Name = "Acme", Email = "not-an-email" })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/SaveClient", new Dto.Sales.Client { Name = new string('x', 201) })).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Sales/Client?id=999999")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Sales/Client?id=cus_00000000000000000000000001")).StatusCode);
 
             var client = await SaveClient(new Dto.Sales.Client { Name = "Members can't edit" });
             await JoinOther();
             client.Name = "Hijacked";
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Sales/SaveClient", client, _otherToken)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={client.Id}", token: _otherToken)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={client.Id}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={PubId<Customer>(client.Id)}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={PubId<Customer>(client.Id)}", token: _otherToken)).StatusCode);
             Assert.Equal("Members can't edit", (await GetClient(client.Id)).Name);
         }
 
@@ -2062,9 +2075,10 @@ namespace AccountGo.BackendTests
         public async Task DeleteClient_RemovesAnUnusedClient_InForeignKeyOrder()
         {
             var client = await SaveClient(new Dto.Sales.Client { Name = "Added by mistake", Email = "oops@example.com" });
-            var deleted = await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={client.Id}");
+            var clientPub = PubId<Customer>(client.Id);
+            var deleted = await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={clientPub}");
             Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Sales/Client?id={client.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Sales/Client?id={clientPub}")).StatusCode);
 
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -2077,8 +2091,8 @@ namespace AccountGo.BackendTests
         {
             // A sales representative drafts invoices and records receipts, but doesn't issue or void them.
             await JoinOther();
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<CompanyMember>(MemberId(_otherId)),
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(RoleId("Sales Representative")) } })).StatusCode);
 
             var invoice = await NewInvoice();
             invoice.Status = "Open";
@@ -2089,23 +2103,23 @@ namespace AccountGo.BackendTests
             invoice.Status = "Draft";
             var drafted = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, _otherToken);
             Assert.True(drafted.IsSuccessStatusCode, await drafted.Content.ReadAsStringAsync());
-            var draftId = (await Json(drafted)).GetProperty("id").GetInt32();
+            var draftId = IntId<SalesInvoiceHeader>((await Json(drafted)).GetProperty("id").GetString());
 
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(draftId)}", token: _otherToken)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", await GetInvoice(draftId), _otherToken)).StatusCode);
             Assert.Equal("Draft", (await GetInvoice(draftId)).Status);
 
             // The owner issues it; the representative records a payment but can't void.
             await Issue(draftId);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<SalesInvoiceHeader>(draftId)}&date={IsoDate(DateTime.UtcNow)}", token: _otherToken)).StatusCode);
             var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = draftId, Amount = 10, PaymentDate = DateTime.UtcNow }, _otherToken);
             Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
             Assert.Equal("Partially Paid", (await GetInvoice(draftId)).Status);
 
             // Without any sales role, a member can't record payments either.
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { ViewerRoleId() } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<CompanyMember>(MemberId(_otherId)),
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(ViewerRoleId()) } })).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = draftId, Amount = 10, PaymentDate = DateTime.UtcNow }, _otherToken)).StatusCode);
         }
@@ -2119,14 +2133,14 @@ namespace AccountGo.BackendTests
             invoice.Status = "Draft";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var draftId = (await Json(saved)).GetProperty("id").GetInt32();
+            var draftId = IntId<SalesInvoiceHeader>((await Json(saved)).GetProperty("id").GetString());
             Assert.False((await GetClient(client.Id)).CanDelete);
 
-            var deleted = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={draftId}");
+            var deleted = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={PubId<SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
 
             Assert.True((await GetClient(client.Id)).CanDelete);
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={client.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={PubId<Customer>(client.Id)}")).StatusCode);
         }
 
         [Fact]
@@ -2143,7 +2157,7 @@ namespace AccountGo.BackendTests
                 dto.SalesInvoiceLines.Single().Amount = amount;
                 var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto);
                 Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-                return (await Json(response)).GetProperty("id").GetInt32();
+                return IntId<SalesInvoiceHeader>((await Json(response)).GetProperty("id").GetString());
             }
 
             var today = DateTime.UtcNow.Date;
@@ -2151,11 +2165,11 @@ namespace AccountGo.BackendTests
             var overdue = await Invoice("Open", 40, today.AddDays(-40), today.AddDays(-10));
             await Invoice("Draft", 999, today.AddDays(1));
             var voided = await Invoice("Open", 500, today.AddDays(-5));
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voided}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<SalesInvoiceHeader>(voided)}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             Assert.True((await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = open, Amount = 30, PaymentDate = DateTime.UtcNow })).IsSuccessStatusCode);
 
-            var invoices = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoices?customerId={client.Id}")).Content.ReadFromJsonAsync<List<Dto.Sales.SalesInvoice>>();
+            var invoices = await ReadDto<List<Dto.Sales.SalesInvoice>>(await Send(HttpMethod.Get, $"/api/Sales/SalesInvoices?customerId={PubId<Customer>(client.Id)}"));
             Assert.Equal(4, invoices.Count);
             Assert.All(invoices, i => Assert.Equal(client.Id, i.CustomerId));
             var expectedOutstanding = invoices.Where(i => i.Status is not ("Draft" or "Void")).Sum(i => i.BalanceDue);

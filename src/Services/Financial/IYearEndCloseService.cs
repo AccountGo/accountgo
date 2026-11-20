@@ -54,6 +54,7 @@ namespace Services.Financial
 
     public sealed class YearEndClosingLine
     {
+        [Dto.Common.PublicId("acct")]
         public int AccountId { get; set; }
         public string AccountCode { get; set; } = "";
         public string AccountName { get; set; } = "";
@@ -87,11 +88,13 @@ namespace Services.Financial
         public string IssuanceStatus { get; set; } = "Unknown";
         public bool CanReopen { get; set; }
         public string? ReopenBlockedReason { get; set; }
+        [Dto.Common.PublicId("fycr")]
         public int? LatestCloseRunId { get; set; }
     }
 
     public sealed class PartnerAllocationPreview
     {
+        [Dto.Common.PublicId("part")]
         public int PartnerId { get; set; }
         public string Name { get; set; } = "";
         public decimal Percent { get; set; }
@@ -102,6 +105,7 @@ namespace Services.Financial
 
     public sealed class YearEndYearSummary
     {
+        [Dto.Common.PublicId("fy")]
         public int Id { get; set; }
         public string FiscalYearCode { get; set; } = "";
         public DateTime StartDate { get; set; }

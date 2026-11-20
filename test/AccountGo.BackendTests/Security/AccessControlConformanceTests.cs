@@ -519,11 +519,16 @@ namespace AccountGo.BackendTests.Security
                 viewerRoleId = db.SecurityRoles.Single(r => r.Name == "Auditor / Viewer").Id;
             }
 
+            var ownerMemberPub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_fixture.Factory.Services, ownerMemberId);
+            var targetMemberPub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_fixture.Factory.Services, targetMemberId);
+            var accountantRolePub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<SecurityRole>(_fixture.Factory.Services, accountantRoleId);
+            var viewerRolePub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<SecurityRole>(_fixture.Factory.Services, viewerRoleId);
+
             // 1. Zero-role Owner cannot self-grant Accountant via PATCH /api/organizations/current/members/{ownerMemberId} without an independent approver
             var ownerSelfGrantRes = await _fixture.Send(
                 HttpMethod.Patch,
-                $"/api/organizations/current/members/{ownerMemberId}",
-                new { securityRoleIds = new[] { accountantRoleId } },
+                $"/api/organizations/current/members/{ownerMemberPub}",
+                new { securityRoleIds = new[] { accountantRolePub } },
                 token: owner.Token,
                 org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, ownerSelfGrantRes.StatusCode);
@@ -531,8 +536,8 @@ namespace AccountGo.BackendTests.Security
             // 2. Zero-role Owner cannot name themselves as their own independent approver
             var ownerSelfApproveRes = await _fixture.Send(
                 HttpMethod.Patch,
-                $"/api/organizations/current/members/{ownerMemberId}",
-                new { securityRoleIds = new[] { accountantRoleId }, approvedByUserId = owner.Id },
+                $"/api/organizations/current/members/{ownerMemberPub}",
+                new { securityRoleIds = new[] { accountantRolePub }, approvedByUserId = owner.Id },
                 token: owner.Token,
                 org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, ownerSelfApproveRes.StatusCode);
@@ -541,7 +546,7 @@ namespace AccountGo.BackendTests.Security
             var selfInviteRes = await _fixture.Send(
                 HttpMethod.Post,
                 "/api/organizations/current/invitations",
-                new { email = $"f5-owner-{slug}@example.com", role = "Member", securityRoleIds = new[] { accountantRoleId } },
+                new { email = $"f5-owner-{slug}@example.com", role = "Member", securityRoleIds = new[] { accountantRolePub } },
                 token: owner.Token,
                 org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, selfInviteRes.StatusCode);
@@ -549,8 +554,8 @@ namespace AccountGo.BackendTests.Security
             // 4. Governance-only Admin cannot unilaterally grant Accountant (sensitive financial mutation role) to a Member without independent approval
             var adminUnilateralGrantRes = await _fixture.Send(
                 HttpMethod.Patch,
-                $"/api/organizations/current/members/{targetMemberId}",
-                new { securityRoleIds = new[] { accountantRoleId } },
+                $"/api/organizations/current/members/{targetMemberPub}",
+                new { securityRoleIds = new[] { accountantRolePub } },
                 token: govOnlyAdmin.Token,
                 org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, adminUnilateralGrantRes.StatusCode);
@@ -558,8 +563,8 @@ namespace AccountGo.BackendTests.Security
             // 5. Governance-only Admin CAN grant read-only Auditor / Viewer role to a Member, OR grant Accountant when approved by the independent Owner
             var adminViewerGrantRes = await _fixture.Send(
                 HttpMethod.Patch,
-                $"/api/organizations/current/members/{targetMemberId}",
-                new { securityRoleIds = new[] { viewerRoleId } },
+                $"/api/organizations/current/members/{targetMemberPub}",
+                new { securityRoleIds = new[] { viewerRolePub } },
                 token: govOnlyAdmin.Token,
                 org: slug);
             Assert.Equal(HttpStatusCode.NoContent, adminViewerGrantRes.StatusCode);
@@ -567,8 +572,8 @@ namespace AccountGo.BackendTests.Security
             // 5a. Governance-only Admin cannot forge owner approval with a raw string (R1)
             var adminForgedGrantRes = await _fixture.Send(
                 HttpMethod.Patch,
-                $"/api/organizations/current/members/{targetMemberId}",
-                new { securityRoleIds = new[] { accountantRoleId }, approvedByUserId = owner.Id },
+                $"/api/organizations/current/members/{targetMemberPub}",
+                new { securityRoleIds = new[] { accountantRolePub }, approvedByUserId = owner.Id },
                 token: govOnlyAdmin.Token,
                 org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, adminForgedGrantRes.StatusCode);
@@ -579,9 +584,9 @@ namespace AccountGo.BackendTests.Security
                 "/api/organizations/current/members/access-approvals",
                 new
                 {
-                    targetMemberId = targetMemberId,
+                    targetMemberId = targetMemberPub,
                     targetUserId = targetMember.Id,
-                    securityRoleIds = new[] { accountantRoleId }
+                    securityRoleIds = new[] { accountantRolePub }
                 },
                 token: owner.Token,
                 org: slug);
@@ -592,8 +597,8 @@ namespace AccountGo.BackendTests.Security
             // 5c. Governance-only Admin submits with valid approvalRequestId and succeeds
             var adminApprovedGrantRes = await _fixture.Send(
                 HttpMethod.Patch,
-                $"/api/organizations/current/members/{targetMemberId}",
-                new { securityRoleIds = new[] { accountantRoleId }, approvalRequestId = approvalRequestId },
+                $"/api/organizations/current/members/{targetMemberPub}",
+                new { securityRoleIds = new[] { accountantRolePub }, approvalRequestId = approvalRequestId },
                 token: govOnlyAdmin.Token,
                 org: slug);
             Assert.Equal(HttpStatusCode.NoContent, adminApprovedGrantRes.StatusCode);
@@ -602,7 +607,7 @@ namespace AccountGo.BackendTests.Security
             var createInviteRes = await _fixture.Send(
                 HttpMethod.Post,
                 "/api/organizations/current/invitations",
-                new { email = $"f5-invitee-{slug}@example.com", role = "Member", securityRoleIds = new[] { viewerRoleId } },
+                new { email = $"f5-invitee-{slug}@example.com", role = "Member", securityRoleIds = new[] { viewerRolePub } },
                 token: govOnlyAdmin.Token,
                 org: slug);
             Assert.Equal(HttpStatusCode.Created, createInviteRes.StatusCode);
@@ -689,10 +694,11 @@ namespace AccountGo.BackendTests.Security
                 actorMemberBId = db.CompanyMembers.Single(m => m.CompanyId == companyB && m.UserId == actor.Id).Id;
             }
 
+            var actorMemberBPub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_fixture.Factory.Services, actorMemberBId);
             var revokeRes = await _fixture.Send(
                 HttpMethod.Patch,
-                $"/api/organizations/current/members/{actorMemberBId}",
-                new { securityRoleIds = Array.Empty<int>() },
+                $"/api/organizations/current/members/{actorMemberBPub}",
+                new { securityRoleIds = Array.Empty<string>() },
                 token: ownerB.Token,
                 org: slugB);
             Assert.Equal(HttpStatusCode.NoContent, revokeRes.StatusCode);
@@ -872,8 +878,8 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Get, "/api/Donors", token: owner.Token, org: slug)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Get, "/api/Donations/DonationInvoices", token: owner.Token, org: slug)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "VAT", taxCode = "VAT", rate = 12 }, token: owner.Token, org: slug)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/deletetaxgroup?id=1", token: owner.Token, org: slug)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/deleteitemtaxgroup?id=1", token: owner.Token, org: slug)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/deletetaxgroup?id=tgrp_00000000000000000000000001", token: owner.Token, org: slug)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await _fixture.Send(HttpMethod.Delete, "/api/Tax/deleteitemtaxgroup?id=itg_00000000000000000000000001", token: owner.Token, org: slug)).StatusCode);
 
             // Auditor / Viewer has audit.logs.view, so GET /api/Administration/AuditLogs succeeds
             Assert.Equal(HttpStatusCode.OK, (await _fixture.Send(HttpMethod.Get, "/api/Administration/AuditLogs", token: viewer.Token, org: slug)).StatusCode);
@@ -992,7 +998,8 @@ namespace AccountGo.BackendTests.Security
             {
                 var response = await Send(HttpMethod.Post, "/api/organizations", new { name, slug }, token, scoped: false);
                 Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-                return int.Parse((await Json(response)).GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+                var publicId = (await Json(response)).GetProperty("id").GetString()!;
+                return AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(Factory.Services, publicId);
             }
 
             public async Task AssignFunctionalRolesDirectAsync(int companyId, string userId, IEnumerable<string> roleNames)

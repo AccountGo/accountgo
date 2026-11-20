@@ -21,13 +21,18 @@ namespace Api.PublicIds
     /// <see cref="PublicIdByTypeObjectConverter"/> to DTO properties carrying <see cref="PublicIdAttribute"/>
     /// or <see cref="PublicIdByTypeAttribute"/>. Resolves <see cref="IPublicIdResolver"/> per request via <see cref="IHttpContextAccessor"/>.
     /// </summary>
-    public sealed class PublicIdContractResolver : CamelCasePropertyNamesContractResolver
+    public sealed class PublicIdContractResolver : DefaultContractResolver
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
 
         public PublicIdContractResolver(IHttpContextAccessor httpContextAccessor)
         {
             _httpContextAccessor = httpContextAccessor;
+            NamingStrategy = new CamelCaseNamingStrategy
+            {
+                ProcessDictionaryKeys = true,
+                OverrideSpecifiedNames = true
+            };
         }
 
         protected override JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization)
@@ -58,7 +63,7 @@ namespace Api.PublicIds
             objectType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Any(p => p.GetCustomAttribute<PublicIdByTypeAttribute>(inherit: true) != null);
 
-        internal static bool IsSupportedIntOrIntCollection(Type type)
+        public static bool IsSupportedIntOrIntCollection(Type type)
         {
             if (type == typeof(int) || type == typeof(int?))
                 return true;
@@ -453,6 +458,12 @@ namespace Api.PublicIds
                 {
                     var prefix = PublicIdRegistry.PrefixForSettlementDestinationType(Convert.ToInt32(discVal));
                     return prefix == null ? null : resolver.ToPublicOrThrow(prefix, id);
+                }
+                case PublicIdTypeDiscriminatorKind.SettlementDestinationFromSourceType:
+                {
+                    var s = discVal.ToString() ?? string.Empty;
+                    var prefix = s.Equals("CustomerCreditNote", StringComparison.OrdinalIgnoreCase) || s == "1" ? "inv" : "bill";
+                    return resolver.ToPublicOrThrow(prefix, id);
                 }
                 default:
                     return resolver.ToPublicPolymorphic(discVal.ToString(), id);

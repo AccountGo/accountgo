@@ -229,9 +229,9 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
                 TaxAmount = l.TaxAmount
             }).ToList()
         };
-        var res = await _host.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto, _owner.Token, Org);
+        var res = await _host.SendDto(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto, _companyId, _owner.Token, Org);
         var json = await OkJson(res);
-        return json.GetProperty("id").GetInt32();
+        return _host.Key<Core.Domain.Sales.SalesInvoiceHeader>(json.GetProperty("id").GetString()!);
     }
 
     private async Task<int> CreatePostedBill(DateTime date, params (int? TaxId, decimal Amount, decimal TaxAmount)[] lines)
@@ -310,7 +310,7 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
     private async Task<int> PayBill(int billId, decimal amount, DateTime date)
     {
         var res = await _host.Send(HttpMethod.Post, "/api/Purchasing/PayBill",
-            new { billId, amount, date = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
+            new { billId = _host.Pub<Core.Domain.Purchases.PurchaseInvoiceHeader>(billId), amount, date = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
             _owner.Token, Org);
         Assert.True(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
         int paymentId = 0;
@@ -345,7 +345,7 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
             notes,
             lockBooks,
             expectedNetTax,
-            amendsFilingId,
+            amendsFilingId = amendsFilingId.HasValue ? _host.Pub<Core.Domain.TaxSystem.TaxFiling>(amendsFilingId.Value) : null,
             amendmentReason
         }, token ?? _owner.Token, Org);
     }
@@ -382,7 +382,7 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
         var periods = await OkJson(await _host.Send(HttpMethod.Get, "/api/tax/periods?count=8", null, _owner.Token, Org));
         var q3 = periods.EnumerateArray().Single(p => p.GetProperty("start").GetString() == "2026-07-01");
         var periodFiling = q3.GetProperty("filing");
-        Assert.Equal(filing.GetProperty("id").GetInt32(), periodFiling.GetProperty("id").GetInt32());
+        Assert.Equal(filing.GetProperty("id").GetString(), periodFiling.GetProperty("id").GetString());
         Assert.Equal("2026-10-15", periodFiling.GetProperty("filedOn").GetString());
         Assert.False(periodFiling.GetProperty("changedSinceFiling").GetProperty("changed").GetBoolean());
 
@@ -472,7 +472,7 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
         await CreatePostedInvoice(new DateTime(2026, 7, 10), (_vat12Id, 500m, 60m));
         var origRes = await PostFiling("2026-07-01", "2026-09-30", 60m, reference: "ORIG");
         Assert.Equal(HttpStatusCode.Created, origRes.StatusCode);
-        var origId = (await ReadJson(origRes)).GetProperty("id").GetInt32();
+        var origId = _host.Key<Core.Domain.TaxSystem.TaxFiling>((await ReadJson(origRes)).GetProperty("id").GetString()!);
 
         // Missing reason -> 400
         var noReason = await PostFiling("2026-07-01", "2026-09-30", 60m,
@@ -606,7 +606,7 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
 
         // Void inv1 in Q4 (next period) -> Q3's netDifference must remain 20m (not affected by Q4 void)
         var voidRes = await _host.Send(HttpMethod.Post,
-            $"/api/Sales/VoidSalesInvoice?id={inv1}&date=2026-10-10", null, _owner.Token, Org);
+            $"/api/Sales/VoidSalesInvoice?id={_host.Pub<Core.Domain.Sales.SalesInvoiceHeader>(inv1)}&date=2026-10-10", null, _owner.Token, Org);
         await OkJson(voidRes);
 
         var afterVoid = await OkJson(await _host.Send(
@@ -626,7 +626,7 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, fileRes.StatusCode);
 
         var voidRes = await _host.Send(HttpMethod.Post,
-            $"/api/Purchasing/VoidPayment?id={paymentId}&date=2026-10-05&reason=Reversed",
+            $"/api/Purchasing/VoidPayment?id={_host.Pub<Core.Domain.Purchases.VendorPayment>(paymentId)}&date=2026-10-05&reason=Reversed",
             null, _owner.Token, Org);
         await OkJson(voidRes);
 
@@ -662,9 +662,13 @@ public sealed class TaxFilingHttpTests : IAsyncLifetime
             foreach (var method in new[] { HttpMethod.Put, HttpMethod.Patch, HttpMethod.Delete })
             {
                 var res = await _host.Send(method, path, new { }, _owner.Token, Org);
-                Assert.True(
-                    res.StatusCode == HttpStatusCode.NotFound || res.StatusCode == HttpStatusCode.MethodNotAllowed,
-                    $"Expected 404 or 405 for {method} {path}, got {res.StatusCode}");
+                var body = await res.Content.ReadAsStringAsync();
+                // "filings" is not a tax rate id, so a write verb on it reaches the tax-rate route and is refused as a
+                // malformed id; it must never reach a filing. Either answer proves there is no write route for filings.
+                var refused = res.StatusCode == HttpStatusCode.NotFound
+                    || res.StatusCode == HttpStatusCode.MethodNotAllowed
+                    || (res.StatusCode == HttpStatusCode.BadRequest && body.Contains("invalid_id", StringComparison.Ordinal));
+                Assert.True(refused, $"Expected a refusal for {method} {path}, got {res.StatusCode}: {body}");
             }
         }
     }

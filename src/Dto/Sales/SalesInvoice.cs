@@ -1,4 +1,5 @@
 using System;
+using Dto.Common;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -7,12 +8,18 @@ namespace Dto.Sales
 {
     public class SalesInvoice : BaseDto
     {
+        [PublicId("inv")]
+        public override int Id { get; set; }
         public string? No { get; set; }
         [Required(ErrorMessage = "Customer is required")]
+        [PublicId("cus")]
         public int CustomerId { get; set; }        
         public DateTime InvoiceDate { get; set; }
+        [PublicId("term")]
         public int? PaymentTermId { get; set; }
+        [PublicId("so")]
         public int? FromSalesOrderId { get; set; }
+        [PublicId("del")]
         public int? FromSalesDeliveryId { get; set; }
         public string? CustomerName { get; set; }
         /// <summary>Attention line under the company name, e.g. "Attn: Jane Doe".</summary>
@@ -100,6 +107,9 @@ namespace Dto.Sales
 
     public class SalesInvoiceLine : BaseDto
     {
+        [PublicId("il")]
+        public override int Id { get; set; }
+        [PublicId("item")]
         public int? ItemId { get; set; }
         [Range(0, 1000000, ErrorMessage = "Quantity must be between 0 and 1000000")]
         public decimal? Quantity { get; set; } = 1;
@@ -107,15 +117,18 @@ namespace Dto.Sales
         public decimal? Amount { get; set; }
         [Range(0, 100, ErrorMessage = "Discount must be between 0 and 100")]
         public decimal? Discount { get; set; } = 0;
+        [PublicId("uom")]
         public int? MeasurementId { get; set; }
         public string? MeasurementDescription { get; set; }
         public string? ItemNo { get; set; }
         public string? ItemDescription { get; set; }
         public decimal? LineTotal { get; set; }
         public decimal? TaxRate { get; set; }
+        [PublicId("tax")]
         public int? TaxId { get; set; }
         public decimal? TaxAmount { get; set; }
         /// <summary>Optional revenue account override for free-text lines; ignored for catalog-linked items.</summary>
+        [PublicId("acct")]
         public int? SalesAccountId { get; set; }
         public string? SalesAccountCode { get; set; }
         public string? SalesAccountName { get; set; }
@@ -125,6 +138,7 @@ namespace Dto.Sales
     {
         public string? DispatchId { get; set; }
         public string? FromEmail { get; set; }
+        [PublicId("iem")]
         public int Id { get; set; }
         public string Kind { get; set; } = "Invoice";
         public string To { get; set; } = string.Empty;
@@ -134,6 +148,7 @@ namespace Dto.Sales
 
     public class InvoicePaymentItemDto
     {
+        [PublicId("rcpt")]
         public int Id { get; set; }
         public string? ReceiptNo { get; set; }
         public DateTime Date { get; set; }

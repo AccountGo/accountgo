@@ -97,18 +97,18 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(saved)).GetProperty("id").GetString());
             var invoiceNo = (await GetInvoice(invoiceId)).No;
             Assert.False(string.IsNullOrEmpty(invoiceNo));
 
             var ledger = await CallTool("get_general_ledger_transactions", new { documentType = "SalesInvoice" });
             var sourceId = ledger.GetProperty("transactions").EnumerateArray()
-                .Select(t => t.GetProperty("sourceDocumentId").GetInt32()).Single();
-            Assert.Equal(invoiceId, sourceId);
+                .Select(t => t.GetProperty("sourceDocumentId").GetString()).Single();
+            Assert.Equal(PubId<Core.Domain.Sales.SalesInvoiceHeader>(invoiceId), sourceId);
 
             var byId = await CallTool("get_invoice", new { invoiceId = sourceId });
             Assert.Equal("Success", byId.GetProperty("status").GetString());
-            Assert.Equal($"/org/{_slug}/sales/{invoiceId}", byId.GetProperty("link").GetString());
+            Assert.Equal($"/org/{_slug}/sales/{PubId<Core.Domain.Sales.SalesInvoiceHeader>(invoiceId)}", byId.GetProperty("link").GetString());
             var data = byId.GetProperty("data");
             Assert.Equal(invoiceNo, data.GetProperty("no").GetString());
             Assert.Equal("Real customer", data.GetProperty("customerName").GetString());
@@ -116,7 +116,7 @@ namespace AccountGo.BackendTests
             Assert.Single(data.GetProperty("salesInvoiceLines").EnumerateArray());
 
             var byNumber = await CallTool("get_invoice", new { invoiceNo });
-            Assert.Equal(invoiceId, byNumber.GetProperty("data").GetProperty("id").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Sales.SalesInvoiceHeader>(invoiceId), byNumber.GetProperty("data").GetProperty("id").GetString());
 
             var missing = await CallTool("get_invoice", new { invoiceNo = "NOPE-1" });
             Assert.Equal("NotFound", missing.GetProperty("status").GetString());
@@ -127,7 +127,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("Open", row.GetProperty("status").GetString());
             Assert.Equal(0, (await CallTool("search_invoices", new { status = "Paid" })).GetProperty("totalCount").GetInt32());
 
-            var clientId = data.GetProperty("customerId").GetInt32();
+            var clientId = data.GetProperty("customerId").GetString();
             var client = await CallTool("get_client", new { clientId });
             Assert.Equal(100m, client.GetProperty("data").GetProperty("client").GetProperty("outstanding").GetDecimal());
             Assert.Equal(1, client.GetProperty("data").GetProperty("recentInvoices").GetProperty("totalCount").GetInt32());
@@ -135,7 +135,7 @@ namespace AccountGo.BackendTests
             var aging = (await CallTool("get_receivables_aging", new { })).GetProperty("data");
             Assert.Equal(100m, aging.GetProperty("total").GetDecimal());
             Assert.Equal(100m, aging.GetProperty("buckets").GetProperty("current").GetDecimal());
-            Assert.Equal(clientId, aging.GetProperty("parties").EnumerateArray().Single().GetProperty("id").GetInt32());
+            Assert.Equal(clientId, aging.GetProperty("parties").EnumerateArray().Single().GetProperty("id").GetString());
         }
 
         [Fact]
@@ -161,7 +161,7 @@ namespace AccountGo.BackendTests
             Assert.True(bad.GetProperty("result").GetProperty("isError").GetBoolean());
 
             // Who prepared and posted is record history: hidden until the member may view it.
-            var journalId = large.GetProperty("sourceDocumentId").GetInt32();
+            var journalId = large.GetProperty("sourceDocumentId").GetString();
             var hidden = (await CallTool("get_journal_entry", new { journalEntryId = journalId })).GetProperty("data");
             Assert.Equal(JsonValueKind.Null, hidden.GetProperty("attribution").ValueKind);
 
@@ -194,7 +194,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(saved)).GetProperty("id").GetString());
 
             var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Aging bank", Type = 1 });
             var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
@@ -248,7 +248,7 @@ namespace AccountGo.BackendTests
             toVoid.Date = today.AddDays(-2);
             toVoid.Status = "Open";
             var second = await SaveBillOk(toVoid);
-            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={second.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
+            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(second.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
 
             Assert.Equal(0m, (await CallTool("get_payables_aging", new { asOfDate = Iso(today.AddDays(-3)) })).GetProperty("data").GetProperty("total").GetDecimal());
 
@@ -257,7 +257,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(350m, dayBefore.GetProperty("total").GetDecimal());
             Assert.Equal(2, dayBefore.GetProperty("documentCount").GetInt32());
 
-            var now = (await CallTool("get_payables_aging", new { asOfDate = Iso(today), vendorId = vendor.Id })).GetProperty("data");
+            var now = (await CallTool("get_payables_aging", new { asOfDate = Iso(today), vendorId = PubId<Core.Domain.Purchases.Vendor>(vendor.Id) })).GetProperty("data");
             Assert.Equal(200m, now.GetProperty("total").GetDecimal());
             Assert.Equal(200m, (await CallTool("get_payables_aging", new { })).GetProperty("data").GetProperty("total").GetDecimal());
 
@@ -345,16 +345,16 @@ namespace AccountGo.BackendTests
 
             var byVendorNumber = await CallTool("get_bill", new { billNo = "SUP-778" });
             Assert.Equal("Success", byVendorNumber.GetProperty("status").GetString());
-            Assert.Equal(approved.Id, byVendorNumber.GetProperty("data").GetProperty("id").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id), byVendorNumber.GetProperty("data").GetProperty("id").GetString());
             Assert.Equal(120m, byVendorNumber.GetProperty("data").GetProperty("balanceDue").GetDecimal());
 
-            var bills = await CallTool("search_bills", new { vendorId = vendor.Id });
+            var bills = await CallTool("search_bills", new { vendorId = PubId<Core.Domain.Purchases.Vendor>(vendor.Id) });
             Assert.Equal(1, bills.GetProperty("totalCount").GetInt32());
 
             var vendors = await CallTool("search_vendors", new { query = "assistant", withBalanceOnly = true });
-            Assert.Equal(vendor.Id, vendors.GetProperty("data").EnumerateArray().Single().GetProperty("id").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Purchases.Vendor>(vendor.Id), vendors.GetProperty("data").EnumerateArray().Single().GetProperty("id").GetString());
 
-            var detail = await CallTool("get_vendor", new { vendorId = vendor.Id });
+            var detail = await CallTool("get_vendor", new { vendorId = PubId<Core.Domain.Purchases.Vendor>(vendor.Id) });
             Assert.Equal(1, detail.GetProperty("data").GetProperty("recentBills").GetProperty("totalCount").GetInt32());
 
             var aging = (await CallTool("get_payables_aging", new { })).GetProperty("data");
@@ -368,7 +368,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(1, payments.GetProperty("totalCount").GetInt32());
             var payment = payments.GetProperty("data").EnumerateArray().Single();
             Assert.Equal(20m, payment.GetProperty("amount").GetDecimal());
-            Assert.Equal(approved.Id, payment.GetProperty("billId").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id), payment.GetProperty("billId").GetString());
             Assert.Equal("SUP-778", payment.GetProperty("vendorInvoiceNo").GetString());
             var tomorrow = DateTime.UtcNow.Date.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
             Assert.Equal(0, (await CallTool("search_bill_payments", new { fromDate = tomorrow })).GetProperty("totalCount").GetInt32());
@@ -391,10 +391,10 @@ namespace AccountGo.BackendTests
             Assert.DoesNotContain("GB33BUKB20201555555555", raw);
             Assert.Contains("Assistant checking", raw);
 
-            var one = await CallTool("list_bank_accounts", new { bankId = bank.Id });
+            var one = await CallTool("list_bank_accounts", new { bankId = PubId<Core.Domain.Financials.Bank>(bank.Id) });
             Assert.DoesNotContain("123456789012", one.GetRawText());
 
-            var register = await CallTool("get_bank_register", new { bankId = bank.Id });
+            var register = await CallTool("get_bank_register", new { bankId = PubId<Core.Domain.Financials.Bank>(bank.Id) });
             Assert.Equal("Success", register.GetProperty("status").GetString());
 
             var context = await CallTool("get_workspace_context", new { });

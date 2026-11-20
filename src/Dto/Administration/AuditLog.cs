@@ -1,9 +1,12 @@
+using Dto.Common;
 ﻿using System;
 
 namespace Dto.Administration
 {
     public class AuditLog : BaseDto
     {
+        [PublicId("alog")]
+        public override int Id { get; set; }
         public string? UserName { get; set; }
         public DateTime AuditEventDateUTC { get; set; }
         public int AuditEventType { get; set; }

@@ -31,6 +31,8 @@ namespace Dto.Common
         SettlementSourceType = 1,
         /// <summary>Sibling property holds a SettlementDestinationType integer/enum (1=SalesInvoice, 2=PurchaseInvoice).</summary>
         SettlementDestinationType = 2,
+        /// <summary>Sibling property holds a SettlementSourceType string/int; maps CustomerCreditNote->inv, SupplierCreditNote/SupplierAdvance->bill.</summary>
+        SettlementDestinationFromSourceType = 3,
     }
 
     /// <summary>

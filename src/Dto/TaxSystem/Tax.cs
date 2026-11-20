@@ -1,7 +1,10 @@
+using Dto.Common;
 ﻿namespace Dto.TaxSystem
 {
     public class Tax : BaseDto
     {
+        [PublicId("tax")]
+        public override int Id { get; set; }
         public string? TaxName { get; set; }
         public string? TaxCode { get; set; }
         public decimal Rate { get; set; }

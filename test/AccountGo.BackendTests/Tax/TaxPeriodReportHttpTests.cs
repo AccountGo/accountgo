@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using AccountGo.BackendTests.Auditing;
 using Api.Data;
 using Core.Domain;
+using AccountGo.BackendTests.PublicIds;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
@@ -234,9 +235,9 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
                 TaxAmount = l.TaxAmount
             }).ToList()
         };
-        var res = await _host.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto, _owner.Token, Org);
+        var res = await _host.SendDto(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto, _companyId, _owner.Token, Org);
         var json = await OkJson(res);
-        return json.GetProperty("id").GetInt32();
+        return _host.Key<SalesInvoiceHeader>(json.GetProperty("id").GetString()!);
     }
 
     private async Task<int> CreatePostedBill(
@@ -375,7 +376,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
     public async Task Void_InSamePeriod_NetsToZero_AndIncludesBothDocumentRows()
     {
         var invId = await CreatePostedInvoice(new DateTime(2026, 10, 5), (_vat12Id, 1000m, 120m));
-        var voidRes = await _host.Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invId}&date=2026-10-20",
+        var voidRes = await _host.Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={_host.Pub<SalesInvoiceHeader>(invId)}&date=2026-10-20",
             null, _owner.Token, Org);
         Assert.True(voidRes.IsSuccessStatusCode, await voidRes.Content.ReadAsStringAsync());
 
@@ -393,7 +394,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
     public async Task Void_InNextPeriod_LeavesOriginalUnchanged_AndShowsNegativeInNextPeriod()
     {
         var invId = await CreatePostedInvoice(new DateTime(2026, 10, 15), (_vat12Id, 1000m, 120m));
-        var voidRes = await _host.Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invId}&date=2026-11-05",
+        var voidRes = await _host.Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={_host.Pub<SalesInvoiceHeader>(invId)}&date=2026-11-05",
             null, _owner.Token, Org);
         Assert.True(voidRes.IsSuccessStatusCode, await voidRes.Content.ReadAsStringAsync());
 
@@ -426,7 +427,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
                 }
             }
         };
-        await OkJson(await _host.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto, _owner.Token, Org));
+        await OkJson(await _host.SendDto(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto, _companyId, _owner.Token, Org));
 
         var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
         Assert.Equal(0m, json.GetProperty("output").GetProperty("tax").GetDecimal());
@@ -489,7 +490,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
         var bankRes = await _host.Send(HttpMethod.Post, "/api/Banking/Accounts",
             new CreateBankAccountRequest { Name = "Tax Bank", Type = 1 }, _owner.Token, Org);
         var bankJson = await OkJson(bankRes);
-        var bankId = bankJson.GetProperty("id").GetInt32();
+        var bankId = _host.Key<Bank>(bankJson.GetProperty("id").GetString()!);
 
         int lineId = 0;
         WithDb(db =>
@@ -521,13 +522,13 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
             lineId = line.Id;
         });
 
-        var recRes = await _host.Send(HttpMethod.Post, $"/api/Banking/StatementLines/{lineId}/RecordExpense",
+        var recRes = await _host.SendDto(HttpMethod.Post, $"/api/Banking/StatementLines/{_host.Pub<BankStatementLine>(lineId)}/RecordExpense",
             new RecordExpenseFromStatementLineRequest
             {
                 NewVendor = new QuickVendorFromStatementRequest { Name = "Host Co" },
                 ExpenseAccountId = _expenseAccountId,
                 TaxId = _vat12Id
-            }, _owner.Token, Org);
+            }, _companyId, _owner.Token, Org);
         Assert.True(recRes.IsSuccessStatusCode, await recRes.Content.ReadAsStringAsync());
 
         var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
@@ -924,7 +925,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
             createReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var createRes = await client.SendAsync(createReq);
             Assert.Equal(HttpStatusCode.Created, createRes.StatusCode);
-            var companyId = int.Parse((await AuditTestHost.Json(createRes)).GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+            var companyId = PublicIdTestHelper.ResolveCompanyId(factory.Services, (await AuditTestHost.Json(createRes)).GetProperty("id").GetString()!);
 
             var tenant = sp.GetRequiredService<ITenantContext>();
             using (var imp = tenant.Impersonate(companyId, role: CompanyMemberRole.Owner))
@@ -961,7 +962,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
     private async Task RecordInvoicePayment(int invoiceId, decimal amount, DateTime date)
     {
         var res = await _host.Send(HttpMethod.Post, "/api/Sales/RecordPayment",
-            new { invoiceId, amount, paymentDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
+            new { invoiceId = _host.Pub<SalesInvoiceHeader>(invoiceId), amount, paymentDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
             _owner.Token, Org);
         Assert.True(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
     }
@@ -969,7 +970,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
     private async Task<int> PayBill(int billId, decimal amount, DateTime date)
     {
         var res = await _host.Send(HttpMethod.Post, "/api/Purchasing/PayBill",
-            new { billId, amount, date = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
+            new { billId = _host.Pub<PurchaseInvoiceHeader>(billId), amount, date = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
             _owner.Token, Org);
         Assert.True(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
         int paymentId = 0;
@@ -1071,11 +1072,11 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
         return creditMinusDebit ? cr - dr : dr - cr;
     }
 
-    private static decimal LedgerMovement(JsonElement reportJson, int accountId)
+    private decimal LedgerMovement(JsonElement reportJson, int accountId)
     {
         foreach (var acc in reportJson.GetProperty("ledger").GetProperty("accounts").EnumerateArray())
         {
-            if (acc.GetProperty("accountId").GetInt32() == accountId)
+            if (acc.GetProperty("accountId").GetString() == _host.Pub<Core.Domain.Financials.Account>(accountId))
                 return acc.GetProperty("movement").GetDecimal();
         }
         return 0m;
@@ -1116,8 +1117,8 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
         Assert.Equal(octTb, oct.GetProperty("output").GetProperty("tax").GetDecimal());
         Assert.Equal(novTb, nov.GetProperty("output").GetProperty("tax").GetDecimal());
 
-        var octLedger20300 = oct.GetProperty("ledger").GetProperty("accounts").EnumerateArray().Single(a => a.GetProperty("accountId").GetInt32() == _salesTaxAccountId);
-        var novLedger20300 = nov.GetProperty("ledger").GetProperty("accounts").EnumerateArray().Single(a => a.GetProperty("accountId").GetInt32() == _salesTaxAccountId);
+        var octLedger20300 = oct.GetProperty("ledger").GetProperty("accounts").EnumerateArray().Single(a => a.GetProperty("accountId").GetString() == _host.Pub<Core.Domain.Financials.Account>(_salesTaxAccountId));
+        var novLedger20300 = nov.GetProperty("ledger").GetProperty("accounts").EnumerateArray().Single(a => a.GetProperty("accountId").GetString() == _host.Pub<Core.Domain.Financials.Account>(_salesTaxAccountId));
         Assert.Equal(0m, octLedger20300.GetProperty("other").GetDecimal());
         Assert.Equal(0m, novLedger20300.GetProperty("other").GetDecimal());
     }
@@ -1240,7 +1241,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
 
         var json = await OkJson(await GetReport("2026-10-01", "2026-10-31"));
         var acc20300 = json.GetProperty("ledger").GetProperty("accounts").EnumerateArray()
-            .Single(a => a.GetProperty("accountId").GetInt32() == _salesTaxAccountId);
+            .Single(a => a.GetProperty("accountId").GetString() == _host.Pub<Core.Domain.Financials.Account>(_salesTaxAccountId));
         Assert.Equal(75m, acc20300.GetProperty("other").GetDecimal());
         var entries = acc20300.GetProperty("entries").EnumerateArray().ToList();
         Assert.Single(entries);
@@ -1316,9 +1317,9 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
             statementLineId = line.Id;
         });
 
-        var res = await _host.Send(
+        var res = await _host.SendDto(
             HttpMethod.Post,
-            $"/api/Banking/StatementLines/{statementLineId}/RecordOtherIncome",
+            $"/api/Banking/StatementLines/{_host.Pub<BankStatementLine>(statementLineId)}/RecordOtherIncome",
             new Dto.Banking.RecordOtherIncomeFromStatementLineRequest
             {
                 CustomerId = _customerId,
@@ -1326,6 +1327,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
                 TaxId = _vat12Id,
                 Description = "Direct income"
             },
+            _companyId,
             _owner.Token,
             Org);
         Assert.True(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
@@ -1347,7 +1349,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
         // Voiding a paid invoice is blocked
         var voidPaidRes = await _host.Send(
             HttpMethod.Post,
-            $"/api/Sales/VoidSalesInvoice?id={invId}&date=2026-10-20",
+            $"/api/Sales/VoidSalesInvoice?id={_host.Pub<SalesInvoiceHeader>(invId)}&date=2026-10-20",
             null, _owner.Token, Org);
         Assert.False(voidPaidRes.IsSuccessStatusCode);
 
@@ -1370,7 +1372,7 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
 
         var voidRes = await _host.Send(
             HttpMethod.Post,
-            $"/api/Purchasing/VoidPayment?id={paymentId}&date=2026-10-20&reason=Entered+in+error",
+            $"/api/Purchasing/VoidPayment?id={_host.Pub<VendorPayment>(paymentId)}&date=2026-10-20&reason=Entered+in+error",
             null, _owner.Token, Org);
         Assert.True(voidRes.IsSuccessStatusCode, await voidRes.Content.ReadAsStringAsync());
 
@@ -1411,9 +1413,9 @@ public sealed class TaxPeriodReportHttpTests : IAsyncLifetime
             var tb10160 = await GetCashTbMovement(from, to, "10160", creditMinusDebit: false);
 
             var acc20300 = report.GetProperty("ledger").GetProperty("accounts").EnumerateArray()
-                .Single(a => a.GetProperty("accountId").GetInt32() == _salesTaxAccountId);
+                .Single(a => a.GetProperty("accountId").GetString() == _host.Pub<Core.Domain.Financials.Account>(_salesTaxAccountId));
             var acc10160 = report.GetProperty("ledger").GetProperty("accounts").EnumerateArray()
-                .Single(a => a.GetProperty("accountId").GetInt32() == _purchasingTaxAccountId);
+                .Single(a => a.GetProperty("accountId").GetString() == _host.Pub<Core.Domain.Financials.Account>(_purchasingTaxAccountId));
 
             Assert.Equal(tb20300, acc20300.GetProperty("movement").GetDecimal());
             Assert.Equal(tb10160, acc10160.GetProperty("movement").GetDecimal());

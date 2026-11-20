@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.Linq;
 using Api.Data;
@@ -34,15 +35,15 @@ namespace Api.Service
         IReadOnlyList<SettlementAccountRolePreviewDto> Roles);
 
     public sealed record UpdateSettlementAccountMappingsRequest(
-        int? CustomerCreditLiabilityAccountId,
-        int? SalesReturnsAllowancesAccountId,
-        int? SupplierCreditAssetAccountId,
-        int? SupplierAdvanceAccountId,
-        int? SupplierReturnClearingAccountId,
-        int? ReturnValuationDifferenceAccountId,
-        int? ReceivableLossAllowanceAccountId,
-        int? ImpairmentExpenseAccountId,
-        int? BadDebtRecoveryAccountId);
+        [property: PublicId("acct")] int? CustomerCreditLiabilityAccountId,
+        [property: PublicId("acct")] int? SalesReturnsAllowancesAccountId,
+        [property: PublicId("acct")] int? SupplierCreditAssetAccountId,
+        [property: PublicId("acct")] int? SupplierAdvanceAccountId,
+        [property: PublicId("acct")] int? SupplierReturnClearingAccountId,
+        [property: PublicId("acct")] int? ReturnValuationDifferenceAccountId,
+        [property: PublicId("acct")] int? ReceivableLossAllowanceAccountId,
+        [property: PublicId("acct")] int? ImpairmentExpenseAccountId,
+        [property: PublicId("acct")] int? BadDebtRecoveryAccountId);
 
     public sealed class SettlementAccountMappingService
     {

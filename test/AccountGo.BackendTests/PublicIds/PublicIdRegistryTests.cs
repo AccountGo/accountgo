@@ -132,4 +132,32 @@ public sealed class PublicIdRegistryTests
         }
         Assert.Equal(5, ids.Count);
     }
+
+    [Fact]
+    public void EveryDocumentType_IsMappedToAPrefix_OrDeliberatelyExempt()
+    {
+        var registry = new PublicIdRegistry();
+        foreach (var name in Enum.GetNames<Core.Domain.DocumentTypes>())
+            Assert.True(registry.TryGetPrefixForTypeName(name, out _) || registry.IsExemptTypeName(name),
+                $"Document type '{name}' has no public id prefix and is not listed as exempt: a ledger row of that type would fail to serialize.");
+    }
+
+    [Theory]
+    [InlineData("invoice", "inv")]
+    [InlineData("invoiceVoid", "inv")]
+    [InlineData("bill", "bill")]
+    [InlineData("billVoid", "bill")]
+    [InlineData("invoicePayment", "inv")]
+    [InlineData("billPayment", "bill")]
+    [InlineData("customerCredit", "cn")]
+    [InlineData("customerCreditVoid", "cn")]
+    [InlineData("customerRefund", "cn")]
+    [InlineData("supplierCredit", "scn")]
+    [InlineData("supplierCreditVoid", "scn")]
+    [InlineData("supplierRefund", "scn")]
+    public void TaxReportDocumentKinds_MapToTheirDocumentPrefix(string kind, string prefix)
+    {
+        Assert.True(new PublicIdRegistry().TryGetPrefixForTypeName(kind, out var actual));
+        Assert.Equal(prefix, actual);
+    }
 }

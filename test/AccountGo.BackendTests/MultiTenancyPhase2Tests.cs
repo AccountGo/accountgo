@@ -427,27 +427,30 @@ namespace AccountGo.BackendTests
             Assert.Equal(bodyB.Status, bodyNonExistent.Status);
         }
 
+        private string Pub<T>(int id) where T : BaseEntity, IHasPublicId =>
+            AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<T>(_factory.Services, id);
+
         // Test 4: UA GET /api/Sales/customer/{idOfB} with header A → 404
         [Fact]
         public async Task Test4_UA_Single_Entity_Of_Other_Tenant_Returns_404()
         {
             // Customer
-            var reqCust = CreateRequest(HttpMethod.Get, $"/api/Sales/Customer?id={CustomerBId}", TokenUA, SlugA);
+            var reqCust = CreateRequest(HttpMethod.Get, $"/api/Sales/Customer?id={Pub<Customer>(CustomerBId)}", TokenUA, SlugA);
             var resCust = await _client.SendAsync(reqCust);
             Assert.Equal(HttpStatusCode.NotFound, resCust.StatusCode);
 
             // Item
-            var reqItem = CreateRequest(HttpMethod.Get, $"/api/Catalog/Item?id={ItemBId}", TokenUA, SlugA);
+            var reqItem = CreateRequest(HttpMethod.Get, $"/api/Catalog/Item?id={Pub<Item>(ItemBId)}", TokenUA, SlugA);
             var resItem = await _client.SendAsync(reqItem);
             Assert.Equal(HttpStatusCode.NotFound, resItem.StatusCode);
 
             // Account
-            var reqAcc = CreateRequest(HttpMethod.Get, $"/api/Financials/Account?id={AccountBId}", TokenUA, SlugA);
+            var reqAcc = CreateRequest(HttpMethod.Get, $"/api/Financials/Account?id={Pub<Account>(AccountBId)}", TokenUA, SlugA);
             var resAcc = await _client.SendAsync(reqAcc);
             Assert.Equal(HttpStatusCode.NotFound, resAcc.StatusCode);
 
             // Journal Entry
-            var reqJe = CreateRequest(HttpMethod.Get, $"/api/Financials/JournalEntry?id={JournalEntryBId}", TokenUA, SlugA);
+            var reqJe = CreateRequest(HttpMethod.Get, $"/api/Financials/JournalEntry?id={Pub<JournalEntryHeader>(JournalEntryBId)}", TokenUA, SlugA);
             var resJe = await _client.SendAsync(reqJe);
             Assert.Equal(HttpStatusCode.NotFound, resJe.StatusCode);
         }
@@ -465,44 +468,33 @@ namespace AccountGo.BackendTests
                     var countBefore = await db.SalesInvoiceHeaders.CountAsync();
 
                     // Reference Customer B
-                    var invoiceWithCustB = new Dto.Sales.SalesInvoice
+                    var invoiceWithCustB = new
                     {
-                        CustomerId = CustomerBId,
-                        InvoiceDate = DateTime.UtcNow,
-                        SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>
-                        {
-                            new Dto.Sales.SalesInvoiceLine { ItemId = ItemAId, Amount = 100, Quantity = 1 }
-                        }
+                        customerId = Pub<Customer>(CustomerBId),
+                        invoiceDate = DateTime.UtcNow,
+                        salesInvoiceLines = new[] { new { itemId = Pub<Item>(ItemAId), amount = 100m, quantity = 1m } }
                     };
-
                     var req1 = CreateRequest(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", TokenUA, SlugA);
                     req1.Content = JsonContent.Create(invoiceWithCustB);
                     var res1 = await _client.SendAsync(req1);
-                    await AssertCrossTenantReferenceDeniedAsync(res1);
+                    Assert.Equal(HttpStatusCode.NotFound, res1.StatusCode);
 
                     // Reference Item B
-                    var invoiceWithItemB = new Dto.Sales.SalesInvoice
+                    var invoiceWithItemB = new
                     {
-                        CustomerId = CustomerAId,
-                        InvoiceDate = DateTime.UtcNow,
-                        SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>
-                        {
-                            new Dto.Sales.SalesInvoiceLine { ItemId = ItemBId, Amount = 100, Quantity = 1 }
-                        }
+                        customerId = Pub<Customer>(CustomerAId),
+                        invoiceDate = DateTime.UtcNow,
+                        salesInvoiceLines = new[] { new { itemId = Pub<Item>(ItemBId), amount = 100m, quantity = 1m } }
                     };
-
                     var req2 = CreateRequest(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", TokenUA, SlugA);
                     req2.Content = JsonContent.Create(invoiceWithItemB);
                     var res2 = await _client.SendAsync(req2);
-                    await AssertCrossTenantReferenceDeniedAsync(res2);
+                    Assert.Equal(HttpStatusCode.NotFound, res2.StatusCode);
 
                     // Same references through the service-based create/update endpoints
-                    await AssertCrossTenantReferenceDeniedAsync(
-                        await SendJsonAsync(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", TokenUA, SlugA, invoiceWithCustB));
-                    await AssertCrossTenantReferenceDeniedAsync(
-                        await SendJsonAsync(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", TokenUA, SlugA, invoiceWithItemB));
-                    await AssertCrossTenantReferenceDeniedAsync(
-                        await SendJsonAsync(HttpMethod.Post, "/api/Sales/UpdateSalesInvoice", TokenUA, SlugA, invoiceWithCustB));
+                    Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", TokenUA, SlugA, invoiceWithCustB)).StatusCode);
+                    Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", TokenUA, SlugA, invoiceWithItemB)).StatusCode);
+                    Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Post, "/api/Sales/UpdateSalesInvoice", TokenUA, SlugA, invoiceWithCustB)).StatusCode);
 
                     // Assert no row was written
                     var countAfter = await db.SalesInvoiceHeaders.CountAsync();
@@ -510,19 +502,19 @@ namespace AccountGo.BackendTests
 
                     // Account: parent account from B
                     var accountsBefore = await db.Accounts.CountAsync();
-                    await AssertCrossTenantReferenceDeniedAsync(
-                        await SendJsonAsync(HttpMethod.Post, "/api/Financials/AddAccount", TokenUA, SlugA,
-                            new Dto.Financial.Account { AccountCode = "19999", AccountName = "Child of B", ParentAccountId = AccountBId }));
+                    Assert.Equal(HttpStatusCode.NotFound,
+                        (await SendJsonAsync(HttpMethod.Post, "/api/Financials/AddAccount", TokenUA, SlugA,
+                            new { accountCode = "19999", accountName = "Child of B", parentAccountId = Pub<Account>(AccountBId) })).StatusCode);
                     Assert.Equal(accountsBefore, await db.Accounts.CountAsync());
 
                     // Donation: donor from B, and GL account from B
                     var donationsBefore = await db.DonationInvoiceHeaders.CountAsync();
-                    await AssertCrossTenantReferenceDeniedAsync(
-                        await SendJsonAsync(HttpMethod.Post, "/api/Donations/CreateDonationInvoice", TokenUA, SlugA,
-                            new Dto.Donations.DonationInvoice { DonorId = DonorBId, Amount = 10, PaymentType = "Cash", GlAccountId = AccountAId }));
-                    await AssertCrossTenantReferenceDeniedAsync(
-                        await SendJsonAsync(HttpMethod.Post, "/api/Donations/CreateDonationInvoice", TokenUA, SlugA,
-                            new Dto.Donations.DonationInvoice { DonorId = DonorAId, Amount = 10, PaymentType = "Cash", GlAccountId = AccountBId }));
+                    Assert.Equal(HttpStatusCode.NotFound,
+                        (await SendJsonAsync(HttpMethod.Post, "/api/Donations/CreateDonationInvoice", TokenUA, SlugA,
+                            new { donorId = Pub<Core.Domain.Donations.Donor>(DonorBId), amount = 10m, paymentType = "Cash", glAccountId = Pub<Account>(AccountAId) })).StatusCode);
+                    Assert.Equal(HttpStatusCode.NotFound,
+                        (await SendJsonAsync(HttpMethod.Post, "/api/Donations/CreateDonationInvoice", TokenUA, SlugA,
+                            new { donorId = Pub<Core.Domain.Donations.Donor>(DonorAId), amount = 10m, paymentType = "Cash", glAccountId = Pub<Account>(AccountBId) })).StatusCode);
                     Assert.Equal(donationsBefore, await db.DonationInvoiceHeaders.CountAsync());
                 }
             }
@@ -539,7 +531,7 @@ namespace AccountGo.BackendTests
             };
 
             var req = CreateRequest(HttpMethod.Post, "/api/Sales/SaveCustomer", TokenUA, SlugA);
-            req.Content = JsonContent.Create(customerDto);
+            req.Content = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ToJsonContent(_factory.Services, CompanyAId, customerDto);
             var res = await _client.SendAsync(req);
             Assert.Equal(HttpStatusCode.OK, res.StatusCode);
 
@@ -653,7 +645,9 @@ namespace AccountGo.BackendTests
                 // SourceJournalService explicitly scopes every query by CompanyId for importer/webhook draft creation.
                 "SourceJournalService.cs",
                 // Audit writes resolve membership ownership when the grant navigation is not loaded.
-                "RecordChangeInterceptor.cs"
+                "RecordChangeInterceptor.cs",
+                // PublicIdResolver uses IgnoreQueryFilters only for outbound int->PublicId formatting of already-authorized entities and explicitly enforces tenant/user scope on all inbound PublicId->int resolution.
+                "PublicIdResolver.cs"
             };
 
             var solutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
@@ -795,14 +789,15 @@ namespace AccountGo.BackendTests
         [Fact]
         public async Task Test15_Donor_Of_Other_Workspace_Cannot_Be_Read_Updated_Or_Deleted()
         {
-            Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Get, $"/api/Donors/{DonorBId}", TokenUA, SlugA)).StatusCode);
-            var update = new Dto.Donors.Donor
+            var donorBPub = Pub<Core.Domain.Donations.Donor>(DonorBId);
+            Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Get, $"/api/Donors/{donorBPub}", TokenUA, SlugA)).StatusCode);
+            var update = new
             {
-                DonorType = "Individual", FirstName = "Hijack", LastName = "Attempt", Street = "1 Main St",
-                Province = "ON", PostalCode = "K1A0B1", Telephone = "5555555555", Email = "x@test.com"
+                donorType = "Individual", firstName = "Hijack", lastName = "Attempt", street = "1 Main St",
+                province = "ON", postalCode = "K1A0B1", telephone = "5555555555", email = "x@test.com"
             };
-            Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Put, $"/api/Donors/{DonorBId}", TokenUA, SlugA, update)).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Delete, $"/api/Donors/{DonorBId}", TokenUA, SlugA)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Put, $"/api/Donors/{donorBPub}", TokenUA, SlugA, update)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Delete, $"/api/Donors/{donorBPub}", TokenUA, SlugA)).StatusCode);
 
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();

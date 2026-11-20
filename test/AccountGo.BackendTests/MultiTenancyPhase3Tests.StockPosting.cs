@@ -26,7 +26,7 @@ namespace AccountGo.BackendTests
             });
             var res = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
-            var id = (await Json(res)).GetProperty("id").GetInt32();
+            var id = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(res)).GetProperty("id").GetString());
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == id).GeneralLedgerHeaderId));
         }
 
@@ -51,7 +51,7 @@ namespace AccountGo.BackendTests
             });
             var res = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
-            var id = (await Json(res)).GetProperty("id").GetInt32();
+            var id = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(res)).GetProperty("id").GetString());
             WithDb(db => Assert.Null(db.SalesInvoiceHeaders.Single(i => i.Id == id).GeneralLedgerHeaderId));
             AssertStockState(itemId, 10m, 5m);
 
@@ -80,10 +80,10 @@ namespace AccountGo.BackendTests
             bill.Status = "Open";
             var saved = await SaveBillOk(bill);
             AssertStockState(itemId, 10m, 5m);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(saved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
             AssertStockState(itemId, 0m, 5m);
             AssertStockInvariant(itemId);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(saved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
             AssertStockState(itemId, 0m, 5m);
         }
 
@@ -100,12 +100,12 @@ namespace AccountGo.BackendTests
             });
             var res = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
-            var id = (await Json(res)).GetProperty("id").GetInt32();
+            var id = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(res)).GetProperty("id").GetString());
             AssertStockState(itemId, 5m, 5m);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(id)}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             AssertStockState(itemId, 10m, 5m);
             AssertStockInvariant(itemId);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(id)}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             AssertStockState(itemId, 10m, 5m);
         }
 
@@ -148,10 +148,10 @@ namespace AccountGo.BackendTests
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
             WithDb(db => Assert.Equal(0m, db.Items.Single(i => i.Id == itemId).StockValue));
             AssertStockInvariant(itemId);
-            var id = (await Json(issued)).GetProperty("id").GetInt32();
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            var id = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(issued)).GetProperty("id").GetString());
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(id)}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             AssertStockInvariant(itemId);
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(saved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
             AssertStockState(itemId, 0m, 0.6734m);
             AssertStockInvariant(itemId);
         }
@@ -168,7 +168,7 @@ namespace AccountGo.BackendTests
             });
             var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", await NewStockInvoice(itemId, 3m));
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            var id = (await Json(response)).GetProperty("id").GetInt32();
+            var id = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(response)).GetProperty("id").GetString());
             for (var payment = 0; payment < 2; payment++)
             {
                 var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
@@ -212,7 +212,7 @@ namespace AccountGo.BackendTests
 
             var next = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", await NewStockInvoice(itemId, 1m));
             Assert.True(next.IsSuccessStatusCode, await next.Content.ReadAsStringAsync());
-            var id = (await Json(next)).GetProperty("id").GetInt32();
+            var id = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(next)).GetProperty("id").GetString());
             WithDb(db =>
             {
                 var invoice = db.SalesInvoiceHeaders.Single(i => i.Id == id);

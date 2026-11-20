@@ -100,8 +100,8 @@ namespace AccountGo.BackendTests
                 db.SaveChanges();
                 roleId = role.Id;
             });
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { roleId } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<CompanyMember>(MemberId(_otherId)),
+                new { securityRoleIds = new[] { PubId<SecurityRole>(roleId) } })).StatusCode);
             var denied = await Send(HttpMethod.Put, "/api/organizations/current/books-lock",
                 new { lockedThrough = IsoDate(later) }, token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
@@ -115,14 +115,14 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var id = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var id = IntId<SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             var lockDate = DateTime.UtcNow.Date.AddDays(-30);
             Assert.True((await Send(HttpMethod.Put, "/api/organizations/current/books-lock",
                 new { lockedThrough = IsoDate(lockDate) })).IsSuccessStatusCode);
 
             var voidResponse = await Send(HttpMethod.Post,
-                $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow.Date)}");
+                $"/api/Sales/VoidSalesInvoice?id={PubId<SalesInvoiceHeader>(id)}&date={IsoDate(DateTime.UtcNow.Date)}");
             Assert.Equal(HttpStatusCode.BadRequest, voidResponse.StatusCode);
             Assert.Contains(LockMessage(lockDate), await voidResponse.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         }
@@ -230,7 +230,7 @@ namespace AccountGo.BackendTests
             Assert.True((await Send(HttpMethod.Put, "/api/organizations/current/books-lock",
                 new { lockedThrough = IsoDate(lockDate) })).IsSuccessStatusCode);
 
-            var refusedExisting = await Send(HttpMethod.Post, "/api/Sales/UpdateReceipt", new
+            var refusedExisting = await Send(HttpMethod.Post, "/api/Sales/UpdateReceipt", new Api.Controllers.SalesController.UpdateReceiptDto
             {
                 Id = lockedReceiptId,
                 CustomerId = customerId,
@@ -242,7 +242,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.BadRequest, refusedExisting.StatusCode);
             Assert.Contains(LockMessage(lockDate), await refusedExisting.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
-            var refusedNew = await Send(HttpMethod.Post, "/api/Sales/UpdateReceipt", new
+            var refusedNew = await Send(HttpMethod.Post, "/api/Sales/UpdateReceipt", new Api.Controllers.SalesController.UpdateReceiptDto
             {
                 Id = openReceiptId,
                 CustomerId = customerId,
@@ -254,7 +254,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.BadRequest, refusedNew.StatusCode);
             Assert.Contains(LockMessage(lockDate), await refusedNew.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
-            var ok = await Send(HttpMethod.Post, "/api/Sales/UpdateReceipt", new
+            var ok = await Send(HttpMethod.Post, "/api/Sales/UpdateReceipt", new Api.Controllers.SalesController.UpdateReceiptDto
             {
                 Id = openReceiptId,
                 CustomerId = customerId,

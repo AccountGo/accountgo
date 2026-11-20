@@ -43,37 +43,37 @@ namespace AccountGo.BackendTests.Security
             return new Workspace(slug, companyId, owner, $"invitee-{slug}@example.com");
         }
 
-        private int ViewerRoleId()
+        private string ViewerRoleId()
         {
             using var scope = _fixture.Factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            return db.SecurityRoles.Single(r => r.Name == ViewerRoleName).Id;
+            return db.SecurityRoles.Single(r => r.Name == ViewerRoleName).PublicId;
         }
 
-        private async Task<int> Invite(Workspace workspace, params int[] securityRoleIds)
+        private async Task<string> Invite(Workspace workspace, params string[] securityRoleIds)
         {
             var response = await _fixture.Send(HttpMethod.Post, InvitationsPath,
                 new { email = workspace.InviteeEmail, role = "Member", securityRoleIds },
                 token: workspace.Owner.Token, org: workspace.Slug);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            return (await Fixture.Json(response)).GetProperty("id").GetInt32();
+            return (await Fixture.Json(response)).GetProperty("id").GetString()!;
         }
 
-        private void SetExpiry(int invitationId, int offsetDays)
+        private void SetExpiry(string invitationPublicId, int offsetDays)
         {
             using var scope = _fixture.Factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            var invitation = db.CompanyInvitations.IgnoreQueryFilters().Single(i => i.Id == invitationId);
+            var invitation = db.CompanyInvitations.IgnoreQueryFilters().Single(i => i.PublicId == invitationPublicId);
             invitation.ExpiresAt = DateTime.UtcNow.AddDays(offsetDays);
             db.SaveChanges();
         }
 
-        private async Task<System.Text.Json.JsonElement> ListInvitation(Workspace workspace, int invitationId)
+        private async Task<System.Text.Json.JsonElement> ListInvitation(Workspace workspace, string invitationPublicId)
         {
             var response = await _fixture.Send(HttpMethod.Get, InvitationsPath, token: workspace.Owner.Token, org: workspace.Slug);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             return (await Fixture.Json(response)).EnumerateArray()
-                .SingleOrDefault(i => i.GetProperty("id").GetInt32() == invitationId);
+                .SingleOrDefault(i => i.GetProperty("id").GetString() == invitationPublicId);
         }
 
         private async Task<long> PolicyRevision(Workspace workspace)

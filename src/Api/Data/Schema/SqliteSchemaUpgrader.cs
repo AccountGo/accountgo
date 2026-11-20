@@ -2551,10 +2551,34 @@ WHERE NOT EXISTS (
                 added = 1;
             }
 
-            using (var backfill = connection.CreateCommand())
+            var hadAuditEvidenceTrigger = false;
+            if (string.Equals(tableName, "AuditLog", StringComparison.Ordinal))
             {
+                using var checkTrig = connection.CreateCommand();
+                checkTrig.CommandText = "SELECT COUNT(1) FROM sqlite_master WHERE type = 'trigger' AND name = 'TR_AuditLog_Evidence_Update';";
+                hadAuditEvidenceTrigger = Convert.ToInt32(checkTrig.ExecuteScalar()) > 0;
+                if (hadAuditEvidenceTrigger)
+                {
+                    using var dropTrig = connection.CreateCommand();
+                    dropTrig.CommandText = "DROP TRIGGER \"TR_AuditLog_Evidence_Update\";";
+                    dropTrig.ExecuteNonQuery();
+                }
+            }
+
+            try
+            {
+                using var backfill = connection.CreateCommand();
                 backfill.CommandText = Api.Data.PublicIdBackfillSql.UpdateStatement(Api.Data.PublicIdSqlDialect.Sqlite, tableName, prefix);
                 backfill.ExecuteNonQuery();
+            }
+            finally
+            {
+                if (hadAuditEvidenceTrigger)
+                {
+                    using var restoreTrig = connection.CreateCommand();
+                    restoreTrig.CommandText = SqliteAuditEvidenceSql.UpdateTrigger;
+                    restoreTrig.ExecuteNonQuery();
+                }
             }
 
             using (var idx = connection.CreateCommand())

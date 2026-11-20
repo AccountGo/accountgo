@@ -3,14 +3,15 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Sales
 {
     public sealed record CustomerCreditLineInputDto(
-        int? SourceSalesInvoiceLineId,
-        int? ItemId,
-        int? TaxId,
+        [property: PublicId("il")] int? SourceSalesInvoiceLineId,
+        [property: PublicId("item")] int? ItemId,
+        [property: PublicId("tax")] int? TaxId,
         bool IsShippingLine,
         string Description,
         decimal Quantity,
@@ -19,9 +20,9 @@ namespace Dto.Sales
         decimal? OverrideTaxAmount = null);
 
     public sealed record SaveCustomerCreditDraftRequest(
-        int? Id,
-        int CustomerId,
-        int? SourceSalesInvoiceHeaderId,
+        [property: PublicId("cn")] int? Id,
+        [property: PublicId("cus")] int CustomerId,
+        [property: PublicId("inv")] int? SourceSalesInvoiceHeaderId,
         DateTime Date,
         int Kind,
         bool ReturnGoodsWithoutRestock,
@@ -40,7 +41,7 @@ namespace Dto.Sales
         long? ExpectedVersion = null);
 
     public sealed record ApplyCustomerCreditItemRequest(
-        int SalesInvoiceHeaderId,
+        [property: PublicId("inv")] int SalesInvoiceHeaderId,
         decimal Amount,
         long? ExpectedInvoiceVersion = null);
 
@@ -57,10 +58,10 @@ namespace Dto.Sales
         long? ExpectedVersion = null);
 
     public sealed record CustomerCreditLineDto(
-        int Id,
-        int? SourceSalesInvoiceLineId,
-        int? ItemId,
-        int? TaxId,
+        [property: PublicId("cnl")] int Id,
+        [property: PublicId("il")] int? SourceSalesInvoiceLineId,
+        [property: PublicId("item")] int? ItemId,
+        [property: PublicId("tax")] int? TaxId,
         decimal TaxRateSnapshot,
         bool IsShippingLine,
         string Description,
@@ -72,24 +73,24 @@ namespace Dto.Sales
         decimal TotalAmount);
 
     public sealed record SettlementApplicationSummaryDto(
-        int Id,
-        int SourceId,
+        [property: PublicId("sapp")] int Id,
+        [property: PublicIdByType("SourceType")] int SourceId,
         string SourceType,
-        int DestinationId,
+        [property: PublicIdByType("SourceType", PublicIdTypeDiscriminatorKind.SettlementDestinationFromSourceType)] int DestinationId,
         string DestinationNo,
         decimal Amount,
         DateTime EffectiveDate,
-        int GeneralLedgerHeaderId,
+        [property: PublicId("gl")] int GeneralLedgerHeaderId,
         bool IsReversed,
         DateTime? ReversalDate,
         string? ReversalReason);
 
     public sealed record CustomerCreditNoteDto(
-        int Id,
+        [property: PublicId("cn")] int Id,
         string? No,
-        int CustomerId,
+        [property: PublicId("cus")] int CustomerId,
         string CustomerName,
-        int? SourceSalesInvoiceHeaderId,
+        [property: PublicId("inv")] int? SourceSalesInvoiceHeaderId,
         string? SourceInvoiceNo,
         DateTime Date,
         string CurrencyCode,
@@ -108,8 +109,8 @@ namespace Dto.Sales
         string SettlementState,
         int Status,
         string StatusLabel,
-        int? GeneralLedgerHeaderId,
-        int? VoidGeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? GeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? VoidGeneralLedgerHeaderId,
         string? SubmittedBy,
         string? ReviewedBy,
         string? PostedBy,

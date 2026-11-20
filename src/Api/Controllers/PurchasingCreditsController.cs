@@ -28,12 +28,12 @@ namespace Api.Controllers
 
         [HttpGet]
         [RequirePermission(SystemPermissions.PurchasesCreditsView)]
-        public IActionResult List([FromQuery] int? vendorId = null, [FromQuery] int? billId = null) =>
+        public IActionResult List([FromQuery] [Dto.Common.PublicId("ven")] int? vendorId = null, [FromQuery] [Dto.Common.PublicId("bill")] int? billId = null) =>
             Ok(_service.List(vendorId, billId));
 
-        [HttpGet("{id:int}")]
+        [HttpGet("{id}")]
         [RequirePermission(SystemPermissions.PurchasesCreditsView)]
-        public IActionResult Get(int id)
+        public IActionResult Get([Dto.Common.PublicId("scn")] int id)
         {
             try
             {
@@ -59,9 +59,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("{id:int}/submit")]
+        [HttpPost("{id}/submit")]
         [RequirePermission(SystemPermissions.PurchasesCreditsCreate)]
-        public IActionResult Submit(int id, [FromQuery] string? idempotencyKey = null)
+        public IActionResult Submit([Dto.Common.PublicId("scn")] int id, [FromQuery] string? idempotencyKey = null)
         {
             try
             {
@@ -73,9 +73,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("{id:int}/post")]
+        [HttpPost("{id}/post")]
         [RequirePermission(SystemPermissions.PurchasesCreditsPost)]
-        public IActionResult Post(int id, [FromBody] PostSupplierCreditRequest request)
+        public IActionResult Post([Dto.Common.PublicId("scn")] int id, [FromBody] PostSupplierCreditRequest request)
         {
             try
             {
@@ -87,9 +87,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("{id:int}/apply")]
+        [HttpPost("{id}/apply")]
         [RequirePermission(SystemPermissions.FinancialsSettlementsApply)]
-        public IActionResult Apply(int id, [FromBody] ApplySupplierCreditRequest request)
+        public IActionResult Apply([Dto.Common.PublicId("scn")] int id, [FromBody] ApplySupplierCreditRequest request)
         {
             try
             {
@@ -101,9 +101,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("applications/{applicationId:int}/reverse")]
+        [HttpPost("applications/{applicationId}/reverse")]
         [RequirePermission(SystemPermissions.FinancialsSettlementsReverse)]
-        public IActionResult ReverseApplication(int applicationId, [FromBody] ReverseSettlementRequest request)
+        public IActionResult ReverseApplication([Dto.Common.PublicId("sapp")] int applicationId, [FromBody] ReverseSettlementRequest request)
         {
             try
             {
@@ -115,9 +115,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("{id:int}/reverse")]
+        [HttpPost("{id}/reverse")]
         [RequirePermission(SystemPermissions.PurchasesCreditsReverse)]
-        public IActionResult Reverse(int id, [FromBody] ReverseSettlementRequest request)
+        public IActionResult Reverse([Dto.Common.PublicId("scn")] int id, [FromBody] ReverseSettlementRequest request)
         {
             try
             {

@@ -17,11 +17,11 @@ namespace Api.Controllers;
 public sealed class EmailDispatchController(IEmailDispatchService dispatch, ITenantContext tenant) : ControllerBase
 {
     [HttpGet]
-    public Task<IActionResult> Get(Guid dispatchId, int invoiceId, string purpose, CancellationToken ct) =>
+    public Task<IActionResult> Get(Guid dispatchId, [Dto.Common.PublicId("inv")] int invoiceId, string purpose, CancellationToken ct) =>
         Execute(dispatchId, invoiceId, purpose, false, ct);
 
     [HttpPost("abandon")]
-    public Task<IActionResult> Abandon(Guid dispatchId, int invoiceId, string purpose, CancellationToken ct) =>
+    public Task<IActionResult> Abandon(Guid dispatchId, [Dto.Common.PublicId("inv")] int invoiceId, string purpose, CancellationToken ct) =>
         Execute(dispatchId, invoiceId, purpose, true, ct);
 
     private async Task<IActionResult> Execute(Guid id, int invoice, string purpose, bool abandon, CancellationToken ct)

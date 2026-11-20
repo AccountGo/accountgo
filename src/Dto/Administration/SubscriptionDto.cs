@@ -1,10 +1,12 @@
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Subscription
 {
     public class TenantSubscriptionDto
     {
+        [PublicId("ws")]
         public int CompanyId { get; set; }
         public string CompanyName { get; set; } = string.Empty;
         public string? Slug { get; set; }
@@ -16,6 +18,7 @@ namespace Dto.Subscription
 
     public class UpdateSubscriptionDto
     {
+        [PublicId("ws")]
         public int? CompanyId { get; set; }
         public string? Slug { get; set; }
         public string? Plan { get; set; }

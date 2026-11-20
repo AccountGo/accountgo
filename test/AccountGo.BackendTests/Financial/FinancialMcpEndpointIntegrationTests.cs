@@ -77,10 +77,8 @@ namespace AccountGo.BackendTests.Financial
             Assert.Equal(HttpStatusCode.Created, createOrgRes.StatusCode);
 
             using var orgDoc = JsonDocument.Parse(await createOrgRes.Content.ReadAsStringAsync());
-            var idProp = orgDoc.RootElement.GetProperty("id");
-            _companyId = idProp.ValueKind == JsonValueKind.String
-                ? int.Parse(idProp.GetString()!)
-                : idProp.GetInt32();
+            var orgPublicId = orgDoc.RootElement.GetProperty("id").GetString()!;
+            _companyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, orgPublicId);
 
             using (var scope = _factory.Services.CreateScope())
             {

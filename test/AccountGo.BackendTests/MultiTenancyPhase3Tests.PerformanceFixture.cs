@@ -61,7 +61,9 @@ public sealed class MultiTenancyPhase3PerformanceFixtureTests : MultiTenancyPhas
         {
             using var response = await Send(HttpMethod.Post, path, value);
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<T>();
+            if (typeof(T) == typeof(System.Text.Json.JsonElement))
+                return (T)(object)(await Json(response));
+            return await ReadDto<T>(response);
         }
         var firstDate = Date("2026-02-01");
         var secondDate = Date("2027-02-01");
@@ -105,18 +107,19 @@ public sealed class MultiTenancyPhase3PerformanceFixtureTests : MultiTenancyPhas
         await AddBooks(firstDate, 1);
         var draft = await Post<BankReconciliationDto>("/api/Banking/Reconciliations", new StartBankReconciliationRequest
         { BankId = first.Id, StatementEndDate = Date("2026-12-31"), StatementEndingBalance = 1090m });
-        using (var request = new HttpRequestMessage(HttpMethod.Put, $"/api/Banking/Reconciliations/{draft.Id}/Items"))
+        var draftPub = PubId<Core.Domain.Financials.BankReconciliation>(draft.Id);
+        using (var request = new HttpRequestMessage(HttpMethod.Put, $"/api/Banking/Reconciliations/{draftPub}/Items"))
         {
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
             request.Headers.Add("X-AccountGo-Org", _slug);
-            request.Content = JsonContent.Create(new UpdateBankReconciliationItemsRequest
+            request.Content = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ToJsonContent(_factory.Services, _companyId, new UpdateBankReconciliationItemsRequest
             { Add = draft.Deposits.Concat(draft.Payments).Where(x => !x.Ticked).Select(x => x.LineId).ToArray(), Version = draft.Version });
             using var response = await _client.SendAsync(request);
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            draft = await response.Content.ReadFromJsonAsync<BankReconciliationDto>();
+            draft = await ReadDto<BankReconciliationDto>(response);
         }
         Assert.Equal(0m, draft.Difference);
-        var finished = await Post<BankReconciliationDto>($"/api/Banking/Reconciliations/{draft.Id}/Finish", new FinishBankReconciliationRequest { Version = draft.Version });
+        var finished = await Post<BankReconciliationDto>($"/api/Banking/Reconciliations/{draftPub}/Finish", new FinishBankReconciliationRequest { Version = draft.Version });
         Assert.NotNull(finished.FinishedAt);
         await AddBooks(secondDate, 1);
         var query = "?from=2026-01-01T00:00:00&to=2027-12-31T23:59:59";
@@ -154,7 +157,7 @@ public sealed class MultiTenancyPhase3PerformanceFixtureTests : MultiTenancyPhas
                 ["monthlyExpenses"] = summary["monthlyExpenses"]?.DeepClone()
             };
         }
-        using (var response = await Send(HttpMethod.Get, $"/api/Banking/Accounts/{first.Id}/Register?from=2026-01-01&to=2027-12-31&pageSize=100"))
+        using (var response = await Send(HttpMethod.Get, $"/api/Banking/Accounts/{PubId<Core.Domain.Financials.Bank>(first.Id)}/Register?from=2026-01-01&to=2027-12-31&pageSize=100"))
         {
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
             golden["bankRegister"] = JsonNode.Parse(await response.Content.ReadAsStringAsync());

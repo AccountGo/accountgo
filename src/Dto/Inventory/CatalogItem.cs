@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Dto.Common;
 
 namespace Dto.Inventory
 {
@@ -8,6 +9,7 @@ namespace Dto.Inventory
     /// </summary>
     public class CatalogItem
     {
+        [PublicId("item")]
         public int Id { get; set; }
         /// <summary>The name, which is also the line text when it is picked for an invoice.</summary>
         public string? Name { get; set; }
@@ -21,8 +23,10 @@ namespace Dto.Inventory
         /// <summary>Whether this item belongs to a Purchased category and uses stock tracking.</summary>
         public bool TrackStock { get; set; }
         /// <summary>The stock item's Inventory account; null for non-stock items.</summary>
+        [PublicId("acct")]
         public int? InventoryAccountId { get; set; }
         /// <summary>The account credited when this item is sold; defaults to 40100 (Sales).</summary>
+        [PublicId("acct")]
         public int? SalesAccountId { get; set; }
         /// <summary>Code of the sales account, for display.</summary>
         public string? SalesAccountCode { get; set; }

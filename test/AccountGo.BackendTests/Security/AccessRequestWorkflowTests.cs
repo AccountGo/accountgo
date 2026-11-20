@@ -19,6 +19,9 @@ namespace AccountGo.BackendTests.Security
             _fixture = fixture;
         }
 
+        private string RolePub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Security.SecurityRole>(_fixture.Factory.Services, id);
+        private string MemPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_fixture.Factory.Services, id);
+
         [Fact]
         public async Task OwnerSetup_LegacySoleOwner_WithoutOrigin_ReturnsForbidden()
         {
@@ -65,7 +68,7 @@ namespace AccountGo.BackendTests.Security
             }
 
             var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
-                new { securityRoleIds = new[] { roleId } }, token: owner.Token, org: slug);
+                new { securityRoleIds = new[] { RolePub(roleId) } }, token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
             using var verifyScope = _fixture.Factory.Services.CreateScope();
@@ -95,7 +98,7 @@ namespace AccountGo.BackendTests.Security
             }
 
             var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
-                new { securityRoleIds = new[] { roleId } }, token: owner.Token, org: slug);
+                new { securityRoleIds = new[] { RolePub(roleId) } }, token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var verifyScope = _fixture.Factory.Services.CreateScope();
             var verify = verifyScope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -129,11 +132,11 @@ namespace AccountGo.BackendTests.Security
                 memberId = db.CompanyMembers.Single(m => m.CompanyId == companyId && m.UserId == member.Id).Id;
             }
 
-            var delResp = await _fixture.Send(HttpMethod.Delete, $"/api/organizations/current/members/{memberId}", token: owner.Token, org: slug);
+            var delResp = await _fixture.Send(HttpMethod.Delete, $"/api/organizations/current/members/{MemPub(memberId)}", token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.NoContent, delResp.StatusCode);
 
             var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
-                new { securityRoleIds = new[] { roleId } }, token: owner.Token, org: slug);
+                new { securityRoleIds = new[] { RolePub(roleId) } }, token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
             using var verifyScope = _fixture.Factory.Services.CreateScope();
@@ -179,7 +182,7 @@ namespace AccountGo.BackendTests.Security
             }
 
             var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
-                new { securityRoleIds = new[] { roleId } }, token: owner.Token, org: slug);
+                new { securityRoleIds = new[] { RolePub(roleId) } }, token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
             using var verifyScope = _fixture.Factory.Services.CreateScope();
@@ -210,7 +213,7 @@ namespace AccountGo.BackendTests.Security
             }
 
             var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
-                new { securityRoleIds = new[] { roleId } }, token: newOwner.Token, org: slug);
+                new { securityRoleIds = new[] { RolePub(roleId) } }, token: newOwner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
             using var verifyScope = _fixture.Factory.Services.CreateScope();
@@ -233,7 +236,7 @@ namespace AccountGo.BackendTests.Security
                 roleId = scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.First(r => r.Name == "Accountant").Id;
 
             var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
-                new { securityRoleIds = new[] { roleId } }, token: owner.Token, org: slug);
+                new { securityRoleIds = new[] { RolePub(roleId) } }, token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
             using var verifyScope = _fixture.Factory.Services.CreateScope();
             var verify = verifyScope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -260,7 +263,7 @@ namespace AccountGo.BackendTests.Security
             }
 
             var change = await _fixture.Send(remove ? HttpMethod.Delete : HttpMethod.Patch,
-                $"/api/organizations/current/members/{memberId}", remove ? null : new { role = "Member" },
+                $"/api/organizations/current/members/{MemPub(memberId)}", remove ? null : new { role = "Member" },
                 token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.NoContent, change.StatusCode);
 
@@ -312,18 +315,18 @@ namespace AccountGo.BackendTests.Security
             }
 
             // 1. Owner tries to assign Accountant to Admin -> Denied (delegation ceiling)
-            var patchOtherRes = await _fixture.Send(HttpMethod.Patch, $"/api/organizations/current/members/{adminMemberId}",
-                new { securityRoleIds = new[] { accountantRoleId } }, token: owner.Token, org: slug);
+            var patchOtherRes = await _fixture.Send(HttpMethod.Patch, $"/api/organizations/current/members/{MemPub(adminMemberId)}",
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) } }, token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, patchOtherRes.StatusCode);
 
             // 2. Owner tries to assign Accountant to self -> Denied (self-grant)
-            var patchSelfRes = await _fixture.Send(HttpMethod.Patch, $"/api/organizations/current/members/{ownerMemberId}",
-                new { securityRoleIds = new[] { accountantRoleId } }, token: owner.Token, org: slug);
+            var patchSelfRes = await _fixture.Send(HttpMethod.Patch, $"/api/organizations/current/members/{MemPub(ownerMemberId)}",
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) } }, token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Forbidden, patchSelfRes.StatusCode);
 
             // 3. Owner creates a legitimate access request for self -> 201 Created
             var createReqRes = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-requests",
-                new { securityRoleIds = new[] { accountantRoleId }, reason = "Need to reconcile year-end books" },
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) }, reason = "Need to reconcile year-end books" },
                 token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Created, createReqRes.StatusCode);
 
@@ -355,7 +358,7 @@ namespace AccountGo.BackendTests.Security
 
             // Case A: Owner self-requests Accountant -> Admin approves -> Owner gains Accountant
             var ownerReqRes = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-requests",
-                new { securityRoleIds = new[] { accountantRoleId }, reason = "Owner financial access" },
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) }, reason = "Owner financial access" },
                 token: owner.Token, org: slug);
             Assert.Equal(HttpStatusCode.Created, ownerReqRes.StatusCode);
             var ownerReqId = (await AccessControlConformanceTests.Fixture.Json(ownerReqRes)).GetProperty("requestId").GetString()!;
@@ -371,7 +374,7 @@ namespace AccountGo.BackendTests.Security
 
             // Case B: Admin self-requests Accountant -> Owner approves -> Admin gains Accountant
             var adminReqRes = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-requests",
-                new { securityRoleIds = new[] { accountantRoleId }, reason = "Admin financial access" },
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) }, reason = "Admin financial access" },
                 token: admin.Token, org: slug);
             Assert.Equal(HttpStatusCode.Created, adminReqRes.StatusCode);
             var adminReqId = (await AccessControlConformanceTests.Fixture.Json(adminReqRes)).GetProperty("requestId").GetString()!;
@@ -404,7 +407,7 @@ namespace AccountGo.BackendTests.Security
 
             // 1. Owner creates request
             var reqRes = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-requests",
-                new { securityRoleIds = new[] { accountantRoleId }, reason = "Financial work" },
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) }, reason = "Financial work" },
                 token: owner.Token, org: slug);
             var reqId = (await AccessControlConformanceTests.Fixture.Json(reqRes)).GetProperty("requestId").GetString()!;
 
@@ -450,7 +453,7 @@ namespace AccountGo.BackendTests.Security
 
             // 1. Rejection lifecycle
             var req1Res = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-requests",
-                new { securityRoleIds = new[] { accountantRoleId }, reason = "Rejection test" },
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) }, reason = "Rejection test" },
                 token: owner.Token, org: slug);
             var req1Id = (await AccessControlConformanceTests.Fixture.Json(req1Res)).GetProperty("requestId").GetString()!;
 
@@ -467,7 +470,7 @@ namespace AccountGo.BackendTests.Security
 
             // 2. Cancellation lifecycle
             var req2Res = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-requests",
-                new { securityRoleIds = new[] { accountantRoleId }, reason = "Cancellation test" },
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) }, reason = "Cancellation test" },
                 token: owner.Token, org: slug);
             var req2Id = (await AccessControlConformanceTests.Fixture.Json(req2Res)).GetProperty("requestId").GetString()!;
 
@@ -501,12 +504,12 @@ namespace AccountGo.BackendTests.Security
 
             // Create Request A (Accountant) and Request B (Sales Representative) for Owner
             var reqARes = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-requests",
-                new { securityRoleIds = new[] { accountantRoleId }, reason = "Request A" },
+                new { securityRoleIds = new[] { RolePub(accountantRoleId) }, reason = "Request A" },
                 token: owner.Token, org: slug);
             var reqAId = (await AccessControlConformanceTests.Fixture.Json(reqARes)).GetProperty("requestId").GetString()!;
 
             var reqBRes = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/access-requests",
-                new { securityRoleIds = new[] { salesRepRoleId }, reason = "Request B" },
+                new { securityRoleIds = new[] { RolePub(salesRepRoleId) }, reason = "Request B" },
                 token: owner.Token, org: slug);
             var reqBId = (await AccessControlConformanceTests.Fixture.Json(reqBRes)).GetProperty("requestId").GetString()!;
 

@@ -124,7 +124,7 @@ namespace AccountGo.BackendTests
             var payment = Assert.Single(paid.Payments);
 
             // Attempting to void bill while payment exists is refused
-            var voidBillRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction");
+            var voidBillRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction");
             Assert.Equal(HttpStatusCode.BadRequest, voidBillRes.StatusCode);
             var err = await voidBillRes.Content.ReadAsStringAsync();
             Assert.Contains("payments that aren't void", err);
@@ -139,7 +139,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.OK, voidPayRes.StatusCode);
 
             // Now voiding the bill succeeds
-            var voidBillOk = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
+            var voidBillOk = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
             Assert.Equal("Void", voidBillOk.Status);
             Assert.Equal(0m, voidBillOk.BalanceDue);
         }
@@ -156,7 +156,7 @@ namespace AccountGo.BackendTests
 
             // Void date earlier than bill date
             var yesterday = today.AddDays(-1);
-            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(yesterday)}&reason=correction");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id)}&date={IsoDate(yesterday)}&reason=correction");
             Assert.Equal(HttpStatusCode.BadRequest, voidRes.StatusCode);
             var msg = await voidRes.Content.ReadAsStringAsync();
             Assert.Contains("cannot be earlier than the", msg);
@@ -202,7 +202,7 @@ namespace AccountGo.BackendTests
             AssertStockState(itemId, 2m, 10m);
 
             // Attempting to void the bill must fail because 3 units are already sold
-            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction");
             Assert.Equal(HttpStatusCode.BadRequest, voidRes.StatusCode);
             var err = await voidRes.Content.ReadAsStringAsync();
             Assert.Contains("already been sold", err);
@@ -210,7 +210,7 @@ namespace AccountGo.BackendTests
 
             // Stock state and bill status remain intact
             AssertStockState(itemId, 2m, 10m);
-            var reloaded = await (await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={approved.Id}")).Content.ReadFromJsonAsync<Dto.Purchasing.Bill>();
+            var reloaded = await ReadDto<Dto.Purchasing.Bill>(await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id)}"));
             Assert.Equal("Open", reloaded.Status);
         }
 
@@ -281,7 +281,7 @@ namespace AccountGo.BackendTests
             });
 
             // Approving draft from archived vendor is rejected
-            var approveRes = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draft.Id}");
+            var approveRes = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(draft.Id)}");
             Assert.Equal(HttpStatusCode.BadRequest, approveRes.StatusCode);
             Assert.Contains("archived", await approveRes.Content.ReadAsStringAsync());
         }
@@ -325,17 +325,18 @@ namespace AccountGo.BackendTests
             var approved = await SaveBillOk(bill);
 
             // Void without reason
-            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}");
+            var approvedPub = PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id);
+            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approvedPub}&date={IsoDate(DateTime.UtcNow)}");
             Assert.Equal(HttpStatusCode.BadRequest, voidRes.StatusCode);
             var err = await voidRes.Content.ReadAsStringAsync();
             Assert.Contains("reason is required to void a bill", err);
 
             // Void with empty/whitespace reason
-            var voidEmptyRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=   ");
+            var voidEmptyRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approvedPub}&date={IsoDate(DateTime.UtcNow)}&reason=   ");
             Assert.Equal(HttpStatusCode.BadRequest, voidEmptyRes.StatusCode);
 
             // Void with valid reason succeeds
-            var voidOk = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=Testing%20reason"));
+            var voidOk = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approvedPub}&date={IsoDate(DateTime.UtcNow)}&reason=Testing%20reason"));
             Assert.Equal("Void", voidOk.Status);
         }
 
@@ -362,7 +363,7 @@ namespace AccountGo.BackendTests
             // Individually, each line has 5 units which is <= 6 on hand.
             // But combined, 10 units were received and only 6 remain (4 were sold).
             // Voiding must fail in the pre-check before posting any reversals.
-            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=reversal");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=reversal");
             Assert.Equal(HttpStatusCode.BadRequest, voidRes.StatusCode);
             var err = await voidRes.Content.ReadAsStringAsync();
             Assert.Contains("4 of", err);
@@ -396,13 +397,14 @@ namespace AccountGo.BackendTests
             Assert.Equal("Draft", draft2.Status);
 
             // Approving draft2 without confirmDuplicate returns 409 Conflict
-            var conflictRes = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draft2.Id}");
+            var draft2Pub = PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(draft2.Id);
+            var conflictRes = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draft2Pub}");
             Assert.Equal(HttpStatusCode.Conflict, conflictRes.StatusCode);
             var json = await Json(conflictRes);
             Assert.Equal("possible_duplicate", json.GetProperty("code").GetString());
 
             // Approving draft2 with confirmDuplicate = true succeeds
-            var approveOk = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draft2.Id}&confirmDuplicate=true"));
+            var approveOk = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draft2Pub}&confirmDuplicate=true"));
             Assert.Equal("Open", approveOk.Status);
             Assert.True(approveOk.Approved);
         }

@@ -21,7 +21,7 @@ public abstract partial class MultiTenancyPhase3TestBase
             journal.JournalEntryLines.Add(new Dto.Financial.JournalEntryLine { AccountId = AccountId(code), DrCr = drCr, Amount = amount });
         using var saved = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", journal);
         Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-        journal.Id = (await saved.Content.ReadFromJsonAsync<Dto.Financial.JournalEntry>()).Id;
+        journal.Id = (await ReadDto<Dto.Financial.JournalEntry>(saved)).Id;
         var approval = await ApproveJournalPostAsync(journal.Id);
         using var posted = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", journal, extraHeaders: approval);
         Assert.True(posted.IsSuccessStatusCode, await posted.Content.ReadAsStringAsync());

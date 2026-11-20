@@ -33,13 +33,13 @@ public sealed class RequestQueryBudgetTests
     [
         ("/api/auth/me", 5), ("/api/organizations", 10), ("/api/organizations/current", 11),
         ("/api/entitlements", 8), ("/api/security/capabilities", 3), ("/api/security/policy", 3),
-        ("/api/linked-entries", 4), ("/api/Dashboard/Summary", 28), ("/api/Financials/Accounts", 20),
+        ("/api/linked-entries", 4), ("/api/Dashboard/Summary", 28), ("/api/Financials/Accounts", 22),
         ("/api/Banking/Accounts", 9), ("/api/Sales/SalesInvoices", 5), ("/api/Sales/Customers", 5),
         ("/api/Purchasing/Bills", 5), ("/api/Purchasing/Vendors", 6), ("/api/Financials/trialbalance", 5),
-        ("/api/Financials/BalanceSheet", 8), ("/api/Financials/IncomeStatement", 7),
+        ("/api/Financials/BalanceSheet", 9), ("/api/Financials/IncomeStatement", 8),
         ("/api/Financials/GeneralLedger", 6), ("/api/Financials/CashFlow", 14),
         ("/api/organizations/current/accounting-policy", 5), ("/api/organizations/current/operating-settings", 11),
-        ("/api/Tax/Taxes", 6), ("/api/Common/PaymentTerms", 4), ("/api/Administration/financialyears", 6),
+        ("/api/Tax/Taxes", 8), ("/api/Common/PaymentTerms", 5), ("/api/Administration/financialyears", 6),
         ("/api/Banking/Reconciliations", 4),
     ];
 

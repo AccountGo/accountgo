@@ -1,11 +1,16 @@
 using System.Collections.Generic;
+using Dto.Common;
 
 namespace Dto.Financial
 {
     public class Account : BaseDto
     {
+        [PublicId("acct")]
+        public override int Id { get; set; }
         public int AccountClassId { get; set; }
+        [PublicId("acct")]
         public int? ParentAccountId { get; set; }
+        [PublicId("ws")]
         public int CompanyId { get; set; }
         public string? AccountCode { get; set; }
         public string? AccountName { get; set; }
@@ -162,7 +167,9 @@ namespace Dto.Financial
         public string RoleKey { get; set; } = string.Empty;
         public string RoleName { get; set; } = string.Empty;
         public string SourceType { get; set; } = string.Empty; // GeneralLedgerSetting | Tax | Bank
+        [PublicIdByType("SourceType")]
         public int? SourceEntityId { get; set; }
+        [PublicId("acct")]
         public int? CurrentAccountId { get; set; }
         public string? CurrentAccountCode { get; set; }
         public string? CurrentAccountName { get; set; }

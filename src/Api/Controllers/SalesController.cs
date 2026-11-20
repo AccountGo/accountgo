@@ -1,4 +1,5 @@
 using Api.ActionFilters;
+using Dto.Common;
 using Api.Filters;
 using Core.Domain;
 using Dto.Sales;
@@ -194,7 +195,7 @@ namespace Api.Controllers
             else
                 _salesService.UpdateCustomer(customer);
 
-            return Ok(new { id = customer.Id, no = customer.No, name = customer.Party.Name });
+            return Ok(new { id = customer.PublicId, no = customer.No, name = customer.Party.Name });
         }
 
         /// <summary>Fills in the receivable, sales, advances and discount accounts a customer has no account for yet.</summary>
@@ -210,13 +211,13 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersView)]
         [HttpGet]
         [Route("Customer")]
-        public IActionResult Customer(int id)
+        public IActionResult Customer([Dto.Common.PublicId("cus")] int id)
         {
             try
             {
                 var customer = _salesService.GetCustomerById(id);
                 if (customer == null)
-                    return NotFound(new { message = $"Customer #{id} not found." });
+                    return NotFound(new { message = "Customer not found." });
 
                 var customerDto = new Dto.Sales.Customer()
                 {
@@ -289,7 +290,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("Client")] // api/Sales/Client?id=
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersView)]
-        public IActionResult Client(int id)
+        public IActionResult Client([Dto.Common.PublicId("cus")] int id)
         {
             var customer = _db.Customers.Include(c => c.Party).FirstOrDefault(c => c.Id == id && c.Party != null);
             if (customer == null)
@@ -395,7 +396,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("ClientContact")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
-        public IActionResult ClientContact(int clientId, [FromBody] Dto.Common.ContactPersonDto contactDto)
+        public IActionResult ClientContact([Dto.Common.PublicId("cus")] int clientId, [FromBody] Dto.Common.ContactPersonDto contactDto)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientId, nameof(clientId));
             var customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == clientId);
@@ -462,21 +463,22 @@ namespace Api.Controllers
         [HttpPost]
         [Route("SetClientBillToContact")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
-        public IActionResult SetClientBillToContact(int clientId, int contactId)
+        public IActionResult SetClientBillToContact([Dto.Common.PublicId("cus")] int clientId, [Dto.Common.PublicId("cont")] int? contactId = null)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientId, nameof(clientId));
             var customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == clientId);
-            if (contactId == 0)
+            // No contact id clears the bill-to contact.
+            if (contactId is not int contactKey)
             {
                 customer.BillToContactId = null;
             }
             else
             {
-                _tenantGuard.EnsureOwned<Core.Domain.Contact>(contactId, nameof(contactId));
-                if (!_db.Set<Core.Domain.CustomerContact>().Any(cc => cc.CustomerId == clientId && cc.ContactId == contactId)
-                    && customer.PrimaryContactId != contactId)
+                _tenantGuard.EnsureOwned<Core.Domain.Contact>(contactKey, nameof(contactId));
+                if (!_db.Set<Core.Domain.CustomerContact>().Any(cc => cc.CustomerId == clientId && cc.ContactId == contactKey)
+                    && customer.PrimaryContactId != contactKey)
                     return BadRequest(new { message = "That contact is not linked to this client." });
-                customer.BillToContactId = contactId;
+                customer.BillToContactId = contactKey;
             }
             customer.ModifiedBy = GetUserNameFromRequestHeader();
             _db.SaveChanges();
@@ -490,7 +492,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("SetClientPrimaryContact")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
-        public IActionResult SetClientPrimaryContact(int clientId, int contactId)
+        public IActionResult SetClientPrimaryContact([Dto.Common.PublicId("cus")] int clientId, [Dto.Common.PublicId("cont")] int contactId)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientId, nameof(clientId));
             _tenantGuard.EnsureOwned<Core.Domain.Contact>(contactId, nameof(contactId));
@@ -512,7 +514,7 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteClientContact")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
-        public IActionResult DeleteClientContact(int clientId, int contactId)
+        public IActionResult DeleteClientContact([Dto.Common.PublicId("cus")] int clientId, [Dto.Common.PublicId("cont")] int contactId)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientId, nameof(clientId));
             _tenantGuard.EnsureOwned<Core.Domain.Contact>(contactId, nameof(contactId));
@@ -565,7 +567,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("ArchiveClient")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
-        public IActionResult ArchiveClient(int id, bool archived = true)
+        public IActionResult ArchiveClient([Dto.Common.PublicId("cus")] int id, bool archived = true)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(id, nameof(id));
             var customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == id);
@@ -586,7 +588,7 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteClient")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
-        public IActionResult DeleteClient(int id)
+        public IActionResult DeleteClient([Dto.Common.PublicId("cus")] int id)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(id, nameof(id));
             if (ClientHasRecords(id))
@@ -805,7 +807,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("SalesOrder")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult SalesOrder(int id)
+        public IActionResult SalesOrder([Dto.Common.PublicId("so")] int id)
         {
             try
             {
@@ -860,13 +862,13 @@ namespace Api.Controllers
         [HttpGet]
         [Route("SalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult SalesInvoice(int id)
+        public IActionResult SalesInvoice([Dto.Common.PublicId("inv")] int id)
         {
             try
             {
                 var salesInvoiceDto = BuildSalesInvoiceDto(id);
                 if (salesInvoiceDto == null)
-                    return NotFound(new { message = $"Invoice #{id} not found." });
+                    return NotFound(new { message = "Invoice not found." });
 
                 return new ObjectResult(salesInvoiceDto);
             }
@@ -879,11 +881,11 @@ namespace Api.Controllers
         [HttpGet]
         [Route("SalesInvoicePdf")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public async Task<IActionResult> SalesInvoicePdf(int id, [FromServices] Api.Service.InvoicePdfRenderer pdfs, CancellationToken ct)
+        public async Task<IActionResult> SalesInvoicePdf([Dto.Common.PublicId("inv")] int id, [FromServices] Api.Service.InvoicePdfRenderer pdfs, CancellationToken ct)
         {
             var salesInvoiceDto = BuildSalesInvoiceDto(id);
             if (salesInvoiceDto == null)
-                return NotFound(new { message = $"Invoice #{id} not found." });
+                return NotFound(new { message = "Invoice not found." });
 
             var rendered = await pdfs.RenderAsync(
                 salesInvoiceDto,
@@ -900,7 +902,7 @@ namespace Api.Controllers
         [Route("SendSalesInvoiceEmail")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public Task<IActionResult> SendSalesInvoiceEmail(
-            int id,
+            [Dto.Common.PublicId("inv")] int id,
             [FromServices] Api.Service.IEmailDispatchService emailDispatch,
             bool attachPdf = false,
             [FromQuery] string[]? additionalRecipients = null,
@@ -916,7 +918,7 @@ namespace Api.Controllers
         [Route("SendSalesInvoiceFollowUpEmail")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public Task<IActionResult> SendSalesInvoiceFollowUpEmail(
-            int id,
+            [Dto.Common.PublicId("inv")] int id,
             [FromServices] Api.Service.IEmailDispatchService emailDispatch,
             bool attachPdf = false,
             [FromQuery] string[]? additionalRecipients = null,
@@ -937,7 +939,7 @@ namespace Api.Controllers
         {
             var invoice = BuildSalesInvoiceDto(id);
             if (invoice == null)
-                return NotFound(new { message = $"Invoice #{id} not found." });
+                return NotFound(new { message = "Invoice not found." });
 
             var dispatchContext = new Api.Service.EmailDispatchContext(_tenantContext.RequireCompanyId(),
                 User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value ?? "",
@@ -1331,11 +1333,11 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesQuotationsView)]
         [HttpGet]
         [Route("Quotation")]
-        public IActionResult Quotation(int id)
+        public IActionResult Quotation([Dto.Common.PublicId("quo")] int id)
         {
             var quote = _salesService.GetSalesQuotationById(id);
             if (quote == null)
-                return NotFound(new { message = $"Quotation #{id} not found." });
+                return NotFound(new { message = "Quotation not found." });
 
             var quoteDto = new Dto.Sales.SalesQuotation()
             {
@@ -1371,7 +1373,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("SalesInvoices")] // api/Sales/SalesInvoices, or ?customerId= for one client's
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult SalesInvoices(int? customerId = null)
+        public IActionResult SalesInvoices([Dto.Common.PublicId("cus")] int? customerId = null)
         {
             var salesInvoices = _salesService.GetSalesInvoices()
                 .Where(i => customerId == null || i.CustomerId == customerId)
@@ -1430,7 +1432,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("ReceivablesAsOf")] // api/Sales/ReceivablesAsOf?asOf=2026-12-31
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult ReceivablesAsOf(DateTime asOf, int? customerId = null)
+        public IActionResult ReceivablesAsOf(DateTime asOf, [Dto.Common.PublicId("cus")] int? customerId = null)
         {
             if (asOf == default)
                 return BadRequest(new { message = "Provide the date to report receivables as of." });
@@ -1454,6 +1456,8 @@ namespace Api.Controllers
                 if (balance <= 0.005m) continue;
                 open.Add(new Dto.Financial.OpenItemAsOf
                 {
+                    DocumentType = "SalesInvoice",
+                    PartyType = "Customer",
                     Id = invoice.Id,
                     No = invoice.No,
                     PartyId = invoice.CustomerId,
@@ -1501,11 +1505,11 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsView)]
         [HttpGet]
         [Route("SalesReceipt")]
-        public IActionResult SalesReceipt(int id)
+        public IActionResult SalesReceipt([Dto.Common.PublicId("rcpt")] int id)
         {
             var salesReceipt = _salesService.GetSalesReceiptById(id);
             if (salesReceipt == null)
-                return NotFound(new { message = $"Sales receipt #{id} not found." });
+                return NotFound(new { message = "Sales receipt not found." });
 
             var creditAccountId = salesReceipt.SalesReceiptLines.FirstOrDefault()?.AccountToCreditId ?? 0;
             var debitCashBankId = _financialService.GetCashAndBanks().Where(cb => cb.AccountId == salesReceipt.AccountToDebitId).FirstOrDefault()?.Id ?? 0;
@@ -1532,7 +1536,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("CustomerInvoices")] // api/Sales/CustomerInvoices
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult CustomerInvoices(int id)
+        public IActionResult CustomerInvoices([Dto.Common.PublicId("cus")] int id)
         {
             try
             {
@@ -1719,18 +1723,20 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
         public IActionResult PostUnpostedInvoices([FromServices] Services.Financial.IBooksReadinessService books)
         {
-            var results = new List<object>();
+            var results = new List<PostUnpostedInvoiceResult>();
             foreach (var invoice in books.Check().UnpostedInvoices)
             {
                 var error = TryPostSalesInvoice(invoice.Id);
-                results.Add(new { invoice.Id, invoice.Number, posted = error == null, error });
+                results.Add(new PostUnpostedInvoiceResult(invoice.Id, invoice.Number, error == null, error));
             }
             var remaining = books.Check();
             return Ok(new
             {
                 results,
-                unpostedInvoices = remaining.UnpostedInvoices,
-                unpostedBills = remaining.UnpostedBills,
+                unpostedInvoices = remaining.UnpostedInvoices
+                    .Select(d => new SubscriptionController.UnpostedInvoiceWireDto(d.Type, d.Id, d.Number, d.Date)).ToList(),
+                unpostedBills = remaining.UnpostedBills
+                    .Select(d => new SubscriptionController.UnpostedBillWireDto(d.Type, d.Id, d.Number, d.Date)).ToList(),
                 isReady = remaining.IsReady,
             });
         }
@@ -1758,7 +1764,7 @@ namespace Api.Controllers
 
                 var existing = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
                 if (existing == null)
-                    return NotFound(new { message = $"Invoice #{salesInvoiceDto.Id} not found." });
+                    return NotFound(new { message = "Invoice not found." });
 
                 if (existing.Status == Core.Domain.SalesInvoiceStatus.Void)
                     return BadRequest(new { message = "Cannot post a void invoice." });
@@ -2275,7 +2281,7 @@ namespace Api.Controllers
 
         [HttpDelete("DeleteSalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public async Task<IActionResult> DeleteSalesInvoice(int id)
+        public async Task<IActionResult> DeleteSalesInvoice([Dto.Common.PublicId("inv")] int id)
         {
             var invoiceDate = _db.SalesInvoiceHeaders
                 .Where(i => i.Id == id)
@@ -2336,7 +2342,7 @@ namespace Api.Controllers
                 var invoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(paymentDto.InvoiceId, nameof(paymentDto.InvoiceId));
                 invoice = _salesService.GetSalesInvoiceById(invoice.Id);
                 if (invoice == null)
-                    return NotFound(new { message = $"Invoice #{paymentDto.InvoiceId} not found." });
+                    return NotFound(new { message = "Invoice not found." });
 
                 try
                 {
@@ -2387,10 +2393,10 @@ namespace Api.Controllers
                 return Ok(new
                 {
                     success = true,
-                    receiptId = receipt.Id,
+                    receiptId = receipt.PublicId,
                     receiptNo = receipt.No,
                     amountPaid = paymentDto.Amount,
-                    invoiceId = invoice.Id,
+                    invoiceId = invoice.PublicId,
                     invoiceNo = invoice.No,
                     isFullyPaid = invoice.IsFullPaid()
                 });
@@ -2406,7 +2412,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("VoidSalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
-        public IActionResult VoidSalesInvoice(int id, DateTime? date = null)
+        public IActionResult VoidSalesInvoice([Dto.Common.PublicId("inv")] int id, DateTime? date = null)
         {
             try
             {
@@ -2417,9 +2423,9 @@ namespace Api.Controllers
                 using var tx = BeginInvoiceNumberingTransaction();
                 var invoice = _salesService.GetSalesInvoiceById(id);
                 if (invoice == null)
-                    return NotFound(new { message = $"Invoice #{id} not found." });
+                    return NotFound(new { message = "Invoice not found." });
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
-                    return Ok(new { success = true, invoiceId = invoice.Id, status = "Void" });
+                    return Ok(new { success = true, invoiceId = invoice.PublicId, status = "Void" });
 
                 if (RefuseIfBooksLocked(invoice.Date) is { } locked)
                     return locked;
@@ -2444,7 +2450,7 @@ namespace Api.Controllers
                 _salesService.UpdateSalesInvoice(invoice);
                 tx.Commit();
 
-                return Ok(new { success = true, invoiceId = invoice.Id, status = "Void" });
+                return Ok(new { success = true, invoiceId = invoice.PublicId, status = "Void" });
             }
             catch (Exception ex)
             {
@@ -2456,14 +2462,14 @@ namespace Api.Controllers
         [HttpPost]
         [Route("IssueSalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
-        public IActionResult IssueSalesInvoice(int id, string? expectedNo = null)
+        public IActionResult IssueSalesInvoice([Dto.Common.PublicId("inv")] int id, string? expectedNo = null)
         {
             try
             {
                 using var tx = BeginInvoiceNumberingTransaction();
                 var invoice = _salesService.GetSalesInvoiceById(id);
                 if (invoice == null)
-                    return NotFound(new { message = $"Invoice #{id} not found." });
+                    return NotFound(new { message = "Invoice not found." });
 
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Open)
                 {
@@ -2471,7 +2477,7 @@ namespace Api.Controllers
                     string? err = null;
                     if (!invoice.GeneralLedgerHeaderId.HasValue)
                         err = TryPostSalesInvoice(invoice.Id);
-                    return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = new List<string>(), postingError = err });
+                    return Ok(new { success = true, invoiceId = invoice.PublicId, no = invoice.No, status = "Open", warnings = new List<string>(), postingError = err });
                 }
 
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Closed)
@@ -2512,7 +2518,7 @@ namespace Api.Controllers
                 if (!invoice.GeneralLedgerHeaderId.HasValue)
                     postingError = TryPostSalesInvoice(invoice.Id);
 
-                return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = stockWarnings, postingError });
+                return Ok(new { success = true, invoiceId = invoice.PublicId, no = invoice.No, status = "Open", warnings = stockWarnings, postingError });
             }
             catch (Exception ex)
             {
@@ -2698,11 +2704,15 @@ namespace Api.Controllers
 
         public sealed class UpdateReceiptDto
         {
+            [PublicId("rcpt")]
             public int Id { get; set; }
+            [PublicId("cus")]
             public int CustomerId { get; set; }
             public DateTime ReceiptDate { get; set; }
             public decimal Amount { get; set; }
+            [PublicId("ba")]
             public int AccountToDebitId { get; set; }
+            [PublicId("acct")]
             public int AccountToCreditId { get; set; }
             public string? PaymentMethod { get; set; }
             public string? ReferenceNo { get; set; }
@@ -2796,13 +2806,16 @@ namespace Api.Controllers
 
         public sealed class SaveAllocationLineDto
         {
+            [PublicId("inv")]
             public int InvoiceId { get; set; }
             public decimal? AmountToAllocate { get; set; }
         }
 
         public sealed class SaveAllocationDto
         {
+            [PublicId("cus")]
             public int CustomerId { get; set; }
+            [PublicId("rcpt")]
             public int ReceiptId { get; set; }
             public DateTime Date { get; set; }
             public List<SaveAllocationLineDto> AllocationLines { get; set; } = new();
@@ -2867,12 +2880,18 @@ namespace Api.Controllers
         [HttpGet]
         [Route("SalesInvoiceForPrinting")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult SalesInvoiceForPrinting(int id)
+        public IActionResult SalesInvoiceForPrinting([Dto.Common.PublicId("inv")] int id)
         {
             var invoice = BuildSalesInvoiceDto(id);
             return invoice == null
-                ? NotFound(new { message = $"Invoice #{id} not found." })
+                ? NotFound(new { message = "Invoice not found." })
                 : Ok(invoice);
         }
+
+        private sealed record PostUnpostedInvoiceResult(
+            [property: Dto.Common.PublicId("inv")] int Id,
+            string? Number,
+            bool Posted,
+            string? Error);
     }
 }

@@ -1,9 +1,12 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Dto.Common;
 
 namespace Dto.Administration
 {
   public class Company : BaseDto
   {
+    [PublicId("ws")]
+    public override int Id { get; set; }
     [Required]
     [Display(Name = "Company Code")]
     public string? CompanyCode { get; set; }

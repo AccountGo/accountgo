@@ -174,6 +174,10 @@ namespace Api.Mcp
             }
         }
 
+        /// <summary>The request's public-ID translator (per-request cache), for tools that take or build ids by hand.</summary>
+        public Api.PublicIds.IPublicIdResolver Ids =>
+            (_httpContextAccessor.HttpContext?.RequestServices ?? _services).GetRequiredService<Api.PublicIds.IPublicIdResolver>();
+
         /// <summary>Serializes a value exactly as the API's JSON responses do (camelCase, Newtonsoft, with PublicId prefetch).</summary>
         public JsonElement ToJson(object? value)
         {

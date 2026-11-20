@@ -29,7 +29,7 @@ namespace AccountGo.BackendTests.Security
         {
             var setup = await CreateDelegationWorkspace();
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { targetMemberId = setup.TargetMemberId, targetUserId = setup.Target.Id, securityRoleIds = new[] { setup.AccountantRoleId } },
+                new { targetMemberId = MemPub(setup.TargetMemberId), targetUserId = setup.Target.Id, securityRoleIds = new[] { RolePub(setup.AccountantRoleId) } },
                 token: setup.Owner.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
             var approvalId = (await Fixture.Json(approval)).GetProperty("approvalRequestId").GetString();
@@ -38,8 +38,8 @@ namespace AccountGo.BackendTests.Security
                 token: setup.Owner.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.NoContent, revoke.StatusCode);
 
-            var grant = await _fixture.Send(HttpMethod.Patch, Current + "/members/" + setup.TargetMemberId,
-                new { securityRoleIds = new[] { setup.AccountantRoleId }, approvalRequestId = approvalId },
+            var grant = await _fixture.Send(HttpMethod.Patch, Current + "/members/" + MemPub(setup.TargetMemberId),
+                new { securityRoleIds = new[] { RolePub(setup.AccountantRoleId) }, approvalRequestId = approvalId },
                 token: setup.Admin.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.Forbidden, grant.StatusCode);
         }
@@ -50,7 +50,7 @@ namespace AccountGo.BackendTests.Security
             var team = await CreateJournalTeam();
             var journalId = await SaveDraft(team);
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = JePub(journalId) },
                 token: team.Reviewer.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
             var body = await Fixture.Json(approval);
@@ -64,14 +64,14 @@ namespace AccountGo.BackendTests.Security
             }
             var resave = await _fixture.Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", new
             {
-                id = journalId,
+                id = JePub(journalId),
                 journalDate = DateTime.UtcNow.Date.AddDays(-1),
                 voucherType = 6,
                 memo = "Edited after approval",
                 journalEntryLines = new[]
                 {
-                    new { id = 0, accountId = cash, drCr = 1, amount = 30m },
-                    new { id = 0, accountId = revenue, drCr = 2, amount = 30m }
+                    new { id = (string?)null, accountId = AcctPub(cash), drCr = 1, amount = 30m },
+                    new { id = (string?)null, accountId = AcctPub(revenue), drCr = 2, amount = 30m }
                 }
             }, token: team.Owner.Token, org: team.Slug);
             Assert.True(resave.IsSuccessStatusCode, await resave.Content.ReadAsStringAsync());
@@ -101,7 +101,7 @@ namespace AccountGo.BackendTests.Security
                 {
                     operationKey = AccessOperationCatalog.WorkspaceInvitationsCreate,
                     targetEmail = inviteeEmail,
-                    securityRoleIds = new[] { setup.AccountantRoleId }
+                    securityRoleIds = new[] { RolePub(setup.AccountantRoleId) }
                 },
                 token: setup.Owner.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
@@ -114,7 +114,7 @@ namespace AccountGo.BackendTests.Security
                 {
                     email = inviteeEmail,
                     role = "Member",
-                    securityRoleIds = new[] { setup.AccountantRoleId },
+                    securityRoleIds = new[] { RolePub(setup.AccountantRoleId) },
                     approvalRequestId = approvalId,
                     approvedByUserId = approverId
                 },
@@ -132,7 +132,7 @@ namespace AccountGo.BackendTests.Security
                 {
                     email = secondEmail,
                     role = "Member",
-                    securityRoleIds = new[] { setup.AccountantRoleId },
+                    securityRoleIds = new[] { RolePub(setup.AccountantRoleId) },
                     approvalRequestId = approvalId,
                     approvedByUserId = approverId
                 },
@@ -156,13 +156,13 @@ namespace AccountGo.BackendTests.Security
         {
             var setup = await CreateDelegationWorkspace();
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { targetMemberId = setup.TargetMemberId, targetUserId = setup.Target.Id, securityRoleIds = new[] { setup.AccountantRoleId } },
+                new { targetMemberId = MemPub(setup.TargetMemberId), targetUserId = setup.Target.Id, securityRoleIds = new[] { RolePub(setup.AccountantRoleId) } },
                 token: setup.Owner.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
             var approvalId = (await Fixture.Json(approval)).GetProperty("approvalRequestId").GetString();
 
-            var first = await _fixture.Send(HttpMethod.Patch, Current + "/members/" + setup.TargetMemberId,
-                new { securityRoleIds = new[] { setup.AccountantRoleId }, approvalRequestId = approvalId },
+            var first = await _fixture.Send(HttpMethod.Patch, Current + "/members/" + MemPub(setup.TargetMemberId),
+                new { securityRoleIds = new[] { RolePub(setup.AccountantRoleId) }, approvalRequestId = approvalId },
                 token: setup.Admin.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
 
@@ -176,8 +176,8 @@ namespace AccountGo.BackendTests.Security
                 await db.SaveChangesAsync();
             }
 
-            var second = await _fixture.Send(HttpMethod.Patch, Current + "/members/" + setup.TargetMemberId,
-                new { securityRoleIds = new[] { setup.AccountantRoleId }, approvalRequestId = approvalId },
+            var second = await _fixture.Send(HttpMethod.Patch, Current + "/members/" + MemPub(setup.TargetMemberId),
+                new { securityRoleIds = new[] { RolePub(setup.AccountantRoleId) }, approvalRequestId = approvalId },
                 token: setup.Admin.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.Forbidden, second.StatusCode);
             Assert.DoesNotContain("500", second.StatusCode.ToString(), StringComparison.Ordinal);
@@ -188,7 +188,7 @@ namespace AccountGo.BackendTests.Security
         {
             var setup = await CreateDelegationWorkspace();
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { targetMemberId = setup.TargetMemberId, targetUserId = setup.Target.Id, securityRoleIds = new[] { setup.AccountantRoleId } },
+                new { targetMemberId = MemPub(setup.TargetMemberId), targetUserId = setup.Target.Id, securityRoleIds = new[] { RolePub(setup.AccountantRoleId) } },
                 token: setup.Owner.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
             var approvalId = (await Fixture.Json(approval)).GetProperty("approvalRequestId").GetString()!;
@@ -212,8 +212,8 @@ namespace AccountGo.BackendTests.Security
             Assert.Single(results, r => r);
             Assert.Single(results, r => !r);
 
-            var patch = await _fixture.Send(HttpMethod.Patch, Current + "/members/" + setup.TargetMemberId,
-                new { securityRoleIds = new[] { setup.AccountantRoleId }, approvalRequestId = approvalId },
+            var patch = await _fixture.Send(HttpMethod.Patch, Current + "/members/" + MemPub(setup.TargetMemberId),
+                new { securityRoleIds = new[] { RolePub(setup.AccountantRoleId) }, approvalRequestId = approvalId },
                 token: setup.Admin.Token, org: setup.Slug);
             Assert.Equal(HttpStatusCode.Forbidden, patch.StatusCode);
 
@@ -297,19 +297,20 @@ namespace AccountGo.BackendTests.Security
 
             var draft = new
             {
-                id = 0,
+                id = (string?)null,
                 journalDate = DateTime.UtcNow.Date.AddDays(-1),
                 voucherType = 6,
                 memo = "Draft for approval cancel",
                 journalEntryLines = new[]
                 {
-                    new { id = 0, accountId = cash, drCr = 1, amount = 25m },
-                    new { id = 0, accountId = revenue, drCr = 2, amount = 25m }
+                    new { id = (string?)null, accountId = AcctPub(cash), drCr = 1, amount = 25m },
+                    new { id = (string?)null, accountId = AcctPub(revenue), drCr = 2, amount = 25m }
                 }
             };
             var save = await _fixture.Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft, token: team.Owner.Token, org: team.Slug);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            return (await Fixture.Json(save)).GetProperty("id").GetInt32();
+            return AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.Financials.JournalEntryHeader>(
+                _fixture.Factory.Services, (await Fixture.Json(save)).GetProperty("id").GetString()!);
         }
 
         private async Task<HttpResponseMessage> PostJournal(JournalTeam team, int journalId, string? approvalId, string? approverId)
@@ -319,9 +320,14 @@ namespace AccountGo.BackendTests.Security
             request.Headers.Add("X-AccountGo-Org", team.Slug);
             if (approvalId != null) request.Headers.Add("X-Approval-Request-Id", approvalId);
             if (approverId != null) request.Headers.Add("X-Approved-By-User-Id", approverId);
-            request.Content = System.Net.Http.Json.JsonContent.Create(new { id = journalId });
+            request.Content = System.Net.Http.Json.JsonContent.Create(new { id = JePub(journalId) });
             using var client = _fixture.Factory.CreateClient();
             return await client.SendAsync(request);
         }
+
+        private string MemPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_fixture.Factory.Services, id);
+        private string RolePub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Security.SecurityRole>(_fixture.Factory.Services, id);
+        private string AcctPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Financials.Account>(_fixture.Factory.Services, id);
+        private string JePub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Financials.JournalEntryHeader>(_fixture.Factory.Services, id);
     }
 }

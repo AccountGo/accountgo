@@ -360,7 +360,7 @@ namespace AccountGo.BackendTests
         {
             var response = await Send(HttpMethod.Post, "/api/organizations", new { name, slug }, token, scoped: false);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            return int.Parse((await Json(response)).GetProperty("id").GetString());
+            return AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, (await Json(response)).GetProperty("id").GetString()!);
         }
 
         private async Task Join(string ownerToken, string email, string memberToken)
@@ -371,9 +371,10 @@ namespace AccountGo.BackendTests
 
         private async Task<int> Invite(string token, string email, string slug)
         {
-            var response = await Send(HttpMethod.Post, "/api/organizations/current/invitations", new { email, role = "Member", securityRoleIds = Array.Empty<int>() }, token, slug);
+            var response = await Send(HttpMethod.Post, "/api/organizations/current/invitations", new { email, role = "Member", securityRoleIds = Array.Empty<string>() }, token, slug);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            return (await Json(response)).GetProperty("id").GetInt32();
+            var publicId = (await Json(response)).GetProperty("id").GetString()!;
+            return AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.CompanyInvitation>(_factory.Services, publicId);
         }
 
         private Task<HttpResponseMessage> Delete(string token, string confirmEmail)

@@ -1,4 +1,5 @@
 using System;
+using Dto.Common;
 using System.ComponentModel.DataAnnotations;
 
 namespace Dto.Sales
@@ -6,6 +7,7 @@ namespace Dto.Sales
     public class RecordInvoicePaymentDto
     {
         [Required]
+        [PublicId("inv")]
         public int InvoiceId { get; set; }
 
         [Range(0.01, 100000000, ErrorMessage = "Payment amount must be greater than zero.")]
@@ -20,6 +22,7 @@ namespace Dto.Sales
         public string? Notes { get; set; }
 
         /// <summary>Deposit-to bank account (Bank.Id). Null uses the receiving default, or cash when no banks exist.</summary>
+        [PublicId("ba")]
         public int? BankAccountId { get; set; }
     }
 }

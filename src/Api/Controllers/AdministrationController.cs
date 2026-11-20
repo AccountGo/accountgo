@@ -1,4 +1,5 @@
 using Dto.Administration;
+using Dto.Common;
 using Dto.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -171,7 +172,7 @@ namespace Api.Controllers
         }
 
         [HttpGet("company")]
-        public IActionResult Company([FromQuery] string? slug = null, [FromQuery] string? companyCode = null, [FromQuery] int? id = null)
+        public IActionResult Company([FromQuery] string? slug = null, [FromQuery] string? companyCode = null, [FromQuery] [Dto.Common.PublicId("ws")] int? id = null)
         {
             var companyId = _tenantContext.RequireCompanyId();
             var company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == companyId);
@@ -183,10 +184,10 @@ namespace Api.Controllers
 
             return Ok(new
             {
-                id = company.Id,
+                id = company.PublicId,
                 name = company.Name,
                 shortName = company.ShortName,
-                slug = string.IsNullOrWhiteSpace(company.Slug) ? (company.ShortName?.ToLowerInvariant() ?? $"org-{company.Id}") : company.Slug,
+                slug = string.IsNullOrWhiteSpace(company.Slug) ? (company.ShortName?.ToLowerInvariant() ?? $"org-{company.PublicId}") : company.Slug,
                 companyCode = company.CompanyCode,
                 cra = company.CRA,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key,
@@ -210,7 +211,7 @@ namespace Api.Controllers
             var terms = _adminService.GetPaymentTerms();
             return Ok(terms.Select(p => new
             {
-                id = p.Id,
+                id = p.PublicId,
                 description = p.Description,
                 paymentType = p.PaymentType.ToString(),
                 dueAfterDays = p.DueAfterDays,
@@ -224,7 +225,7 @@ namespace Api.Controllers
         [Api.Filters.RequirePermission(Core.Domain.Security.SystemPermissions.AuditLogsView)]
         [HttpGet]
         [Route("auditlogs")] // api/Administration/AuditLogs
-        public IActionResult AuditLogs([FromQuery] int? beforeId = null, [FromQuery] int limit = 100)
+        public IActionResult AuditLogs([FromQuery] [Dto.Common.PublicId("alog")] int? beforeId = null, [FromQuery] int limit = 100)
         {
             var auditLogs = _adminService.AuditLogs(beforeId, limit);
             var auditLogsDto = auditLogs.Select(log => new AuditLog()
@@ -286,6 +287,7 @@ namespace Api.Controllers
 
         public class SaveRoleRequest
         {
+            [PublicId("role")]
             public int Id { get; set; }
             public string Name { get; set; } = string.Empty;
             public string? DisplayName { get; set; }
@@ -380,9 +382,9 @@ namespace Api.Controllers
         }
 
         [Authorize(Roles = PlatformAdminRole)]
-        [HttpDelete("roles/{id:int}")]
+        [HttpDelete("roles/{id}")]
         public IActionResult DeleteRole(
-            int id,
+            [Dto.Common.PublicId("role")] int id,
             [FromServices] ApiDbContext db,
             [FromServices] Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
             [FromServices] Core.Authorization.IWorkspaceReviewerEligibility? reviewerEligibility = null)
@@ -575,6 +577,7 @@ namespace Api.Controllers
 
         public class UpdateCompanyRequest
         {
+            [PublicId("ws")]
             public int? Id { get; set; }
             public string? Name { get; set; }
             public string? ShortName { get; set; }
@@ -617,7 +620,7 @@ namespace Api.Controllers
 
             return Ok(new
             {
-                id = company.Id,
+                id = company.PublicId,
                 name = company.Name,
                 shortName = company.ShortName,
                 slug = company.Slug,

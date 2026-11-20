@@ -31,10 +31,10 @@ namespace Api.Controllers
         }
 
         [RequirePermission(SystemPermissions.DonationsView)]
-        [HttpGet("{id:int}")]
+        [HttpGet("{id}")]
         [ProducesResponseType(typeof(DonorDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<DonorDto>> GetDonorAsync(int id, CancellationToken cancellationToken)
+        public async Task<ActionResult<DonorDto>> GetDonorAsync([Dto.Common.PublicId("dnr")] int id, CancellationToken cancellationToken)
         {
             var donor = await _context.Donors.AsNoTracking().FirstOrDefaultAsync(entity => entity.Id == id, cancellationToken);
             if (donor == null)
@@ -53,15 +53,15 @@ namespace Api.Controllers
             ApplyInput(donor, input);
             _context.Donors.Add(donor);
             await _context.SaveChangesAsync(cancellationToken);
-            return CreatedAtAction("GetDonor", new { id = donor.Id }, ToDto(donor));
+            return CreatedAtAction("GetDonor", new { id = donor.PublicId }, ToDto(donor));
         }
 
         [RequirePermission(SystemPermissions.DonationsManage)]
-        [HttpPut("{id:int}")]
+        [HttpPut("{id}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> UpdateDonorAsync(int id, DonorDto input, CancellationToken cancellationToken)
+        public async Task<IActionResult> UpdateDonorAsync([Dto.Common.PublicId("dnr")] int id, DonorDto input, CancellationToken cancellationToken)
         {
             var donor = await _context.Donors.FindAsync(new object[] { id }, cancellationToken);
             if (donor == null)
@@ -73,10 +73,10 @@ namespace Api.Controllers
         }
 
         [RequirePermission(SystemPermissions.DonationsManage)]
-        [HttpDelete("{id:int}")]
+        [HttpDelete("{id}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> DeleteDonorAsync(int id, CancellationToken cancellationToken)
+        public async Task<IActionResult> DeleteDonorAsync([Dto.Common.PublicId("dnr")] int id, CancellationToken cancellationToken)
         {
             var donor = await _context.Donors.FindAsync(new object[] { id }, cancellationToken);
             if (donor == null)

@@ -17,7 +17,8 @@ namespace Api.Mcp.Models
 
     public class IncomeStatementItemMcp
     {
-        public int AccountId { get; set; }
+        /// <summary>The account's public id, like <c>acct_…</c>.</summary>
+        public string? AccountId { get; set; }
         public bool IsExpense { get; set; }
         public string AccountCode { get; set; } = string.Empty;
         public string AccountName { get; set; } = string.Empty;

@@ -35,33 +35,33 @@ namespace Api.Controllers
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("advances/{id:int}/submit")]
+        [HttpPost("advances/{id}/submit")]
         [RequirePermission(SystemPermissions.PurchasesAdvancesCreate)]
-        public IActionResult SubmitAdvance(int id, [FromQuery] string? idempotencyKey = null)
+        public IActionResult SubmitAdvance([Dto.Common.PublicId("adv")] int id, [FromQuery] string? idempotencyKey = null)
         {
             try { return Ok(_service.SubmitAdvance(id, idempotencyKey)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("advances/{id:int}/post")]
+        [HttpPost("advances/{id}/post")]
         [RequirePermission(SystemPermissions.PurchasesAdvancesPost)]
-        public IActionResult PostAdvance(int id, [FromBody] PostPartyRefundRequest request)
+        public IActionResult PostAdvance([Dto.Common.PublicId("adv")] int id, [FromBody] PostPartyRefundRequest request)
         {
             try { return Ok(_service.PostAdvance(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("advances/{id:int}/apply")]
+        [HttpPost("advances/{id}/apply")]
         [RequirePermission(SystemPermissions.FinancialsSettlementsApply)]
-        public IActionResult ApplyAdvance(int id, [FromBody] ApplySupplierAdvanceRequest request)
+        public IActionResult ApplyAdvance([Dto.Common.PublicId("adv")] int id, [FromBody] ApplySupplierAdvanceRequest request)
         {
             try { return Ok(_service.ApplyAdvance(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("advances/{id:int}/reverse")]
+        [HttpPost("advances/{id}/reverse")]
         [RequirePermission(SystemPermissions.PurchasesAdvancesReverse)]
-        public IActionResult ReverseAdvance(int id, [FromBody] ReverseSettlementRequest request)
+        public IActionResult ReverseAdvance([Dto.Common.PublicId("adv")] int id, [FromBody] ReverseSettlementRequest request)
         {
             try { return Ok(_service.ReverseAdvance(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
@@ -83,49 +83,49 @@ namespace Api.Controllers
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("refunds/{id:int}/submit")]
+        [HttpPost("refunds/{id}/submit")]
         [RequirePermission(SystemPermissions.SalesRefundsCreate)]
-        public IActionResult SubmitRefund(int id, [FromQuery] string? idempotencyKey = null)
+        public IActionResult SubmitRefund([Dto.Common.PublicId("rf")] int id, [FromQuery] string? idempotencyKey = null)
         {
             try { return Ok(_service.SubmitRefund(id, idempotencyKey, PartyRefundDirection.CustomerPayout)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("refunds/supplier/{id:int}/submit")]
+        [HttpPost("refunds/supplier/{id}/submit")]
         [RequirePermission(SystemPermissions.PurchasesRefundsCreate)]
-        public IActionResult SubmitSupplierRefund(int id, [FromQuery] string? idempotencyKey = null)
+        public IActionResult SubmitSupplierRefund([Dto.Common.PublicId("rf")] int id, [FromQuery] string? idempotencyKey = null)
         {
             try { return Ok(_service.SubmitRefund(id, idempotencyKey, PartyRefundDirection.SupplierInflow)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("refunds/{id:int}/post")]
+        [HttpPost("refunds/{id}/post")]
         [RequirePermission(SystemPermissions.SalesRefundsPost)]
-        public IActionResult PostCustomerRefund(int id, [FromBody] PostPartyRefundRequest request)
+        public IActionResult PostCustomerRefund([Dto.Common.PublicId("rf")] int id, [FromBody] PostPartyRefundRequest request)
         {
             try { return Ok(_service.PostRefund(id, request, PartyRefundDirection.CustomerPayout)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("refunds/supplier/{id:int}/post")]
+        [HttpPost("refunds/supplier/{id}/post")]
         [RequirePermission(SystemPermissions.PurchasesRefundsPost)]
-        public IActionResult PostSupplierRefund(int id, [FromBody] PostPartyRefundRequest request)
+        public IActionResult PostSupplierRefund([Dto.Common.PublicId("rf")] int id, [FromBody] PostPartyRefundRequest request)
         {
             try { return Ok(_service.PostRefund(id, request, PartyRefundDirection.SupplierInflow)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("refunds/{id:int}/reverse")]
+        [HttpPost("refunds/{id}/reverse")]
         [RequirePermission(SystemPermissions.SalesRefundsReverse)]
-        public IActionResult ReverseRefund(int id, [FromBody] ReverseSettlementRequest request)
+        public IActionResult ReverseRefund([Dto.Common.PublicId("rf")] int id, [FromBody] ReverseSettlementRequest request)
         {
             try { return Ok(_service.ReverseRefund(id, request, PartyRefundDirection.CustomerPayout)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("refunds/supplier/{id:int}/reverse")]
+        [HttpPost("refunds/supplier/{id}/reverse")]
         [RequirePermission(SystemPermissions.PurchasesRefundsReverse)]
-        public IActionResult ReverseSupplierRefund(int id, [FromBody] ReverseSettlementRequest request)
+        public IActionResult ReverseSupplierRefund([Dto.Common.PublicId("rf")] int id, [FromBody] ReverseSettlementRequest request)
         {
             try { return Ok(_service.ReverseRefund(id, request, PartyRefundDirection.SupplierInflow)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }

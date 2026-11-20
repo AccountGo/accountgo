@@ -1,5 +1,6 @@
 #nullable disable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -98,24 +99,32 @@ namespace Api.Controllers
                         && issued != null
                         && !string.IsNullOrWhiteSpace(issued.IntendedJournalMode)
                         && !string.Equals(issued.IntendedJournalMode, currentJournalMode, StringComparison.Ordinal);
-                    return new
-                    {
-                        id = i.Id,
-                        email = i.Email,
-                        role = i.Role.ToString(),
-                        expiresAt = i.ExpiresAt,
-                        expired = i.ExpiresAt <= now,
+                    return new WorkspaceInvitationItemDto(
+                        i.Id,
+                        i.Email,
+                        i.Role.ToString(),
+                        i.ExpiresAt,
+                        i.ExpiresAt <= now,
                         policyChanged,
-                        securityRoleIds = JsonSerializer.Deserialize<List<int>>(i.SecurityRoleIdsJson)
-                    };
+                        JsonSerializer.Deserialize<List<int>>(i.SecurityRoleIdsJson) ?? new List<int>());
                 }));
         }
+
+        private sealed record WorkspaceInvitationItemDto(
+            [property: PublicId("winv")] int Id,
+            string Email,
+            string Role,
+            DateTime ExpiresAt,
+            bool Expired,
+            bool PolicyChanged,
+            [property: PublicId("role")] List<int> SecurityRoleIds);
 
         public class InviteRequest
         {
             [Required, EmailAddress]
             public string Email { get; set; }
             public string Role { get; set; } = "Member";
+            [PublicId("role")]
             public List<int> SecurityRoleIds { get; set; } = new List<int>();
 #nullable enable
             public string? ApprovedByUserId { get; set; }
@@ -221,7 +230,7 @@ namespace Api.Controllers
                 tx.Commit();
                 return StatusCode(201, new
                 {
-                    id = invitation.Id,
+                    id = invitation.PublicId,
                     email,
                     role = role.ToString(),
                     expiresAt = invitation.ExpiresAt,
@@ -237,8 +246,8 @@ namespace Api.Controllers
             public long? ExpectedPolicyRevision { get; set; }
         }
 
-        [HttpPost("{id:int}/resend")]
-        public async Task<IActionResult> Resend(int id, [FromBody] ResendInvitationRequest? request = null)
+        [HttpPost("{id}/resend")]
+        public async Task<IActionResult> Resend([Dto.Common.PublicId("winv")] int id, [FromBody] ResendInvitationRequest? request = null)
         {
             using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
             {
@@ -327,8 +336,8 @@ namespace Api.Controllers
             }
         }
 
-        [HttpDelete("{id:int}")]
-        public IActionResult Revoke(int id)
+        [HttpDelete("{id}")]
+        public IActionResult Revoke([Dto.Common.PublicId("winv")] int id)
         {
             var invitation = Find(id);
             if (invitation == null)

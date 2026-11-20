@@ -44,7 +44,7 @@ namespace AccountGo.BackendTests
             Assert.Contains("Issued invoices can't be edited. Void it and issue a new one.", updateError);
 
             // 3. DeleteSalesInvoice rejects delete on issued invoice
-            var delRes = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={draftId}");
+            var delRes = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.BadRequest, delRes.StatusCode);
         }
 
@@ -55,18 +55,18 @@ namespace AccountGo.BackendTests
             var no = await Issue(draftId);
 
             // Calling issue again on Open invoice is idempotent (returns 200 without changes)
-            var reissue = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}");
+            var reissue = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.OK, reissue.StatusCode);
             var reloaded = await GetInvoice(draftId);
             Assert.Equal("Open", reloaded.Status);
             Assert.Equal(no, reloaded.No);
 
             // Void it
-            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}&date={IsoDate(DateTime.UtcNow)}");
             Assert.Equal(HttpStatusCode.OK, voidRes.StatusCode);
 
             // Calling issue on Void invoice is rejected
-            var issueVoid = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}");
+            var issueVoid = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.BadRequest, issueVoid.StatusCode);
         }
 
@@ -90,7 +90,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("Paid", paidInvoice.Status);
 
             // Attempting to void paid invoice is rejected
-            var voidPaidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}");
+            var voidPaidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}&date={IsoDate(DateTime.UtcNow)}");
             Assert.Equal(HttpStatusCode.BadRequest, voidPaidRes.StatusCode);
             var voidPaidMsg = await voidPaidRes.Content.ReadAsStringAsync();
             Assert.Contains("Cannot void a paid invoice", voidPaidMsg);
@@ -123,10 +123,10 @@ namespace AccountGo.BackendTests
             Assert.Contains("already paid", secondPayMsg);
 
             // Sending email on paid invoice is rejected
-            var emailRes = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={draftId}");
+            var emailRes = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.BadRequest, emailRes.StatusCode);
 
-            var followUpRes = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceFollowUpEmail?id={draftId}");
+            var followUpRes = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceFollowUpEmail?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.BadRequest, followUpRes.StatusCode);
         }
 
@@ -238,17 +238,15 @@ namespace AccountGo.BackendTests
             });
             Assert.Equal(HttpStatusCode.OK, payRes.StatusCode);
             var payData = await payRes.Content.ReadFromJsonAsync<JsonElement>();
-            var receiptId = payData.GetProperty("receiptId").GetInt32();
+            var receiptId = IntId<Core.Domain.Sales.SalesReceiptHeader>(payData.GetProperty("receiptId").GetString());
 
             // Attempt to update the posted & allocated receipt
             var editDto = new
             {
-                Id = receiptId,
-                CustomerId = invoice.CustomerId,
+                Id = PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId),
+                CustomerId = PubId<Core.Domain.Sales.Customer>(invoice.CustomerId),
                 ReceiptDate = DateTime.UtcNow,
-                Amount = 25m,
-                AccountToDebitId = 1,
-                AccountToCreditId = 2
+                Amount = 25m
             };
 
             var updateRes = await Send(HttpMethod.Post, "/api/Sales/UpdateReceipt", editDto);
@@ -272,10 +270,10 @@ namespace AccountGo.BackendTests
 
             var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
-            var savedInvoice = await saveRes.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var savedInvoice = await ReadDto<Dto.Sales.SalesInvoice>(saveRes);
 
             // Issuing posts to GL - must balance Dr == Cr
-            var issueRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={savedInvoice.Id}");
+            var issueRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(savedInvoice.Id)}");
             Assert.True(issueRes.IsSuccessStatusCode, await issueRes.Content.ReadAsStringAsync());
 
             var reloaded = await GetInvoice(savedInvoice.Id);
@@ -305,7 +303,7 @@ namespace AccountGo.BackendTests
             // 1. Post on Void is rejected and remains Void
             var draftId = await SaveDraft();
             await Issue(draftId);
-            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}&date={IsoDate(DateTime.UtcNow)}");
             Assert.True(voidRes.IsSuccessStatusCode);
             var voidPostRes = await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", new Dto.Sales.SalesInvoice { Id = draftId });
             Assert.Equal(HttpStatusCode.BadRequest, voidPostRes.StatusCode);
@@ -354,7 +352,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Draft";
             var draftRes = await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice);
             Assert.True(draftRes.IsSuccessStatusCode, await draftRes.Content.ReadAsStringAsync());
-            var created = await draftRes.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var created = await ReadDto<Dto.Sales.SalesInvoice>(draftRes);
             Assert.Equal("Draft", created.Status);
             var fetched = await GetInvoice(created.Id);
             Assert.Equal("Draft", fetched.Status);
@@ -364,7 +362,7 @@ namespace AccountGo.BackendTests
         public async Task SalesInvoice_VoidSalesInvoice_RejectsDraft()
         {
             var draftId = await SaveDraft();
-            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}&date={IsoDate(DateTime.UtcNow)}");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}&date={IsoDate(DateTime.UtcNow)}");
             Assert.Equal(HttpStatusCode.BadRequest, voidRes.StatusCode);
             var msg = await voidRes.Content.ReadAsStringAsync();
             Assert.Contains("Draft invoices cannot be voided. Delete the draft instead.", msg);
@@ -447,7 +445,7 @@ namespace AccountGo.BackendTests
             var invoice1Dto = await NewInvoice();
             invoice1Dto.Status = "Draft";
             var saveRes1 = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice1Dto);
-            var draftId1 = (await Json(saveRes1)).GetProperty("id").GetInt32();
+            var draftId1 = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(saveRes1)).GetProperty("id").GetString());
             await Issue(draftId1);
             var invoice1 = await GetInvoice(draftId1);
 
@@ -455,7 +453,7 @@ namespace AccountGo.BackendTests
             invoice2Dto.CustomerId = invoice1.CustomerId;
             invoice2Dto.Status = "Draft";
             var saveRes2 = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice2Dto);
-            var draftId2 = (await Json(saveRes2)).GetProperty("id").GetInt32();
+            var draftId2 = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(saveRes2)).GetProperty("id").GetString());
             await Issue(draftId2);
             var invoice2 = await GetInvoice(draftId2);
 
@@ -468,7 +466,7 @@ namespace AccountGo.BackendTests
             });
             Assert.True(payRes.IsSuccessStatusCode);
             var payData = await payRes.Content.ReadFromJsonAsync<JsonElement>();
-            var arReceiptId = payData.GetProperty("receiptId").GetInt32();
+            var arReceiptId = IntId<Core.Domain.Sales.SalesReceiptHeader>(payData.GetProperty("receiptId").GetString());
 
             // Attempting to allocate an AR-crediting receipt via SaveAllocation must be rejected
             var arAllocDto = new Api.Controllers.SalesController.SaveAllocationDto
@@ -557,23 +555,23 @@ namespace AccountGo.BackendTests
             });
 
             // Calling read endpoints with _otherToken (which lacks sales.invoices.view in this workspace) returns 403 Forbidden
-            var r1 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={draftId}", token: _otherToken);
+            var r1 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}", token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, r1.StatusCode);
 
-            var r2 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={draftId}", token: _otherToken);
+            var r2 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}", token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, r2.StatusCode);
 
             var r3 = await Send(HttpMethod.Get, "/api/Sales/SalesInvoices", token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, r3.StatusCode);
 
-            var r4 = await Send(HttpMethod.Get, $"/api/Sales/CustomerInvoices?id={draftId}", token: _otherToken);
+            var r4 = await Send(HttpMethod.Get, $"/api/Sales/CustomerInvoices?id={Core.Domain.PublicIdGenerator.New("cus")}", token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, r4.StatusCode);
 
-            var r5 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoiceForPrinting?id={draftId}", token: _otherToken);
+            var r5 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoiceForPrinting?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}", token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, r5.StatusCode);
 
             // Calling with authorized token succeeds
-            var okRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={draftId}");
+            var okRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.OK, okRes.StatusCode);
         }
 
@@ -594,7 +592,7 @@ namespace AccountGo.BackendTests
                 db.SaveChanges();
             });
 
-            var lockedRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}");
+            var lockedRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.BadRequest, lockedRes.StatusCode);
             var afterLocked = await GetInvoice(draftId);
             Assert.Equal("Draft", afterLocked.Status);
@@ -613,7 +611,7 @@ namespace AccountGo.BackendTests
                 db.SaveChanges();
             });
 
-            var beforeStartRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}");
+            var beforeStartRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(draftId)}");
             Assert.Equal(HttpStatusCode.BadRequest, beforeStartRes.StatusCode);
             var afterBeforeStart = await GetInvoice(draftId);
             Assert.Equal("Draft", afterBeforeStart.Status);

@@ -1,12 +1,16 @@
+using Dto.Common;
 ﻿using System;
 
 namespace Dto.Financial
 {
     public class JournalEntry : BaseDto
     {
+        [PublicId("je")]
+        public override int Id { get; set; }
         public DateTime JournalDate { get; set; }
         public int? VoucherType { get; set; }
         /// <summary>Closed fiscal year id when <see cref="VoucherType"/> is PriorPeriodAdjustment (7).</summary>
+        [PublicId("fy")]
         public int? AdjustsFiscalYearId { get; set; }
         public string? AdjustsFiscalYearCode { get; set; }
         public string? ReferenceNo { get; set; }
@@ -51,6 +55,9 @@ namespace Dto.Financial
 
     public class JournalEntryLine : BaseDto
     {
+        [PublicId("jel")]
+        public override int Id { get; set; }
+        [PublicId("acct")]
         public int? AccountId { get; set; }
         public int DrCr { get; set; }
         public decimal? Amount { get; set; }

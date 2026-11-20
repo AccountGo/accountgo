@@ -30,33 +30,33 @@ namespace Api.Controllers
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("{id:int}/post")]
+        [HttpPost("{id}/post")]
         [RequirePermission(SystemPermissions.SalesWriteOffsPost)]
-        public IActionResult Post(int id, [FromBody] PostWriteOffCommand request)
+        public IActionResult Post([Dto.Common.PublicId("wo")] int id, [FromBody] PostWriteOffCommand request)
         {
             try { return Ok(_service.Post(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("{id:int}/reverse")]
+        [HttpPost("{id}/reverse")]
         [RequirePermission(SystemPermissions.SalesWriteOffsReverse)]
-        public IActionResult Reverse(int id, [FromBody] ReverseSettlementRequest request)
+        public IActionResult Reverse([Dto.Common.PublicId("wo")] int id, [FromBody] ReverseSettlementRequest request)
         {
             try { return Ok(_service.Reverse(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("{id:int}/recoveries")]
+        [HttpPost("{id}/recoveries")]
         [RequirePermission(SystemPermissions.SalesWriteOffsPost)]
-        public IActionResult RecordRecovery(int id, [FromBody] RecordWriteOffRecoveryCommand request)
+        public IActionResult RecordRecovery([Dto.Common.PublicId("wo")] int id, [FromBody] RecordWriteOffRecoveryCommand request)
         {
             try { return Ok(_service.RecordRecovery(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("{writeOffId:int}/recoveries/{recoveryId:int}/reverse")]
+        [HttpPost("{writeOffId}/recoveries/{recoveryId}/reverse")]
         [RequirePermission(SystemPermissions.SalesWriteOffsReverse)]
-        public IActionResult ReverseRecovery(int writeOffId, int recoveryId, [FromBody] ReverseSettlementRequest request)
+        public IActionResult ReverseRecovery([Dto.Common.PublicId("wo")] int writeOffId, [Dto.Common.PublicId("wor")] int recoveryId, [FromBody] ReverseSettlementRequest request)
         {
             try { return Ok(_service.ReverseRecovery(writeOffId, recoveryId, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }

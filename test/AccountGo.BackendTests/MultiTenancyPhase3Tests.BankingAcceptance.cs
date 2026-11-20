@@ -51,18 +51,19 @@ namespace AccountGo.BackendTests
             };
 
             // 1. First import: all 200 lines imported
-            var res1 = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{bank.Id}/StatementImports", request);
+            var bankPub = PubId<Core.Domain.Financials.Bank>(bank.Id);
+            var res1 = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{bankPub}/StatementImports", request);
             Assert.True(res1.IsSuccessStatusCode, await res1.Content.ReadAsStringAsync());
-            var commit1 = await res1.Content.ReadFromJsonAsync<BankStatementCommitResultDto>();
+            var commit1 = await ReadDto<BankStatementCommitResultDto>(res1);
             Assert.NotNull(commit1);
             Assert.Equal(200, commit1.Imported);
             Assert.Equal(0, commit1.Errors);
             Assert.Equal(0, commit1.Duplicates);
 
             // Verify lines in database have correct parsed date (Month 5, May 2026)
-            var linesRes = await Send(HttpMethod.Get, $"/api/Banking/Accounts/{bank.Id}/StatementLines?pageSize=200");
+            var linesRes = await Send(HttpMethod.Get, $"/api/Banking/Accounts/{bankPub}/StatementLines?pageSize=200");
             Assert.True(linesRes.IsSuccessStatusCode, await linesRes.Content.ReadAsStringAsync());
-            var linesList = await linesRes.Content.ReadFromJsonAsync<BankStatementLineListDto>();
+            var linesList = await ReadDto<BankStatementLineListDto>(linesRes);
             Assert.NotNull(linesList);
             Assert.Equal(200, linesList.Lines.Count);
             Assert.All(linesList.Lines, line =>
@@ -73,10 +74,10 @@ namespace AccountGo.BackendTests
             });
 
             // 2. Re-import identical file: detects all 200 rows as duplicates
-            var res2 = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{bank.Id}/StatementImports", request);
+            var res2 = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{bankPub}/StatementImports", request);
             if (res2.IsSuccessStatusCode)
             {
-                var commit2 = await res2.Content.ReadFromJsonAsync<BankStatementCommitResultDto>();
+                var commit2 = await ReadDto<BankStatementCommitResultDto>(res2);
                 Assert.NotNull(commit2);
                 Assert.Equal(0, commit2.Imported);
                 Assert.Equal(200, commit2.Duplicates);
@@ -106,12 +107,12 @@ namespace AccountGo.BackendTests
             // 1. Can retrieve statement expense categories without Financials module
             var catRes = await Send(HttpMethod.Get, "/api/Banking/StatementExpenseCategories");
             Assert.True(catRes.IsSuccessStatusCode, await catRes.Content.ReadAsStringAsync());
-            var categories = await catRes.Content.ReadFromJsonAsync<StatementExpenseCategoriesDto>();
+            var categories = await ReadDto<StatementExpenseCategoriesDto>(catRes);
             Assert.NotNull(categories);
             var category = categories.Curated.Concat(categories.More).First();
 
             // 2. Record expense from statement line creates paid bill
-            var recRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{lineId}/RecordExpense",
+            var recRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{PubId<BankStatementLine>(lineId)}/RecordExpense",
                 new RecordExpenseFromStatementLineRequest
                 {
                     NewVendor = new QuickVendorFromStatementRequest { Name = "Hosting Provider" },
@@ -154,7 +155,7 @@ namespace AccountGo.BackendTests
             invoice.SalesInvoiceLines.Single().Amount = 320m;
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(saved)).GetProperty("id").GetString());
             var receiptRes = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", new RecordInvoicePaymentDto
             {
                 InvoiceId = invoiceId, BankAccountId = bank.Id, PaymentDate = invoiceDate, Amount = 320m
@@ -163,7 +164,7 @@ namespace AccountGo.BackendTests
 
             // The statement date is two days after the receipt, within the match window.
             var csv = $"Date,Payee,Amount,Memo\n{DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)},Match Client Inc,320.00,INV-{invoiceId} Payment\n";
-            var importRes = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{bank.Id}/StatementImports",
+            var importRes = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{PubId<Core.Domain.Financials.Bank>(bank.Id)}/StatementImports",
                 new BankStatementImportRequest
                 {
                     Source = (int)BankStatementSources.Csv,
@@ -172,7 +173,7 @@ namespace AccountGo.BackendTests
                     ColumnMap = new BankStatementColumnMap { DateColumn = 0, PayeeColumn = 1, AmountColumn = 2, MemoColumn = 3, DateFormat = "yyyy-MM-dd" }
                 });
             Assert.True(importRes.IsSuccessStatusCode, await importRes.Content.ReadAsStringAsync());
-            var commit = await importRes.Content.ReadFromJsonAsync<BankStatementCommitResultDto>();
+            var commit = await ReadDto<BankStatementCommitResultDto>(importRes);
             Assert.NotNull(commit);
             Assert.Equal(1, commit.Imported);
             Assert.Equal(1, commit.AutoMatched);
@@ -196,7 +197,7 @@ namespace AccountGo.BackendTests
             var tbBefore = await tbRes1.Content.ReadAsStringAsync();
 
             // Exclude statement line as Personal
-            var exRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{lineId}/Exclude",
+            var exRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{PubId<BankStatementLine>(lineId)}/Exclude",
                 new ExcludeBankStatementLineRequest
                 {
                     Reason = (int)BankStatementExclusionReasons.Personal
@@ -232,10 +233,10 @@ namespace AccountGo.BackendTests
                 token: _otherToken, scoped: false);
             Assert.Equal(HttpStatusCode.Created, c2Res.StatusCode);
             var c2Json = await Json(c2Res);
-            int company2Id = int.Parse(c2Json.GetProperty("id").GetString());
+            int company2Id = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, c2Json.GetProperty("id").GetString());
 
             // Find an account belonging strictly to Company 2
-            int company2AccountId = 0;
+            string company2AccountPub = null;
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -244,22 +245,22 @@ namespace AccountGo.BackendTests
                     var foreign = new Core.Domain.Financials.Account { CompanyId = company2Id, AccountClassId = (int)AccountClasses.Expense, AccountCode = "59998", AccountName = "Foreign expense", DrOrCrSide = DrOrCrSide.Dr };
                     db.Accounts.Add(foreign);
                     db.SaveChanges();
-                    company2AccountId = foreign.Id;
+                    company2AccountPub = foreign.PublicId;
                 }
             }
 
             // Tenant 1 attempts to record expense using Tenant 2's account
-            var recRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{lineId}/RecordExpense",
-                new RecordExpenseFromStatementLineRequest
+            var recRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{PubId<BankStatementLine>(lineId)}/RecordExpense",
+                new
                 {
-                    NewVendor = new QuickVendorFromStatementRequest { Name = "Cross Tenant Vendor" },
-                    ExpenseAccountId = company2AccountId
+                    newVendor = new { name = "Cross Tenant Vendor" },
+                    expenseAccountId = company2AccountPub
                 });
 
-            // Must reject cross-tenant reference
-            Assert.Equal(HttpStatusCode.BadRequest, recRes.StatusCode);
+            // Must reject cross-tenant reference (boundary returns 404 unknown_id)
+            Assert.Equal(HttpStatusCode.NotFound, recRes.StatusCode);
             var errJson = await recRes.Content.ReadAsStringAsync();
-            Assert.Contains("CROSS_TENANT_REFERENCE_DENIED", errJson);
+            Assert.Contains("unknown_id", errJson);
         }
 
         [Fact]
@@ -271,14 +272,14 @@ namespace AccountGo.BackendTests
             // Get income categories
             var catRes = await Send(HttpMethod.Get, "/api/Banking/StatementIncomeCategories");
             Assert.True(catRes.IsSuccessStatusCode, await catRes.Content.ReadAsStringAsync());
-            var categories = await catRes.Content.ReadFromJsonAsync<StatementIncomeCategoriesDto>();
+            var categories = await ReadDto<StatementIncomeCategoriesDto>(catRes);
             Assert.NotNull(categories);
             var category = categories.Curated.Concat(categories.More).First();
 
             var taxId = AddSalesTax(12m);
 
             // Record other income with tax
-            var recRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{lineId}/RecordOtherIncome",
+            var recRes = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{PubId<BankStatementLine>(lineId)}/RecordOtherIncome",
                 new RecordOtherIncomeFromStatementLineRequest
                 {
                     IncomeAccountId = category.AccountId,

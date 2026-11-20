@@ -19,6 +19,7 @@ public static class PublicIdExemptions
         // Fixed 1-5 accounting classification (enum-like lookup)
         ["Dto.Financial.Account.AccountClassId"] = "Fixed 1-5 AccountClass enum-like classification lookup.",
         ["Dto.Financial.CreateAccountRequest.AccountClassId"] = "Fixed 1-5 AccountClass enum-like classification lookup.",
+        ["Dto.Financial.CoaImportRowPreviewDto.AccountClassId"] = "Fixed 1-5 AccountClass enum-like classification lookup.",
         ["Dto.Financial.AccountClass.Id"] = "Fixed 1-5 AccountClass enum-like classification lookup.",
         ["Api.Mcp.Models.BalanceSheetAccountRow.AccountClassId"] = "Fixed 1-5 AccountClass enum-like classification lookup.",
         ["Api.Service.Import.CoaCanonicalRow.AccountClassId"] = "Fixed 1-5 AccountClass enum-like classification lookup.",
@@ -44,7 +45,6 @@ public static class PublicIdExemptions
         ["Dto.Administration.Company.Id"] = "Legacy unused Dto.Administration.Company; active endpoints return CompanySummaryDto / anonymous DTOs.",
         ["Dto.TaxSystem.TaxGroupTax.Id"] = "Join table row (exempt in design §4).",
         ["Dto.TaxSystem.ItemTaxGroupTax.Id"] = "Join table row (exempt in design §4).",
-        ["Dto.Purchasing.Bill.Id"] = "Covered by [PublicId(\"bill\")] — placeholder removed if annotated.",
     };
 
     /// <summary>Scoped controller action parameter exemptions: "ControllerName.ActionName.paramName" -> reason.</summary>

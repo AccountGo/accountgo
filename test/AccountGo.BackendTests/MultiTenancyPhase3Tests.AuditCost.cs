@@ -143,7 +143,7 @@ public sealed class MultiTenancyPhase3AuditCostTests : MultiTenancyPhase3TestBas
         journal.JournalEntryLines.Add(new Dto.Financial.JournalEntryLine { AccountId = AccountId("40100"), DrCr = 2, Amount = 7m });
         using var response = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", journal);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-        var saved = await System.Net.Http.Json.HttpContentJsonExtensions.ReadFromJsonAsync<Dto.Financial.JournalEntry>(response.Content);
+        var saved = await ReadDto<Dto.Financial.JournalEntry>(response);
         WithDb(db =>
         {
             var lineIds = db.JournalEntryLines.IgnoreQueryFilters().Where(l => l.JournalEntryHeaderId == saved.Id).Select(l => l.Id).ToList();

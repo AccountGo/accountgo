@@ -3,12 +3,14 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Banking
 {
     public class StartBankReconciliationRequest
     {
+        [PublicId("ba")]
         public int BankId { get; set; }
         public DateTime StatementEndDate { get; set; }
         public decimal StatementEndingBalance { get; set; }
@@ -37,6 +39,7 @@ namespace Dto.Banking
         public int Kind { get; set; }
         public decimal Amount { get; set; }
         public DateTime Date { get; set; }
+        [PublicId("acct")]
         public int? ContraAccountId { get; set; }
         /// <summary>Required when Kind is Adjustment.</summary>
         public bool? IncreaseBalance { get; set; }
@@ -47,7 +50,9 @@ namespace Dto.Banking
 
     public class BankReconciliationListItemDto
     {
+        [PublicId("rec")]
         public int Id { get; set; }
+        [PublicId("ba")]
         public int BankId { get; set; }
         public string? BankName { get; set; }
         public DateTime StatementEndDate { get; set; }
@@ -64,7 +69,9 @@ namespace Dto.Banking
 
     public class BankReconciliationCandidateLineDto
     {
+        [PublicId("gll")]
         public int LineId { get; set; }
+        [PublicId("gl")]
         public int HeaderId { get; set; }
         public DateTime Date { get; set; }
         public string Type { get; set; } = string.Empty;
@@ -78,7 +85,9 @@ namespace Dto.Banking
 
     public class BankReconciliationDto
     {
+        [PublicId("rec")]
         public int Id { get; set; }
+        [PublicId("ba")]
         public int BankId { get; set; }
         public string? BankName { get; set; }
         public DateTime StatementEndDate { get; set; }

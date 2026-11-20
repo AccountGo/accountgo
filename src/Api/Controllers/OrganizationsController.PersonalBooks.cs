@@ -1,5 +1,6 @@
 #nullable disable
 using System;
+using Dto.Common;
 using System.Data;
 using System.Linq;
 using System.Threading;
@@ -29,6 +30,7 @@ public partial class OrganizationsController
         public DateTime? BooksStartDate { get; set; }
         [JsonConverter(typeof(StringEnumConverter))] public FiscalYearPattern? FiscalYearPattern { get; set; }
         public int? FiscalYearStartMonth { get; set; }
+        [PublicId("ws")]
         public int? LinkWorkCompanyId { get; set; }
     }
 
@@ -151,8 +153,8 @@ public partial class OrganizationsController
     /// row is written: plan, chart of accounts and entries are unchanged.
     /// </summary>
     [TenantFree]
-    [HttpPost("personal/adopt/{companyId:int}")]
-    public IActionResult AdoptPersonal(int companyId)
+    [HttpPost("personal/adopt/{companyId}")]
+    public IActionResult AdoptPersonal([Dto.Common.PublicId("ws")] int companyId)
     {
         if (string.IsNullOrWhiteSpace(UserId)) return Unauthorized();
         if (!OwnsLiveWorkspace(companyId)) return Forbid();
@@ -186,7 +188,7 @@ public partial class OrganizationsController
         }
     }
 
-    public sealed class PersonalLinkRequest { public int WorkCompanyId { get; set; } }
+    public sealed class PersonalLinkRequest { [PublicId("ws")] public int WorkCompanyId { get; set; } }
 
     [TenantFree]
     [HttpPost("personal/link")]
@@ -213,8 +215,8 @@ public partial class OrganizationsController
     }
 
     [TenantFree]
-    [HttpDelete("personal/link/{workCompanyId:int}")]
-    public IActionResult UnlinkPersonal(int workCompanyId)
+    [HttpDelete("personal/link/{workCompanyId}")]
+    public IActionResult UnlinkPersonal([Dto.Common.PublicId("ws")] int workCompanyId)
     {
         using var tx = _db.Database.BeginTransaction(IsolationLevel.Serializable);
         var personal = OwnedPersonalBooks();

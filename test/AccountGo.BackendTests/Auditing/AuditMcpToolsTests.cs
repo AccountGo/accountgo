@@ -26,8 +26,10 @@ public sealed class AuditMcpToolsTests(AuditTestHost host) : IClassFixture<Audit
         var user = await host.CreateUser(slug + "@example.com");
         var companyId = await host.CreateWorkspace(user.Token, slug, slug);
         await host.SetFunctionalRoles(companyId, user.Id, "Auditor / Viewer");
-        await host.InsertRecordChanges(companyId, 1, DateTime.UtcNow.AddDays(-5), entityType: "AuditMcpProbe", entityId: 777);
-        await host.InsertRecordChanges(companyId, 1, DateTime.UtcNow.AddDays(-200), entityType: "AuditMcpProbe", entityId: 777);
+        // The probe rows sit on the workspace itself, a record type that has a public id to ask for.
+        var companyPublicId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Company>(host.Factory.Services, companyId);
+        await host.InsertRecordChanges(companyId, 1, DateTime.UtcNow.AddDays(-5), entityType: "Company", entityId: companyId, actorUserId: "probe-actor");
+        await host.InsertRecordChanges(companyId, 1, DateTime.UtcNow.AddDays(-200), entityType: "Company", entityId: companyId, actorUserId: "probe-actor");
         host.Entitlements.UsePlan(companyId, access == "community" ? PlanKeys.Community : "pro", access switch
         {
             "recent" => new[] { FeatureKeys.AuditActivity },
@@ -35,9 +37,9 @@ public sealed class AuditMcpToolsTests(AuditTestHost host) : IClassFixture<Audit
             _ => Array.Empty<string>()
         });
 
-        var record = await CallHistory(user.Token, slug, new { entityType = "AuditMcpProbe", entityId = 777 });
+        var record = await CallHistory(user.Token, slug, new { entityType = "Company", entityId = companyPublicId });
         Assert.True(record.GetProperty("status").GetString() == "Success", record.GetRawText());
-        Assert.Equal(2, record.GetProperty("data").GetProperty("items").GetArrayLength());
+        Assert.Equal(2, record.GetProperty("data").GetProperty("items").EnumerateArray().Count(i => i.GetProperty("actorUserId").GetString() == "probe-actor"));
         Assert.Equal(JsonValueKind.Null, record.GetProperty("data").GetProperty("windowDays").ValueKind);
 
         var feed = await CallHistory(user.Token, slug, new { limit = 100 });
@@ -49,7 +51,7 @@ public sealed class AuditMcpToolsTests(AuditTestHost host) : IClassFixture<Audit
             return;
         }
         var data = feed.GetProperty("data");
-        var probes = data.GetProperty("items").EnumerateArray().Where(i => i.GetProperty("entityType").GetString() == "AuditMcpProbe").ToList();
+        var probes = data.GetProperty("items").EnumerateArray().Where(i => i.GetProperty("entityType").GetString() == "Company" && i.GetProperty("actorUserId").GetString() == "probe-actor").ToList();
         Assert.Equal(window == 90 ? 1 : 2, probes.Count);
         if (window == 90)
             Assert.Equal(90, data.GetProperty("windowDays").GetInt32());

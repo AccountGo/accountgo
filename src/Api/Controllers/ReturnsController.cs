@@ -31,9 +31,9 @@ namespace Api.Controllers
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("customer/{id:int}/reverse")]
+        [HttpPost("customer/{id}/reverse")]
         [RequirePermission(SystemPermissions.SalesReturnsReverse)]
-        public IActionResult ReverseCustomerReturn(int id, [FromBody] ReverseSettlementRequest request)
+        public IActionResult ReverseCustomerReturn([Dto.Common.PublicId("crr")] int id, [FromBody] ReverseSettlementRequest request)
         {
             try { return Ok(_service.ReverseCustomerReturn(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
@@ -47,9 +47,9 @@ namespace Api.Controllers
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }
         }
 
-        [HttpPost("supplier/dispatch/{id:int}/reverse")]
+        [HttpPost("supplier/dispatch/{id}/reverse")]
         [RequirePermission(SystemPermissions.PurchasesReturnsReverse)]
-        public IActionResult ReverseSupplierReturnDispatch(int id, [FromBody] ReverseSettlementRequest request)
+        public IActionResult ReverseSupplierReturnDispatch([Dto.Common.PublicId("srd")] int id, [FromBody] ReverseSettlementRequest request)
         {
             try { return Ok(_service.ReverseSupplierReturnDispatch(id, request)); }
             catch (SettlementCommandException ex) { return Problem(detail: ex.Message, statusCode: ex.HttpStatus, title: ex.Code); }

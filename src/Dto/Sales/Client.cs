@@ -9,6 +9,7 @@ namespace Dto.Sales
     /// </summary>
     public class Client
     {
+        [PublicId("cus")]
         public int Id { get; set; }
         public string? Name { get; set; }
         public string? Email { get; set; }
@@ -18,8 +19,10 @@ namespace Dto.Sales
         public string? City { get; set; }
         public string? PostalCode { get; set; }
         public string? Country { get; set; }
+        [PublicId("term")]
         public int? PaymentTermId { get; set; }
         /// <summary>Default Bill To contact for new invoices; null prints the company party alone.</summary>
+        [PublicId("cont")]
         public int? BillToContactId { get; set; }
         /// <summary>Contact persons linked to this client. Populated on a single-client read.</summary>
         public List<ContactPersonDto> Contacts { get; set; } = new();

@@ -34,6 +34,8 @@ namespace Api.Mcp.Tools
         private readonly ITenantContext _tenantContext;
         private readonly IAccessAuthorizationService _authorizationService;
         private readonly ILogger<FinancialMcpTools> _logger;
+        private readonly Api.PublicIds.IPublicIdResolver? _ids;
+        private readonly Api.PublicIds.PublicIdRegistry? _idRegistry;
 
         public FinancialMcpTools(
             IFinancialService financialService,
@@ -42,8 +44,12 @@ namespace Api.Mcp.Tools
             IPlanCatalog plans,
             ITenantContext tenantContext,
             ILogger<FinancialMcpTools>? logger = null,
-            IAccessAuthorizationService? authorizationService = null)
+            IAccessAuthorizationService? authorizationService = null,
+            Api.PublicIds.IPublicIdResolver? ids = null,
+            Api.PublicIds.PublicIdRegistry? idRegistry = null)
         {
+            _ids = ids;
+            _idRegistry = idRegistry;
             _financialService = financialService ?? throw new ArgumentNullException(nameof(financialService));
             _adminService = adminService ?? throw new ArgumentNullException(nameof(adminService));
             _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
@@ -115,6 +121,7 @@ namespace Api.Mcp.Tools
                 classificationCounts[className] = classificationCounts.GetValueOrDefault(className, 0) + 1;
             }
 
+            PrefetchAccounts(filteredAccounts.Select(a => a.Id));
             var response = new ChartOfAccountsMcpResponse
             {
                 Organization = OrgLabel(),
@@ -125,7 +132,7 @@ namespace Api.Mcp.Tools
                 ClassificationCounts = classificationCounts,
                 Accounts = filteredAccounts.Select(a => new AccountMcpSummary
                 {
-                    Id = a.Id,
+                    Id = AccountPublicId(a.Id),
                     Code = a.AccountCode ?? string.Empty,
                     Name = a.AccountName ?? string.Empty,
                     Description = a.Description,
@@ -183,6 +190,7 @@ namespace Api.Mcp.Tools
 
             var rawItems = _financialService.TrialBalance(from, to, basis)?.ToList() ?? new List<TrialBalance>();
 
+            PrefetchAccounts(rawItems.Select(i => i.AccountId));
             var totalDebit = rawItems.Sum(i => i.Debit);
             var totalCredit = rawItems.Sum(i => i.Credit);
 
@@ -200,7 +208,7 @@ namespace Api.Mcp.Tools
                 AccountCount = rawItems.Count,
                 Items = rawItems.Select(i => new TrialBalanceItemMcp
                 {
-                    AccountId = i.AccountId,
+                    AccountId = AccountPublicId(i.AccountId),
                     AccountCode = i.AccountCode!,
                     AccountName = i.AccountName!,
                     Debit = i.Debit,
@@ -246,6 +254,7 @@ namespace Api.Mcp.Tools
                 rawItems = rawItems.Where(i => i.Amount != 0m).ToList();
             }
 
+            PrefetchAccounts(rawItems.Select(i => i.AccountId));
             // AccountClassId 1: Assets, 2: Liabilities, 3: Equity
             var totalAssets = rawItems.Where(i => i.AccountClassId == 1).Sum(i => i.Amount);
             var totalLiabilities = rawItems.Where(i => i.AccountClassId == 2).Sum(i => i.Amount);
@@ -264,7 +273,7 @@ namespace Api.Mcp.Tools
                 IsBalanced = Math.Round(totalAssets, 2) == Math.Round(totalLiabilities + totalEquity, 2),
                 Items = rawItems.Select(i => new BalanceSheetItemMcp
                 {
-                    AccountId = i.AccountId,
+                    AccountId = AccountPublicId(i.AccountId),
                     AccountClassId = i.AccountClassId,
                     AccountCode = i.AccountCode!,
                     AccountName = i.AccountName!,
@@ -313,6 +322,7 @@ namespace Api.Mcp.Tools
                 rawItems = rawItems.Where(i => i.Amount != 0m).ToList();
             }
 
+            PrefetchAccounts(rawItems.Select(i => i.AccountId));
             var totalRevenue = rawItems.Where(i => !i.IsExpense).Sum(i => i.Amount);
             var totalExpense = rawItems.Where(i => i.IsExpense).Sum(i => i.Amount);
 
@@ -328,7 +338,7 @@ namespace Api.Mcp.Tools
                 NetIncome = totalRevenue - totalExpense,
                 Items = rawItems.Select(i => new IncomeStatementItemMcp
                 {
-                    AccountId = i.AccountId,
+                    AccountId = AccountPublicId(i.AccountId),
                     IsExpense = i.IsExpense,
                     AccountCode = i.AccountCode!,
                     AccountName = i.AccountName!,
@@ -384,6 +394,7 @@ namespace Api.Mcp.Tools
                 financingActivities = financingActivities.Where(a => a.Amount != 0m).ToList();
             }
 
+            PrefetchAccounts(operatingActivities.Concat(investingActivities).Concat(financingActivities).Select(a => a.AccountId));
             var isBalanced = basis == Core.Domain.AccountingBasis.Cash
                 ? Math.Round(cf.StartingCash + cf.NetChangeInCash, 2) == Math.Round(cf.EndingCash, 2)
                 : Math.Round(cf.OperatingCashFlow + cf.InvestingCashFlow + cf.FinancingCashFlow, 2) == Math.Round(cf.NetChangeInCash, 2);
@@ -406,7 +417,7 @@ namespace Api.Mcp.Tools
                 IsBalanced = isBalanced,
                 OperatingActivities = operatingActivities.Select(a => new CashFlowLineMcp
                 {
-                    AccountId = a.AccountId,
+                    AccountId = AccountPublicId(a.AccountId),
                     AccountCode = a.AccountCode!,
                     AccountName = a.AccountName!,
                     LineType = a.LineType!,
@@ -414,7 +425,7 @@ namespace Api.Mcp.Tools
                 }).ToList(),
                 InvestingActivities = investingActivities.Select(a => new CashFlowLineMcp
                 {
-                    AccountId = a.AccountId,
+                    AccountId = AccountPublicId(a.AccountId),
                     AccountCode = a.AccountCode!,
                     AccountName = a.AccountName!,
                     LineType = a.LineType!,
@@ -422,7 +433,7 @@ namespace Api.Mcp.Tools
                 }).ToList(),
                 FinancingActivities = financingActivities.Select(a => new CashFlowLineMcp
                 {
-                    AccountId = a.AccountId,
+                    AccountId = AccountPublicId(a.AccountId),
                     AccountCode = a.AccountCode!,
                     AccountName = a.AccountName!,
                     LineType = a.LineType!,
@@ -508,6 +519,13 @@ namespace Api.Mcp.Tools
                 string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
                 minAmount, maxAmount);
 
+            var items = page?.Items ?? new List<Dto.Financial.GeneralLedgerTransaction>();
+            if (_ids != null && _idRegistry != null)
+            {
+                // Same graph walk as the HTTP path: gl, gll, acct and the polymorphic source document ids, one query per prefix.
+                Api.PublicIds.PublicIdPrefetchFilter.PrefetchObjectGraphAsync(items, _ids, _idRegistry).GetAwaiter().GetResult();
+            }
+
             var response = new GeneralLedgerTransactionsMcpResponse
             {
                 Organization = OrgLabel(),
@@ -518,7 +536,32 @@ namespace Api.Mcp.Tools
                 FromDate = from,
                 ToDate = to,
                 AccountCode = accountCode,
-                Transactions = page?.Items ?? new List<Dto.Financial.GeneralLedgerTransaction>()
+                Transactions = items.Select(t => new GeneralLedgerTransactionMcp
+                {
+                    Id = t.Id > 0 ? _ids?.ToPublic("gl", t.Id) : null,
+                    Date = t.Date,
+                    DocumentType = t.DocumentType,
+                    DocumentTypeLabel = t.DocumentTypeLabel,
+                    Description = t.Description,
+                    SourceDocumentId = t.SourceDocumentId is int sourceId && sourceId > 0
+                        ? _ids?.ToPublicPolymorphic(t.DocumentType, sourceId)
+                        : null,
+                    SourcePath = t.SourcePath,
+                    ReversedGeneralLedgerHeaderId = t.ReversedGeneralLedgerHeaderId is int reversedId && reversedId > 0
+                        ? _ids?.ToPublic("gl", reversedId)
+                        : null,
+                    TotalDebit = t.TotalDebit,
+                    TotalCredit = t.TotalCredit,
+                    Lines = t.Lines.Select(l => new GeneralLedgerTransactionLineMcp
+                    {
+                        Id = l.Id > 0 ? _ids?.ToPublic("gll", l.Id) : null,
+                        AccountId = AccountPublicId(l.AccountId),
+                        AccountCode = l.AccountCode,
+                        AccountName = l.AccountName,
+                        Debit = l.Debit,
+                        Credit = l.Credit
+                    }).ToList()
+                }).ToList()
             };
 
             return Task.FromResult(response);
@@ -527,6 +570,18 @@ namespace Api.Mcp.Tools
         #endregion
 
         #region Helper Guards
+
+        /// <summary>
+        /// Loads the public ids of every account on a report in one query, so mapping rows costs no per-row lookups.
+        /// Without a resolver (unit tests that build the tools by hand) ids are left null: an integer key is never emitted.
+        /// </summary>
+        private void PrefetchAccounts(IEnumerable<int> accountIds)
+        {
+            if (_ids == null) return;
+            _ids.PrefetchAsync(accountIds.Where(i => i > 0).Distinct().Select(i => ("acct", i))).GetAwaiter().GetResult();
+        }
+
+        private string? AccountPublicId(int accountId) => accountId > 0 ? _ids?.ToPublic("acct", accountId) : null;
 
         private void EnsureTenantResolved()
         {

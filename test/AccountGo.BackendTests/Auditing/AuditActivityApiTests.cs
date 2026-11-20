@@ -102,8 +102,9 @@ namespace AccountGo.BackendTests.Auditing
             Assert.Equal(4, ItemEntityTypes(pageB).Count(t => t == "TenantB"));
             Assert.DoesNotContain("TenantA", ItemEntityTypes(pageB));
 
-            var crossLookup = await GetOk(workspaceA, ActivityPath + "?entityType=TenantB&entityId=1");
-            Assert.Empty(crossLookup.GetProperty("items").EnumerateArray());
+            var donorB = SeedDonor(workspaceB.CompanyId, "B1");
+            var crossLookup = await _host.Send(HttpMethod.Get, ActivityPath + $"?entityType=Donor&entityId={donorB.PublicId}", token: workspaceA.Viewer.Token, org: workspaceA.Slug);
+            Assert.Equal(HttpStatusCode.NotFound, crossLookup.StatusCode);
         }
 
         [Fact]
@@ -137,9 +138,10 @@ namespace AccountGo.BackendTests.Auditing
         public async Task Activity_ReturnsChangesAsJson_AndResolvesActorName()
         {
             var workspace = await CreateWorkspace("act-shape");
-            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "Shape", entityId: 5, actorUserId: workspace.Viewer.Id);
+            var donor = SeedDonor(workspace.CompanyId, "Shape");
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "Donor", entityId: donor.Id, actorUserId: workspace.Viewer.Id);
 
-            var page = await GetOk(workspace, ActivityPath + "?entityType=Shape&entityId=5");
+            var page = await GetOk(workspace, ActivityPath + $"?entityType=Donor&entityId={donor.PublicId}");
 
             var item = Assert.Single(page.GetProperty("items").EnumerateArray());
             Assert.Equal("Modified", item.GetProperty("action").GetString());
@@ -148,6 +150,7 @@ namespace AccountGo.BackendTests.Auditing
             Assert.Equal(workspace.Viewer.Email, item.GetProperty("actorName").GetString());
             Assert.Equal("user", item.GetProperty("actorKind").GetString());
             Assert.StartsWith("seed-", item.GetProperty("correlationId").GetString());
+            Assert.Equal(donor.PublicId, item.GetProperty("entityId").GetString());
         }
 
         // ---- activity: keyset paging ------------------------------------------------------------------
@@ -210,23 +213,24 @@ namespace AccountGo.BackendTests.Auditing
         public async Task Activity_SingleRecordOnly_ListIsForbidden_ButSingleRecordStillWorks()
         {
             var workspace = await CreateWorkspace("act-single");
-            await _host.InsertRecordChanges(workspace.CompanyId, 3, entityType: "Invoice", entityId: 77);
+            var donor = SeedDonor(workspace.CompanyId, "Single");
+            await _host.InsertRecordChanges(workspace.CompanyId, 3, entityType: "Donor", entityId: donor.Id);
             UseEntitlements(workspace.CompanyId);
 
             var list = await _host.Send(HttpMethod.Get, ActivityPath, token: workspace.Viewer.Token, org: workspace.Slug);
             Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
             await AssertFeatureNotEntitled(list, FeatureKeys.AuditActivity);
 
-            var filteredByTypeOnly = await _host.Send(HttpMethod.Get, ActivityPath + "?entityType=Invoice", token: workspace.Viewer.Token, org: workspace.Slug);
+            var filteredByTypeOnly = await _host.Send(HttpMethod.Get, ActivityPath + "?entityType=Donor", token: workspace.Viewer.Token, org: workspace.Slug);
             Assert.Equal(HttpStatusCode.Forbidden, filteredByTypeOnly.StatusCode);
             await AssertFeatureNotEntitled(filteredByTypeOnly, FeatureKeys.AuditActivity);
 
-            var single = await GetOk(workspace, ActivityPath + "?entityType=Invoice&entityId=77");
+            var single = await GetOk(workspace, ActivityPath + $"?entityType=Donor&entityId={donor.PublicId}");
             Assert.Equal(3, ItemIds(single).Count);
             Assert.All(single.GetProperty("items").EnumerateArray(), item =>
             {
-                Assert.Equal("Invoice", item.GetProperty("entityType").GetString());
-                Assert.Equal(77, item.GetProperty("entityId").GetInt32());
+                Assert.Equal("Donor", item.GetProperty("entityType").GetString());
+                Assert.Equal(donor.PublicId, item.GetProperty("entityId").GetString());
             });
             Assert.Equal(JsonValueKind.Null, single.GetProperty("windowDays").ValueKind);
         }
@@ -235,30 +239,31 @@ namespace AccountGo.BackendTests.Auditing
         public async Task Activity_Recent90Days_ClampsWindow_AndReportsWindowDays()
         {
             var workspace = await CreateWorkspace("act-90");
+            var donors = new[] { SeedDonor(workspace.CompanyId, "D1"), SeedDonor(workspace.CompanyId, "D2"), SeedDonor(workspace.CompanyId, "D3"), SeedDonor(workspace.CompanyId, "D4") };
             var now = DateTime.UtcNow;
-            await _host.InsertRecordChanges(workspace.CompanyId, 1, now.AddDays(-10), entityType: "Window", entityId: 1);
-            await _host.InsertRecordChanges(workspace.CompanyId, 1, now.AddDays(-60), entityType: "Window", entityId: 2);
-            await _host.InsertRecordChanges(workspace.CompanyId, 1, now.AddDays(-RecentWindowDays - 10), entityType: "Window", entityId: 3);
-            await _host.InsertRecordChanges(workspace.CompanyId, 1, now.AddDays(-200), entityType: "Window", entityId: 4);
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, now.AddDays(-10), entityType: "Donor", entityId: donors[0].Id);
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, now.AddDays(-60), entityType: "Donor", entityId: donors[1].Id);
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, now.AddDays(-RecentWindowDays - 10), entityType: "Donor", entityId: donors[2].Id);
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, now.AddDays(-200), entityType: "Donor", entityId: donors[3].Id);
             UseEntitlements(workspace.CompanyId, FeatureKeys.AuditActivity);
 
-            var defaultWindow = await GetOk(workspace, ActivityPath + "?entityType=Window");
+            var defaultWindow = await GetOk(workspace, ActivityPath + "?entityType=Donor");
             Assert.Equal(RecentWindowDays, defaultWindow.GetProperty("windowDays").GetInt32());
             Assert.Equal(2, ItemIds(defaultWindow).Count);
 
             // A caller-supplied `from` older than the window is clamped up to the window floor.
-            var widened = await GetOk(workspace, ActivityPath + "?entityType=Window&from=" + Iso(now.AddDays(-365)));
+            var widened = await GetOk(workspace, ActivityPath + "?entityType=Donor&from=" + Iso(now.AddDays(-365)));
             Assert.Equal(RecentWindowDays, widened.GetProperty("windowDays").GetInt32());
             Assert.Equal(2, ItemIds(widened).Count);
 
             // A `from` inside the window is honored.
-            var narrowed = await GetOk(workspace, ActivityPath + "?entityType=Window&from=" + Iso(now.AddDays(-30)));
+            var narrowed = await GetOk(workspace, ActivityPath + "?entityType=Donor&from=" + Iso(now.AddDays(-30)));
             Assert.Equal(RecentWindowDays, narrowed.GetProperty("windowDays").GetInt32());
             var narrowedItem = Assert.Single(narrowed.GetProperty("items").EnumerateArray());
-            Assert.Equal(1, narrowedItem.GetProperty("entityId").GetInt32());
+            Assert.Equal(donors[0].PublicId, narrowedItem.GetProperty("entityId").GetString());
 
             // Single-record history is not windowed.
-            var oldRecord = await GetOk(workspace, ActivityPath + "?entityType=Window&entityId=4");
+            var oldRecord = await GetOk(workspace, ActivityPath + $"?entityType=Donor&entityId={donors[3].PublicId}");
             Assert.Single(oldRecord.GetProperty("items").EnumerateArray());
             Assert.Equal(JsonValueKind.Null, oldRecord.GetProperty("windowDays").ValueKind);
         }
@@ -432,6 +437,23 @@ namespace AccountGo.BackendTests.Auditing
             CreatedAt = createdAt
         };
 
+        private (int Id, string PublicId) SeedDonor(int companyId, string name)
+        {
+            using var scope = _host.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var donor = new Core.Domain.Donations.Donor
+            {
+                CompanyId = companyId,
+                DonorType = "Individual",
+                FirstName = name,
+                LastName = "Test"
+            };
+            db.Donors.Add(donor);
+            db.SaveChanges();
+            return (donor.Id, donor.PublicId);
+        }
+
         // ---- /api/Administration/auditlogs ------------------------------------------------------------
 
         [Fact]
@@ -443,26 +465,26 @@ namespace AccountGo.BackendTests.Auditing
             await SeedAuditLogs(other.CompanyId, 5, "OtherTenantTable");
 
             var firstPage = await GetOk(workspace, AuditLogsPath);
-            var firstIds = firstPage.EnumerateArray().Select(r => r.GetProperty("id").GetInt32()).ToList();
+            var firstIds = firstPage.EnumerateArray().Select(r => r.GetProperty("id").GetString()!).ToList();
             Assert.Equal(MaxPageSize, firstIds.Count);
-            Assert.Equal(firstIds.OrderByDescending(id => id).ToList(), firstIds);
+            Assert.All(firstIds, id => Assert.StartsWith("alog_", id));
 
             var oversized = await GetOk(workspace, AuditLogsPath + "?limit=5000");
             Assert.Equal(MaxPageSize, oversized.GetArrayLength());
             var small = await GetOk(workspace, AuditLogsPath + "?limit=10");
             Assert.Equal(10, small.GetArrayLength());
 
-            var all = new List<int>(firstIds);
+            var all = new List<string>(firstIds);
             var guard = 0;
             var lastId = firstIds[^1];
             while (guard++ < 20)
             {
                 var page = await GetOk(workspace, AuditLogsPath + "?beforeId=" + lastId);
-                var ids = page.EnumerateArray().Select(r => r.GetProperty("id").GetInt32()).ToList();
+                var ids = page.EnumerateArray().Select(r => r.GetProperty("id").GetString()!).ToList();
                 Assert.True(ids.Count <= MaxPageSize);
                 if (ids.Count == 0)
                     break;
-                Assert.All(ids, id => Assert.True(id < lastId));
+                Assert.All(ids, id => Assert.StartsWith("alog_", id));
                 all.AddRange(ids);
                 lastId = ids[^1];
             }
@@ -474,10 +496,10 @@ namespace AccountGo.BackendTests.Auditing
                 .Where(a => a.CompanyId == workspace.CompanyId
                     && a.TableName != Core.Authorization.ApprovalEvidence.ApprovalTable
                     && a.TableName != Core.Authorization.ApprovalEvidence.StateTable)
-                .Select(a => a.Id)
+                .Select(a => a.PublicId)
                 .ToList();
             Assert.True(expected.Count >= AuditLogRowCount);
-            Assert.Equal(expected.OrderBy(id => id), all.OrderBy(id => id));
+            Assert.Equal(expected.OrderBy(id => id, StringComparer.Ordinal), all.OrderBy(id => id, StringComparer.Ordinal));
         }
 
         private async Task SeedAuditLogs(int companyId, int count, string tableName)

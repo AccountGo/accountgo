@@ -81,9 +81,12 @@ namespace Api.Mcp.Tools
                 .Where(j => to == null || j.JournalDate.Date <= to)
                 .Where(j => Matches(query, j.ReferenceNo, j.Memo))
                 .OrderByDescending(j => j.JournalDate).ThenByDescending(j => j.Id)
-                .Select(j => new
+                .ToList();
+            return await PageAsync("journalEntries", entries, skip, take,
+                j => new[] { ("je", j.Id) },
+                j => new
                 {
-                    j.Id,
+                    Id = Pub("je", j.Id),
                     Date = j.JournalDate,
                     j.ReferenceNo,
                     j.Memo,
@@ -92,20 +95,25 @@ namespace Api.Mcp.Tools
                     TotalCredit = j.creditAmount,
                     LineCount = j.JournalEntryLines.Count,
                     j.AdjustsFiscalYearCode
-                })
-                .ToList();
-            return Page("journalEntries", entries, skip, take, PagePath("financials/journals"));
+                },
+                PagePath("financials/journals"), cancellationToken);
         }
 
         [McpServerTool(Name = "get_journal_entry", Title = "Get Journal Entry", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
-        [Description("Returns one journal entry with its lines (account code and name, debit or credit, amount, memo), totals, reference, memo and posted state. For a member who may view record history it also returns attribution: who prepared it, who posted it and when, and whether the person who posted also prepared it; posted details are empty for journals posted before history was kept. Use the id from search_journal_entries or a GL transaction's sourceDocumentId for document type JournalEntry. Requires the Financials module and permission to view journals.")]
-        public Task<WorkspaceDataMcpResponse> GetJournalEntry(
-            [Description("The journal entry id.")] int journalEntryId,
-            CancellationToken cancellationToken = default) =>
-            RecordAsync<FinancialsController>("journalEntry", nameof(FinancialsController.JournalEntry), c => c.JournalEntry(journalEntryId),
+        [Description("Returns one journal entry with its lines (account code and name, debit or credit, amount, memo), totals, reference, memo and posted state. For a member who may view record history it also returns attribution: who prepared it, who posted it and when, and whether the person who posted also prepared it; posted details are empty for journals posted before history was kept. Use the id (like 'je_…') from search_journal_entries or a GL transaction's sourceDocumentId for document type JournalEntry. Requires the Financials module and permission to view journals.")]
+        public async Task<WorkspaceDataMcpResponse> GetJournalEntry(
+            [Description("The journal entry id, like 'je_…'.")] string journalEntryId,
+            CancellationToken cancellationToken = default)
+        {
+            var resolved = await ResolveIdAsync("journalEntry", journalEntryId, "je", nameof(journalEntryId), cancellationToken);
+            if (resolved.Failure != null) return resolved.Failure;
+            if (resolved.Id is not int journalKey) return Invalid("journalEntry", "Provide journalEntryId.");
+
+            return await RecordAsync<FinancialsController>("journalEntry", nameof(FinancialsController.JournalEntry), c => c.JournalEntry(journalKey),
                 link: PagePath("financials/journals"),
-                arguments: new Dictionary<string, object?> { ["id"] = journalEntryId },
+                arguments: new Dictionary<string, object?> { ["id"] = journalKey },
                 shape: value => value is Dto.Financial.JournalEntry entry ? DescribeJournal(entry) : value);
+        }
 
         [McpServerTool(Name = "get_books_checks", Title = "Get Books Checks", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Runs the repeatable checks of a books review for a period and returns each with a status: Pass, Finding (a difference or error), Review (records a person should look at) or NotChecked (the member cannot read that area). Covers: every ledger entry balances; balances on the unusual side; receivables and payables at the period end against their ledger accounts; issued invoices and approved bills missing from the ledger; duplicate invoice numbers and duplicate bills; manual journals at the period end, without a memo, posted to receivables, payables or bank accounts, reversed soon after the period end, or posted by their own preparer; bank accounts not reconciled through the period end; imported bank lines not yet in the books. Each check has a count, an amount where it applies, a plain explanation and up to ten example records with a path inside the workspace. All figures are computed on the server: quote them instead of adding rows yourself. Call it first in a review, then use the other tools to follow up each Finding and Review. A Pass means that check found nothing, not that the books are correct. Requires the Financials or Reports module and permission to view reports.")]
@@ -126,14 +134,16 @@ namespace Api.Mcp.Tools
         [McpServerTool(Name = "search_items", Title = "Search Products and Services", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Lists the products and services catalog with code, name, price, cost, revenue account, whether stock is tracked and quantity on hand. Filter by text or include archived items; with itemId returns that one item. Requires the Sales or Purchases module and permission to view items.")]
         public async Task<WorkspaceDataMcpResponse> SearchItems(
-            [Description("Optional item id for one item.")] int? itemId = null,
+            [Description("Optional item id, like 'item_…', for one item.")] string? itemId = null,
             [Description("Optional text matched against item code and name.")] string? query = null,
             [Description("Include archived items. Defaults to false.")] bool includeArchived = false,
             [Description("Records to skip. Defaults to 0.")] int skip = 0,
             [Description("Records to return (1-100). Defaults to 25.")] int take = DefaultTake,
             CancellationToken cancellationToken = default)
         {
-            if (itemId is int id)
+            var resolved = await ResolveIdAsync("item", itemId, "item", nameof(itemId), cancellationToken);
+            if (resolved.Failure != null) return resolved.Failure;
+            if (resolved.Id is int id)
             {
                 return await RecordAsync<CatalogController>("item", nameof(CatalogController.Item), c => c.Item(id),
                     link: PagePath("items"), arguments: new Dictionary<string, object?> { ["id"] = id });
@@ -168,9 +178,15 @@ namespace Api.Mcp.Tools
                 .Where(a => accountIds.Contains(a.Id))
                 .ToDictionary(a => a.Id);
 
+            Reader.Ids.PrefetchAsync(
+                new[] { ("je", entry.Id) }
+                    .Concat(entry.JournalEntryLines.Select(l => ("jel", l.Id)))
+                    .Concat(accountIds.Select(a => ("acct", a)))
+                    .Where(i => i.Item2 > 0)).GetAwaiter().GetResult();
+
             return new
             {
-                entry.Id,
+                Id = Pub("je", entry.Id),
                 Date = entry.JournalDate,
                 entry.ReferenceNo,
                 entry.Memo,
@@ -184,8 +200,8 @@ namespace Api.Mcp.Tools
                     accounts.TryGetValue(l.AccountId ?? 0, out var account);
                     return new
                     {
-                        l.Id,
-                        l.AccountId,
+                        Id = Pub("jel", l.Id),
+                        AccountId = Pub("acct", l.AccountId),
                         AccountCode = account?.AccountCode,
                         AccountName = account?.AccountName,
                         Side = l.DrCr == 1 ? "Dr" : l.DrCr == 2 ? "Cr" : null,

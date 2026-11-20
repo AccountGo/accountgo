@@ -157,10 +157,15 @@ namespace Api.Controllers
                     : $"{count} issued documents have no ledger entry yet. Post them before turning on accounting.",
             };
             problem.Extensions["code"] = BooksNotReadyCode;
-            problem.Extensions["unpostedInvoices"] = readiness.UnpostedInvoices;
-            problem.Extensions["unpostedBills"] = readiness.UnpostedBills;
+            problem.Extensions["unpostedInvoices"] = readiness.UnpostedInvoices
+                .Select(d => new UnpostedInvoiceWireDto(d.Type, d.Id, d.Number, d.Date)).ToList();
+            problem.Extensions["unpostedBills"] = readiness.UnpostedBills
+                .Select(d => new UnpostedBillWireDto(d.Type, d.Id, d.Number, d.Date)).ToList();
             return new ObjectResult(problem) { StatusCode = StatusCodes.Status409Conflict };
         }
+
+        public sealed record UnpostedInvoiceWireDto(string Type, [property: Dto.Common.PublicId("inv")] int Id, string? Number, DateTime Date);
+        public sealed record UnpostedBillWireDto(string Type, [property: Dto.Common.PublicId("bill")] int Id, string? Number, DateTime Date);
 
         [TenantFree]
         [AllowAnonymous]

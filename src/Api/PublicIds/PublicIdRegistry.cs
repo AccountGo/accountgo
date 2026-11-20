@@ -42,6 +42,11 @@ namespace Api.PublicIds
         {
             "CompanySetting",
             "GeneralLedgerSetting",
+            // Legacy document types with no record table; nothing to point a public id at.
+            "SalesDebitMemo",
+            "SalesCreditMemo",
+            "PurchaseDebitMemo",
+            "PurchaseCreditMemo",
             "WorkspaceOperatingSettings",
             "WorkspacePolicyCoordination",
             "WorkspaceApprovalRule",
@@ -154,15 +159,28 @@ namespace Api.PublicIds
             // DocumentTypes enum names and short web/controller link aliases
             AddAlias(nameof(DocumentTypes.SalesInvoice), "inv");
             AddAlias("invoice", "inv");
+            // The tax report names a void by its document kind plus "Void"; the id is still the document's.
+            AddAlias("invoiceVoid", "inv");
+            AddAlias("invoicePayment", "inv");
+            // Credit-note documents and the refunds paid against them (the report keys a refund row by its credit note).
+            AddAlias("customerCredit", "cn");
+            AddAlias("customerCreditVoid", "cn");
+            AddAlias("customerRefund", "cn");
+            AddAlias("supplierCredit", "scn");
+            AddAlias("supplierCreditVoid", "scn");
+            AddAlias("supplierRefund", "scn");
             AddAlias(nameof(DocumentTypes.SalesReceipt), "rcpt");
             AddAlias(nameof(DocumentTypes.SalesOrder), "so");
             AddAlias(nameof(DocumentTypes.SalesQuote), "quo");
             AddAlias(nameof(DocumentTypes.SalesDelivery), "del");
             AddAlias(nameof(DocumentTypes.PurchaseInvoice), "bill");
             AddAlias("bill", "bill");
+            AddAlias("billVoid", "bill");
+            AddAlias("billPayment", "bill");
             AddAlias(nameof(DocumentTypes.PurchaseOrder), "po");
             AddAlias(nameof(DocumentTypes.PurchaseReceipt), "prc");
-            AddAlias(nameof(DocumentTypes.PurchaseInvoicePayment), "vpay");
+            // PayBill records the bill id (not the vendor payment id) as the ledger source.
+            AddAlias(nameof(DocumentTypes.PurchaseInvoicePayment), "bill");
             AddAlias(nameof(DocumentTypes.JournalEntry), "je");
             AddAlias(nameof(DocumentTypes.BankTransaction), "btx");
             AddAlias(nameof(DocumentTypes.CustomerAllocation), "alloc");

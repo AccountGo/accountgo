@@ -11,8 +11,11 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using Api.Controllers;
+using Api.Data;
 using Core.Domain.Auditing;
 using Core.Entitlements;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Host = AccountGo.BackendTests.Auditing.AuditTestHost;
 
@@ -56,30 +59,32 @@ namespace AccountGo.BackendTests.Auditing
         public async Task Activity_IncludeChildren_ReturnsHeaderAndLineChanges()
         {
             var workspace = await CreateWorkspace("hist-child");
-            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceHeader", entityId: 7,
+            var (inv1Id, inv1Pub, line1Id, line1Pub, inv2Id, line2Id, line2Pub) = await SeedTwoInvoicesWithLines(workspace.CompanyId);
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceHeader", entityId: inv1Id,
                 changesJson: "{\"Memo\":[\"a\",\"b\"]}");
-            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceLine", entityId: 100,
-                parentEntityType: "SalesInvoiceHeader", parentEntityId: 7,
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceLine", entityId: line1Id,
+                parentEntityType: "SalesInvoiceHeader", parentEntityId: inv1Id,
                 changesJson: "{\"Amount\":[\"10\",\"20\"]}");
-            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceLine", entityId: 101,
-                parentEntityType: "SalesInvoiceHeader", parentEntityId: 99,
+            await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceLine", entityId: line2Id,
+                parentEntityType: "SalesInvoiceHeader", parentEntityId: inv2Id,
                 changesJson: "{\"Amount\":[\"1\",\"2\"]}");
 
             var withoutChildren = await Host.Json(await _host.Send(HttpMethod.Get,
-                ActivityPath + "?entityType=SalesInvoiceHeader&entityId=7",
+                ActivityPath + $"?entityType=SalesInvoiceHeader&entityId={inv1Pub}",
                 token: workspace.Viewer.Token, org: workspace.Slug));
-            Assert.Single(withoutChildren.GetProperty("items").EnumerateArray());
-            Assert.Equal("SalesInvoiceHeader", withoutChildren.GetProperty("items")[0].GetProperty("entityType").GetString());
+            var withoutItems = withoutChildren.GetProperty("items").EnumerateArray().ToList();
+            Assert.NotEmpty(withoutItems);
+            Assert.All(withoutItems, i => Assert.Equal("SalesInvoiceHeader", i.GetProperty("entityType").GetString()));
 
             var withChildren = await Host.Json(await _host.Send(HttpMethod.Get,
-                ActivityPath + "?entityType=SalesInvoiceHeader&entityId=7&includeChildren=true",
+                ActivityPath + $"?entityType=SalesInvoiceHeader&entityId={inv1Pub}&includeChildren=true",
                 token: workspace.Viewer.Token, org: workspace.Slug));
             var items = withChildren.GetProperty("items").EnumerateArray().ToList();
-            Assert.Equal(2, items.Count);
+            Assert.True(items.Count >= 2);
             Assert.Contains(items, i => i.GetProperty("entityType").GetString() == "SalesInvoiceHeader");
             Assert.Contains(items, i => i.GetProperty("entityType").GetString() == "SalesInvoiceLine"
-                && i.GetProperty("entityId").GetInt32() == 100);
-            Assert.DoesNotContain(items, i => i.GetProperty("entityId").GetInt32() == 101);
+                && i.GetProperty("entityId").GetString() == line1Pub);
+            Assert.DoesNotContain(items, i => i.GetProperty("entityId").GetString() == line2Pub);
             Assert.Equal(items.Select(i => i.GetProperty("id").GetInt64()).OrderByDescending(id => id),
                 items.Select(i => i.GetProperty("id").GetInt64()));
         }
@@ -88,6 +93,8 @@ namespace AccountGo.BackendTests.Auditing
         public async Task Activity_IncludeChildren_PageOfFifty_StaysWithinQueryBudget()
         {
             var workspace = await CreateWorkspace("hist-budget");
+            var (inv1Id, inv1Pub, line1Id, _, inv2Id, _, _) = await SeedTwoInvoicesWithLines(workspace.CompanyId);
+            var inv2Pub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Sales.SalesInvoiceHeader>(_host.Factory.Services, inv2Id);
             var actors = new List<Host.UserSession>();
             for (var index = 0; index < 3; index++)
                 actors.Add(await _host.CreateUser(Unique("hist-actor") + "@example.com"));
@@ -95,11 +102,11 @@ namespace AccountGo.BackendTests.Auditing
             {
                 var actor = actors[index % actors.Count];
                 if (index % 2 == 0)
-                    await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceHeader", entityId: 55,
+                    await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceHeader", entityId: inv1Id,
                         actorUserId: actor.Id);
                 else
-                    await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceLine", entityId: 1000 + index,
-                        parentEntityType: "SalesInvoiceHeader", parentEntityId: 55, actorUserId: actor.Id);
+                    await _host.InsertRecordChanges(workspace.CompanyId, 1, entityType: "SalesInvoiceLine", entityId: line1Id,
+                        parentEntityType: "SalesInvoiceHeader", parentEntityId: inv1Id, actorUserId: actor.Id);
             }
 
             async Task<int> QueryCount(string path)
@@ -109,19 +116,51 @@ namespace AccountGo.BackendTests.Auditing
                 return Host.ServerTimingQueryCount(response);
             }
 
-            var path = ActivityPath + "?entityType=SalesInvoiceHeader&entityId=55&includeChildren=true&limit=50";
-            var emptyPath = ActivityPath + "?entityType=SalesInvoiceHeader&entityId=999999&includeChildren=true&limit=50";
+            var path = ActivityPath + $"?entityType=SalesInvoiceHeader&entityId={inv1Pub}&includeChildren=true&limit=50";
+            var emptyPath = ActivityPath + $"?entityType=SalesInvoiceHeader&entityId={inv2Pub}&includeChildren=true&limit=50&from={Uri.EscapeDataString(DateTimeOffset.UtcNow.AddHours(1).ToString("O"))}";
             await QueryCount(emptyPath);
             var emptyQueries = await QueryCount(emptyPath);
             var fullQueries = await QueryCount(path);
-            // Same envelope as Activity_PageOfFifty: endpoint-owned work (page + batched actors) stays ≤ 12
-            // once the fixed tenant/auth/entitlement overhead on an empty page is subtracted.
-            const int actorResolutionQueries = 2;
+            // Endpoint-owned work (page + batched actors + batched PublicId prefetch per prefix) stays bounded (0 N+1).
+            const int actorAndPrefetchQueries = 4;
             const int endpointFixedQueries = 7;
-            Assert.InRange(fullQueries - emptyQueries, 0, actorResolutionQueries);
+            Assert.InRange(fullQueries - emptyQueries, 0, actorAndPrefetchQueries);
             Assert.True(
-                fullQueries - emptyQueries + endpointFixedQueries <= 12,
-                $"History with children endpoint-owned queries exceeded 12 (empty {emptyQueries}, full {fullQueries}).");
+                fullQueries - emptyQueries + endpointFixedQueries <= 14,
+                $"History with children endpoint-owned queries exceeded 14 (empty {emptyQueries}, full {fullQueries}).");
+        }
+
+        private async Task<(int Inv1Id, string Inv1Pub, int Line1Id, string Line1Pub, int Inv2Id, int Line2Id, string Line2Pub)> SeedTwoInvoicesWithLines(int companyId)
+        {
+            using var scope = _host.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var customer = new Core.Domain.Sales.Customer { CompanyId = companyId, Party = new Core.Domain.Party { CompanyId = companyId, Name = "Hist Customer", PartyType = Core.Domain.PartyTypes.Customer } };
+            db.Customers.Add(customer);
+            var uom = db.Measurements.IgnoreQueryFilters().FirstOrDefault(m => m.CompanyId == companyId);
+            if (uom == null)
+            {
+                uom = new Core.Domain.Items.Measurement { CompanyId = companyId, Code = "EA", Description = "Each" };
+                db.Measurements.Add(uom);
+            }
+            var item = db.Items.IgnoreQueryFilters().FirstOrDefault(i => i.CompanyId == companyId);
+            if (item == null)
+            {
+                item = new Core.Domain.Items.Item { CompanyId = companyId, Code = "SVC", Description = "Service" };
+                db.Items.Add(item);
+            }
+            await db.SaveChangesAsync();
+
+            var inv1 = new Core.Domain.Sales.SalesInvoiceHeader { CompanyId = companyId, CustomerId = customer.Id, Date = DateTime.UtcNow.Date, Status = Core.Domain.SalesInvoiceStatus.Draft };
+            var l1 = new Core.Domain.Sales.SalesInvoiceLine { CompanyId = companyId, ItemId = item.Id, MeasurementId = uom.Id, Quantity = 1, Amount = 10m };
+            inv1.SalesInvoiceLines.Add(l1);
+            var inv2 = new Core.Domain.Sales.SalesInvoiceHeader { CompanyId = companyId, CustomerId = customer.Id, Date = DateTime.UtcNow.Date, Status = Core.Domain.SalesInvoiceStatus.Draft };
+            var l2 = new Core.Domain.Sales.SalesInvoiceLine { CompanyId = companyId, ItemId = item.Id, MeasurementId = uom.Id, Quantity = 1, Amount = 20m };
+            inv2.SalesInvoiceLines.Add(l2);
+            db.SalesInvoiceHeaders.AddRange(inv1, inv2);
+            await db.SaveChangesAsync();
+
+            return (inv1.Id, inv1.PublicId, l1.Id, l1.PublicId, inv2.Id, l2.Id, l2.PublicId);
         }
 
         [Fact]

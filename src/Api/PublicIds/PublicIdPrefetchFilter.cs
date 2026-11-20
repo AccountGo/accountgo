@@ -143,6 +143,8 @@ namespace Api.PublicIds
                         PublicIdRegistry.PrefixForSettlementSourceType(Convert.ToInt32(discVal)),
                     PublicIdTypeDiscriminatorKind.SettlementDestinationType =>
                         PublicIdRegistry.PrefixForSettlementDestinationType(Convert.ToInt32(discVal)),
+                    PublicIdTypeDiscriminatorKind.SettlementDestinationFromSourceType =>
+                        (discVal.ToString() ?? string.Empty).Equals("CustomerCreditNote", StringComparison.OrdinalIgnoreCase) || discVal.ToString() == "1" ? "inv" : "bill",
                     _ => registry.TryGetPrefixForTypeName(discVal.ToString(), out var mapped) ? mapped : null
                 };
 

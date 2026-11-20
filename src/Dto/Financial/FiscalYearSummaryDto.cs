@@ -1,3 +1,4 @@
+using Dto.Common;
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
@@ -11,6 +12,7 @@ namespace Dto.Financial
     /// </summary>
     public sealed class FiscalYearSummaryDto
     {
+        [PublicId("fy")]
         public int Id { get; init; }
         public string FiscalYearCode { get; init; } = "";
         public string FiscalYearName { get; init; } = "";
@@ -23,6 +25,7 @@ namespace Dto.Financial
 
         public string? ClosedAt { get; init; }
         public string? ClosedBy { get; init; }
+        [PublicId("gl")]
         public int? ClosingGeneralLedgerHeaderId { get; init; }
         public bool IsPersisted { get; init; }
     }

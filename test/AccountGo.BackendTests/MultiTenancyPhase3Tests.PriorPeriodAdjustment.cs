@@ -96,7 +96,7 @@ namespace AccountGo.BackendTests
             var save = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", ppa);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
             var saved = await save.Content.ReadFromJsonAsync<JsonElement>();
-            ppa.Id = saved.GetProperty("id").GetInt32();
+            ppa.Id = IntId<Core.Domain.Financials.JournalEntryHeader>(saved.GetProperty("id").GetString());
 
             var apr = await ApproveJournalPostAsync(ppa.Id);
             var post = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", ppa, extraHeaders: apr);

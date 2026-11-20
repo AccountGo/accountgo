@@ -1,4 +1,5 @@
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -6,8 +7,11 @@ namespace Dto.Donations
 {
     public class DonationInvoice : BaseDto
     {
+        [PublicId("dinv")]
+        public override int Id { get; set; }
         public string? No { get; set; }
         [Range(1, int.MaxValue, ErrorMessage = "Select a donor from the Donors module.")]
+        [PublicId("dnr")]
         public int DonorId { get; set; }
         public DateTime DonationDate { get; set; }
         public string? DonorName { get; set; }
@@ -19,6 +23,7 @@ namespace Dto.Donations
         public string PaymentType { get; set; } = string.Empty;
         [Required(ErrorMessage = "Select a GL account with a code between 41000 and 41999."),
          Range(1, int.MaxValue, ErrorMessage = "Select a GL account with a code between 41000 and 41999.")]
+        [PublicId("acct")]
         public int? GlAccountId { get; set; }
         public string GlAccountCode { get; set; } = string.Empty;
         public string GlAccountName { get; set; } = string.Empty;
@@ -43,7 +48,10 @@ namespace Dto.Donations
 
     public class DonationInvoiceLine : BaseDto
     {
+        [PublicId("dil")]
+        public override int Id { get; set; }
         [Required(ErrorMessage = "Item is required")]
+        [PublicId("item")]
         public int? ItemId { get; set; }
         [Required(ErrorMessage = "Quantity is required")]
         [Range(0, 1000000, ErrorMessage = "Quantity must be between 0 and 1000000")]
@@ -52,6 +60,7 @@ namespace Dto.Donations
         [Range(0, 1000000, ErrorMessage = "Amount must be between 0 and 1000000")]
         public decimal? Amount { get; set; }
         [Required(ErrorMessage = "Measurement is required")]
+        [PublicId("uom")]
         public int? MeasurementId { get; set; }
         public string? MeasurementDescription { get; set; }
         public string? ItemNo { get; set; }

@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -238,6 +239,7 @@ namespace Api.Controllers
             public string? Notes { get; set; }
             public bool LockBooks { get; set; }
             public decimal ExpectedNetTax { get; set; }
+            [PublicId("txf")]
             public int? AmendsFilingId { get; set; }
             public string? AmendmentReason { get; set; }
         }

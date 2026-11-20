@@ -1,5 +1,6 @@
 #nullable disable
 using System;
+using Dto.Common;
 using System.Linq;
 using System.Security.Claims;
 using System.Globalization;
@@ -131,6 +132,7 @@ namespace Api.Controllers
             [JsonConverter(typeof(StringEnumConverter))] public IndustryTemplate? IndustryTemplate { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public EntityType? EntityType { get; set; }
             [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
+            [PublicId("role")]
             public System.Collections.Generic.List<int> SecurityRoleIds { get; set; }
 
             // Additive About answers. Omitted values keep the legacy unclassified path (no automatic full-access grant).
@@ -464,7 +466,7 @@ namespace Api.Controllers
                 : company.ActivationState;
             return Ok(new
             {
-                id = company.Id, name = company.Name, slug = company.Slug, shortName = company.ShortName,
+                id = company.PublicId, name = company.Name, slug = company.Slug, shortName = company.ShortName,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key,
                 activationState,
                 pendingPlan = ResolvePendingPlanKey(company, activationState),
@@ -811,6 +813,7 @@ namespace Api.Controllers
             public bool ShowPaymentInstructions { get; set; } = true;
             public string DefaultNotes { get; set; }
             public string DefaultPaymentInstructions { get; set; }
+            [PublicId("ba")]
             public int? PaymentBankId { get; set; }
         }
 
@@ -1200,14 +1203,15 @@ namespace Api.Controllers
                     && !facts.LinkedAsWorkCompanyIds.Contains(company.Id) && isPersonalPurpose,
                 isPersonalPurpose,
                 linkedPersonalCompanyId = facts.UserLinks.Where(l => l.WorkCompanyId == company.Id)
-                    .Select(l => (int?)l.PersonalCompanyId).FirstOrDefault(),
+                    .Select(l => facts.CompanyPublicIds.TryGetValue(l.PersonalCompanyId, out var pub) ? pub : null).FirstOrDefault(),
                 linkedWorkCompanyIds = facts.UserLinks.Where(l => l.PersonalCompanyId == company.Id)
-                    .Select(l => l.WorkCompanyId).ToList(),
+                    .Select(l => facts.CompanyPublicIds.TryGetValue(l.WorkCompanyId, out var pub) ? pub : null)
+                    .Where(pub => pub != null).ToList(),
                 canAddPersonalBooks = canAddPersonalBooks ?? CanAddPersonalBooks(),
                 includedModules = _plans.ResolveStoredPlan(company.Plan).IncludedModules,
                 requiredModules = _plans.ResolveStoredPlan(company.Plan).RequiredModules,
                 currency = facts.Currencies.TryGetValue(company.Id, out var currency) ? currency : null,
-                id = company.Id.ToString(), name = company.Name, shortName = company.ShortName, slug = company.Slug,
+                id = company.PublicId, name = company.Name, shortName = company.ShortName, slug = company.Slug,
                 plan = _plans.ResolveStoredPlan(company.Plan).Key, subscriptionStatus = company.SubscriptionStatus,
                 activationState,
                 pendingPlan = ResolvePendingPlanKey(company, activationState),
@@ -1245,7 +1249,8 @@ namespace Api.Controllers
             HashSet<int> LinkedAsWorkCompanyIds,
             HashSet<int> PersonalPurposeCompanyIds,
             List<(int WorkCompanyId, int PersonalCompanyId)> UserLinks,
-            Dictionary<int, string> Currencies);
+            Dictionary<int, string> Currencies,
+            Dictionary<int, string> CompanyPublicIds);
 
         private SummaryFacts LoadSummaryFacts(IReadOnlyCollection<int> companyIds)
         {
@@ -1260,6 +1265,13 @@ namespace Api.Controllers
                 .Select(s => s.CompanyId).Distinct().ToList();
             var userLinks = _db.WorkspaceLinks.Where(l => l.OwnerUserId == UserId)
                 .Select(l => new { l.WorkCompanyId, l.PersonalCompanyId }).ToList();
+            var linkedIds = userLinks.SelectMany(l => new[] { l.WorkCompanyId, l.PersonalCompanyId }).Distinct().ToList();
+            var companyPublicIds = linkedIds.Count == 0
+                ? new Dictionary<int, string>()
+                : _db.Companies.IgnoreQueryFilters()
+                    .Where(c => linkedIds.Contains(c.Id))
+                    .Select(c => new { c.Id, c.PublicId })
+                    .ToDictionary(c => c.Id, c => c.PublicId);
             var currencies = new Dictionary<int, string>();
             foreach (var row in _db.CompanySettings.IgnoreQueryFilters()
                          .Where(s => companyIds.Contains(s.CompanyId))
@@ -1271,7 +1283,8 @@ namespace Api.Controllers
                 linkedAsWork.ToHashSet(),
                 personalPurpose.ToHashSet(),
                 userLinks.Select(l => (l.WorkCompanyId, l.PersonalCompanyId)).ToList(),
-                currencies);
+                currencies,
+                companyPublicIds);
         }
     }
 }

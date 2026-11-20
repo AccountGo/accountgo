@@ -3,17 +3,18 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using Dto.Sales;
 
 namespace Dto.Purchasing
 {
     public sealed record SupplierCreditLineInputDto(
-        int? SourcePurchaseInvoiceLineId,
-        int? MatchedReturnDispatchId,
-        int? ItemId,
-        int? ExpenseOrAssetAccountId,
-        int? TaxId,
+        [property: PublicId("bl")] int? SourcePurchaseInvoiceLineId,
+        [property: PublicId("srd")] int? MatchedReturnDispatchId,
+        [property: PublicId("item")] int? ItemId,
+        [property: PublicId("acct")] int? ExpenseOrAssetAccountId,
+        [property: PublicId("tax")] int? TaxId,
         bool TaxRecoverable,
         string Description,
         decimal Quantity,
@@ -21,9 +22,9 @@ namespace Dto.Purchasing
         decimal? OverrideTaxAmount = null);
 
     public sealed record SaveSupplierCreditDraftRequest(
-        int? Id,
-        int VendorId,
-        int? SourcePurchaseInvoiceHeaderId,
+        [property: PublicId("scn")] int? Id,
+        [property: PublicId("ven")] int VendorId,
+        [property: PublicId("bill")] int? SourcePurchaseInvoiceHeaderId,
         string VendorCreditNo,
         DateTime Date,
         DateTime? EffectiveDate,
@@ -42,7 +43,7 @@ namespace Dto.Purchasing
         long? ExpectedVersion = null);
 
     public sealed record ApplySupplierCreditItemRequest(
-        int PurchaseInvoiceHeaderId,
+        [property: PublicId("bill")] int PurchaseInvoiceHeaderId,
         decimal Amount,
         long? ExpectedBillVersion = null);
 
@@ -53,12 +54,12 @@ namespace Dto.Purchasing
         long? ExpectedCreditVersion = null);
 
     public sealed record SupplierCreditLineDto(
-        int Id,
-        int? SourcePurchaseInvoiceLineId,
-        int? MatchedReturnDispatchId,
-        int? ItemId,
-        int? ExpenseOrAssetAccountId,
-        int? TaxId,
+        [property: PublicId("scnl")] int Id,
+        [property: PublicId("bl")] int? SourcePurchaseInvoiceLineId,
+        [property: PublicId("srd")] int? MatchedReturnDispatchId,
+        [property: PublicId("item")] int? ItemId,
+        [property: PublicId("acct")] int? ExpenseOrAssetAccountId,
+        [property: PublicId("tax")] int? TaxId,
         decimal TaxRateSnapshot,
         bool TaxRecoverableSnapshot,
         string Description,
@@ -69,12 +70,12 @@ namespace Dto.Purchasing
         decimal TotalAmount);
 
     public sealed record SupplierCreditNoteDto(
-        int Id,
+        [property: PublicId("scn")] int Id,
         string? No,
         string VendorCreditNo,
-        int VendorId,
+        [property: PublicId("ven")] int VendorId,
         string VendorName,
-        int? SourcePurchaseInvoiceHeaderId,
+        [property: PublicId("bill")] int? SourcePurchaseInvoiceHeaderId,
         string? SourceBillNo,
         DateTime Date,
         DateTime EffectiveDate,
@@ -93,8 +94,8 @@ namespace Dto.Purchasing
         string SettlementState,
         int Status,
         string StatusLabel,
-        int? GeneralLedgerHeaderId,
-        int? VoidGeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? GeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? VoidGeneralLedgerHeaderId,
         string? SubmittedBy,
         string? ReviewedBy,
         string? PostedBy,
