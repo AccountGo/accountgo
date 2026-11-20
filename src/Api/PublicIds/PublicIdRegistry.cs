@@ -87,7 +87,7 @@ namespace Api.PublicIds
         {
         }
 
-        public PublicIdRegistry(IEnumerable<Assembly> assemblies)
+        internal PublicIdRegistry(IEnumerable<Assembly> assemblies)
         {
             var types = assemblies
                 .Distinct()

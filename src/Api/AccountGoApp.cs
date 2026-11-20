@@ -122,6 +122,8 @@ public static class AccountGoApp
         // Add database context and provide builder environment information to the extended method for debugging purpose
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<Api.PublicIds.PublicIdRegistry>();
+        builder.Services.AddScoped<Api.PublicIds.IPublicIdResolver, Api.PublicIds.PublicIdResolver>();
+        builder.Services.AddSingleton<Api.PublicIds.PublicIdContractResolver>();
         builder.Services.AddSingleton<Api.Observability.ServerTimingDbCommandInterceptor>();
         builder.Services.AddScoped<Api.Auditing.IRequestAuditContext, Api.Auditing.RequestAuditContext>();
         builder.Services.AddScoped<Api.Data.RecordChangeInterceptor>();
@@ -254,20 +256,31 @@ public static class AccountGoApp
 
         builder.Services.AddControllers(options =>
         {
+            options.ModelBinderProviders.Insert(0, new Api.PublicIds.PublicIdModelBinderProvider());
+            options.Filters.Add<Api.PublicIds.PublicIdErrorFilter>();
+            options.Filters.Add<Api.PublicIds.PublicIdPrefetchFilter>();
             options.Filters.Add<Api.Filters.TenantEndpointFilter>();
             options.Filters.Add<Api.Filters.ReconciledPeriodConfirmationFilter>();
         })
-        .AddNewtonsoftJson(
-            options =>
-                {
-                    options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
-                    options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
-                }
-            );
+        .AddNewtonsoftJson(options =>
+        {
+            options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+        });
+
+        builder.Services.AddOptions<Microsoft.AspNetCore.Mvc.MvcNewtonsoftJsonOptions>()
+            .Configure<Api.PublicIds.PublicIdContractResolver>((options, resolver) =>
+            {
+                options.SerializerSettings.ContractResolver = resolver;
+                options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+            });
 
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen();
+        builder.Services.AddSwaggerGen(options =>
+        {
+            options.SchemaFilter<Api.PublicIds.PublicIdSwaggerSchemaFilter>();
+            options.OperationFilter<Api.PublicIds.PublicIdSwaggerOperationFilter>();
+        });
 
         // cors
         builder.Services.ConfigureCors(builder.Configuration);
