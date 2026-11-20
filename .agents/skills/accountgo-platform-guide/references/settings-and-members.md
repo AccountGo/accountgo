@@ -88,9 +88,9 @@ Access & Billing
 
 Owner or Admin is required to open Settings. That title does not grant close permission. Closing and reopening need the close permission. A Member with that permission opens **Year-end close** in the sidebar (`/org/{orgSlug}/financials/year-end`). Without close permission the ended year says **View only — close permission required**.
 
-- **Year-end close**: Prepare a missing year with **Prepare fiscal years through next year**, then **Review & close** on an ended year. The button opens the preview. Warnings need a written reason. See the financials reference for equity targets, reopen, the close package, and prior-period adjustments. Do not send the person to create a **Closing entries** journal.
-- **Fiscal years**: The **Active Fiscal Reporting Year** cards list each year's dates and a status of **Open**, **Ended**, or **Closed**. **Closed** is a completed close, with who closed it and when. A year that is not current is not automatically Closed. A card that says **Not prepared yet** is only a calculated year; prepare it before closing. The active flag on the record is not the status.
-- Books lock sits on the same tab. Closing moves the lock to the year end when that date is later than the current lock. The lock date alone is not proof the year is closed; read `closedAt` / status from `get_fiscal_years`, and the lock from `get_workspace_context`.
+- **Year-end close** card: steps, status, equity targets, reopen and close package are in the financials reference. Never send the person to a **Closing entries** journal.
+- **Active Fiscal Reporting Year** cards show dates and **Open**/**Ended**/**Closed** (who closed it and when). A past year is not automatically Closed. **Not prepared yet** is a calculated year to prepare before closing.
+- The books lock is on this tab; a lock date alone does not prove a year is closed.
 - Bank accounts are added on **Banking**, not by mapping them on this tab. Payment terms are under **Invoices**.
 
 ### F. Roles & Permissions (`?tab=roles`)
