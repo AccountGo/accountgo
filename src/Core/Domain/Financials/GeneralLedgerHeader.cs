@@ -16,8 +16,10 @@ using System.Linq;
 namespace Core.Domain.Financials
 {
     [Table("GeneralLedgerHeader")]
-    public partial class GeneralLedgerHeader : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("gl")]
+    public partial class GeneralLedgerHeader : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public GeneralLedgerHeader()
         {
             GeneralLedgerLines = new HashSet<GeneralLedgerLine>();

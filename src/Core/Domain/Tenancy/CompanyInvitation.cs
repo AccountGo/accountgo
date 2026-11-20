@@ -5,8 +5,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("CompanyInvitation")]
-    public class CompanyInvitation : BaseEntity
+    [PublicIdPrefix("winv")]
+    public class CompanyInvitation : BaseEntity, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public string Email { get; set; } = "";             // normalized lower-case
         public CompanyMemberRole Role { get; set; }          // Admin or Member only (never Owner)

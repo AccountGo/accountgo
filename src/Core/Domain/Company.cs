@@ -14,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("Company")]
-    public partial class Company : BaseEntity
+    [PublicIdPrefix("ws")]
+    public partial class Company : BaseEntity, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string ShortName { get; set; } = string.Empty;
         public string? Slug { get; set; }

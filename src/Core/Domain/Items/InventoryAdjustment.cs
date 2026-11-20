@@ -7,8 +7,10 @@ namespace Core.Domain.Items
 {
     /// <summary>A stock count, write-off, or opening balance that updates inventory and its general ledger value.</summary>
     [Table("InventoryAdjustment")]
-    public partial class InventoryAdjustment : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("iadj")]
+    public partial class InventoryAdjustment : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         [Required]
         public string No { get; set; } = null!;

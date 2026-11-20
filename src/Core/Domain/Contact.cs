@@ -13,8 +13,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("Contact")]
-    public partial class Contact : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("cont")]
+    public partial class Contact : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public Contact()
         {
         }

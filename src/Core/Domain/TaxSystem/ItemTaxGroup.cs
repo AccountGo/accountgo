@@ -14,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.TaxSystem
 {
     [Table("ItemTaxGroup")]
-    public partial class ItemTaxGroup : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("itg")]
+    public partial class ItemTaxGroup : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public ItemTaxGroup()
         {
             ItemTaxGroupTax = new HashSet<ItemTaxGroupTax>();

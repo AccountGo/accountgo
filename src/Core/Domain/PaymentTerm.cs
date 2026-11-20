@@ -13,8 +13,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("PaymentTerm")]
-    public partial class PaymentTerm : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("term")]
+    public partial class PaymentTerm : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public string? Description { get; set; }
         public PaymentTypes PaymentType { get; set; }

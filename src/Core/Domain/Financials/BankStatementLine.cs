@@ -10,8 +10,10 @@ namespace Core.Domain.Financials
 {
     /// <summary>A line from a bank statement file. Never posts to the ledger by itself (Phase 3A).</summary>
     [Table("BankStatementLine")]
-    public partial class BankStatementLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("bsl")]
+    public partial class BankStatementLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int BankId { get; set; }
         public int BankStatementImportId { get; set; }

@@ -4,8 +4,10 @@ using System;
 namespace Core.Domain;
 
 /// <summary>Global registry joining two independently posted workspace journals.</summary>
-public sealed class LinkedEntryPair : BaseEntity
+[PublicIdPrefix("lep")]
+public sealed class LinkedEntryPair : BaseEntity, IHasPublicId
 {
+    public string PublicId { get; set; } = string.Empty;
     public int SourceCompanyId { get; set; }
     public int? SourceJournalId { get; set; }
     public int MirrorCompanyId { get; set; }

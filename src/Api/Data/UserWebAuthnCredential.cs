@@ -1,3 +1,4 @@
+using Core.Domain;
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
@@ -5,8 +6,10 @@ using System;
 
 namespace Api.Data
 {
-    public class UserWebAuthnCredential
+    [PublicIdPrefix("pkey")]
+    public class UserWebAuthnCredential : IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int Id { get; set; }
         public string UserId { get; set; } = string.Empty;
         public byte[] CredentialId { get; set; } = Array.Empty<byte>();

@@ -12,8 +12,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("JournalEntryLine")]
-    public partial class JournalEntryLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("jel")]
+    public partial class JournalEntryLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int JournalEntryHeaderId { get; set; }
         public int AccountId { get; set; }

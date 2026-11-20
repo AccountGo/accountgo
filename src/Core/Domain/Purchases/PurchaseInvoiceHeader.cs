@@ -23,8 +23,10 @@ namespace Core.Domain.Purchases
     /// it the workspace's own number; paid with vendor payments, or voided, which reverses what approving posted.
     /// </summary>
     [Table("PurchaseInvoiceHeader")]
-    public partial class PurchaseInvoiceHeader : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("bill")]
+    public partial class PurchaseInvoiceHeader : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public PurchaseInvoiceHeader()
         {
             PurchaseInvoiceLines = new HashSet<PurchaseInvoiceLine>();

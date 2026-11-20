@@ -15,8 +15,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseReceiptLine")]
-    public partial class PurchaseReceiptLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("prcl")]
+    public partial class PurchaseReceiptLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int PurchaseReceiptHeaderId { get; set; }
         public int ItemId { get; set; }

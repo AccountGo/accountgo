@@ -60,6 +60,13 @@ public static class AccountGoApp
             return;
         }
 
+        if (args.Contains("--backfill-public-ids"))
+        {
+            var repaired = Api.Data.PublicIdBackfillSql.RepairAll(app.Services);
+            Console.WriteLine($"✓ Public IDs backfilled ({repaired} row(s) updated); exiting without serving requests.");
+            return;
+        }
+
         var databaseInit = InitializeDatabaseCore(app, args);
         foreach (var module in modules)
             module.InitializeDatabase(app);
@@ -114,6 +121,7 @@ public static class AccountGoApp
 
         // Add database context and provide builder environment information to the extended method for debugging purpose
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSingleton<Api.PublicIds.PublicIdRegistry>();
         builder.Services.AddSingleton<Api.Observability.ServerTimingDbCommandInterceptor>();
         builder.Services.AddScoped<Api.Auditing.IRequestAuditContext, Api.Auditing.RequestAuditContext>();
         builder.Services.AddScoped<Api.Data.RecordChangeInterceptor>();

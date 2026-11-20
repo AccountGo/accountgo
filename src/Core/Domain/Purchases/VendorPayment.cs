@@ -15,8 +15,10 @@ namespace Core.Domain.Purchases
 {
 
     [Table("VendorPayment")]
-    public partial class VendorPayment : BaseEntity, ICompanyOwned
-    {        
+    [PublicIdPrefix("vpay")]
+    public partial class VendorPayment : BaseEntity, ICompanyOwned, IHasPublicId
+    {
+        public string PublicId { get; set; } = string.Empty;        
         public VendorPayment()
         { }
 

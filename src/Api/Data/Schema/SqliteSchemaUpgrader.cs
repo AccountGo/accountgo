@@ -2513,6 +2513,57 @@ WHERE NOT EXISTS (
                 cmd.CommandText = SalesInvoiceNumberIndexSql;
                 cmd.ExecuteNonQuery();
             }
+
+            EnsurePublicIds(connection, logger);
+        }
+
+        private static void EnsurePublicIds(DbConnection connection, ILogger? logger)
+        {
+            var addedColumns = 0;
+            foreach (var spec in Api.Data.PublicIdBackfillSql.ApiTables)
+            {
+                addedColumns += EnsurePublicIdForTable(connection, spec.TableName, spec.Prefix);
+            }
+            foreach (var spec in Api.Data.PublicIdBackfillSql.IdentityTables)
+            {
+                addedColumns += EnsurePublicIdForTable(connection, spec.TableName, spec.Prefix);
+            }
+            if (addedColumns > 0)
+            {
+                logger?.LogInformation("✓ Added PublicId column and filtered unique index on {Count} SQLite table(s).", addedColumns);
+            }
+        }
+
+        public static int EnsurePublicIdForTablePublic(DbConnection connection, string tableName, string prefix) =>
+            EnsurePublicIdForTable(connection, tableName, prefix);
+
+        private static int EnsurePublicIdForTable(DbConnection connection, string tableName, string prefix)
+        {
+            if (!TableExists(connection, tableName))
+                return 0;
+
+            var added = 0;
+            if (!ColumnExists(connection, tableName, "PublicId"))
+            {
+                using var alter = connection.CreateCommand();
+                alter.CommandText = $"ALTER TABLE \"{tableName}\" ADD COLUMN \"PublicId\" TEXT NOT NULL DEFAULT '';";
+                alter.ExecuteNonQuery();
+                added = 1;
+            }
+
+            using (var backfill = connection.CreateCommand())
+            {
+                backfill.CommandText = Api.Data.PublicIdBackfillSql.UpdateStatement(Api.Data.PublicIdSqlDialect.Sqlite, tableName, prefix);
+                backfill.ExecuteNonQuery();
+            }
+
+            using (var idx = connection.CreateCommand())
+            {
+                idx.CommandText = $"CREATE UNIQUE INDEX IF NOT EXISTS \"IX_{tableName}_PublicId\" ON \"{tableName}\" (\"PublicId\") WHERE \"PublicId\" <> '';";
+                idx.ExecuteNonQuery();
+            }
+
+            return added;
         }
 
         // D1 0008_invoice_number_unique.sql. A blank number means "not numbered yet"; NULLs never clash in a unique index.
@@ -2649,6 +2700,8 @@ WHERE NOT EXISTS (
                     logger?.LogInformation("✓ Removed SystemAdministrators role from the built-in demo and support accounts ({Count} records).", removed);
                 }
             }
+
+            Api.Data.PublicIdBackfillSql.RepairSqliteConnection(connection, tx);
         }
 
         private static bool TableExists(DbConnection connection, string tableName, DbTransaction? tx = null)

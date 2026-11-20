@@ -17,8 +17,10 @@ using Core.Domain.TaxSystem;
 namespace Core.Domain.Sales
 {
     [Table("SalesInvoiceLine")]
-    public partial class SalesInvoiceLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("il")]
+    public partial class SalesInvoiceLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public SalesInvoiceLine()
         {
             SalesReceiptLines = new HashSet<SalesReceiptLine>();

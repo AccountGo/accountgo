@@ -9,8 +9,10 @@ namespace Core.Domain
     public enum CompanyMemberStatus { Active = 1, Suspended = 2 }
 
     [Table("CompanyMember")]
-    public class CompanyMember : BaseEntity
+    [PublicIdPrefix("mem")]
+    public class CompanyMember : BaseEntity, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public string UserId { get; set; } = "";   // AspNetUsers.Id (== JWT NameIdentifier)
         public CompanyMemberRole Role { get; set; }  // governance: who can manage the workspace

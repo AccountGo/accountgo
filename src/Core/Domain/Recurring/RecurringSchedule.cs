@@ -8,8 +8,10 @@ namespace Core.Domain.Recurring;
 /// A template that generates recurring invoices or bills on a calendar schedule.
 /// One occurrence per period. Not a second ledger; each run creates an ordinary document.
 /// </summary>
-public partial class RecurringSchedule : BaseEntity, ICompanyOwned
+[PublicIdPrefix("rsch")]
+public partial class RecurringSchedule : BaseEntity, ICompanyOwned, IHasPublicId
 {
+    public string PublicId { get; set; } = string.Empty;
     public RecurringSchedule()
     {
         Lines = new HashSet<RecurringScheduleLine>();

@@ -12,8 +12,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("Measurement")]
-    public partial class Measurement : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("uom")]
+    public partial class Measurement : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public string? Code { get; set; }
         public string? Description { get; set; }

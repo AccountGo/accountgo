@@ -13,8 +13,10 @@ namespace Core.Domain.Financials
     /// Remembers a recording action for a normalized bank description.
     /// </summary>
     [Table("BankStatementDescriptionRule")]
-    public partial class BankStatementDescriptionRule : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("bsdr")]
+    public partial class BankStatementDescriptionRule : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
 
         /// <summary>Normalized payee/memo key (lowercase, collapsed whitespace).</summary>

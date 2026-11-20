@@ -9,3 +9,9 @@ public sealed class ApiDbContextDesignTimeFactory : IDesignTimeDbContextFactory<
     public ApiDbContext CreateDbContext(string[] args) => new(new DbContextOptionsBuilder<ApiDbContext>()
         .UseSqlServer("Server=localhost;Database=accountgo_design;Trusted_Connection=True").Options);
 }
+
+public sealed class ApplicationIdentityDbContextDesignTimeFactory : IDesignTimeDbContextFactory<ApplicationIdentityDbContext>
+{
+    public ApplicationIdentityDbContext CreateDbContext(string[] args) => new(new DbContextOptionsBuilder<ApplicationIdentityDbContext>()
+        .UseSqlServer("Server=localhost;Database=accountgo_design;Trusted_Connection=True").Options);
+}

@@ -13,8 +13,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("InventoryControlJournal")]
-    public partial class InventoryControlJournal : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("icj")]
+    public partial class InventoryControlJournal : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }

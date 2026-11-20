@@ -13,8 +13,10 @@ using Core.Domain.TaxSystem;
 namespace Core.Domain.Sales
 {
     [Table("CustomerCreditNote")]
-    public class CustomerCreditNote : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("cn")]
+    public class CustomerCreditNote : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public CustomerCreditNote()
         {
             Lines = new HashSet<CustomerCreditNoteLine>();
@@ -91,8 +93,10 @@ namespace Core.Domain.Sales
     }
 
     [Table("CustomerCreditNoteLine")]
-    public class CustomerCreditNoteLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("cnl")]
+    public class CustomerCreditNoteLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int CustomerCreditNoteId { get; set; }
         public int? SourceSalesInvoiceLineId { get; set; }
@@ -120,8 +124,10 @@ namespace Core.Domain.Sales
     }
 
     [Table("CustomerReturnReceipt")]
-    public class CustomerReturnReceipt : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("crr")]
+    public class CustomerReturnReceipt : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public CustomerReturnReceipt()
         {
             Lines = new HashSet<CustomerReturnReceiptLine>();
@@ -163,8 +169,10 @@ namespace Core.Domain.Sales
     }
 
     [Table("CustomerReturnReceiptLine")]
-    public class CustomerReturnReceiptLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("crrl")]
+    public class CustomerReturnReceiptLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int CustomerReturnReceiptId { get; set; }
         public int SalesInvoiceLineId { get; set; }
@@ -187,8 +195,10 @@ namespace Core.Domain.Sales
     }
 
     [Table("ReceivableWriteOff")]
-    public class ReceivableWriteOff : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("wo")]
+    public class ReceivableWriteOff : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public ReceivableWriteOff()
         {
             Recoveries = new HashSet<WriteOffRecovery>();
@@ -248,8 +258,10 @@ namespace Core.Domain.Sales
     }
 
     [Table("WriteOffRecovery")]
-    public class WriteOffRecovery : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("wor")]
+    public class WriteOffRecovery : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int ReceivableWriteOffId { get; set; }
 

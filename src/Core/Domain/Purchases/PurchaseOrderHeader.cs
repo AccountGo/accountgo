@@ -5,8 +5,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseOrderHeader")]
-    public class PurchaseOrderHeader : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("po")]
+    public class PurchaseOrderHeader : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int? VendorId { get; set; }
         public string? No { get; set; }

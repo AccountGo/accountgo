@@ -10,8 +10,10 @@ namespace Core.Domain.TaxSystem
 {
     /// <summary>Append-only record of a filed tax period return (or amendment).</summary>
     [Table("TaxFiling")]
-    public partial class TaxFiling : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("txf")]
+    public partial class TaxFiling : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
 
         [Column(TypeName = "date")]

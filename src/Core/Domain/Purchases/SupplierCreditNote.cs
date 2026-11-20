@@ -13,8 +13,10 @@ using Core.Domain.TaxSystem;
 namespace Core.Domain.Purchases
 {
     [Table("SupplierCreditNote")]
-    public class SupplierCreditNote : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("scn")]
+    public class SupplierCreditNote : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public SupplierCreditNote()
         {
             Lines = new HashSet<SupplierCreditNoteLine>();
@@ -93,8 +95,10 @@ namespace Core.Domain.Purchases
     }
 
     [Table("SupplierCreditNoteLine")]
-    public class SupplierCreditNoteLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("scnl")]
+    public class SupplierCreditNoteLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int SupplierCreditNoteId { get; set; }
         public int? SourcePurchaseInvoiceLineId { get; set; }
@@ -124,8 +128,10 @@ namespace Core.Domain.Purchases
     }
 
     [Table("SupplierAdvance")]
-    public class SupplierAdvance : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("adv")]
+    public class SupplierAdvance : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int VendorId { get; set; }
         public int? PurchaseOrderHeaderId { get; set; }
@@ -186,8 +192,10 @@ namespace Core.Domain.Purchases
     }
 
     [Table("SupplierReturnDispatch")]
-    public class SupplierReturnDispatch : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("srd")]
+    public class SupplierReturnDispatch : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public SupplierReturnDispatch()
         {
             Lines = new HashSet<SupplierReturnDispatchLine>();
@@ -239,8 +247,10 @@ namespace Core.Domain.Purchases
     }
 
     [Table("SupplierReturnDispatchLine")]
-    public class SupplierReturnDispatchLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("srdl")]
+    public class SupplierReturnDispatchLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int SupplierReturnDispatchId { get; set; }
         public int? PurchaseReceiptLineId { get; set; }

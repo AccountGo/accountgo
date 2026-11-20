@@ -16,8 +16,10 @@ using System.Linq;
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseOrderLine")]
-    public class PurchaseOrderLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("pol")]
+    public class PurchaseOrderLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int PurchaseOrderHeaderId { get; set; }
         public int ItemId { get; set; }

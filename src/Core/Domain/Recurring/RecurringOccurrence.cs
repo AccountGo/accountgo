@@ -7,8 +7,10 @@ namespace Core.Domain.Recurring;
 /// A single run of a recurring schedule, tracking the period, document, and status.
 /// Uniquely identified by company + schedule + scheduled run date.
 /// </summary>
-public partial class RecurringOccurrence : BaseEntity, ICompanyOwned
+[PublicIdPrefix("rocc")]
+public partial class RecurringOccurrence : BaseEntity, ICompanyOwned, IHasPublicId
 {
+    public string PublicId { get; set; } = string.Empty;
     /// <summary>Tenant scope.</summary>
     public int CompanyId { get; set; }
 

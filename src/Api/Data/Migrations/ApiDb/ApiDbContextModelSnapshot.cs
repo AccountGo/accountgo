@@ -73,6 +73,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("OriginalValue")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("RecordId")
                         .HasColumnType("nvarchar(max)");
 
@@ -83,6 +90,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("AuditLog", "dbo");
                 });
@@ -276,6 +287,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Plan")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ShortName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -293,6 +311,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("Slug")
                         .IsUnique()
@@ -313,6 +335,7 @@ namespace Api.Data.Migrations.ApiDb
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Financial Solutions Inc.",
                             Plan = "accounting_free",
+                            PublicId = "ws_01j00000000000000000000001",
                             ShortName = "FSI",
                             Slug = "ph-financials",
                             SubscriptionStatus = "active"
@@ -350,6 +373,13 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("ResendCount")
                         .HasColumnType("int");
 
@@ -371,6 +401,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
@@ -397,6 +431,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("JoinedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("Role")
                         .HasColumnType("int");
 
@@ -408,6 +449,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("UserId");
 
@@ -631,9 +676,20 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("PartyId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PartyId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("Contact");
                 });
@@ -730,6 +786,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool>("Posted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Purpose")
                         .HasColumnType("nvarchar(max)");
 
@@ -744,6 +807,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("DonorId");
 
                     b.HasIndex("GlAccountId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("DonationInvoiceHeader");
                 });
@@ -775,6 +842,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -786,6 +860,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("DonationInvoiceLine");
                 });
@@ -833,6 +911,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(2)
                         .HasColumnType("nvarchar(2)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Street")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -844,6 +929,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(30)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("Donors");
 
@@ -859,6 +948,7 @@ namespace Api.Data.Migrations.ApiDb
                             LastName = "Bennett",
                             PostalCode = "K1A 0B1",
                             Province = "ON",
+                            PublicId = "dnr_01j00000000000000000000001",
                             Street = "125 Maple Street",
                             Telephone = "613-555-0101"
                         },
@@ -873,6 +963,7 @@ namespace Api.Data.Migrations.ApiDb
                             LastName = "",
                             PostalCode = "V6B 1A1",
                             Province = "BC",
+                            PublicId = "dnr_01j00000000000000000000002",
                             Street = "480 Cedar Avenue",
                             Telephone = "604-555-0102"
                         });
@@ -953,6 +1044,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("ParentAccountId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<byte[]>("RowVersion")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasMaxLength(8)
@@ -963,6 +1061,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("AccountClassId");
 
                     b.HasIndex("ParentAccountId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("CompanyId", "AccountCode")
                         .IsUnique();
@@ -1048,6 +1150,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("OpeningBalanceGeneralLedgerHeaderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("RoutingNumber")
                         .HasColumnType("nvarchar(max)");
 
@@ -1060,6 +1169,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex(new[] { "CompanyId", "AccountId" }, "UX_Bank_Company_Account")
                         .IsUnique()
@@ -1113,6 +1226,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("FinishedMaxGeneralLedgerHeaderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("datetime2");
 
@@ -1149,6 +1269,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
+
                     b.HasIndex(new[] { "CompanyId", "BankId", "StatementEndDate" }, "IX_BankReconciliation_Company_Bank_EndDate");
 
                     b.HasIndex(new[] { "CompanyId", "BankId" }, "UX_BankReconciliation_OneDraft")
@@ -1181,6 +1305,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("GeneralLedgerLineId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BankReconciliationId");
@@ -1188,6 +1319,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("GeneralLedgerLineId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex(new[] { "BankReconciliationId", "GeneralLedgerLineId" }, "UX_BankReconciliationItem_Recon_Line")
                         .IsUnique();
@@ -1266,6 +1401,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PartnerId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("VendorId")
                         .HasColumnType("int");
 
@@ -1276,6 +1418,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ExpenseAccountId");
 
                     b.HasIndex("PartnerId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("VendorId");
 
@@ -1313,6 +1459,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("Source")
                         .HasColumnType("int");
 
@@ -1321,6 +1474,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("BankId");
 
                     b.HasIndex("CompanyId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex(new[] { "CompanyId", "BankId" }, "IX_BankStatementImport_Company_Bank");
 
@@ -1385,6 +1542,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("PostedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Reference")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1401,6 +1565,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("MatchedGeneralLedgerLineId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex(new[] { "CompanyId", "BankId", "ExcludedAt" }, "IX_BankStatementLine_Company_Bank_ExcludedAt");
 
@@ -1454,6 +1622,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PartyId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ReferenceNo")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1475,6 +1650,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("GeneralLedgerHeaderId");
 
                     b.HasIndex("PartyId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("ToBankId");
 
@@ -1583,10 +1762,21 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("FinancialYear");
                 });
@@ -1611,6 +1801,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("DocumentType")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("ReversedGeneralLedgerHeaderId")
                         .HasColumnType("int");
 
@@ -1618,6 +1815,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("GeneralLedgerHeader");
                 });
@@ -1648,6 +1849,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("GeneralLedgerHeaderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
@@ -1655,6 +1863,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("BankReconciliationId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex(new[] { "CompanyId", "BankReconciliationId" }, "IX_GeneralLedgerLine_Company_BankReconciliationId");
 
@@ -1788,6 +2000,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool?>("Posted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -1809,6 +2028,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("GeneralLedgerHeaderId");
 
                     b.HasIndex("PartyId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("CompanyId", "SourceSystem", "SourceKey")
                         .IsUnique()
@@ -1843,11 +2066,22 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Memo")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
 
                     b.HasIndex("JournalEntryHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("JournalEntryLine");
                 });
@@ -1912,12 +2146,23 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasColumnType("varbinary(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("CompanyId", "CapitalAccountId")
                         .IsUnique();
@@ -2017,6 +2262,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ReversalReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -2063,6 +2315,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
+
                     b.HasIndex("VendorId");
 
                     b.HasIndex("VoidGeneralLedgerHeaderId");
@@ -2094,6 +2350,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("PartyRefundId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("SourceAccountId")
                         .HasColumnType("int");
 
@@ -2111,6 +2374,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CustomerCreditNoteId");
 
                     b.HasIndex("PartyRefundId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SupplierAdvanceId");
 
@@ -2164,6 +2431,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool>("IsReversed")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -2191,6 +2465,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CustomerCreditNoteId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseInvoiceHeaderId");
 
@@ -2376,6 +2654,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("RecordedAuthority")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -2389,6 +2674,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(2000)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("CompanyId", "FinancialYearId", "AttemptNo")
                         .IsUnique();
@@ -2564,6 +2853,13 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("QuantityChange")
                         .HasColumnType("decimal(18, 4)");
 
@@ -2581,6 +2877,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("InventoryControlJournalId");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("InventoryAdjustment");
                 });
@@ -2623,6 +2923,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal?>("OUTQty")
                         .HasColumnType("decimal(18, 4)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal?>("TotalAmount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -2637,6 +2944,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("InventoryControlJournal");
                 });
@@ -2693,6 +3004,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal?>("Price")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("PurchaseDescription")
                         .HasColumnType("nvarchar(max)");
 
@@ -2734,6 +3052,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemTaxGroupId");
 
                     b.HasIndex("PreferredVendorId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseMeasurementId");
 
@@ -2782,6 +3104,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Name")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("SalesAccountId")
                         .HasColumnType("int");
 
@@ -2796,6 +3125,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("InventoryAccountId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesAccountId");
 
@@ -2819,7 +3152,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("Measurement");
                 });
@@ -2866,6 +3210,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("SourceAmount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -2892,6 +3243,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("StatementLineId")
                         .IsUnique()
@@ -2996,6 +3351,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ShippingCountry")
                         .HasColumnType("nvarchar(max)");
 
@@ -3012,6 +3374,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("Party");
                 });
@@ -3039,7 +3405,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("PaymentType")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("PaymentTerm");
                 });
@@ -3128,6 +3505,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -3164,6 +3548,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("GeneralLedgerHeaderId");
 
                     b.HasIndex("PayableAccountId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("VendorId");
 
@@ -3204,6 +3592,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("PurchaseInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -3232,6 +3627,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("InventoryControlJournalId");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseInvoiceHeaderId");
 
@@ -3265,6 +3664,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -3278,6 +3684,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseInvoiceHeaderId");
 
@@ -3309,6 +3719,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("PurchaseOrderHeaderId")
                         .HasColumnType("int");
 
@@ -3321,6 +3738,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseOrderHeaderId");
 
@@ -3347,12 +3768,23 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("No")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("VendorId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("VendorId");
 
@@ -3388,6 +3820,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("MeasurementId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseInvoiceLineId")
                         .HasColumnType("int");
 
@@ -3407,6 +3846,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseInvoiceLineId");
 
@@ -3470,6 +3913,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseOrderHeaderId")
                         .HasColumnType("int");
 
@@ -3531,6 +3981,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("BankId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseOrderHeaderId");
 
@@ -3602,6 +4056,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("PostedBy")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
 
                     b.Property<string>("Reason")
                         .IsRequired()
@@ -3681,6 +4142,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("PayableAccountId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
+
                     b.HasIndex("ReturnClearingAccountId");
 
                     b.HasIndex("SourcePurchaseInvoiceHeaderId");
@@ -3725,6 +4190,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("MatchedReturnDispatchId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 4)");
 
@@ -3765,6 +4237,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MatchedReturnDispatchId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SourcePurchaseInvoiceLineId");
 
@@ -3815,6 +4291,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -3860,6 +4343,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
+
                     b.HasIndex("PurchaseInvoiceHeaderId");
 
                     b.HasIndex("PurchaseReceiptHeaderId");
@@ -3902,6 +4389,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseInvoiceLineId")
                         .HasColumnType("int");
 
@@ -3924,6 +4418,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("InventoryControlJournalId");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseInvoiceLineId");
 
@@ -3984,6 +4482,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Province")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseAccountId")
                         .HasColumnType("int");
 
@@ -4010,6 +4515,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("PaymentTermId");
 
                     b.HasIndex("PrimaryContactId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseAccountId");
 
@@ -4056,6 +4565,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("PaymentMethod")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -4082,6 +4598,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("AccountId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseInvoiceHeaderId");
 
@@ -4149,6 +4669,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("PeriodStart")
                         .HasColumnType("date");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchaseInvoiceId")
                         .HasColumnType("int");
 
@@ -4177,6 +4704,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("IdempotencyKey");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchaseInvoiceId");
 
@@ -4264,6 +4795,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("RecognitionMode")
                         .HasColumnType("int");
 
@@ -4283,6 +4821,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex(new[] { "CompanyId", "Kind", "PartyId" }, "IX_RecurringSchedule_Company_Kind_Party");
 
@@ -4328,6 +4870,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("ItemId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("Quantity")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("decimal(18, 4)")
@@ -4349,6 +4898,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("RecurringScheduleId");
 
@@ -4398,6 +4951,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PromptPaymentDiscountAccountId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("SalesAccountId")
                         .HasColumnType("int");
 
@@ -4422,6 +4982,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("PrimaryContactId");
 
                     b.HasIndex("PromptPaymentDiscountAccountId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesAccountId");
 
@@ -4459,6 +5023,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("GeneralLedgerHeaderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("SalesInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -4468,6 +5039,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesInvoiceHeaderId");
 
@@ -4530,6 +5105,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("PostedBy")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
 
                     b.Property<string>("Reason")
                         .IsRequired()
@@ -4610,6 +5192,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
+
                     b.HasIndex("ReceivableAccountId");
 
                     b.HasIndex("SalesReturnsAccountId");
@@ -4653,6 +5239,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("ItemId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 4)");
 
@@ -4688,6 +5281,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CustomerCreditNoteId");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SourceSalesInvoiceLineId");
 
@@ -4733,6 +5330,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime>("ReceiptDate")
                         .HasColumnType("datetime2");
 
@@ -4767,6 +5371,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesInvoiceHeaderId");
 
@@ -4811,6 +5419,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("OriginalUnitCost")
                         .HasColumnType("decimal(18, 4)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 4)");
 
@@ -4834,6 +5449,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("InventoryControlJournalId");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesInvoiceLineId");
 
@@ -4899,6 +5518,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -4954,6 +5580,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
+
                     b.HasIndex("SalesInvoiceHeaderId");
 
                     b.HasIndex("VoidGeneralLedgerHeaderId");
@@ -4991,6 +5621,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("Status")
                         .HasColumnType("int");
 
@@ -5001,6 +5638,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("GeneralLedgerHeaderId");
 
                     b.HasIndex("PaymentTermId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("SalesDeliveryHeader");
                 });
@@ -5082,6 +5723,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("SalesInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -5111,6 +5759,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("DispatchId")
                         .IsUnique()
                         .HasFilter("[DispatchId] IS NOT NULL");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesInvoiceHeaderId");
 
@@ -5165,6 +5817,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("ReceivableAccountId")
                         .HasColumnType("int");
 
@@ -5199,6 +5858,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("ReceivableAccountId");
 
@@ -5243,6 +5906,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("MeasurementId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 2)");
 
@@ -5270,6 +5940,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesAccountId");
 
@@ -5305,6 +5979,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -5316,6 +5997,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("PaymentTermId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("SalesOrderHeader");
                 });
@@ -5343,6 +6028,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("MeasurementId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 2)");
 
@@ -5354,6 +6046,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesOrderHeaderId");
 
@@ -5383,6 +6079,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -5392,6 +6095,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("SalesQuoteHeader");
                 });
@@ -5419,6 +6126,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("MeasurementId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 2)");
 
@@ -5430,6 +6144,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesQuoteHeaderId");
 
@@ -5471,6 +6189,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("PaymentMethod")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -5484,6 +6209,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("SalesReceiptHeader");
                 });
@@ -5517,6 +6246,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("MeasurementId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal?>("Quantity")
                         .HasColumnType("decimal(18, 2)");
 
@@ -5533,6 +6269,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("SalesInvoiceLineId");
 
@@ -5585,6 +6325,13 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("ReceivableWriteOffId")
                         .HasColumnType("int");
 
@@ -5618,6 +6365,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("BankId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("ReceivableWriteOffId");
 
@@ -5687,6 +6438,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Name")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<bool>("SysAdmin")
                         .HasColumnType("bit");
 
@@ -5694,6 +6452,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("SecurityRole", "dbo");
                 });
@@ -5824,7 +6586,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Name")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("ItemTaxGroup");
                 });
@@ -5872,6 +6645,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("PurchasingAccountId")
                         .HasColumnType("int");
 
@@ -5892,6 +6672,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("PurchasingAccountId");
 
@@ -5954,6 +6738,13 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("PeriodStart")
                         .HasColumnType("date");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Reference")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -5968,6 +6759,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("AmendsFilingId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.HasIndex("CompanyId", "PeriodStart", "PeriodEnd", "Sequence")
                         .IsUnique();
@@ -5992,10 +6787,21 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
                     b.Property<bool>("TaxAppliedToShipping")
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
 
                     b.ToTable("TaxGroup");
                 });
@@ -6390,7 +7196,8 @@ namespace Api.Data.Migrations.ApiDb
                                 .HasForeignKey("CompanySettingId");
                         });
 
-                    b.Navigation("BusinessAddress");
+                    b.Navigation("BusinessAddress")
+                        .IsRequired();
 
                     b.Navigation("Company");
                 });

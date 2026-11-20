@@ -13,8 +13,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesQuoteLine")]
-    public partial class SalesQuoteLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("quol")]
+    public partial class SalesQuoteLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int SalesQuoteHeaderId { get; set; }
         public int ItemId { get; set; }

@@ -15,8 +15,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("ItemCategory")]
-    public partial class ItemCategory : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("icat")]
+    public partial class ItemCategory : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public ItemCategory()
         {
             Items = new HashSet<Item>();

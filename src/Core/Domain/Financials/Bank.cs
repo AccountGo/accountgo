@@ -14,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("Bank")]
-    public partial class Bank : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("ba")]
+    public partial class Bank : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public BankTypes Type { get; set; }
 
