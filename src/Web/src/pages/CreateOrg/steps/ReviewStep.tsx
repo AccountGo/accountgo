@@ -30,6 +30,8 @@ export const ReviewStep: React.FC<{
   // About answers are the choices this setup applies; workspace facts below remain read-only on continuation.
   const aboutRows: [string, string][] = [
     ...(soloSetupAvailable && state.workspacePurpose ? [['Purpose', purposeLabel] as [string, string]] : []),
+    // Without solo setup the purpose is not saved, but the business kind still decides the year-end close account.
+    ...(!soloSetupAvailable && state.workKind ? [['Business type', purposeLabel] as [string, string]] : []),
     ...(soloSetupAvailable && state.workKind && capabilities?.canAddPersonalBooks === true
       ? [['Personal books', state.addPersonalBooks ? 'Free, linked to this workspace' : 'Not now'] as [string, string]] : []),
     ...(soloSetupAvailable && state.collaborationIntent ? [['Who uses it', COLLABORATION_LABEL[state.collaborationIntent]] as [string, string]] : []),
