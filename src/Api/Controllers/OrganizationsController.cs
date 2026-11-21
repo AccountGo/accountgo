@@ -1121,10 +1121,10 @@ namespace Api.Controllers
 
         private object ToPolicyResponse(CompanySetting s)
         {
-            var permanentId = _db.GeneralLedgerSettings.Select(g => g.PermanentAccountId).FirstOrDefault();
-            var closeTarget = permanentId.HasValue
-                ? _db.Accounts.Where(a => a.Id == permanentId.Value).Select(a => new { a.AccountCode, a.AccountName }).FirstOrDefault()
-                : null;
+            // One query: the configured permanent (close target) account of this workspace.
+            var closeTarget = (from g in _db.GeneralLedgerSettings
+                               join a in _db.Accounts on g.PermanentAccountId equals (int?)a.Id
+                               select new { a.AccountCode, a.AccountName }).FirstOrDefault();
             return ToPolicyResponse(s, closeTarget?.AccountCode, closeTarget?.AccountName);
         }
 
