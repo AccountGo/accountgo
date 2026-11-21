@@ -242,6 +242,7 @@ namespace AccountGo.BackendTests
                 var change = db.RecordChanges
                     .IgnoreQueryFilters()
                     .Where(c => c.CompanyId == _companyId && c.EntityType == "CompanySetting")
+                    .OrderBy(c => c.Id)
                     .AsEnumerable()
                     .LastOrDefault(c => c.ChangesJson.Contains("IdleTimeoutMinutes", StringComparison.Ordinal));
                 Assert.NotNull(change);

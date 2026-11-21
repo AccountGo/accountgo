@@ -226,19 +226,21 @@ namespace AccountGo.BackendTests.Financial
             using var db = new PostgresApiDbContext(options, new FixedTenantContext(1));
             db.GetService<IMigrator>().Migrate("20261117090109_YearEndCloseEvidence");
 
-            var company = db.Companies.FirstOrDefault(c => c.Id == 1) ?? new Company { Name = "Legacy Co", CompanyCode = "LEG", Slug = "leg" };
-            if (company.Id == 0) { db.Companies.Add(company); db.SaveChanges(); }
-
-            var party = new Party { CompanyId = company.Id, Name = "Legacy Vendor", PartyType = PartyTypes.Vendor };
-            db.Parties.Add(party);
-            db.SaveChanges();
-            var vendor = new Core.Domain.Purchases.Vendor { CompanyId = company.Id, PartyId = party.Id };
-            db.Vendors.Add(vendor);
-            db.SaveChanges();
+            // The current model selects columns the old schema does not have yet, so seed the legacy rows with raw SQL.
+            var companyId = db.Database.SqlQueryRaw<int>(@"SELECT ""Id"" AS ""Value"" FROM ""Company"" ORDER BY ""Id"" LIMIT 1").AsEnumerable().DefaultIfEmpty(0).First();
+            if (companyId == 0)
+                companyId = db.Database.SqlQueryRaw<int>(
+                    @"INSERT INTO ""Company"" (""Name"", ""CompanyCode"", ""Slug"") VALUES ('Legacy Co', 'LEG', 'leg') RETURNING ""Id"" AS ""Value""").AsEnumerable().First();
+            var partyId = db.Database.SqlQueryRaw<int>(
+                @"INSERT INTO ""Party"" (""CompanyId"", ""Name"", ""PartyType"", ""IsActive"") VALUES ({0}, 'Legacy Vendor', {1}, TRUE) RETURNING ""Id"" AS ""Value""",
+                companyId, (int)PartyTypes.Vendor).AsEnumerable().First();
+            var vendorId = db.Database.SqlQueryRaw<int>(
+                @"INSERT INTO ""Vendor"" (""CompanyId"", ""PartyId"") VALUES ({0}, {1}) RETURNING ""Id"" AS ""Value""",
+                companyId, partyId).AsEnumerable().First();
 
             db.Database.ExecuteSqlRaw(
                 @"INSERT INTO ""PurchaseInvoiceHeader"" (""CompanyId"", ""VendorId"", ""No"", ""VendorInvoiceNo"", ""Date"", ""Status"") VALUES ({0}, {1}, 'LEG-BILL-1', 'LB1', TIMESTAMP '2026-10-01 00:00:00', 1);",
-                company.Id, vendor.Id);
+                companyId, vendorId);
 
             // Now upgrade to latest migration
             db.Database.Migrate();
@@ -247,6 +249,10 @@ namespace AccountGo.BackendTests.Financial
             Assert.Equal("LEG-BILL-1", upgradedBill.No);
             Assert.Equal(0m, upgradedBill.CreditedAmount);
             Assert.Equal(0m, upgradedBill.AdvanceAppliedAmount);
+
+            // Rows that existed before the upgrade are backfilled with a public id of the right shape.
+            Assert.Matches("^bill_[0-9a-z]{26}$", upgradedBill.PublicId);
+            Assert.True(db.Parties.AsNoTracking().Any(p => p.Name == "Legacy Vendor" && p.PublicId != ""));
         }
     }
 }
