@@ -14,6 +14,7 @@ import {
   bufferRequest,
   fetchFromContainer,
   isInvoiceLogoRoute,
+  isDocumentCaptureUploadRoute,
   maxRequestBodyBytesForRoute,
   payloadTooLargeResponse,
   toRequest,
@@ -21,6 +22,10 @@ import {
   unavailableResponse,
   watchContainerExit,
   MAX_LOGO_REQUEST_BYTES,
+  MAX_DOCUMENT_CAPTURE_REQUEST_BYTES,
+  MAX_DOCUMENT_CAPTURE_ACCEPT_BYTES,
+  MAX_DOCUMENT_CAPTURE_LINK_BYTES,
+  MAX_ASSISTANT_RUN_STREAM_BODY_BYTES,
 } from "../container-proxy.ts";
 
 const ATTEMPTS = 4;
@@ -348,6 +353,43 @@ test("isInvoiceLogoRoute and maxRequestBodyBytesForRoute handle variants, percen
   assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "GET"), undefined);
   assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "DELETE"), undefined);
   assert.equal(maxRequestBodyBytesForRoute("/api/other", "PUT"), undefined);
+});
+
+test("document capture and assistant routes have canonical method-specific request bounds", () => {
+  assert.equal(isDocumentCaptureUploadRoute("/api/document-captures"), true);
+  assert.equal(isDocumentCaptureUploadRoute("/API//DOCUMENT-CAPTURES/"), true);
+  assert.equal(isDocumentCaptureUploadRoute("/api/document%2dcaptures"), true);
+  assert.equal(isDocumentCaptureUploadRoute("/api/document-captures/cap_abc"), false);
+  assert.equal(maxRequestBodyBytesForRoute("/api/document-captures", "POST"), MAX_DOCUMENT_CAPTURE_REQUEST_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/document%2dcaptures", "post"), MAX_DOCUMENT_CAPTURE_REQUEST_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/document-captures/cap_abc/accept", "POST"), MAX_DOCUMENT_CAPTURE_ACCEPT_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/document-captures/cap_abc/link", "POST"), MAX_DOCUMENT_CAPTURE_LINK_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/document-captures/cap_abc/links", "POST"), MAX_DOCUMENT_CAPTURE_LINK_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/document-captures/cap_abc/reject", "POST"), MAX_DOCUMENT_CAPTURE_LINK_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/ai/chat/run-stream", "POST"), MAX_ASSISTANT_RUN_STREAM_BODY_BYTES);
+  assert.equal(MAX_ASSISTANT_RUN_STREAM_BODY_BYTES, 64 * 1024);
+  assert.equal(maxRequestBodyBytesForRoute("/api/document-captures", "PUT"), undefined);
+  assert.equal(maxRequestBodyBytesForRoute("/api/unrelated", "POST"), undefined);
+  assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "PUT"), MAX_LOGO_REQUEST_BYTES);
+});
+
+test("bufferRequest rejects an unknown-length streamed capture upload over the route limit", async () => {
+  const limit = MAX_DOCUMENT_CAPTURE_REQUEST_BYTES;
+  const request = new Request("http://app.test/api/document-captures", {
+    method: "POST",
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(limit));
+        controller.enqueue(new Uint8Array(1));
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  });
+  await assert.rejects(
+    () => bufferRequest(request.url, request, request.headers, { maxBytes: limit }),
+    (error) => error instanceof PayloadTooLargeError && error.maxBytes === limit,
+  );
 });
 
 test("turnstileActionForRoute matches mixed-case, trailing-slash, and percent-encoded auth POST routes", () => {

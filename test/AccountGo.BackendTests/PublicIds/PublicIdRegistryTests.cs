@@ -56,7 +56,8 @@ public sealed class PublicIdRegistryTests
         }
 
         Assert.Equal(
-            apiModelSpecs.Select(s => $"{s.TableName}:{s.Prefix}").OrderBy(x => x, StringComparer.Ordinal).ToList(),
+            // DocumentCaptures is introduced by its own migration after the historical public-ID backfill migration.
+            apiModelSpecs.Where(s => s.TableName != "DocumentCaptures").Select(s => $"{s.TableName}:{s.Prefix}").OrderBy(x => x, StringComparer.Ordinal).ToList(),
             PublicIdBackfillSql.ApiTables.Select(s => $"{s.TableName}:{s.Prefix}").OrderBy(x => x, StringComparer.Ordinal).ToList());
 
         Assert.Equal(

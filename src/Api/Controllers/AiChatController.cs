@@ -65,6 +65,7 @@ namespace Api.Controllers
             User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
         [HttpPost("run-stream")]
+        [RequestSizeLimit(AnterRunStreamBody.MaxRequestBodyBytes)]
         public async Task RunStream([FromBody] RunStreamRequest body, CancellationToken cancellationToken)
         {
             if (!await EnsureConfiguredAsync(cancellationToken)) return;

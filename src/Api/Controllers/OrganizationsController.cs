@@ -21,9 +21,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Services.Billing;
+using Api.DocumentCaptures;
 
 namespace Api.Controllers
 {
@@ -758,13 +760,31 @@ namespace Api.Controllers
         [RequireWorkspaceRole(CompanyMemberRole.Owner)]
         [Authorize(Policy = "MfaStepUp")]
         [HttpDelete("current")]
-        public IActionResult Delete([FromBody] DeleteOrganizationRequest request)
+        public async Task<IActionResult> Delete([FromBody] DeleteOrganizationRequest request, CancellationToken cancellationToken = default)
         {
-            var company = _db.Companies.Single(c => c.Id == _tenant.RequireCompanyId());
+            var companyId = _tenant.RequireCompanyId();
+            await using var transaction = await HttpContext.RequestServices
+                .GetRequiredService<DocumentCaptureAdmissionLock>()
+                .AcquireCompanyAsync(companyId, cancellationToken);
+            var company = await _db.Companies.IgnoreQueryFilters()
+                .SingleOrDefaultAsync(c => c.Id == companyId, cancellationToken);
+            if (company is null || company.DeletedAt != null)
+                return NotFound();
             if (!string.Equals(request.ConfirmSlug, company.Slug, StringComparison.Ordinal))
                 return Problem(statusCode: 400, title: "Workspace slug confirmation does not match");
             company.DeletedAt = DateTime.UtcNow;
-            _db.SaveChanges();
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            try
+            {
+                await HttpContext.RequestServices.GetRequiredService<DocumentCaptureRetentionService>()
+                    .PurgeDeletedCompanyAsync(companyId, CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                HttpContext.RequestServices.GetRequiredService<ILogger<OrganizationsController>>()
+                    .LogWarning(exception, "Document capture cleanup after workspace deletion failed for company {CompanyId}.", companyId);
+            }
             AuditWorkspaceDeleted(company.Id);
             return NoContent();
         }

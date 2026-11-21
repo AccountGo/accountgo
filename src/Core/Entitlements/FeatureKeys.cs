@@ -14,6 +14,9 @@ namespace Core.Entitlements
         /// </summary>
         public const string BankingStatementImport = "banking.statement_import";
 
+        /// <summary>Workspace access to new document uploads and extraction.</summary>
+        public const string DocumentCapture = "documents.capture";
+
         /// <summary>Full workspace activity history, security-event reads and audit export.</summary>
         public const string AuditHistoryFull = "audit.history.full";
 

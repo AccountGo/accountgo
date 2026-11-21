@@ -804,6 +804,8 @@ WHERE ""DisabledModulesJson"" IS NULL
         // Tables added after the first release; the same statements are in the D1 migrations.
         private static void EnsureTables(DbConnection connection)
         {
+            EnsureDocumentCaptureSchema(connection);
+
             if (!TableExists(connection, "SalesInvoiceHeader")
                 || !TableExists(connection, "Item")
                 || !TableExists(connection, "GeneralLedgerHeader")
@@ -839,6 +841,137 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureLinkedEntryPairs(connection);
             EnsureCreditsReturnsRefundsSchema(connection);
         }
+
+        private static void EnsureDocumentCaptureSchema(DbConnection connection)
+        {
+            foreach (var sql in new[]
+            {
+                DocumentCaptureTableSql,
+                DocumentCaptureBlobTableSql,
+                DocumentCaptureAttemptTableSql,
+                DocumentCaptureLinkTableSql,
+                DocumentCapturePublicIdIndexSql,
+                DocumentCaptureIdempotencyIndexSql,
+                DocumentCaptureSourceHashIndexSql,
+                DocumentCaptureStatusExpiryIndexSql,
+                DocumentCaptureAttemptsGenerationIndexSql,
+                DocumentCaptureAttemptsReservationIndexSql,
+                DocumentCaptureLinksCaptureIndexSql,
+                DocumentCaptureLinksTargetIndexSql
+            })
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private const string DocumentCaptureTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentCaptures"" (
+                ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""PublicId"" TEXT NOT NULL,
+                ""Kind"" TEXT NOT NULL,
+                ""SchemaVersion"" INTEGER NOT NULL,
+                ""Status"" TEXT NOT NULL,
+                ""SourceHash"" TEXT NOT NULL,
+                ""ContentHash"" TEXT NOT NULL,
+                ""NormalizationVersion"" TEXT NOT NULL,
+                ""ContentType"" TEXT NOT NULL,
+                ""ByteCount"" INTEGER NOT NULL,
+                ""Width"" INTEGER NULL,
+                ""Height"" INTEGER NULL,
+                ""PageCount"" INTEGER NOT NULL,
+                ""IdempotencyKey"" TEXT NULL,
+                ""RequestFingerprint"" TEXT NOT NULL,
+                ""ExtractionGeneration"" INTEGER NOT NULL,
+                ""ExtractingStartedAt"" TEXT NULL,
+                ""LeaseExpiresAt"" TEXT NULL,
+                ""DetectedKind"" TEXT NULL,
+                ""DetectedDocumentCount"" INTEGER NULL,
+                ""WarningsJson"" TEXT NULL,
+                ""FieldsJson"" TEXT NULL,
+                ""AcceptedFieldsJson"" TEXT NULL,
+                ""RawText"" TEXT NULL,
+                ""ProviderName"" TEXT NULL,
+                ""ProviderVersion"" TEXT NULL,
+                ""ErrorCode"" TEXT NULL,
+                ""CreatedBy"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""AcceptedBy"" TEXT NULL,
+                ""AcceptedAt"" TEXT NULL,
+                ""RejectedBy"" TEXT NULL,
+                ""RejectedAt"" TEXT NULL,
+                ""ExpiresAt"" TEXT NOT NULL,
+                ""BytesDeletedAt"" TEXT NULL,
+                ""FieldsWipedAt"" TEXT NULL,
+                CONSTRAINT ""AK_DocumentCaptures_CompanyId_Id"" UNIQUE (""CompanyId"", ""Id"")
+            );";
+
+        private const string DocumentCaptureBlobTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentCaptureBlobs"" (
+                ""CaptureId"" INTEGER NOT NULL PRIMARY KEY,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""DocumentBytes"" BLOB NOT NULL,
+                CONSTRAINT ""FK_DocumentCaptureBlobs_DocumentCaptures_CompanyId_CaptureId""
+                    FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentCaptureAttemptTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentCaptureAttempts"" (
+                ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""CaptureId"" INTEGER NOT NULL,
+                ""Generation"" INTEGER NOT NULL,
+                ""ReservedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_DocumentCaptureAttempts_DocumentCaptures_CompanyId_CaptureId""
+                    FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentCaptureLinkTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentCaptureLinks"" (
+                ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""CaptureId"" INTEGER NOT NULL,
+                ""TargetType"" TEXT NOT NULL,
+                ""TargetId"" INTEGER NOT NULL,
+                ""LinkedBy"" TEXT NOT NULL,
+                ""LinkedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_DocumentCaptureLinks_DocumentCaptures_CompanyId_CaptureId""
+                    FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentCaptureIdempotencyIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptures_CompanyId_IdempotencyKey""
+            ON ""DocumentCaptures"" (""CompanyId"", ""IdempotencyKey"") WHERE ""IdempotencyKey"" IS NOT NULL;";
+
+        private const string DocumentCapturePublicIdIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptures_CompanyId_PublicId""
+            ON ""DocumentCaptures"" (""CompanyId"", ""PublicId"");";
+
+        private const string DocumentCaptureSourceHashIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptures_CompanyId_SourceHash_Kind_SchemaVersion_CreatedAt""
+            ON ""DocumentCaptures"" (""CompanyId"", ""SourceHash"", ""Kind"", ""SchemaVersion"", ""CreatedAt"");";
+
+        private const string DocumentCaptureStatusExpiryIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptures_CompanyId_Status_ExpiresAt""
+            ON ""DocumentCaptures"" (""CompanyId"", ""Status"", ""ExpiresAt"");";
+
+        private const string DocumentCaptureAttemptsGenerationIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureAttempts_CompanyId_CaptureId_Generation""
+            ON ""DocumentCaptureAttempts"" (""CompanyId"", ""CaptureId"", ""Generation"");";
+
+        private const string DocumentCaptureAttemptsReservationIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureAttempts_CompanyId_ReservedAt""
+            ON ""DocumentCaptureAttempts"" (""CompanyId"", ""ReservedAt"");";
+
+        private const string DocumentCaptureLinksCaptureIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureLinks_CompanyId_CaptureId""
+            ON ""DocumentCaptureLinks"" (""CompanyId"", ""CaptureId"");";
+
+        private const string DocumentCaptureLinksTargetIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureLinks_CompanyId_TargetType_TargetId""
+            ON ""DocumentCaptureLinks"" (""CompanyId"", ""TargetType"", ""TargetId"");";
 
         private static void EnsureCreditsReturnsRefundsSchema(DbConnection connection)
         {
