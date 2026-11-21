@@ -161,6 +161,9 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     // Review step: does NOT present Purpose or Who uses it as part of the workspace being created
     expect(screen.queryByText('Purpose')).toBeNull();
     expect(screen.queryByText('Who uses it')).toBeNull();
+    // The business kind chosen on the About step is shown, because it decides the year-end close account.
+    expect(screen.getByText('Business type')).toBeTruthy();
+    expect(screen.getByText('A business or company · Company')).toBeTruthy();
 
     // Clearly states before confirmation that purpose and collaboration choices will not be saved
     const reviewNote = screen.getByRole('note');
@@ -316,7 +319,9 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     // Review step is updated: discarded choices are REMOVED from the created workspace summary
     expect(screen.queryByText('Purpose')).toBeNull();
     expect(screen.queryByText('Who uses it')).toBeNull();
-    expect(screen.queryByText('Freelance or self-employed')).toBeNull();
+    // The business kind is still shown (it decides the year-end close account), under its own label.
+    expect(screen.getByText('Business type')).toBeTruthy();
+    expect(screen.getByText('Freelance or self-employed')).toBeTruthy();
 
     // Clearly states before confirmation that purpose and collaboration choices will not be saved
     const reviewNote = screen.getByRole('note');

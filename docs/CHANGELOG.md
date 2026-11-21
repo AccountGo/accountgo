@@ -54,6 +54,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Resuming payment on a workspace waiting for checkout now sends you directly back to checkout for the plan you selected, or asks you to choose a plan when none was recorded.
 
 ### Fixed
+- The final review step of workspace setup now shows the business type you chose when solo setup is off.
 - Creating a workspace without solo setup now asks what kind of business it is, so a company no longer defaults to sole-proprietor equity at year-end close.
 - Overflow action menus (`...`) inside cards such as client and vendor contacts now render cleanly above surrounding sections instead of being clipped, and form dialogs keep their headers and action buttons pinned while long forms scroll.
 - Saving roles on the Members page while the service is starting now shows a clear message that nothing was saved, and the message scrolls into view.
