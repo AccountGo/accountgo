@@ -47,6 +47,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 20304,Advances-H.O. Dues,20100,2,FALSE,FALSE,100,CR
 20400,Other Current Liabilities,20100,2,FALSE,FALSE,100,CR
 20500,Non-current Liabilities,20000,2,FALSE,FALSE,100,CR
+20510,Loans Payable,20000,2,FALSE,FALSE,100,CR
 20600,Other Long-term Liabilities,20000,2,FALSE,FALSE,100,CR
 30000,Equity,,3,FALSE,FALSE,100,CR
 30100,Member Capital,30000,3,FALSE,FALSE,100,CR
@@ -100,6 +101,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 50124,Subscription Billing Fees,50100,5,FALSE,FALSE,100,DR
 50125,Non-recoverable Tax on Payment Fees,50100,5,FALSE,FALSE,100,DR
 50126,Foreign Exchange Losses,50100,5,FALSE,FALSE,100,DR
+50127,Insurance Expenses-General,50100,5,FALSE,FALSE,100,DR
 50200,Purchase A/C,50000,5,FALSE,FALSE,100,DR
 50300,Cost of Goods Sold,50000,5,FALSE,FALSE,100,DR
 50310,Inventory Adjustments,50000,5,FALSE,FALSE,100,DR

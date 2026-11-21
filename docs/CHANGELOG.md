@@ -20,6 +20,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Customer physical return receipts (at supported original issue cost and condition), supplier return dispatches with control-transfer clearing, and stock rebate allocations (behind the per-workspace feature gate).
 
 - Starter charts include accounts for payment processor clearing, payouts in transit, deferred revenue, related-party revenue, payment fees and foreign exchange gains and losses.
+- New workspaces' starter chart now includes a general Insurance Expenses account and a Loans Payable account.
 
 - The assistant can review your books: it checks the reports, bank reconciliations, invoices, bills and manual journals for likely errors, lists what it found with links to each record, and says what it could not check. It can also help answer an accountant's or auditor's requests. This is a review of your own records, not an audit.
 - The assistant can run a set of checks over a period when you ask it to review your books: whether what clients and vendors owe agrees with the ledger, invoices and bills missing from the ledger, duplicate bills, manual journals worth a second look, and bank accounts not reconciled to the period end. Each result links to the records behind it.
@@ -53,6 +54,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Fixed
 - Overflow action menus (`...`) inside cards such as client and vendor contacts now render cleanly above surrounding sections instead of being clipped, and form dialogs keep their headers and action buttons pinned while long forms scroll.
+- Saving roles on the Members page while the service is starting now shows a clear message that nothing was saved, and the message scrolls into view.
 - Notices above the sign-in form, such as the message shown after you are signed out, are now readable in the light theme.
 - Wise webhook integrations now accept initial transfer state notifications and additional balance update schema versions, show the failing event type and reason, and let you replay failed malformed deliveries.
 - Creating accounts now uses the correct debit or credit normal balance for their class and contra status. Editing unused accounts also corrects legacy defaults without changing accounts that have journal history.

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RefreshCw, UserPlus, ShieldCheck, ShieldAlert, RotateCcw } from 'lucide-react';
 import {
@@ -25,6 +25,7 @@ import {
   permissionsForRoles,
 } from '../lib/accessPresets';
 import { withSuppressedEntitlementDenial } from '../lib/entitlementEvents';
+import { unavailableWriteMessage } from '../lib/unavailableWrite';
 
 interface PendingConfirm {
   title: string;
@@ -72,11 +73,13 @@ async function requireSuccess(response: Response): Promise<void> {
   if (response.ok) return;
   const text = await response.text();
   let message = text || `Request failed (${response.status})`;
+  let problemMessage: string | undefined;
   let reasonCode: string | undefined;
   let policyRevision: number | undefined;
   try {
     const problem: { detail?: string; title?: string; message?: string; reasonCode?: string; policyRevision?: number } = JSON.parse(text);
-    message = problem.detail || problem.message || problem.title || message;
+    problemMessage = problem.detail || problem.message || problem.title;
+    message = problemMessage || message;
     reasonCode = problem.reasonCode;
     policyRevision = problem.policyRevision;
   } catch {
@@ -85,7 +88,8 @@ async function requireSuccess(response: Response): Promise<void> {
   if (response.status === 409 && reasonCode !== LAST_REVIEWER_REASON_CODE && reasonCode !== POLICY_ASSUMPTIONS_CHANGED_REASON_CODE) {
     throw new ApiProblemError(`${message} Review the latest workspace setup and try again.`, response.status, reasonCode, policyRevision);
   }
-  throw new ApiProblemError(message, response.status, reasonCode, policyRevision);
+  const unavailable = unavailableWriteMessage(response.status, problemMessage);
+  throw new ApiProblemError(unavailable ?? message, response.status, reasonCode, policyRevision);
 }
 
 function journalWorkflowLabel(mode?: string): string {
@@ -115,6 +119,7 @@ export const Members: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const errorRef = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
   const [form, setForm] = useState<'invite' | 'request' | 'setup' | WorkspaceMember | null>(null);
@@ -237,6 +242,11 @@ export const Members: React.FC = () => {
       if (!signal?.aborted) setLoading(false);
     }
   }, [authFetch, currentOrg.slug]);
+
+  // The alert sits at the top of the page while forms render far below it, so bring a new error into view.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [error]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -486,7 +496,7 @@ export const Members: React.FC = () => {
           </>
         }
       />
-      {error && <div role="alert" data-reason-code={errorReasonCode || undefined} className="p-4 rounded-xl bg-red-500/10 text-red-400">{error}</div>}
+      {error && <div ref={errorRef} role="alert" data-reason-code={errorReasonCode || undefined} className="p-4 rounded-xl bg-red-500/10 text-red-400">{error}</div>}
       {notice && <div role="status" className="p-4 rounded-xl bg-emerald-500/10 text-emerald-400">{notice}</div>}
 
       {/* Your access summary */}

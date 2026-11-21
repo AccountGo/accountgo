@@ -334,6 +334,12 @@
     },
     {
       "accountClassId": 2,
+      "accountCode": "20510",
+      "accountName": "Loans Payable",
+      "amount": 0.0
+    },
+    {
+      "accountClassId": 2,
       "accountCode": "20600",
       "accountName": "Other Long-term Liabilities",
       "amount": 0.0
@@ -662,6 +668,12 @@
       "isExpense": true,
       "accountCode": "50126",
       "accountName": "Foreign Exchange Losses",
+      "amount": 0.0
+    },
+    {
+      "isExpense": true,
+      "accountCode": "50127",
+      "accountName": "Insurance Expenses-General",
       "amount": 0.0
     },
     {

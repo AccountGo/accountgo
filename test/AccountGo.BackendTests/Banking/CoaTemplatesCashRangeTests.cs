@@ -34,6 +34,29 @@ public class CoaTemplatesCashRangeTests
         Assert.Equal(fromCsv, fromTemplate);
     }
 
+    [Fact]
+    public void BaseChart_HasGeneralInsuranceExpenseAndLoansPayable_UnderTheirParents_WithUniqueCodes()
+    {
+        var csvPath = Path.Combine(RepoRoot(), "src", "Api", "Data", "coa.csv");
+        var rows = File.ReadLines(csvPath).Skip(1)
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .Select(l => l.Split(','))
+            .ToList();
+
+        Assert.Equal(rows.Count, rows.Select(r => r[0].Trim()).Distinct(StringComparer.Ordinal).Count());
+
+        var insurance = Assert.Single(rows, r => r[0] == "50127");
+        Assert.Equal("Insurance Expenses-General", insurance[1]);
+        Assert.Equal("50100", insurance[2]);
+        Assert.Equal("5", insurance[3]);
+
+        var loans = Assert.Single(rows, r => r[0] == "20510");
+        Assert.Equal("Loans Payable", loans[1]);
+        Assert.Equal("20000", loans[2]);
+        Assert.Equal("2", loans[3]);
+        Assert.Equal("CR", loans[7].Trim());
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
