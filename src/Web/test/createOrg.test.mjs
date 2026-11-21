@@ -130,19 +130,31 @@ test('buildPayload omits About fields when solo setup is disabled to offer a leg
   assert.equal(json.name, 'Acme Studio');
 });
 
-test('when solo setup is disabled, about step validation does not require purpose or collaboration choices', () => {
+test('when solo setup is disabled, about step requires only the business kind, not purpose or collaboration', () => {
   const state = defaultState(today);
-  // Default state has empty workspacePurpose and collaborationIntent
   assert.equal(state.workspacePurpose, '');
   assert.equal(state.collaborationIntent, '');
 
-  // With soloSetupEnabled: false, validateStep('about') does not require them
-  assert.deepEqual(validateStep('about', state, today, { soloSetupEnabled: false }), {});
+  // The business kind decides the year-end close target, so it is asked even without solo setup.
+  assert.deepEqual(Object.keys(validateStep('about', state, today, { soloSetupEnabled: false })), ['workKind']);
+  const company = { ...state, workKind: 'Company' };
+  assert.deepEqual(Object.keys(validateStep('about', company, today, { soloSetupEnabled: false })), ['legalForm']);
+  assert.deepEqual(validateStep('about', { ...company, legalForm: 'Corporation' }, today, { soloSetupEnabled: false }), {});
+  assert.deepEqual(validateStep('about', { ...state, workKind: 'Freelance' }, today, { soloSetupEnabled: false }), {});
 
-  // With identity and moneyTime valid, validateAll passes without About choices
-  const filled = { ...state, name: 'Acme', slug: 'acme' };
+  const filled = { ...state, name: 'Acme', slug: 'acme', workKind: 'Freelance' };
   assert.deepEqual(validateAll(filled, today, { soloSetupEnabled: false }), {});
 
-  // firstIncompleteStepIndex moves past about when solo setup is disabled
+  // firstIncompleteStepIndex moves past about when the business kind is answered
   assert.equal(firstIncompleteStepIndex(filled, today, { soloSetupEnabled: false }), 5);
+});
+
+test('entityType is sent from the business kind even when solo setup is disabled', () => {
+  const base = defaultState(today, { name: 'Acme Ltd' });
+  const off = { soloSetupEnabled: false };
+  assert.equal(buildPayload({ ...base, workKind: 'Company', legalForm: 'Corporation' }, off).entityType, 'Corporation');
+  assert.equal(buildPayload({ ...base, workKind: 'Company', legalForm: 'Partnership' }, off).entityType, 'Partnership');
+  assert.equal(buildPayload({ ...base, workKind: 'Freelance' }, off).entityType, 'SoleProprietor');
+  // Personal purpose never maps to Individual without solo setup.
+  assert.equal(buildPayload({ ...base, workspacePurpose: 'Personal' }, off).entityType, undefined);
 });

@@ -49,6 +49,8 @@ interface YearEndPreview {
   blocking: YearEndCheckItem[];
   warnings: YearEndCheckItem[];
   closingLines: YearEndClosingLine[];
+  closeTargetAccountCode?: string | null;
+  closeTargetAccountName?: string | null;
   partnerAllocations?: Array<{ partnerId: string; name: string; percent: number; profitShare: number; drawingsClosed: number; capitalAfterClose: number }>;
   partnerLossNotice?: string | null;
   canClose: boolean;
@@ -502,6 +504,11 @@ export const YearEndCloseCard: React.FC<{ canClose: boolean; personal?: boolean 
               <button type="button" className="btn-secondary !h-9 !text-xs" onClick={() => void openCloseDialog(closeDialog.code)}>
                 Refresh review
               </button>
+            )}
+            {closeDialog.preview.closingLines.length > 0 && closeDialog.preview.closeTargetAccountCode && (
+              <p className="text-xs text-[var(--text-secondary)]">
+                The year's result will be posted to {closeDialog.preview.closeTargetAccountCode} {closeDialog.preview.closeTargetAccountName}.
+              </p>
             )}
             {closeDialog.preview.closingLines.length > 0 && (
               <div className="overflow-x-auto">

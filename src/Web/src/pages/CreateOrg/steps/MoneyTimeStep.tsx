@@ -31,7 +31,7 @@ export const MoneyTimeStep: React.FC<{
         </datalist>
       </Field>
 
-      <Field id="org-books-start" label="Books start date" error={errors.booksStartDate} hint="The first day you will record transactions here. Opening balances can be added later.">
+      <Field id="org-books-start" label="Books start date" error={errors.booksStartDate} hint="The first day you will record transactions here. Your first fiscal year is the whole year that contains this date, and entries dated before it are blocked. Opening balances can be added later.">
         <input
           id="org-books-start"
           type="date"

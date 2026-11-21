@@ -89,6 +89,16 @@ namespace AccountGo.BackendTests
             var previewBody = await preview.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(2, previewBody.GetProperty("status").GetInt32()); // Ended
 
+            // The preview and the accounting policy both name the equity account the year closes to.
+            var policyResponse = await Send(HttpMethod.Get, "/api/organizations/current/accounting-policy");
+            var policyBody = await policyResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var closeTargetCode = previewBody.GetProperty("closeTargetAccountCode").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(closeTargetCode));
+            Assert.False(string.IsNullOrWhiteSpace(previewBody.GetProperty("closeTargetAccountName").GetString()));
+            Assert.Equal(closeTargetCode, policyBody.GetProperty("closeTargetAccountCode").GetString());
+            Assert.Contains(previewBody.GetProperty("closingLines").EnumerateArray(),
+                line => line.GetProperty("accountCode").GetString() == closeTargetCode);
+
             var closeRefused = await CloseYear(fyCode, acknowledgeIfNeeded: true);
 
             Assert.True(closeRefused.IsSuccessStatusCode, await closeRefused.Content.ReadAsStringAsync());
@@ -125,6 +135,7 @@ namespace AccountGo.BackendTests
             var impact = await Send(HttpMethod.Get, $"/api/Financials/YearEnd/{fyCode}");
             var impactBody = await impact.Content.ReadFromJsonAsync<JsonElement>();
             Assert.True(impactBody.GetProperty("requiresLockAcknowledgement").GetBoolean());
+            Assert.Equal(JsonValueKind.Null, impactBody.GetProperty("closeTargetAccountCode").ValueKind);
             Assert.Equal(IsoDate(fyEnd), impactBody.GetProperty("currentBooksLockedThrough").GetString());
             var noAck = await Send(HttpMethod.Post, $"/api/Financials/YearEnd/{fyCode}/Reopen", new { reason = "Adjust year-end accrual" });
             Assert.Equal(HttpStatusCode.BadRequest, noAck.StatusCode);

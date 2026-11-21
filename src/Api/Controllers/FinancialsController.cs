@@ -2459,6 +2459,8 @@ namespace Api.Controllers
                 item.PartnerId, item.Name, item.Percent,
                 item.ProfitShare, item.DrawingsClosed, item.CapitalAfterClose)).ToList(),
             partnerLossNotice = preview.PartnerLossNotice,
+            closeTargetAccountCode = preview.CloseTargetAccountCode,
+            closeTargetAccountName = preview.CloseTargetAccountName,
             currentBooksLockedThrough = preview.CurrentBooksLockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             proposedBooksLockedThrough = preview.ProposedBooksLockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             requiresLockAcknowledgement = preview.RequiresLockAcknowledgement,

@@ -64,6 +64,22 @@ export const AboutStep: React.FC<{
             Workspace purpose and collaboration choices cannot be applied and will not be saved. You can assign functional roles and manage permissions in Members settings after creation.
           </p>
         </div>
+        <div>
+          <ChoiceCards<WorkKind>
+            legend="What is this workspace for?"
+            name="workKind"
+            value={state.workKind}
+            onChange={(workKind) => update({ workKind })}
+            options={purposeOptions}
+          />
+          {errors.workKind && <p role="alert" className="text-[11px] text-rose-400 mt-1.5">{errors.workKind}</p>}
+        </div>
+        {state.workKind === 'Company' && <div>
+          <ChoiceCards<LegalForm> legend="What kind of business?" name="legalForm" value={state.legalForm}
+            onChange={(legalForm) => update({ legalForm })} options={legalOptions} />
+          {errors.legalForm && <p role="alert" className="text-[11px] text-rose-400 mt-1.5">{errors.legalForm}</p>}
+          <p className="text-[11px] text-[var(--text-muted)] mt-2">This decides which equity account the year's profit is closed to at year end.</p>
+        </div>}
         {personalOnlyLink}
       </div>
     );

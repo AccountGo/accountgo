@@ -389,8 +389,11 @@ namespace Services.Financial
             var packageNote = status == FiscalYearCloseStatus.Closed && latestRunId == null
                 ? "No retained close package: closed before this feature"
                 : null;
+            var closeTarget = status == FiscalYearCloseStatus.Closed ? null : ResolveCloseTarget();
             return new YearEndPreview
             {
+                CloseTargetAccountCode = closeTarget?.AccountCode,
+                CloseTargetAccountName = closeTarget?.AccountName,
                 CurrentBooksLockedThrough = impact.Current,
                 ProposedBooksLockedThrough = impact.Proposed,
                 RequiresLockAcknowledgement = impact.RequiresAcknowledgement,
@@ -679,6 +682,12 @@ namespace Services.Financial
                     LinkPath = "/purchases/credits"
                 });
             }
+        }
+
+        private Account? ResolveCloseTarget()
+        {
+            var permanentId = _glSettings.Table.Select(s => s.PermanentAccountId).FirstOrDefault();
+            return permanentId.HasValue ? _accounts.Table.FirstOrDefault(a => a.Id == permanentId.Value) : null;
         }
 
         private IReadOnlyList<YearEndClosingLine> BuildClosingLines(FinancialYear year,
