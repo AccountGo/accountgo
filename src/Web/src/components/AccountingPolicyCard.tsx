@@ -10,6 +10,8 @@ interface Policy {
   booksStartDate: string;
   taxRegime: string;
   entityType?: string;
+  closeTargetAccountCode?: string | null;
+  closeTargetAccountName?: string | null;
   inventoryCostingMethod: string;
   isLedgerFrozen: boolean;
 }
@@ -134,6 +136,7 @@ export const AccountingPolicyCard: React.FC<{ canEdit: boolean; personal?: boole
           <label htmlFor="policy-books-start" className={labelClass}>Books start date</label>
           <input id="policy-books-start" type="date" className={selectClass} disabled={lockedDisabled} value={policy.booksStartDate}
             onChange={(e) => set({ booksStartDate: e.target.value })} />
+          <p className="text-[11px] text-[var(--text-muted)] mt-1">Your first fiscal year is the whole year that contains this date. Entries dated before it are blocked.</p>
         </div>
         <div>
           <label htmlFor="policy-fy" className={labelClass}>Fiscal year</label>
@@ -162,6 +165,11 @@ export const AccountingPolicyCard: React.FC<{ canEdit: boolean; personal?: boole
           <select id="policy-entity-type" className={selectClass} disabled={!canEdit} value={policy.entityType ?? 'SoleProprietor'} onChange={(e) => set({ entityType: e.target.value })}>
             {ENTITY_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
+          {saved?.closeTargetAccountCode && (
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">
+              Year-end close posts the year's result to {saved.closeTargetAccountCode} {saved.closeTargetAccountName}. The entity type cannot be changed once a year has been closed.
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="policy-inventory" className={labelClass}>Inventory costing</label>

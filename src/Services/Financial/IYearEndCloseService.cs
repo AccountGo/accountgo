@@ -75,6 +75,9 @@ namespace Services.Financial
         public IReadOnlyList<YearEndClosingLine> ClosingLines { get; set; } = Array.Empty<YearEndClosingLine>();
         public IReadOnlyList<PartnerAllocationPreview> PartnerAllocations { get; set; } = Array.Empty<PartnerAllocationPreview>();
         public string? PartnerLossNotice { get; set; }
+        /// <summary>The equity account that receives the year's result, so the preview can name it. Null once closed or when none is configured.</summary>
+        public string? CloseTargetAccountCode { get; set; }
+        public string? CloseTargetAccountName { get; set; }
         public DateTime? CurrentBooksLockedThrough { get; set; }
         public DateTime? ProposedBooksLockedThrough { get; set; }
         public bool RequiresLockAcknowledgement { get; set; }

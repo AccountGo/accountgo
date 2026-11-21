@@ -38,7 +38,7 @@ public sealed class RequestQueryBudgetTests
         ("/api/Purchasing/Bills", 5), ("/api/Purchasing/Vendors", 6), ("/api/Financials/trialbalance", 5),
         ("/api/Financials/BalanceSheet", 9), ("/api/Financials/IncomeStatement", 8),
         ("/api/Financials/GeneralLedger", 6), ("/api/Financials/CashFlow", 14),
-        ("/api/organizations/current/accounting-policy", 5), ("/api/organizations/current/operating-settings", 11),
+        ("/api/organizations/current/accounting-policy", 6), ("/api/organizations/current/operating-settings", 11),
         ("/api/Tax/Taxes", 8), ("/api/Common/PaymentTerms", 5), ("/api/Administration/financialyears", 6),
         ("/api/Banking/Reconciliations", 4),
     ];

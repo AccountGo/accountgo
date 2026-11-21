@@ -154,6 +154,12 @@ export const validateStep = (
 ): StepErrors => {
   const errors: StepErrors = {};
   const soloEnabled = capabilities?.soloSetupEnabled !== false;
+  if (step === 'about' && !soloEnabled) {
+    // Without solo setup the About questions are not asked, but the business kind still decides where the year's
+    // result is closed to, so it is always required.
+    if (!state.workKind) errors.workKind = 'Choose what this workspace is for.';
+    if (state.workKind === 'Company' && !state.legalForm) errors.legalForm = 'Choose what kind of business.';
+  }
   if (step === 'about' && soloEnabled) {
     if (!state.workKind) errors.workKind = 'Choose what this workspace is for.';
     if (state.workKind === 'Company' && !state.legalForm) errors.legalForm = 'Choose what kind of business.';
@@ -231,10 +237,9 @@ export const buildPayload = (state: WizardState, capabilities?: SetupCapabilitie
     workspacePurpose: soloEnabled ? (workspacePurpose || undefined) : undefined,
     collaborationIntent: soloEnabled ? (state.collaborationIntent || undefined) : undefined,
     // Retain the Individual mapping for older callers that still supply Personal purpose.
-    entityType: soloEnabled
-      ? (workspacePurpose === 'Personal' ? 'Individual'
-        : state.workKind === 'Freelance' ? 'SoleProprietor' : state.legalForm || undefined)
-      : undefined,
+    // The business kind is sent whether or not solo setup is on: it decides which equity account the year closes to.
+    entityType: soloEnabled && workspacePurpose === 'Personal' ? 'Individual'
+      : state.workKind === 'Freelance' ? 'SoleProprietor' : state.legalForm || undefined,
     ownerAccessPreset: soloEnabled && (state.collaborationIntent === 'JustMe' || state.collaborationIntent === 'WithOthers')
       ? 'FullWorkspaceAccess'
       : undefined,

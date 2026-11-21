@@ -1119,8 +1119,19 @@ namespace Api.Controllers
         private static string FormatDate(DateTime? date) =>
             date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-        private object ToPolicyResponse(CompanySetting s) => new
+        private object ToPolicyResponse(CompanySetting s)
         {
+            // One query: the configured permanent (close target) account of this workspace.
+            var closeTarget = (from g in _db.GeneralLedgerSettings
+                               join a in _db.Accounts on g.PermanentAccountId equals (int?)a.Id
+                               select new { a.AccountCode, a.AccountName }).FirstOrDefault();
+            return ToPolicyResponse(s, closeTarget?.AccountCode, closeTarget?.AccountName);
+        }
+
+        private object ToPolicyResponse(CompanySetting s, string closeTargetAccountCode, string closeTargetAccountName) => new
+        {
+            closeTargetAccountCode,
+            closeTargetAccountName,
             reportingFramework = s.ReportingFramework.ToString(),
             accountingBasis = s.AccountingBasis.ToString(),
             fiscalYearPattern = s.FiscalYearPattern.ToString(),

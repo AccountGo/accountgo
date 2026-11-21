@@ -147,12 +147,15 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     );
 
     // Unapplicable choices are hidden from customer
-    expect(screen.queryByDisplayValue('Freelance')).toBeNull();
     expect(screen.queryByDisplayValue('Personal')).toBeNull();
     expect(screen.queryByDisplayValue('JustMe')).toBeNull();
     expect(screen.queryByDisplayValue('WithOthers')).toBeNull();
 
-    // Advance to Review step without being blocked for About choices
+    // The business kind is still asked: it decides which equity account the year closes to.
+    fireEvent.click(screen.getByRole('radio', { name: /A business or company/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /^Company$/ }));
+
+    // Advance to Review step without being blocked for the other About choices
     await advanceToReview();
 
     // Review step: does NOT present Purpose or Who uses it as part of the workspace being created
@@ -188,6 +191,7 @@ describe('CreateOrg wizard capability-aware journeys', () => {
     expect(postCalls[0].collaborationIntent).toBeUndefined();
     expect(postCalls[0].ownerAccessPreset).toBeUndefined();
     expect(postCalls[0].initialJournalWorkflow).toBeUndefined();
+    expect(postCalls[0].entityType).toBe('Corporation');
     expect(postCalls[0].name).toBe('Acme');
     expect(postCalls[0].slug).toBe('acme');
   });
