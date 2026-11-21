@@ -411,10 +411,16 @@ namespace AccountGo.BackendTests.Auditing
                 };
             }
 
-            var saved = await _host.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, token, slug);
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/Sales/SaveSalesInvoice");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            req.Headers.Add("X-AccountGo-Org", slug);
+            req.Content = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ToJsonContent(_host.Factory.Services, companyId, invoice);
+            using var client = _host.Factory.CreateClient();
+            var saved = await client.SendAsync(req);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await Host.Json(saved)).GetProperty("id").GetInt32();
-            var issued = await _host.Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={invoiceId}", token: token, org: slug);
+            var invoicePubId = (await Host.Json(saved)).GetProperty("id").GetString()!;
+            var invoiceId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<SalesInvoiceHeader>(_host.Factory.Services, invoicePubId);
+            var issued = await _host.Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={invoicePubId}", token: token, org: slug);
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
             return invoiceId;
         }
@@ -442,10 +448,13 @@ namespace AccountGo.BackendTests.Auditing
             return new Team(slug, companyId, owner, admin, target, targetMemberId, _host.SecurityRoleId("Accountant"));
         }
 
+        private string MemPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_host.Factory.Services, id);
+        private string RolePub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Security.SecurityRole>(_host.Factory.Services, id);
+
         private async Task<string> GrantApproval(Team team)
         {
             var approval = await _host.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { targetMemberId = team.TargetMemberId, targetUserId = team.Target.Id, securityRoleIds = new[] { team.AccountantRoleId } },
+                new { targetMemberId = MemPub(team.TargetMemberId), targetUserId = team.Target.Id, securityRoleIds = new[] { RolePub(team.AccountantRoleId) } },
                 team.Owner.Token, team.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
             return (await Host.Json(approval)).GetProperty("approvalRequestId").GetString()!;
@@ -492,8 +501,8 @@ namespace AccountGo.BackendTests.Auditing
             var team = await CreateTeam();
             var approvalId = await GrantApproval(team);
 
-            var patch = await _host.Send(HttpMethod.Patch, Current + "/members/" + team.TargetMemberId,
-                new { securityRoleIds = new[] { team.AccountantRoleId }, approvalRequestId = approvalId },
+            var patch = await _host.Send(HttpMethod.Patch, Current + "/members/" + MemPub(team.TargetMemberId),
+                new { securityRoleIds = new[] { RolePub(team.AccountantRoleId) }, approvalRequestId = approvalId },
                 team.Admin.Token, team.Slug);
             Assert.Equal(HttpStatusCode.NoContent, patch.StatusCode);
 
@@ -512,7 +521,7 @@ namespace AccountGo.BackendTests.Auditing
         {
             var team = await CreateTeam();
 
-            var remove = await _host.Send(HttpMethod.Delete, Current + "/members/" + team.TargetMemberId, token: team.Owner.Token, org: team.Slug);
+            var remove = await _host.Send(HttpMethod.Delete, Current + "/members/" + MemPub(team.TargetMemberId), token: team.Owner.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.NoContent, remove.StatusCode);
 
             var events = await _host.SettledEvents(e => e.EventType == "member.remove" && e.CompanyId == team.CompanyId, 1);
@@ -529,7 +538,7 @@ namespace AccountGo.BackendTests.Auditing
             var viewerRoleId = _host.SecurityRoleId("Auditor / Viewer");
 
             var invite = await _host.Send(HttpMethod.Post, Current + "/invitations",
-                new { email = invitee.Email, role = "Member", securityRoleIds = new[] { viewerRoleId } },
+                new { email = invitee.Email, role = "Member", securityRoleIds = new[] { RolePub(viewerRoleId) } },
                 team.Admin.Token, team.Slug);
             Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
             var rawToken = LastInvitationToken();
@@ -560,7 +569,7 @@ namespace AccountGo.BackendTests.Auditing
             }
 
             var save = await _host.Send(HttpMethod.Post, "/api/Administration/roles",
-                new { id = 0, name = roleName, displayName = roleName, permissionIds = new[] { permissionId } },
+                new { id = (string?)null, name = roleName, displayName = roleName, permissionIds = new[] { permissionId } },
                 admin.Token, slug);
             Assert.True(save.StatusCode == HttpStatusCode.OK, await save.Content.ReadAsStringAsync());
 

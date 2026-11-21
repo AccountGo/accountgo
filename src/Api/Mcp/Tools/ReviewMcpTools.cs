@@ -98,9 +98,9 @@ namespace Api.Mcp.Tools
         [McpServerTool(Name = "search_receipts", Title = "Search Receipts", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("With receiptId, returns the receipt detail from the Sales page. Otherwise lists sales receipt summaries newest first: receipt number, client, date, amount, unallocated amount, payment method, reference and memo. Filter by text, client and inclusive receipt dates, then page. Requires Sales and sales.receipts.view. The list endpoint does not expose void/posting status or allocation detail. Use get_invoice for invoice payment evidence. Links open Sales; there is no standalone receipt detail page.")]
         public async Task<WorkspaceDataMcpResponse> SearchReceipts(
-            [Description("Optional positive receipt id. Returns the receipt detail instead of a list; list filters do not apply.")] int? receiptId = null,
+            [Description("Optional receipt id, like 'rcpt_…'. Returns the receipt detail instead of a list; list filters do not apply.")] string? receiptId = null,
             [Description("Optional text in receipt number, client name, reference or memo.")] string? query = null,
-            [Description("Optional positive client id.")] int? clientId = null,
+            [Description("Optional client id, like 'cus_…'.")] string? clientId = null,
             [Description("Optional earliest receipt date, yyyy-MM-dd.")] string? fromDate = null,
             [Description("Optional latest receipt date, yyyy-MM-dd.")] string? toDate = null,
             [Description("Records to skip, at least zero.")] int skip = 0,
@@ -108,51 +108,61 @@ namespace Api.Mcp.Tools
             CancellationToken cancellationToken = default)
         {
             const string kind = "receipts";
-            if (receiptId.HasValue)
+            var receipt = await ResolveIdAsync("receipt", receiptId, "rcpt", nameof(receiptId), cancellationToken);
+            if (receipt.Failure != null) return receipt.Failure;
+            if (receipt.Id is int receiptKey)
             {
-                if (receiptId <= 0) return Invalid(kind, "Provide a positive receipt id.");
                 return await RecordAsync<SalesController>("receipt", nameof(SalesController.SalesReceipt),
-                    c => c.SalesReceipt(receiptId.Value), PagePath("sales"),
-                    new Dictionary<string, object?> { ["id"] = receiptId.Value });
+                    c => c.SalesReceipt(receiptKey), PagePath("sales"),
+                    new Dictionary<string, object?> { ["id"] = receiptKey });
             }
-            if (skip < 0 || take < 1 || take > MaxTake || clientId <= 0)
-                return Invalid(kind, "Provide a positive client id, skip >= 0 and take between 1 and 100.");
+            var client = await ResolveIdAsync(kind, clientId, "cus", nameof(clientId), cancellationToken);
+            if (client.Failure != null) return client.Failure;
+            var clientKey = client.Id;
+            if (skip < 0 || take < 1 || take > MaxTake)
+                return Invalid(kind, "Provide skip >= 0 and take between 1 and 100.");
             if (!TryDateRange(fromDate, toDate, out var from, out var to))
                 return Invalid(kind, "Provide an ordered yyyy-MM-dd receipt date range.");
             var read = await Reader.ReadAsync<SalesController>(nameof(SalesController.SalesReceipts), c => c.SalesReceipts());
             if (!read.Succeeded) return Refused(kind, read);
             var receipts = ((IEnumerable<Dto.Sales.SalesReceipt>?)read.Value ?? Array.Empty<Dto.Sales.SalesReceipt>())
-                .Where(r => !clientId.HasValue || r.CustomerId == clientId)
+                .Where(r => !clientKey.HasValue || r.CustomerId == clientKey)
                 .Where(r => !from.HasValue || r.ReceiptDate.Date >= from)
                 .Where(r => !to.HasValue || r.ReceiptDate.Date <= to)
                 .Where(r => Matches(query, r.ReceiptNo, r.CustomerName, r.ReferenceNo, r.Memo))
                 .OrderByDescending(r => r.ReceiptDate).ThenByDescending(r => r.Id)
-                .Select(r => new { r.Id, r.ReceiptNo, r.CustomerId, r.CustomerName, r.ReceiptDate, r.Amount,
-                    r.RemainingAmountToAllocate, r.PaymentMethod, r.ReferenceNo, r.Memo, Link = PagePath("sales") });
-            return Page(kind, receipts, skip, take, PagePath("sales"));
+                .ToList();
+            return await PageAsync(kind, receipts, skip, take,
+                r => new[] { ("rcpt", r.Id), ("cus", r.CustomerId) },
+                r => new { Id = Pub("rcpt", r.Id), r.ReceiptNo, CustomerId = Pub("cus", r.CustomerId), r.CustomerName, r.ReceiptDate, r.Amount,
+                    r.RemainingAmountToAllocate, r.PaymentMethod, r.ReferenceNo, r.Memo, Link = PagePath("sales") },
+                PagePath("sales"), cancellationToken);
         }
 
         /// <summary>Reads aggregate aging of currently uncleared bank entries through the selected date.</summary>
         [McpServerTool(Name = "get_bank_outstanding_items", Title = "Get Bank Outstanding Aging", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Returns bank outstanding aging bucket totals and counts, deposits in transit, outstanding payments and stale-item flags. Requires Financials and banking.accounts.view. Despite the tool name, the endpoint returns aggregate buckets, not individual items. asOfDate limits entry dates and determines age; clearance uses current reconciliation status, so this is not a historical reconstruction of outstanding items at cutoff. Use get_bank_register for individual entries.")]
-        public Task<WorkspaceDataMcpResponse> GetBankOutstandingItems(
-            [Description("Positive bank account id from list_bank_accounts.")] int bankId,
+        public async Task<WorkspaceDataMcpResponse> GetBankOutstandingItems(
+            [Description("Bank account id, like 'ba_…', from list_bank_accounts.")] string bankId,
             [Description("Optional cutoff date, yyyy-MM-dd. Defaults to today UTC.")] string? asOfDate = null,
             CancellationToken cancellationToken = default)
         {
-            if (bankId <= 0 || !TryDateRange(asOfDate, null, out _, out _))
-                return Task.FromResult(Invalid("bankOutstandingAging", "Provide a positive bank id and an optional yyyy-MM-dd date."));
-            return RecordAsync<BankingController>("bankOutstandingAging", nameof(BankingController.GetOutstandingAging),
-                c => c.GetOutstandingAging(bankId, asOfDate), PagePath($"banking/{bankId}"),
-                new Dictionary<string, object?> { ["id"] = bankId, ["asOf"] = asOfDate });
+            if (!TryDateRange(asOfDate, null, out _, out _))
+                return Invalid("bankOutstandingAging", "Provide a bank id and an optional yyyy-MM-dd date.");
+            var bank = await ResolveIdAsync("bankOutstandingAging", bankId, "ba", nameof(bankId), cancellationToken);
+            if (bank.Failure != null) return bank.Failure;
+            if (bank.Id is not int bankKey) return Invalid("bankOutstandingAging", "Provide bankId.");
+            return await RecordAsync<BankingController>("bankOutstandingAging", nameof(BankingController.GetOutstandingAging),
+                c => c.GetOutstandingAging(bankKey, asOfDate), PagePath($"banking/{Pub("ba", bankKey)}"),
+                new Dictionary<string, object?> { ["id"] = bankKey, ["asOf"] = asOfDate });
         }
 
         /// <summary>Reads change evidence without treating absent history as proof that no event occurred.</summary>
         [McpServerTool(Name = "get_record_history", Title = "Get Record History", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Returns recorded changes with actor, time, action and before/after fields. Requires audit.logs.view. Supply entityType and entityId together for single-record history, optionally including children. Omit both for the workspace activity feed: its plan may refuse access, limit it to 90 days, or allow full history; single-record history has no plan window. Preserves items, nextCursor and windowDays. Use nextCursor to continue. Full bank numbers are redacted. Absence of history is not proof that an event never occurred; older records may lack attribution. Use get_invoice, get_bill or get_journal_entry for source-document details.")]
-        public Task<WorkspaceDataMcpResponse> GetRecordHistory(
+        public async Task<WorkspaceDataMcpResponse> GetRecordHistory(
             [Description("Exact recorded entity type, for example SalesInvoiceHeader; requires entityId.")] string? entityType = null,
-            [Description("Positive record id; requires entityType.")] int? entityId = null,
+            [Description("The record's public id, like 'inv_…', as returned by the other tools; requires entityType.")] string? entityId = null,
             [Description("Include recorded child changes for the selected record.")] bool includeChildren = false,
             [Description("Optional actor user id from get_members_and_roles.")] string? actorUserId = null,
             [Description("Optional inclusive ISO-8601 timestamp, with UTC offset recommended.")] string? from = null,
@@ -162,14 +172,15 @@ namespace Api.Mcp.Tools
             CancellationToken cancellationToken = default)
         {
             const string kind = "recordHistory";
-            if (string.IsNullOrWhiteSpace(entityType) == entityId.HasValue || entityId <= 0 || cursor <= 0
-                || limit < 1 || limit > 100 || (includeChildren && !entityId.HasValue))
-                return Task.FromResult(Invalid(kind, "Provide entityType and a positive entityId together, a positive cursor, and limit between 1 and 100. Children require a record."));
+            var hasEntityId = !string.IsNullOrWhiteSpace(entityId);
+            if (string.IsNullOrWhiteSpace(entityType) == hasEntityId || cursor <= 0
+                || limit < 1 || limit > 100 || (includeChildren && !hasEntityId))
+                return Invalid(kind, "Provide entityType and entityId together, a positive cursor, and limit between 1 and 100. Children require a record.");
             if (!TryTimestamp(from, out var start) || !TryTimestamp(to, out var end)
                 || (start.HasValue && end.HasValue && start > end))
-                return Task.FromResult(Invalid(kind, "Provide an ordered ISO-8601 timestamp range."));
-            return RecordAsync<AuditActivityController>(kind, nameof(AuditActivityController.Activity),
-                c => c.Activity(entityType, entityId, includeChildren, actorUserId, start, end, cursor, limit),
+                return Invalid(kind, "Provide an ordered ISO-8601 timestamp range.");
+            return await RecordAsync<AuditActivityController>(kind, nameof(AuditActivityController.Activity),
+                c => c.Activity(entityType, entityId?.Trim(), includeChildren, actorUserId, start, end, cursor, limit),
                 arguments: new Dictionary<string, object?> { ["entityType"] = entityType, ["entityId"] = entityId,
                     ["includeChildren"] = includeChildren, ["actorUserId"] = actorUserId,
                     ["from"] = start, ["to"] = end, ["cursor"] = cursor, ["limit"] = limit });
@@ -189,7 +200,7 @@ namespace Api.Mcp.Tools
         [McpServerTool(Name = "get_stock_movements", Title = "Get Stock Movements", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Returns stock movement rows newest first with item, date, source document, incoming/outgoing quantity, unit and total cost, memo and the page's running quantity. Requires Inventory and inventory.items.view. Filter by one item for meaningful per-item running quantities; the existing all-items endpoint accumulates across its returned items. Date filters and paging preserve the original running quantities, not a recomputation for the selected window. Does not provide physical-count evidence. Use search_items for item IDs and get_invoice or get_bill for source documents.")]
         public async Task<WorkspaceDataMcpResponse> GetStockMovements(
-            [Description("Optional positive stock item id.")] int? itemId = null,
+            [Description("Optional stock item id, like 'item_…'.")] string? itemId = null,
             [Description("Optional earliest movement date, yyyy-MM-dd.")] string? fromDate = null,
             [Description("Optional latest movement date, yyyy-MM-dd.")] string? toDate = null,
             [Description("Records to skip, at least zero.")] int skip = 0,
@@ -197,15 +208,18 @@ namespace Api.Mcp.Tools
             CancellationToken cancellationToken = default)
         {
             const string kind = "stockMovements";
-            if (itemId <= 0 || skip < 0 || take < 1 || take > MaxTake)
-                return Invalid(kind, "Provide a positive item id, skip >= 0 and take between 1 and 100.");
+            var item = await ResolveIdAsync(kind, itemId, "item", nameof(itemId), cancellationToken);
+            if (item.Failure != null) return item.Failure;
+            var itemKey = item.Id;
+            if (skip < 0 || take < 1 || take > MaxTake)
+                return Invalid(kind, "Provide skip >= 0 and take between 1 and 100.");
             if (!TryDateRange(fromDate, toDate, out var from, out var to))
                 return Invalid(kind, "Provide an ordered yyyy-MM-dd movement date range.");
             McpReadResult read;
             try
             {
-                read = await Reader.ReadAsync<StockController>(nameof(StockController.Movements), c => c.Movements(itemId),
-                    new Dictionary<string, object?> { ["itemId"] = itemId });
+                read = await Reader.ReadAsync<StockController>(nameof(StockController.Movements), c => c.Movements(itemKey),
+                    new Dictionary<string, object?> { ["itemId"] = itemKey });
             }
             catch (TenantEntityNotFoundException)
             {
@@ -213,10 +227,15 @@ namespace Api.Mcp.Tools
             }
             if (!read.Succeeded) return Refused(kind, read);
             // Keep row fields and decimal values intact through the Newtonsoft response serializer.
-            var rows = JArray.FromObject(read.Value!)
+            // Serialized through the API's settings so ids become public ids; decimals are kept as decimals when parsed back.
+            using var movementReader = new Newtonsoft.Json.JsonTextReader(new System.IO.StringReader(Reader.ToJson(read.Value!).GetRawText()))
+            {
+                FloatParseHandling = Newtonsoft.Json.FloatParseHandling.Decimal
+            };
+            var rows = JArray.Load(movementReader)
                 .Where(r => !from.HasValue || r.Value<DateTime>("date").Date >= from)
                 .Where(r => !to.HasValue || r.Value<DateTime>("date").Date <= to);
-            return Page(kind, rows, skip, take, PagePath(itemId.HasValue ? $"items/inventory/{itemId}" : "items/inventory"));
+            return Page(kind, rows, skip, take, PagePath(itemKey.HasValue ? $"items/inventory/{Pub("item", itemKey.Value)}" : "items/inventory"));
         }
 
         /// <summary>Validates optional ISO dates and their inclusive range without throwing a tool error.</summary>

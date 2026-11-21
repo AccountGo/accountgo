@@ -226,8 +226,8 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string; pend
       const createPersonalBooks = async (companyId: unknown, currency: string) => {
         if (!shouldCreatePersonalBooks) return;
         try {
-          const id = Number(companyId);
-          if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Workspace id unavailable');
+          const id = typeof companyId === 'string' && companyId ? companyId : null;
+          if (!id) throw new Error('Workspace id unavailable');
           const personal = await authFetch('/api/organizations/personal', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

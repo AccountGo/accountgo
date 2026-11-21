@@ -34,24 +34,163 @@ namespace Api.Controllers
         private readonly ApplicationIdentityDbContext _identity;
         private readonly ITenantContext _tenant;
         private readonly IEntitlementService _entitlements;
+        private readonly Api.PublicIds.IPublicIdResolver _publicIds;
+        private readonly Api.PublicIds.PublicIdRegistry _registry;
 
         public AuditActivityController(
             ApiDbContext db,
             ApplicationIdentityDbContext identity,
             ITenantContext tenant,
-            IEntitlementService entitlements)
+            IEntitlementService entitlements,
+            Api.PublicIds.IPublicIdResolver publicIds,
+            Api.PublicIds.PublicIdRegistry registry)
         {
             _db = db;
             _identity = identity;
             _tenant = tenant;
             _entitlements = entitlements;
+            _publicIds = publicIds;
+            _registry = registry;
+        }
+
+        private (int? ResolvedId, IActionResult? Error) ResolveEntityIdFilter(string? entityType, string? entityId)
+        {
+            if (string.IsNullOrWhiteSpace(entityId))
+                return (null, null);
+
+            Api.PublicIds.PublicIdLookupResult lookup;
+            if (!string.IsNullOrWhiteSpace(entityType))
+            {
+                lookup = _publicIds.ResolvePolymorphic(entityId.Trim(), entityType);
+            }
+            else if (Core.Domain.PublicIdGenerator.TryParse(entityId.Trim(), out var prefix, out _))
+            {
+                lookup = _publicIds.Resolve(entityId.Trim(), prefix);
+            }
+            else
+            {
+                lookup = Api.PublicIds.PublicIdLookupResult.Fail(Api.PublicIds.PublicIdLookupError.Malformed);
+            }
+
+            if (lookup.Ok)
+                return (lookup.Id, null);
+
+            if (lookup.Error == Api.PublicIds.PublicIdLookupError.NotFound)
+                return (null, NotFound(new { message = Api.PublicIds.PublicIdErrorCodes.NotFoundMessage, code = Api.PublicIds.PublicIdErrorCodes.UnknownId }));
+
+            return (null, BadRequest(new { message = "IDs are strings like 'inv_…'.", code = Api.PublicIds.PublicIdErrorCodes.InvalidId }));
+        }
+
+        private async Task PrefetchRecordChangeIdsAsync(IReadOnlyList<RecordChange> rows)
+        {
+            var pairs = new List<(string Prefix, int Id)>();
+            foreach (var r in rows)
+            {
+                if (r.EntityId > 0 && _registry.TryGetPrefixForTypeName(r.EntityType, out var ep))
+                    pairs.Add((ep, r.EntityId));
+                if (r.ParentEntityId.HasValue && r.ParentEntityId.Value > 0 && _registry.TryGetPrefixForTypeName(r.ParentEntityType, out var pp))
+                    pairs.Add((pp, r.ParentEntityId.Value));
+            }
+            foreach (var r in rows)
+                foreach (var (prefix, id) in ForeignKeyValues(r))
+                    pairs.Add((prefix, id));
+            if (pairs.Count > 0)
+                await _publicIds.PrefetchAsync(pairs);
+        }
+
+        private static readonly object ForeignKeyMapLock = new();
+        private static Dictionary<(string Type, string Property), string>? _foreignKeyMap;
+
+        /// <summary>Maps (entity type name, foreign key property) to the prefix of the row it points at, from the EF model.</summary>
+        private Dictionary<(string Type, string Property), string> ForeignKeyMap()
+        {
+            if (_foreignKeyMap != null) return _foreignKeyMap;
+            lock (ForeignKeyMapLock)
+            {
+                if (_foreignKeyMap != null) return _foreignKeyMap;
+                var map = new Dictionary<(string, string), string>();
+                foreach (var entity in _db.Model.GetEntityTypes())
+                {
+                    foreach (var key in entity.GetForeignKeys())
+                    {
+                        if (key.Properties.Count != 1) continue;
+                        if (!_registry.TryGetByType(key.PrincipalEntityType.ClrType, out var principal)) continue;
+                        map[(entity.ClrType.Name, key.Properties[0].Name)] = principal.Prefix;
+                    }
+                }
+                _foreignKeyMap = map;
+                return map;
+            }
+        }
+
+        /// <summary>The foreign key values a change row records, as (prefix, integer id), so they can be shown as public ids.</summary>
+        private IEnumerable<(string Prefix, int Id)> ForeignKeyValues(RecordChange row)
+        {
+            if (string.IsNullOrWhiteSpace(row.ChangesJson) || row.ChangesJson[0] != '{') yield break;
+            JObject obj;
+            try { obj = JObject.Parse(row.ChangesJson); }
+            catch (Newtonsoft.Json.JsonException) { yield break; }
+            var map = ForeignKeyMap();
+            foreach (var property in obj.Properties())
+            {
+                if (!map.TryGetValue((row.EntityType, property.Name), out var prefix)) continue;
+                foreach (var token in ChangeValueTokens(property.Value))
+                    if (token.Type == JTokenType.Integer && token.Value<long>() is > 0 and <= int.MaxValue)
+                        yield return (prefix, (int)token.Value<long>());
+            }
+        }
+
+        private static IEnumerable<JToken> ChangeValueTokens(JToken value)
+        {
+            if (value is JArray { Count: >= 2 } pair) { yield return pair[0]; yield return pair[1]; yield break; }
+            if (value is JObject named)
+            {
+                if (named.TryGetValue("old", StringComparison.OrdinalIgnoreCase, out var o)) yield return o;
+                if (named.TryGetValue("new", StringComparison.OrdinalIgnoreCase, out var n)) yield return n;
+                yield break;
+            }
+            yield return value;
+        }
+
+        /// <summary>
+        /// The change JSON with foreign key values shown as public ids. The stored evidence keeps the integers; only what is
+        /// returned changes. A value whose row is gone shows as e.g. cus_deleted rather than an internal number or a blank.
+        /// </summary>
+        private string? PublicChangesJson(RecordChange row)
+        {
+            if (string.IsNullOrWhiteSpace(row.ChangesJson) || row.ChangesJson[0] != '{') return row.ChangesJson;
+            JObject obj;
+            try { obj = JObject.Parse(row.ChangesJson); }
+            catch (Newtonsoft.Json.JsonException) { return row.ChangesJson; }
+            var map = ForeignKeyMap();
+            var changed = false;
+            foreach (var property in obj.Properties())
+            {
+                if (!map.TryGetValue((row.EntityType, property.Name), out var prefix)) continue;
+                foreach (var token in ChangeValueTokens(property.Value).ToList())
+                {
+                    if (token.Type != JTokenType.Integer) continue;
+                    var id = token.Value<long>();
+                    // A value of zero or below is a placeholder key from insert time, not a row, so it shows as blank.
+                    if (id <= 0 || id > int.MaxValue)
+                    {
+                        token.Replace(JValue.CreateNull());
+                        changed = true;
+                        continue;
+                    }
+                    var publicId = _publicIds.ToPublic(prefix, (int)id);
+                    token.Replace(new JValue(publicId ?? $"{prefix}_deleted"));
+                    changed = true;
+                }
+            }
+            return changed ? obj.ToString(Newtonsoft.Json.Formatting.None) : row.ChangesJson;
         }
 
         [RequirePermission(SystemPermissions.AuditLogsView)]
         [HttpGet("activity")]
         public async Task<IActionResult> Activity(
             [FromQuery] string? entityType = null,
-            [FromQuery] int? entityId = null,
+            [FromQuery] string? entityId = null,
             [FromQuery] bool includeChildren = false,
             [FromQuery] string? actorUserId = null,
             [FromQuery] DateTimeOffset? from = null,
@@ -59,9 +198,13 @@ namespace Api.Controllers
             [FromQuery] long? cursor = null,
             [FromQuery] int limit = 50)
         {
+            var (resolvedEntityId, filterError) = ResolveEntityIdFilter(entityType, entityId);
+            if (filterError != null)
+                return filterError;
+
             var companyId = _tenant.RequireCompanyId();
             limit = Math.Clamp(limit <= 0 ? 50 : limit, 1, 100);
-            var singleRecord = !string.IsNullOrWhiteSpace(entityType) && entityId.HasValue;
+            var singleRecord = !string.IsNullOrWhiteSpace(entityType) && resolvedEntityId.HasValue;
             var access = AuditHistoryAccess.Evaluate(_entitlements, companyId);
             int? windowDays = null;
 
@@ -80,7 +223,7 @@ namespace Api.Controllers
                 }
             }
 
-            var query = BuildActivityQuery(companyId, entityType, entityId, includeChildren, actorUserId, from, to, cursor);
+            var query = BuildActivityQuery(companyId, entityType, resolvedEntityId, includeChildren, actorUserId, from, to, cursor);
 
             var rows = await query
                 .OrderByDescending(r => r.Id)
@@ -90,22 +233,23 @@ namespace Api.Controllers
             var page = rows.Take(limit).ToList();
             long? nextCursor = rows.Count > limit ? page[^1].Id : null;
             var names = await ResolveActorNames(page.Select(p => p.ActorUserId).Where(id => !string.IsNullOrWhiteSpace(id))!);
+            await PrefetchRecordChangeIdsAsync(page);
 
             var items = page.Select(r => new
             {
                 id = r.Id,
                 entityType = r.EntityType,
-                entityId = r.EntityId,
+                entityId = FormatRecordChangeEntityId(r.EntityType, r.EntityId),
                 parentEntityType = r.ParentEntityType,
-                parentEntityId = r.ParentEntityId,
+                parentEntityId = FormatRecordChangeEntityId(r.ParentEntityType, r.ParentEntityId),
                 action = r.Action,
-                changes = ParseChanges(r.ChangesJson),
+                changes = ParseChanges(PublicChangesJson(r)),
                 actorUserId = r.ActorUserId,
                 actorName = r.ActorUserId != null && names.TryGetValue(r.ActorUserId, out var n) ? n : null,
                 actorKind = r.ActorKind,
                 correlationId = r.CorrelationId,
                 occurredAt = r.OccurredAt
-            });
+            }).ToList();
 
             return Ok(new { items, nextCursor, windowDays });
         }
@@ -115,31 +259,36 @@ namespace Api.Controllers
         [AuditDataAccess("activity.export", "data.export")]
         public async Task<IActionResult> ExportActivity(
             [FromQuery] string? entityType = null,
-            [FromQuery] int? entityId = null,
+            [FromQuery] string? entityId = null,
             [FromQuery] bool includeChildren = false,
             [FromQuery] string? actorUserId = null,
             [FromQuery] DateTimeOffset? from = null,
             [FromQuery] DateTimeOffset? to = null)
         {
+            var (resolvedEntityId, filterError) = ResolveEntityIdFilter(entityType, entityId);
+            if (filterError != null)
+                return filterError;
+
             var companyId = _tenant.RequireCompanyId();
             if (AuditHistoryAccess.Evaluate(_entitlements, companyId) != AuditHistoryAccessLevel.Full)
                 return FeatureNotEntitled(FeatureKeys.AuditHistoryFull,
                     "Full activity export is not available for this workspace.");
 
-            var singleRecord = !string.IsNullOrWhiteSpace(entityType) && entityId.HasValue;
+            var singleRecord = !string.IsNullOrWhiteSpace(entityType) && resolvedEntityId.HasValue;
             if (!singleRecord)
             {
                 // Export uses the same filters as /activity but never the 90-day window — Full only.
             }
 
-            var query = BuildActivityQuery(companyId, entityType, entityId, includeChildren, actorUserId, from, to, cursor: null);
+            var query = BuildActivityQuery(companyId, entityType, resolvedEntityId, includeChildren, actorUserId, from, to, cursor: null);
             var rows = await query
                 .OrderByDescending(r => r.Id)
                 .Take(ExportRowCap)
                 .ToListAsync();
 
             var names = await ResolveActorNames(rows.Select(p => p.ActorUserId).Where(id => !string.IsNullOrWhiteSpace(id))!);
-            var csv = BuildActivityCsv(rows, names);
+            await PrefetchRecordChangeIdsAsync(rows);
+            var csv = BuildActivityCsv(rows, names, r => FormatRecordChangeEntityId(r.EntityType, r.EntityId) ?? string.Empty, PublicChangesJson);
             var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray();
             return File(bytes, "text/csv; charset=utf-8", "activity-export.csv");
         }
@@ -235,7 +384,7 @@ namespace Api.Controllers
             return query;
         }
 
-        private static string BuildActivityCsv(IReadOnlyList<RecordChange> rows, IReadOnlyDictionary<string, string> names)
+        private static string BuildActivityCsv(IReadOnlyList<RecordChange> rows, IReadOnlyDictionary<string, string> names, Func<RecordChange, string> formatEntityId, Func<RecordChange, string?> changesJson)
         {
             var builder = new StringBuilder();
             builder.AppendLine("occurredAt,actor,actorKind,entityType,entityId,action,field,oldValue,newValue,correlationId");
@@ -246,13 +395,13 @@ namespace Api.Controllers
                     : row.ActorUserId ?? string.Empty;
                 var occurredAt = DateTime.SpecifyKind(row.OccurredAt, DateTimeKind.Utc)
                     .ToString("o", CultureInfo.InvariantCulture);
-                foreach (var field in ExpandChangeFields(row.ChangesJson))
+                foreach (var field in ExpandChangeFields(changesJson(row)))
                 {
                     builder.Append(Csv(occurredAt)).Append(',')
                         .Append(Csv(actor)).Append(',')
                         .Append(Csv(row.ActorKind)).Append(',')
                         .Append(Csv(row.EntityType)).Append(',')
-                        .Append(Csv(row.EntityId.ToString(CultureInfo.InvariantCulture))).Append(',')
+                        .Append(Csv(formatEntityId(row))).Append(',')
                         .Append(Csv(row.Action)).Append(',')
                         .Append(Csv(field.Field)).Append(',')
                         .Append(Csv(field.OldValue)).Append(',')
@@ -334,6 +483,15 @@ namespace Api.Controllers
                     RequiredFeature: requiredFeature),
                 _tenant);
             return new ObjectResult(problem) { StatusCode = StatusCodes.Status403Forbidden };
+        }
+
+        private string? FormatRecordChangeEntityId(string? typeName, int? id)
+        {
+            if (!id.HasValue || id.Value <= 0 || string.IsNullOrWhiteSpace(typeName))
+                return null;
+            if (!_registry.TryGetPrefixForTypeName(typeName, out var prefix))
+                return null;
+            return _publicIds.ToPublic(prefix, id.Value);
         }
 
         private async Task<Dictionary<string, string>> ResolveActorNames(IEnumerable<string?> userIds)

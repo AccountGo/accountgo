@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Dto.Common;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,7 +9,9 @@ namespace Dto.Financial
 {
     public class MasterGeneralLedger : BaseDto
     {
+        [PublicId("gl")]
         public new int? Id { get; set; }
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public int CurrencyId { get; set; }
         public string? DocumentType { get; set; }

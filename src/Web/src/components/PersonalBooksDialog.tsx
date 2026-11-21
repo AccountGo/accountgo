@@ -22,7 +22,7 @@ export function PersonalBooksDialog({ currentOrg, onClose, onCreated }: {
       const response = await authFetch('/api/organizations/personal', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), currency: currency.trim().toUpperCase(),
-          ...(canLink && link ? { linkWorkCompanyId: Number(currentOrg!.id) } : {}) }),
+          ...(canLink && link ? { linkWorkCompanyId: currentOrg!.id } : {}) }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.detail || 'Could not create personal books.');

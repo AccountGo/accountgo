@@ -3,9 +3,12 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Items;
+using Core.Domain.Sales;
 using UglyToad.PdfPig;
 using Xunit;
 using Xunit.Abstractions;
@@ -83,7 +86,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(270m, assets);
             Assert.Equal(assets, liabilitiesAndEquity);
             Assert.Contains(balance, a => a.GetProperty("accountCode").GetString() == "TEST-CONTRA" && a.GetProperty("amount").GetDecimal() == -30m);
-            Assert.Contains(balance, a => a.GetProperty("accountId").GetInt32() == 0 && a.GetProperty("amount").GetDecimal() == 170m);
+            Assert.Contains(balance, a => a.GetProperty("accountId").ValueKind == JsonValueKind.Null && a.GetProperty("amount").GetDecimal() == 170m);
 
             var cashFlowResponse = await Send(HttpMethod.Get, "/api/Financials/CashFlow" + query);
             Assert.Equal(HttpStatusCode.OK, cashFlowResponse.StatusCode);
@@ -130,9 +133,9 @@ namespace AccountGo.BackendTests
                 Assert.Equal(60m, rows.Where(a => a.GetProperty("accountClassId").GetInt32() == 1).Sum(a => a.GetProperty("amount").GetDecimal()));
                 Assert.Equal(60m, rows.Where(a => a.GetProperty("accountClassId").GetInt32() == 3).Sum(a => a.GetProperty("amount").GetDecimal()));
                 if (day == "2026-01-02")
-                    Assert.Contains(rows, a => a.GetProperty("accountId").GetInt32() == 0 && a.GetProperty("amount").GetDecimal() == -40m);
+                    Assert.Contains(rows, a => a.GetProperty("accountId").ValueKind == JsonValueKind.Null && a.GetProperty("amount").GetDecimal() == -40m);
                 else
-                    Assert.DoesNotContain(rows, a => a.GetProperty("accountId").GetInt32() == 0);
+                    Assert.DoesNotContain(rows, a => a.GetProperty("accountId").ValueKind == JsonValueKind.Null);
             }
         }
 
@@ -162,8 +165,8 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.BadRequest, badBasisNumber.StatusCode);
             Assert.Contains("Provide a valid accounting basis: Accrual or Cash.", await badBasisNumber.Content.ReadAsStringAsync());
             await JoinOther();
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<CompanyMember>(MemberId(_otherId)),
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(RoleId("Sales Representative")) } })).StatusCode);
             var denied = await Send(HttpMethod.Get, "/api/Financials/" + action, token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
             Assert.Contains("reports.view", await denied.Content.ReadAsStringAsync());
@@ -552,18 +555,18 @@ namespace AccountGo.BackendTests
             // 1. Create and approve a stock bill on Jan 10: 10 units @ $20 = $200 Inventory
             var createBillResp = await Send(HttpMethod.Post, "/api/Purchasing/SaveBill", new
             {
-                vendorId,
+                vendorId = PubId<Core.Domain.Purchases.Vendor>(vendorId),
                 vendorInvoiceNo = "STK-BILL-1",
                 date = jan10,
                 lines = new[]
                 {
-                    new { itemId = stockItemId, description = "Widget", quantity = 10m, amount = 20m }
+                    new { itemId = PubId<Item>(stockItemId), description = "Widget", quantity = 10m, amount = 20m }
                 }
             });
             Assert.Equal(HttpStatusCode.OK, createBillResp.StatusCode);
-            billId = (await Json(createBillResp)).GetProperty("id").GetInt32();
+            billId = IntId<Core.Domain.Purchases.PurchaseInvoiceHeader>((await Json(createBillResp)).GetProperty("id").GetString());
 
-            var approveResp = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={billId}");
+            var approveResp = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(billId)}");
             Assert.Equal(HttpStatusCode.OK, approveResp.StatusCode);
 
             // Verify on Jan 15 (before selling or paying): Inventory (10800) is +$200 and A/P (20110) is +$200 on Cash Basis
@@ -608,8 +611,8 @@ namespace AccountGo.BackendTests
                 serviceInvoice2Id = inv2.Id;
             });
 
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={stockInvoiceId}")).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={serviceInvoice2Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(stockInvoiceId)}")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(serviceInvoice2Id)}")).StatusCode);
 
             // Verify on Jan 31 (after sale, still unpaid by customer and supplier unpaid):
             // Inventory is $200 - $80 = +$120 (never negative, ties to subledger 6 units * $20), COGS is $80, A/P is $200, Revenue is $0
@@ -627,8 +630,8 @@ namespace AccountGo.BackendTests
             // 3. Pay 50% ($100) of the stock bill on Feb 10: Inventory stays $120, A/P drops from $200 to $100
             var payBillResp = await Send(HttpMethod.Post, "/api/Purchasing/PayBill", new
             {
-                billId,
-                accountId = cashAccountId,
+                billId = PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(billId),
+                accountId = PubId<Core.Domain.Financials.Account>(cashAccountId),
                 amount = 100m,
                 date = feb10,
                 paymentMethod = "Bank Transfer"
@@ -678,12 +681,12 @@ namespace AccountGo.BackendTests
 
             var saveAllocResp = await Send(HttpMethod.Post, "/api/Sales/SaveAllocation", new
             {
-                CustomerId = customerId,
-                ReceiptId = depositReceiptId,
+                CustomerId = PubId<Customer>(customerId),
+                ReceiptId = PubId<SalesReceiptHeader>(depositReceiptId),
                 Date = mar10,
                 AllocationLines = new[]
                 {
-                    new { InvoiceId = stockInvoiceId, AmountToAllocate = 200m }
+                    new { InvoiceId = PubId<SalesInvoiceHeader>(stockInvoiceId), AmountToAllocate = 200m }
                 }
             });
             Assert.Equal(HttpStatusCode.OK, saveAllocResp.StatusCode);
@@ -701,12 +704,12 @@ namespace AccountGo.BackendTests
             // Over-allocating the already-exhausted receipt via SaveAllocation is rejected
             var overAllocResp = await Send(HttpMethod.Post, "/api/Sales/SaveAllocation", new
             {
-                CustomerId = customerId,
-                ReceiptId = depositReceiptId,
+                CustomerId = PubId<Customer>(customerId),
+                ReceiptId = PubId<SalesReceiptHeader>(depositReceiptId),
                 Date = mar10,
                 AllocationLines = new[]
                 {
-                    new { InvoiceId = serviceInvoice2Id, AmountToAllocate = 80m }
+                    new { InvoiceId = PubId<SalesInvoiceHeader>(serviceInvoice2Id), AmountToAllocate = 80m }
                 }
             });
             Assert.Equal(HttpStatusCode.BadRequest, overAllocResp.StatusCode);

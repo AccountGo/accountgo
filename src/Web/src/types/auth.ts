@@ -12,7 +12,7 @@ export interface UserDto {
 }
 
 export interface WebAuthnCredential {
-  id: number;
+  id: string;
   nickname: string;
   createdAt: string;
   lastUsedAt?: string | null;
@@ -20,7 +20,7 @@ export interface WebAuthnCredential {
 }
 
 export interface UserSession {
-  id: number;
+  id: string;
   createdAt: string;
   expiresAt: string;
   ipAddress?: string;
@@ -29,7 +29,7 @@ export interface UserSession {
 }
 
 export interface TrustedDevice {
-  id: number;
+  id: string;
   label: string;
   createdByIp?: string;
   createdAt: string;

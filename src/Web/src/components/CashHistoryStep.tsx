@@ -14,7 +14,7 @@ export const CashHistoryStep: React.FC<{
   bankName: string;
   showCodes: boolean;
   formatCurrency: (n: number) => string;
-  onAssign: (accountId: number) => void;
+  onAssign: (accountId: string) => void;
   onSkipAll: () => void;
   onClose: () => void;
 }> = ({ groups, bankName, showCodes, formatCurrency, onAssign, onSkipAll, onClose }) => {

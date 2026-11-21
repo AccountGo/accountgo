@@ -271,7 +271,7 @@ namespace Services.Banking
 
                 string? billNo = null;
                 int sourceId = payment.Id;
-                string sourceType = nameof(DocumentTypes.PurchaseInvoicePayment);
+                string sourceType = nameof(VendorPayment);
                 if (payment.PurchaseInvoiceHeaderId.HasValue
                     && bills.TryGetValue(payment.PurchaseInvoiceHeaderId.Value, out var bill))
                 {

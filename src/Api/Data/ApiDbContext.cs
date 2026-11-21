@@ -109,32 +109,80 @@ namespace Api.Data
             }
         }
 
+        private void AssignPublicIds()
+        {
+            foreach (var entry in ChangeTracker.Entries<IHasPublicId>())
+            {
+                if (entry.State != EntityState.Added)
+                    continue;
+                if (!string.IsNullOrWhiteSpace(entry.Entity.PublicId))
+                    continue;
+                var attr = entry.Metadata.ClrType.GetCustomAttribute<PublicIdPrefixAttribute>(inherit: false)
+                    ?? throw new InvalidOperationException(
+                        $"Entity '{entry.Metadata.ClrType.Name}' implements IHasPublicId without [PublicIdPrefix].");
+                entry.Entity.PublicId = PublicIdGenerator.New(attr.Prefix);
+            }
+        }
+
+        private void EnforcePublicIdImmutability()
+        {
+            foreach (var entry in ChangeTracker.Entries<IHasPublicId>())
+            {
+                if (entry.State != EntityState.Modified)
+                    continue;
+                var prop = entry.Property(nameof(IHasPublicId.PublicId));
+                if (prop.IsModified && !string.Equals(prop.OriginalValue as string, prop.CurrentValue as string, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot modify PublicId of existing {entry.Metadata.ClrType.Name}.");
+                }
+            }
+        }
+
+        private void EnsurePublicIdsAssigned()
+        {
+            foreach (var entry in ChangeTracker.Entries<IHasPublicId>())
+            {
+                if (entry.State == EntityState.Added && string.IsNullOrWhiteSpace(entry.Entity.PublicId))
+                {
+                    throw new InvalidOperationException(
+                        $"Added entity {entry.Metadata.ClrType.Name} has an empty PublicId.");
+                }
+            }
+        }
+
         // Every SaveChanges/SaveChangesAsync overload funnels into these two.
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
+            AssignPublicIds();
             CleanupDeletedPersonalBooks();
             EnforceAccessBootstrapLifecycle();
             EnforceAuditLogImmutability();
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
+            EnforcePublicIdImmutability();
             EnforceTenantSecurity();
             EnforceRecurringScheduleConsistency();
             EnforceYearEndEvidenceImmutability();
             AdvanceAccountingRevision();
+            EnsurePublicIdsAssigned();
             return base.SaveChanges(acceptAllChangesOnSuccess);
         }
 
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
+            AssignPublicIds();
             CleanupDeletedPersonalBooks();
             EnforceAccessBootstrapLifecycle();
             EnforceAuditLogImmutability();
             EnforceBankAccountIdRequired();
             EnforceReconciledLineImmutability();
+            EnforcePublicIdImmutability();
             EnforceTenantSecurity();
             EnforceRecurringScheduleConsistency();
             EnforceYearEndEvidenceImmutability();
             AdvanceAccountingRevision();
+            EnsurePublicIdsAssigned();
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         }
 
@@ -1289,6 +1337,22 @@ namespace Api.Data
             #endregion
 
             ConfigureCreditsReturnsRefundsModel(builder);
+
+            foreach (var entityType in builder.Model.GetEntityTypes())
+            {
+                if (!typeof(IHasPublicId).IsAssignableFrom(entityType.ClrType))
+                    continue;
+                builder.Entity(entityType.ClrType, entity =>
+                {
+                    entity.Property<string>(nameof(IHasPublicId.PublicId))
+                        .HasMaxLength(PublicIdGenerator.MaxLength)
+                        .IsRequired()
+                        .HasDefaultValue(string.Empty);
+                    entity.HasIndex(nameof(IHasPublicId.PublicId))
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
+                });
+            }
 
             builder.Seed();
             /* Medhat END */

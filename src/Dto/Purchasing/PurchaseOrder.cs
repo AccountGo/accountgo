@@ -1,11 +1,16 @@
 using System;
+using Dto.Common;
 
 namespace Dto.Purchasing
 {
     public class PurchaseOrder : BaseDto
     {
+        [PublicId("po")]
+        public override int Id { get; set; }
         public string? No { get; set; }
+        [PublicId("term")]
         public int? PaymentTermId { get; set; }
+        [PublicId("ven")]
         public int VendorId { get; set; }
         public string? VendorName { get; set; }
 
@@ -43,7 +48,11 @@ namespace Dto.Purchasing
 
     public class PurchaseOrderLine : BaseDto
     {
+        [PublicId("pol")]
+        public override int Id { get; set; }
+        [PublicId("item")]
         public int? ItemId { get; set; }
+        [PublicId("txg")]
         public int? TaxGroupId { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }

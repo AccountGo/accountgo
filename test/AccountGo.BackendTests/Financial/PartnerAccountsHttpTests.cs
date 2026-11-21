@@ -227,11 +227,12 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
         var list = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
         var partner = list.GetProperty("partners")[0];
-        var partnerId = partner.GetProperty("id").GetInt32();
+        var partnerPubId = partner.GetProperty("id").GetString()!;
+        var partnerId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.Financials.Partner>(_host.Factory.Services, partnerPubId);
         var staleVersion = partner.GetProperty("rowVersion").GetString();
         WithDb(db => db.Partners.Single(p => p.Id == partnerId).RowVersion = Guid.NewGuid().ToByteArray());
 
-        var response = await _host.Send(HttpMethod.Put, $"/api/Financials/Partners/{partnerId}", new { name = "Changed", rowVersion = staleVersion }, _user.Token, Org);
+        var response = await _host.Send(HttpMethod.Put, $"/api/Financials/Partners/{partnerPubId}", new { name = "Changed", rowVersion = staleVersion }, _user.Token, Org);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Contains("Someone else changed this. Reload and try again.", await response.Content.ReadAsStringAsync());
@@ -252,7 +253,7 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         }, _user.Token, Org);
         Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
         var list = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
-        var ids = list.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetInt32()).ToArray();
+        var ids = list.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetString()!).ToArray();
 
         var response = await _host.Send(HttpMethod.Put, "/api/Financials/Partners/Shares/FY2025", new[]
         {
@@ -282,7 +283,7 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         Assert.Contains("Archive the partners first.", await blocked.Content.ReadAsStringAsync());
 
         var list = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
-        var partnerIds = list.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetInt32()).ToArray();
+        var partnerIds = list.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetString()!).ToArray();
         WithDb(db => db.PartnerShares.RemoveRange(db.PartnerShares.ToList()));
         foreach (var partnerId in partnerIds)
         {
@@ -350,8 +351,8 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
         var partners = await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org);
         var json = await AuditTestHost.Json(partners);
-        var firstId = json.GetProperty("partners")[0].GetProperty("id").GetInt32();
-        var secondId = json.GetProperty("partners")[1].GetProperty("id").GetInt32();
+        var firstId = json.GetProperty("partners")[0].GetProperty("id").GetString()!;
+        var secondId = json.GetProperty("partners")[1].GetProperty("id").GetString()!;
 
         var response = await _host.Send(HttpMethod.Put, "/api/Financials/Partners/Shares/FY2025", new[]
         {
@@ -479,10 +480,12 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         }, _user.Token, Org);
         Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
 
+        var listJson = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
+        var pIds = listJson.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetString()!).ToArray();
         var response = await _host.Send(HttpMethod.Post, "/api/Financials/Partners", new
         {
             name = "Casey", fiscalYearCode = "FY2025", percent = 10m,
-            shares = new[] { new { partnerId = 1, percent = 50m }, new { partnerId = 2, percent = 40m } }
+            shares = new[] { new { partnerId = pIds[0], percent = 50m }, new { partnerId = pIds[1], percent = 40m } }
         }, _user.Token, Org, headers: new System.Collections.Generic.Dictionary<string, string> { ["If-Match"] = "stale-version" });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -524,7 +527,7 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         }, _user.Token, Org);
         Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
         var body = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
-        var ids = body.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetInt32()).ToArray();
+        var ids = body.GetProperty("partners").EnumerateArray().Select(p => p.GetProperty("id").GetString()!).ToArray();
         foreach (var shares in new[]
         {
             new[] { new { partnerId = ids[0], percent = 60m }, new { partnerId = ids[1], percent = 30m } },
@@ -559,7 +562,8 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
         var initial = await AuditTestHost.Json(await _host.Send(HttpMethod.Get, "/api/Financials/Partners", token: _user.Token, org: Org));
         var partners = initial.GetProperty("partners").EnumerateArray().ToArray();
-        var first = partners[0].GetProperty("id").GetInt32(); var second = partners[1].GetProperty("id").GetInt32(); var third = partners[2].GetProperty("id").GetInt32();
+        var first = partners[0].GetProperty("id").GetString()!; var second = partners[1].GetProperty("id").GetString()!; var third = partners[2].GetProperty("id").GetString()!;
+        var thirdIntId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.Financials.Partner>(_host.Factory.Services, third);
         Assert.Equal(HttpStatusCode.BadRequest, (await _host.Send(HttpMethod.Post, $"/api/Financials/Partners/{third}/Archive", token: _user.Token, org: Org)).StatusCode);
 
         var removeShare = await _host.Send(HttpMethod.Put, "/api/Financials/Partners/Shares/FY2025", new[]
@@ -569,8 +573,8 @@ public sealed class PartnerAccountsHttpTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, removeShare.StatusCode);
         WithDb(db =>
         {
-            var partner = db.Partners.Single(p => p.Id == third);
-            Assert.False(db.PartnerShares.Any(s => s.PartnerId == third));
+            var partner = db.Partners.Single(p => p.Id == thirdIntId);
+            Assert.False(db.PartnerShares.Any(s => s.PartnerId == thirdIntId));
             Assert.False(db.GeneralLedgerLines.Any(line => line.AccountId == partner.CapitalAccountId || line.AccountId == partner.DrawingsAccountId));
         });
         var archived = await _host.Send(HttpMethod.Post, $"/api/Financials/Partners/{third}/Archive", token: _user.Token, org: Org);

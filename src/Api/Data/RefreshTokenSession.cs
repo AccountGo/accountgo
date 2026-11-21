@@ -1,9 +1,12 @@
+using Core.Domain;
 using System;
 
 namespace Api.Data
 {
-    public class RefreshTokenSession
+    [PublicIdPrefix("sess")]
+    public class RefreshTokenSession : IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int Id { get; set; }
         public string UserId { get; set; } = string.Empty;
         /// <summary>Groups rotations from one sign-in. Theft/reuse outside grace revokes only this family.</summary>

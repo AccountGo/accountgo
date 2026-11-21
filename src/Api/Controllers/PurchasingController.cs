@@ -123,7 +123,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("PurchaseOrder")]
         [RequirePermission(SystemPermissions.PurchasesOrdersView)]
-        public IActionResult PurchaseOrder(int id)
+        public IActionResult PurchaseOrder([Dto.Common.PublicId("po")] int id)
         {
             var purchaseOrder = _purchasingService.GetPurchaseOrderById(id);
 
@@ -304,7 +304,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("Vendor")] // api/Purchasing/Vendor?id=
         [RequirePermission(SystemPermissions.PurchasesVendorsView)]
-        public IActionResult Vendor(int id)
+        public IActionResult Vendor([Dto.Common.PublicId("ven")] int id)
         {
             var vendor = _db.Vendors.Include(v => v.Party).FirstOrDefault(v => v.Id == id && v.Party != null);
             if (vendor == null)
@@ -385,7 +385,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("VendorContact")]
         [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
-        public IActionResult VendorContact(int vendorId, [FromBody] Dto.Common.ContactPersonDto contactDto)
+        public IActionResult VendorContact([Dto.Common.PublicId("ven")] int vendorId, [FromBody] Dto.Common.ContactPersonDto contactDto)
         {
             _tenantGuard.EnsureOwned<Vendor>(vendorId, nameof(vendorId));
             var vendor = _db.Vendors.Include(v => v.Party).Single(v => v.Id == vendorId);
@@ -452,7 +452,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("SetVendorBillToContact")]
         [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
-        public IActionResult SetVendorBillToContact(int vendorId, int contactId)
+        public IActionResult SetVendorBillToContact([Dto.Common.PublicId("ven")] int vendorId, [Dto.Common.PublicId("cont")] int contactId)
         {
             _tenantGuard.EnsureOwned<Vendor>(vendorId, nameof(vendorId));
             _tenantGuard.EnsureOwned<Contact>(contactId, nameof(contactId));
@@ -474,7 +474,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("SetVendorPrimaryContact")]
         [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
-        public IActionResult SetVendorPrimaryContact(int vendorId, int contactId)
+        public IActionResult SetVendorPrimaryContact([Dto.Common.PublicId("ven")] int vendorId, [Dto.Common.PublicId("cont")] int contactId)
         {
             _tenantGuard.EnsureOwned<Vendor>(vendorId, nameof(vendorId));
             _tenantGuard.EnsureOwned<Contact>(contactId, nameof(contactId));
@@ -496,7 +496,7 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteVendorContact")]
         [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
-        public IActionResult DeleteVendorContact(int vendorId, int contactId)
+        public IActionResult DeleteVendorContact([Dto.Common.PublicId("ven")] int vendorId, [Dto.Common.PublicId("cont")] int contactId)
         {
             _tenantGuard.EnsureOwned<Vendor>(vendorId, nameof(vendorId));
             _tenantGuard.EnsureOwned<Contact>(contactId, nameof(contactId));
@@ -549,7 +549,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("ArchiveVendor")]
         [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
-        public IActionResult ArchiveVendor(int id, bool archived = true)
+        public IActionResult ArchiveVendor([Dto.Common.PublicId("ven")] int id, bool archived = true)
         {
             _tenantGuard.EnsureOwned<Vendor>(id, nameof(id));
             var vendor = _db.Vendors.Include(v => v.Party).Single(v => v.Id == id);
@@ -570,7 +570,7 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteVendor")]
         [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
-        public IActionResult DeleteVendor(int id)
+        public IActionResult DeleteVendor([Dto.Common.PublicId("ven")] int id)
         {
             _tenantGuard.EnsureOwned<Vendor>(id, nameof(id));
             if (VendorHasRecords(id))
@@ -719,7 +719,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("Bills")] // api/Purchasing/Bills, or ?vendorId= for one vendor's
         [RequirePermission(SystemPermissions.PurchasesBillsView)]
-        public IActionResult Bills(int? vendorId = null)
+        public IActionResult Bills([Dto.Common.PublicId("ven")] int? vendorId = null)
         {
             var terms = _adminService.GetPaymentTerms().ToList();
             var bills = BillsQuery()
@@ -734,7 +734,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("PayablesAsOf")] // api/Purchasing/PayablesAsOf?asOf=2026-12-31
         [RequirePermission(SystemPermissions.PurchasesBillsView)]
-        public IActionResult PayablesAsOf(DateTime asOf, int? vendorId = null)
+        public IActionResult PayablesAsOf(DateTime asOf, [Dto.Common.PublicId("ven")] int? vendorId = null)
         {
             if (asOf == default)
                 return BadRequest(new { message = "Provide the date to report payables as of." });
@@ -758,6 +758,8 @@ namespace Api.Controllers
                 if (balance <= 0.005m) continue;
                 open.Add(new Dto.Financial.OpenItemAsOf
                 {
+                    DocumentType = "PurchaseInvoice",
+                    PartyType = "Vendor",
                     Id = bill.Id,
                     No = bill.No,
                     PartyId = bill.VendorId ?? 0,
@@ -775,7 +777,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("Bill")] // api/Purchasing/Bill?id=
         [RequirePermission(SystemPermissions.PurchasesBillsView)]
-        public IActionResult Bill(int id)
+        public IActionResult Bill([Dto.Common.PublicId("bill")] int id)
         {
             var bill = BillsQuery().FirstOrDefault(b => b.Id == id);
             if (bill == null)
@@ -979,7 +981,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("ApproveBill")]
         [RequirePermission(SystemPermissions.PurchasesBillsPost)]
-        public IActionResult ApproveBill(int id, bool confirmDuplicate = false)
+        public IActionResult ApproveBill([Dto.Common.PublicId("bill")] int id, bool confirmDuplicate = false)
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
             var bill = _db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Id == id);
@@ -1012,7 +1014,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("VoidBill")]
         [RequirePermission(SystemPermissions.PurchasesBillsPost)]
-        public IActionResult VoidBill([FromQuery] int? id, [FromBody] Dto.Purchasing.VoidBillDto? dto = null, [FromQuery] DateTime? date = null, [FromQuery] string? reason = null)
+        public IActionResult VoidBill([FromQuery] [Dto.Common.PublicId("bill")] int? id, [FromBody] Dto.Purchasing.VoidBillDto? dto = null, [FromQuery] DateTime? date = null, [FromQuery] string? reason = null)
         {
             int billId = dto?.Id ?? id ?? 0;
             DateTime? voidDate = dto?.Date ?? date;
@@ -1040,7 +1042,7 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteBill")]
         [RequirePermission(SystemPermissions.PurchasesBillsCreate)]
-        public IActionResult DeleteBill(int id)
+        public IActionResult DeleteBill([Dto.Common.PublicId("bill")] int id)
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
             var bill = _db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Id == id);
@@ -1092,7 +1094,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("VoidPayment")]
         [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
-        public IActionResult VoidPayment([FromBody] Dto.Purchasing.VoidPaymentDto? dto = null, [FromQuery] int? id = null, [FromQuery] DateTime? date = null, [FromQuery] string? reason = null)
+        public IActionResult VoidPayment([FromBody] Dto.Purchasing.VoidPaymentDto? dto = null, [FromQuery] [Dto.Common.PublicId("vpay")] int? id = null, [FromQuery] DateTime? date = null, [FromQuery] string? reason = null)
         {
             int paymentId = dto?.Id ?? id ?? 0;
             DateTime? voidDate = dto?.Date ?? date;
@@ -1108,7 +1110,7 @@ namespace Api.Controllers
             _tenantGuard.EnsureOwned<VendorPayment>(paymentId, nameof(paymentId));
             var payment = _db.VendorPayments.FirstOrDefault(p => p.Id == paymentId);
             if (payment == null)
-                return NotFound(new { message = $"Payment #{paymentId} was not found." });
+                return NotFound(new { message = "Payment was not found." });
 
             if (RefuseIfBooksLocked(payment.Date) is { } locked)
                 return locked;

@@ -213,7 +213,7 @@ namespace AccountGo.BackendTests
             var invoice = await NewStockInvoice(itemId, 5m);
             var savedInvoice = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(savedInvoice.IsSuccessStatusCode, await savedInvoice.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(savedInvoice)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(savedInvoice)).GetProperty("id").GetString());
             int invoiceLedgerId = 0;
             WithDb(db =>
             {
@@ -227,7 +227,7 @@ namespace AccountGo.BackendTests
             AssertStockState(itemId, 15m, 6m);
             AssertStockInvariant(itemId);
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invoiceId}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(invoiceId)}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             AssertStockState(itemId, 20m, 6m);
             var invoiceAndVoid = Ledger(invoiceLedgerId).Concat(Ledger(InvoiceVoidLedgerId(invoiceId))).ToList();
             Assert.All(invoiceAndVoid.Select(line => line.AccountId).Distinct(), accountId =>
@@ -235,7 +235,7 @@ namespace AccountGo.BackendTests
                     .Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount)));
             AssertStockInvariant(itemId);
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={secondBill.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(secondBill.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).IsSuccessStatusCode);
             AssertStockState(itemId, 10m, 5m);
             AssertStockInvariant(itemId);
 
@@ -260,7 +260,7 @@ namespace AccountGo.BackendTests
             var oversoldJson = await Json(oversoldResponse);
             Assert.Contains(oversoldJson.GetProperty("warnings").EnumerateArray(),
                 warning => warning.GetString() == "Only 11 of Test stock in stock.");
-            var oversoldId = oversoldJson.GetProperty("id").GetInt32();
+            var oversoldId = IntId<Core.Domain.Sales.SalesInvoiceHeader>(oversoldJson.GetProperty("id").GetString());
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == oversoldId).GeneralLedgerHeaderId));
             // Selling never changes the average, even past zero.
             AssertStockState(itemId, -1m, 4.7273m);
@@ -271,7 +271,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(stockItems.GetProperty("totalValue").GetDecimal(),
                 stockItems.GetProperty("inventoryAccountBalance").GetDecimal());
 
-            var movementResponse = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={itemId}"));
+            var movementResponse = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={PubId<Core.Domain.Items.Item>(itemId)}"));
             var movements = movementResponse.EnumerateArray().ToArray();
             var movementTypes = movements.Select(movement => movement.GetProperty("type").GetString()).ToArray();
             Assert.Contains("Bill", movementTypes);
@@ -299,7 +299,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Stock/Movements")).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Stock/Adjust", new
             {
-                itemId = 1,
+                itemId = "item_00000000000000000000000001",
                 quantityChange = 1,
                 unitCost = 1,
                 reason = "Count",
@@ -336,7 +336,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/Stock/Items", token: _otherToken)).StatusCode);
             var adjustmentRequest = new
             {
-                itemId = item.Id,
+                itemId = PubId<Core.Domain.Items.Item>(item.Id),
                 quantityChange = 3m,
                 unitCost = 2m,
                 reason = "Count",
@@ -357,7 +357,7 @@ namespace AccountGo.BackendTests
             });
             var posted = await Send(HttpMethod.Post, "/api/Stock/Adjust", adjustmentRequest, token: _otherToken);
             Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
-            var movements = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={item.Id}"));
+            var movements = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={PubId<Core.Domain.Items.Item>(item.Id)}"));
             var adjustment = Assert.Single(movements.EnumerateArray().ToArray());
             Assert.Equal("Adjustment", adjustment.GetProperty("type").GetString());
             Assert.Equal(3m, adjustment.GetProperty("runningQuantity").GetDecimal());
@@ -420,8 +420,7 @@ namespace AccountGo.BackendTests
             });
 
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Catalog stock supplier" });
-            var accounts = await (await Send(HttpMethod.Get, "/api/Purchasing/BillAccounts"))
-                .Content.ReadFromJsonAsync<List<Dto.Purchasing.BillAccount>>();
+            var accounts = await ReadDto<List<Dto.Purchasing.BillAccount>>(await Send(HttpMethod.Get, "/api/Purchasing/BillAccounts"));
             Assert.Contains(accounts, account => account.Code == "10800" && account.IsInventoryAccount);
             var bill = NewBill(vendor.Id, ("Catalog stock", 2m, 5m, AccountId("50200")));
             bill.Lines[0].ItemId = created.Id;
@@ -438,7 +437,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await Json(issuedResponse)).GetProperty("id").GetString());
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).GeneralLedgerHeaderId));
             AssertStockState(created.Id, 4m, 3.8325m);
             AssertStockInvariant(created.Id);

@@ -74,7 +74,7 @@ namespace Services.TaxSystem
         decimal Tax);
 
     public sealed record TaxPeriodTaxRow(
-        int? TaxId,
+        [property: Dto.Common.PublicId("tax")] int? TaxId,
         string TaxCode,
         string TaxName,
         decimal? Rate,
@@ -85,11 +85,11 @@ namespace Services.TaxSystem
     public sealed record TaxPeriodDocumentRow(
         string Side,
         string Kind,
-        int Id,
+        [property: Dto.Common.PublicIdByType("Kind")] int Id,
         string No,
         string Date,
         string Party,
-        int? TaxId,
+        [property: Dto.Common.PublicId("tax")] int? TaxId,
         decimal Taxable,
         decimal Tax,
         bool Posted);
@@ -99,7 +99,7 @@ namespace Services.TaxSystem
 
     public sealed record TaxPeriodUnpostedWarning(
         string Kind,
-        int Id,
+        [property: Dto.Common.PublicIdByType("Kind")] int Id,
         string No,
         string Date);
 
@@ -107,7 +107,7 @@ namespace Services.TaxSystem
         IReadOnlyList<TaxPeriodLedgerAccount> Accounts);
 
     public sealed record TaxPeriodLedgerAccount(
-        int AccountId,
+        [property: Dto.Common.PublicId("acct")] int AccountId,
         string Code,
         string Name,
         string PositiveSide,
@@ -117,7 +117,7 @@ namespace Services.TaxSystem
         IReadOnlyList<TaxPeriodLedgerOtherEntry> Entries);
 
     public sealed record TaxPeriodLedgerOtherEntry(
-        int GlHeaderId,
+        [property: Dto.Common.PublicId("gl")] int GlHeaderId,
         string Date,
         string Description,
         string DocumentType,

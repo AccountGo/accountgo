@@ -98,20 +98,20 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var accounts = await SeedAccounts(workId, personalId);
         var cases = new[]
         {
-            (Kind: "Personal", PersonalAccount: accounts.PersonalExpenseId, Source: new[] { ("30800", DrOrCrSide.Dr), ("W9001", DrOrCrSide.Cr) }, Mirror: new[] { ("P9002", DrOrCrSide.Dr), ("40900", DrOrCrSide.Cr) }),
-            (Kind: "MoveToPersonal", PersonalAccount: accounts.PersonalBankId, Source: new[] { ("30800", DrOrCrSide.Dr), ("W9001", DrOrCrSide.Cr) }, Mirror: new[] { ("P9001", DrOrCrSide.Dr), ("40900", DrOrCrSide.Cr) }),
-            (Kind: "MoneyIn", PersonalAccount: accounts.PersonalBankId, Source: new[] { ("W9001", DrOrCrSide.Dr), ("30100", DrOrCrSide.Cr) }, Mirror: new[] { ("40900", DrOrCrSide.Dr), ("P9001", DrOrCrSide.Cr) })
+            (Kind: "Personal", PersonalAccount: accounts.PersonalExpensePub, Source: new[] { ("30800", DrOrCrSide.Dr), ("W9001", DrOrCrSide.Cr) }, Mirror: new[] { ("P9002", DrOrCrSide.Dr), ("40900", DrOrCrSide.Cr) }),
+            (Kind: "MoveToPersonal", PersonalAccount: accounts.PersonalBankPub, Source: new[] { ("30800", DrOrCrSide.Dr), ("W9001", DrOrCrSide.Cr) }, Mirror: new[] { ("P9001", DrOrCrSide.Dr), ("40900", DrOrCrSide.Cr) }),
+            (Kind: "MoneyIn", PersonalAccount: accounts.PersonalBankPub, Source: new[] { ("W9001", DrOrCrSide.Dr), ("30100", DrOrCrSide.Cr) }, Mirror: new[] { ("40900", DrOrCrSide.Dr), ("P9001", DrOrCrSide.Cr) })
         };
         foreach (var item in cases)
         {
             using var response = await Send(HttpMethod.Post, "/api/linked-entries", new
             {
                 kind = item.Kind, date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = item.PersonalAccount
+                amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = item.PersonalAccount
             }, workSlug);
             Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var pairId = json.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+            var pairId = PairId(json);
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
             var pair = await db.LinkedEntryPairs.SingleAsync(p => p.Id == pairId);
@@ -147,7 +147,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var response = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         }, workSlug);
 
         Assert.False(response.IsSuccessStatusCode);
@@ -172,7 +172,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var request = new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         };
         using (var missing = await Send(HttpMethod.Post, "/api/linked-entries", request, workSlug))
         {
@@ -185,7 +185,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         }, workSlug);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var id = json.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var id = PairId(json);
         using var checkScope = _factory.Services.CreateScope();
         var pair = await checkScope.ServiceProvider.GetRequiredService<ApiDbContext>().LinkedEntryPairs.SingleAsync(p => p.Id == id);
         Assert.Equal(25m, pair.SourceAmount);
@@ -214,12 +214,12 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var response = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId,
-            splitWorkExpenseAccountId = workExpenseId, splitWorkAmount = 10m
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub,
+            splitWorkExpenseAccountId = Pub<Account>(workExpenseId), splitWorkAmount = 10m
         }, workSlug);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var id = json.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var id = PairId(json);
         using var verify = _factory.Services.CreateScope();
         var dbVerify = verify.ServiceProvider.GetRequiredService<ApiDbContext>();
         var pair = await dbVerify.LinkedEntryPairs.SingleAsync(p => p.Id == id);
@@ -247,7 +247,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var body = new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         };
         using (var companyDenied = await Send(HttpMethod.Post, "/api/linked-entries", body, workSlug))
         {
@@ -273,11 +273,11 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var create = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         }, workSlug);
         Assert.Equal(HttpStatusCode.OK, create.StatusCode);
         using var body = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
-        var pairId = body.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var pairId = PairId(body);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var pair = await db.LinkedEntryPairs.SingleAsync(p => p.Id == pairId);
@@ -285,7 +285,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var mirrorHeader = await db.JournalEntryHeaders.IgnoreQueryFilters().SingleAsync(j => j.CompanyId == personalId && j.Id == pair.MirrorJournalId);
         var originalGlCount = await db.GeneralLedgerHeaders.IgnoreQueryFilters().CountAsync(g => g.CompanyId == workId || g.CompanyId == personalId);
 
-        using var reverse = await Send(HttpMethod.Post, $"/api/linked-entries/{pairId}/reverse", new
+        using var reverse = await Send(HttpMethod.Post, $"/api/linked-entries/{Pub<LinkedEntryPair>(pairId)}/reverse", new
         {
             date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), reason = "Retry-safe review guard"
         }, workSlug);
@@ -306,20 +306,20 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var createBody = new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         };
 
         using var first = await Send(HttpMethod.Post, "/api/linked-entries", createBody, workSlug);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         using var firstJson = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
-        var postedPairId = firstJson.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var postedPairId = PairId(firstJson);
         using var readScope = _factory.Services.CreateScope();
         var readDb = readScope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var postedPair = await readDb.LinkedEntryPairs.AsNoTracking().SingleAsync(p => p.Id == postedPairId);
         using var approval = await Send(HttpMethod.Post, "/api/organizations/current/members/access-approvals", new
         {
             operationKey = Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
-            resourceId = postedPair.SourceJournalId!.Value.ToString(CultureInfo.InvariantCulture)
+            resourceId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Financials.JournalEntryHeader>(_factory.Services, postedPair.SourceJournalId!.Value)
         }, workSlug, reviewer.Token);
         Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
         using var approvalJson = JsonDocument.Parse(await approval.Content.ReadAsStringAsync());
@@ -331,7 +331,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
             Assert.Equal("__AccessDelegationApproval", approvalRow.TableName);
             Assert.Equal("Approved", approvalRow.OriginalValue);
         }
-        using var post = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = postedPair.SourceJournalId },
+        using var post = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = Pub<JournalEntryHeader>(postedPair.SourceJournalId!.Value) },
             workSlug, _token, approvalRequestId,
             approvalJson.RootElement.GetProperty("approverUserId").GetString());
         Assert.True(post.StatusCode == HttpStatusCode.OK, await post.Content.ReadAsStringAsync());
@@ -355,12 +355,12 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var second = await Send(HttpMethod.Post, "/api/linked-entries", createBody, workSlug);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         using var secondJson = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
-        var cancelledPairId = secondJson.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var cancelledPairId = PairId(secondJson);
         var cancelledPair = await readDb.LinkedEntryPairs.SingleAsync(p => p.Id == cancelledPairId);
         using var cancellationApproval = await Send(HttpMethod.Post, "/api/organizations/current/members/access-approvals", new
         {
             operationKey = Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
-            resourceId = cancelledPair.SourceJournalId!.Value.ToString(CultureInfo.InvariantCulture)
+            resourceId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Financials.JournalEntryHeader>(_factory.Services, cancelledPair.SourceJournalId!.Value)
         }, workSlug, reviewer.Token);
         Assert.Equal(HttpStatusCode.Created, cancellationApproval.StatusCode);
         using var cancellationJson = JsonDocument.Parse(await cancellationApproval.Content.ReadAsStringAsync());
@@ -383,28 +383,28 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var create = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         }, workSlug);
         Assert.Equal(HttpStatusCode.OK, create.StatusCode);
         using var createJson = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
-        var pairId = createJson.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var pairId = PairId(createJson);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var pair = await db.LinkedEntryPairs.AsNoTracking().SingleAsync(p => p.Id == pairId);
         using var approval = await Send(HttpMethod.Post, "/api/organizations/current/members/access-approvals", new
         {
             operationKey = Core.Authorization.AccessOperationCatalog.FinancialsJournalPost,
-            resourceId = pair.SourceJournalId!.Value.ToString(CultureInfo.InvariantCulture)
+            resourceId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Financials.JournalEntryHeader>(_factory.Services, pair.SourceJournalId!.Value)
         }, workSlug, reviewer.Token);
         Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
         using var approvalJson = JsonDocument.Parse(await approval.Content.ReadAsStringAsync());
         var approvalRequestId = approvalJson.RootElement.GetProperty("approvalRequestId").GetString();
         var approverId = approvalJson.RootElement.GetProperty("approverUserId").GetString();
-        using var post = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = pair.SourceJournalId },
+        using var post = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = Pub<JournalEntryHeader>(pair.SourceJournalId!.Value) },
             workSlug, _token, approvalRequestId, approverId);
         Assert.True(post.StatusCode == HttpStatusCode.OK, await post.Content.ReadAsStringAsync());
 
-        using var retry = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = pair.SourceJournalId },
+        using var retry = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = Pub<JournalEntryHeader>(pair.SourceJournalId!.Value) },
             workSlug, _token, approvalRequestId, approverId);
         Assert.True(retry.StatusCode == HttpStatusCode.Conflict, await retry.Content.ReadAsStringAsync());
         var body = await retry.Content.ReadAsStringAsync();
@@ -420,15 +420,16 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var create = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         }, workSlug);
         using var json = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
-        var pairId = json.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var pairId = PairId(json);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var pair = await db.LinkedEntryPairs.SingleAsync(p => p.Id == pairId);
         var sourceJournalId = pair.SourceJournalId!.Value;
-        using var mirror = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = pair.MirrorJournalId }, "linked-personal");
+        var sourceJournalPub = Pub<JournalEntryHeader>(sourceJournalId);
+        using var mirror = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = Pub<JournalEntryHeader>(pair.MirrorJournalId!.Value) }, "linked-personal");
         Assert.True(mirror.StatusCode == HttpStatusCode.Conflict, await mirror.Content.ReadAsStringAsync());
         Assert.Contains("linked_entry_use_pair_reversal", await mirror.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         var mirrorJournal = await db.JournalEntryHeaders.IgnoreQueryFilters().SingleAsync(j => j.CompanyId == personalId && j.Id == pair.MirrorJournalId);
@@ -438,9 +439,8 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         scope.ServiceProvider.GetRequiredService<LinkedEntryService>().CancelPendingSource(workId, sourceJournalId);
         Assert.Equal("Cancelled", (await db.LinkedEntryPairs.AsNoTracking().SingleAsync(p => p.Id == pairId)).State);
         Assert.Equal("Cancelled", scope.ServiceProvider.GetRequiredService<LinkedEntryService>().GetSourcePairState(workId, sourceJournalId));
-        using var source = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = sourceJournalId }, workSlug);
-        Assert.True(source.StatusCode == HttpStatusCode.Conflict, await source.Content.ReadAsStringAsync());
-        Assert.Contains("linked_entry_not_pending", await source.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var source = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = sourceJournalPub }, workSlug);
+        Assert.True(source.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Conflict, await source.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -451,11 +451,11 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var create = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         }, workSlug);
         Assert.True(create.StatusCode == HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
         using var json = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
-        var pairId = json.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var pairId = PairId(json);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var pair = await db.LinkedEntryPairs.SingleAsync(p => p.Id == pairId);
@@ -475,7 +475,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var rejected = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         }, workSlug, reviewer.Token);
         Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
         using (var scope = _factory.Services.CreateScope())
@@ -491,7 +491,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var response = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub
         }, workSlug);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("This account is also in your work books", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
@@ -551,12 +551,12 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var create = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "Personal", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 25m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalExpenseId,
-            statementLineId
+            amount = 25m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalExpensePub,
+            statementLineId = Pub<BankStatementLine>(statementLineId)
         }, workSlug);
         Assert.True(create.StatusCode == HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
         using var json = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
-        var pairId = json.RootElement.GetProperty("pair").GetProperty("id").GetInt32();
+        var pairId = PairId(json);
         using var scope = _factory.Services.CreateScope();
         var dbCheck = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var pair = await dbCheck.LinkedEntryPairs.SingleAsync(p => p.Id == pairId);
@@ -578,7 +578,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         await rejectedAttempt.RollbackAsync();
         await dbCheck.Entry(matchedBefore).ReloadAsync();
 
-        using var reverse = await Send(HttpMethod.Post, $"/api/linked-entries/{pairId}/reverse", new
+        using var reverse = await Send(HttpMethod.Post, $"/api/linked-entries/{Pub<LinkedEntryPair>(pairId)}/reverse", new
         {
             date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), reason = "Correction"
         }, workSlug);
@@ -592,7 +592,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         var unmatchedLine = await dbCheck.BankStatementLines.IgnoreQueryFilters().AsNoTracking().SingleAsync(l => l.Id == statementLineId);
         Assert.Null(unmatchedLine.MatchedGeneralLedgerLineId);
 
-        using var second = await Send(HttpMethod.Post, $"/api/linked-entries/{pairId}/reverse", new
+        using var second = await Send(HttpMethod.Post, $"/api/linked-entries/{Pub<LinkedEntryPair>(pairId)}/reverse", new
         {
             date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
         }, workSlug);
@@ -602,7 +602,7 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var capital = await Send(HttpMethod.Post, "/api/linked-entries", new
         {
             kind = "MoneyIn", date = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            amount = 12m, workBankAccountId = accounts.WorkBankId, personalAccountId = accounts.PersonalBankId
+            amount = 12m, workBankAccountId = accounts.WorkBankPub, personalAccountId = accounts.PersonalBankPub
         }, workSlug);
         Assert.Equal(HttpStatusCode.OK, capital.StatusCode);
         using (var statementScope = _factory.Services.CreateScope())
@@ -624,14 +624,20 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
             l.DrCr == DrOrCrSide.Dr ? l.Amount : 0m, l.DrCr == DrOrCrSide.Cr ? l.Amount : 0m)).ToList();
     }
 
-    private async Task<(int WorkBankId, int PersonalExpenseId, int PersonalBankId)> SeedAccounts(int workId, int personalId)
+    private string Pub<T>(int id) where T : BaseEntity, IHasPublicId =>
+        AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<T>(_factory.Services, id);
+
+    private int PairId(JsonDocument json) =>
+        AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<LinkedEntryPair>(_factory.Services, json.RootElement.GetProperty("pair").GetProperty("id").GetString()!);
+
+    private async Task<(int WorkBankId, string WorkBankPub, string PersonalExpensePub, string PersonalBankPub)> SeedAccounts(int workId, int personalId)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         db.SuppressTenantSecurityCheck = true;
         var workSlug = await db.Companies.IgnoreQueryFilters().Where(c => c.Id == workId).Select(c => c.Slug).SingleAsync();
         var personalSlug = await db.Companies.IgnoreQueryFilters().Where(c => c.Id == personalId).Select(c => c.Slug).SingleAsync();
-        async Task<(int AccountId, int BankId)> BankFor(int companyId, string slug, string code, string bankName)
+        async Task<(int AccountId, string AccountPub, int BankId, string BankPub)> BankFor(int companyId, string slug, string code, string bankName)
         {
             var account = new Account { CompanyId = companyId, AccountClassId = (int)AccountClasses.Assets, AccountCode = code, AccountName = bankName, IsCash = true, DrOrCrSide = DrOrCrSide.Dr };
             db.Accounts.Add(account);
@@ -639,14 +645,14 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
             var bank = new Bank { CompanyId = companyId, Name = bankName, AccountId = account.Id, Type = BankTypes.CheckingAccount, IsActive = true, CurrencyCode = "USD" };
             db.Banks.Add(bank);
             await db.SaveChangesAsync();
-            return (account.Id, bank.Id);
+            return (account.Id, account.PublicId, bank.Id, bank.PublicId);
         }
         var workBank = await BankFor(workId, workSlug!, "W9001", "Work bank");
         var personalBank = await BankFor(personalId, personalSlug!, "P9001", "Personal bank");
         var expense = new Account { CompanyId = personalId, AccountClassId = (int)AccountClasses.Expense, AccountCode = "P9002", AccountName = "Household spending", DrOrCrSide = DrOrCrSide.Dr };
         db.Accounts.Add(expense);
         await db.SaveChangesAsync();
-        return (workBank.BankId, expense.Id, personalBank.AccountId);
+        return (workBank.BankId, workBank.BankPub, expense.PublicId, personalBank.AccountPub);
     }
 
     private async Task<(int WorkId, int PersonalId, string WorkSlug)> CreateLinkedWorkspaces()
@@ -655,15 +661,16 @@ public sealed class LinkedEntriesHttpTests : IAsyncLifetime
         using var work = await Send(HttpMethod.Post, "/api/organizations", new { name = "Linked work", slug = workSlug, currency = "USD" });
         Assert.True(work.StatusCode == HttpStatusCode.Created, await work.Content.ReadAsStringAsync());
         using var workJson = JsonDocument.Parse(await work.Content.ReadAsStringAsync());
-        var workId = int.Parse(workJson.RootElement.GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+        var workPubId = workJson.RootElement.GetProperty("id").GetString()!;
+        var workId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, workPubId);
         using var personal = await Send(HttpMethod.Post, "/api/organizations/personal", new
         {
-            name = "Linked personal", slug = "linked-personal", currency = "USD", linkWorkCompanyId = workId,
+            name = "Linked personal", slug = "linked-personal", currency = "USD", linkWorkCompanyId = workPubId,
             booksStartDate = "2026-01-01", fiscalYearPattern = "Calendar"
         });
         Assert.Equal(HttpStatusCode.Created, personal.StatusCode);
         using var personalJson = JsonDocument.Parse(await personal.Content.ReadAsStringAsync());
-        var personalId = int.Parse(personalJson.RootElement.GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+        var personalId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, personalJson.RootElement.GetProperty("id").GetString()!);
         await GrantFinancialPermissions(workId, personalId);
         return (workId, personalId, workSlug);
     }

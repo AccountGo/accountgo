@@ -4,13 +4,13 @@ import { useAuth } from '../auth/AuthContext';
 import { usePermissions } from './Gating';
 import { useOptionalCapabilities } from '../lib/entitlements';
 
-export function BillStatementSources({ billId, orgSlug }: { billId: number; orgSlug: string }) {
+export function BillStatementSources({ billId, orgSlug }: { billId: string; orgSlug: string }) {
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
   const caps = useOptionalCapabilities();
   const canStatementImport = caps ? caps.canStatementImport : false;
   const canView = hasPermission('banking.accounts.view');
-  const [sources, setSources] = useState<{ id: number; bankId: number }[]>([]);
+  const [sources, setSources] = useState<{ id: string; bankId: string }[]>([]);
   useEffect(() => {
     let active = true;
     setSources([]);

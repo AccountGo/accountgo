@@ -1,4 +1,5 @@
 using Api.Authorization;
+using Dto.Common;
 using Api.Data;
 using Api.Filters;
 using Core.Authorization;
@@ -182,14 +183,14 @@ namespace Api.Controllers
         [HttpGet]
         [Route("Account")]
         [RequirePermission(SystemPermissions.FinancialsAccountsView)]
-        public async Task<IActionResult> Account(int id)
+        public async Task<IActionResult> Account([Dto.Common.PublicId("acct")] int id)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsAccountsView, SystemPermissions.FinancialsAccountsView, out var denied))
                 return denied!;
 
             var account = _financialService.GetAccount(id);
             if (account == null)
-                return NotFound(new { message = $"Account #{id} not found." });
+                return NotFound(new { message = "Account not found." });
 
             var (isProtected, protectionReason, canDelete, deleteBlockedReason) =
                 await _accountService.GetAccountProtectionInfoAsync(account.Id);
@@ -254,14 +255,14 @@ namespace Api.Controllers
         [HttpGet]
         [Route("JournalEntry")]
         [RequirePermission(SystemPermissions.FinancialsJournalView)]
-        public IActionResult JournalEntry(int id)
+        public IActionResult JournalEntry([Dto.Common.PublicId("je")] int id)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalView, SystemPermissions.FinancialsJournalView, out var denied))
                 return denied!;
 
             var je = _financialService.GetJournalEntry(id);
             if (je == null)
-                return NotFound(new { message = $"Journal entry #{id} not found." });
+                return NotFound(new { message = "Journal entry not found." });
 
             var journalEntryDto = ToJournalEntryDto(je);
 
@@ -404,10 +405,10 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("JournalEntries/{id:int}/DiscardImported")]
+        [Route("JournalEntries/{id}/DiscardImported")]
         [RequireModule("financials")]
         [RequirePermission(SystemPermissions.FinancialsJournalCreate)]
-        public IActionResult DiscardImportedJournalEntry(int id)
+        public IActionResult DiscardImportedJournalEntry([Dto.Common.PublicId("je")] int id)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsJournalCreate, SystemPermissions.FinancialsJournalCreate, out var denied))
                 return denied!;
@@ -428,7 +429,7 @@ namespace Api.Controllers
             try
             {
                 sourceJournals.Discard(companyId.Value, id, actorId);
-                return Ok(new { discarded = true, id });
+                return Ok(new DiscardSourceJournalResult(true, id));
             }
             catch (Api.Service.SourceJournalOperationException ex)
             {
@@ -438,8 +439,12 @@ namespace Api.Controllers
             }
         }
 
+        private sealed record DiscardSourceJournalResult(
+            bool Discarded,
+            [property: PublicId("je")] int Id);
+
         private sealed record PostSingleResult(
-            int Id,
+            [property: PublicId("je")] int Id,
             bool Posted,
             int StatusCode,
             string? Code,
@@ -448,11 +453,12 @@ namespace Api.Controllers
 
         public sealed class PostJournalBatchRequest
         {
+            [PublicId("je")]
             public List<int> Ids { get; set; } = new();
         }
 
         public sealed record PostJournalBatchItemResult(
-            int Id,
+            [property: PublicId("je")] int Id,
             bool Posted,
             string? Code,
             string? Message);
@@ -767,7 +773,7 @@ namespace Api.Controllers
                         journalEntry.Id.ToString(CultureInfo.InvariantCulture), actorUserId: preparerUserId).GetAwaiter().GetResult();
                 }
 
-                return Ok(new { id = journalEntry.Id });
+                return Ok(new { id = journalEntry.PublicId });
             }
             catch (Exception ex)
             {
@@ -786,7 +792,7 @@ namespace Api.Controllers
         public ActionResult GeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
             string? accountCode = null,
-            int? transactionNo = null,
+            [Dto.Common.PublicId("gl")] int? transactionNo = null,
             Core.Domain.DocumentTypes? documentType = null,
             int skip = 0,
             int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize,
@@ -805,11 +811,83 @@ namespace Api.Controllers
                 return BadRequest(new { message = $"Provide skip >= 0 and take between 1 and {Services.Financial.FinancialService.GeneralLedgerMaxPageSize}." });
             try
             {
-                return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take, search, minAmount, maxAmount));
+                var page = _financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take, search, minAmount, maxAmount);
+                RewriteGeneralLedgerSourcePaths(page);
+                return Ok(page);
             }
             catch (ArgumentException ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private void RewriteGeneralLedgerSourcePaths(Dto.Financial.GeneralLedgerTransactionPage page) =>
+            RewriteGeneralLedgerSourcePaths(page, HttpContext?.RequestServices?.GetService<Api.PublicIds.IPublicIdResolver>());
+
+        /// <summary>Rewrites each ledger row's source link from integer keys to public ids; shared with the assistant tool.</summary>
+        internal static void RewriteGeneralLedgerSourcePaths(Dto.Financial.GeneralLedgerTransactionPage? page, Api.PublicIds.IPublicIdResolver? resolver)
+        {
+            if (resolver == null || page?.Items == null || page.Items.Count == 0)
+                return;
+
+            var invIds = new List<int>();
+            var billIds = new List<int>();
+            var jeIds = new List<int>();
+            var bankIds = new List<int>();
+
+            foreach (var item in page.Items)
+            {
+                if (!item.SourceDocumentId.HasValue) continue;
+                switch (item.DocumentType)
+                {
+                    case nameof(Core.Domain.DocumentTypes.SalesInvoice): invIds.Add(item.SourceDocumentId.Value); break;
+                    case nameof(Core.Domain.DocumentTypes.PurchaseInvoice):
+                    case nameof(Core.Domain.DocumentTypes.PurchaseInvoicePayment): billIds.Add(item.SourceDocumentId.Value); break;
+                    case nameof(Core.Domain.DocumentTypes.JournalEntry): jeIds.Add(item.SourceDocumentId.Value); break;
+                    case nameof(Core.Domain.DocumentTypes.BankTransaction):
+                        if (item.SourcePath != null && item.SourcePath.StartsWith("/banking/", StringComparison.Ordinal)
+                            && int.TryParse(item.SourcePath.AsSpan("/banking/".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var bId))
+                            bankIds.Add(bId);
+                        break;
+                }
+            }
+
+            var prefetch = new List<(string Prefix, int Id)>();
+            prefetch.AddRange(invIds.Select(i => ("inv", i)));
+            prefetch.AddRange(billIds.Select(i => ("bill", i)));
+            prefetch.AddRange(jeIds.Select(i => ("je", i)));
+            prefetch.AddRange(bankIds.Select(i => ("ba", i)));
+            if (prefetch.Count > 0)
+                resolver.PrefetchAsync(prefetch).GetAwaiter().GetResult();
+
+            foreach (var item in page.Items)
+            {
+                if (!item.SourceDocumentId.HasValue) continue;
+                var id = item.SourceDocumentId.Value;
+                switch (item.DocumentType)
+                {
+                    case nameof(Core.Domain.DocumentTypes.SalesInvoice):
+                        var invPub = resolver.ToPublic("inv", id);
+                        item.SourcePath = invPub != null ? "/sales/" + invPub : null;
+                        break;
+                    case nameof(Core.Domain.DocumentTypes.PurchaseInvoice):
+                    case nameof(Core.Domain.DocumentTypes.PurchaseInvoicePayment):
+                        var billPub = resolver.ToPublic("bill", id);
+                        item.SourcePath = billPub != null ? "/purchases/" + billPub : null;
+                        break;
+                    case nameof(Core.Domain.DocumentTypes.JournalEntry):
+                        var jePub = resolver.ToPublic("je", id);
+                        item.SourcePath = jePub != null ? "/financials/journals?id=" + jePub : null;
+                        break;
+                    case nameof(Core.Domain.DocumentTypes.BankTransaction):
+                        if (item.SourcePath != null && item.SourcePath.StartsWith("/banking/", StringComparison.Ordinal)
+                            && int.TryParse(item.SourcePath.AsSpan("/banking/".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var bId))
+                        {
+                            var baPub = resolver.ToPublic("ba", bId);
+                            item.SourcePath = baPub != null ? "/banking/" + baPub : null;
+                        }
+                        break;
+                }
             }
         }
 
@@ -1114,21 +1192,28 @@ namespace Api.Controllers
             return Ok(new
             {
                 openingCash = movement.OpeningCash,
-                lines = movement.Lines.Select(line => new
-                {
-                    date = line.Date,
-                    generalLedgerHeaderId = line.GeneralLedgerHeaderId,
-                    description = line.Description,
-                    accountName = line.AccountName,
-                    counterpartAccountName = line.CounterpartAccountName,
-                    moneyIn = line.MoneyIn,
-                    moneyOut = line.MoneyOut,
-                }),
+                lines = movement.Lines.Select(line => new CashMovementLineDto(
+                    line.Date,
+                    line.GeneralLedgerHeaderId,
+                    line.Description,
+                    line.AccountName,
+                    line.CounterpartAccountName,
+                    line.MoneyIn,
+                    line.MoneyOut)).ToList(),
                 totalIn = movement.TotalIn,
                 totalOut = movement.TotalOut,
                 closingCash = movement.ClosingCash,
             });
         }
+
+        private sealed record CashMovementLineDto(
+            DateTime Date,
+            [property: Dto.Common.PublicId("gl")] int GeneralLedgerHeaderId,
+            string? Description,
+            string? AccountName,
+            string? CounterpartAccountName,
+            decimal MoneyIn,
+            decimal MoneyOut);
 
         private async Task<Services.Financial.FinancialReportCashMovement> LoadCashMovementAsync(DateTime? from, DateTime? to)
         {
@@ -2014,7 +2099,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("Bank/{id}")] // api/Financials/Bank/1
         [RequirePermission(SystemPermissions.BankingAccountsView)]
-        public IActionResult GetBank(int id)
+        public IActionResult GetBank([Dto.Common.PublicId("ba")] int id)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.BankingAccountsView, SystemPermissions.BankingAccountsView, out var denied))
                 return denied!;
@@ -2062,7 +2147,8 @@ namespace Api.Controllers
                 }, includeFullNumbers: false);
                 tx.Commit();
 
-                return CreatedAtAction(nameof(GetBank), new { id = created.Id }, ToLegacyBankDto(created));
+                var publicId = _db.Banks.AsNoTracking().Where(b => b.Id == created.Id).Select(b => b.PublicId).Single();
+                return CreatedAtAction(nameof(GetBank), new { id = publicId }, ToLegacyBankDto(created));
             }
             catch (Exception ex)
             {
@@ -2077,7 +2163,7 @@ namespace Api.Controllers
         [Route("Bank/{id}")] // api/Financials/Bank/1
         [RequireModule("financials")]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult UpdateBank(int id, [FromBody] Dto.Financial.Bank bankDto)
+        public IActionResult UpdateBank([Dto.Common.PublicId("ba")] int id, [FromBody] Dto.Financial.Bank bankDto)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.BankingAccountsManage, SystemPermissions.BankingAccountsManage, out var denied))
                 return denied!;
@@ -2124,7 +2210,7 @@ namespace Api.Controllers
         [Route("Bank/{id}")] // api/Financials/Bank/1
         [RequireModule("financials")]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult DeleteBank(int id)
+        public IActionResult DeleteBank([Dto.Common.PublicId("ba")] int id)
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.BankingAccountsManage, SystemPermissions.BankingAccountsManage, out var denied))
                 return denied!;
@@ -2308,16 +2394,38 @@ namespace Api.Controllers
         private static string? FormatYearEndDateTime(DateTime? value) =>
             value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-        private static object MapYearEndSummary(YearEndYearSummary year) => new
-        {
-            id = year.Id,
-            fiscalYearCode = year.FiscalYearCode,
-            startDate = FormatYearEndDate(year.StartDate),
-            endDate = FormatYearEndDate(year.EndDate),
-            status = year.Status,
-            closedAt = FormatYearEndDateTime(year.ClosedAt),
-            closedBy = year.ClosedBy
-        };
+        private sealed record YearEndSummaryDto(
+            [property: Dto.Common.PublicId("fy")] int Id,
+            string FiscalYearCode,
+            string StartDate,
+            string EndDate,
+            Services.Financial.FiscalYearCloseStatus Status,
+            string? ClosedAt,
+            string? ClosedBy);
+
+        private sealed record YearEndClosingLineDto(
+            [property: Dto.Common.PublicId("acct")] int AccountId,
+            string AccountCode,
+            string AccountName,
+            string DrCr,
+            decimal Amount);
+
+        private sealed record YearEndPartnerAllocationDto(
+            [property: Dto.Common.PublicId("ptnr")] int PartnerId,
+            string Name,
+            decimal Percent,
+            decimal ProfitShare,
+            decimal DrawingsClosed,
+            decimal CapitalAfterClose);
+
+        private static object MapYearEndSummary(YearEndYearSummary year) => new YearEndSummaryDto(
+            year.Id,
+            year.FiscalYearCode,
+            FormatYearEndDate(year.StartDate),
+            FormatYearEndDate(year.EndDate),
+            year.Status,
+            FormatYearEndDateTime(year.ClosedAt),
+            year.ClosedBy);
 
         private static object MapYearEndPreview(YearEndPreview preview) => new
         {
@@ -2341,19 +2449,15 @@ namespace Api.Controllers
                 count = item.Count,
                 linkPath = item.LinkPath
             }),
-            closingLines = preview.ClosingLines.Select(line => new
-            {
-                accountId = line.AccountId,
-                accountCode = line.AccountCode,
-                accountName = line.AccountName,
-                drCr = line.DrCr,
-                amount = line.Amount
-            }),
-            partnerAllocations = preview.PartnerAllocations.Select(item => new
-            {
-                partnerId = item.PartnerId, name = item.Name, percent = item.Percent,
-                profitShare = item.ProfitShare, drawingsClosed = item.DrawingsClosed, capitalAfterClose = item.CapitalAfterClose
-            }),
+            closingLines = preview.ClosingLines.Select(line => new YearEndClosingLineDto(
+                line.AccountId,
+                line.AccountCode,
+                line.AccountName,
+                line.DrCr,
+                line.Amount)).ToList(),
+            partnerAllocations = preview.PartnerAllocations.Select(item => new YearEndPartnerAllocationDto(
+                item.PartnerId, item.Name, item.Percent,
+                item.ProfitShare, item.DrawingsClosed, item.CapitalAfterClose)).ToList(),
             partnerLossNotice = preview.PartnerLossNotice,
             currentBooksLockedThrough = preview.CurrentBooksLockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             proposedBooksLockedThrough = preview.ProposedBooksLockedThrough?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -2451,7 +2555,7 @@ namespace Api.Controllers
             if (year == null) return NotFound(new { message = "Fiscal year was not found." });
             var runs = _db.YearEndCloseRuns.Where(r => r.FinancialYearId == year.Id)
                 .OrderBy(r => r.AttemptNo)
-                .Select(r => new { id = r.Id, attemptNo = r.AttemptNo, previewHash = r.PreviewHash, closedAtUtc = r.ClosedAtUtc, actor = r.Actor })
+                .Select(r => new { id = r.PublicId, attemptNo = r.AttemptNo, previewHash = r.PreviewHash, closedAtUtc = r.ClosedAtUtc, actor = r.Actor })
                 .ToList();
             return Ok(new
             {
@@ -2466,16 +2570,29 @@ namespace Api.Controllers
         [Route("YearEnd/{code}/CloseRuns/{runId}/Package")]
         [RequireModule("financials")]
         [RequirePermission(SystemPermissions.FinancialsPeriodsClose)]
-        public IActionResult DownloadYearEndPackage(string code, string runId, string format = "json")
+        public IActionResult DownloadYearEndPackage(string code, string runId, [FromServices] Api.PublicIds.IPublicIdResolver publicIds, string format = "json")
         {
             if (!TryAuthorizeOperation(AccessOperationCatalog.FinancialsPeriodsClose, SystemPermissions.FinancialsPeriodsClose, out var denied))
                 return denied!;
             var year = _db.FinancialYears.FirstOrDefault(y => y.FiscalYearCode == code);
             if (year == null) return NotFound(new { message = "Fiscal year was not found." });
             var runQuery = _db.YearEndCloseRuns.Where(r => r.FinancialYearId == year.Id);
-            var run = string.Equals(runId, "latest", StringComparison.OrdinalIgnoreCase)
-                ? runQuery.OrderByDescending(r => r.AttemptNo).FirstOrDefault()
-                : int.TryParse(runId, out var id) ? runQuery.FirstOrDefault(r => r.Id == id) : null;
+            Core.Domain.Financials.YearEndCloseRun? run;
+            if (string.Equals(runId, "latest", StringComparison.OrdinalIgnoreCase))
+            {
+                run = runQuery.OrderByDescending(r => r.AttemptNo).FirstOrDefault();
+            }
+            else
+            {
+                var lookup = publicIds.Resolve(runId, "yecr");
+                if (!lookup.Ok)
+                {
+                    if (lookup.Error == Api.PublicIds.PublicIdLookupError.NotFound)
+                        return NotFound(new { message = Api.PublicIds.PublicIdErrorCodes.NotFoundMessage, code = Api.PublicIds.PublicIdErrorCodes.UnknownId });
+                    return BadRequest(new { message = "IDs are strings like 'yecr_…'.", code = Api.PublicIds.PublicIdErrorCodes.InvalidId });
+                }
+                run = runQuery.FirstOrDefault(r => r.Id == lookup.Id);
+            }
             if (run == null)
                 return NotFound(new { code = "close_package_missing", message = year.ClosedAt != null
                     ? "No retained close package: closed before this feature"
@@ -2486,15 +2603,15 @@ namespace Api.Controllers
             var full = TryAuthorizeOperation(AccessOperationCatalog.ReportsView, SystemPermissions.ReportsView, out _);
             var body = full
                 ? evidence.Payload
-                : "redacted=1\nrun=" + run.Id.ToString(CultureInfo.InvariantCulture) + "\nhash=" + run.PreviewHash + "\ncanonicalDigest=" + evidence.ContentDigest;
+                : "redacted=1\nrun=" + run.PublicId + "\nhash=" + run.PreviewHash + "\ncanonicalDigest=" + evidence.ContentDigest;
             var digest = full ? evidence.ContentDigest : YearEndPreviewHash.Hex(body);
             if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
             {
                 var csv = "section,value\nmanifest," + digest + "\n" + string.Join("\n",
                     body.Split('\n').Select(line => "row,\"" + line.Replace("\"", "\"\"") + "\""));
-                return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "year-end-" + code + "-run-" + run.Id + ".csv");
+                return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "year-end-" + code + "-run-" + run.PublicId + ".csv");
             }
-            return Ok(new { runId = run.Id, redacted = !full, contentDigest = digest, canonicalDigest = evidence.ContentDigest, payload = body });
+            return Ok(new { runId = run.PublicId, redacted = !full, contentDigest = digest, canonicalDigest = evidence.ContentDigest, payload = body });
         }
 
         /// <summary>Historical AR/AP aging. asOf is required; the report does not fall back to today.</summary>

@@ -11,6 +11,7 @@ import type {
   StatementExpenseCategories,
   StatementExpenseCategory,
 } from '../types/banking';
+import { shortRef } from '../lib/shortRef';
 
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
 const inputClass =
@@ -19,7 +20,7 @@ const inputClass =
 type Mode = 'expense' | 'payBill' | 'draft';
 
 interface WorkspaceTax {
-  id: number;
+  id: string;
   name: string;
   rate: number;
 }
@@ -27,7 +28,7 @@ interface WorkspaceTax {
 interface StatementLineExpenseDialogProps {
   line: BankStatementLine;
   /** Extra money-out lines to record with the same vendor + category (#436 I4). */
-  additionalLineIds?: number[];
+  additionalLineIds?: string[];
   formatCurrency: (n: number) => string;
   initialMode?: Mode;
   bankAccountName?: string;
@@ -110,12 +111,12 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
         ]);
         if (cancelled) return;
         if (catRes.ok) setCategories((await catRes.json()) as StatementExpenseCategories);
-        let ruleVendorId: number | null = null;
-        let ruleAccountId: number | null = null;
+        let ruleVendorId: string | null = null;
+        let ruleAccountId: string | null = null;
         if (ruleRes.status === 200) {
           const rule = await ruleRes.json();
-          if (rule?.vendorId) ruleVendorId = Number(rule.vendorId);
-          if (rule?.expenseAccountId) ruleAccountId = Number(rule.expenseAccountId);
+          if (rule?.vendorId) ruleVendorId = rule.vendorId;
+          if (rule?.expenseAccountId) ruleAccountId = rule.expenseAccountId;
         }
         if (vendorRes.ok) {
           const list = (await vendorRes.json()) as Vendor[];
@@ -168,8 +169,8 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
         if (!expenseAccountId) throw new Error('Pick a category.');
         if (!vendorChoice) throw new Error('Pick a vendor or create one from the bank description.');
         const body: Record<string, unknown> = {
-          expenseAccountId: Number(expenseAccountId),
-          taxId: taxId ? Number(taxId) : null,
+          expenseAccountId: expenseAccountId,
+          taxId: taxId ? taxId : null,
           description: description.trim() || null,
           vendorInvoiceNo: vendorInvoiceNo.trim() || null,
           memo: memo.trim() || null,
@@ -178,7 +179,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
         if (vendorChoice.startsWith('__new__:')) {
           body.newVendor = { name: vendorChoice.slice('__new__:'.length) };
         } else {
-          body.vendorId = Number(vendorChoice);
+          body.vendorId = vendorChoice;
         }
         if (isBulk) {
           const res = await authFetch('/api/Banking/StatementLines/BulkRecordExpense', {
@@ -215,7 +216,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            billId: Number(billId),
+            billId: billId,
             memo: memo.trim() || null,
           }),
         });
@@ -419,7 +420,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
               <option value="">Select bill…</option>
               {bills.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.no || `#${b.id}`} · {b.vendorName || 'Vendor'} · due {formatCurrency(b.balanceDue)}
+                  {b.no || `${shortRef(b.id)}`} · {b.vendorName || 'Vendor'} · due {formatCurrency(b.balanceDue)}
                 </option>
               ))}
             </select>
@@ -441,7 +442,7 @@ export const StatementLineExpenseDialog: React.FC<StatementLineExpenseDialogProp
             ? 'Save one bill draft only. No approval, payment, posting or statement match. This line stays in Needs review.'
             : mode === 'expense'
               ? `Record and match explicitly creates and approves a bill, records the already-made ${formatCurrency(amount)} payment, and matches this line.`
-              : `Record the already-made ${formatCurrency(amount)} payment against ${bills.find(b => b.id === Number(billId))?.no || 'the selected bill'} and match this line.`}
+              : `Record the already-made ${formatCurrency(amount)} payment against ${bills.find(b => b.id === billId)?.no || 'the selected bill'} and match this line.`}
           {' '}Date: {line.postedDate.slice(0, 10)}. Bank: {bankAccountName || `Account ${line.bankId}`}.
           {' '}No payment instruction is sent to any provider. {taxId ? 'The selected tax is included in the bank gross amount.' : 'No tax selected.'}
         </p>

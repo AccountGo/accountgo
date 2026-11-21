@@ -14,7 +14,7 @@ export const BankAccountFormDialog: React.FC<{
   account?: BankAccount;
   hasFinancials: boolean;
   /** Pre-selected adopt when taking over a single cash-history group. */
-  defaultAdoptAccountId?: number | null;
+  defaultAdoptAccountId?: string | null;
   leaveCashHistoryUnassigned?: boolean;
   onSaved: (account: BankAccount, created: boolean) => void;
   onClose: () => void;
@@ -42,7 +42,7 @@ export const BankAccountFormDialog: React.FC<{
   const [postingMode, setPostingMode] = useState<'new' | 'link' | 'adopt'>(
     defaultAdoptAccountId ? 'adopt' : 'new',
   );
-  const [postingAccountId, setPostingAccountId] = useState<number | ''>('');
+  const [postingAccountId, setPostingAccountId] = useState<string>('');
   const [eligible, setEligible] = useState<EligiblePostingAccount[] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,9 +134,9 @@ export const BankAccountFormDialog: React.FC<{
           postingMode === 'adopt'
             ? defaultAdoptAccountId
             : postingMode === 'link' && postingAccountId
-              ? Number(postingAccountId)
+              ? postingAccountId
               : null,
-        postingAccountId: postingMode === 'link' && postingAccountId ? Number(postingAccountId) : null,
+        postingAccountId: postingMode === 'link' && postingAccountId ? postingAccountId : null,
       });
 
       // Link existing uses postingAccountId; adopt uses adoptAccountId only.
@@ -338,7 +338,7 @@ export const BankAccountFormDialog: React.FC<{
               ) : (
                 <select
                   value={postingAccountId}
-                  onChange={(e) => setPostingAccountId(e.target.value ? Number(e.target.value) : '')}
+                  onChange={(e) => setPostingAccountId(e.target.value)}
                   className={inputClass}
                   required
                 >

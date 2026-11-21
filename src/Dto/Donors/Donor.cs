@@ -1,4 +1,5 @@
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -6,6 +7,7 @@ namespace Dto.Donors
 {
     public class Donor : IValidatableObject
     {
+        [PublicId("dnr")]
         public int Id { get; set; }
 
         [Required(ErrorMessage = "Select a donor type: Individual or Company."),

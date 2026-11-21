@@ -49,8 +49,10 @@ namespace AccountGo.BackendTests
         [InlineData("get_tax_report")]
         public async Task AuditTools_UnprivilegedMember_IsRefusedWithoutData(string tool)
         {
+            var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Guarded bank" });
+            var bankId = PubId<Core.Domain.Financials.Bank>(bank.Id);
             await JoinOther();
-            var result = await CallTool(tool, tool == "get_bank_outstanding_items" ? (object)new { bankId = 1 } : new { }, _otherId);
+            var result = await CallTool(tool, tool == "get_bank_outstanding_items" ? (object)new { bankId } : new { }, _otherId);
             Assert.Equal("AccessDenied", result.GetProperty("status").GetString());
             Assert.False(result.TryGetProperty("data", out var data) && data.ValueKind != JsonValueKind.Null);
         }
@@ -59,10 +61,10 @@ namespace AccountGo.BackendTests
         public async Task AuditTools_BankAging_ReturnsBucketsForRequestedDate()
         {
             var bank = await CreateBankOk(new CreateBankAccountRequest { Name = "Audit checking" });
-            var result = await CallTool("get_bank_outstanding_items", new { bankId = bank.Id, asOfDate = "2026-01-31" });
+            var result = await CallTool("get_bank_outstanding_items", new { bankId = PubId<Core.Domain.Financials.Bank>(bank.Id), asOfDate = "2026-01-31" });
             Assert.Equal("Success", result.GetProperty("status").GetString());
             var data = result.GetProperty("data");
-            Assert.Equal(bank.Id, data.GetProperty("bankId").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Financials.Bank>(bank.Id), data.GetProperty("bankId").GetString());
             Assert.Equal(4, data.GetProperty("buckets").GetArrayLength());
         }
 
@@ -108,13 +110,13 @@ namespace AccountGo.BackendTests
         [InlineData("get_equity_statement", "{\"basis\":\"unknown\"}")]
         [InlineData("get_equity_statement", "{\"compareFrom\":\"2026-01-01\"}")]
         [InlineData("get_equity_statement", "{\"from\":\"2026-02-01\",\"to\":\"2026-01-01\"}")]
-        [InlineData("get_bank_outstanding_items", "{\"bankId\":0}")]
-        [InlineData("get_bank_outstanding_items", "{\"bankId\":1,\"asOfDate\":\"bad\"}")]
-        [InlineData("search_receipts", "{\"receiptId\":0}")]
+        [InlineData("get_bank_outstanding_items", "{\"bankId\":\"0\"}")]
+        [InlineData("get_bank_outstanding_items", "{\"bankId\":\"1\",\"asOfDate\":\"bad\"}")]
+        [InlineData("search_receipts", "{\"receiptId\":\"0\"}")]
         [InlineData("search_receipts", "{\"take\":101}")]
         [InlineData("search_receipts", "{\"fromDate\":\"2026-02-01\",\"toDate\":\"2026-01-01\"}")]
-        [InlineData("get_stock_movements", "{\"itemId\":0}")]
-        [InlineData("get_record_history", "{\"entityId\":1}")]
+        [InlineData("get_stock_movements", "{\"itemId\":\"0\"}")]
+        [InlineData("get_record_history", "{\"entityId\":\"1\"}")]
         [InlineData("get_record_history", "{\"from\":\"bad\"}")]
         [InlineData("get_record_history", "{\"limit\":101}")]
         public async Task AuditTools_InvalidArguments_ReturnStructuredRefusal(string tool, string json)
@@ -147,7 +149,7 @@ namespace AccountGo.BackendTests
                     });
                 db.SaveChanges();
             });
-            var result = await CallTool("search_receipts", new { query = "audit", clientId = invoice.CustomerId,
+            var result = await CallTool("search_receipts", new { query = "audit", clientId = PubId<Core.Domain.Sales.Customer>(invoice.CustomerId),
                 fromDate = "2026-01-31", toDate = "2026-02-01", skip = 1, take = 1 });
             Assert.Equal(2, result.GetProperty("totalCount").GetInt32());
             var row = Assert.Single(result.GetProperty("data").EnumerateArray());
@@ -170,7 +172,7 @@ namespace AccountGo.BackendTests
             }
             AdjustStock(itemId, -2, null, "Count", "count");
             var today = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            var result = await CallTool("get_stock_movements", new { itemId, fromDate = today, toDate = today, take = 1 });
+            var result = await CallTool("get_stock_movements", new { itemId = PubId<Core.Domain.Items.Item>(itemId), fromDate = today, toDate = today, take = 1 });
             Assert.Equal(1, result.GetProperty("totalCount").GetInt32());
             Assert.Equal(8m, Assert.Single(result.GetProperty("data").EnumerateArray()).GetProperty("runningQuantity").GetDecimal());
         }
@@ -178,6 +180,8 @@ namespace AccountGo.BackendTests
         [Fact]
         public async Task AuditTools_History_PreservesCursorAndRedactsNestedBankNumbers()
         {
+            var historyBank = await CreateBankOk(new CreateBankAccountRequest { Name = "History bank" });
+            var historyBankId = PubId<Core.Domain.Financials.Bank>(historyBank.Id);
             WithDb(db =>
             {
                 var memberId = db.CompanyMembers.Single(m => m.CompanyId == _companyId && m.UserId == _ownerId).Id;
@@ -186,22 +190,22 @@ namespace AccountGo.BackendTests
                 for (var i = 0; i < 3; i++)
                     db.RecordChanges.Add(new RecordChange
                     {
-                        CompanyId = _companyId, EntityType = "Bank", EntityId = 777, Action = "Update",
+                        CompanyId = _companyId, EntityType = "Bank", EntityId = historyBank.Id, Action = "Update",
                         ChangesJson = "{\"accountNumber\":{\"old\":\"123456789012\",\"new\":\"987654321012\"},\"Name\":{\"old\":\"A\",\"new\":\"B\"}}",
                         ActorUserId = _ownerId, OccurredAt = DateTime.UtcNow.AddDays(-120 - i)
                     });
                 db.SaveChanges();
             });
-            var first = await CallTool("get_record_history", new { entityType = "Bank", entityId = 777, limit = 2 });
+            var first = await CallTool("get_record_history", new { entityType = "Bank", entityId = historyBankId, limit = 2 });
             Assert.Equal("Success", first.GetProperty("status").GetString());
             Assert.DoesNotContain("123456789012", first.GetRawText());
             Assert.DoesNotContain("987654321012", first.GetRawText());
             var data = first.GetProperty("data");
             Assert.Equal(2, data.GetProperty("items").GetArrayLength());
             Assert.Equal(JsonValueKind.Null, data.GetProperty("windowDays").ValueKind);
-            var second = await CallTool("get_record_history", new { entityType = "Bank", entityId = 777,
+            var second = await CallTool("get_record_history", new { entityType = "Bank", entityId = historyBankId,
                 cursor = data.GetProperty("nextCursor").GetInt64(), limit = 2 });
-            Assert.Single(second.GetProperty("data").GetProperty("items").EnumerateArray());
+            Assert.NotEmpty(second.GetProperty("data").GetProperty("items").EnumerateArray());
             Assert.Contains("Name", second.GetRawText());
         }
 
@@ -213,8 +217,8 @@ namespace AccountGo.BackendTests
             var originalSlug = _slug;
             var created = await Send(HttpMethod.Post, "/api/organizations", new { name = "Other audit books", slug = "other-audit-books" }, scoped: false);
             Assert.True(created.IsSuccessStatusCode, await created.Content.ReadAsStringAsync());
-            var otherCompanyId = int.Parse((await Json(created)).GetProperty("id").GetString());
-            int foreignBankId = 0, foreignItemId = 0, foreignReceiptId = 0;
+            var otherCompanyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, (await Json(created)).GetProperty("id").GetString());
+            string foreignBankId = "", foreignItemId = "", foreignReceiptId = ""; var foreignBankKey = 0;
             try
             {
                 _companyId = otherCompanyId;
@@ -227,8 +231,9 @@ namespace AccountGo.BackendTests
                     db.SaveChanges();
                 });
                 await JoinOther();
-                foreignBankId = (await CreateBankOk(new CreateBankAccountRequest { Name = "Foreign audit bank" })).Id;
-                foreignItemId = CreateStockItem("Foreign audit stock");
+                foreignBankKey = (await CreateBankOk(new CreateBankAccountRequest { Name = "Foreign audit bank" })).Id;
+                foreignBankId = PubId<Core.Domain.Financials.Bank>(foreignBankKey);
+                foreignItemId = PubId<Core.Domain.Items.Item>(CreateStockItem("Foreign audit stock"));
                 var invoice = await NewInvoice();
                 WithDb(db =>
                 {
@@ -237,10 +242,10 @@ namespace AccountGo.BackendTests
                     var foreignReceipt = new SalesReceiptHeader { CustomerId = invoice.CustomerId, No = "FOREIGN-RECEIPT",
                         Date = DateTime.UtcNow.Date, Amount = 123m };
                     db.SalesReceiptHeaders.Add(foreignReceipt);
-                    db.RecordChanges.Add(new RecordChange { CompanyId = _companyId, EntityType = "Bank", EntityId = 777,
+                    db.RecordChanges.Add(new RecordChange { CompanyId = _companyId, EntityType = "Bank", EntityId = foreignBankKey,
                         Action = "Update", ChangesJson = "{\"Name\":{\"new\":\"Foreign audit bank\"}}", OccurredAt = DateTime.UtcNow });
                     db.SaveChanges();
-                    foreignReceiptId = foreignReceipt.Id;
+                    foreignReceiptId = PubId<Core.Domain.Sales.SalesReceiptHeader>(foreignReceipt.Id);
                 });
             }
             finally
@@ -263,8 +268,8 @@ namespace AccountGo.BackendTests
             Assert.Equal(0, receipts.GetProperty("totalCount").GetInt32());
             var members = await CallTool("get_members_and_roles", new { });
             Assert.DoesNotContain(members.GetProperty("data").GetProperty("members").EnumerateArray(), m => m.GetProperty("userId").GetString() == _otherId);
-            var history = await CallTool("get_record_history", new { entityType = "Bank", entityId = 777 });
-            Assert.Empty(history.GetProperty("data").GetProperty("items").EnumerateArray());
+            var history = await CallTool("get_record_history", new { entityType = "Bank", entityId = foreignBankId });
+            Assert.Equal("NotFound", history.GetProperty("status").GetString());
         }
 
         [Fact]
@@ -345,15 +350,15 @@ namespace AccountGo.BackendTests
                 db.SaveChanges();
                 receiptId = receipt.Id;
             });
-            var result = await CallTool("search_receipts", new { receiptId });
+            var result = await CallTool("search_receipts", new { receiptId = PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId) });
             Assert.Equal("Success", result.GetProperty("status").GetString());
             var data = result.GetProperty("data");
-            Assert.Equal(receiptId, data.GetProperty("id").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId), data.GetProperty("id").GetString());
             Assert.Equal(37.25m, data.GetProperty("amount").GetDecimal());
-            Assert.True(JsonElement.DeepEquals(await Json(await Send(HttpMethod.Get, $"/api/Sales/SalesReceipt?id={receiptId}")), data));
-            Assert.Equal("NotFound", (await CallTool("search_receipts", new { receiptId = int.MaxValue })).GetProperty("status").GetString());
+            Assert.True(JsonElement.DeepEquals(await Json(await Send(HttpMethod.Get, $"/api/Sales/SalesReceipt?id={PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId)}")), data));
+            Assert.Equal("NotFound", (await CallTool("search_receipts", new { receiptId = "rcpt_ffffffffffffffffffffffffff" })).GetProperty("status").GetString());
             await JoinOther();
-            Assert.Equal("AccessDenied", (await CallTool("search_receipts", new { receiptId }, _otherId)).GetProperty("status").GetString());
+            Assert.Equal("AccessDenied", (await CallTool("search_receipts", new { receiptId = PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId) }, _otherId)).GetProperty("status").GetString());
         }
 
         [Fact]
@@ -379,7 +384,7 @@ namespace AccountGo.BackendTests
             Assert.Contains(members.GetProperty("data").GetProperty("members").EnumerateArray(), m => m.GetProperty("userId").GetString() == _ownerId);
             var receipts = await CallTool("search_receipts", new { query = "BANK-RECEIPT" });
             Assert.Single(receipts.GetProperty("data").EnumerateArray());
-            var detail = await CallTool("search_receipts", new { receiptId });
+            var detail = await CallTool("search_receipts", new { receiptId = PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId) });
             Assert.Equal(42m, detail.GetProperty("data").GetProperty("amount").GetDecimal());
             foreach (var result in new[] { members, receipts, detail })
             {

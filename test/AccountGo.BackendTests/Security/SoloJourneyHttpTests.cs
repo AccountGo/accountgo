@@ -459,19 +459,20 @@ namespace AccountGo.BackendTests.Security
                 memo = "Owner-prepared adjustment",
                 journalEntryLines = new object[]
                 {
-                    new { accountId = cash, drCr = 1, amount = 25m },
-                    new { accountId = revenue, drCr = 2, amount = 25m }
+                    new { accountId = AcctPub(cash), drCr = 1, amount = 25m },
+                    new { accountId = AcctPub(revenue), drCr = 2, amount = 25m }
                 }
             };
             var save = await SendScoped(HttpMethod.Post, "/api/Financials/SaveJournalEntry", token, slug, draft);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            var journalId = (await Json(save)).GetProperty("id").GetInt32();
+            var journalPubId = (await Json(save)).GetProperty("id").GetString()!;
+            var journalId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.Financials.JournalEntryHeader>(_factory.Services, journalPubId);
 
             // Post as the SAME user with NO independent-approval headers: allowed because the workspace
             // policy is SingleActorAllowed.
             var postBody = new
             {
-                id = journalId,
+                id = journalPubId,
                 journalDate = draft.journalDate,
                 voucherType = 6,
                 memo = draft.memo,
@@ -515,20 +516,21 @@ namespace AccountGo.BackendTests.Security
                 memo = "Draft before downgrade",
                 journalEntryLines = new object[]
                 {
-                    new { accountId = cash, drCr = 1, amount = 25m },
-                    new { accountId = revenue, drCr = 2, amount = 25m }
+                    new { accountId = AcctPub(cash), drCr = 1, amount = 25m },
+                    new { accountId = AcctPub(revenue), drCr = 2, amount = 25m }
                 }
             };
             var save = await SendScoped(HttpMethod.Post, "/api/Financials/SaveJournalEntry", token, slug, draft);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            var journalId = (await Json(save)).GetProperty("id").GetInt32();
+            var journalPubId = (await Json(save)).GetProperty("id").GetString()!;
+            var journalId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.Financials.JournalEntryHeader>(_factory.Services, journalPubId);
 
             // Remove the financials entitlement after the draft exists (plan downgrade / module opt-out).
             DisableModule(slug, "financials");
 
             var postBody = new
             {
-                id = journalId,
+                id = journalPubId,
                 journalDate = draft.journalDate,
                 voucherType = 6,
                 memo = draft.memo,
@@ -582,7 +584,7 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(WorkspaceApprovalRuleKind.SingleActorAllowed, JournalRuleKind(slug));
 
             // Owner invites a read-only viewer.
-            var viewerRoleId = SecurityRoleId("Auditor / Viewer");
+            var viewerRoleId = RolePub(SecurityRoleId("Auditor / Viewer"));
             var invite = await SendScoped(HttpMethod.Post, "/api/organizations/current/invitations", ownerToken, slug,
                 new { email = "accountant@example.com", role = "Member", securityRoleIds = new[] { viewerRoleId } });
             Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
@@ -611,16 +613,16 @@ namespace AccountGo.BackendTests.Security
                 memo = "Owner still posts after invite",
                 journalEntryLines = new object[]
                 {
-                    new { accountId = cash, drCr = 1, amount = 10m },
-                    new { accountId = revenue, drCr = 2, amount = 10m }
+                    new { accountId = AcctPub(cash), drCr = 1, amount = 10m },
+                    new { accountId = AcctPub(revenue), drCr = 2, amount = 10m }
                 }
             };
             var save = await SendScoped(HttpMethod.Post, "/api/Financials/SaveJournalEntry", ownerToken, slug, draft);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            var journalId = (await Json(save)).GetProperty("id").GetInt32();
+            var journalPubId = (await Json(save)).GetProperty("id").GetString()!;
             var post = await SendScoped(HttpMethod.Post, "/api/Financials/PostJournalEntry", ownerToken, slug, new
             {
-                id = journalId,
+                id = journalPubId,
                 draft.journalDate,
                 voucherType = 6,
                 draft.memo,
@@ -633,14 +635,14 @@ namespace AccountGo.BackendTests.Security
         public async Task MemberRemoval_PreservesApprovedPolicy_AndDoesNotAutoRelaxReview()
         {
             var (ownerToken, _, slug) = await CreateInitializedSoloWorkspace("owner-rm@example.com", "owner-rm-books");
-            var viewerRoleId = SecurityRoleId("Auditor / Viewer");
+            var viewerRoleId = RolePub(SecurityRoleId("Auditor / Viewer"));
             Assert.Equal(HttpStatusCode.Created, (await SendScoped(HttpMethod.Post, "/api/organizations/current/invitations", ownerToken, slug,
                 new { email = "rm-member@example.com", role = "Member", securityRoleIds = new[] { viewerRoleId } })).StatusCode);
             var (memberToken, memberId) = await CreateVerifiedUser("rm-member@example.com");
             Assert.True((await SendTenantFree(HttpMethod.Post, "/api/invitations/" + InvitationToken() + "/accept", memberToken)).IsSuccessStatusCode);
 
             var ruleBeforeRemoval = JournalRuleKind(slug);
-            var memberCompanyId = MemberId(slug, memberId);
+            var memberCompanyId = MemberPub(MemberId(slug, memberId));
             var remove = await SendScoped(HttpMethod.Delete, "/api/organizations/current/members/" + memberCompanyId, ownerToken, slug, null);
             Assert.True(remove.IsSuccessStatusCode, await remove.Content.ReadAsStringAsync());
 
@@ -653,14 +655,14 @@ namespace AccountGo.BackendTests.Security
         public async Task OwnershipTransfer_PreservesApprovedPolicy_AndDoesNotGrantAccessOrRelaxReview()
         {
             var (ownerToken, _, slug) = await CreateInitializedSoloWorkspace("owner-xfer@example.com", "owner-xfer-books");
-            var accountantRoleId = SecurityRoleId("Accountant");
+            var accountantRoleId = RolePub(SecurityRoleId("Accountant"));
             Assert.Equal(HttpStatusCode.Created, (await SendScoped(HttpMethod.Post, "/api/organizations/current/invitations", ownerToken, slug,
                 new { email = "new-owner@example.com", role = "Admin", securityRoleIds = new[] { accountantRoleId } })).StatusCode);
             var (newOwnerToken, newOwnerId) = await CreateVerifiedUser("new-owner@example.com");
             Assert.True((await SendTenantFree(HttpMethod.Post, "/api/invitations/" + InvitationToken() + "/accept", newOwnerToken)).IsSuccessStatusCode);
 
             var ruleBefore = JournalRuleKind(slug);
-            var targetMemberId = MemberId(slug, newOwnerId);
+            var targetMemberId = MemberPub(MemberId(slug, newOwnerId));
             var transfer = await SendScoped(HttpMethod.Post, "/api/organizations/current/transfer-ownership", ownerToken, slug,
                 new { memberId = targetMemberId });
             Assert.True(transfer.IsSuccessStatusCode, await transfer.Content.ReadAsStringAsync());
@@ -670,6 +672,10 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(ruleBefore, JournalRuleKind(slug));
             Assert.Equal(WorkspaceApprovalRuleKind.SingleActorAllowed, JournalRuleKind(slug));
         }
+
+        private string AcctPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Financials.Account>(_factory.Services, id);
+        private string RolePub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Security.SecurityRole>(_factory.Services, id);
+        private string MemberPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_factory.Services, id);
 
         // ---- onboarding measurement for the new-workspace flow -------------------------------------
 

@@ -3,12 +3,14 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Banking
 {
     public class BankAccountDto
     {
+        [PublicId("ba")]
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public int Type { get; set; }
@@ -18,6 +20,7 @@ namespace Dto.Banking
         public string? RoutingNumber { get; set; }
         public string? Iban { get; set; }
         public string? Swift { get; set; }
+        [PublicId("acct")]
         public int? AccountId { get; set; }
         public string? AccountCode { get; set; }
         public string? AccountName { get; set; }
@@ -33,17 +36,30 @@ namespace Dto.Banking
 
     public class BankAccountPickerItemDto
     {
+        [PublicId("ba")]
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? AccountNumberMasked { get; set; }
         public bool IsDefaultForReceipts { get; set; }
         public bool IsDefaultForPayments { get; set; }
         public string? Group { get; set; }
+        [PublicId("acct")]
         public int? AccountId { get; set; }
+    }
+
+    /// <summary>A postable cash account no bank record uses yet, offered when adding a bank account.</summary>
+    public class EligiblePostingAccountDto
+    {
+        [PublicId("acct")]
+        public int Id { get; set; }
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+        public decimal Balance { get; set; }
     }
 
     public class UnassignedCashDto
     {
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public string? AccountCode { get; set; }
         public string? AccountName { get; set; }
@@ -75,7 +91,9 @@ namespace Dto.Banking
         public DateTime? OpeningBalanceDate { get; set; }
         /// <summary>Create a new posting account after explicitly leaving existing cash history unassigned.</summary>
         public bool LeaveCashHistoryUnassigned { get; set; }
+        [PublicId("acct")]
         public int? AdoptAccountId { get; set; }
+        [PublicId("acct")]
         public int? PostingAccountId { get; set; }
         public string? CurrencyCode { get; set; }
     }
@@ -91,6 +109,7 @@ namespace Dto.Banking
         public string? Swift { get; set; }
         public bool IsDefaultForReceipts { get; set; }
         public bool IsDefaultForPayments { get; set; }
+        [PublicId("acct")]
         public int? PostingAccountId { get; set; }
         public string? CurrencyCode { get; set; }
         public decimal? OpeningBalance { get; set; }
@@ -108,7 +127,9 @@ namespace Dto.Banking
 
     public class BankRegisterLineDto
     {
+        [PublicId("gll")]
         public int LineId { get; set; }
+        [PublicId("gl")]
         public int HeaderId { get; set; }
         public DateTime Date { get; set; }
         public string Type { get; set; } = string.Empty;
@@ -118,12 +139,14 @@ namespace Dto.Banking
         public decimal In { get; set; }
         public decimal Out { get; set; }
         public decimal Balance { get; set; }
+        [PublicId("rec")]
         public int? ReconciliationId { get; set; }
     }
 
     public class BankRegisterSourceDocDto
     {
         public string Type { get; set; } = string.Empty;
+        [PublicIdByType("Type")]
         public int Id { get; set; }
         public string? No { get; set; }
     }
@@ -146,6 +169,7 @@ namespace Dto.Banking
 
     public class OutstandingAgingDto
     {
+        [PublicId("ba")]
         public int BankId { get; set; }
         public DateTime AsOfDate { get; set; }
         public IReadOnlyList<OutstandingAgingBucketDto> Buckets { get; set; } = Array.Empty<OutstandingAgingBucketDto>();
@@ -158,6 +182,7 @@ namespace Dto.Banking
 
     public class BankCloseStatusBankDto
     {
+        [PublicId("ba")]
         public int BankId { get; set; }
         public string Name { get; set; } = string.Empty;
         public DateTime? ReconciledThrough { get; set; }
@@ -187,7 +212,9 @@ namespace Dto.Banking
 
     public class BankBalanceCheckLineDto
     {
+        [PublicId("gll")]
         public int LineId { get; set; }
+        [PublicId("gl")]
         public int HeaderId { get; set; }
         public DateTime Date { get; set; }
         public string Type { get; set; } = string.Empty;
@@ -202,6 +229,7 @@ namespace Dto.Banking
     /// <summary>Compares a balance the user types in with the book balance. Nothing is posted (3F).</summary>
     public class BankBalanceCheckDto
     {
+        [PublicId("ba")]
         public int BankId { get; set; }
         public DateTime AsOfDate { get; set; }
         public decimal BankBalance { get; set; }

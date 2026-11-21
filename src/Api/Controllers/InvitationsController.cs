@@ -74,7 +74,7 @@ namespace Api.Controllers
             return Ok((from i in _db.CompanyInvitations
                        join c in _db.Companies on i.CompanyId equals c.Id
                        where i.Email == email && i.RevokedAt == null && i.AcceptedAt == null && i.ExpiresAt > now
-                       select new { id = i.Id, workspaceName = c.Name, slug = c.Slug, role = i.Role.ToString(), expiresAt = i.ExpiresAt }).ToList());
+                       select new { id = i.PublicId, workspaceName = c.Name, slug = c.Slug, role = i.Role.ToString(), expiresAt = i.ExpiresAt }).ToList());
         }
 
         [AllowAnonymous]
@@ -119,8 +119,8 @@ namespace Api.Controllers
         }
 
         // Recovery path for verified users without the original invitation link. No token is exposed by pending.
-        [HttpPost("pending/{id:int}/accept")]
-        public IActionResult AcceptPending(int id)
+        [HttpPost("pending/{id}/accept")]
+        public IActionResult AcceptPending([Dto.Common.PublicId("winv")] int id)
         {
             return AcceptInvitation(() => FindById(id));
         }

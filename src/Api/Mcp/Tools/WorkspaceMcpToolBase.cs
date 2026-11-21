@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Api.Mcp.Models;
 using Core.Tenancy;
@@ -34,6 +35,39 @@ namespace Api.Mcp.Tools
         }
 
         protected McpControllerReader Reader { get; }
+
+        /// <summary>A tool's id argument after translation: the integer key, or the response to return instead.</summary>
+        protected readonly record struct IdArg(int? Id, WorkspaceDataMcpResponse? Failure);
+
+        /// <summary>
+        /// Translates a prefixed public id argument (for example <c>inv_…</c>) to the integer key under the member's
+        /// workspace scope. A blank value means "not supplied" (<see cref="IdArg.Id"/> null, no failure). A wrong kind
+        /// or malformed id is an invalid request; an unknown id and another workspace's id give the same not-found
+        /// answer.
+        /// </summary>
+        protected async Task<IdArg> ResolveIdAsync(string kind, string? publicId, string prefix, string paramName, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(publicId))
+                return new IdArg(null, null);
+
+            var result = await Reader.Ids.ResolveAsync(publicId.Trim(), prefix, cancellationToken);
+            if (result.Ok)
+                return new IdArg(result.Id, null);
+
+            return result.Error == Api.PublicIds.PublicIdLookupError.NotFound
+                ? new IdArg(null, NotFound(kind, $"No record '{publicId.Trim()}' for {paramName} in this workspace."))
+                : new IdArg(null, Invalid(kind, $"{paramName} must be an id like '{prefix}_…', as returned by the tools that list these records."));
+        }
+
+        /// <summary>The public id for a record, or null when there is none (id 0 or null).</summary>
+        protected string? Pub(string prefix, int id) => id > 0 ? Reader.Ids.ToPublic(prefix, id) : null;
+
+        /// <inheritdoc cref="Pub(string, int)"/>
+        protected string? Pub(string prefix, int? id) => id is > 0 ? Reader.Ids.ToPublic(prefix, id.Value) : null;
+
+        /// <summary>Loads the public ids of many records in one query per prefix, so building rows costs no extra lookups.</summary>
+        protected Task PrefetchAsync(IEnumerable<(string Prefix, int Id)> ids, CancellationToken cancellationToken) =>
+            Reader.Ids.PrefetchAsync(ids.Where(i => i.Id > 0), cancellationToken);
 
         protected ITenantContext Tenant { get; }
 
@@ -83,6 +117,25 @@ namespace Api.Mcp.Tools
         {
             var list = items as IList<T> ?? items.ToList();
             return Success(kind, list.Skip(skip).Take(take).ToList(), link, list.Count, skip, take);
+        }
+
+        /// <summary>
+        /// Pages first, then loads the public ids of only the returned rows in one query per prefix, then projects them.
+        /// Projecting every filtered row would look up ids one at a time for rows that are never returned.
+        /// </summary>
+        protected async Task<WorkspaceDataMcpResponse> PageAsync<T>(
+            string kind,
+            IReadOnlyList<T> all,
+            int skip,
+            int take,
+            Func<T, IEnumerable<(string Prefix, int Id)>> idsOf,
+            Func<T, object> project,
+            string? link,
+            CancellationToken cancellationToken)
+        {
+            var page = all.Skip(skip).Take(take).ToList();
+            await PrefetchAsync(page.SelectMany(idsOf), cancellationToken);
+            return Success(kind, page.Select(project).ToList(), link, all.Count, skip, take);
         }
 
         protected WorkspaceDataMcpResponse Refused(string kind, McpReadResult read) =>

@@ -5,8 +5,8 @@ import { useAuth } from '../auth/AuthContext';
 import { useIntegrations, type IncomingItem } from '../lib/integrations';
 import type { TenantContextType } from '../types';
 
-interface ReviewPage { companyId: number; items: IncomingItem[]; totalCount: number; page: number; pageSize: number }
-interface Options { companyId: number; connections: { id: string; label: string; provider: string }[]; banks: { bankId: number; bankName: string }[] }
+interface ReviewPage { companyId: string; items: IncomingItem[]; totalCount: number; page: number; pageSize: number }
+interface Options { companyId: string; connections: { id: string; label: string; provider: string }[]; banks: { bankId: string; bankName: string }[] }
 const input = 'rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-2 text-sm';
 
 export default function IncomingReview() {

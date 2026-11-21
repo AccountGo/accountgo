@@ -14,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("Party")]
-    public partial class Party : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("pty")]
+    public partial class Party : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public Party()
         {
             Contacts = new HashSet<Contact>();

@@ -5,8 +5,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Security
 {
     [Table("SecurityRole", Schema = "dbo")]
-    public class SecurityRole : BaseEntity
+    [PublicIdPrefix("role")]
+    public class SecurityRole : BaseEntity, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         //[Key]
         //public int SecurityRoleId { get; set; }
         public string? Name { get; set; }

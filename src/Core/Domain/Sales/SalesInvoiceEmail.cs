@@ -18,8 +18,10 @@ namespace Core.Domain.Sales
     /// provider accepted the message, so every row is an email that actually went out.
     /// </summary>
     [Table("SalesInvoiceEmail")]
-    public class SalesInvoiceEmail : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("iem")]
+    public class SalesInvoiceEmail : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         /// <summary>The invoice itself, sent when issued or again later.</summary>
         public const string InvoiceKind = "Invoice";
         /// <summary>A polite reminder that the invoice is still unpaid.</summary>

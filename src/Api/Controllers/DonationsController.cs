@@ -93,7 +93,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.DonationsView)]
         [HttpGet]
         [Route("DonationInvoice")]
-        public IActionResult DonationInvoice(int id)
+        public IActionResult DonationInvoice([Dto.Common.PublicId("dinv")] int id)
         {
             var invoice = _donationsService.GetDonationInvoiceById(id);
 
@@ -175,7 +175,7 @@ namespace Api.Controllers
 
         [RequirePermission(SystemPermissions.DonationsManage)]
         [HttpDelete("DeleteDonationInvoice")]
-        public async Task<IActionResult> DeleteDonationInvoice(int id)
+        public async Task<IActionResult> DeleteDonationInvoice([Dto.Common.PublicId("dinv")] int id)
         {
             var result = await _donationsService.DeleteDonationInvoiceAsync(id);
 

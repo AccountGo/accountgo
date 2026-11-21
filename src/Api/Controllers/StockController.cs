@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -54,7 +55,7 @@ namespace Api.Controllers
                 .ToHashSet();
             var values = items.Select(item => new
             {
-                id = item.Id,
+                id = item.PublicId,
                 code = item.Code,
                 name = item.Description,
                 quantityOnHand = item.QuantityOnHand,
@@ -82,7 +83,7 @@ namespace Api.Controllers
         /// <summary>Returns stock ledger movements with a running quantity, newest first.</summary>
         [HttpGet("Movements")]
         [RequirePermission(SystemPermissions.InventoryItemsView)]
-        public IActionResult Movements(int? itemId)
+        public IActionResult Movements([Dto.Common.PublicId("item")] int? itemId)
         {
             if (itemId.HasValue && itemId.Value <= 0)
                 return BadRequest(new { message = "Choose a stock item." });
@@ -98,6 +99,7 @@ namespace Api.Controllers
             }
 
             var itemNames = items.ToDictionary(item => item.Id, item => item.Description);
+            var itemPublicIds = items.ToDictionary(item => item.Id, item => item.PublicId);
             var movements = _db.InventoryControlJournals
                 .Where(movement => itemIds.Contains(movement.ItemId))
                 .OrderBy(movement => movement.Date)
@@ -116,12 +118,12 @@ namespace Api.Controllers
                 .ToArray();
             var bills = _db.PurchaseInvoiceHeaders
                 .Where(bill => billIds.Contains(bill.Id))
-                .Select(bill => new { bill.Id, bill.No })
-                .ToDictionary(bill => bill.Id, bill => bill.No);
+                .Select(bill => new { bill.Id, bill.No, bill.PublicId })
+                .ToDictionary(bill => bill.Id);
             var invoices = _db.SalesInvoiceHeaders
                 .Where(invoice => invoiceIds.Contains(invoice.Id))
-                .Select(invoice => new { invoice.Id, invoice.No })
-                .ToDictionary(invoice => invoice.Id, invoice => invoice.No);
+                .Select(invoice => new { invoice.Id, invoice.No, invoice.PublicId })
+                .ToDictionary(invoice => invoice.Id);
             var movementIds = movements.Select(movement => movement.Id).ToArray();
             var adjustments = _db.InventoryAdjustments
                 .Where(adjustment => adjustment.InventoryControlJournalId.HasValue
@@ -139,26 +141,32 @@ namespace Api.Controllers
                 string type;
                 string? linkType = null;
                 string? documentNo = null;
-                int? documentId = movement.DocumentId;
+                string? documentId = null;
                 switch (movement.DocumentType)
                 {
                     case DocumentTypes.PurchaseInvoice:
                         type = movement.IsReverse ? "Void of Bill" : "Bill";
                         linkType = "bill";
-                        if (documentId.HasValue)
-                            bills.TryGetValue(documentId.Value, out documentNo);
+                        if (movement.DocumentId.HasValue && bills.TryGetValue(movement.DocumentId.Value, out var billInfo))
+                        {
+                            documentId = billInfo.PublicId;
+                            documentNo = billInfo.No;
+                        }
                         break;
                     case DocumentTypes.SalesInvoice:
                         type = movement.IsReverse ? "Void of Invoice" : "Invoice";
                         linkType = "invoice";
-                        if (documentId.HasValue)
-                            invoices.TryGetValue(documentId.Value, out documentNo);
+                        if (movement.DocumentId.HasValue && invoices.TryGetValue(movement.DocumentId.Value, out var invInfo))
+                        {
+                            documentId = invInfo.PublicId;
+                            documentNo = invInfo.No;
+                        }
                         break;
                     case DocumentTypes.InventoryAdjustment:
                         type = movement.IsReverse ? "Void of Adjustment" : "Adjustment";
                         if (adjustments.TryGetValue(movement.Id, out var adjustment))
                         {
-                            documentId = adjustment.Id;
+                            documentId = adjustment.PublicId;
                             documentNo = adjustment.No;
                         }
                         break;
@@ -169,8 +177,8 @@ namespace Api.Controllers
 
                 result.Add(new
                 {
-                    id = movement.Id,
-                    itemId = movement.ItemId,
+                    id = movement.PublicId,
+                    itemId = itemPublicIds.TryGetValue(movement.ItemId, out var itemPubId) ? itemPubId : null,
                     itemName = itemNames.TryGetValue(movement.ItemId, out var itemName) ? itemName : string.Empty,
                     date = movement.Date,
                     type,
@@ -233,7 +241,7 @@ namespace Api.Controllers
 
                 return Ok(new
                 {
-                    id = adjustment.Id,
+                    id = adjustment.PublicId,
                     number = adjustment.No,
                     message = "Stock adjustment posted."
                 });
@@ -257,6 +265,7 @@ namespace Api.Controllers
         public sealed class AdjustStockRequest
         {
             /// <summary>The stock item being adjusted.</summary>
+            [PublicId("item")]
             public int ItemId { get; set; }
 
             /// <summary>The signed quantity change: positive adds stock and negative removes it.</summary>

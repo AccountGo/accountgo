@@ -28,7 +28,7 @@ interface RoleDefinition {
 }
 
 interface WorkspaceSecurityRole {
-  id: number;
+  id: string;
   name: string;
   displayName?: string;
   permissions: string[];

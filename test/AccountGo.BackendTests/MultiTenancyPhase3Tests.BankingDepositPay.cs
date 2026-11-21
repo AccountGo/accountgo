@@ -25,7 +25,7 @@ namespace AccountGo.BackendTests
         {
             var response = await Send(HttpMethod.Post, "/api/Banking/Accounts", request, token);
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<BankAccountDto>();
+            return await ReadDto<BankAccountDto>(response);
         }
     }
 
@@ -43,7 +43,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto
@@ -72,14 +72,14 @@ namespace AccountGo.BackendTests
         {
             await CreateBankOk(new CreateBankAccountRequest { Name = "Keep", Type = 1 });
             var gone = await CreateBankOk(new CreateBankAccountRequest { Name = "Gone", Type = 1 });
-            var archive = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{gone.Id}/Archive?confirm=true");
+            var archive = await Send(HttpMethod.Post, $"/api/Banking/Accounts/{PubId<Core.Domain.Financials.Bank>(gone.Id)}/Archive?confirm=true");
             Assert.True(archive.IsSuccessStatusCode, await archive.Content.ReadAsStringAsync());
 
             var invoice = await NewInvoice();
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
 
             var refused = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto
@@ -100,7 +100,7 @@ namespace AccountGo.BackendTests
             var createOtherOrg = await Send(HttpMethod.Post, "/api/organizations",
                 new { name = "Other Co Bank Org", slug = "other-bank-org" }, token: _otherToken, scoped: false);
             Assert.Equal(HttpStatusCode.Created, createOtherOrg.StatusCode);
-            var otherCompanyId = int.Parse((await Json(createOtherOrg)).GetProperty("id").GetString());
+            var otherCompanyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, (await Json(createOtherOrg)).GetProperty("id").GetString());
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -110,25 +110,27 @@ namespace AccountGo.BackendTests
                 await db.SaveChangesAsync();
             }
             _slug = "other-bank-org";
-            var otherBank = await CreateBankOk(new CreateBankAccountRequest { Name = "Other Co Bank", Type = 1 }, _otherToken);
+            var otherBankResp = await Send(HttpMethod.Post, "/api/Banking/Accounts", new CreateBankAccountRequest { Name = "Other Co Bank", Type = 1 }, _otherToken);
+            Assert.True(otherBankResp.IsSuccessStatusCode, await otherBankResp.Content.ReadAsStringAsync());
+            var otherBankPub = (await Json(otherBankResp)).GetProperty("id").GetString();
             _slug = ownerSlug;
 
             var invoice = await NewInvoice();
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoicePub = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
 
             var refused = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
-                new Dto.Sales.RecordInvoicePaymentDto
+                new
                 {
-                    InvoiceId = invoiceId,
-                    Amount = 10,
-                    PaymentDate = DateTime.UtcNow,
-                    BankAccountId = otherBank.Id
+                    invoiceId = invoicePub,
+                    amount = 10,
+                    paymentDate = DateTime.UtcNow,
+                    bankAccountId = otherBankPub
                 });
-            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
-            Assert.Equal("CROSS_TENANT_REFERENCE_DENIED", (await Json(refused)).GetProperty("code").GetString());
+            Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
+            Assert.Equal("unknown_id", (await Json(refused)).GetProperty("code").GetString());
         }
 
         [Fact]

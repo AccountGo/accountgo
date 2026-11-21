@@ -27,8 +27,8 @@ import { BANK_RECONCILIATION_STATUS } from '../types/banking';
 
 const ReconcilePage: React.FC = () => {
   const { bankId: bankIdParam, reconId: reconIdParam } = useParams<{ bankId: string; reconId?: string }>();
-  const bankId = Number(bankIdParam);
-  const reconIdFromRoute = reconIdParam ? Number(reconIdParam) : null;
+  const bankId = bankIdParam ?? '';
+  const reconIdFromRoute = reconIdParam || null;
   const navigate = useNavigate();
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
@@ -80,7 +80,7 @@ const ReconcilePage: React.FC = () => {
   }, [authFetch, bankId]);
 
   const loadRecon = useCallback(
-    async (id: number) => {
+    async (id: string) => {
       const res = await authFetch(`/api/Banking/Reconciliations/${id}`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -94,7 +94,7 @@ const ReconcilePage: React.FC = () => {
   );
 
   const bootstrap = useCallback(async () => {
-    if (!Number.isFinite(bankId)) return;
+    if (!bankId) return;
     setLoading(true);
     setError(null);
     try {
@@ -104,7 +104,7 @@ const ReconcilePage: React.FC = () => {
       } else {
         const listRes = await authFetch(`/api/Banking/Reconciliations?bankId=${bankId}`);
         if (listRes.ok) {
-          const items: { id: number; status: number }[] = await listRes.json();
+          const items: { id: string; status: number }[] = await listRes.json();
           const draft = items.find((i) => i.status === BANK_RECONCILIATION_STATUS.Draft);
           if (draft) {
             navigate(`/org/${currentOrg.slug}/banking/${bankId}/reconcile/${draft.id}`, { replace: true });
@@ -127,9 +127,9 @@ const ReconcilePage: React.FC = () => {
 
   const putTickItemsRef = useRef<
     (
-      id: number,
-      add: number[],
-      remove: number[],
+      id: string,
+      add: string[],
+      remove: string[],
       version: number,
     ) => Promise<TickSavePutResult<BankReconciliation>>
   >(async () => ({ ok: false, conflict: false, message: 'Not ready.' }));
@@ -188,7 +188,7 @@ const ReconcilePage: React.FC = () => {
   flushTicksRef.current = () => flushTicks();
 
   const queueTick = useCallback(
-    (lineId: number) => {
+    (lineId: string) => {
       const current = reconRef.current;
       const saver = tickSaverRef.current;
       if (!current || !canReconcile || !saver) return;
@@ -568,11 +568,11 @@ function LineColumn({
 }: {
   title: string;
   lines: BankReconciliationCandidateLine[];
-  visibleIds: Set<number>;
-  focusLineId?: number;
+  visibleIds: Set<string>;
+  focusLineId?: string;
   formatCurrency: (n: number) => string;
   interactive: boolean;
-  onToggle: (lineId: number) => void;
+  onToggle: (lineId: string) => void;
 }) {
   const shown = lines.filter((l) => visibleIds.has(l.lineId));
   return (

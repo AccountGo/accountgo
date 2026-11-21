@@ -18,8 +18,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("Item")]
-    public partial class Item : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("item")]
+    public partial class Item : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public Item()
         {
             SalesInvoiceLines = new HashSet<SalesInvoiceLine>();

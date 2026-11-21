@@ -6,8 +6,8 @@ import type { BankStatementLine } from '../src/types/banking';
 const fetcher = vi.fn();
 vi.mock('../src/auth/AuthContext', () => ({ useAuth: () => ({ authFetch: fetcher }) }));
 afterEach(() => { cleanup(); fetcher.mockReset(); });
-const line = { id: 42, amount: -25, postedDate: '2026-06-15', payee: 'Personal transfer', isMatched: false, isExcluded: false } as BankStatementLine;
-const action = { accountId: 10, accountCode: '30800', accountName: 'My drawings', label: 'Owner drawing' };
+const line = { id: '42', amount: -25, postedDate: '2026-06-15', payee: 'Personal transfer', isMatched: false, isExcluded: false } as BankStatementLine;
+const action = { accountId: '10', accountCode: '30800', accountName: 'My drawings', label: 'Owner drawing' };
 
 it('shows the account and hint, and sends only memo and remember for a single line', async () => {
   fetcher.mockResolvedValue(new Response('{}', { status: 200 }));
@@ -28,14 +28,14 @@ it('confirms a reconciled period and retries the entire bulk selection', async (
   fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ code: 'RECONCILED_PERIOD_CONFIRM_REQUIRED', message: 'Already reconciled. Continue?' }), { status: 409 }))
     .mockResolvedValueOnce(new Response('{}', { status: 200 }));
   const saved = vi.fn();
-  render(<StatementLineOwnerMovementDialog lines={[line, { ...line, id: 43 }]} action={action} formatCurrency={String} onClose={vi.fn()} onSaved={saved} />);
+  render(<StatementLineOwnerMovementDialog lines={[line, { ...line, id: '43' }]} action={action} formatCurrency={String} onClose={vi.fn()} onSaved={saved} />);
   fireEvent.click(screen.getByRole('button', { name: 'Record' }));
   const confirm = await screen.findByRole('button', { name: 'Post anyway' });
   expect(saved).not.toHaveBeenCalled();
   fireEvent.click(confirm);
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(fetcher.mock.calls[1][0]).toBe('/api/Banking/StatementLines/BulkRecordOwnerMovement?confirmReconciledPeriod=true');
-  expect(JSON.parse(fetcher.mock.calls[1][1].body).lineIds).toEqual([42, 43]);
+  expect(JSON.parse(fetcher.mock.calls[1][1].body).lineIds).toEqual(['42', '43']);
 });
 
 it('undo confirms the reversal, sends the optional reason and retries after period confirmation', async () => {
@@ -55,8 +55,8 @@ it('undo confirms the reversal, sends the optional reason and retries after peri
 it('requires a partner and updates the account before recording', async () => {
   fetcher.mockResolvedValue(new Response('{}', { status: 200 }));
   const partners = [
-    { partnerId: 1, name: 'Avery', drawing: { accountId: 21, accountCode: '30851', accountName: 'Drawings – Avery', label: 'Partner drawing' }, contribution: null },
-    { partnerId: 2, name: 'Blake', drawing: { accountId: 22, accountCode: '30852', accountName: 'Drawings – Blake', label: 'Partner drawing' }, contribution: null },
+    { partnerId: '1', name: 'Avery', drawing: { accountId: '21', accountCode: '30851', accountName: 'Drawings – Avery', label: 'Partner drawing' }, contribution: null },
+    { partnerId: '2', name: 'Blake', drawing: { accountId: '22', accountCode: '30852', accountName: 'Drawings – Blake', label: 'Partner drawing' }, contribution: null },
   ];
   const saved = vi.fn();
   render(<StatementLineOwnerMovementDialog lines={[line]} action={partners[0].drawing!} partners={partners} formatCurrency={String} onClose={vi.fn()} onSaved={saved} />);
@@ -69,5 +69,5 @@ it('requires a partner and updates the account before recording', async () => {
   expect(submit.disabled).toBe(false);
   fireEvent.click(submit);
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
-  expect(JSON.parse(fetcher.mock.calls[0][1].body).partnerId).toBe(2);
+  expect(JSON.parse(fetcher.mock.calls[0][1].body).partnerId).toBe('2');
 });

@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
@@ -65,10 +66,11 @@ public sealed class PartnersController : BaseController
             var debitBalance = debitNet.GetValueOrDefault(accountId);
             return accounts.TryGetValue(accountId, out var account) && account.DrOrCrSide == DrOrCrSide.Cr ? -debitBalance : debitBalance;
         }
+        var partnerPublicIds = partnerRows.ToDictionary(p => p.Id, p => p.PublicId);
         var partners = partnerRows.Select(p =>
         {
             var capital = accounts[p.CapitalAccountId]; var drawings = accounts[p.DrawingsAccountId];
-            return new { p.Id, p.Name, CapitalAccountCode = capital.AccountCode, CapitalAccountName = capital.AccountName, DrawingsAccountCode = drawings.AccountCode, DrawingsAccountName = drawings.AccountName,
+            return new { Id = p.PublicId, p.Name, CapitalAccountCode = capital.AccountCode, CapitalAccountName = capital.AccountName, DrawingsAccountCode = drawings.AccountCode, DrawingsAccountName = drawings.AccountName,
                 CapitalBalance = BalanceFor(capital.Id), DrawingsBalance = BalanceFor(drawings.Id), Archived = p.ArchivedAt != null, RowVersion = Convert.ToBase64String(p.RowVersion) };
         }).ToList();
         var openYearRows = _db.FinancialYears.Where(y => y.ClosedAt == null).OrderBy(y => y.StartDate).ToList();
@@ -78,7 +80,7 @@ public sealed class PartnersController : BaseController
         var openYears = openYearRows.Select(year =>
         {
             var yearShares = openShares.Where(share => share.FinancialYearId == year.Id).ToList();
-            return new { year.FiscalYearCode, RowVersion = ShareVersion(year.Id, yearShares.Select(share => (share.PartnerId, share.Percent))), Shares = yearShares.Select(share => new { share.PartnerId, share.Percent }).ToList() };
+            return new { year.FiscalYearCode, RowVersion = ShareVersion(year.Id, yearShares.Select(share => (share.PartnerId, share.Percent))), Shares = yearShares.Select(share => new { PartnerId = partnerPublicIds.TryGetValue(share.PartnerId, out var pub) ? pub : string.Empty, share.Percent }).ToList() };
         }).ToList();
         var permanent = accounts.Values.FirstOrDefault(a => a.AccountCode == "30100"); var distribution = accounts.Values.FirstOrDefault(a => a.AccountCode == "30800");
         var capitalBalance = permanent == null ? 0m : BalanceFor(permanent.Id);
@@ -130,9 +132,9 @@ public sealed class PartnersController : BaseController
     }
 
     public sealed record RenameRequest(string Name, string RowVersion);
-    [HttpPut("{id:int}")]
+    [HttpPut("{id}")]
     [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
-    public IActionResult Rename(int id, [FromBody] RenameRequest request)
+    public IActionResult Rename([Dto.Common.PublicId("ptnr")] int id, [FromBody] RenameRequest request)
     {
         if (!Authorize(AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, SystemPermissions.FinancialsAccountsManage, out var denied)) return denied!;
         var partner = _db.Partners.FirstOrDefault(p => p.Id == id); if (partner == null) return NotFound();
@@ -142,7 +144,7 @@ public sealed class PartnersController : BaseController
         try { _db.SaveChanges(); tx.Commit(); return Ok(GetResult()); } catch (DbUpdateConcurrencyException) { return Conflict(new { message = "Someone else changed this. Reload and try again." }); } catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
-    public sealed record ShareRequest(int PartnerId, decimal Percent);
+    public sealed record ShareRequest([property: PublicId("ptnr")] int PartnerId, decimal Percent);
     [HttpPut("Shares/{fiscalYearCode}")]
     [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
     public IActionResult ReplaceShares(string fiscalYearCode, [FromBody] ShareRequest[] request, [FromHeader(Name = "If-Match")] string? rowVersion = null)
@@ -155,9 +157,9 @@ public sealed class PartnersController : BaseController
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); } catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
-    [HttpPost("{id:int}/Archive")]
+    [HttpPost("{id}/Archive")]
     [RequirePermission(SystemPermissions.FinancialsAccountsManage)]
-    public IActionResult Archive(int id)
+    public IActionResult Archive([Dto.Common.PublicId("ptnr")] int id)
     {
         if (!Authorize(AccessOperationCatalog.WorkspaceAccountingPolicyUpdate, SystemPermissions.FinancialsAccountsManage, out var denied)) return denied!;
         var p = _db.Partners.FirstOrDefault(x => x.Id == id); if (p == null) return NotFound();

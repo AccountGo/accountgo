@@ -5,8 +5,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Core.Domain.Donations
 {
     [Table("DonationInvoiceLine")]
-    public partial class DonationInvoiceLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("dil")]
+    public partial class DonationInvoiceLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int DonationInvoiceHeaderId { get; set; }
         public int ItemId { get; set; }

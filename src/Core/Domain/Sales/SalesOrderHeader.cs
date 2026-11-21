@@ -14,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesOrderHeader")]
-    public partial class SalesOrderHeader : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("so")]
+    public partial class SalesOrderHeader : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public SalesOrderHeader()
         {
             SalesOrderLines = new HashSet<SalesOrderLine>();

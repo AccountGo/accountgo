@@ -62,12 +62,12 @@ public sealed class MultiTenancyPhase3AuditBaselineTests : MultiTenancyPhase3Tes
         using (var response = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", journal))
         {
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            journal.Id = (await Json(response)).GetProperty("id").GetInt32();
+            journal.Id = IntId<Core.Domain.Financials.JournalEntryHeader>((await Json(response)).GetProperty("id").GetString());
         }
         var approval = await ApproveJournalPostAsync(journal.Id);
         using (var response = await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", journal, extraHeaders: approval))
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using (var response = await Send(HttpMethod.Patch, $"/api/organizations/current/members/{targetMemberId}", new { securityRoleIds = new[] { viewerRoleId } }))
+        using (var response = await Send(HttpMethod.Patch, $"/api/organizations/current/members/{PubId<CompanyMember>(targetMemberId)}", new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(viewerRoleId) } }))
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         using (var response = await Send(HttpMethod.Get, "/api/Financials/ExportSnapshot"))
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);

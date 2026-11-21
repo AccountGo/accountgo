@@ -1,9 +1,12 @@
+using Dto.Common;
 ﻿using System;
 
 namespace Dto.Inventory
 {
     public class InventoryControlJournal : BaseDto
     {
+        [PublicId("icj")]
+        public override int Id { get; set; }
         public decimal? In { get; set; }
         public decimal? Out { get; set; }
         public string? Item { get; set; }

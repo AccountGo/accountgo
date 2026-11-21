@@ -448,7 +448,7 @@ namespace AccountGo.BackendTests.Financial
             {
                 var response = await Send(HttpMethod.Post, "/api/organizations", new { name, slug }, token, scoped: false);
                 Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-                var companyId = int.Parse((await Json(response)).GetProperty("id").GetString(), CultureInfo.InvariantCulture);
+                var companyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(Factory.Services, (await Json(response)).GetProperty("id").GetString()!);
                 using var scope = Factory.Services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 var ownerMember = db.CompanyMembers.Single(m => m.CompanyId == companyId && m.Role == CompanyMemberRole.Owner);
@@ -463,7 +463,7 @@ namespace AccountGo.BackendTests.Financial
                 using var request = new HttpRequestMessage(method, path);
                 if (!string.IsNullOrEmpty(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 if (scoped) request.Headers.Add("X-AccountGo-Org", org ?? "life-org");
-                if (body != null) request.Content = JsonContent.Create(body);
+                if (body != null) request.Content = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ToJsonContent(Factory.Services, 0, body);
                 return await _client.SendAsync(request);
             }
         }

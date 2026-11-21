@@ -10,11 +10,13 @@
 using System;
 using System.Collections.Generic;
 using Core.Domain;
+using Dto.Common;
 
 namespace Services.Financial
 {
     public class TrialBalance
     {
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public string? AccountCode { get; set; }
         public string? AccountName { get; set; }
@@ -24,6 +26,7 @@ namespace Services.Financial
 
     public class BalanceSheet
     {
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public int AccountClassId { get; set; }
         public string? AccountCode { get; set; }
@@ -33,6 +36,7 @@ namespace Services.Financial
 
     public class IncomeStatement
     {
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public bool IsExpense { get; set; }
         public string? AccountCode { get; set; }
@@ -79,6 +83,7 @@ namespace Services.Financial
 
     public class CashFlowLine
     {
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public string? AccountCode { get; set; }
         public string? AccountName { get; set; }
@@ -88,7 +93,9 @@ namespace Services.Financial
 
     public partial class MasterGeneralLedger
     {
+        [PublicId("gl")]
         public int Id { get; set; }
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public int CurrencyId { get; set; }
         public string? DocumentType { get; set; }

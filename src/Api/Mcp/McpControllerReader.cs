@@ -174,9 +174,24 @@ namespace Api.Mcp
             }
         }
 
-        /// <summary>Serializes a value exactly as the API's JSON responses do (camelCase, Newtonsoft).</summary>
+        /// <summary>The request's public-ID translator (per-request cache), for tools that take or build ids by hand.</summary>
+        public Api.PublicIds.IPublicIdResolver Ids =>
+            (_httpContextAccessor.HttpContext?.RequestServices ?? _services).GetRequiredService<Api.PublicIds.IPublicIdResolver>();
+
+        /// <summary>Serializes a value exactly as the API's JSON responses do (camelCase, Newtonsoft, with PublicId prefetch).</summary>
         public JsonElement ToJson(object? value)
         {
+            if (value != null)
+            {
+                var requestServices = _httpContextAccessor.HttpContext?.RequestServices ?? _services;
+                var resolver = requestServices.GetService<Api.PublicIds.IPublicIdResolver>();
+                var registry = requestServices.GetService<Api.PublicIds.PublicIdRegistry>();
+                if (resolver != null && registry != null)
+                {
+                    Api.PublicIds.PublicIdPrefetchFilter.PrefetchObjectGraphAsync(value, resolver, registry)
+                        .GetAwaiter().GetResult();
+                }
+            }
             var json = Newtonsoft.Json.JsonConvert.SerializeObject(value, _jsonSettings);
             using var document = JsonDocument.Parse(json);
             return document.RootElement.Clone();

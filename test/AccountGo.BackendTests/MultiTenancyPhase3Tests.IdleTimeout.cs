@@ -155,7 +155,7 @@ namespace AccountGo.BackendTests
         {
             var created = await Send(HttpMethod.Post, "/api/organizations", new { name = "Strict Client", slug = "strict-client" }, token: _otherToken, scoped: false);
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-            var strictCompanyId = int.Parse((await Json(created)).GetProperty("id").GetString());
+            var strictCompanyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, (await Json(created)).GetProperty("id").GetString());
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -242,6 +242,7 @@ namespace AccountGo.BackendTests
                 var change = db.RecordChanges
                     .IgnoreQueryFilters()
                     .Where(c => c.CompanyId == _companyId && c.EntityType == "CompanySetting")
+                    .OrderBy(c => c.Id)
                     .AsEnumerable()
                     .LastOrDefault(c => c.ChangesJson.Contains("IdleTimeoutMinutes", StringComparison.Ordinal));
                 Assert.NotNull(change);

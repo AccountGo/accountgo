@@ -19,6 +19,7 @@ namespace Api.Data.Seed
                 new Core.Domain.Donations.Donor
                 {
                     Id = 1,
+                    PublicId = "dnr_01j00000000000000000000001",
                     CompanyId = 1,
                     DonorType = "Individual",
                     FirstName = "Olivia",
@@ -33,6 +34,7 @@ namespace Api.Data.Seed
                 new Core.Domain.Donations.Donor
                 {
                     Id = 2,
+                    PublicId = "dnr_01j00000000000000000000002",
                     CompanyId = 1,
                     DonorType = "Company",
                     FirstName = string.Empty,
@@ -52,6 +54,7 @@ namespace Api.Data.Seed
             List<Company> companiees = new List<Company>() {
                 new Company() {    // 1
                     Id = 1,
+                    PublicId = "ws_01j00000000000000000000001",
                     Name = "Financial Solutions Inc.",
                     CompanyCode = "100",
                     ShortName = "FSI",

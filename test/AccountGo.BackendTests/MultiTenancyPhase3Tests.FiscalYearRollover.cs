@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Core.Domain.Sales;
 using Dto.Banking;
 using Xunit;
 using Xunit.Abstractions;
@@ -44,7 +45,7 @@ namespace AccountGo.BackendTests
             {
                 Assert.Contains(db.FinancialYears, y => y.StartDate.Date == nextYearStart && y.IsActive);
                 Assert.Equal(1, db.FinancialYears.Count(y => y.StartDate.Date == nextYearStart));
-                Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == saved.GetProperty("id").GetInt32()).GeneralLedgerHeaderId);
+                Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == IntId<SalesInvoiceHeader>(saved.GetProperty("id").GetString())).GeneralLedgerHeaderId);
             });
         }
 
@@ -220,7 +221,7 @@ namespace AccountGo.BackendTests
 
             var current = Row(years, currentCode);
             Assert.False(current.GetProperty("isPersisted").GetBoolean());
-            Assert.Equal(0, current.GetProperty("id").GetInt32());
+            Assert.Equal(JsonValueKind.Null, current.GetProperty("id").ValueKind);
             Assert.Equal("Open", current.GetProperty("status").GetString());
             Assert.Equal(JsonValueKind.Null, current.GetProperty("closedAt").ValueKind);
             Assert.Equal(JsonValueKind.Null, current.GetProperty("closedBy").ValueKind);

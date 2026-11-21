@@ -32,7 +32,7 @@ interface YearEndCheckItem {
 }
 
 interface YearEndClosingLine {
-  accountId: number;
+  accountId: string;
   accountCode: string;
   accountName: string;
   drCr: string;
@@ -49,7 +49,7 @@ interface YearEndPreview {
   blocking: YearEndCheckItem[];
   warnings: YearEndCheckItem[];
   closingLines: YearEndClosingLine[];
-  partnerAllocations?: Array<{ partnerId: number; name: string; percent: number; profitShare: number; drawingsClosed: number; capitalAfterClose: number }>;
+  partnerAllocations?: Array<{ partnerId: string; name: string; percent: number; profitShare: number; drawingsClosed: number; capitalAfterClose: number }>;
   partnerLossNotice?: string | null;
   canClose: boolean;
   previewHash?: string;
@@ -57,7 +57,7 @@ interface YearEndPreview {
   issuanceStatus?: string;
   canReopen?: boolean;
   reopenBlockedReason?: string | null;
-  latestCloseRunId?: number | null;
+  latestCloseRunId?: string | null;
   currentBooksLockedThrough?: string | null;
   proposedBooksLockedThrough?: string | null;
   requiresLockAcknowledgement?: boolean;

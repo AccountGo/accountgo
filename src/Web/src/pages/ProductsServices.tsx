@@ -23,14 +23,14 @@ export const ProductsServices: React.FC = () => {
   const showStock = hasModule('inventory');
 
   const [items, setItems] = useState<CatalogItem[]>([]);
-  const [salesAccounts, setSalesAccounts] = useState<{ id: number; code: string; name: string }[]>([]);
+  const [salesAccounts, setSalesAccounts] = useState<{ id: string; code: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'active' | 'archived'>('active');
   // The dialog: {} to add an item, or the item being edited.
   const [dialog, setDialog] = useState<{ item?: CatalogItem } | null>(null);
-  const [openingId, setOpeningId] = useState<number | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
   const formatCurrency = useCallback(
@@ -77,7 +77,7 @@ export const ProductsServices: React.FC = () => {
   }, [items, query, view]);
 
   // Whether an item can be deleted is only known per item, so editing loads it first.
-  const openItem = async (id: number) => {
+  const openItem = async (id: string) => {
     setOpeningId(id);
     setError(null);
     try {

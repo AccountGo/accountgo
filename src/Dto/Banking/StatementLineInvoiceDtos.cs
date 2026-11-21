@@ -3,12 +3,14 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 
 namespace Dto.Banking
 {
     /// <summary>Apply a money-in statement line as payment on an open invoice (#436 I3).</summary>
     public class ApplyOpenInvoiceFromStatementLineRequest
     {
+        [PublicId("inv")]
         public int InvoiceId { get; set; }
         public string? PaymentMethod { get; set; }
         public string? Memo { get; set; }

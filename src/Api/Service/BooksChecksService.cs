@@ -238,14 +238,14 @@ namespace Api.Service
                 .Where(i => i.Date < endExclusive && i.Status != null && i.Status != SalesInvoiceStatus.Draft
                     && i.Status != SalesInvoiceStatus.Void && i.GeneralLedgerHeaderId == null)
                 .OrderBy(i => i.Date).ThenBy(i => i.Id)
-                .Select(i => new { i.Id, i.No, i.Date })
+                .Select(i => new { i.Id, i.PublicId, i.No, i.Date })
                 .ToList();
             var check = New("sales.unposted", "sales", "missing", "Issued invoices missing from the ledger");
             if (rows.Count == 0) return check;
             check.Status = BooksCheckStatus.Finding;
             check.Count = rows.Count;
             check.Detail = "Issued invoices with no ledger entry. Their revenue and receivable are absent from every report.";
-            check.Examples = rows.Take(MaxExamples).Select(i => Example($"Invoice {i.No}", $"/sales/{i.Id}", i.Date, null)).ToList();
+            check.Examples = rows.Take(MaxExamples).Select(i => Example($"Invoice {i.No}", $"/sales/{i.PublicId}", i.Date, null)).ToList();
             return check;
         }
 
@@ -255,14 +255,14 @@ namespace Api.Service
                 .Where(b => b.Date < endExclusive && b.Status != null && b.Status != PurchaseInvoiceStatus.Draft
                     && b.Status != PurchaseInvoiceStatus.Void && b.GeneralLedgerHeaderId == null)
                 .OrderBy(b => b.Date).ThenBy(b => b.Id)
-                .Select(b => new { b.Id, b.No, b.Date })
+                .Select(b => new { b.Id, b.PublicId, b.No, b.Date })
                 .ToList();
             var check = New("purchases.unposted", "purchases", "missing", "Approved bills missing from the ledger");
             if (rows.Count == 0) return check;
             check.Status = BooksCheckStatus.Finding;
             check.Count = rows.Count;
             check.Detail = "Approved bills with no ledger entry. Their cost and payable are absent from every report.";
-            check.Examples = rows.Take(MaxExamples).Select(b => Example($"Bill {b.No}", $"/purchases/{b.Id}", b.Date, null)).ToList();
+            check.Examples = rows.Take(MaxExamples).Select(b => Example($"Bill {b.No}", $"/purchases/{b.PublicId}", b.Date, null)).ToList();
             return check;
         }
 
@@ -270,7 +270,7 @@ namespace Api.Service
         {
             var rows = _db.SalesInvoiceHeaders.AsNoTracking()
                 .Where(i => i.No != null && i.No != "" && i.Status != SalesInvoiceStatus.Void && i.Status != SalesInvoiceStatus.Draft)
-                .Select(i => new { i.Id, i.No, i.Date })
+                .Select(i => new { i.Id, i.PublicId, i.No, i.Date })
                 .ToList();
             var groups = rows.GroupBy(i => i.No!.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).ToList();
             var check = New("sales.duplicateNumbers", "sales", "real", "Invoice numbers used more than once");
@@ -278,7 +278,7 @@ namespace Api.Service
             check.Status = BooksCheckStatus.Finding;
             check.Count = groups.Count;
             check.Detail = "The same invoice number appears on more than one issued invoice.";
-            check.Examples = groups.SelectMany(g => g).Take(MaxExamples).Select(i => Example($"Invoice {i.No}", $"/sales/{i.Id}", i.Date, null)).ToList();
+            check.Examples = groups.SelectMany(g => g).Take(MaxExamples).Select(i => Example($"Invoice {i.No}", $"/sales/{i.PublicId}", i.Date, null)).ToList();
             return check;
         }
 
@@ -301,7 +301,7 @@ namespace Api.Service
                 byNumber.Amount = sameNumber.Sum(g => g.OrderBy(b => b.Id).Skip(1).Sum(b => b.Total()));
                 byNumber.Detail = "More than one approved bill from the same vendor carries the same vendor invoice number. The amount is the total of the later copies.";
                 byNumber.Examples = sameNumber.SelectMany(g => g).Take(MaxExamples)
-                    .Select(b => Example($"Bill {b.No} (vendor invoice {b.VendorInvoiceNo})", $"/purchases/{b.Id}", b.Date, b.Total())).ToList();
+                    .Select(b => Example($"Bill {b.No} (vendor invoice {b.VendorInvoiceNo})", $"/purchases/{b.PublicId}", b.Date, b.Total())).ToList();
             }
             yield return byNumber;
 
@@ -317,7 +317,7 @@ namespace Api.Service
                 byAmount.Count = sameDay.Count;
                 byAmount.Detail = "Bills in the period from the same vendor on the same date for the same amount. They may be genuine repeat purchases or one bill entered twice.";
                 byAmount.Examples = sameDay.SelectMany(g => g).Take(MaxExamples)
-                    .Select(b => Example($"Bill {b.No}", $"/purchases/{b.Id}", b.Date, b.Total())).ToList();
+                    .Select(b => Example($"Bill {b.No}", $"/purchases/{b.PublicId}", b.Date, b.Total())).ToList();
             }
             yield return byAmount;
         }
@@ -330,6 +330,7 @@ namespace Api.Service
                 .Select(j => new
                 {
                     j.Id,
+                    j.PublicId,
                     j.Date,
                     j.Memo,
                     j.ReferenceNo,
@@ -337,8 +338,8 @@ namespace Api.Service
                     Debit = j.JournalEntryLines.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => (decimal?)l.Amount) ?? 0
                 })
                 .ToList();
-            BooksCheckExample JournalExample(int id, DateTime date, string? reference, decimal amount) =>
-                Example(string.IsNullOrWhiteSpace(reference) ? $"Journal #{id}" : $"Journal #{id} ({reference})", $"/financials/journals?id={id}", date, amount);
+            BooksCheckExample JournalExample(string publicId, DateTime date, string? reference, decimal amount) =>
+                Example(string.IsNullOrWhiteSpace(reference) ? $"Journal {publicId}" : $"Journal {reference}", $"/financials/journals?id={publicId}", date, amount);
 
             var periodEndFrom = end.AddDays(-(PeriodEndDays - 1));
             var late = journals.Where(j => j.Date.Date >= periodEndFrom).OrderByDescending(j => j.Debit).ToList();
@@ -349,7 +350,7 @@ namespace Api.Service
                 periodEnd.Count = late.Count;
                 periodEnd.Amount = late.Sum(j => j.Debit);
                 periodEnd.Detail = $"Manual journals dated in the last {PeriodEndDays} days of the period, largest first. Period-end adjustments deserve a look at what supports them.";
-                periodEnd.Examples = late.Take(MaxExamples).Select(j => JournalExample(j.Id, j.Date, j.ReferenceNo, j.Debit)).ToList();
+                periodEnd.Examples = late.Take(MaxExamples).Select(j => JournalExample(j.PublicId, j.Date, j.ReferenceNo, j.Debit)).ToList();
             }
             yield return periodEnd;
 
@@ -361,7 +362,7 @@ namespace Api.Service
                 noMemo.Count = blank.Count;
                 noMemo.Amount = blank.Sum(j => j.Debit);
                 noMemo.Detail = "Posted manual journals in the period with no memo explaining their purpose.";
-                noMemo.Examples = blank.Take(MaxExamples).Select(j => JournalExample(j.Id, j.Date, j.ReferenceNo, j.Debit)).ToList();
+                noMemo.Examples = blank.Take(MaxExamples).Select(j => JournalExample(j.PublicId, j.Date, j.ReferenceNo, j.Debit)).ToList();
             }
             yield return noMemo;
 
@@ -374,7 +375,7 @@ namespace Api.Service
                 controlAccounts.Count = control.Count;
                 controlAccounts.Amount = control.Sum(j => j.Debit);
                 controlAccounts.Detail = "Manual journals in the period that post to an account normally moved only by invoices, bills, receipts, payments or bank entries. They bypass those documents and can explain a tie-out difference.";
-                controlAccounts.Examples = control.Take(MaxExamples).Select(j => JournalExample(j.Id, j.Date, j.ReferenceNo, j.Debit)).ToList();
+                controlAccounts.Examples = control.Take(MaxExamples).Select(j => JournalExample(j.PublicId, j.Date, j.ReferenceNo, j.Debit)).ToList();
             }
             yield return controlAccounts;
 
@@ -433,7 +434,7 @@ namespace Api.Service
                 selfPosted.Count = self.Count;
                 selfPosted.Amount = self.Sum(j => j.Debit);
                 selfPosted.Detail += " The listed journals were prepared and posted by the same person, so nobody else checked them. That is expected when the workspace allows single-user posting.";
-                selfPosted.Examples = self.Take(MaxExamples).Select(j => JournalExample(j.Id, j.Date, j.ReferenceNo, j.Debit)).ToList();
+                selfPosted.Examples = self.Take(MaxExamples).Select(j => JournalExample(j.PublicId, j.Date, j.ReferenceNo, j.Debit)).ToList();
             }
             yield return selfPosted;
         }
@@ -451,11 +452,13 @@ namespace Api.Service
             var open = status.Banks.Where(b => !b.IsReconciled).ToList();
             check.Detail = $"{status.ReconciledCount} of {status.TotalCount} bank accounts are reconciled through {status.PeriodEnd:yyyy-MM-dd}.";
             if (open.Count == 0) return check;
+            var openBankIds = open.Take(MaxExamples).Select(b => b.BankId).ToList();
+            var bankPublicIds = _db.Banks.AsNoTracking().Where(b => openBankIds.Contains(b.Id)).ToDictionary(b => b.Id, b => b.PublicId);
             check.Status = BooksCheckStatus.Finding;
             check.Count = open.Count;
             check.Examples = open.Take(MaxExamples)
                 .Select(b => Example(b.ReconciledThrough.HasValue ? $"{b.Name} (reconciled through {b.ReconciledThrough:yyyy-MM-dd})" : $"{b.Name} (never reconciled)",
-                    $"/banking/{b.BankId}/reconcile", b.ReconciledThrough, null)).ToList();
+                    bankPublicIds.TryGetValue(b.BankId, out var pub) ? $"/banking/{pub}/reconcile" : "/banking", b.ReconciledThrough, null)).ToList();
             return check;
         }
 
@@ -464,7 +467,7 @@ namespace Api.Service
             var lines = _db.BankStatementLines.AsNoTracking()
                 .Where(l => l.PostedDate < endExclusive && l.MatchedGeneralLedgerLineId == null && l.ExcludedAt == null)
                 .OrderBy(l => l.PostedDate).ThenBy(l => l.Id)
-                .Select(l => new { l.Id, l.BankId, l.PostedDate, l.Amount, l.Payee, l.Memo })
+                .Select(l => new { l.Id, l.PublicId, l.BankId, BankPublicId = l.Bank.PublicId, l.PostedDate, l.Amount, l.Payee, l.Memo })
                 .ToList();
             var check = New("bank.unmatchedLines", "bank", "missing", "Imported bank lines not yet in the books");
             if (lines.Count == 0) return check;
@@ -473,8 +476,8 @@ namespace Api.Service
             check.Amount = lines.Sum(l => Math.Abs(l.Amount));
             check.Detail = "Imported statement lines dated on or before the period end that are neither matched to a ledger entry nor excluded. Each is money that moved and may be missing from the books. The amount is the total ignoring direction.";
             check.Examples = lines.Take(MaxExamples)
-                .Select(l => Example(string.IsNullOrWhiteSpace(l.Payee) ? (l.Memo ?? $"Statement line #{l.Id}") : l.Payee!,
-                    $"/banking/{l.BankId}/statement-import", l.PostedDate, l.Amount)).ToList();
+                .Select(l => Example(string.IsNullOrWhiteSpace(l.Payee) ? (l.Memo ?? $"Statement line {l.PublicId}") : l.Payee!,
+                    $"/banking/{l.BankPublicId}/statement-import", l.PostedDate, l.Amount)).ToList();
             return check;
         }
 

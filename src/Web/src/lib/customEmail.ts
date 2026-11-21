@@ -7,7 +7,7 @@ export interface ApprovedEmailSender {
 }
 
 export interface EmailCapabilities {
-  companyId: number;
+  companyId: string;
   customEmailAvailable: boolean;
   canManageDomains: boolean;
   canManageApprovedSenders: boolean;

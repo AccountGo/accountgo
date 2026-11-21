@@ -32,7 +32,7 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var invoiceId = IntId<Core.Domain.Sales.SalesInvoiceHeader>((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString());
             Assert.True((await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto
                 {
@@ -57,9 +57,8 @@ namespace AccountGo.BackendTests
                     BankAccountId = bank.Id
                 }));
 
-            var register = await (await Send(HttpMethod.Get,
-                $"/api/Banking/Accounts/{bank.Id}/Register?from=2026-01-01&page=1&pageSize=50"))
-                .Content.ReadFromJsonAsync<BankRegisterDto>();
+            var register = await ReadDto<BankRegisterDto>(await Send(HttpMethod.Get,
+                $"/api/Banking/Accounts/{PubId<Core.Domain.Financials.Bank>(bank.Id)}/Register?from=2026-01-01&page=1&pageSize=50"));
 
             Assert.Equal(0m, register.BroughtForward);
             Assert.True(register.TotalCount >= 3, $"expected OB + receipt + payment, got {register.TotalCount}");

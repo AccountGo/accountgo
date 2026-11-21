@@ -98,7 +98,7 @@ namespace AccountGo.BackendTests
             invoice.No = number;
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            return (await Json(saved)).GetProperty("id").GetInt32();
+            return IntId<SalesInvoiceHeader>((await Json(saved)).GetProperty("id").GetString());
         }
 
         [Fact]
@@ -164,7 +164,7 @@ namespace AccountGo.BackendTests
                 setting.BooksLockedThrough = new DateTime(2026, 12, 31);
                 db.SaveChanges();
             });
-            var lockedRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={lockedDraft}");
+            var lockedRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<Core.Domain.Sales.SalesInvoiceHeader>(lockedDraft)}");
             Assert.Equal(HttpStatusCode.BadRequest, lockedRes.StatusCode);
 
             WithDb(db =>
@@ -187,7 +187,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("INV-2026-0001", no1);
 
             // Voiding keeps INV-2026-0001; next invoice gets INV-2026-0002.
-            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={d1}&date=2026-05-02");
+            var voidRes = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<SalesInvoiceHeader>(d1)}&date=2026-05-02");
             Assert.Equal(HttpStatusCode.OK, voidRes.StatusCode);
             Assert.Equal(no1, (await GetInvoice(d1)).No);
 
@@ -257,7 +257,7 @@ namespace AccountGo.BackendTests
                 newYearDrafts.Add(await SaveDraftOnDate(new DateTime(2028, 3, 1 + i)));
 
             var newYearResults = await Task.WhenAll(newYearDrafts.Select(id =>
-                Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={id}")));
+                Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(id)}")));
             foreach (var r in newYearResults)
                 Assert.Equal(HttpStatusCode.OK, r.StatusCode);
 
@@ -283,7 +283,7 @@ namespace AccountGo.BackendTests
                 sameYearDrafts.Add(await SaveDraftOnDate(new DateTime(2028, 4, 1 + i)));
 
             var sameYearResults = await Task.WhenAll(sameYearDrafts.Select(id =>
-                Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={id}")));
+                Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(id)}")));
             foreach (var r in sameYearResults)
                 Assert.Equal(HttpStatusCode.OK, r.StatusCode);
 
@@ -321,7 +321,7 @@ namespace AccountGo.BackendTests
 
             Assert.Equal("PRV-2026-0001", await Issue(d1));
 
-            var staleRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={d2}&expectedNo={Uri.EscapeDataString(expected)}");
+            var staleRes = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(d2)}&expectedNo={Uri.EscapeDataString(expected)}");
             Assert.Equal(HttpStatusCode.Conflict, staleRes.StatusCode);
             var staleJson = await Json(staleRes);
             Assert.Equal("number_changed", staleJson.GetProperty("code").GetString());
@@ -524,9 +524,9 @@ namespace AccountGo.BackendTests
                 lineId = line.Id;
             });
 
-            var res = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{lineId}/RecordOtherIncome", new
+            var res = await Send(HttpMethod.Post, $"/api/Banking/StatementLines/{PubId<Core.Domain.Financials.BankStatementLine>(lineId)}/RecordOtherIncome", new
             {
-                incomeAccountId,
+                incomeAccountId = PubId<Core.Domain.Financials.Account>(incomeAccountId),
                 payeeName = "Acme Partner",
                 memo = "Rebate"
             });

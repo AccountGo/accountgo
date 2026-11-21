@@ -6,6 +6,8 @@ namespace Dto.Sales
 {
     public class Customer : BaseDto
     {
+        [PublicId("cus")]
+        public override int Id { get; set; }
         public string? No { get; set; }
         [Required]
         public string? Name { get; set; }
@@ -16,11 +18,17 @@ namespace Dto.Sales
         public Address CompanyAddress { get; set; } = new();
         public Address ShippingAddress { get; set; } = new();
 
+        [PublicId("acct")]
         public int? AccountsReceivableId { get; set; }
+        [PublicId("acct")]
         public int? SalesAccountId { get; set; }
+        [PublicId("acct")]
         public int? PrepaymentAccountId { get; set; }
+        [PublicId("acct")]
         public int? SalesDiscountAccountId { get; set; }
+        [PublicId("txg")]
         public int? TaxGroupId { get; set; }
+        [PublicId("term")]
         public int? PaymentTermId { get; set; }
         public bool Archived { get; set; }
         public decimal Balance { get; set; }

@@ -3,18 +3,19 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using Dto.Sales;
 
 namespace Dto.Financial
 {
     public sealed record SaveSupplierAdvanceDraftRequest(
-        int? Id,
-        int VendorId,
-        int? PurchaseOrderHeaderId,
+        [property: PublicId("adv")] int? Id,
+        [property: PublicId("ven")] int VendorId,
+        [property: PublicId("po")] int? PurchaseOrderHeaderId,
         DateTime Date,
         decimal Amount,
-        int BankId,
+        [property: PublicId("ba")] int BankId,
         string Purpose,
         bool IsRefundable,
         string? ReferenceNo,
@@ -23,7 +24,7 @@ namespace Dto.Financial
         long? ExpectedVersion = null);
 
     public sealed record ApplySupplierAdvanceItemRequest(
-        int PurchaseInvoiceHeaderId,
+        [property: PublicId("bill")] int PurchaseInvoiceHeaderId,
         decimal Amount,
         long? ExpectedBillVersion = null);
 
@@ -34,11 +35,11 @@ namespace Dto.Financial
         long? ExpectedAdvanceVersion = null);
 
     public sealed record SupplierAdvanceDto(
-        int Id,
+        [property: PublicId("adv")] int Id,
         string? No,
-        int VendorId,
+        [property: PublicId("ven")] int VendorId,
         string VendorName,
-        int? PurchaseOrderHeaderId,
+        [property: PublicId("po")] int? PurchaseOrderHeaderId,
         DateTime Date,
         string CurrencyCode,
         int CurrencyPrecision,
@@ -46,7 +47,7 @@ namespace Dto.Financial
         decimal AppliedAmount,
         decimal RefundedAmount,
         decimal AvailableAmount,
-        int BankId,
+        [property: PublicId("ba")] int BankId,
         string BankName,
         string Purpose,
         bool IsRefundable,
@@ -54,8 +55,8 @@ namespace Dto.Financial
         string? EvidenceReference,
         int Status,
         string StatusLabel,
-        int? GeneralLedgerHeaderId,
-        int? VoidGeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? GeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? VoidGeneralLedgerHeaderId,
         string? SubmittedBy,
         string? ReviewedBy,
         string? PostedBy,
@@ -64,16 +65,16 @@ namespace Dto.Financial
 
     public sealed record RefundAllocationInputDto(
         int SourceType, // 1=CustomerCreditNote, 2=SupplierCreditNote, 3=SupplierAdvance
-        int SourceId,
+        [property: PublicIdByType("SourceType", PublicIdTypeDiscriminatorKind.SettlementSourceType)] int SourceId,
         decimal Amount);
 
     public sealed record SavePartyRefundDraftRequest(
-        int? Id,
+        [property: PublicId("rf")] int? Id,
         int Direction, // 1=CustomerPayout, 2=SupplierInflow
-        int? CustomerId,
-        int? VendorId,
+        [property: PublicId("cus")] int? CustomerId,
+        [property: PublicId("ven")] int? VendorId,
         DateTime Date,
-        int BankId,
+        [property: PublicId("ba")] int BankId,
         string PaymentMethod,
         string? ExternalReference,
         string? EvidenceReference,
@@ -86,34 +87,34 @@ namespace Dto.Financial
         long? ExpectedVersion = null);
 
     public sealed record PartyRefundAllocationDto(
-        int Id,
+        [property: PublicId("rfa")] int Id,
         int SourceType,
         string SourceTypeLabel,
-        int SourceId,
+        [property: PublicIdByType("SourceType", PublicIdTypeDiscriminatorKind.SettlementSourceType)] int SourceId,
         string SourceNo,
         decimal Amount);
 
     public sealed record PartyRefundDto(
-        int Id,
+        [property: PublicId("rf")] int Id,
         string? No,
         int Direction,
         string DirectionLabel,
-        int? CustomerId,
-        int? VendorId,
+        [property: PublicId("cus")] int? CustomerId,
+        [property: PublicId("ven")] int? VendorId,
         string PartyName,
         DateTime Date,
         string CurrencyCode,
         int CurrencyPrecision,
         decimal Amount,
-        int BankId,
+        [property: PublicId("ba")] int BankId,
         string BankName,
         string PaymentMethod,
         string? ExternalReference,
         string? EvidenceReference,
         int Status,
         string StatusLabel,
-        int? GeneralLedgerHeaderId,
-        int? VoidGeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? GeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? VoidGeneralLedgerHeaderId,
         string? SubmittedBy,
         string? ReviewedBy,
         string? PostedBy,

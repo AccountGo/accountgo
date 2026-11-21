@@ -7,7 +7,7 @@ namespace Api.Service;
 
 /// <summary>Organization-scoped email capabilities; availability does not grant dispatch authorization.</summary>
 public sealed record EmailCapabilities(
-    int CompanyId, bool CustomEmailAvailable, bool CanManageDomains, bool CanManageApprovedSenders,
+    [property: Dto.Common.PublicId("ws")] int CompanyId, bool CustomEmailAvailable, bool CanManageDomains, bool CanManageApprovedSenders,
     string State, string? UnavailableReason, bool UpgradeAvailable = false,
     IReadOnlyList<ApprovedEmailSender>? ApprovedSenders = null);
 

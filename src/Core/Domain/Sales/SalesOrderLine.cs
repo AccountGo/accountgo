@@ -14,8 +14,10 @@ using System.Linq;
 namespace Core.Domain.Sales
 {
     [Table("SalesOrderLine")]
-    public partial class SalesOrderLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("sol")]
+    public partial class SalesOrderLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int SalesOrderHeaderId { get; set; }
         public int ItemId { get; set; }

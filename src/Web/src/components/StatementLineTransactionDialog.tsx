@@ -6,7 +6,7 @@ import { kindsForAmount } from '../lib/statementImport';
 import type { BankStatementLine } from '../types/banking';
 
 interface PostableAccount {
-  id: number;
+  id: string;
   accountCode: string;
   accountName: string;
   canPost: boolean;
@@ -77,7 +77,7 @@ export const StatementLineTransactionDialog: React.FC<StatementLineTransactionDi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           kind,
-          contraAccountId: contraAccountId ? Number(contraAccountId) : null,
+          contraAccountId: contraAccountId ? contraAccountId : null,
           memo: memo.trim() || null,
         }),
       });

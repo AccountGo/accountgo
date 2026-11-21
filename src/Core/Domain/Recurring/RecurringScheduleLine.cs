@@ -6,8 +6,10 @@ namespace Core.Domain.Recurring;
 /// <summary>
 /// A line item on a recurring schedule, copied to each generated invoice or bill.
 /// </summary>
-public partial class RecurringScheduleLine : BaseEntity, ICompanyOwned
+[PublicIdPrefix("rschl")]
+public partial class RecurringScheduleLine : BaseEntity, ICompanyOwned, IHasPublicId
 {
+    public string PublicId { get; set; } = string.Empty;
     /// <summary>Tenant scope.</summary>
     public int CompanyId { get; set; }
 

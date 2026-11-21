@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Banking
@@ -10,6 +11,7 @@ namespace Dto.Banking
     /// <summary>Plain-language expense category for Record expense (#436 I2).</summary>
     public class StatementExpenseCategoryDto
     {
+        [PublicId("acct")]
         public int AccountId { get; set; }
         public string Name { get; set; } = string.Empty;
         /// <summary>True when the account is on the short curated list; false for "More…".</summary>
@@ -32,9 +34,12 @@ namespace Dto.Banking
     public class RecordExpenseFromStatementLineRequest
     {
         /// <summary>Existing vendor, or omit and set <see cref="NewVendor"/>.</summary>
+        [PublicId("ven")]
         public int? VendorId { get; set; }
         public QuickVendorFromStatementRequest? NewVendor { get; set; }
+        [PublicId("acct")]
         public int ExpenseAccountId { get; set; }
+        [PublicId("tax")]
         public int? TaxId { get; set; }
         public string? Description { get; set; }
         public string? VendorInvoiceNo { get; set; }
@@ -47,6 +52,7 @@ namespace Dto.Banking
     /// <summary>Apply a money-out statement line as payment on an open bill (#436 I2).</summary>
     public class PayOpenBillFromStatementLineRequest
     {
+        [PublicId("bill")]
         public int BillId { get; set; }
         public string? PaymentMethod { get; set; }
         public string? Memo { get; set; }
@@ -56,6 +62,7 @@ namespace Dto.Banking
     {
         /// <summary>bill | vendorPayment (and later invoice / salesReceipt).</summary>
         public string Kind { get; set; } = string.Empty;
+        [PublicIdByType("Kind")]
         public int Id { get; set; }
         public string? No { get; set; }
     }

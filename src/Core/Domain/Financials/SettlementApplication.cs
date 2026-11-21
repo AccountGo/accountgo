@@ -12,8 +12,10 @@ using Core.Domain.Sales;
 namespace Core.Domain.Financials
 {
     [Table("SettlementApplication")]
-    public class SettlementApplication : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("sapp")]
+    public class SettlementApplication : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
 
         public SettlementSourceType SourceType { get; set; }
@@ -70,8 +72,10 @@ namespace Core.Domain.Financials
     }
 
     [Table("PartyRefund")]
-    public class PartyRefund : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("rf")]
+    public class PartyRefund : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public PartyRefund()
         {
             Allocations = new HashSet<PartyRefundAllocation>();
@@ -130,8 +134,10 @@ namespace Core.Domain.Financials
     }
 
     [Table("PartyRefundAllocation")]
-    public class PartyRefundAllocation : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("rfa")]
+    public class PartyRefundAllocation : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int PartyRefundId { get; set; }
         public SettlementSourceType SourceType { get; set; }

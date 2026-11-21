@@ -38,9 +38,12 @@ namespace Api.Mcp.Tools
                 .Where(v => includeArchived || !v.Archived)
                 .Where(v => !withBalanceOnly || v.Outstanding > 0)
                 .Where(v => Matches(query, v.Name, v.Email, v.Phone))
-                .Select(v => new
+                .ToList();
+            return await PageAsync("vendors", vendors, skip, take,
+                v => new[] { ("ven", v.Id) },
+                v => new
                 {
-                    v.Id,
+                    Id = Pub("ven", v.Id),
                     v.Name,
                     v.Email,
                     v.Phone,
@@ -50,36 +53,41 @@ namespace Api.Mcp.Tools
                     v.Overdue,
                     v.PaidToDate,
                     v.LastBillDate,
-                    Link = PagePath($"purchases/vendors/{v.Id}")
-                })
-                .ToList();
-            return Page("vendors", vendors, skip, take, PagePath("purchases/vendors"));
+                    Link = PagePath($"purchases/vendors/{Pub("ven", v.Id)}")
+                },
+                PagePath("purchases/vendors"), cancellationToken);
         }
 
         [McpServerTool(Name = "get_vendor", Title = "Get Vendor", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Returns one vendor's details (address, contacts, payment term, balances) plus their most recent bills with status and balance due. Requires the Purchases module and permission to view vendors; bills are included only when the member may view bills.")]
         public async Task<WorkspaceDataMcpResponse> GetVendor(
-            [Description("The vendor id (from search_vendors or a bill's vendorId).")] int vendorId,
+            [Description("The vendor id, like 'ven_…' (from search_vendors or a bill's vendorId).")] string vendorId,
             [Description("How many recent bills to include (0-50). Defaults to 10.")] int recentBills = 10,
             CancellationToken cancellationToken = default)
         {
             if (recentBills < 0 || recentBills > 50)
                 throw new ArgumentException("recentBills must be between 0 and 50.", nameof(recentBills));
 
-            var vendor = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Vendor), c => c.Vendor(vendorId),
-                new Dictionary<string, object?> { ["id"] = vendorId });
+            var resolved = await ResolveIdAsync("vendor", vendorId, "ven", nameof(vendorId), cancellationToken);
+            if (resolved.Failure != null) return resolved.Failure;
+            if (resolved.Id is not int vendorKey) return Invalid("vendor", "Provide vendorId.");
+
+            var vendor = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Vendor), c => c.Vendor(vendorKey),
+                new Dictionary<string, object?> { ["id"] = vendorKey });
             if (!vendor.Succeeded) return Refused("vendor", vendor);
 
             object? bills = null;
             string? billsNote = null;
             if (recentBills > 0)
             {
-                var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorId),
-                    new Dictionary<string, object?> { ["vendorId"] = vendorId });
+                var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorKey),
+                    new Dictionary<string, object?> { ["vendorId"] = vendorKey });
                 if (read.Succeeded)
                 {
                     var all = ((IEnumerable<Dto.Purchasing.Bill>?)read.Value ?? Array.Empty<Dto.Purchasing.Bill>()).ToList();
-                    bills = new { TotalCount = all.Count, Items = all.Take(recentBills).Select(BillSummary).ToList() };
+                    var recent = all.Take(recentBills).ToList();
+                    await PrefetchAsync(BillIds(recent), cancellationToken);
+                    bills = new { TotalCount = all.Count, Items = recent.Select(BillSummary).ToList() };
                 }
                 else
                 {
@@ -88,14 +96,14 @@ namespace Api.Mcp.Tools
             }
 
             return Success("vendor", new { Vendor = vendor.Value, RecentBills = bills, RecentBillsNote = billsNote },
-                link: PagePath($"purchases/vendors/{vendorId}"));
+                link: PagePath($"purchases/vendors/{Pub("ven", vendorKey)}"));
         }
 
         [McpServerTool(Name = "search_bills", Title = "Search Bills", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Lists vendor bills newest first with number, vendor and vendor invoice number, dates, status (Draft, Open, Overdue, Partially Paid, Paid, Void), total, amount paid and balance due. Filter by vendor, status, date range, overdue only, or text in number/vendor/vendor invoice number/reference. Use get_bill for lines, expense accounts and payments. Requires the Purchases module and permission to view bills.")]
         public async Task<WorkspaceDataMcpResponse> SearchBills(
             [Description("Optional text matched against bill number, vendor name, vendor invoice number and reference.")] string? query = null,
-            [Description("Optional vendor id.")] int? vendorId = null,
+            [Description("Optional vendor id, like 'ven_…'.")] string? vendorId = null,
             [Description("Optional status: Draft, Open, Overdue, Partially Paid, Paid or Void.")] string? status = null,
             [Description("Only bills that are past due with a balance. Defaults to false.")] bool overdueOnly = false,
             [Description("Optional earliest bill date (e.g. '2026-01-01').")] string? fromDate = null,
@@ -107,9 +115,12 @@ namespace Api.Mcp.Tools
             ValidatePaging(skip, take);
             var from = ParseDate(fromDate, nameof(fromDate));
             var to = ParseDate(toDate, nameof(toDate));
+            var resolved = await ResolveIdAsync("bills", vendorId, "ven", nameof(vendorId), cancellationToken);
+            if (resolved.Failure != null) return resolved.Failure;
+            var vendorKey = resolved.Id;
 
-            var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorId),
-                new Dictionary<string, object?> { ["vendorId"] = vendorId });
+            var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorKey),
+                new Dictionary<string, object?> { ["vendorId"] = vendorKey });
             if (!read.Succeeded) return Refused("bills", read);
 
             var bills = ((IEnumerable<Dto.Purchasing.Bill>?)read.Value ?? Array.Empty<Dto.Purchasing.Bill>())
@@ -118,22 +129,24 @@ namespace Api.Mcp.Tools
                 .Where(b => from == null || b.Date.Date >= from)
                 .Where(b => to == null || b.Date.Date <= to)
                 .Where(b => Matches(query, b.No, b.VendorName, b.VendorInvoiceNo, b.ReferenceNo))
-                .Select(BillSummary)
                 .ToList();
-            return Page("bills", bills, skip, take, PagePath("purchases"));
+            return await PageAsync("bills", bills, skip, take, b => BillIds(new[] { b }), BillSummary,
+                PagePath("purchases"), cancellationToken);
         }
 
         [McpServerTool(Name = "get_bill", Title = "Get Bill", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
-        [Description("Returns one vendor bill in full: vendor, vendor invoice number, dates and due date, status, lines (description, expense account, quantity, amount, tax), totals, payments, balance due, approval and void details. Look it up by id (from search_bills or a GL transaction's sourceDocumentId for document type PurchaseInvoice) or by bill number. Requires the Purchases module and permission to view bills.")]
+        [Description("Returns one vendor bill in full: vendor, vendor invoice number, dates and due date, status, lines (description, expense account, quantity, amount, tax), totals, payments, balance due, approval and void details. Look it up by id like 'bill_…' (from search_bills or a GL transaction's sourceDocumentId for document type PurchaseInvoice) or by bill number. Requires the Purchases module and permission to view bills.")]
         public async Task<WorkspaceDataMcpResponse> GetBill(
-            [Description("The bill id. Provide this or billNo.")] int? billId = null,
+            [Description("The bill id, like 'bill_…'. Provide this or billNo.")] string? billId = null,
             [Description("The bill number or the vendor's invoice number. Provide this or billId.")] string? billNo = null,
             CancellationToken cancellationToken = default)
         {
-            if (billId == null && string.IsNullOrWhiteSpace(billNo))
+            if (string.IsNullOrWhiteSpace(billId) && string.IsNullOrWhiteSpace(billNo))
                 return Invalid("bill", "Provide billId or billNo.");
 
-            var id = billId;
+            var resolved = await ResolveIdAsync("bill", billId, "bill", nameof(billId), cancellationToken);
+            if (resolved.Failure != null) return resolved.Failure;
+            var id = resolved.Id;
             if (id == null)
             {
                 var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(null),
@@ -148,46 +161,53 @@ namespace Api.Mcp.Tools
             }
 
             return await RecordAsync<PurchasingController>("bill", nameof(PurchasingController.Bill), c => c.Bill(id.Value),
-                link: PagePath($"purchases/{id}"), arguments: new Dictionary<string, object?> { ["id"] = id });
+                link: PagePath($"purchases/{Pub("bill", id.Value)}"), arguments: new Dictionary<string, object?> { ["id"] = id });
         }
 
         [McpServerTool(Name = "get_payables_aging", Title = "Get Payables Aging", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Accounts payable aging: totals in Current, 1-30, 31-60, 61-90 and over 90 days past due, and the same buckets per vendor. Without asOfDate it is as of today, from the bill balances the Purchases pages show. With asOfDate it is what was owed at the end of that day, following ledger dates (bill date, payment date, void posting date), so its total can be compared with the payables control account in the balance sheet at the same date; unpostedTotal is the part owed on bills that have no ledger posting. Drafts and voided bills are excluded. Requires the Purchases module and permission to view bills.")]
         public async Task<WorkspaceDataMcpResponse> GetPayablesAging(
-            [Description("Optional vendor id to age one vendor only.")] int? vendorId = null,
+            [Description("Optional vendor id, like 'ven_…', to age one vendor only.")] string? vendorId = null,
             [Description("Optional date to age as of, e.g. a period end '2026-12-31'. Defaults to today.")] string? asOfDate = null,
             CancellationToken cancellationToken = default)
         {
             var asOf = ParseDate(asOfDate, nameof(asOfDate));
+            var resolved = await ResolveIdAsync("payablesAging", vendorId, "ven", nameof(vendorId), cancellationToken);
+            if (resolved.Failure != null) return resolved.Failure;
+            var vendorKey = resolved.Id;
             if (asOf.HasValue)
             {
-                var past = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.PayablesAsOf), c => c.PayablesAsOf(asOf.Value, vendorId),
-                    new Dictionary<string, object?> { ["asOf"] = asOf.Value, ["vendorId"] = vendorId });
+                var past = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.PayablesAsOf), c => c.PayablesAsOf(asOf.Value, vendorKey),
+                    new Dictionary<string, object?> { ["asOf"] = asOf.Value, ["vendorId"] = vendorKey });
                 if (!past.Succeeded) return Refused("payablesAging", past);
 
                 var items = ((IEnumerable<Dto.Financial.OpenItemAsOf>?)past.Value ?? Array.Empty<Dto.Financial.OpenItemAsOf>()).ToList();
+                await PrefetchAsync(items.Select(i => ("ven", i.PartyId)).Distinct(), cancellationToken);
                 return Success("payablesAging",
                     Aging.Build(items.Select(i => new AgingInput(i.PartyId, i.PartyName, i.Id, i.No, i.DueDate, i.BalanceDue)).ToList(),
-                        asOf.Value.Date, id => PagePath($"purchases/vendors/{id}"), items.Where(i => !i.Posted).Sum(i => i.BalanceDue)),
+                        asOf.Value.Date, id => Pub("ven", id), id => PagePath($"purchases/vendors/{Pub("ven", id)}"),
+                        items.Where(i => !i.Posted).Sum(i => i.BalanceDue)),
                     link: PagePath("purchases"));
             }
 
-            var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorId),
-                new Dictionary<string, object?> { ["vendorId"] = vendorId });
+            var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorKey),
+                new Dictionary<string, object?> { ["vendorId"] = vendorKey });
             if (!read.Succeeded) return Refused("payablesAging", read);
 
             var open = ((IEnumerable<Dto.Purchasing.Bill>?)read.Value ?? Array.Empty<Dto.Purchasing.Bill>())
                 .Where(b => !SameStatus(b.Status, "Draft") && !SameStatus(b.Status, "Void") && b.BalanceDue > 0.005m)
                 .Select(b => new AgingInput(b.VendorId, b.VendorName, b.Id, b.No, b.DueDate ?? b.Date, b.BalanceDue))
                 .ToList();
-            return Success("payablesAging", Aging.Build(open, DateTime.UtcNow.Date, id => PagePath($"purchases/vendors/{id}")),
+            await PrefetchAsync(open.Select(b => ("ven", b.PartyId)).Distinct(), cancellationToken);
+            return Success("payablesAging",
+                Aging.Build(open, DateTime.UtcNow.Date, id => Pub("ven", id), id => PagePath($"purchases/vendors/{Pub("ven", id)}")),
                 link: PagePath("purchases"));
         }
 
         [McpServerTool(Name = "search_bill_payments", Title = "Search Bill Payments", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
         [Description("Lists payments made on vendor bills, newest first, each with its date, amount, method, reference and the bill it settled (bill number, vendor invoice number, bill date, vendor). Filter by payment date range or vendor. Use it to see what was paid after a period end and which period the bill belongs to. Voided payments are left out unless includeVoided is true. Requires the Purchases module and permission to view bills.")]
         public async Task<WorkspaceDataMcpResponse> SearchBillPayments(
-            [Description("Optional vendor id.")] int? vendorId = null,
+            [Description("Optional vendor id, like 'ven_…'.")] string? vendorId = null,
             [Description("Optional earliest payment date (e.g. '2027-01-01').")] string? fromDate = null,
             [Description("Optional latest payment date (e.g. '2027-01-31').")] string? toDate = null,
             [Description("Include voided payments. Defaults to false.")] bool includeVoided = false,
@@ -200,9 +220,12 @@ namespace Api.Mcp.Tools
             var to = ParseDate(toDate, nameof(toDate));
             if (from.HasValue && to.HasValue && from.Value > to.Value)
                 throw new ArgumentException("The earliest date must not be after the latest date.", nameof(fromDate));
+            var resolved = await ResolveIdAsync("billPayments", vendorId, "ven", nameof(vendorId), cancellationToken);
+            if (resolved.Failure != null) return resolved.Failure;
+            var vendorKey = resolved.Id;
 
-            var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorId),
-                new Dictionary<string, object?> { ["vendorId"] = vendorId });
+            var read = await Reader.ReadAsync<PurchasingController>(nameof(PurchasingController.Bills), c => c.Bills(vendorKey),
+                new Dictionary<string, object?> { ["vendorId"] = vendorKey });
             if (!read.Succeeded) return Refused("billPayments", read);
 
             var payments = ((IEnumerable<Dto.Purchasing.Bill>?)read.Value ?? Array.Empty<Dto.Purchasing.Bill>())
@@ -210,9 +233,12 @@ namespace Api.Mcp.Tools
                 .Where(x => includeVoided || !x.Payment.IsVoid)
                 .Where(x => (!from.HasValue || x.Payment.Date.Date >= from.Value) && (!to.HasValue || x.Payment.Date.Date <= to.Value))
                 .OrderByDescending(x => x.Payment.Date).ThenByDescending(x => x.Payment.Id)
-                .Select(x => (object)new
+                .ToList();
+            return await PageAsync("billPayments", payments, skip, take,
+                x => new[] { ("vpay", x.Payment.Id), ("bill", x.Bill.Id), ("ven", x.Bill.VendorId) },
+                x => new
                 {
-                    x.Payment.Id,
+                    Id = Pub("vpay", x.Payment.Id),
                     x.Payment.No,
                     x.Payment.Date,
                     x.Payment.Amount,
@@ -221,23 +247,25 @@ namespace Api.Mcp.Tools
                     x.Payment.AccountName,
                     x.Payment.IsVoid,
                     x.Payment.VoidedAt,
-                    BillId = x.Bill.Id,
+                    BillId = Pub("bill", x.Bill.Id),
                     BillNo = x.Bill.No,
                     x.Bill.VendorInvoiceNo,
                     BillDate = x.Bill.Date,
-                    x.Bill.VendorId,
+                    VendorId = Pub("ven", x.Bill.VendorId),
                     x.Bill.VendorName,
-                    Link = PagePath($"purchases/{x.Bill.Id}")
-                })
-                .ToList();
-            return Page("billPayments", payments, skip, take, link: PagePath("purchases"));
+                    Link = PagePath($"purchases/{Pub("bill", x.Bill.Id)}")
+                },
+                PagePath("purchases"), cancellationToken);
         }
+
+        private static IEnumerable<(string Prefix, int Id)> BillIds(IEnumerable<Dto.Purchasing.Bill> bills) =>
+            bills.SelectMany(b => new[] { ("bill", b.Id), ("ven", b.VendorId) });
 
         private object BillSummary(Dto.Purchasing.Bill b) => new
         {
-            b.Id,
+            Id = Pub("bill", b.Id),
             b.No,
-            b.VendorId,
+            VendorId = Pub("ven", b.VendorId),
             b.VendorName,
             b.VendorInvoiceNo,
             b.Date,
@@ -247,7 +275,7 @@ namespace Api.Mcp.Tools
             b.AmountPaid,
             b.BalanceDue,
             b.ReferenceNo,
-            Link = PagePath($"purchases/{b.Id}")
+            Link = PagePath($"purchases/{Pub("bill", b.Id)}")
         };
     }
 }

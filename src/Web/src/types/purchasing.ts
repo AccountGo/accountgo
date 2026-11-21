@@ -11,11 +11,11 @@ export interface Vendor extends PartyBase {
 export type BillStatus = InvoiceStatus;
 
 export interface BillLine {
-  id: number;
-  itemId?: number | null;
+  id: string;
+  itemId?: string | null;
   description?: string | null;
   /** The account the line is booked to. */
-  accountId?: number | null;
+  accountId?: string | null;
   accountName?: string | null;
   isStockItem?: boolean;
   quantity: number;
@@ -23,17 +23,17 @@ export interface BillLine {
   amount: number;
   /** Percent off. */
   discount?: number | null;
-  taxId?: number | null;
+  taxId?: string | null;
   taxAmount: number;
   subtotal: number;
 }
 
 export interface BillPayment {
-  id: number;
+  id: string;
   no?: string | null;
   date: string;
   amount: number;
-  accountId?: number | null;
+  accountId?: string | null;
   /** The cash or bank account it was paid from. */
   accountName?: string | null;
   paymentMethod?: string | null;
@@ -47,10 +47,10 @@ export interface BillPayment {
 
 /** A vendor's bill (api/Purchasing/Bill). */
 export interface Bill {
-  id: number;
+  id: string;
   /** The workspace's own number, given when the bill is approved. */
   no?: string | null;
-  vendorId: number;
+  vendorId: string;
   vendorName?: string | null;
   vendorEmail?: string | null;
   vendorPhone?: string | null;
@@ -59,7 +59,7 @@ export interface Bill {
   vendorInvoiceNo?: string | null;
   date: string;
   dueDate?: string | null;
-  paymentTermId?: number | null;
+  paymentTermId?: string | null;
   referenceNo?: string | null;
   notes?: string | null;
   lines: BillLine[];
@@ -85,7 +85,7 @@ export interface Bill {
 
 /** An account a bill line can be booked to, or a bill paid from. */
 export interface BillAccount {
-  id: number;
+  id: string;
   code: string;
   name: string;
   group: 'Expense' | 'Asset';

@@ -120,7 +120,7 @@ export const Members: React.FC = () => {
   const [form, setForm] = useState<'invite' | 'request' | 'setup' | WorkspaceMember | null>(null);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'Admin' | 'Member'>('Member');
-  const [roleIds, setRoleIds] = useState<number[]>([]);
+  const [roleIds, setRoleIds] = useState<string[]>([]);
   const accessPresets = useMemo(
     () => buildAccessPresets(roles, (module: ModuleKey) => (hasModule ? hasModule(module) : true)),
     [roles, hasModule],
@@ -130,7 +130,7 @@ export const Members: React.FC = () => {
     () => describePermissions(permissionsForRoles(roles, roleIds)),
     [roles, roleIds],
   );
-  const [requestTargetMemberId, setRequestTargetMemberId] = useState<number | null>(null);
+  const [requestTargetMemberId, setRequestTargetMemberId] = useState<string | null>(null);
   const [requestReason, setRequestReason] = useState('');
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const { canCreate: canCreateResource } = useCapabilities();
@@ -323,7 +323,7 @@ export const Members: React.FC = () => {
     retry,
   });
 
-  const resendConfirmationHandler = (invitationId: number): PolicyConflictHandler => ({
+  const resendConfirmationHandler = (invitationId: string): PolicyConflictHandler => ({
     reasonCode: POLICY_ASSUMPTIONS_CHANGED_REASON_CODE,
     ownerOnly: false,
     title: 'Journal approval policy changed since this invitation was sent',
@@ -606,7 +606,7 @@ export const Members: React.FC = () => {
               <select
                 className={input}
                 value={requestTargetMemberId ?? ''}
-                onChange={e => setRequestTargetMemberId(e.target.value ? Number(e.target.value) : null)}
+                onChange={e => setRequestTargetMemberId(e.target.value || null)}
               >
                 <option value="">Myself ({user?.email})</option>
                 {members.filter(m => m.userId !== user?.id && m.status === 'Active').map(m => (

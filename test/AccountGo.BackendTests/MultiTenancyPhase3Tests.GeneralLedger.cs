@@ -70,7 +70,9 @@ namespace AccountGo.BackendTests
             var page = await Json(response);
             var rows = page.GetProperty("items").EnumerateArray().ToList();
             Assert.Equal(2, page.GetProperty("totalCount").GetInt32());
-            Assert.Equal(new[] { lastId, firstId }, rows.Select(row => row.GetProperty("id").GetInt32()));
+            var firstPub = PubId<GeneralLedgerHeader>(firstId);
+            var lastPub = PubId<GeneralLedgerHeader>(lastId);
+            Assert.Equal(new[] { lastPub, firstPub }, rows.Select(row => row.GetProperty("id").GetString()));
             Assert.All(rows, row =>
             {
                 Assert.Equal(123.45m, row.GetProperty("totalDebit").GetDecimal());
@@ -84,13 +86,11 @@ namespace AccountGo.BackendTests
             Assert.Equal("SalesInvoice", rows[1].GetProperty("documentType").GetString());
             Assert.Equal("Sales Invoice", rows[1].GetProperty("documentTypeLabel").GetString());
             Assert.Equal("Invoice INV-42", rows[1].GetProperty("description").GetString());
-            Assert.Equal("/sales/42", rows[1].GetProperty("sourcePath").GetString());
-            Assert.Equal("/purchases/43", rows[0].GetProperty("sourcePath").GetString());
-            Assert.Equal(firstId, rows[0].GetProperty("reversedGeneralLedgerHeaderId").GetInt32());
+            Assert.Equal(firstPub, rows[0].GetProperty("reversedGeneralLedgerHeaderId").GetString());
             var byType = await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger" + query + "&documentType=SalesInvoice"));
-            Assert.Equal(firstId, Assert.Single(byType.GetProperty("items").EnumerateArray()).GetProperty("id").GetInt32());
-            var byId = await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger?transactionNo=" + lastId));
-            Assert.Equal(lastId, Assert.Single(byId.GetProperty("items").EnumerateArray()).GetProperty("id").GetInt32());
+            Assert.Equal(firstPub, Assert.Single(byType.GetProperty("items").EnumerateArray()).GetProperty("id").GetString());
+            var byId = await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger?transactionNo=" + lastPub));
+            Assert.Equal(lastPub, Assert.Single(byId.GetProperty("items").EnumerateArray()).GetProperty("id").GetString());
             Assert.Empty((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger?accountCode=missing"))).GetProperty("items").EnumerateArray());
         }
 
@@ -118,12 +118,14 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
-            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invoiceId}&date={IsoDate(DateTime.UtcNow)}")).StatusCode);
+            var invoicePub = (await Json(saved)).GetProperty("id").GetString();
+            var invoiceId = IntId<Core.Domain.Sales.SalesInvoiceHeader>(invoicePub);
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={invoicePub}&date={IsoDate(DateTime.UtcNow)}")).StatusCode);
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Ledger supplier" });
             var bill = NewBill(vendor.Id, ("Ledger expense", 1, 100m, null));
             bill.Status = "Open";
             var approved = await SaveBillOk(bill);
+            var approvedPub = PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id);
             var paid = await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 100m, Date = DateTime.UtcNow }));
             var response = await Send(HttpMethod.Get, "/api/Financials/GeneralLedger");
@@ -131,18 +133,18 @@ namespace AccountGo.BackendTests
             var rows = (await Json(response)).GetProperty("items").EnumerateArray().ToList();
             var sales = rows.Where(r => r.GetProperty("documentType").GetString() == "SalesInvoice").ToList();
             Assert.Equal(2, sales.Count);
-            Assert.All(sales, r => Assert.Equal("/sales/" + invoiceId, r.GetProperty("sourcePath").GetString()));
+            Assert.All(sales, r => Assert.Equal("/sales/" + invoicePub, r.GetProperty("sourcePath").GetString()));
             var original = sales.Single(r => r.GetProperty("reversedGeneralLedgerHeaderId").ValueKind == System.Text.Json.JsonValueKind.Null);
             var reversal = sales.Single(r => r.GetProperty("reversedGeneralLedgerHeaderId").ValueKind != System.Text.Json.JsonValueKind.Null);
-            Assert.Equal(original.GetProperty("id").GetInt32(), reversal.GetProperty("reversedGeneralLedgerHeaderId").GetInt32());
+            Assert.Equal(original.GetProperty("id").GetString(), reversal.GetProperty("reversedGeneralLedgerHeaderId").GetString());
             var netByAccount = sales.SelectMany(r => r.GetProperty("lines").EnumerateArray())
-                .GroupBy(l => l.GetProperty("accountId").GetInt32());
+                .GroupBy(l => l.GetProperty("accountId").GetString());
             Assert.All(netByAccount, g => Assert.Equal(0m, g.Sum(l => l.GetProperty("debit").GetDecimal() - l.GetProperty("credit").GetDecimal())));
             var purchases = rows.Where(r => r.GetProperty("documentType").GetString().StartsWith("PurchaseInvoice", StringComparison.Ordinal)).ToList();
             Assert.Equal(2, purchases.Count);
-            Assert.All(purchases, r => Assert.Equal("/purchases/" + approved.Id, r.GetProperty("sourcePath").GetString()));
+            Assert.All(purchases, r => Assert.Equal("/purchases/" + approvedPub, r.GetProperty("sourcePath").GetString()));
             Assert.Contains(purchases, r => r.GetProperty("documentType").GetString() == "PurchaseInvoicePayment"
-                && r.GetProperty("sourceDocumentId").GetInt32() == approved.Id);
+                && r.GetProperty("sourceDocumentId").GetString() == approvedPub);
             Assert.Single(paid.Payments);
             Assert.All(rows, r => Assert.Equal(r.GetProperty("totalDebit").GetDecimal(), r.GetProperty("totalCredit").GetDecimal()));
         }
@@ -164,8 +166,8 @@ namespace AccountGo.BackendTests
                 firstId = first.Id; secondId = second.Id;
             });
             var rows = (await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray().ToList();
-            Assert.Equal(new[] { Math.Max(firstId, secondId), Math.Min(firstId, secondId) }, rows.Select(r => r.GetProperty("id").GetInt32()));
-            var unbalanced = rows.Single(r => r.GetProperty("id").GetInt32() == secondId);
+            Assert.Equal(new[] { PubId<GeneralLedgerHeader>(Math.Max(firstId, secondId)), PubId<GeneralLedgerHeader>(Math.Min(firstId, secondId)) }, rows.Select(r => r.GetProperty("id").GetString()));
+            var unbalanced = rows.Single(r => r.GetProperty("id").GetString() == PubId<GeneralLedgerHeader>(secondId));
             Assert.NotEqual(unbalanced.GetProperty("totalDebit").GetDecimal(), unbalanced.GetProperty("totalCredit").GetDecimal());
         }
 
@@ -175,8 +177,8 @@ namespace AccountGo.BackendTests
             var created = await Send(HttpMethod.Post, "/api/organizations",
                 new { name = "Other books", slug = "other-books" }, token: _otherToken, scoped: false);
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-            var otherCompany = int.Parse((await Json(created)).GetProperty("id").GetString());
-            int foreignGl = 0, foreignJournal = 0, foreignAccount = 0;
+            var otherCompany = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, (await Json(created)).GetProperty("id").GetString());
+            string foreignGlPub = null, foreignJournalPub = null, foreignAccountPub = null;
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -196,20 +198,38 @@ namespace AccountGo.BackendTests
                     db.GeneralLedgerHeaders.Add(header);
                     db.JournalEntryHeaders.Add(journal);
                     db.SaveChanges();
-                    foreignGl = header.Id; foreignJournal = journal.Id; foreignAccount = accounts[0].Id;
+                    foreignGlPub = header.PublicId; foreignJournalPub = journal.PublicId; foreignAccountPub = accounts[0].PublicId;
                 }
             }
-            foreach (var query in new[] { "", "?transactionNo=" + foreignGl, "?accountCode=10111" })
+            foreach (var query in new[] { "", "?accountCode=10111" })
                 Assert.Empty((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger" + query))).GetProperty("items").EnumerateArray());
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Financials/GeneralLedger?transactionNo=" + foreignGlPub)).StatusCode);
             Assert.Empty((await Json(await Send(HttpMethod.Get, "/api/Financials/JournalEntries"))).EnumerateArray());
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + foreignJournal)).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = foreignJournal })).StatusCode);
-            var own = LedgerDraft();
-            own.Id = foreignJournal;
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", own)).StatusCode);
-            own.Id = 0;
-            own.JournalEntryLines[0].AccountId = foreignAccount;
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", own)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + foreignJournalPub)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", new { id = foreignJournalPub })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", new
+            {
+                id = foreignJournalPub,
+                journalDate = DateTime.UtcNow.Date.AddDays(-1),
+                voucherType = 6,
+                memo = "Manual adjustment",
+                journalEntryLines = new[]
+                {
+                    new { accountId = PubId<Account>(AccountId("10111")), drCr = 1, amount = 25m },
+                    new { accountId = PubId<Account>(AccountId("40100")), drCr = 2, amount = 25m }
+                }
+            })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", new
+            {
+                journalDate = DateTime.UtcNow.Date.AddDays(-1),
+                voucherType = 6,
+                memo = "Manual adjustment",
+                journalEntryLines = new[]
+                {
+                    new { accountId = foreignAccountPub, drCr = 1, amount = 25m },
+                    new { accountId = PubId<Account>(AccountId("40100")), drCr = 2, amount = 25m }
+                }
+            })).StatusCode);
         }
 
         [Fact]
@@ -226,13 +246,13 @@ namespace AccountGo.BackendTests
                 });
                 db.SecurityRoles.Add(role); db.SaveChanges(); roleId = role.Id;
             });
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { roleId } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<CompanyMember>(MemberId(_otherId)),
+                new { securityRoleIds = new[] { PubId<SecurityRole>(roleId) } })).StatusCode);
             var denied = await Send(HttpMethod.Get, "/api/Financials/GeneralLedger", token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
             Assert.Contains("financials.journal.view", await denied.Content.ReadAsStringAsync());
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/Financials/Accounts", token: _otherToken)).StatusCode);
-            foreach (var path in new[] { "JournalEntries", "JournalEntry?id=1" })
+            foreach (var path in new[] { "JournalEntries", "JournalEntry?id=je_00000000000000000000000001" })
                 Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Financials/" + path, token: _otherToken)).StatusCode);
 
             WithDb(db =>
@@ -245,7 +265,7 @@ namespace AccountGo.BackendTests
             var draft = LedgerDraft();
             var save = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft, _otherToken);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            draft.Id = (await Json(save)).GetProperty("id").GetInt32();
+            draft.Id = IntId<JournalEntryHeader>((await Json(save)).GetProperty("id").GetString());
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/Financials/GeneralLedger", token: _otherToken)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, _otherToken)).StatusCode);
 
@@ -268,19 +288,19 @@ namespace AccountGo.BackendTests
             var draft = LedgerDraft();
             var save = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            draft.Id = (await Json(save)).GetProperty("id").GetInt32();
+            var draftPub = (await Json(save)).GetProperty("id").GetString();
+            draft.Id = IntId<JournalEntryHeader>(draftPub);
             Assert.Empty((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray());
             draft.Memo = "Updated draft";
-            draft.JournalEntryLines = (await (await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + draft.Id))
-                .Content.ReadFromJsonAsync<Dto.Financial.JournalEntry>()).JournalEntryLines;
+            draft.JournalEntryLines = (await ReadDto<Dto.Financial.JournalEntry>(await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + draftPub))).JournalEntryLines;
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft)).StatusCode);
             var apr = await ApproveJournalPostAsync(draft.Id);
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr)).StatusCode);
             var posted = Assert.Single((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray());
             Assert.Equal(draft.JournalDate, posted.GetProperty("date").GetDateTime());
             Assert.Equal("Updated draft", posted.GetProperty("description").GetString());
-            Assert.Equal("/financials/journals?id=" + draft.Id, posted.GetProperty("sourcePath").GetString());
-            Assert.Equal(draft.Id, posted.GetProperty("sourceDocumentId").GetInt32());
+            Assert.Equal("/financials/journals?id=" + draftPub, posted.GetProperty("sourcePath").GetString());
+            Assert.Equal(draftPub, posted.GetProperty("sourceDocumentId").GetString());
             Assert.Equal(25m, posted.GetProperty("totalDebit").GetDecimal());
             Assert.Equal(25m, posted.GetProperty("totalCredit").GetDecimal());
             draft.Memo = "Must not replace posted memo";
@@ -290,7 +310,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("approval_already_used", (await Json(repeatedPost)).GetProperty("code").GetString());
             var after = Assert.Single((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray());
             Assert.Equal(posted.GetRawText(), after.GetRawText());
-            var voucher = await Json(await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + draft.Id));
+            var voucher = await Json(await Send(HttpMethod.Get, "/api/Financials/JournalEntry?id=" + draftPub));
             Assert.True(voucher.GetProperty("posted").GetBoolean());
             Assert.Equal("Updated draft", voucher.GetProperty("memo").GetString());
         }
@@ -301,7 +321,7 @@ namespace AccountGo.BackendTests
             var draft = LedgerDraft();
             draft.JournalEntryLines[1].Amount = 20m;
             var saved = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft);
-            draft.Id = (await Json(saved)).GetProperty("id").GetInt32();
+            draft.Id = IntId<JournalEntryHeader>((await Json(saved)).GetProperty("id").GetString());
             var apr1 = await ApproveJournalPostAsync(draft.Id);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr1)).StatusCode);
             WithDb(db => Assert.Empty(db.GeneralLedgerHeaders));
@@ -340,9 +360,9 @@ namespace AccountGo.BackendTests
             var page1 = await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger?from=2026-04-15&to=2026-04-15&skip=0&take=2"));
             Assert.Equal(3, page1.GetProperty("totalCount").GetInt32());
             Assert.Equal(2, page1.GetProperty("take").GetInt32());
-            Assert.Equal(new[] { thirdId, secondId }, page1.GetProperty("items").EnumerateArray().Select(r => r.GetProperty("id").GetInt32()).ToArray());
+            Assert.Equal(new[] { PubId<GeneralLedgerHeader>(thirdId), PubId<GeneralLedgerHeader>(secondId) }, page1.GetProperty("items").EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToArray());
             var page2 = await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger?from=2026-04-15&to=2026-04-15&skip=2&take=2"));
-            Assert.Equal(firstId, Assert.Single(page2.GetProperty("items").EnumerateArray()).GetProperty("id").GetInt32());
+            Assert.Equal(PubId<GeneralLedgerHeader>(firstId), Assert.Single(page2.GetProperty("items").EnumerateArray()).GetProperty("id").GetString());
         }
 
         [Fact]
@@ -361,12 +381,12 @@ namespace AccountGo.BackendTests
             };
             var save = await Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            draft.Id = (await Json(save)).GetProperty("id").GetInt32();
+            draft.Id = IntId<JournalEntryHeader>((await Json(save)).GetProperty("id").GetString());
             var apr = await ApproveJournalPostAsync(draft.Id);
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/Financials/PostJournalEntry", draft, extraHeaders: apr)).StatusCode);
             var posted = Assert.Single((await Json(await Send(HttpMethod.Get, "/api/Financials/GeneralLedger"))).GetProperty("items").EnumerateArray());
             Assert.Equal(3, posted.GetProperty("lines").GetArrayLength());
-            Assert.Equal(2, posted.GetProperty("lines").EnumerateArray().Count(l => l.GetProperty("accountId").GetInt32() == cash));
+            Assert.Equal(2, posted.GetProperty("lines").EnumerateArray().Count(l => l.GetProperty("accountId").GetString() == PubId<Account>(cash)));
             Assert.Equal(25m, posted.GetProperty("totalDebit").GetDecimal());
             Assert.Equal(25m, posted.GetProperty("totalCredit").GetDecimal());
         }

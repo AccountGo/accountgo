@@ -30,7 +30,7 @@ export const SelectOrg: React.FC = () => {
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState<boolean>(true);
-  const [acceptingInvitation, setAcceptingInvitation] = useState<number | null>(null);
+  const [acceptingInvitation, setAcceptingInvitation] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState('');
 
   const { user: authUser, logout, authFetch } = useAuth();

@@ -273,7 +273,7 @@ namespace AccountGo.BackendTests
                 }
             }
 
-            var response = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/run", new { runDate = IsoDate(runDate) });
+            var response = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/run", new { runDate = IsoDate(runDate) });
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var body = await Json(response);
 
@@ -300,17 +300,17 @@ namespace AccountGo.BackendTests
 
             // _otherToken joins as a Sales Representative: has sales.invoices.create, not sales.invoices.post.
             await JoinOther();
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<Core.Domain.CompanyMember>(MemberId(_otherId)),
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(RoleId("Sales Representative")) } })).StatusCode);
 
             // Draft-only run-now needs only create -> allowed.
-            var draftRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{draftScheduleId}/run",
+            var draftRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(draftScheduleId)}/run",
                 new { runDate = IsoDate(runDate) }, token: _otherToken);
             Assert.Equal(HttpStatusCode.OK, draftRes.StatusCode);
             Assert.Equal("DraftCreated", (await Json(draftRes)).GetProperty("outcome").GetString());
 
             // Auto-issue run-now may post -> requires post, which the Sales Rep lacks -> 403.
-            var autoRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{autoScheduleId}/run",
+            var autoRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(autoScheduleId)}/run",
                 new { runDate = IsoDate(runDate) }, token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, autoRes.StatusCode);
             Assert.Contains("sales.invoices.post", await autoRes.Content.ReadAsStringAsync());
@@ -323,7 +323,7 @@ namespace AccountGo.BackendTests
             int scheduleId = SeedSalesSchedule("RUN-PAUSED", RecurringAction.AutoIssue, runDate, _ownerId,
                 status: RecurringScheduleStatus.Paused);
 
-            var response = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/run", new { runDate = IsoDate(runDate) });
+            var response = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/run", new { runDate = IsoDate(runDate) });
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             Assert.Contains("paused", (await response.Content.ReadAsStringAsync()), StringComparison.OrdinalIgnoreCase);
@@ -523,12 +523,12 @@ namespace AccountGo.BackendTests
                 }
             }
 
-            var failRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/run", new { runDate = IsoDate(runDate) });
+            var failRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/run", new { runDate = IsoDate(runDate) });
             Assert.Equal(HttpStatusCode.OK, failRes.StatusCode);
             var failBody = await Json(failRes);
             Assert.Equal("Failed", failBody.GetProperty("outcome").GetString());
             Assert.Equal("BOOKS_LOCKED", failBody.GetProperty("errorCode").GetString());
-            int occurrenceId = failBody.GetProperty("occurrenceId").GetInt32();
+            int occurrenceId = IntId<Core.Domain.Recurring.RecurringOccurrence>(failBody.GetProperty("occurrenceId").GetString());
 
             // Unlock the books, then retry the occurrence via the endpoint.
             using (var scope = _factory.Services.CreateScope())
@@ -542,15 +542,15 @@ namespace AccountGo.BackendTests
                 }
             }
 
-            var retryRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/occurrences/{occurrenceId}/retry");
+            var retryRes = await Send(HttpMethod.Post, $"/api/RecurringSchedules/occurrences/{PubId<Core.Domain.Recurring.RecurringOccurrence>(occurrenceId)}/retry");
             Assert.Equal(HttpStatusCode.OK, retryRes.StatusCode);
             var retryBody = await Json(retryRes);
             // In-month auto-issue with all guards passing issues; the key contract is a document now exists for the
             // same occurrence and the outcome is a success, not a failure.
             var outcome = retryBody.GetProperty("outcome").GetString();
             Assert.True(outcome is "Issued" or "DraftCreated" or "DraftCreatedGuardFailed", $"unexpected outcome {outcome}");
-            Assert.Equal(occurrenceId, retryBody.GetProperty("occurrenceId").GetInt32());
-            Assert.True(retryBody.GetProperty("salesInvoiceId").GetInt32() > 0);
+            Assert.Equal(PubId<Core.Domain.Recurring.RecurringOccurrence>(occurrenceId), retryBody.GetProperty("occurrenceId").GetString());
+            Assert.False(string.IsNullOrEmpty(retryBody.GetProperty("salesInvoiceId").GetString()));
         }
 
         [SqliteFact]
@@ -957,10 +957,10 @@ namespace AccountGo.BackendTests
 
             // _otherToken joins as a Sales Representative: has sales.invoices.create, not sales.invoices.post.
             await JoinOther();
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + PubId<Core.Domain.CompanyMember>(MemberId(_otherId)),
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(RoleId("Sales Representative")) } })).StatusCode);
 
-            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/occurrences/{occurrenceId}/retry",
+            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/occurrences/{PubId<Core.Domain.Recurring.RecurringOccurrence>(occurrenceId)}/retry",
                 body: null, token: _otherToken);
             Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
             Assert.Contains("sales.invoices.post", await res.Content.ReadAsStringAsync());
@@ -974,7 +974,7 @@ namespace AccountGo.BackendTests
             var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 10);
             int scheduleId = SeedSalesSchedule("SKIP-OK", RecurringAction.CreateDraft, runDate, _ownerId);
 
-            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/skip",
+            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/skip",
                 new { runDate = IsoDate(runDate), reason = "Client on holiday" });
             Assert.Equal(HttpStatusCode.OK, res.StatusCode);
             Assert.Equal("Skipped", (await Json(res)).GetProperty("outcome").GetString());
@@ -1004,7 +1004,7 @@ namespace AccountGo.BackendTests
             var runDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 11);
             int scheduleId = SeedSalesSchedule("SKIP-NOREASON", RecurringAction.CreateDraft, runDate, _ownerId);
 
-            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/skip",
+            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/skip",
                 new { runDate = IsoDate(runDate), reason = "" });
             Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
             Assert.Contains("reason", await res.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
@@ -1038,9 +1038,9 @@ namespace AccountGo.BackendTests
             }
 
             Assert.Equal(HttpStatusCode.NoContent,
-                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/pause", new { reason = "Holiday" })).StatusCode);
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/pause", new { reason = "Holiday" })).StatusCode);
             Assert.Equal(HttpStatusCode.NoContent,
-                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/end", new { reason = "Contract closed" })).StatusCode);
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/end", new { reason = "Contract closed" })).StatusCode);
 
             using (var scope = _factory.Services.CreateScope())
             {
@@ -1072,7 +1072,7 @@ namespace AccountGo.BackendTests
             int scheduleId = SeedSalesSchedule("RESUME-ARCH", RecurringAction.CreateDraft, runDate, _ownerId);
 
             Assert.Equal(HttpStatusCode.NoContent,
-                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/pause", new { reason = "x" })).StatusCode);
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/pause", new { reason = "x" })).StatusCode);
 
             using (var scope = _factory.Services.CreateScope())
             {
@@ -1086,7 +1086,7 @@ namespace AccountGo.BackendTests
                 }
             }
 
-            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/resume");
+            var res = await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/resume");
             Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
             Assert.Contains("archived", await res.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
 
@@ -1110,9 +1110,9 @@ namespace AccountGo.BackendTests
             int scheduleId = SeedSalesSchedule("RESUME-NOCATCHUP", RecurringAction.CreateDraft, pastRun, _ownerId);
 
             Assert.Equal(HttpStatusCode.NoContent,
-                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/pause", new { reason = "x" })).StatusCode);
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/pause", new { reason = "x" })).StatusCode);
             Assert.Equal(HttpStatusCode.NoContent,
-                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/resume")).StatusCode);
+                (await Send(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/resume")).StatusCode);
 
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -1138,12 +1138,12 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.OK, listRes.StatusCode);
             var list = await Json(listRes);
             Assert.True(list.GetArrayLength() >= 1);
-            Assert.Contains(list.EnumerateArray(), e => e.GetProperty("id").GetInt32() == scheduleId);
+            Assert.Contains(list.EnumerateArray(), e => e.GetProperty("id").GetString() == PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId));
 
-            var detailRes = await Send(HttpMethod.Get, $"/api/RecurringSchedules/{scheduleId}");
+            var detailRes = await Send(HttpMethod.Get, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}");
             Assert.Equal(HttpStatusCode.OK, detailRes.StatusCode);
             var detail = await Json(detailRes);
-            Assert.Equal(scheduleId, detail.GetProperty("id").GetInt32());
+            Assert.Equal(PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId), detail.GetProperty("id").GetString());
             Assert.True(detail.GetProperty("upcomingDates").GetArrayLength() >= 1);
 
             var previewRes = await Send(HttpMethod.Post, "/api/RecurringSchedules/preview", new
@@ -1190,7 +1190,7 @@ namespace AccountGo.BackendTests
             if (listRes.StatusCode == HttpStatusCode.OK)
             {
                 var list = await Json(listRes);
-                Assert.DoesNotContain(list.EnumerateArray(), e => e.GetProperty("id").GetInt32() == scheduleId);
+                Assert.DoesNotContain(list.EnumerateArray(), e => e.GetProperty("id").GetString() == PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId));
             }
             else
             {
@@ -1200,19 +1200,19 @@ namespace AccountGo.BackendTests
 
             // Direct detail / occurrences by the other company's id must never return the real data: a 404 (tenant
             // scope) or 403 (module gate) or an empty occurrence list are all acceptable; 200-with-the-schedule is not.
-            var detailRes = await AsSecond(HttpMethod.Get, $"/api/RecurringSchedules/{scheduleId}");
+            var detailRes = await AsSecond(HttpMethod.Get, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}");
             Assert.NotEqual(HttpStatusCode.OK, detailRes.StatusCode);
-            var occRes = await AsSecond(HttpMethod.Get, $"/api/RecurringSchedules/{scheduleId}/occurrences");
+            var occRes = await AsSecond(HttpMethod.Get, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/occurrences");
             if (occRes.StatusCode == HttpStatusCode.OK)
                 Assert.Equal(0, (await Json(occRes)).GetArrayLength());
 
             // Lifecycle actions on a foreign id must never succeed (no 2xx).
             foreach (var action in new[] { "pause", "resume", "end" })
             {
-                var res = await AsSecond(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/{action}", new { reason = "x" });
+                var res = await AsSecond(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/{action}", new { reason = "x" });
                 Assert.False(res.IsSuccessStatusCode, $"{action} on a foreign schedule must not succeed.");
             }
-            var skipRes = await AsSecond(HttpMethod.Post, $"/api/RecurringSchedules/{scheduleId}/skip",
+            var skipRes = await AsSecond(HttpMethod.Post, $"/api/RecurringSchedules/{PubId<Core.Domain.Recurring.RecurringSchedule>(scheduleId)}/skip",
                 new { runDate = IsoDate(runDate), reason = "x" });
             Assert.False(skipRes.IsSuccessStatusCode, "skip on a foreign schedule must not succeed.");
 
@@ -1234,7 +1234,7 @@ namespace AccountGo.BackendTests
             // the auto-issue post gate.
             var body = new
             {
-                customerId = SeedCustomerId("AUTOAPPROVE"),
+                customerId = PubId<Core.Domain.Sales.Customer>(SeedCustomerId("AUTOAPPROVE")),
                 name = "Bad action",
                 cadence = "Monthly",
                 interval = 1,

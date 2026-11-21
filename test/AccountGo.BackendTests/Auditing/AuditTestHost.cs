@@ -123,7 +123,8 @@ namespace AccountGo.BackendTests.Auditing
         {
             var response = await Send(HttpMethod.Post, "/api/organizations", new { name, slug }, token, scoped: false);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            return int.Parse((await Json(response)).GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+            var publicId = (await Json(response)).GetProperty("id").GetString()!;
+            return AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(Factory.Services, publicId);
         }
 
         public async Task SetFunctionalRoles(int companyId, string userId, params string[] roleNames)
@@ -202,6 +203,36 @@ namespace AccountGo.BackendTests.Auditing
                 request.Content = JsonContent.Create(body);
             return await _client.SendAsync(request);
         }
+
+        /// <summary>
+        /// Sends a DTO whose integer ids are marked as public ids, writing the prefixed ids on the wire as the web app does.
+        /// <paramref name="companyId"/> scopes the id lookups to that workspace.
+        /// </summary>
+        public async Task<HttpResponseMessage> SendDto(
+            HttpMethod method,
+            string path,
+            object body,
+            int companyId,
+            string? token = null,
+            string? org = null,
+            bool scoped = true)
+        {
+            using var request = new HttpRequestMessage(method, path);
+            if (!string.IsNullOrEmpty(token))
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            if (scoped)
+                request.Headers.Add("X-AccountGo-Org", org ?? "default-org");
+            request.Content = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ToJsonContent(Factory.Services, companyId, body);
+            return await _client.SendAsync(request);
+        }
+
+        /// <summary>The public id of a record, for building a URL or a hand-written request body.</summary>
+        public string Pub<TEntity>(int id) where TEntity : BaseEntity, IHasPublicId =>
+            AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<TEntity>(Factory.Services, id);
+
+        /// <summary>The integer key behind a public id in a response, for checking the database directly.</summary>
+        public int Key<TEntity>(string publicId) where TEntity : BaseEntity, IHasPublicId =>
+            AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<TEntity>(Factory.Services, publicId);
 
         public static async Task<JsonElement> Json(HttpResponseMessage response)
         {

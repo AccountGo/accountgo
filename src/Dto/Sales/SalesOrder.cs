@@ -1,19 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
+using Dto.Common;
 
 namespace Dto.Sales
 {
     public class SalesOrder : BaseDto
     {
+        [PublicId("so")]
+        public override int Id { get; set; }
         public string No { get; set; } = "1";
+        [PublicId("cus")]
         public int CustomerId { get; set; } = 1;
         public DateTime OrderDate { get; set; }
+        [PublicId("term")]
         public int? PaymentTermId { get; set; } = 1;
         public string ReferenceNo { get; set; } = "1";
         public decimal? Amount { get { return GetTotalAmount(); } }
         public string CustomerNo { get; set; } = "1";
         public string CustomerName { get; set; } = "1";
         public int StatusId { get; set; } = 1;
+        [PublicId("quo")]
         public int? QuotationId { get; set; } = 1;
         public IList<SalesOrderLine> SalesOrderLines { get; set; }
 
@@ -45,7 +51,11 @@ namespace Dto.Sales
 
     public class SalesOrderLine : BaseDto
     {
+        [PublicId("sol")]
+        public override int Id { get; set; }
+        [PublicId("item")]
         public int? ItemId { get; set; }
+        [PublicId("uom")]
         public int? MeasurementId { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? Discount { get; set; }

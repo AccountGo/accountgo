@@ -21,7 +21,7 @@ namespace AccountGo.BackendTests
 
         protected class SalesAccountOptionDto
         {
-            public int Id { get; set; }
+            public string Id { get; set; }
             public string Code { get; set; }
             public string Name { get; set; }
         }
@@ -62,8 +62,7 @@ namespace AccountGo.BackendTests
             Assert.Equal("40100", defaultItem.SalesAccountCode);
 
             // Fetch single item
-            var fetched = await (await Send(HttpMethod.Get, $"/api/Catalog/Item?id={defaultItem.Id}"))
-                .Content.ReadFromJsonAsync<Dto.Inventory.CatalogItem>();
+            var fetched = await ReadDto<Dto.Inventory.CatalogItem>(await Send(HttpMethod.Get, $"/api/Catalog/Item?id={PubId<Core.Domain.Items.Item>(defaultItem.Id)}"));
             Assert.Equal(AccountId("40100"), fetched.SalesAccountId);
             Assert.Equal("40100", fetched.SalesAccountCode);
 
@@ -78,8 +77,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(otherIncomeId, customItem.SalesAccountId);
             Assert.Equal("40600", customItem.SalesAccountCode);
 
-            var fetchedCustom = await (await Send(HttpMethod.Get, $"/api/Catalog/Item?id={customItem.Id}"))
-                .Content.ReadFromJsonAsync<Dto.Inventory.CatalogItem>();
+            var fetchedCustom = await ReadDto<Dto.Inventory.CatalogItem>(await Send(HttpMethod.Get, $"/api/Catalog/Item?id={PubId<Core.Domain.Items.Item>(customItem.Id)}"));
             Assert.Equal(otherIncomeId, fetchedCustom.SalesAccountId);
             Assert.Equal("40600", fetchedCustom.SalesAccountCode);
 
@@ -124,8 +122,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(AccountId("10800"), savedAgain.InventoryAccountId);
 
             // Reload to verify DB state
-            var reloaded = await (await Send(HttpMethod.Get, $"/api/Catalog/Item?id={stockItem.Id}"))
-                .Content.ReadFromJsonAsync<Dto.Inventory.CatalogItem>();
+            var reloaded = await ReadDto<Dto.Inventory.CatalogItem>(await Send(HttpMethod.Get, $"/api/Catalog/Item?id={PubId<Core.Domain.Items.Item>(stockItem.Id)}"));
             Assert.Equal(otherIncomeId, reloaded.SalesAccountId);
             Assert.Equal("40600", reloaded.SalesAccountCode);
         }
@@ -204,7 +201,7 @@ namespace AccountGo.BackendTests
 
             var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saveRes)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(saveRes)).GetProperty("id").GetString());
 
             int glHeaderId = 0;
             WithDb(db =>
@@ -237,16 +234,16 @@ namespace AccountGo.BackendTests
 
             var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
-            var savedInvoice = await saveRes.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var savedInvoice = await ReadDto<Dto.Sales.SalesInvoice>(saveRes);
             Assert.NotNull(savedInvoice);
             var savedLine = savedInvoice.SalesInvoiceLines.Single();
             Assert.Equal(otherIncomeId, savedLine.SalesAccountId);
             Assert.Equal("40600", savedLine.SalesAccountCode);
 
             // Read back via GET
-            var getRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={savedInvoice.Id}");
+            var getRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(savedInvoice.Id)}");
             Assert.True(getRes.IsSuccessStatusCode, await getRes.Content.ReadAsStringAsync());
-            var reloaded = await getRes.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var reloaded = await ReadDto<Dto.Sales.SalesInvoice>(getRes);
             var reloadedLine = reloaded.SalesInvoiceLines.Single();
             Assert.Equal(otherIncomeId, reloadedLine.SalesAccountId);
             Assert.Equal("40600", reloadedLine.SalesAccountCode);
@@ -265,8 +262,7 @@ namespace AccountGo.BackendTests
             var updateRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", reloaded);
             Assert.True(updateRes.IsSuccessStatusCode, await updateRes.Content.ReadAsStringAsync());
 
-            var reloaded2 = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={savedInvoice.Id}"))
-                .Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var reloaded2 = await ReadDto<Dto.Sales.SalesInvoice>(await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(savedInvoice.Id)}"));
             Assert.Equal(defaultSalesId, reloaded2.SalesInvoiceLines.Single().SalesAccountId);
             Assert.Equal("40100", reloaded2.SalesInvoiceLines.Single().SalesAccountCode);
         }
@@ -296,7 +292,7 @@ namespace AccountGo.BackendTests
 
             var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saveRes)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(saveRes)).GetProperty("id").GetString());
 
             int glHeaderId = 0;
             WithDb(db =>
@@ -353,7 +349,7 @@ namespace AccountGo.BackendTests
 
             var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saveRes)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(saveRes)).GetProperty("id").GetString());
 
             int glHeaderId = 0;
             WithDb(db =>
@@ -389,7 +385,7 @@ namespace AccountGo.BackendTests
 
             var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saveRes)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(saveRes)).GetProperty("id").GetString());
 
             int glHeaderId = 0;
             WithDb(db =>
@@ -496,17 +492,17 @@ namespace AccountGo.BackendTests
 
             var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
-            var invoiceId = (await Json(saveRes)).GetProperty("id").GetInt32();
+            var invoiceId = IntId<SalesInvoiceHeader>((await Json(saveRes)).GetProperty("id").GetString());
 
-            var pdfRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId}");
+            var pdfRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={PubId<SalesInvoiceHeader>(invoiceId)}");
             Assert.True(pdfRes.IsSuccessStatusCode, await pdfRes.Content.ReadAsStringAsync());
             Assert.Equal("application/pdf", pdfRes.Content.Headers.ContentType?.MediaType);
             var bytes = await pdfRes.Content.ReadAsByteArrayAsync();
             Assert.NotEmpty(bytes);
 
             // Fetch the invoice DTO to test customer-facing email templates
-            var getRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
-            var invoiceDto = await getRes.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var getRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(invoiceId)}");
+            var invoiceDto = await ReadDto<Dto.Sales.SalesInvoice>(getRes);
             Assert.NotNull(invoiceDto);
 
             // Assert customer email templates do not leak internal revenue account code or name

@@ -10,8 +10,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("BankReconciliation")]
-    public partial class BankReconciliation : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("rec")]
+    public partial class BankReconciliation : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int BankId { get; set; }
         public DateTime StatementEndDate { get; set; }

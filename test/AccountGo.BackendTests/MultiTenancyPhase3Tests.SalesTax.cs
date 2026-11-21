@@ -13,6 +13,7 @@ using Api.Data.Schema;
 using Api.Service;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Sales;
 using Core.Domain.TaxSystem;
 using Core.Tenancy;
 using Microsoft.Data.Sqlite;
@@ -65,7 +66,7 @@ namespace AccountGo.BackendTests
         {
             var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            return await ReadDto<Dto.Sales.SalesInvoice>(response);
         }
 
         protected int SalesTaxLedgerId(int invoiceId)
@@ -125,7 +126,7 @@ namespace AccountGo.BackendTests
             AssertTaxTotals(resaved, subtotal, taxAmount, total);
             Assert.Equal(reopened.SalesInvoiceLines.Single().Id, resaved.SalesInvoiceLines.Single().Id);
 
-            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={saved.Id}");
+            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(saved.Id)}");
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
             var entry = Ledger(SalesTaxLedgerId(saved.Id));
             Assert.Equal(total, Assert.Single(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("10120")).Amount);
@@ -193,7 +194,7 @@ namespace AccountGo.BackendTests
             invoice.SalesInvoiceLines.Single().TaxAmount = 999m;
             var createdResponse = await Send(HttpMethod.Post, "/api/Sales/CreateSalesInvoice", invoice);
             Assert.True(createdResponse.IsSuccessStatusCode, await createdResponse.Content.ReadAsStringAsync());
-            var created = await createdResponse.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var created = await ReadDto<Dto.Sales.SalesInvoice>(createdResponse);
             AssertTaxTotals(created, 100, 12, 112);
             var line = created.SalesInvoiceLines.Single();
             line.Quantity = 2;
@@ -201,7 +202,7 @@ namespace AccountGo.BackendTests
             line.TaxAmount = 999m;
             var updatedResponse = await Send(HttpMethod.Post, "/api/Sales/UpdateSalesInvoice", created);
             Assert.True(updatedResponse.IsSuccessStatusCode, await updatedResponse.Content.ReadAsStringAsync());
-            var updated = await updatedResponse.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var updated = await ReadDto<Dto.Sales.SalesInvoice>(updatedResponse);
             AssertTaxTotals(updated, 200, 10, 210);
             Assert.Equal(line.TaxId, updated.SalesInvoiceLines.Single().TaxId);
             updated.SalesInvoiceLines.Single().TaxId = null;
@@ -280,7 +281,7 @@ namespace AccountGo.BackendTests
             var posted = await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", saved);
             Assert.Equal(HttpStatusCode.BadRequest, posted.StatusCode);
             Assert.Contains("Tax Sales tax 12 has no sales tax account", await posted.Content.ReadAsStringAsync());
-            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={saved.Id}");
+            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={PubId<SalesInvoiceHeader>(saved.Id)}");
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
             var issuedJson = await Json(issued);
             Assert.Equal("Tax Sales tax 12 has no sales tax account", issuedJson.GetProperty("postingError").GetString());
@@ -305,18 +306,39 @@ namespace AccountGo.BackendTests
                 invoice = await SaveTaxInvoice(invoice);
             var org = await Send(HttpMethod.Post, "/api/organizations", new { name = "Foreign tax", slug = "foreign-tax" }, scoped: false);
             Assert.Equal(HttpStatusCode.Created, org.StatusCode);
-            var companyId = int.Parse((await Json(org)).GetProperty("id").GetString(), CultureInfo.InvariantCulture);
+            var companyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, (await Json(org)).GetProperty("id").GetString());
             var taxId = 0;
+            string taxPub = null;
             using (var scope = _factory.Services.CreateScope())
             using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(companyId, "foreign-tax", CompanyMemberRole.Owner))
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                taxId = db.Taxes.First().Id;
+                var t = db.Taxes.First();
+                taxId = t.Id;
+                taxPub = t.PublicId;
             }
-            invoice.SalesInvoiceLines.Single().TaxId = taxId;
-            var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.Equal("CROSS_TENANT_REFERENCE_DENIED", (await Json(response)).GetProperty("code").GetString());
+            var line = invoice.SalesInvoiceLines.Single();
+            var payload = new
+            {
+                id = editing ? PubId<SalesInvoiceHeader>(invoice.Id) : null,
+                customerId = PubId<Customer>(invoice.CustomerId),
+                invoiceDate = invoice.InvoiceDate,
+                status = "Draft",
+                salesInvoiceLines = new[]
+                {
+                    new
+                    {
+                        itemId = line.ItemId.HasValue ? PubId<Core.Domain.Items.Item>(line.ItemId.Value) : null,
+                        measurementId = line.MeasurementId.HasValue ? PubId<Core.Domain.Items.Measurement>(line.MeasurementId.Value) : null,
+                        quantity = line.Quantity,
+                        amount = line.Amount,
+                        taxId = taxPub
+                    }
+                }
+            };
+            var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", payload);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("unknown_id", (await Json(response)).GetProperty("code").GetString());
             WithDb(db => Assert.DoesNotContain(db.SalesInvoiceLines, l => l.TaxId == taxId));
         }
 
@@ -337,16 +359,16 @@ namespace AccountGo.BackendTests
                 db.SaveChanges();
             });
             AssertTaxTotals(await GetInvoice(saved.Id), 100, 12, 112);
-            foreach (var route in new[] { "/api/Sales/SalesInvoices", $"/api/Sales/CustomerInvoices?id={invoice.CustomerId}" })
+            foreach (var route in new[] { "/api/Sales/SalesInvoices", $"/api/Sales/CustomerInvoices?id={PubId<Customer>(invoice.CustomerId)}" })
             {
                 var response = await Send(HttpMethod.Get, route);
                 Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-                var list = await response.Content.ReadFromJsonAsync<List<Dto.Sales.SalesInvoice>>();
+                var list = await ReadDto<List<Dto.Sales.SalesInvoice>>(response);
                 AssertTaxTotals(list.Single(i => i.Id == saved.Id), 100, 12, 112);
             }
-            var printing = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoiceForPrinting?id={saved.Id}");
+            var printing = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoiceForPrinting?id={PubId<SalesInvoiceHeader>(saved.Id)}");
             Assert.True(printing.IsSuccessStatusCode, await printing.Content.ReadAsStringAsync());
-            var printed = await printing.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            var printed = await ReadDto<Dto.Sales.SalesInvoice>(printing);
             AssertTaxTotals(printed, 100, 12, 112);
             Assert.Equal(12m, printed.SalesInvoiceLines.Single().TaxAmount);
             var email = InvoiceEmailTemplate.Build(printed, "USD", canReply: true);
@@ -355,7 +377,7 @@ namespace AccountGo.BackendTests
             Assert.DoesNotContain("Taxed consulting", email.Text);
             Assert.Contains("Amount due: $112.00", email.Text);
             Assert.Contains("$112.00", email.Html);
-            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={saved.Id}");
+            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={PubId<SalesInvoiceHeader>(saved.Id)}");
             Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
             Assert.Equal("application/pdf", pdf.Content.Headers.ContentType.MediaType);
         }
@@ -374,7 +396,7 @@ namespace AccountGo.BackendTests
             Assert.Contains(entry, l => l.AccountId == AccountId("10800") && l.DrCr == DrOrCrSide.Cr && l.Amount == 25m);
             AssertBalancedSalesTax(entry);
             AssertStockState(itemId, 5, 5);
-            var response = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={saved.Id}&date={IsoDate(DateTime.UtcNow)}");
+            var response = await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={PubId<SalesInvoiceHeader>(saved.Id)}&date={IsoDate(DateTime.UtcNow)}");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
             var both = entry.Concat(Ledger(InvoiceVoidLedgerId(saved.Id))).ToList();
             Assert.All(both.Select(l => l.AccountId).Distinct(), account =>

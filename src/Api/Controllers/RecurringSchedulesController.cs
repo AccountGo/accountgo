@@ -102,7 +102,7 @@ namespace Api.Controllers
         /// <summary>Full detail for one schedule (lines + upcoming dates).</summary>
         [HttpGet("{id}")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult Get(int id)
+        public IActionResult Get([Dto.Common.PublicId("rsch")] int id)
         {
             var detail = _schedules.GetSchedule(id);
             if (detail == null)
@@ -113,7 +113,7 @@ namespace Api.Controllers
         /// <summary>Occurrence history for one schedule, newest first.</summary>
         [HttpGet("{id}/occurrences")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesView)]
-        public IActionResult Occurrences(int id)
+        public IActionResult Occurrences([Dto.Common.PublicId("rsch")] int id)
         {
             // A missing/other-tenant schedule yields an empty history rather than leaking existence.
             return Ok(_schedules.GetOccurrences(id));
@@ -165,7 +165,7 @@ namespace Api.Controllers
         /// <summary>Updates an existing schedule. Needs invoice-create; auto-issue also needs post.</summary>
         [HttpPut("{id}")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult Update(int id, [FromBody] RecurringScheduleInput input)
+        public IActionResult Update([Dto.Common.PublicId("rsch")] int id, [FromBody] RecurringScheduleInput input)
         {
             var actor = Actor();
             if (actor == null) return Unauthorized();
@@ -191,7 +191,7 @@ namespace Api.Controllers
         /// <summary>Skips the schedule's next occurrence; records a reason, creates no document, advances by one.</summary>
         [HttpPost("{id}/skip")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult Skip(int id, [FromBody] SkipRequest request)
+        public IActionResult Skip([Dto.Common.PublicId("rsch")] int id, [FromBody] SkipRequest request)
         {
             var actor = Actor();
             if (actor == null) return Unauthorized();
@@ -225,7 +225,7 @@ namespace Api.Controllers
         /// <summary>Pauses an active schedule. Existing invoices are untouched.</summary>
         [HttpPost("{id}/pause")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult Pause(int id, [FromBody] ReasonRequest? request = null)
+        public IActionResult Pause([Dto.Common.PublicId("rsch")] int id, [FromBody] ReasonRequest? request = null)
         {
             var actor = Actor();
             if (actor == null) return Unauthorized();
@@ -243,7 +243,7 @@ namespace Api.Controllers
         /// <summary>Resumes a paused schedule without catch-up; refuses an archived customer.</summary>
         [HttpPost("{id}/resume")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult Resume(int id)
+        public IActionResult Resume([Dto.Common.PublicId("rsch")] int id)
         {
             var actor = Actor();
             if (actor == null) return Unauthorized();
@@ -261,7 +261,7 @@ namespace Api.Controllers
         /// <summary>Ends a schedule permanently. Existing invoices are untouched.</summary>
         [HttpPost("{id}/end")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult End(int id, [FromBody] ReasonRequest? request = null)
+        public IActionResult End([Dto.Common.PublicId("rsch")] int id, [FromBody] ReasonRequest? request = null)
         {
             var actor = Actor();
             if (actor == null) return Unauthorized();
@@ -288,7 +288,7 @@ namespace Api.Controllers
         /// </summary>
         [HttpPost("{id}/run")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult RunNow(int id, [FromBody] RunNowRequest? request = null)
+        public IActionResult RunNow([Dto.Common.PublicId("rsch")] int id, [FromBody] RunNowRequest? request = null)
         {
             var actor = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
             if (string.IsNullOrWhiteSpace(actor))
@@ -338,7 +338,7 @@ namespace Api.Controllers
         /// </summary>
         [HttpPost("occurrences/{occurrenceId}/retry")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult RetryOccurrence(int occurrenceId)
+        public IActionResult RetryOccurrence([Dto.Common.PublicId("rocc")] int occurrenceId)
         {
             var actor = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
             if (string.IsNullOrWhiteSpace(actor))
@@ -409,17 +409,20 @@ namespace Api.Controllers
             return new ObjectResult(problem) { StatusCode = decision.HttpStatus };
         }
 
+        private sealed record RecurringGenerationResponse(
+            [property: Dto.Common.PublicId("rocc")] int OccurrenceId,
+            string Outcome,
+            [property: Dto.Common.PublicId("inv")] int? SalesInvoiceId,
+            string? ErrorCode,
+            string? Message);
+
         /// <summary>The curated, safe response body shared by run-now and retry.</summary>
-        private static object ResponseFor(RecurringGenerationResult result) => new
-        {
-            occurrenceId = result.OccurrenceId,
-            outcome = result.Outcome.ToString(),
-            salesInvoiceId = result.SalesInvoiceId,
-            errorCode = result.ErrorCode,
-            // Only curated, safe text is returned. A failure's raw detail (which may carry database or
-            // internal information) stays in the occurrence's ErrorMessage and the logs, never the response.
-            message = SafeMessageFor(result),
-        };
+        private static object ResponseFor(RecurringGenerationResult result) => new RecurringGenerationResponse(
+            result.OccurrenceId,
+            result.Outcome.ToString(),
+            result.SalesInvoiceId,
+            result.ErrorCode,
+            SafeMessageFor(result));
 
         /// <summary>
         /// Curated, safe response text for a generation result. Downgrade reasons are fixed, non-sensitive strings

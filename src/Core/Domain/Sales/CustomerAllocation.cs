@@ -14,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("CustomerAllocation")]
-    public partial class CustomerAllocation : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("alloc")]
+    public partial class CustomerAllocation : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public CustomerAllocation()
         {
         }

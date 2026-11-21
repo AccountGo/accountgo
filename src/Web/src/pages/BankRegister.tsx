@@ -20,8 +20,9 @@ import type { TenantContextType } from '../types';
 import type { BankAccount, BankRegister as BankRegisterDto } from '../types/banking';
 import { bankTypeLabel } from '../types/banking';
 import { BankLiveFeed } from '../components/BankLiveFeed';
+import { shortRef } from '../lib/shortRef';
 
-function sourcePath(orgSlug: string, type: string, id: number): string | null {
+function sourcePath(orgSlug: string, type: string, id: string): string | null {
   switch (type) {
     case 'SalesReceipt':
     case 'SalesInvoice':
@@ -38,7 +39,7 @@ function sourcePath(orgSlug: string, type: string, id: number): string | null {
 
 const BankRegisterPage: React.FC = () => {
   const { bankId } = useParams<{ bankId: string }>();
-  const id = Number(bankId);
+  const id = bankId ?? '';
   const navigate = useNavigate();
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
@@ -74,7 +75,7 @@ const BankRegisterPage: React.FC = () => {
   );
 
   const load = useCallback(async () => {
-    if (!Number.isFinite(id)) return;
+    if (!id) return;
     setLoading(true);
     setError(null);
     try {
@@ -326,7 +327,7 @@ const BankRegisterPage: React.FC = () => {
             {(register?.lines ?? []).map((line) => {
               const href =
                 line.sourceDoc && sourcePath(currentOrg.slug, line.sourceDoc.type, line.sourceDoc.id);
-              const reference = line.reference || (href ? line.sourceDoc?.no || `#${line.sourceDoc?.id}` : '—');
+              const reference = line.reference || (href ? line.sourceDoc?.no || `${shortRef(line.sourceDoc?.id)}` : '—');
               return (
                 <tr key={line.lineId} className="text-[var(--text-main)]">
                   <td className="px-4 py-2.5 whitespace-nowrap">{String(line.date).slice(0, 10)}</td>

@@ -50,6 +50,7 @@ import type {
   BankStatementResolveMapping,
   StatementLineStatus,
 } from '../types/banking';
+import { shortRef } from '../lib/shortRef';
 
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
 const inputClass =
@@ -99,9 +100,9 @@ function findSampleHeaderIndex(rows: string[][]): number {
 
 const BankStatementImportPage: React.FC = () => {
   const { bankId } = useParams<{ bankId: string }>();
-  const id = Number(bankId);
+  const id = bankId ?? '';
   const [searchParams] = useSearchParams();
-  const focusedLineId = Number(searchParams.get('lineId')) || null;
+  const focusedLineId = searchParams.get('lineId') || null;
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasPermission } = useTenantContext();
@@ -158,15 +159,15 @@ const BankStatementImportPage: React.FC = () => {
   const [createFor, setCreateFor] = useState<BankStatementLine | null>(null);
   const [expenseFor, setExpenseFor] = useState<BankStatementLine | null>(null);
   const [expenseMode, setExpenseMode] = useState<'expense' | 'draft'>('expense');
-  const [matchConfirm, setMatchConfirm] = useState<{ line: BankStatementLine; ledgerId: number } | null>(null);
+  const [matchConfirm, setMatchConfirm] = useState<{ line: BankStatementLine; ledgerId: string } | null>(null);
   const [applyFor, setApplyFor] = useState<BankStatementLine | null>(null);
   const [ownerActions, setOwnerActions] = useState<StatementOwnerActions | null>(null);
   const [ownerFor, setOwnerFor] = useState<{ lines: BankStatementLine[]; action: StatementOwnerAction; undo?: boolean } | null>(null);
   const [incomeFor, setIncomeFor] = useState<BankStatementLine | null>(null);
   const [linkedEntryFor, setLinkedEntryFor] = useState<{ line: BankStatementLine; kind: 'Personal' | 'MoneyIn' } | null>(null);
   const [excludeFor, setExcludeFor] = useState<BankStatementLine | null>(null);
-  const [pickedCandidate, setPickedCandidate] = useState<Record<number, string>>({});
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [pickedCandidate, setPickedCandidate] = useState<Record<string, string>>({});
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [closingBalanceOffer, setClosingBalanceOffer] = useState<StatementBalanceOffer | null>(null);
   const [closingBalanceNotice, setClosingBalanceNotice] = useState<string | null>(null);
   const [balanceCheckOpen, setBalanceCheckOpen] = useState(false);
@@ -221,7 +222,7 @@ const BankStatementImportPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!Number.isFinite(id)) return;
+      if (!id) return;
       setLoading(true);
       setError(null);
       setAccount(null);
@@ -244,7 +245,7 @@ const BankStatementImportPage: React.FC = () => {
   }, [authFetch, id]);
 
   useEffect(() => {
-    if (!account || !Number.isFinite(id)) return;
+    if (!account || !id) return;
     let cancelled = false;
     (async () => {
       setError(null);
@@ -434,7 +435,7 @@ const BankStatementImportPage: React.FC = () => {
     }
   };
 
-  const toggleSelected = (id: number) => {
+  const toggleSelected = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
@@ -490,7 +491,7 @@ const BankStatementImportPage: React.FC = () => {
   const lineAction = async (
     line: BankStatementLine,
     action: 'Match' | 'Unmatch' | 'Include',
-    glLineId?: number,
+    glLineId?: string,
   ) => {
     setBusy(true);
     setError(null);
@@ -1035,8 +1036,8 @@ const BankStatementImportPage: React.FC = () => {
                           if (matchedLineAction(line, canManage, canCreateTx, ownerButtons) === 'undo') {
                             const partnerAction = ownerActions?.partners?.find(p => p.partnerId === line.matchedPartnerId);
                             const action = line.matchedOwnerAction === 'drawing'
-                              ? partnerAction?.drawing ?? ownerActions?.drawing ?? (line.matchedPartnerId ? { accountId: 0, accountCode: '', accountName: '', label: 'Partner drawing' } : null)
-                              : partnerAction?.contribution ?? ownerActions?.contribution ?? (line.matchedPartnerId ? { accountId: 0, accountCode: '', accountName: '', label: 'Partner contribution' } : null);
+                              ? partnerAction?.drawing ?? ownerActions?.drawing ?? (line.matchedPartnerId ? { accountId: '', accountCode: '', accountName: '', label: 'Partner drawing' } : null)
+                              : partnerAction?.contribution ?? ownerActions?.contribution ?? (line.matchedPartnerId ? { accountId: '', accountCode: '', accountName: '', label: 'Partner contribution' } : null);
                             if (action) setOwnerFor({ lines: [line], action, undo: true });
                           } else void lineAction(line, 'Unmatch');
                         }}
@@ -1065,7 +1066,7 @@ const BankStatementImportPage: React.FC = () => {
                               type="button"
                               disabled={busy}
                               onClick={() =>
-                                setMatchConfirm({ line, ledgerId: Number(pickedCandidate[line.id] ?? line.candidates[0].generalLedgerLineId) })
+                                setMatchConfirm({ line, ledgerId: pickedCandidate[line.id] ?? line.candidates[0].generalLedgerLineId })
                               }
                               className="h-8 px-3 rounded-lg text-xs font-semibold text-white bg-[var(--brand-primary)] disabled:opacity-50"
                             >
@@ -1097,7 +1098,7 @@ const BankStatementImportPage: React.FC = () => {
                           <button type="button" disabled={busy} onClick={() => { setSelectedIds([]); setExpenseMode('draft'); setExpenseFor(line); }}
                             className="h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--border-subtle)]">Save bill draft</button>
                         )}
-                        {line.draftBillId && <Link className="text-xs underline" to={`/org/${currentOrg.slug}/purchases/${line.draftBillId}`}>Review linked bill #{line.draftBillId}</Link>}
+                        {line.draftBillId && <Link className="text-xs underline" to={`/org/${currentOrg.slug}/purchases/${line.draftBillId}`}>Review linked bill {shortRef(line.draftBillId)}</Link>}
                         {!early && line.amount > 0 && (canApplyOpenInvoice || canRecordOtherIncome) && (
                           <>
                             {canApplyOpenInvoice && (

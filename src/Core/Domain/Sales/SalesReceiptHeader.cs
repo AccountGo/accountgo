@@ -18,8 +18,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesReceiptHeader")]
-    public partial class SalesReceiptHeader : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("rcpt")]
+    public partial class SalesReceiptHeader : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public SalesReceiptHeader()
         {
             SalesReceiptLines = new HashSet<SalesReceiptLine>();

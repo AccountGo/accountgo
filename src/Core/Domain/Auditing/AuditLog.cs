@@ -11,8 +11,10 @@ namespace Core.Domain.Auditing
     }
 
     [Table("AuditLog", Schema = "dbo")]
-    public class AuditLog : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("alog")]
+    public class AuditLog : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         ////[Key]
         //public int AuditLogId { get; set; }
         public int CompanyId { get; set; }

@@ -126,7 +126,7 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
 
         var resp = await Send("SaveJournalEntry", HttpMethod.Post, new
         {
-            id,
+            id = JePub(id),
             journalDate = "2026-11-10",
             voucherType = (int)JournalVoucherTypes.Other,
             referenceNo = "TAMPER",
@@ -135,8 +135,8 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
             sourceKey = "tampered",
             journalEntryLines = new[]
             {
-                new { id = 0, accountId = _cashAccountId, drCr = 1, amount = 200m, memo = "Dr" },
-                new { id = 0, accountId = _revenueAccountId, drCr = 2, amount = 200m, memo = "Cr" }
+                new { id = (string?)null, accountId = AcctPub(_cashAccountId), drCr = 1, amount = 200m, memo = "Dr" },
+                new { id = (string?)null, accountId = AcctPub(_revenueAccountId), drCr = 2, amount = 200m, memo = "Cr" }
             }
         });
 
@@ -150,7 +150,7 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
     {
         // Normal (default SingleActorAllowed or solo) workspace
         var normalId = CreateSourceDraft("http7:normal:v1");
-        var normalResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = normalId, journalDate = "2026-11-10" });
+        var normalResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = JePub(normalId), journalDate = "2026-11-10" });
         Assert.Equal(HttpStatusCode.OK, normalResp.StatusCode);
 
         // Switch workspace to IndependentReviewerRequired
@@ -169,7 +169,7 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
 
         // Human Owner posts a system:-prepared draft WITHOUT approval headers
         var reviewId = CreateSourceDraft("http7:review:v1");
-        var reviewResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = reviewId, journalDate = "2026-11-10" });
+        var reviewResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = JePub(reviewId), journalDate = "2026-11-10" });
         Assert.True(reviewResp.StatusCode == HttpStatusCode.OK,
             $"Expected 200 OK in review-required workspace, got {(int)reviewResp.StatusCode}: {await reviewResp.Content.ReadAsStringAsync()}");
     }
@@ -195,7 +195,7 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
         }
 
         // Closed period (2025) must fail before BooksLockedThrough or bank reconciliation is set
-        var closedResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = closedYearId, journalDate = "2025-06-15" });
+        var closedResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = JePub(closedYearId), journalDate = "2025-06-15" });
         Assert.Equal(HttpStatusCode.BadRequest, closedResp.StatusCode);
 
         using (var scope = _host.Factory.Services.CreateScope())
@@ -226,7 +226,7 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
         }
 
         // Reconciled bank period guard (2026-08-15 <= 2026-08-31)
-        var reconciledResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = reconciledPeriodId, journalDate = "2026-08-15" });
+        var reconciledResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = JePub(reconciledPeriodId), journalDate = "2026-08-15" });
         Assert.Equal(HttpStatusCode.Conflict, reconciledResp.StatusCode);
         Assert.Equal("RECONCILED_PERIOD_CONFIRM_REQUIRED", (await AuditTestHost.Json(reconciledResp)).GetProperty("code").GetString());
 
@@ -240,7 +240,7 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
             db.SaveChanges();
         }
 
-        var lockedResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = lockedDateId, journalDate = "2026-06-15" });
+        var lockedResp = await Send("PostJournalEntry", HttpMethod.Post, new { id = JePub(lockedDateId), journalDate = "2026-06-15" });
         Assert.Equal(HttpStatusCode.Forbidden, lockedResp.StatusCode);
     }
 
@@ -251,7 +251,7 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
         var reconciledDraft = CreateSourceDraft("http9:reconciled:v1", new DateTime(2026, 8, 15));
         var valid1 = CreateSourceDraft("http9:valid1:v1", new DateTime(2026, 11, 10));
         var alreadyPosted = CreateSourceDraft("http9:posted:v1", new DateTime(2026, 11, 10));
-        Assert.Equal(HttpStatusCode.OK, (await Send("PostJournalEntry", HttpMethod.Post, new { id = alreadyPosted, journalDate = "2026-11-10" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send("PostJournalEntry", HttpMethod.Post, new { id = JePub(alreadyPosted), journalDate = "2026-11-10" })).StatusCode);
 
         var lockedPeriod = CreateSourceDraft("http9:locked:v1", new DateTime(2026, 5, 10));
         using (var scope = _host.Factory.Services.CreateScope())
@@ -282,36 +282,36 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
         }
 
         var otherCompanyDraft = CreateSourceDraft("http9:other:v1", new DateTime(2026, 11, 10), companyId: _otherCompanyId, orgSlug: OtherOrg);
-        var nonExistent = 999999;
 
         // Place in-service failure (reconciled period guard inside UpdateJournalEntry) before valid1, and include duplicate valid1 (R3, R9)
         var batchResp = await Send("JournalEntries/PostBatch", HttpMethod.Post, new
         {
-            ids = new[] { reconciledDraft, valid1, valid1, alreadyPosted, otherCompanyDraft, lockedPeriod, nonExistent }
+            ids = new[] { JePub(reconciledDraft), JePub(valid1), JePub(valid1), JePub(alreadyPosted), JePub(lockedPeriod) }
         });
 
         Assert.Equal(HttpStatusCode.OK, batchResp.StatusCode);
         var arr = await AuditTestHost.Json(batchResp);
-        Assert.Equal(6, arr.GetArrayLength());
-        var items = arr.EnumerateArray().ToDictionary(e => e.GetProperty("id").GetInt32());
+        Assert.Equal(4, arr.GetArrayLength());
+        var items = arr.EnumerateArray().ToDictionary(e => e.GetProperty("id").GetString()!);
 
-        Assert.False(items[reconciledDraft].GetProperty("posted").GetBoolean());
-        Assert.Equal("reconciled_period_confirmation_required", items[reconciledDraft].GetProperty("code").GetString());
+        Assert.False(items[JePub(reconciledDraft)].GetProperty("posted").GetBoolean());
+        Assert.Equal("reconciled_period_confirmation_required", items[JePub(reconciledDraft)].GetProperty("code").GetString());
 
-        Assert.True(items[valid1].GetProperty("posted").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, items[valid1].GetProperty("code").ValueKind);
+        Assert.True(items[JePub(valid1)].GetProperty("posted").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, items[JePub(valid1)].GetProperty("code").ValueKind);
 
-        Assert.False(items[alreadyPosted].GetProperty("posted").GetBoolean());
-        Assert.Equal("workflow_state_invalid", items[alreadyPosted].GetProperty("code").GetString());
+        Assert.False(items[JePub(alreadyPosted)].GetProperty("posted").GetBoolean());
+        Assert.Equal("workflow_state_invalid", items[JePub(alreadyPosted)].GetProperty("code").GetString());
 
-        Assert.False(items[otherCompanyDraft].GetProperty("posted").GetBoolean());
-        Assert.Equal("foreign_resource", items[otherCompanyDraft].GetProperty("code").GetString());
+        Assert.False(items[JePub(lockedPeriod)].GetProperty("posted").GetBoolean());
+        Assert.Equal("workflow_state_invalid", items[JePub(lockedPeriod)].GetProperty("code").GetString());
 
-        Assert.False(items[lockedPeriod].GetProperty("posted").GetBoolean());
-        Assert.Equal("workflow_state_invalid", items[lockedPeriod].GetProperty("code").GetString());
-
-        Assert.False(items[nonExistent].GetProperty("posted").GetBoolean());
-        Assert.Equal("foreign_resource", items[nonExistent].GetProperty("code").GetString());
+        // Foreign and unknown journal IDs are rejected with identical 404 unknown_id at the public ID boundary.
+        var foreignBatch = await Send("JournalEntries/PostBatch", HttpMethod.Post, new { ids = new[] { JePub(otherCompanyDraft) } });
+        var unknownBatch = await Send("JournalEntries/PostBatch", HttpMethod.Post, new { ids = new[] { PublicIdGenerator.New("je") } });
+        Assert.Equal(HttpStatusCode.NotFound, foreignBatch.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, unknownBatch.StatusCode);
+        Assert.Equal(await foreignBatch.Content.ReadAsStringAsync(), await unknownBatch.Content.ReadAsStringAsync());
 
         using (var verifyScope = _host.Factory.Services.CreateScope())
         {
@@ -341,34 +341,35 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
 
         var saveManual = await Send("SaveJournalEntry", HttpMethod.Post, new
         {
-            id = 0,
+            id = (string?)null,
             journalDate = "2026-11-10",
             voucherType = (int)JournalVoucherTypes.Other,
             referenceNo = "MAN-SOD-1",
             memo = "Manual SoD draft",
             journalEntryLines = new[]
             {
-                new { id = 0, accountId = _cashAccountId, drCr = 1, amount = 50m, memo = "Dr" },
-                new { id = 0, accountId = _revenueAccountId, drCr = 2, amount = 50m, memo = "Cr" }
+                new { id = (string?)null, accountId = AcctPub(_cashAccountId), drCr = 1, amount = 50m, memo = "Dr" },
+                new { id = (string?)null, accountId = AcctPub(_revenueAccountId), drCr = 2, amount = 50m, memo = "Cr" }
             }
         });
         Assert.Equal(HttpStatusCode.OK, saveManual.StatusCode);
-        var manualId = (await AuditTestHost.Json(saveManual)).GetProperty("id").GetInt32();
+        var manualPubId = (await AuditTestHost.Json(saveManual)).GetProperty("id").GetString()!;
         var importedId = CreateSourceDraft("http-sod:imported:v1", new DateTime(2026, 11, 10));
+        var importedPubId = JePub(importedId);
 
         var batchResp = await Send("JournalEntries/PostBatch", HttpMethod.Post, new
         {
-            ids = new[] { manualId, importedId }
+            ids = new[] { manualPubId, importedPubId }
         });
         Assert.Equal(HttpStatusCode.OK, batchResp.StatusCode);
 
-        var items = (await AuditTestHost.Json(batchResp)).EnumerateArray().ToDictionary(e => e.GetProperty("id").GetInt32());
-        Assert.False(items[manualId].GetProperty("posted").GetBoolean());
-        Assert.Equal("separation_of_duties_violation", items[manualId].GetProperty("code").GetString());
-        Assert.Contains("prepared", items[manualId].GetProperty("message").GetString() ?? "", StringComparison.OrdinalIgnoreCase);
+        var items = (await AuditTestHost.Json(batchResp)).EnumerateArray().ToDictionary(e => e.GetProperty("id").GetString()!);
+        Assert.False(items[manualPubId].GetProperty("posted").GetBoolean());
+        Assert.Equal("separation_of_duties_violation", items[manualPubId].GetProperty("code").GetString());
+        Assert.Contains("prepared", items[manualPubId].GetProperty("message").GetString() ?? "", StringComparison.OrdinalIgnoreCase);
 
-        Assert.True(items[importedId].GetProperty("posted").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, items[importedId].GetProperty("code").ValueKind);
+        Assert.True(items[importedPubId].GetProperty("posted").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, items[importedPubId].GetProperty("code").ValueKind);
     }
 
     [Fact]
@@ -376,23 +377,24 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
     {
         var draftId = CreateSourceDraft("http10:discard:v1");
 
-        var discardResp = await Send($"JournalEntries/{draftId}/DiscardImported", HttpMethod.Post);
+        var discardResp = await Send($"JournalEntries/{JePub(draftId)}/DiscardImported", HttpMethod.Post);
         Assert.Equal(HttpStatusCode.OK, discardResp.StatusCode);
 
         // Recreating with the same key succeeds
         var recreatedId = CreateSourceDraft("http10:discard:v1");
         Assert.NotEqual(draftId, recreatedId);
+        var recreatedPubId = JePub(recreatedId);
 
         // Post it, then attempt discard -> 409 source_journal_posted
-        Assert.Equal(HttpStatusCode.OK, (await Send("PostJournalEntry", HttpMethod.Post, new { id = recreatedId, journalDate = "2026-11-10" })).StatusCode);
-        var discardPosted = await Send($"JournalEntries/{recreatedId}/DiscardImported", HttpMethod.Post);
+        Assert.Equal(HttpStatusCode.OK, (await Send("PostJournalEntry", HttpMethod.Post, new { id = recreatedPubId, journalDate = "2026-11-10" })).StatusCode);
+        var discardPosted = await Send($"JournalEntries/{recreatedPubId}/DiscardImported", HttpMethod.Post);
         Assert.Equal(HttpStatusCode.Conflict, discardPosted.StatusCode);
         Assert.Equal("source_journal_posted", (await AuditTestHost.Json(discardPosted)).GetProperty("code").GetString());
 
         // Manual draft -> 409 not_a_source_journal
         var saveManual = await Send("SaveJournalEntry", HttpMethod.Post, new
         {
-            id = 0,
+            id = (string?)null,
             journalDate = "2026-11-10",
             voucherType = (int)JournalVoucherTypes.Other,
             referenceNo = "MAN-1",
@@ -401,26 +403,29 @@ public sealed class SourceJournalHttpTests : IAsyncLifetime
             sourceKey = "should-be-ignored",
             journalEntryLines = new[]
             {
-                new { id = 0, accountId = _cashAccountId, drCr = 1, amount = 50m, memo = "Dr" },
-                new { id = 0, accountId = _revenueAccountId, drCr = 2, amount = 50m, memo = "Cr" }
+                new { id = (string?)null, accountId = AcctPub(_cashAccountId), drCr = 1, amount = 50m, memo = "Dr" },
+                new { id = (string?)null, accountId = AcctPub(_revenueAccountId), drCr = 2, amount = 50m, memo = "Cr" }
             }
         });
         Assert.Equal(HttpStatusCode.OK, saveManual.StatusCode);
-        var manualId = (await AuditTestHost.Json(saveManual)).GetProperty("id").GetInt32();
+        var manualPubId = (await AuditTestHost.Json(saveManual)).GetProperty("id").GetString()!;
 
-        var discardManual = await Send($"JournalEntries/{manualId}/DiscardImported", HttpMethod.Post);
+        var discardManual = await Send($"JournalEntries/{manualPubId}/DiscardImported", HttpMethod.Post);
         Assert.Equal(HttpStatusCode.Conflict, discardManual.StatusCode);
         Assert.Equal("not_a_source_journal", (await AuditTestHost.Json(discardManual)).GetProperty("code").GetString());
 
         // Filter tests: source=any, source=none, source=example-feed
-        var anyList = (await AuditTestHost.Json(await Send("JournalEntries?source=any"))).EnumerateArray().Select(e => e.GetProperty("id").GetInt32()).ToList();
-        var noneList = (await AuditTestHost.Json(await Send("JournalEntries?source=none"))).EnumerateArray().Select(e => e.GetProperty("id").GetInt32()).ToList();
-        var feedList = (await AuditTestHost.Json(await Send("JournalEntries?source=example-feed"))).EnumerateArray().Select(e => e.GetProperty("id").GetInt32()).ToList();
+        var anyList = (await AuditTestHost.Json(await Send("JournalEntries?source=any"))).EnumerateArray().Select(e => e.GetProperty("id").GetString()!).ToList();
+        var noneList = (await AuditTestHost.Json(await Send("JournalEntries?source=none"))).EnumerateArray().Select(e => e.GetProperty("id").GetString()!).ToList();
+        var feedList = (await AuditTestHost.Json(await Send("JournalEntries?source=example-feed"))).EnumerateArray().Select(e => e.GetProperty("id").GetString()!).ToList();
 
-        Assert.Contains(recreatedId, anyList);
-        Assert.DoesNotContain(manualId, anyList);
-        Assert.Contains(manualId, noneList);
-        Assert.DoesNotContain(recreatedId, noneList);
-        Assert.Contains(recreatedId, feedList);
+        Assert.Contains(recreatedPubId, anyList);
+        Assert.DoesNotContain(manualPubId, anyList);
+        Assert.Contains(manualPubId, noneList);
+        Assert.DoesNotContain(recreatedPubId, noneList);
+        Assert.Contains(recreatedPubId, feedList);
     }
+
+    private string JePub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<JournalEntryHeader>(_host.Factory.Services, id);
+    private string AcctPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Account>(_host.Factory.Services, id);
 }

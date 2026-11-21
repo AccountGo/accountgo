@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using Core.Domain.Recurring;
 using Newtonsoft.Json;
@@ -23,7 +24,9 @@ namespace Services.Recurring
     /// <summary>A line on a schedule, as edited in the UI.</summary>
     public sealed class RecurringScheduleLineInput
     {
+        [PublicId("rschl")]
         public int? Id { get; set; }
+        [PublicId("item")]
         public int? ItemId { get; set; }
         public string? Description { get; set; }
         public decimal Quantity { get; set; } = 1m;
@@ -31,7 +34,9 @@ namespace Services.Recurring
         public decimal Discount { get; set; }
         [JsonConverter(typeof(StringEnumConverter))]
         public RecurringDiscountType DiscountType { get; set; } = RecurringDiscountType.Percentage;
+        [PublicId("tax")]
         public int? TaxId { get; set; }
+        [PublicId("acct")]
         public int? AccountId { get; set; }
         public int SortOrder { get; set; }
     }
@@ -39,7 +44,9 @@ namespace Services.Recurring
     /// <summary>Create/update payload for a sales-invoice schedule.</summary>
     public sealed class RecurringScheduleInput
     {
+        [PublicId("rsch")]
         public int Id { get; set; }
+        [PublicId("cus")]
         public int CustomerId { get; set; }
         public string Name { get; set; } = "";
         [JsonConverter(typeof(StringEnumConverter))]
@@ -53,6 +60,7 @@ namespace Services.Recurring
         public RecurringAction Action { get; set; } = RecurringAction.CreateDraft;
         [JsonConverter(typeof(StringEnumConverter))]
         public RecurringServicePeriodMode ServicePeriodMode { get; set; } = RecurringServicePeriodMode.CurrentMonth;
+        [PublicId("term")]
         public int? PaymentTermId { get; set; }
         public string? Notes { get; set; }
         public string? PaymentInstructions { get; set; }
@@ -62,7 +70,9 @@ namespace Services.Recurring
     /// <summary>A line as returned to the UI.</summary>
     public sealed class RecurringScheduleLineView
     {
+        [PublicId("rschl")]
         public int Id { get; set; }
+        [PublicId("item")]
         public int? ItemId { get; set; }
         public string? ItemNo { get; set; }
         public string? Description { get; set; }
@@ -71,7 +81,9 @@ namespace Services.Recurring
         public decimal Discount { get; set; }
         [JsonConverter(typeof(StringEnumConverter))]
         public RecurringDiscountType DiscountType { get; set; }
+        [PublicId("tax")]
         public int? TaxId { get; set; }
+        [PublicId("acct")]
         public int? AccountId { get; set; }
         public int SortOrder { get; set; }
     }
@@ -79,8 +91,10 @@ namespace Services.Recurring
     /// <summary>A schedule summary row for the list page.</summary>
     public sealed class RecurringScheduleSummary
     {
+        [PublicId("rsch")]
         public int Id { get; set; }
         public string Name { get; set; } = "";
+        [PublicId("cus")]
         public int CustomerId { get; set; }
         public string? CustomerName { get; set; }
         public bool CustomerArchived { get; set; }
@@ -105,8 +119,10 @@ namespace Services.Recurring
     /// <summary>Full schedule detail for the detail/editor page.</summary>
     public sealed class RecurringScheduleDetail
     {
+        [PublicId("rsch")]
         public int Id { get; set; }
         public string Name { get; set; } = "";
+        [PublicId("cus")]
         public int CustomerId { get; set; }
         public string? CustomerName { get; set; }
         public bool CustomerArchived { get; set; }
@@ -125,6 +141,7 @@ namespace Services.Recurring
         public RecurringAction Action { get; set; }
         [JsonConverter(typeof(StringEnumConverter))]
         public RecurringServicePeriodMode ServicePeriodMode { get; set; }
+        [PublicId("term")]
         public int? PaymentTermId { get; set; }
         public string? Notes { get; set; }
         public string? PaymentInstructions { get; set; }
@@ -138,7 +155,9 @@ namespace Services.Recurring
     /// <summary>One occurrence row in a schedule's history.</summary>
     public sealed class RecurringOccurrenceView
     {
+        [PublicId("rocc")]
         public int Id { get; set; }
+        [PublicId("rsch")]
         public int RecurringScheduleId { get; set; }
         public DateTime ScheduledRunDate { get; set; }
         public DateTime PeriodStart { get; set; }
@@ -146,6 +165,7 @@ namespace Services.Recurring
         public DateTime DocumentDate { get; set; }
         [JsonConverter(typeof(StringEnumConverter))]
         public RecurringOccurrenceStatus Status { get; set; }
+        [PublicId("inv")]
         public int? SalesInvoiceId { get; set; }
         public string? ErrorCode { get; set; }
         public string? GuardFailureReason { get; set; }

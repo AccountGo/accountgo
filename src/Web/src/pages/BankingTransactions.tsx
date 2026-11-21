@@ -17,7 +17,7 @@ const BankingTransactionsPage: React.FC = () => {
   const canCreate = hasPermission('banking.transactions.create');
 
   const [banks, setBanks] = useState<BankAccount[]>([]);
-  const [bankId, setBankId] = useState<number | ''>('');
+  const [bankId, setBankId] = useState<string>('');
   const [rows, setRows] = useState<BankTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +116,7 @@ const BankingTransactionsPage: React.FC = () => {
         </label>
         <select
           value={bankId}
-          onChange={(e) => setBankId(e.target.value ? Number(e.target.value) : '')}
+          onChange={(e) => setBankId(e.target.value)}
           className="h-10 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-sm min-w-[16rem]"
         >
           <option value="">Select…</option>

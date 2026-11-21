@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Dto.Common;
 
 namespace Dto.Dashboard
 {
@@ -47,6 +48,7 @@ namespace Dto.Dashboard
 
     public class DashboardBankBalanceDto
     {
+        [PublicId("ba")]
         public int BankId { get; set; }
         public string Name { get; set; } = string.Empty;
         public decimal Balance { get; set; }

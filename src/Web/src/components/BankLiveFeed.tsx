@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useIntegrations, type Connection } from '../lib/integrations';
 
-export function BankLiveFeed({ orgSlug, bankId }: { orgSlug: string; bankId: number }) {
+export function BankLiveFeed({ orgSlug, bankId }: { orgSlug: string; bankId: string }) {
   const { capabilities } = useIntegrations();
   const { authFetch } = useAuth();
   const [connections, setConnections] = useState<Connection[]>([]);

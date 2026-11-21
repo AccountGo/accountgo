@@ -16,8 +16,10 @@ using System.Linq;
 namespace Core.Domain.Purchases
 {
     [Table("Vendor")]
-    public partial class Vendor : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("ven")]
+    public partial class Vendor : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public Vendor()
         {
             PurchaseOrders = new HashSet<PurchaseOrderHeader>();

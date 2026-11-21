@@ -99,10 +99,7 @@ namespace AccountGo.BackendTests.Ai
             var res = await _client.SendAsync(req);
             Assert.Equal(HttpStatusCode.Created, res.StatusCode);
             using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
-            var idProp = doc.RootElement.GetProperty("id");
-            return idProp.ValueKind == JsonValueKind.String
-                ? int.Parse(idProp.GetString()!)
-                : idProp.GetInt32();
+            return AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, doc.RootElement.GetProperty("id").GetString()!);
         }
 
         public Task DisposeAsync()

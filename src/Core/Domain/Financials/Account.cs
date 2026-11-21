@@ -16,8 +16,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("Account")]
-    public partial class Account : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("acct")]
+    public partial class Account : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public Account()
         {
             ChildAccounts = new HashSet<Account>();

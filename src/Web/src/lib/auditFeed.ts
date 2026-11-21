@@ -1,11 +1,14 @@
 import { auditEntityName, isAuditLineEntity, type AuditChangeRow } from './auditLabels';
+import { shortRef } from './shortRef';
 
 /** One row of GET /api/organizations/current/activity. */
 export interface ActivityItem extends AuditChangeRow {
+  /** The audit row's own sequence number (not a record id), so it stays numeric. */
   id: number;
-  entityId: number;
+  /** The record's public id, or null for a record type that has none. */
+  entityId: string | null;
   parentEntityType?: string | null;
-  parentEntityId?: number | null;
+  parentEntityId?: string | null;
   actorUserId?: string | null;
   actorName?: string | null;
   actorKind?: string | null;
@@ -53,7 +56,7 @@ export function buildQueryString(params: Record<string, QueryValue>): string {
   return text ? `?${text}` : '';
 }
 
-export function recordHistoryUrl(entityType: string, entityId: number | string, cursor?: number | null): string {
+export function recordHistoryUrl(entityType: string, entityId: string, cursor?: number | null): string {
   return `${ACTIVITY_ENDPOINT}${buildQueryString({
     entityType,
     entityId,
@@ -182,17 +185,20 @@ export function groupHistoryBySave(items: readonly ActivityItem[]): HistoryGroup
   }
   return Array.from(groups.values()).map(({ group }) => ({
     ...group,
-    parts: [group.parts[0], ...group.parts.slice(1).sort((a, b) => a.rows[0].entityId - b.rows[0].entityId)]
+    parts: [group.parts[0], ...group.parts.slice(1).sort((a, b) => (a.rows[0].entityId ?? '').localeCompare(b.rows[0].entityId ?? ''))]
       .filter((part) => part.rows.length > 0),
   }));
 }
 
-/** "Invoice #12", or "Invoice #12 · Line 3" for a line whose document is known. */
+/** "Invoice inv_…", or "Invoice inv_… · Line il_…" for a line whose document is known; the id is left out for a record type that has none. */
 export function activityRecordLabel(item: ActivityItem, personal: boolean): string {
-  if (item.parentEntityType && item.parentEntityId != null) {
-    return `${auditEntityName(item.parentEntityType, personal)} #${item.parentEntityId} · Line ${item.entityId}`;
+  const line = item.entityId ? `Line ${item.entityId}` : 'Line';
+  if (item.parentEntityType && item.parentEntityId) {
+    return `${auditEntityName(item.parentEntityType, personal)} ${shortRef(item.parentEntityId)} · ${line}`;
   }
-  return `${auditEntityName(item.entityType, personal)} #${item.entityId}`;
+  return item.entityId
+    ? `${auditEntityName(item.entityType, personal)} ${shortRef(item.entityId)}`
+    : auditEntityName(item.entityType, personal);
 }
 
 export interface PersonOption {

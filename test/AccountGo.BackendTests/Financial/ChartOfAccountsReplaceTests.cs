@@ -384,7 +384,7 @@ namespace AccountGo.BackendTests.Financial
             {
                 var response = await Send(HttpMethod.Post, "/api/organizations", new { name, slug }, token, scoped: false);
                 Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-                var companyId = int.Parse((await Json(response)).GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+                var companyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(Factory.Services, (await Json(response)).GetProperty("id").GetString()!);
                 using var scope = Factory.Services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 var ownerMember = db.CompanyMembers.Single(m => m.CompanyId == companyId && m.Role == CompanyMemberRole.Owner);

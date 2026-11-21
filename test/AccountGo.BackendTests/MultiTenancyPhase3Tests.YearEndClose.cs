@@ -233,13 +233,13 @@ namespace AccountGo.BackendTests
         public async Task AccountClassification_CanBeConfiguredAndSurvivesAnOlderUpdate()
         {
             var id = AccountId("40100");
-            var get = await Send(HttpMethod.Get, $"/api/Financials/Account?id={id}");
+            var get = await Send(HttpMethod.Get, $"/api/Financials/Account?id={PubId<Account>(id)}");
             Assert.True(get.IsSuccessStatusCode, await get.Content.ReadAsStringAsync());
-            var account = await get.Content.ReadFromJsonAsync<Dto.Financial.Account>();
+            var account = await ReadDto<Dto.Financial.Account>(get);
             account.IsSuspenseOrClearing = true;
             var save = await Send(HttpMethod.Put, "/api/Financials/UpdateAccount/40100", account);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            var updated = await save.Content.ReadFromJsonAsync<Dto.Financial.Account>();
+            var updated = await ReadDto<Dto.Financial.Account>(save);
             Assert.True(updated.IsSuspenseOrClearing);
             account.IsSuspenseOrClearing = null;
             var legacy = await Send(HttpMethod.Put, "/api/Financials/UpdateAccount/40100", account);

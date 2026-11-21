@@ -21,8 +21,10 @@ namespace Core.Domain.Financials
 
     /// <summary>One close attempt. Reopen does not delete earlier attempts.</summary>
     [Table("YearEndCloseRun")]
-    public class YearEndCloseRun : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("yecr")]
+    public class YearEndCloseRun : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int FinancialYearId { get; set; }
         public int AttemptNo { get; set; }

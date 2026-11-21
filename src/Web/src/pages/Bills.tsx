@@ -57,7 +57,7 @@ export const Bills: React.FC = () => {
   const formatDate = (value?: string | null) =>
     value ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
   const newBillPath = `/org/${currentOrg.slug}/purchases/new`;
-  const billPath = (id: number) => `/org/${currentOrg.slug}/purchases/${id}`;
+  const billPath = (id: string) => `/org/${currentOrg.slug}/purchases/${id}`;
 
   const load = useCallback(
     async (quiet = false) => {

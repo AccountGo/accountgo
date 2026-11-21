@@ -30,7 +30,7 @@ const Banking: React.FC = () => {
     groups: UnassignedCash[];
     pendingName: string;
   } | null>(null);
-  const [adoptHint, setAdoptHint] = useState<number | null>(null);
+  const [adoptHint, setAdoptHint] = useState<string | null>(null);
   const [leaveCashHistoryUnassigned, setLeaveCashHistoryUnassigned] = useState(false);
 
   const formatCurrency = useCallback(

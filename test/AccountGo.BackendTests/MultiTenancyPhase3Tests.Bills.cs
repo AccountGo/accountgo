@@ -36,32 +36,31 @@ namespace AccountGo.BackendTests
 
         protected async Task<Dto.Purchasing.Bill> SaveBillOk(Dto.Purchasing.Bill bill) => await BillOk(await SaveBill(bill));
 
-        protected static async Task<Dto.Purchasing.Bill> BillOk(HttpResponseMessage response)
+        protected async Task<Dto.Purchasing.Bill> BillOk(HttpResponseMessage response)
         {
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Bill>();
+            return await ReadDto<Dto.Purchasing.Bill>(response);
         }
 
         protected async Task<List<Dto.Purchasing.Bill>> Bills(int? vendorId = null) =>
-            await (await Send(HttpMethod.Get, "/api/Purchasing/Bills" + (vendorId.HasValue ? $"?vendorId={vendorId}" : ""))).Content
-                .ReadFromJsonAsync<List<Dto.Purchasing.Bill>>();
+            await ReadDto<List<Dto.Purchasing.Bill>>(await Send(HttpMethod.Get, "/api/Purchasing/Bills" + (vendorId.HasValue ? $"?vendorId={PubId<Core.Domain.Purchases.Vendor>(vendorId.Value)}" : "")));
 
         protected async Task<Dto.Purchasing.Supplier> SaveVendor(Dto.Purchasing.Supplier vendor)
         {
             var response = await Send(HttpMethod.Post, "/api/Purchasing/SaveVendor", vendor);
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Supplier>();
+            return await ReadDto<Dto.Purchasing.Supplier>(response);
         }
 
         protected async Task<Dto.Purchasing.Supplier> GetVendor(int id)
         {
-            var response = await Send(HttpMethod.Get, $"/api/Purchasing/Vendor?id={id}");
+            var response = await Send(HttpMethod.Get, $"/api/Purchasing/Vendor?id={PubId<Core.Domain.Purchases.Vendor>(id)}");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return await response.Content.ReadFromJsonAsync<Dto.Purchasing.Supplier>();
+            return await ReadDto<Dto.Purchasing.Supplier>(response);
         }
 
         protected async Task<List<Dto.Purchasing.Supplier>> Vendors() =>
-            await (await Send(HttpMethod.Get, "/api/Purchasing/Vendors")).Content.ReadFromJsonAsync<List<Dto.Purchasing.Supplier>>();
+            await ReadDto<List<Dto.Purchasing.Supplier>>(await Send(HttpMethod.Get, "/api/Purchasing/Vendors"));
 
         protected void WithDb(Action<ApiDbContext> action)
         {
@@ -141,7 +140,8 @@ namespace AccountGo.BackendTests
             Assert.Equal(1200m, edited.Total);
             Assert.Equal(0m, await DashboardKpi("totalPayables"));
 
-            var approved = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={edited.Id}"));
+            var editedPub = PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(edited.Id);
+            var approved = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={editedPub}"));
             Assert.Equal("Open", approved.Status);
             Assert.True(approved.Approved);
             Assert.False(string.IsNullOrEmpty(approved.No));
@@ -156,8 +156,8 @@ namespace AccountGo.BackendTests
             // An approved bill is voided and entered again, not edited or deleted.
             approved.Lines[0].Amount = 1;
             Assert.Equal(HttpStatusCode.BadRequest, (await SaveBill(approved)).StatusCode);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteBill?id={edited.Id}")).StatusCode);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={edited.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteBill?id={editedPub}")).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={editedPub}")).StatusCode);
         }
 
         [Fact]
@@ -185,7 +185,7 @@ namespace AccountGo.BackendTests
                 new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 200.01m, Date = DateTime.UtcNow })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 10m, Date = DateTime.UtcNow, AccountId = AccountId("50200") })).StatusCode);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction")).StatusCode);
 
             var settled = await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill { BillId = approved.Id, Amount = 200m, Date = DateTime.UtcNow }));
@@ -197,7 +197,7 @@ namespace AccountGo.BackendTests
             other.Status = "Open";
             var toVoid = await SaveBillOk(other);
             Assert.Equal(80m, await DashboardKpi("totalPayables"));
-            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={toVoid.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
+            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(toVoid.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
             Assert.Equal("Void", voided.Status);
             Assert.Equal(0m, voided.BalanceDue);
             Assert.Equal(0m, await DashboardKpi("totalPayables"));
@@ -270,7 +270,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(0m, draft.Lines[1].TaxAmount);
 
             // Re-read draft from GET /api/Purchasing/Bill?id=
-            var reopenedResponse = await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={draft.Id}");
+            var reopenedResponse = await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(draft.Id)}");
             var reopened = await BillOk(reopenedResponse);
             Assert.Equal(230m, reopened.Subtotal);
             Assert.Equal(18m, reopened.TotalTax);
@@ -291,7 +291,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(5m, updated.Lines[1].TaxAmount);
 
             // Approve the updated draft
-            var approved = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={updated.Id}"));
+            var approved = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(updated.Id)}"));
             Assert.Equal("Open", approved.Status);
             Assert.True(approved.Approved);
             Assert.Equal(275m, approved.Total);
@@ -374,7 +374,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(1100m, approved.Total);
             Assert.Equal(100m, approved.TotalTax);
 
-            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
+            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(approved.Id)}&date={IsoDate(DateTime.UtcNow)}&reason=correction"));
             Assert.Equal("Void", voided.Status);
             Assert.Equal(0m, voided.BalanceDue);
 
@@ -387,23 +387,30 @@ namespace AccountGo.BackendTests
         public async Task Bill_Tax_ForeignTax_IsRejectedOnSave()
         {
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Foreign Tax Vendor" });
-            var bill = NewBill(vendor.Id, ("Item", 1, 100m, null));
 
             var org = await Send(HttpMethod.Post, "/api/organizations", new { name = "Foreign tax bill", slug = "foreign-tax-bill" }, scoped: false);
             Assert.Equal(HttpStatusCode.Created, org.StatusCode);
-            var companyId = int.Parse((await Json(org)).GetProperty("id").GetString(), System.Globalization.CultureInfo.InvariantCulture);
+            var companyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, (await Json(org)).GetProperty("id").GetString());
             var foreignTaxId = 0;
+            string foreignTaxPub = null;
             using (var scope = _factory.Services.CreateScope())
             using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(companyId, "foreign-tax-bill", CompanyMemberRole.Owner))
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                foreignTaxId = db.Taxes.First().Id;
+                var t = db.Taxes.First();
+                foreignTaxId = t.Id;
+                foreignTaxPub = t.PublicId;
             }
 
-            bill.Lines[0].TaxId = foreignTaxId;
-            var response = await SaveBill(bill);
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.Equal("CROSS_TENANT_REFERENCE_DENIED", (await Json(response)).GetProperty("code").GetString());
+            var response = await Send(HttpMethod.Post, "/api/Purchasing/SaveBill", new
+            {
+                vendorId = PubId<Core.Domain.Purchases.Vendor>(vendor.Id),
+                date = DateTime.UtcNow.Date,
+                status = "Draft",
+                lines = new[] { new { description = "Item", quantity = 1m, amount = 100m, taxId = foreignTaxPub } }
+            });
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("unknown_id", (await Json(response)).GetProperty("code").GetString());
             WithDb(db => Assert.DoesNotContain(db.PurchaseInvoiceLines, l => l.TaxId == foreignTaxId));
         }
 
@@ -432,7 +439,7 @@ namespace AccountGo.BackendTests
                 var wrongAccount = NewBill(vendor.Id, ("Item", 1, 10m, AccountId(code)));
                 Assert.Equal(HttpStatusCode.BadRequest, (await SaveBill(wrongAccount)).StatusCode);
             }
-            var accounts = await (await Send(HttpMethod.Get, "/api/Purchasing/BillAccounts")).Content.ReadFromJsonAsync<List<Dto.Purchasing.BillAccount>>();
+            var accounts = await ReadDto<List<Dto.Purchasing.BillAccount>>(await Send(HttpMethod.Get, "/api/Purchasing/BillAccounts"));
             Assert.Contains(accounts, a => a.Code == "50200" && a.Group == "Expense");
             Assert.Contains(accounts, a => a.Code == "13302" && a.Group == "Asset");
             Assert.DoesNotContain(accounts, a => a.Code is "10111" or "10120" or "10110");
@@ -450,8 +457,9 @@ namespace AccountGo.BackendTests
         {
             // A purchasing agent drafts bills; approving and paying them is the accountant's.
             await JoinOther();
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { RoleId("Purchasing Agent") } })).StatusCode);
+            var otherMemPub = PubId<CompanyMember>(MemberId(_otherId));
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + otherMemPub,
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(RoleId("Purchasing Agent")) } })).StatusCode);
 
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Role check" });
             var bill = NewBill(vendor.Id, ("Item", 1, 10m, null));
@@ -462,20 +470,21 @@ namespace AccountGo.BackendTests
 
             bill.Status = "Draft";
             var draft = await BillOk(await SaveBill(bill, _otherToken));
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draft.Id}", token: _otherToken)).StatusCode);
-            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draft.Id}"));
+            var draftPub = PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(draft.Id);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draftPub}", token: _otherToken)).StatusCode);
+            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draftPub}"));
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill { BillId = draft.Id, Amount = 5m, Date = DateTime.UtcNow }, _otherToken)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={draft.Id}&date={IsoDate(DateTime.UtcNow)}&reason=correction", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={draftPub}&date={IsoDate(DateTime.UtcNow)}&reason=correction", token: _otherToken)).StatusCode);
 
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { RoleId("Accountant") } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + otherMemPub,
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(RoleId("Accountant")) } })).StatusCode);
             Assert.True((await Send(HttpMethod.Post, "/api/Purchasing/PayBill",
                 new Dto.Purchasing.PayBill { BillId = draft.Id, Amount = 5m, Date = DateTime.UtcNow }, _otherToken)).IsSuccessStatusCode);
 
             // A viewer sees bills and vendors but changes nothing.
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
-                new { securityRoleIds = new[] { ViewerRoleId() } })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + otherMemPub,
+                new { securityRoleIds = new[] { PubId<Core.Domain.Security.SecurityRole>(ViewerRoleId()) } })).StatusCode);
             Assert.True((await Send(HttpMethod.Get, "/api/Purchasing/Bills", token: _otherToken)).IsSuccessStatusCode);
             Assert.True((await Send(HttpMethod.Get, "/api/Purchasing/Vendors", token: _otherToken)).IsSuccessStatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await SaveBill(bill, _otherToken)).StatusCode);
@@ -506,7 +515,7 @@ namespace AccountGo.BackendTests
             var draft = await Bill("Draft", 999m, today.AddDays(1));
             var voided = await Bill("Open", 500m, today.AddDays(-5));
             Assert.Equal("Overdue", overdue.Status);
-            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={voided.Id}&date={IsoDate(today)}&reason=correction"));
+            await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(voided.Id)}&date={IsoDate(today)}&reason=correction"));
             await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/PayBill", new Dto.Purchasing.PayBill { BillId = open.Id, Amount = 30m, Date = today }));
 
             var bills = await Bills(vendor.Id);
@@ -521,10 +530,10 @@ namespace AccountGo.BackendTests
             }
             Assert.Equal(110m, await DashboardKpi("totalPayables"));
             Assert.False((await GetVendor(vendor.Id)).CanDelete);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteVendor?id={vendor.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteVendor?id={PubId<Core.Domain.Purchases.Vendor>(vendor.Id)}")).StatusCode);
 
             // Archived vendors keep their bills, and take no new ones until restored.
-            var archived = await Json(await Send(HttpMethod.Post, $"/api/Purchasing/ArchiveVendor?id={vendor.Id}"));
+            var archived = await Json(await Send(HttpMethod.Post, $"/api/Purchasing/ArchiveVendor?id={PubId<Core.Domain.Purchases.Vendor>(vendor.Id)}"));
             Assert.True(archived.GetProperty("archived").GetBoolean());
             Assert.Equal(HttpStatusCode.BadRequest, (await SaveBill(NewBill(vendor.Id, ("Line", 1, 1m, null)))).StatusCode);
             Assert.Equal(4, (await Bills(vendor.Id)).Count);
@@ -533,10 +542,10 @@ namespace AccountGo.BackendTests
             var unused = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Mistake" });
             var mistake = await SaveBillOk(NewBill(unused.Id, ("Oops", 1, 1m, null)));
             Assert.False((await GetVendor(unused.Id)).CanDelete);
-            var deleted = await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteBill?id={mistake.Id}");
+            var deleted = await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteBill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(mistake.Id)}");
             Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
             Assert.True((await GetVendor(unused.Id)).CanDelete);
-            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteVendor?id={unused.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Purchasing/DeleteVendor?id={PubId<Core.Domain.Purchases.Vendor>(unused.Id)}")).StatusCode);
             Assert.DoesNotContain(await Vendors(), v => v.Id == unused.Id);
         }
 
@@ -550,15 +559,16 @@ namespace AccountGo.BackendTests
             invoice.Status = "Open";
             var issued = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
-            var id = (await Json(issued)).GetProperty("id").GetInt32();
+            var idPub = (await Json(issued)).GetProperty("id").GetString();
+            var id = IntId<Core.Domain.Sales.SalesInvoiceHeader>(idPub);
             Assert.Equal(100m, await OutstandingReceivables());
 
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={idPub}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             // Nothing is due on a voided invoice, in the invoice and in the list.
             var voided = await GetInvoice(id);
             Assert.Equal("Void", voided.Status);
             Assert.Equal(0m, voided.BalanceDue);
-            var listed = await (await Send(HttpMethod.Get, "/api/Sales/SalesInvoices")).Content.ReadFromJsonAsync<List<Dto.Sales.SalesInvoice>>();
+            var listed = await ReadDto<List<Dto.Sales.SalesInvoice>>(await Send(HttpMethod.Get, "/api/Sales/SalesInvoices"));
             Assert.Equal(0m, listed.Single(i => i.Id == id).BalanceDue);
             int posted = 0, reversal = 0;
             WithDb(db =>
@@ -573,7 +583,7 @@ namespace AccountGo.BackendTests
                 Assert.Equal(0m, both.Where(l => l.AccountId == account).Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : -l.Amount));
 
             // Voiding again doesn't reverse twice.
-            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={idPub}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             WithDb(db => Assert.Equal(reversal, db.SalesInvoiceHeaders.Single(i => i.Id == id).VoidGeneralLedgerHeaderId));
         }
     }

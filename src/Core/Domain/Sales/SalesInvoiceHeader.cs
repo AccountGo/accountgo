@@ -16,8 +16,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesInvoiceHeader")]
-    public partial class SalesInvoiceHeader : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("inv")]
+    public partial class SalesInvoiceHeader : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public SalesInvoiceHeader()
         {
             SalesInvoiceLines = new HashSet<SalesInvoiceLine>();

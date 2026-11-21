@@ -1,7 +1,7 @@
 /** Pure helpers for the reconciliation workspace (keyboard focus, search, tick batches). */
 
 export interface ReconcileLineRef {
-  lineId: number;
+  lineId: string;
   in: number;
   out: number;
   ticked: boolean;
@@ -81,9 +81,9 @@ export function filterVisibleLines(
 
 /** Build add/remove arrays for PUT Items from the previous ticked set and a toggled line. */
 export function tickTogglePayload(
-  previouslyTicked: ReadonlySet<number>,
-  lineId: number,
-): { add: number[]; remove: number[] } {
+  previouslyTicked: ReadonlySet<string>,
+  lineId: string,
+): { add: string[]; remove: string[] } {
   if (previouslyTicked.has(lineId)) {
     return { add: [], remove: [lineId] };
   }
@@ -97,11 +97,11 @@ export function canFinishReconciliation(difference: number): boolean {
 
 export const RECONCILE_TICK_DEBOUNCE_MS = 400;
 
-export type TickBatch = { add: number[]; remove: number[] };
+export type TickBatch = { add: string[]; remove: string[] };
 
 export type PendingTickSets = {
-  add: Set<number>;
-  remove: Set<number>;
+  add: Set<string>;
+  remove: Set<string>;
 };
 
 export function createEmptyPendingTicks(): PendingTickSets {
@@ -114,8 +114,8 @@ export function hasPendingTicks(pending: PendingTickSets): boolean {
 
 export function mergeTickIntoPending(
   pending: PendingTickSets,
-  previouslyTicked: ReadonlySet<number>,
-  lineId: number,
+  previouslyTicked: ReadonlySet<string>,
+  lineId: string,
 ): void {
   const { add, remove } = tickTogglePayload(previouslyTicked, lineId);
   mergeBatchIntoPending(pending, { add, remove });
@@ -140,7 +140,7 @@ export function takePendingTickBatch(pending: PendingTickSets): TickBatch {
 }
 
 /** Overlay still-pending optimistic ticks onto a server line snapshot. */
-export function applyPendingTicksToLines<T extends { lineId: number; ticked: boolean }>(
+export function applyPendingTicksToLines<T extends { lineId: string; ticked: boolean }>(
   lines: T[],
   pending: PendingTickSets,
 ): T[] {
@@ -154,7 +154,7 @@ export function applyPendingTicksToLines<T extends { lineId: number; ticked: boo
 
 export function applyPendingTicksToRecon<
   T extends { deposits: L[]; payments: L[] },
-  L extends { lineId: number; ticked: boolean },
+  L extends { lineId: string; ticked: boolean },
 >(recon: T, pending: PendingTickSets): T {
   if (!hasPendingTicks(pending)) return recon;
   return {
@@ -175,10 +175,10 @@ export type TickSavePutResult<T> =
  * and retries the put once.
  */
 export type TickSaveRecon = {
-  id: number;
+  id: string;
   version: number;
-  deposits: { lineId: number; ticked: boolean }[];
-  payments: { lineId: number; ticked: boolean }[];
+  deposits: { lineId: string; ticked: boolean }[];
+  payments: { lineId: string; ticked: boolean }[];
 };
 
 export class TickSaveController<T extends TickSaveRecon> {
@@ -187,24 +187,24 @@ export class TickSaveController<T extends TickSaveRecon> {
   private readonly getRecon: () => T | null;
   private readonly isDraft: (recon: T) => boolean;
   private readonly putItems: (
-    id: number,
-    add: number[],
-    remove: number[],
+    id: string,
+    add: string[],
+    remove: string[],
     version: number,
   ) => Promise<TickSavePutResult<T>>;
-  private readonly reload: (id: number) => Promise<T>;
+  private readonly reload: (id: string) => Promise<T>;
   private readonly onUpdate: (recon: T) => void;
 
   constructor(
     getRecon: () => T | null,
     isDraft: (recon: T) => boolean,
     putItems: (
-      id: number,
-      add: number[],
-      remove: number[],
+      id: string,
+      add: string[],
+      remove: string[],
       version: number,
     ) => Promise<TickSavePutResult<T>>,
-    reload: (id: number) => Promise<T>,
+    reload: (id: string) => Promise<T>,
     onUpdate: (recon: T) => void,
   ) {
     this.getRecon = getRecon;

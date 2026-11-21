@@ -989,8 +989,8 @@ namespace Api.Controllers
         }
 
         [Authorize]
-        [HttpDelete("sessions/{id:int}")]
-        public async Task<IActionResult> RevokeSession(int id)
+        [HttpDelete("sessions/{id}")]
+        public async Task<IActionResult> RevokeSession([Dto.Common.PublicId("sess")] int id)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var email = User.FindFirst(ClaimTypes.Email)?.Value;

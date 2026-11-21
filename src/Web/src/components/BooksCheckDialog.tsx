@@ -4,8 +4,9 @@ import { BookCheck } from 'lucide-react';
 import { getOrgSlugFromLocation, useAuth } from '../auth/AuthContext';
 import { BOOKS_NOT_READY_EVENT, type BooksNotReadyProblem, type UnpostedDocument } from '../lib/entitlementEvents';
 import { ModalShell } from './ModalShell';
+import { shortRef } from '../lib/shortRef';
 
-type PostResult = { id: number; number?: string | null; posted: boolean; error?: string | null };
+type PostResult = { id: string; number?: string | null; posted: boolean; error?: string | null };
 
 function documentHref(slug: string | null, doc: UnpostedDocument): string | null {
   if (!slug) return null;
@@ -15,7 +16,7 @@ function documentHref(slug: string | null, doc: UnpostedDocument): string | null
 
 function documentLabel(doc: UnpostedDocument): string {
   const kind = doc.type === 'invoice' ? 'Invoice' : 'Bill';
-  return doc.number ? `${kind} ${doc.number}` : `${kind} #${doc.id}`;
+  return doc.number ? `${kind} ${doc.number}` : `${kind} ${shortRef(doc.id)}`;
 }
 
 function formatDate(value: string): string {
@@ -44,7 +45,7 @@ export const BooksCheckDialogView: React.FC<{ problem: BooksNotReadyProblem; onC
   const closeRef = useRef<HTMLButtonElement>(null);
   const [invoices, setInvoices] = useState<UnpostedDocument[]>(problem.unpostedInvoices);
   const [bills, setBills] = useState<UnpostedDocument[]>(problem.unpostedBills);
-  const [errors, setErrors] = useState<Record<number, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const slug = typeof window === 'undefined' ? null : getOrgSlugFromLocation();
@@ -65,7 +66,7 @@ export const BooksCheckDialogView: React.FC<{ problem: BooksNotReadyProblem; onC
         unpostedInvoices: UnpostedDocument[];
         unpostedBills: UnpostedDocument[];
       };
-      const nextErrors: Record<number, string> = {};
+      const nextErrors: Record<string, string> = {};
       for (const result of body.results ?? []) {
         if (!result.posted && result.error) nextErrors[result.id] = result.error;
       }

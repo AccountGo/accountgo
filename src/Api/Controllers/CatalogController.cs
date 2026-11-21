@@ -67,7 +67,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("Item")] // api/Catalog/Item?id=
         [RequirePermission(SystemPermissions.InventoryItemsView)]
-        public IActionResult Item(int id)
+        public IActionResult Item([Dto.Common.PublicId("item")] int id)
         {
             var item = _db.Items.Include(i => i.ItemCategory).Include(i => i.SalesAccount).FirstOrDefault(i => i.Id == id);
             if (item == null)
@@ -209,7 +209,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("ArchiveItem")]
         [RequirePermission(SystemPermissions.InventoryItemsManage)]
-        public IActionResult ArchiveItem(int id, bool archived = true)
+        public IActionResult ArchiveItem([Dto.Common.PublicId("item")] int id, bool archived = true)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(id, nameof(id));
             var item = _db.Items.Include(i => i.ItemCategory).Single(i => i.Id == id);
@@ -226,7 +226,7 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteItem")]
         [RequirePermission(SystemPermissions.InventoryItemsManage)]
-        public IActionResult DeleteItem(int id)
+        public IActionResult DeleteItem([Dto.Common.PublicId("item")] int id)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(id, nameof(id));
             if (IsUsed(id))

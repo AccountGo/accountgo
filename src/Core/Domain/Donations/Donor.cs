@@ -2,8 +2,10 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Core.Domain.Donations
 {
-    public class Donor : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("dnr")]
+    public class Donor : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
 
         [Required, MaxLength(10)]

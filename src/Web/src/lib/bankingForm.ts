@@ -3,18 +3,18 @@ import type { CreateBankAccountPayload, UnassignedCash } from '../types/banking'
 /** Pure helpers for banking create flow (Vitest / node:test friendly). */
 
 export function pickDefaultReceiptBankId(
-  items: Array<{ id: number; isDefaultForReceipts: boolean }>,
-): number | null {
-  const banks = items.filter((i) => i.id > 0);
+  items: Array<{ id: string | null; isDefaultForReceipts: boolean }>,
+): string | null {
+  const banks = items.filter((i): i is typeof i & { id: string } => !!i.id);
   if (banks.length === 0) return null;
   const preferred = banks.find((i) => i.isDefaultForReceipts);
   return (preferred ?? banks[0]).id;
 }
 
 export function pickDefaultPaymentBankId(
-  items: Array<{ id: number; isDefaultForPayments: boolean }>,
-): number | null {
-  const banks = items.filter((i) => i.id > 0);
+  items: Array<{ id: string | null; isDefaultForPayments: boolean }>,
+): string | null {
+  const banks = items.filter((i): i is typeof i & { id: string } => !!i.id);
   if (banks.length === 0) return null;
   const preferred = banks.find((i) => i.isDefaultForPayments);
   return (preferred ?? banks[0]).id;
@@ -38,9 +38,9 @@ export function buildCreatePayload(input: {
   isDefaultForPayments?: boolean;
   openingBalance?: string;
   openingBalanceDate?: string;
-  adoptAccountId?: number | null;
+  adoptAccountId?: string | null;
   leaveCashHistoryUnassigned?: boolean;
-  postingAccountId?: number | null;
+  postingAccountId?: string | null;
 }): CreateBankAccountPayload {
   const name = input.name.trim();
   if (!name) throw new Error('Name is required.');

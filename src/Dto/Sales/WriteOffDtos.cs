@@ -3,12 +3,13 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Sales
 {
     public sealed record RequestWriteOffCommand(
-        int SalesInvoiceHeaderId,
+        [property: PublicId("inv")] int SalesInvoiceHeaderId,
         DateTime Date,
         decimal Amount,
         decimal AllowanceAllocatedAmount,
@@ -24,33 +25,33 @@ namespace Dto.Sales
     public sealed record RecordWriteOffRecoveryCommand(
         DateTime Date,
         decimal Amount,
-        int BankId,
+        [property: PublicId("ba")] int BankId,
         string? ReferenceNo,
         string? EvidenceReference,
         string? IdempotencyKey = null,
         long? ExpectedWriteOffVersion = null);
 
     public sealed record WriteOffRecoveryDto(
-        int Id,
+        [property: PublicId("wor")] int Id,
         string? No,
         DateTime Date,
         decimal Amount,
-        int BankId,
+        [property: PublicId("ba")] int BankId,
         string BankName,
         string? ReferenceNo,
         string? EvidenceReference,
         int Status,
         string StatusLabel,
-        int? GeneralLedgerHeaderId,
-        int? VoidGeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? GeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? VoidGeneralLedgerHeaderId,
         long Version);
 
     public sealed record ReceivableWriteOffDto(
-        int Id,
+        [property: PublicId("wo")] int Id,
         string? No,
-        int CustomerId,
+        [property: PublicId("cus")] int CustomerId,
         string CustomerName,
-        int SalesInvoiceHeaderId,
+        [property: PublicId("inv")] int SalesInvoiceHeaderId,
         string InvoiceNo,
         DateTime Date,
         string CurrencyCode,
@@ -62,8 +63,8 @@ namespace Dto.Sales
         string CollectionEvidence,
         int Status,
         string StatusLabel,
-        int? GeneralLedgerHeaderId,
-        int? VoidGeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? GeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? VoidGeneralLedgerHeaderId,
         string? SubmittedBy,
         string? ReviewedBy,
         string? PostedBy,

@@ -14,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("JournalEntryHeader")]
-    public partial class JournalEntryHeader : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("je")]
+    public partial class JournalEntryHeader : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public JournalEntryHeader()
         {
             JournalEntryLines = new HashSet<JournalEntryLine>();

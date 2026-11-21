@@ -2,7 +2,7 @@
  * A contact person linked to a client or vendor.
  */
 export interface ContactPerson {
-  id: number;
+  id: string;
   firstName: string;
   lastName: string;
   middleName?: string | null;
@@ -22,7 +22,7 @@ export interface ContactPerson {
  * purchases. What each one owes or is owed comes from its issued invoices or approved bills.
  */
 export interface PartyBase {
-  id: number;
+  id: string;
   name: string;
   email?: string | null;
   phone?: string | null;
@@ -32,9 +32,9 @@ export interface PartyBase {
   postalCode?: string | null;
   country?: string | null;
   /** Null: new documents use the workspace's default terms. */
-  paymentTermId?: number | null;
+  paymentTermId?: string | null;
   /** Default Bill To contact; null prints the company alone. */
-  billToContactId?: number | null;
+  billToContactId?: string | null;
   /** Contact persons; populated on a single-party read. */
   contacts?: ContactPerson[];
   archived: boolean;

@@ -69,7 +69,9 @@ namespace Api.Controllers
         [RequireOperation(AccessOperationCatalog.WorkspaceCurrentView)]
         public IActionResult PaymentTerms()
         {
-            var paymentterms = _administrationService.GetPaymentTerms();
+            var paymentterms = _administrationService.GetPaymentTerms()
+                .Select(pt => new CommonPaymentTermDto(pt.Id, pt.Description, pt.PaymentType, pt.DueAfterDays, pt.IsActive))
+                .ToList();
             return new ObjectResult(paymentterms);
         }
 
@@ -80,21 +82,20 @@ namespace Api.Controllers
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems().OrderBy(i => i.Description);
-            return new ObjectResult(items.Select(item => new
-            {
+            return new ObjectResult(items.Select(item => new CommonItemDto(
                 item.Id,
                 item.Description,
                 item.Code,
                 item.Price,
                 item.SellMeasurementId,
-                Archived = item.ArchivedAt.HasValue,
-                TrackStock = item.ItemCategory?.ItemType == Core.Domain.ItemTypes.Purchased,
+                item.ArchivedAt.HasValue,
+                item.ItemCategory?.ItemType == Core.Domain.ItemTypes.Purchased,
                 item.QuantityOnHand,
                 item.AverageCost,
                 item.SalesAccountId,
-                SalesAccountCode = item.SalesAccount?.AccountCode,
-                SalesAccountName = item.SalesAccount?.AccountName
-            }).ToList());
+                item.SalesAccount?.AccountCode,
+                item.SalesAccount?.AccountName
+            )).ToList());
         }
 
         [HttpGet]
@@ -103,7 +104,10 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult Measurements()
         {
-            return new ObjectResult(_inventoryService.GetMeasurements().OrderBy(m => m.Description));
+            return new ObjectResult(_inventoryService.GetMeasurements()
+                .OrderBy(m => m.Description)
+                .Select(m => new CommonMeasurementDto(m.Id, m.Code, m.Description))
+                .ToList());
         }
 
         [HttpGet]
@@ -130,8 +134,19 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult ItemCategories()
         {
-            var itemcategories = _inventoryService.GetItemCategories();
-            return Ok(itemcategories.AsEnumerable());
+            var itemcategories = _inventoryService.GetItemCategories()
+                .Select(c => new CommonItemCategoryDto(
+                    c.Id,
+                    c.Name,
+                    c.ItemType,
+                    c.MeasurementId,
+                    c.SalesAccountId,
+                    c.InventoryAccountId,
+                    c.CostOfGoodsSoldAccountId,
+                    c.AdjustmentAccountId,
+                    c.AssemblyAccountId))
+                .ToList();
+            return Ok(itemcategories);
         }
 
         [HttpGet]
@@ -188,5 +203,41 @@ namespace Api.Controllers
             return Json(paymentMethods);
         }
 
+        private sealed record CommonPaymentTermDto(
+            [property: Dto.Common.PublicId("term")] int Id,
+            string? Description,
+            PaymentTypes PaymentType,
+            int? DueAfterDays,
+            bool IsActive);
+
+        private sealed record CommonItemCategoryDto(
+            [property: Dto.Common.PublicId("icat")] int Id,
+            string? Name,
+            ItemTypes ItemType,
+            [property: Dto.Common.PublicId("uom")] int? MeasurementId,
+            [property: Dto.Common.PublicId("acct")] int? SalesAccountId,
+            [property: Dto.Common.PublicId("acct")] int? InventoryAccountId,
+            [property: Dto.Common.PublicId("acct")] int? CostOfGoodsSoldAccountId,
+            [property: Dto.Common.PublicId("acct")] int? AdjustmentAccountId,
+            [property: Dto.Common.PublicId("acct")] int? AssemblyAccountId);
+
+        private sealed record CommonMeasurementDto(
+            [property: Dto.Common.PublicId("uom")] int Id,
+            string? Code,
+            string? Description);
+
+        private sealed record CommonItemDto(
+            [property: Dto.Common.PublicId("item")] int Id,
+            string? Description,
+            string? Code,
+            decimal? Price,
+            [property: Dto.Common.PublicId("uom")] int? SellMeasurementId,
+            bool Archived,
+            bool TrackStock,
+            decimal QuantityOnHand,
+            decimal AverageCost,
+            [property: Dto.Common.PublicId("acct")] int? SalesAccountId,
+            string? SalesAccountCode,
+            string? SalesAccountName);
     }
 }

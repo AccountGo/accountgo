@@ -62,14 +62,14 @@ namespace Services.TaxSystem
         string Actor);
 
     public sealed record TaxFilingDto(
-        int Id,
+        [property: Dto.Common.PublicId("txf")] int Id,
         string PeriodStart,
         string PeriodEnd,
         string PeriodLabel,
         string Frequency,
         string Basis,
         int Sequence,
-        int? AmendsFilingId,
+        [property: Dto.Common.PublicId("txf")] int? AmendsFilingId,
         string? AmendmentReason,
         string FiledOn,
         string? Reference,
@@ -81,7 +81,7 @@ namespace Services.TaxSystem
         string CreatedAt);
 
     public sealed record TaxPeriodFilingSummaryDto(
-        int Id,
+        [property: Dto.Common.PublicId("txf")] int Id,
         int Sequence,
         string FiledOn,
         string? Reference,
@@ -90,7 +90,7 @@ namespace Services.TaxSystem
 
     public sealed record TaxFilingDiffRowDto(
         string Side,
-        int? TaxId,
+        [property: Dto.Common.PublicId("tax")] int? TaxId,
         string TaxCode,
         decimal Filed,
         decimal Current,

@@ -3,9 +3,10 @@ import { FileText, X } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import type { BankStatementLine } from '../types/banking';
+import { shortRef } from '../lib/shortRef';
 
 interface OpenInvoice {
-  id: number;
+  id: string;
   no?: string | null;
   customerName?: string | null;
   balanceDue?: number;
@@ -80,7 +81,7 @@ export const StatementLineApplyInvoiceDialog: React.FC<StatementLineApplyInvoice
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invoiceId: Number(invoiceId),
+          invoiceId: invoiceId,
           memo: memo.trim() || null,
         }),
       });
@@ -156,7 +157,7 @@ export const StatementLineApplyInvoiceDialog: React.FC<StatementLineApplyInvoice
               <option value="">Select invoice…</option>
               {invoices.map((inv) => (
                 <option key={inv.id} value={inv.id}>
-                  {inv.no || `#${inv.id}`} · {inv.customerName || 'Customer'} · due{' '}
+                  {inv.no || `${shortRef(inv.id)}`} · {inv.customerName || 'Customer'} · due{' '}
                   {formatCurrency(inv.balanceDue ?? inv.amountDue ?? 0)}
                 </option>
               ))}

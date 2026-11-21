@@ -10,7 +10,7 @@ import { currencySymbol } from '../lib/currency';
 import { ModalShell } from '../components/ModalShell';
 
 interface StockItem {
-  id: number;
+  id: string;
   code: string | null;
   name: string;
   quantityOnHand: number;
@@ -27,12 +27,12 @@ interface StockItemsResponse {
 }
 
 interface StockMovement {
-  id: number;
-  itemId: number;
+  id: string;
+  itemId: string;
   itemName: string;
   date: string;
   type: string;
-  documentId: number | null;
+  documentId: string | null;
   documentNo: string | null;
   linkType: 'bill' | 'invoice' | null;
   in: number;
@@ -44,7 +44,7 @@ interface StockMovement {
 }
 
 interface AdjustmentPayload {
-  itemId: number;
+  itemId: string;
   quantityChange: number;
   unitCost: number | null;
   reason: string;
@@ -74,7 +74,7 @@ export const Inventory: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showAdjust, setShowAdjust] = useState(false);
-  const activeItemId = routeItemId ? Number(routeItemId) : null;
+  const activeItemId = routeItemId || null;
 
   const currency = useMemo(() => new Intl.NumberFormat(undefined, {
     style: 'currency',
@@ -93,7 +93,7 @@ export const Inventory: React.FC = () => {
       setData(items);
 
       if (activeItemId !== null) {
-        if (!Number.isInteger(activeItemId) || !items.items.some(item => item.id === activeItemId)) {
+        if (!items.items.some(item => item.id === activeItemId)) {
           setMovements([]);
           throw new Error('Stock item not found.');
         }
@@ -295,7 +295,7 @@ export const Inventory: React.FC = () => {
 const AdjustStockDialog: React.FC<{
   open: boolean;
   items: StockItem[];
-  initialItemId?: number;
+  initialItemId?: string;
   currencySymbol: string;
   formatMoney: (amount: number) => string;
   onClose: () => void;
@@ -310,7 +310,7 @@ const AdjustStockDialog: React.FC<{
   const [memo, setMemo] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const selectedItem = items.find(item => item.id === Number(itemId));
+  const selectedItem = items.find(item => item.id === itemId);
   const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
   const inputClass = 'w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition';
 

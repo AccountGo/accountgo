@@ -39,26 +39,27 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { addBusinessDays, businessDaysBetween, isValidDate, localToday } from '../lib/businessDays';
 import { carriedOverPaymentInstructions, paymentInstructionsPayload } from '../lib/paymentBank';
 import { archivedTaxMessage, firstArchivedTax, invoiceLineAmounts, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
+import { shortRef } from '../lib/shortRef';
 
 interface InvoiceEditProps {
   isEdit?: boolean;
 }
 
 interface FormLineItem {
-  id?: number;
-  itemId?: number | null;
+  id?: string;
+  itemId?: string | null;
   itemDescription: string;
   quantity: number;
   amount: number;
   discount: number;
-  taxId: number | '';
-  salesAccountId?: number | null;
+  taxId: string | '';
+  salesAccountId?: string | null;
   salesAccountCode?: string | null;
   salesAccountName?: string | null;
 }
 
 interface SalesAccountOption {
-  id: number;
+  id: string;
   code: string;
   name: string;
 }
@@ -92,10 +93,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [isLoadingRefs, setIsLoadingRefs] = useState<boolean>(true);
 
   // Form State
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   /** Full client with contacts, for the Bill To selector. */
   const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
-  const [billToContactId, setBillToContactId] = useState<number | ''>('');
+  const [billToContactId, setBillToContactId] = useState<string>('');
   const [invoiceNo, setInvoiceNo] = useState<string>('');
   // Issued invoices keep their number; only drafts (and new invoices) can change it.
   const [isIssued, setIsIssued] = useState<boolean>(false);
@@ -105,7 +106,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [referenceNo, setReferenceNo] = useState<string>('');
   const [shippingHandlingCharge, setShippingHandlingCharge] = useState(0);
   const [invoiceDate, setInvoiceDate] = useState<string>(localToday);
-  const [paymentTermId, setPaymentTermId] = useState<number | ''>('');
+  const [paymentTermId, setPaymentTermId] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   // New invoices start from the workspace's default texts (Settings → Invoices); edits keep the invoice's own values.
   const [notes, setNotes] = useState<string>('');
@@ -302,7 +303,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       const loadInvoice = async () => {
         try {
           const res = await authFetch(`/api/Sales/SalesInvoice?id=${invoiceId}`);
-          if (!res.ok) throw new Error(`Could not load invoice #${invoiceId}`);
+          if (!res.ok) throw new Error(`Could not load invoice ${shortRef(invoiceId)}`);
           const data: Invoice = await res.json();
 
           if (data.status !== 'Draft') {
@@ -355,7 +356,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   // Payment terms count business days (lib/businessDays). Choosing a term sets the due date; editing either date by
   // hand keeps both dates and selects the term they match, or Custom when none does.
-  const applyTerm = (id: number | '') => {
+  const applyTerm = (id: string | '') => {
     setPaymentTermId(id);
     const term = paymentTerms.find((t) => t.id === id);
     if (term && isValidDate(invoiceDate)) setDueDate(addBusinessDays(invoiceDate, term.dueAfterDays ?? 0));
@@ -368,7 +369,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   useEffect(() => {
     if (!clientParam || clientParamApplied || customers.length === 0 || paymentTerms.length === 0) return;
     setClientParamApplied(true);
-    const client = customers.find((c) => c.id === Number(clientParam) && !c.archived);
+    const client = customers.find((c) => c.id === clientParam && !c.archived);
     if (!client) return;
     setSelectedCustomerId(client.id);
     if (client.paymentTermId) applyTerm(client.paymentTermId);
@@ -399,10 +400,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     });
   };
 
-  const selectedCustomer = customers.find((c) => c.id === Number(selectedCustomerId));
+  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
   const loadClientDetail = useCallback(
-    async (customerId: number) => {
+    async (customerId: string) => {
       try {
         const res = await authFetch(`/api/Sales/Client?id=${customerId}`);
         if (!res.ok) {
@@ -427,7 +428,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       setBillToContactId('');
       return;
     }
-    void loadClientDetail(Number(selectedCustomerId));
+    void loadClientDetail(selectedCustomerId);
   }, [selectedCustomerId, loadClientDetail]);
 
   const handlePickCustomer = (customer: CustomerOption) => {
@@ -436,12 +437,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     setIsCustomerPickerOpen(false);
   };
 
-  const handleBillToChange = async (contactId: number | '') => {
+  const handleBillToChange = async (contactId: string | '') => {
     setBillToContactId(contactId);
     if (!selectedCustomerId) return;
     try {
       const res = await authFetch(
-        `/api/Sales/SetClientBillToContact?clientId=${Number(selectedCustomerId)}&contactId=${contactId || 0}`,
+        `/api/Sales/SetClientBillToContact?clientId=${selectedCustomerId}${contactId ? `&contactId=${contactId}` : ''}`,
         { method: 'POST' },
       );
       if (!res.ok) {
@@ -455,7 +456,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   };
 
   const billToContact: ContactPerson | undefined = selectedClientDetail?.contacts?.find(
-    (c) => c.id === Number(billToContactId),
+    (c) => c.id === billToContactId,
   );
   const billToPreviewEmail = billToContact?.email || selectedCustomer?.email;
   const billToPreviewPhone = billToContact?.phone || selectedCustomer?.phone;
@@ -561,27 +562,27 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
     try {
       const payload: any = {
-        id: isEdit && invoiceId ? Number(invoiceId) : 0,
+        id: isEdit && invoiceId ? invoiceId : null,
         // Blank: the invoice takes the next number when it is issued.
         no: invoiceNo.trim() || null,
-        customerId: Number(selectedCustomerId),
+        customerId: selectedCustomerId,
         invoiceDate: invoiceDate,
         dueDate: dueDate || invoiceDate,
-        paymentTermId: paymentTermId ? Number(paymentTermId) : null,
+        paymentTermId: paymentTermId ? paymentTermId : null,
         referenceNo: referenceNo.trim() || undefined,
         shippingHandlingCharge,
         status: asDraft ? 'Draft' : 'Open',
         notes: notes.trim() || undefined,
         paymentInstructions: paymentInstructionsPayload(paymentInstructions, paymentInstructionsCleared),
         salesInvoiceLines: validLines.map((l) => ({
-          id: l.id || 0,
+          id: l.id || null,
           itemId: l.itemId || null,
           itemDescription: l.itemDescription.trim() || 'Service / Product',
           quantity: Number(l.quantity),
           amount: Number(l.amount) || 0,
           discount: Number(l.discount) || 0,
           taxId: l.taxId || null,
-          salesAccountId: l.salesAccountId ? Number(l.salesAccountId) : null,
+          salesAccountId: l.salesAccountId ? l.salesAccountId : null,
         })),
       };
 
@@ -640,7 +641,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     if (isNew) {
       setSelectedCustomerId(client.id);
       if (client.paymentTermId) applyTerm(client.paymentTermId);
-    } else if (Number(selectedCustomerId) === client.id) {
+    } else if (selectedCustomerId === client.id) {
       void loadClientDetail(client.id);
     }
     setClientDialog(null);
@@ -650,7 +651,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     if (!selectedCustomerId) return;
     setIsLoadingClient(true);
     try {
-      const res = await authFetch(`/api/Sales/Client?id=${Number(selectedCustomerId)}`);
+      const res = await authFetch(`/api/Sales/Client?id=${selectedCustomerId}`);
       if (!res.ok) throw new Error('The client could not be loaded.');
       setClientDialog({ client: await res.json() });
     } catch (err: any) {
@@ -810,7 +811,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                       disabled={isIssued}
                       onChange={(e) => {
                         const raw = e.target.value;
-                        void handleBillToChange(raw ? Number(raw) : '');
+                        void handleBillToChange(raw);
                       }}
                       className="w-full h-10 px-3 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] disabled:opacity-60"
                     >
@@ -909,7 +910,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               </label>
               <select
                 value={paymentTermId}
-                onChange={(e) => applyTerm(e.target.value ? Number(e.target.value) : '')}
+                onChange={(e) => applyTerm(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
               >
                 <option value="">Custom</option>
@@ -1058,7 +1059,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                                 aria-label={`Line ${idx + 1} income account`}
                                 value={line.salesAccountId ?? ''}
                                 onChange={(e) => {
-                                  const val = e.target.value ? Number(e.target.value) : null;
+                                  const val = e.target.value || null;
                                   const acc = salesAccounts.find((a) => a.id === val);
                                   setLines((prev) => {
                                     const updated = [...prev];
@@ -1076,7 +1077,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                                 <option value="">Default (40100 · Sales)</option>
                                 {line.salesAccountId && !salesAccounts.some((a) => a.id === line.salesAccountId) && (
                                   <option value={line.salesAccountId}>
-                                    {line.salesAccountCode ? `${line.salesAccountCode} · ${line.salesAccountName}` : `Account #${line.salesAccountId}`}
+                                    {line.salesAccountCode ? `${line.salesAccountCode} · ${line.salesAccountName}` : `Account ${shortRef(line.salesAccountId)}`}
                                   </option>
                                 )}
                                 {salesAccounts.map((acc) => (
@@ -1135,7 +1136,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           aria-label={`Line ${idx + 1} tax`}
                           value={line.taxId}
                           onChange={(e) =>
-                            handleLineChange(idx, 'taxId', e.target.value ? Number(e.target.value) : '')
+                            handleLineChange(idx, 'taxId', e.target.value)
                           }
                           className="w-full h-9 px-2 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         >
@@ -1294,7 +1295,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       {isCustomerPickerOpen && (
         <PartyPickerDialog
           role="client"
-          parties={customers.filter((c) => !c.archived || c.id === Number(selectedCustomerId))}
+          parties={customers.filter((c) => !c.archived || c.id === selectedCustomerId)}
           selectedId={selectedCustomerId || null}
           onPick={handlePickCustomer}
           onAddNew={

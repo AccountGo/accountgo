@@ -80,12 +80,14 @@ namespace AccountGo.BackendTests.Security
             return (await Fixture.Json(response)).GetProperty("policyRevision").GetInt64();
         }
 
-        private async Task<int> MemberId(Team team, string userId)
+        private async Task<string> MemberId(Team team, string userId)
         {
             var response = await _fixture.Send(HttpMethod.Get, Current + "/members", token: team.Owner.Token, org: team.Slug);
             var members = await Fixture.Json(response);
-            return members.EnumerateArray().Single(m => m.GetProperty("userId").GetString() == userId).GetProperty("memberId").GetInt32();
+            return members.EnumerateArray().Single(m => m.GetProperty("userId").GetString() == userId).GetProperty("memberId").GetString()!;
         }
+
+        private string RolePub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Security.SecurityRole>(_fixture.Factory.Services, id);
 
         private async Task<HttpResponseMessage> SetPolicy(Team team, string workflow, long? revision = null, string? token = null)
         {
@@ -175,7 +177,7 @@ namespace AccountGo.BackendTests.Security
             var platform = await _fixture.CreateUser($"platform-{team.Slug}@example.com", isSystemAdministrator: true);
             await _fixture.AddMemberDirectAsync(team.CompanyId, platform.Id, CompanyMemberRole.Admin, Array.Empty<string>());
             var response = await _fixture.Send(HttpMethod.Post, "/api/Administration/roles",
-                new { id = roleId, name = roleName, displayName = roleName, permissionIds = Array.Empty<int>() },
+                new { id = RolePub(roleId), name = roleName, displayName = roleName, permissionIds = Array.Empty<string>() },
                 token: platform.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
             await AssertReason(response, HttpStatusCode.Conflict, WorkspacePolicyReasonCodes.LastReviewerUnavailable);
@@ -221,7 +223,7 @@ namespace AccountGo.BackendTests.Security
             // Concurrent role-template strip and last-extra-reviewer removal: coordination must keep
             // independent review usable (at least one of the requests is rejected).
             var stripTask = _fixture.Send(HttpMethod.Post, "/api/Administration/roles",
-                new { id = roleId, name = roleName, displayName = roleName, permissionIds = Array.Empty<int>() },
+                new { id = RolePub(roleId), name = roleName, displayName = roleName, permissionIds = Array.Empty<string>() },
                 token: platform.Token, org: team.Slug);
             var removeTask = _fixture.Send(HttpMethod.Delete, $"{Current}/members/{extraId}",
                 token: team.Owner.Token, org: team.Slug);
@@ -457,7 +459,8 @@ namespace AccountGo.BackendTests.Security
             using (var scope = _fixture.Factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                Assert.NotEmpty(db.CompanyMemberSecurityRoles.IgnoreQueryFilters().Where(r => r.CompanyMemberId == reviewerMemberId));
+                var reviewerMemberIntId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<CompanyMember>(_fixture.Factory.Services, reviewerMemberId);
+                Assert.NotEmpty(db.CompanyMemberSecurityRoles.IgnoreQueryFilters().Where(r => r.CompanyMemberId == reviewerMemberIntId));
             }
 
             var revision = await Revision(team);
@@ -538,34 +541,35 @@ namespace AccountGo.BackendTests.Security
 
         // ---- independent-review posting path ---------------------------------------------------------------
 
-        private async Task<int> SaveDraft(Team team)
+        private async Task<(string PublicId, int InternalId)> SaveDraft(Team team)
         {
-            int cash, revenue;
+            string cash, revenue;
             using (var scope = _fixture.Factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                cash = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == team.CompanyId && a.AccountCode == "10111").Id;
-                revenue = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == team.CompanyId && a.AccountCode == "40100").Id;
+                cash = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == team.CompanyId && a.AccountCode == "10111").PublicId;
+                revenue = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == team.CompanyId && a.AccountCode == "40100").PublicId;
             }
 
             var draft = new
             {
-                id = 0,
                 journalDate = DateTime.UtcNow.Date.AddDays(-1),
                 voucherType = 6,
                 memo = "Reviewed adjustment",
                 journalEntryLines = new[]
                 {
-                    new { id = 0, accountId = cash, drCr = 1, amount = 25m },
-                    new { id = 0, accountId = revenue, drCr = 2, amount = 25m }
+                    new { accountId = cash, drCr = 1, amount = 25m },
+                    new { accountId = revenue, drCr = 2, amount = 25m }
                 }
             };
             var save = await _fixture.Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", draft, token: team.Owner.Token, org: team.Slug);
             Assert.True(save.IsSuccessStatusCode, await save.Content.ReadAsStringAsync());
-            return (await Fixture.Json(save)).GetProperty("id").GetInt32();
+            var publicId = (await Fixture.Json(save)).GetProperty("id").GetString()!;
+            var internalId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.InternalIdOf<Core.Domain.Financials.JournalEntryHeader>(_fixture.Factory.Services, publicId);
+            return (publicId, internalId);
         }
 
-        private async Task<HttpResponseMessage> PostJournal(Team team, int journalId, string? approvalId = null, string? approverId = null)
+        private async Task<HttpResponseMessage> PostJournal(Team team, string journalId, string? approvalId = null, string? approverId = null)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, "/api/Financials/PostJournalEntry");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", team.Owner.Token);
@@ -581,20 +585,20 @@ namespace AccountGo.BackendTests.Security
         public async Task IndependentReview_ReviewerApproval_MakesPreparersPostingOperable()
         {
             var team = await CreateTeam();
-            var journalId = await SaveDraft(team);
+            var (journalId, journalIntId) = await SaveDraft(team);
 
             // Without an independent approval the preparer cannot post their own entry.
             Assert.Equal(HttpStatusCode.Forbidden, (await PostJournal(team, journalId)).StatusCode);
 
             // The preparer cannot record the review approval for their own entry.
             var selfApproval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId },
                 token: team.Owner.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.Forbidden, selfApproval.StatusCode);
 
             // An independent eligible reviewer records the approval; the preparer then posts with the headers.
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId },
                 token: team.Reviewer.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
             var body = await Fixture.Json(approval);
@@ -608,7 +612,7 @@ namespace AccountGo.BackendTests.Security
                 var rows = db.AuditLogs.IgnoreQueryFilters().Where(a => a.CompanyId == team.CompanyId && a.RecordId == requestId).ToList();
                 Assert.Contains(rows, a => a.TableName == "__AccessDelegationApprovalState" && a.OriginalValue == "Consumed");
                 var persisted = System.Text.Json.JsonSerializer.Deserialize<PersistedAccessApprovalPayload>(rows.Single(a => a.TableName == "__AccessDelegationApproval").NewValue!)!;
-                Assert.Equal(journalId.ToString(), persisted.ResourceId);
+                Assert.Equal(journalIntId.ToString(), persisted.ResourceId);
             }
             var retry = await PostJournal(team, journalId,
                 body.GetProperty("approvalRequestId").GetString(), body.GetProperty("approverUserId").GetString());
@@ -620,9 +624,9 @@ namespace AccountGo.BackendTests.Security
         public async Task IndependentReview_ConcurrentPostsConsumeApprovalOnce()
         {
             var team = await CreateTeam();
-            var journalId = await SaveDraft(team);
+            var (journalId, journalIntId) = await SaveDraft(team);
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId },
                 token: team.Reviewer.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
             var body = await Fixture.Json(approval);
@@ -637,7 +641,7 @@ namespace AccountGo.BackendTests.Security
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
             Assert.Equal(1, await db.AuditLogs.IgnoreQueryFilters().CountAsync(a => a.CompanyId == team.CompanyId &&
                 a.TableName == "__AccessDelegationApprovalState" && a.RecordId == approvalId && a.OriginalValue == "Consumed"));
-            Assert.Equal(1, await db.GeneralLedgerHeaders.IgnoreQueryFilters().CountAsync(g => g.CompanyId == team.CompanyId && g.SourceDocumentId == journalId &&
+            Assert.Equal(1, await db.GeneralLedgerHeaders.IgnoreQueryFilters().CountAsync(g => g.CompanyId == team.CompanyId && g.SourceDocumentId == journalIntId &&
                 g.DocumentType == Core.Domain.DocumentTypes.JournalEntry));
         }
 
@@ -645,7 +649,7 @@ namespace AccountGo.BackendTests.Security
         public async Task IndependentReview_EarlierPreparerCannotPostAfterAnotherPreparer()
         {
             var team = await CreateTeam();
-            var journalId = await SaveDraft(team);
+            var (journalId, _) = await SaveDraft(team);
             var loaded = await _fixture.Send(HttpMethod.Get, $"/api/Financials/JournalEntry?id={journalId}", token: team.Reviewer.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.OK, loaded.StatusCode);
             var draft = await Fixture.Json(loaded);
@@ -655,13 +659,13 @@ namespace AccountGo.BackendTests.Security
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
             Assert.Equal("SEPARATION_OF_DUTIES_VIOLATION", (await Fixture.Json(response)).GetProperty("code").GetString());
             var reviewerApproval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId },
                 token: team.Reviewer.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.Forbidden, reviewerApproval.StatusCode);
             var independent = await _fixture.CreateUser($"independent-{team.Slug}@example.com");
             await _fixture.AddMemberDirectAsync(team.CompanyId, independent.Id, CompanyMemberRole.Admin, new[] { "Accountant" });
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId },
                 token: independent.Token, org: team.Slug);
             Assert.True(approval.IsSuccessStatusCode, await approval.Content.ReadAsStringAsync());
             var body = await Fixture.Json(approval);
@@ -673,7 +677,7 @@ namespace AccountGo.BackendTests.Security
         public async Task IndependentReview_ThirdPersonCanPostAfterTwoPreparers()
         {
             var team = await CreateTeam();
-            var journalId = await SaveDraft(team);
+            var (journalId, _) = await SaveDraft(team);
             var loaded = await _fixture.Send(HttpMethod.Get, $"/api/Financials/JournalEntry?id={journalId}", token: team.Reviewer.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.OK, loaded.StatusCode);
             var saved = await _fixture.Send(HttpMethod.Post, "/api/Financials/SaveJournalEntry", await Fixture.Json(loaded), token: team.Reviewer.Token, org: team.Slug);
@@ -688,9 +692,9 @@ namespace AccountGo.BackendTests.Security
         public async Task IndependentReview_RevokedApprovalCannotAuthorizePost()
         {
             var team = await CreateTeam();
-            var journalId = await SaveDraft(team);
+            var (journalId, _) = await SaveDraft(team);
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() }, token: team.Reviewer.Token, org: team.Slug);
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId }, token: team.Reviewer.Token, org: team.Slug);
             Assert.Equal(HttpStatusCode.Created, approval.StatusCode);
             var body = await Fixture.Json(approval);
             var approvalId = body.GetProperty("approvalRequestId").GetString();
@@ -705,10 +709,10 @@ namespace AccountGo.BackendTests.Security
         public async Task IndependentReview_ApprovalFromIneligibleReviewer_IsRejected()
         {
             var team = await CreateTeam(reviewerCanPost: false);
-            var journalId = await SaveDraft(team);
+            var (journalId, _) = await SaveDraft(team);
 
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId.ToString() },
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = journalId },
                 token: team.Reviewer.Token, org: team.Slug);
 
             await AssertReason(approval, HttpStatusCode.Forbidden, WorkspacePolicyReasonCodes.ReviewerRequired);
@@ -720,7 +724,7 @@ namespace AccountGo.BackendTests.Security
             var team = await CreateTeam();
 
             var approval = await _fixture.Send(HttpMethod.Post, Current + "/members/access-approvals",
-                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = "999999" },
+                new { operationKey = AccessOperationCatalog.FinancialsJournalPost, resourceId = "je_00000000000000000000000001" },
                 token: team.Reviewer.Token, org: team.Slug);
 
             Assert.Equal(HttpStatusCode.BadRequest, approval.StatusCode);

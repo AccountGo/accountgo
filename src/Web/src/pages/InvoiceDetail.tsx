@@ -46,6 +46,7 @@ import { recoverPendingEmail, sendInvoiceEmailRequest } from '../lib/invoiceEmai
 import type { PendingEmailAttempt } from '../lib/customEmail';
 import { useEmailCapabilities } from '../lib/useEmailCapabilities';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
+import { shortRef } from '../lib/shortRef';
 
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -98,7 +99,7 @@ export const InvoiceDetail: React.FC = () => {
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [paymentNotes, setPaymentNotes] = useState<string>('');
   const [depositBanks, setDepositBanks] = useState<BankAccountPickerItem[] | null>(null);
-  const [depositBankId, setDepositBankId] = useState<number | ''>('');
+  const [depositBankId, setDepositBankId] = useState<string>('');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState<boolean>(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
@@ -129,7 +130,7 @@ export const InvoiceDetail: React.FC = () => {
     try {
       const res = await authFetch(`/api/Sales/SalesInvoice?id=${invoiceId}`);
       if (!res.ok) {
-        throw new Error(`Failed to load invoice #${invoiceId} (${res.status})`);
+        throw new Error(`Failed to load invoice ${shortRef(invoiceId)} (${res.status})`);
       }
       const data: Invoice = await res.json();
       setInvoice(data);
@@ -150,7 +151,7 @@ export const InvoiceDetail: React.FC = () => {
 
   // PDF is rendered by the API so it looks the same whatever browser saves it.
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
-  const fetchInvoicePdf = async (id: number, no: string | null) => {
+  const fetchInvoicePdf = async (id: string, no: string | null) => {
     const res = await authFetch(`/api/Sales/SalesInvoicePdf?id=${id}`);
     if (!res.ok) {
       throw new Error(`Could not generate the PDF (${res.status})`);
@@ -289,7 +290,8 @@ export const InvoiceDetail: React.FC = () => {
         paymentMethod: paymentMethod,
         referenceNo: paymentReference.trim() || undefined,
         notes: paymentNotes.trim() || undefined,
-        bankAccountId: depositBankId === '' ? undefined : Number(depositBankId),
+        // Cash accounts without a bank record have no bank id to send; the server then uses the default deposit account.
+        bankAccountId: depositBankId === '' || depositBankId.startsWith('cash:') ? undefined : depositBankId,
       };
 
       const res = await authFetch(withConfirmReconciledPeriod('/api/Sales/RecordPayment', confirmReconciledPeriod), {
@@ -586,7 +588,7 @@ export const InvoiceDetail: React.FC = () => {
           Invoice Not Found
         </h2>
         <p className="text-sm text-[var(--text-secondary)] mb-6">
-          The requested invoice #{invoiceId} could not be retrieved.
+          The requested invoice {shortRef(invoiceId)} could not be retrieved.
         </p>
         <Link
           to={`/org/${orgSlug}/sales`}
@@ -1196,11 +1198,11 @@ export const InvoiceDetail: React.FC = () => {
                   <select
                     required
                     value={depositBankId}
-                    onChange={(e) => setDepositBankId(e.target.value ? Number(e.target.value) : '')}
+                    onChange={(e) => setDepositBankId(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                   >
                     {depositBanks.map((b) => (
-                      <option key={b.id} value={b.id}>
+                      <option key={b.id ?? b.name} value={b.id ?? `cash:${b.accountId ?? b.name}`}>
                         {b.name}
                         {b.accountNumberMasked ? ` · ${b.accountNumberMasked}` : ''}
                         {b.isDefaultForReceipts ? ' (default)' : ''}

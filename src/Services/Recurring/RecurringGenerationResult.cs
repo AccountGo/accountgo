@@ -113,9 +113,11 @@ namespace Services.Recurring
         public RecurringGenerationOutcome Outcome { get; init; }
 
         /// <summary>The processed occurrence id, when one was involved.</summary>
+        [Dto.Common.PublicId("rocc")]
         public int OccurrenceId { get; init; }
 
         /// <summary>The generated sales invoice id, when a document was created.</summary>
+        [Dto.Common.PublicId("inv")]
         public int? SalesInvoiceId { get; init; }
 
         /// <summary>Error code when <see cref="Outcome"/> is <see cref="RecurringGenerationOutcome.Failed"/>.</summary>

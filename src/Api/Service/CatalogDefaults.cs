@@ -153,7 +153,7 @@ namespace Api.Service
                 .OrderBy(a => a.AccountCode)
                 .Select(a => new
                 {
-                    id = a.Id,
+                    id = a.PublicId,
                     code = a.AccountCode,
                     name = a.AccountName,
                     accountClassId = a.AccountClassId

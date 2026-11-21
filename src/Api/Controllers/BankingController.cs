@@ -101,9 +101,9 @@ namespace Api.Controllers
             return Ok(_banks.EligiblePostingAccounts());
         }
 
-        [HttpGet("Accounts/{id:int}")]
+        [HttpGet("Accounts/{id}")]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
-        public IActionResult GetAccount(int id)
+        public IActionResult GetAccount([Dto.Common.PublicId("ba")] int id)
         {
             try
             {
@@ -115,10 +115,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("Accounts/{id:int}/Register")]
+        [HttpGet("Accounts/{id}/Register")]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
         public IActionResult GetRegister(
-            int id,
+            [Dto.Common.PublicId("ba")] int id,
             [FromQuery] string? from = null,
             [FromQuery] string? to = null,
             [FromQuery] int page = 1,
@@ -138,10 +138,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("Accounts/{id:int}/OutstandingAging")]
+        [HttpGet("Accounts/{id}/OutstandingAging")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
-        public IActionResult GetOutstandingAging(int id, [FromQuery] string? asOf = null)
+        public IActionResult GetOutstandingAging([Dto.Common.PublicId("ba")] int id, [FromQuery] string? asOf = null)
         {
             try
             {
@@ -157,10 +157,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Accounts/{id:int}/BalanceCheck")]
+        [HttpPost("Accounts/{id}/BalanceCheck")]
         [RequireModule(SystemModules.Sales, SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
-        public IActionResult CheckBalance(int id, [FromBody] BankBalanceCheckRequest request)
+        public IActionResult CheckBalance([Dto.Common.PublicId("ba")] int id, [FromBody] BankBalanceCheckRequest request)
         {
             try
             {
@@ -210,7 +210,8 @@ namespace Api.Controllers
                 using var tx = BeginWriteTransaction();
                 var created = _banks.Create(request, includeFullNumbers: true);
                 tx.Commit();
-                return CreatedAtAction(nameof(GetAccount), new { id = created.Id }, created);
+                var publicId = _db.Banks.AsNoTracking().Where(b => b.Id == created.Id).Select(b => b.PublicId).Single();
+                return CreatedAtAction(nameof(GetAccount), new { id = publicId }, created);
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
@@ -218,9 +219,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPut("Accounts/{id:int}")]
+        [HttpPut("Accounts/{id}")]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult UpdateAccount(int id, [FromBody] UpdateBankAccountRequest request)
+        public IActionResult UpdateAccount([Dto.Common.PublicId("ba")] int id, [FromBody] UpdateBankAccountRequest request)
         {
             try
             {
@@ -239,9 +240,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Accounts/{id:int}/Archive")]
+        [HttpPost("Accounts/{id}/Archive")]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult Archive(int id, [FromQuery] bool confirm = false)
+        public IActionResult Archive([Dto.Common.PublicId("ba")] int id, [FromQuery] bool confirm = false)
         {
             try
             {
@@ -269,9 +270,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Accounts/{id:int}/Unarchive")]
+        [HttpPost("Accounts/{id}/Unarchive")]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult Unarchive(int id)
+        public IActionResult Unarchive([Dto.Common.PublicId("ba")] int id)
         {
             try
             {
@@ -290,9 +291,9 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Accounts/{id:int}/SetDefault")]
+        [HttpPost("Accounts/{id}/SetDefault")]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult SetDefault(int id, [FromQuery(Name = "for")] string forKind)
+        public IActionResult SetDefault([Dto.Common.PublicId("ba")] int id, [FromQuery(Name = "for")] string forKind)
         {
             try
             {
@@ -315,7 +316,7 @@ namespace Api.Controllers
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
         public IActionResult ListTransactions(
-            [FromQuery] int bankId,
+            [FromQuery] [Dto.Common.PublicId("ba")] int bankId,
             [FromQuery] string? from = null,
             [FromQuery] string? to = null)
         {
@@ -362,10 +363,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Transactions/{id:int}/Void")]
+        [HttpPost("Transactions/{id}/Void")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
-        public IActionResult VoidTransaction(int id, [FromBody] VoidBankTransactionRequest? request)
+        public IActionResult VoidTransaction([Dto.Common.PublicId("btx")] int id, [FromBody] VoidBankTransactionRequest? request)
         {
             try
             {
@@ -391,7 +392,7 @@ namespace Api.Controllers
         [HttpGet("Reconciliations")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
-        public IActionResult ListReconciliations([FromQuery] int bankId)
+        public IActionResult ListReconciliations([FromQuery] [Dto.Common.PublicId("ba")] int bankId)
         {
             try
             {
@@ -433,10 +434,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("Reconciliations/{id:int}")]
+        [HttpGet("Reconciliations/{id}")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
-        public IActionResult GetReconciliation(int id)
+        public IActionResult GetReconciliation([Dto.Common.PublicId("rec")] int id)
         {
             try
             {
@@ -452,10 +453,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPut("Reconciliations/{id:int}/Items")]
+        [HttpPut("Reconciliations/{id}/Items")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingReconcile)]
-        public IActionResult UpdateReconciliationItems(int id, [FromBody] UpdateBankReconciliationItemsRequest request)
+        public IActionResult UpdateReconciliationItems([Dto.Common.PublicId("rec")] int id, [FromBody] UpdateBankReconciliationItemsRequest request)
         {
             try
             {
@@ -478,11 +479,11 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Reconciliations/{id:int}/Adjustments")]
+        [HttpPost("Reconciliations/{id}/Adjustments")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingReconcile)]
         [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
-        public IActionResult AddReconciliationAdjustment(int id, [FromBody] CreateReconciliationAdjustmentRequest request)
+        public IActionResult AddReconciliationAdjustment([Dto.Common.PublicId("rec")] int id, [FromBody] CreateReconciliationAdjustmentRequest request)
         {
             try
             {
@@ -505,10 +506,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Reconciliations/{id:int}/Finish")]
+        [HttpPost("Reconciliations/{id}/Finish")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingReconcile)]
-        public IActionResult FinishReconciliation(int id, [FromBody] FinishBankReconciliationRequest request)
+        public IActionResult FinishReconciliation([Dto.Common.PublicId("rec")] int id, [FromBody] FinishBankReconciliationRequest request)
         {
             try
             {
@@ -531,10 +532,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Reconciliations/{id:int}/Undo")]
+        [HttpPost("Reconciliations/{id}/Undo")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingReconcileUndo)]
-        public IActionResult UndoReconciliation(int id, [FromBody] UndoBankReconciliationRequest request)
+        public IActionResult UndoReconciliation([Dto.Common.PublicId("rec")] int id, [FromBody] UndoBankReconciliationRequest request)
         {
             try
             {
@@ -557,10 +558,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Reconciliations/{id:int}/Review")]
+        [HttpPost("Reconciliations/{id}/Review")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingReconcile)]
-        public IActionResult ReviewReconciliation(int id)
+        public IActionResult ReviewReconciliation([Dto.Common.PublicId("rec")] int id)
         {
             try
             {
@@ -583,10 +584,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpDelete("Reconciliations/{id:int}")]
+        [HttpDelete("Reconciliations/{id}")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingReconcile)]
-        public IActionResult DiscardReconciliation(int id)
+        public IActionResult DiscardReconciliation([Dto.Common.PublicId("rec")] int id)
         {
             try
             {
@@ -605,11 +606,11 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("Reconciliations/{id:int}/Report.pdf")]
+        [HttpGet("Reconciliations/{id}/Report.pdf")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
         [AuditDataAccess("reconciliation_report", "data.export")]
-        public IActionResult ReconciliationReportPdf(int id)
+        public IActionResult ReconciliationReportPdf([Dto.Common.PublicId("rec")] int id)
         {
             try
             {
@@ -628,10 +629,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Accounts/{bankId:int}/StatementImports/Preview")]
+        [HttpPost("Accounts/{bankId}/StatementImports/Preview")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult PreviewStatementImport(int bankId, [FromBody] BankStatementImportRequest request)
+        public IActionResult PreviewStatementImport([Dto.Common.PublicId("ba")] int bankId, [FromBody] BankStatementImportRequest request)
         {
             try
             {
@@ -651,10 +652,10 @@ namespace Api.Controllers
         /// Read-only. Lists statement lines already stored for rows the current Wise rule would skip.
         /// Does not delete, unmatch, reverse, or change a reconciliation.
         /// </summary>
-        [HttpPost("Accounts/{bankId:int}/StatementImports/WiseConversionImpact")]
+        [HttpPost("Accounts/{bankId}/StatementImports/WiseConversionImpact")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult WiseConversionImpact(int bankId, [FromBody] BankStatementImportRequest request)
+        public IActionResult WiseConversionImpact([Dto.Common.PublicId("ba")] int bankId, [FromBody] BankStatementImportRequest request)
         {
             try
             {
@@ -671,10 +672,10 @@ namespace Api.Controllers
         }
 
         /// <summary>Saved mapping or built-in preset for this CSV header — never skips preview (#447 Phase B).</summary>
-        [HttpPost("Accounts/{bankId:int}/StatementImports/ResolveMapping")]
+        [HttpPost("Accounts/{bankId}/StatementImports/ResolveMapping")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult ResolveStatementMapping(int bankId, [FromBody] BankStatementImportRequest request)
+        public IActionResult ResolveStatementMapping([Dto.Common.PublicId("ba")] int bankId, [FromBody] BankStatementImportRequest request)
         {
             try
             {
@@ -690,10 +691,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Accounts/{bankId:int}/StatementImports")]
+        [HttpPost("Accounts/{bankId}/StatementImports")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult CommitStatementImport(int bankId, [FromBody] BankStatementImportRequest request)
+        public IActionResult CommitStatementImport([Dto.Common.PublicId("ba")] int bankId, [FromBody] BankStatementImportRequest request)
         {
             try
             {
@@ -712,15 +713,15 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("Accounts/{bankId:int}/StatementLines")]
+        [HttpGet("Accounts/{bankId}/StatementLines")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
         public IActionResult ListStatementLines(
-            int bankId,
+            [Dto.Common.PublicId("ba")] int bankId,
             [FromQuery] string? status = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = BankStatementImportService.DefaultListPageSize,
-            [FromQuery] int? lineId = null)
+            [FromQuery] [Dto.Common.PublicId("bsl")] int? lineId = null)
         {
             try
             {
@@ -736,11 +737,11 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("StatementLines/ForBill/{billId:int}")]
+        [HttpGet("StatementLines/ForBill/{billId}")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsView)]
         [RequirePermission(SystemPermissions.PurchasesBillsView)]
-        public IActionResult StatementLinesForBill(int billId)
+        public IActionResult StatementLinesForBill([Dto.Common.PublicId("bill")] int billId)
         {
             var companyId = _tenant.RequireCompanyId();
             var paymentHeaders = _db.VendorPayments.Where(p => p.CompanyId == companyId &&
@@ -753,10 +754,10 @@ namespace Api.Controllers
                 .Select(l => new { l.Id, l.BankId }).ToList());
         }
 
-        [HttpPost("StatementLines/{id:int}/Match")]
+        [HttpPost("StatementLines/{id}/Match")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult MatchStatementLine(int id, [FromBody] MatchBankStatementLineRequest? request)
+        public IActionResult MatchStatementLine([Dto.Common.PublicId("bsl")] int id, [FromBody] MatchBankStatementLineRequest? request)
         {
             if (RefuseIfBooksLocked(id) is { } locked)
                 return locked;
@@ -778,10 +779,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("StatementLines/{id:int}/Unmatch")]
+        [HttpPost("StatementLines/{id}/Unmatch")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult UnmatchStatementLine(int id)
+        public IActionResult UnmatchStatementLine([Dto.Common.PublicId("bsl")] int id)
         {
             if (RefuseIfBooksLocked(id) is { } locked)
                 return locked;
@@ -803,11 +804,11 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("StatementLines/{id:int}/CreateTransaction")]
+        [HttpPost("StatementLines/{id}/CreateTransaction")]
         [RequireModule(SystemModules.Financials)]
         [RequirePermission(SystemPermissions.BankingReconcile)]
         [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
-        public IActionResult CreateTransactionFromStatementLine(int id, [FromBody] CreateTransactionFromStatementLineRequest request)
+        public IActionResult CreateTransactionFromStatementLine([Dto.Common.PublicId("bsl")] int id, [FromBody] CreateTransactionFromStatementLineRequest request)
         {
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
@@ -894,14 +895,14 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("StatementLines/{id:int}/RecordExpense")]
+        [HttpPost("StatementLines/{id}/RecordExpense")]
         [RequireStatementImport]
         [RequireModule(SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.PurchasesBillsCreate)]
         [RequirePermission(SystemPermissions.PurchasesBillsPost)]
         [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
-        public IActionResult RecordExpenseFromStatementLine(int id, [FromBody] RecordExpenseFromStatementLineRequest request)
+        public IActionResult RecordExpenseFromStatementLine([Dto.Common.PublicId("bsl")] int id, [FromBody] RecordExpenseFromStatementLineRequest request)
         {
             if (request?.NewVendor != null && !string.IsNullOrWhiteSpace(request.NewVendor.Name)
                 && !_tenant.Permissions.Contains(SystemPermissions.PurchasesVendorsManage))
@@ -940,12 +941,12 @@ namespace Api.Controllers
         }
 
         /// <summary>Creates a linked bill draft without approval, payment or a statement match.</summary>
-        [HttpPost("StatementLines/{id:int}/DraftExpense")]
+        [HttpPost("StatementLines/{id}/DraftExpense")]
         [RequireStatementImport]
         [RequireModule(SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.PurchasesBillsCreate)]
-        public IActionResult DraftExpenseFromStatementLine(int id, [FromBody] RecordExpenseFromStatementLineRequest request)
+        public IActionResult DraftExpenseFromStatementLine([Dto.Common.PublicId("bsl")] int id, [FromBody] RecordExpenseFromStatementLineRequest request)
         {
             if (request?.NewVendor != null && !string.IsNullOrWhiteSpace(request.NewVendor.Name)
                 && !_tenant.Permissions.Contains(SystemPermissions.PurchasesVendorsManage))
@@ -970,12 +971,12 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("StatementLines/{id:int}/PayOpenBill")]
+        [HttpPost("StatementLines/{id}/PayOpenBill")]
         [RequireStatementImport]
         [RequireModule(SystemModules.Purchases)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.PurchasesPaymentsCreate)]
-        public IActionResult PayOpenBillFromStatementLine(int id, [FromBody] PayOpenBillFromStatementLineRequest request)
+        public IActionResult PayOpenBillFromStatementLine([Dto.Common.PublicId("bsl")] int id, [FromBody] PayOpenBillFromStatementLineRequest request)
         {
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
@@ -1004,11 +1005,11 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         public IActionResult StatementOwnerActions() => Ok(_statements.GetOwnerActions());
 
-        [HttpPost("StatementLines/{id:int}/UndoOwnerMovement")]
+        [HttpPost("StatementLines/{id}/UndoOwnerMovement")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
-        public IActionResult UndoOwnerMovement(int id, [FromBody] UndoOwnerMovementRequest? request)
+        public IActionResult UndoOwnerMovement([Dto.Common.PublicId("bsl")] int id, [FromBody] UndoOwnerMovementRequest? request)
         {
             if (RefuseIfBooksLocked(id) is { } locked) return locked;
             try
@@ -1033,11 +1034,11 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("StatementLines/{id:int}/RecordOwnerMovement")]
+        [HttpPost("StatementLines/{id}/RecordOwnerMovement")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.BankingTransactionsCreate)]
-        public IActionResult RecordOwnerMovement(int id, [FromBody] RecordOwnerMovementRequest? request) =>
+        public IActionResult RecordOwnerMovement([Dto.Common.PublicId("bsl")] int id, [FromBody] RecordOwnerMovementRequest? request) =>
             RecordOwnerMovements(new[] { id }, request ?? new RecordOwnerMovementRequest(), bulk: false);
 
         [HttpPost("StatementLines/BulkRecordOwnerMovement")]
@@ -1086,14 +1087,14 @@ namespace Api.Controllers
         public IActionResult StatementIncomeCategories() =>
             Ok(_statementIncome.ListIncomeCategories());
 
-        [HttpPost("StatementLines/{id:int}/RecordOtherIncome")]
+        [HttpPost("StatementLines/{id}/RecordOtherIncome")]
         [RequireStatementImport]
         [RequireModule(SystemModules.Sales)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.SalesInvoicesCreate)]
         [RequirePermission(SystemPermissions.SalesInvoicesPost)]
         [RequirePermission(SystemPermissions.SalesReceiptsCreate)]
-        public IActionResult RecordOtherIncomeFromStatementLine(int id, [FromBody] RecordOtherIncomeFromStatementLineRequest request)
+        public IActionResult RecordOtherIncomeFromStatementLine([Dto.Common.PublicId("bsl")] int id, [FromBody] RecordOtherIncomeFromStatementLineRequest request)
         {
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
@@ -1125,12 +1126,12 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("StatementLines/{id:int}/ApplyOpenInvoice")]
+        [HttpPost("StatementLines/{id}/ApplyOpenInvoice")]
         [RequireStatementImport]
         [RequireModule(SystemModules.Sales)]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
         [RequirePermission(SystemPermissions.SalesReceiptsCreate)]
-        public IActionResult ApplyOpenInvoiceFromStatementLine(int id, [FromBody] ApplyOpenInvoiceFromStatementLineRequest request)
+        public IActionResult ApplyOpenInvoiceFromStatementLine([Dto.Common.PublicId("bsl")] int id, [FromBody] ApplyOpenInvoiceFromStatementLineRequest request)
         {
             if (RefuseBeforeBooksStart(id) is { } refused)
                 return refused;
@@ -1154,10 +1155,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("StatementLines/{id:int}/Exclude")]
+        [HttpPost("StatementLines/{id}/Exclude")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult ExcludeStatementLine(int id, [FromBody] ExcludeBankStatementLineRequest request)
+        public IActionResult ExcludeStatementLine([Dto.Common.PublicId("bsl")] int id, [FromBody] ExcludeBankStatementLineRequest request)
         {
             if (RefuseIfBooksLocked(id) is { } locked)
                 return locked;
@@ -1179,10 +1180,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("Accounts/{bankId:int}/StatementLines/ExcludeBeforeBooksStart")]
+        [HttpPost("Accounts/{bankId}/StatementLines/ExcludeBeforeBooksStart")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult ExcludeStatementLinesBeforeBooksStart(int bankId)
+        public IActionResult ExcludeStatementLinesBeforeBooksStart([Dto.Common.PublicId("ba")] int bankId)
         {
             // Intentionally unguarded: lines before the books start can never post and are always on or before any lock date, so guarding would block the cleanup forever.
             try
@@ -1202,10 +1203,10 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("StatementLines/{id:int}/Include")]
+        [HttpPost("StatementLines/{id}/Include")]
         [RequireStatementImport]
         [RequirePermission(SystemPermissions.BankingAccountsManage)]
-        public IActionResult IncludeStatementLine(int id)
+        public IActionResult IncludeStatementLine([Dto.Common.PublicId("bsl")] int id)
         {
             if (RefuseIfBooksLocked(id) is { } locked)
                 return locked;
@@ -1227,13 +1228,13 @@ namespace Api.Controllers
             }
         }
 
+        private sealed record ReconciliationConflictResponse(
+            string Code,
+            string Message,
+            [property: Dto.Common.PublicId("rec")] int? ReconciliationId);
+
         private static IActionResult ReconciliationConflict(BankReconciliationConflictException ex) =>
-            new ConflictObjectResult(new
-            {
-                code = ex.Code,
-                message = ex.Message,
-                reconciliationId = ex.ReconciliationId
-            });
+            new ConflictObjectResult(new ReconciliationConflictResponse(ex.Code, ex.Message, ex.ReconciliationId));
 
         private static IActionResult ReconciledPeriodConflict(ReconciledPeriodConfirmationRequiredException ex) =>
             new ConflictObjectResult(new

@@ -14,8 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("GeneralLedgerLine")]
-    public partial class GeneralLedgerLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("gll")]
+    public partial class GeneralLedgerLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public GeneralLedgerLine()
         {
         }

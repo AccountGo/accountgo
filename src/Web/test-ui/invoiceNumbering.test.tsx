@@ -156,10 +156,10 @@ describe('Draft invoice next-number preview', () => {
     authFetch.mockImplementation(async (url: string) => {
       if (url.startsWith('/api/Sales/SalesInvoice?id=77')) {
         return jsonResponse({
-          id: 77,
+          id: '77',
           no: null,
           status: 'Draft',
-          customerId: 10,
+          customerId: '10',
           customerName: 'Northwind Studio',
           invoiceDate: '2026-11-15',
           dueDate: '2026-11-30',
@@ -169,7 +169,7 @@ describe('Draft invoice next-number preview', () => {
           paidAmount: 0,
           balanceDue: 500,
           salesInvoiceLines: [
-            { id: 1, itemDescription: 'Retainer', quantity: 1, amount: 500, discount: 0, lineTotal: 500 },
+            { id: '1', itemDescription: 'Retainer', quantity: 1, amount: 500, discount: 0, lineTotal: 500 },
           ],
         });
       }
@@ -197,15 +197,15 @@ describe('Draft invoice next-number preview', () => {
     authFetch.mockImplementation(async (url: string) => {
       if (url.startsWith('/api/Sales/SalesInvoice?id=77')) {
         return jsonResponse({
-          id: 77,
+          id: '77',
           no: null,
           status: 'Draft',
-          customerId: 10,
+          customerId: '10',
           customerName: 'Northwind Studio',
           invoiceDate: '2026-11-15',
           dueDate: '2026-11-30',
           salesInvoiceLines: [
-            { id: 1, itemDescription: 'Retainer', quantity: 1, amount: 500, discount: 0 },
+            { id: '1', itemDescription: 'Retainer', quantity: 1, amount: 500, discount: 0 },
           ],
         });
       }

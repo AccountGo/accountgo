@@ -12,7 +12,7 @@ import { HeaderButton } from './PageHeader';
 
 export interface RecordHistoryPanelProps {
   entityType: string;
-  entityId: number | string;
+  entityId: string;
   open: boolean;
   onClose: () => void;
   /** Personal books use their own record names and never mention organizations. */
@@ -43,7 +43,7 @@ export function useRecordHistory() {
 }
 
 /** Button plus panel for a record shown inside a larger page (a journal editor, for example). */
-export const RecordHistoryAction: React.FC<{ entityType: string; entityId: number | string }> = ({ entityType, entityId }) => {
+export const RecordHistoryAction: React.FC<{ entityType: string; entityId: string }> = ({ entityType, entityId }) => {
   const history = useRecordHistory();
   if (!history.canShow) return null;
   return (

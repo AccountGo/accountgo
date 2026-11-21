@@ -7,8 +7,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("BankReconciliationItem")]
-    public partial class BankReconciliationItem : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("reci")]
+    public partial class BankReconciliationItem : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int BankReconciliationId { get; set; }
         public int GeneralLedgerLineId { get; set; }

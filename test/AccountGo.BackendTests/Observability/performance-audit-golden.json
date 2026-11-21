@@ -34,6 +34,7 @@
         "Id",
         "InvitedByUserId",
         "JoinedAt",
+        "PublicId",
         "Role",
         "Status",
         "UserId"
@@ -64,6 +65,7 @@
         "Memo",
         "PartyId",
         "Posted",
+        "PublicId",
         "ReferenceNo",
         "SourceKey",
         "SourceSystem",
@@ -88,7 +90,8 @@
         "DrCr",
         "Id",
         "JournalEntryHeaderId",
-        "Memo"
+        "Memo",
+        "PublicId"
       ]
     },
     {
@@ -101,7 +104,8 @@
         "DrCr",
         "Id",
         "JournalEntryHeaderId",
-        "Memo"
+        "Memo",
+        "PublicId"
       ]
     },
     {

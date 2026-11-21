@@ -13,7 +13,7 @@ vi.mock('../src/lib/entitlements', async importOriginal => ({
 }));
 
 const draft: Invoice = {
-  id: 42, no: null, customerId: 1, customerName: 'Example client', invoiceDate: '2027-02-01',
+  id: '42', no: null, customerId: '1', customerName: 'Example client', invoiceDate: '2027-02-01',
   amount: 100, totalAllocatedAmount: 0, paidAmount: 0, balanceDue: 100,
   posted: false, status: 'Draft', salesInvoiceLines: [],
 };

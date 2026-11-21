@@ -35,6 +35,27 @@ namespace AccountGo.ServicesTests
         }
 
         [Fact]
+        public void Upgrade_TableCreatedByALaterStep_StillGetsAPublicIdColumn()
+        {
+            // An older database that lacks a feature table: the upgrader creates it with raw DDL after the public id step
+            // used to run, which left the table without its PublicId column until the next restart.
+            using var connection = new SqliteConnection("Data Source=:memory:");
+            connection.Open();
+            using (var db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection).Options))
+                db.Database.EnsureCreated();
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS \"TaxFiling\";";
+            command.ExecuteNonQuery();
+
+            SqliteSchemaUpgrader.Upgrade(connection);
+
+            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'TaxFiling'";
+            Assert.Equal(1L, command.ExecuteScalar());
+            command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('TaxFiling') WHERE name = 'PublicId'";
+            Assert.Equal(1L, command.ExecuteScalar());
+        }
+
+        [Fact]
         public void Upgrade_Phase2Schema_PreservesExistingRowsAndBackfillsCurrency()
         {
             using (var connection = new SqliteConnection("Data Source=:memory:"))

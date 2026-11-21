@@ -89,7 +89,21 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         });
         return id;
     }
-    private Task<HttpResponseMessage> Record(int id, bool rememberRule = false, string suffix = "") => Send(HttpMethod.Post, $"StatementLines/{id}/RecordOwnerMovement{suffix}", new { rememberRule });
+    private string Pub<T>(int id) where T : BaseEntity, IHasPublicId =>
+        AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<T>(_host.Factory.Services, id);
+    private string Bsl(int id)
+    {
+        using var scope = _host.Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return db.BankStatementLines.IgnoreQueryFilters().Where(e => e.Id == id).Select(e => e.PublicId).FirstOrDefault()
+            ?? PublicIdGenerator.New("bsl");
+    }
+    private string Ba(int id) => Pub<Bank>(id);
+    private string Ptnr(int id) => Pub<Partner>(id);
+    private string Acct(int id) => Pub<Account>(id);
+    private string Btx(int id) => Pub<BankTransaction>(id);
+
+    private Task<HttpResponseMessage> Record(int id, bool rememberRule = false, string suffix = "") => Send(HttpMethod.Post, $"StatementLines/{Bsl(id)}/RecordOwnerMovement{suffix}", new { rememberRule });
     private void AssertNothingPosted(params int[] ids) => WithDb(db =>
     {
         Assert.Empty(db.BankTransactions);
@@ -105,7 +119,7 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
     public async Task MissingBody_UsesSingleDefaultsOrRefusesBulkWithoutPosting(bool bulk, bool jsonNull)
     {
         var id = Line(-25);
-        var route = bulk ? "StatementLines/BulkRecordOwnerMovement" : $"StatementLines/{id}/RecordOwnerMovement";
+        var route = bulk ? "StatementLines/BulkRecordOwnerMovement" : $"StatementLines/{Bsl(id)}/RecordOwnerMovement";
         using var client = _host.Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/Banking/" + route);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _user.Token);
@@ -187,13 +201,13 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         Assert.Equal("Partner drawing", offered.GetProperty("drawing").GetProperty("label").GetString());
 
         var id = Line(-42, "Avery transfer");
-        var missingPartner = await Send(HttpMethod.Post, $"StatementLines/{id}/RecordOwnerMovement", new { });
+        var missingPartner = await Send(HttpMethod.Post, $"StatementLines/{Bsl(id)}/RecordOwnerMovement", new { });
         Assert.Equal(HttpStatusCode.BadRequest, missingPartner.StatusCode);
         Assert.Equal("Choose a partner.", (await AuditTestHost.Json(missingPartner)).GetProperty("message").GetString());
-        var recorded = await Send(HttpMethod.Post, $"StatementLines/{id}/RecordOwnerMovement", new { partnerId, rememberRule = true });
+        var recorded = await Send(HttpMethod.Post, $"StatementLines/{Bsl(id)}/RecordOwnerMovement", new { partnerId = Ptnr(partnerId), rememberRule = true });
         await AssertOk(recorded);
         var recordedJson = await AuditTestHost.Json(recorded);
-        Assert.Equal(partnerId, recordedJson.GetProperty("matchedPartnerId").GetInt32());
+        Assert.Equal(Ptnr(partnerId), recordedJson.GetProperty("matchedPartnerId").GetString());
         Assert.Equal("Avery", recordedJson.GetProperty("matchedPartnerName").GetString());
         WithDb(db =>
         {
@@ -201,26 +215,26 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
             Assert.Equal(partnerId, Assert.Single(db.BankStatementDescriptionRules).PartnerId);
         });
         var suggestionLine = Line(-13, "Avery transfer");
-        var statementPage = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=unmatched"));
-        var suggestion = statementPage.GetProperty("lines").EnumerateArray().Single(line => line.GetProperty("id").GetInt32() == suggestionLine);
+        var statementPage = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{Ba(_bankId)}/StatementLines?status=unmatched"));
+        var suggestion = statementPage.GetProperty("lines").EnumerateArray().Single(line => line.GetProperty("id").GetString() == Bsl(suggestionLine));
         Assert.Equal("drawing", suggestion.GetProperty("suggestedOwnerAction").GetString());
-        Assert.Equal(partnerId, suggestion.GetProperty("suggestedPartnerId").GetInt32());
+        Assert.Equal(Ptnr(partnerId), suggestion.GetProperty("suggestedPartnerId").GetString());
         Assert.Equal("Avery", suggestion.GetProperty("suggestedPartnerName").GetString());
         WithDb(db =>
         {
             db.Partners.Single(p => p.Id == partnerId).ArchivedAt = DateTime.UtcNow;
         });
-        var undone = await Send(HttpMethod.Post, $"StatementLines/{id}/UndoOwnerMovement", new { });
+        var undone = await Send(HttpMethod.Post, $"StatementLines/{Bsl(id)}/UndoOwnerMovement", new { });
         await AssertOk(undone);
         var undoJson = await AuditTestHost.Json(undone);
-        Assert.Equal(partnerId, undoJson.GetProperty("matchedPartnerId").GetInt32());
+        Assert.Equal(Ptnr(partnerId), undoJson.GetProperty("matchedPartnerId").GetString());
         WithDb(db => Assert.NotNull(Assert.Single(db.BankTransactions).VoidGeneralLedgerHeaderId));
 
         var legacyLine = Line(-17, "Legacy shared drawing");
         var sharedDrawingAccountId = 0;
         WithDb(db => sharedDrawingAccountId = db.Accounts.Single(a => a.AccountCode == "30800").Id);
-        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{legacyLine}/CreateTransaction", new { kind = 2, contraAccountId = sharedDrawingAccountId }));
-        var legacyUndo = await Send(HttpMethod.Post, $"StatementLines/{legacyLine}/UndoOwnerMovement", new { });
+        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{Bsl(legacyLine)}/CreateTransaction", new { kind = 2, contraAccountId = Acct(sharedDrawingAccountId) }));
+        var legacyUndo = await Send(HttpMethod.Post, $"StatementLines/{Bsl(legacyLine)}/UndoOwnerMovement", new { });
         Assert.Equal(HttpStatusCode.BadRequest, legacyUndo.StatusCode);
         Assert.Equal("This line wasn't recorded as an owner drawing or contribution.", (await AuditTestHost.Json(legacyUndo)).GetProperty("message").GetString());
         WithDb(db => Assert.False(Assert.Single(db.BankTransactions.Where(tx => tx.ContraAccountId == sharedDrawingAccountId)).IsVoid));
@@ -283,7 +297,7 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
             });
             token = member.Token;
         }
-        var response = await Send(HttpMethod.Post, $"StatementLines/{id}/RecordOwnerMovement", new { }, token);
+        var response = await Send(HttpMethod.Post, $"StatementLines/{Bsl(id)}/RecordOwnerMovement", new { }, token);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         AssertNothingPosted(id);
     }
@@ -294,7 +308,7 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
     public async Task Bulk_RecordsAllOrNothing(bool mixed)
     {
         var ids = new[] { Line(-10), Line(-20), Line(mixed ? 30 : -30) };
-        var response = await Send(HttpMethod.Post, "StatementLines/BulkRecordOwnerMovement", new { lineIds = ids });
+        var response = await Send(HttpMethod.Post, "StatementLines/BulkRecordOwnerMovement", new { lineIds = ids.Select(Bsl).ToArray() });
         if (mixed) { Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode); AssertNothingPosted(ids); }
         else
         {
@@ -383,17 +397,17 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         await AssertOk(await Record(Line(-10, "Personal transfer 123"), true));
         var next = Line(-15, "Personal transfer 456");
         var opposite = Line(20, "Personal transfer 789");
-        var json = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=unmatched"));
-        Assert.Equal("drawing", json.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetInt32() == next).GetProperty("suggestedOwnerAction").GetString());
-        Assert.Equal(JsonValueKind.Null, json.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetInt32() == opposite).GetProperty("suggestedOwnerAction").ValueKind);
+        var json = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{Ba(_bankId)}/StatementLines?status=unmatched"));
+        Assert.Equal("drawing", json.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetString() == Bsl(next)).GetProperty("suggestedOwnerAction").GetString());
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetString() == Bsl(opposite)).GetProperty("suggestedOwnerAction").ValueKind);
         Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Get, "StatementDescriptionRule?description=Personal%20transfer")).StatusCode);
         WithDb(db => { var rule = Assert.Single(db.BankStatementDescriptionRules); Assert.Equal(1, db.Entry(rule).Property<int>("Action").CurrentValue); Assert.Null(rule.VendorId); Assert.Null(rule.ExpenseAccountId); });
         var expenseAccountId = 0;
         WithDb(db => expenseAccountId = db.Accounts.First(a => a.AccountClassId == (int)AccountClasses.Expense
             && !db.Accounts.Any(child => child.ParentAccountId == a.Id)).Id);
-        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{next}/RecordExpense", new
+        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{Bsl(next)}/RecordExpense", new
         {
-            expenseAccountId, newVendor = new { name = "Personal transfer vendor" }, rememberRule = true
+            expenseAccountId = Acct(expenseAccountId), newVendor = new { name = "Personal transfer vendor" }, rememberRule = true
         }));
         WithDb(db => Assert.Equal(0, db.Entry(Assert.Single(db.BankStatementDescriptionRules)).Property<int>("Action").CurrentValue));
         Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "StatementDescriptionRule?description=Personal%20transfer")).StatusCode);
@@ -407,7 +421,7 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         await AssertOk(await Record(id));
         var transactionId = 0;
         WithDb(db => transactionId = db.BankTransactions.Single().Id);
-        await AssertOk(await Send(HttpMethod.Post, $"Transactions/{transactionId}/Void", new { date = Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), reason = "Correction" }));
+        await AssertOk(await Send(HttpMethod.Post, $"Transactions/{Btx(transactionId)}/Void", new { date = Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), reason = "Correction" }));
         WithDb(db =>
         {
             Assert.Null(db.BankStatementLines.Single(l => l.Id == id).MatchedGeneralLedgerLineId);
@@ -418,12 +432,12 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
     }
 
     private Task<HttpResponseMessage> Undo(int id, string suffix = "") =>
-        Send(HttpMethod.Post, $"StatementLines/{id}/UndoOwnerMovement{suffix}");
+        Send(HttpMethod.Post, $"StatementLines/{Bsl(id)}/UndoOwnerMovement{suffix}");
 
     private async Task<string?> MatchedAction(int id)
     {
-        var json = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=all"));
-        return json.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetInt32() == id)
+        var json = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{Ba(_bankId)}/StatementLines?status=all"));
+        return json.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetString() == Bsl(id))
             .GetProperty("matchedOwnerAction").GetString();
     }
 
@@ -467,7 +481,7 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
             var contra = 0;
             WithDb(db => contra = db.Accounts.First(a => a.AccountClassId == (int)AccountClasses.Expense
                 && !db.Accounts.Any(c => c.ParentAccountId == a.Id)).Id);
-            await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{id}/CreateTransaction", new { kind = (int)BankTransactionKinds.MoneyOut, contraAccountId = contra }));
+            await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{Bsl(id)}/CreateTransaction", new { kind = (int)BankTransactionKinds.MoneyOut, contraAccountId = Acct(contra) }));
         }
         else if (kind != "unmatched") await AssertOk(await Record(id));
         WithDb(db =>
@@ -526,7 +540,7 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
             db.SecurityRolePermissions.Add(new SecurityRolePermission { SecurityRoleId = role.Id, SecurityPermissionId = db.SecurityPermissions.Single(p => p.Name == SystemPermissions.BankingAccountsManage).Id });
             db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = db.CompanyMembers.Single(m => m.UserId == member.Id).Id, SecurityRoleId = role.Id });
         });
-        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"StatementLines/{id}/UndoOwnerMovement", null, member.Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"StatementLines/{Bsl(id)}/UndoOwnerMovement", null, member.Token)).StatusCode);
         WithDb(db => { Assert.False(db.BankTransactions.Single().IsVoid); Assert.NotNull(db.BankStatementLines.Single().MatchedGeneralLedgerLineId); });
     }
 
@@ -617,15 +631,15 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
     {
         var (_, _, drawingsId) = SetupPartner();
         var lineId = Line(30, "Repayment");
-        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{lineId}/CreateTransaction",
-            new { kind = 1, contraAccountId = drawingsId }));
+        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{Bsl(lineId)}/CreateTransaction",
+            new { kind = 1, contraAccountId = Acct(drawingsId) }));
 
-        var page = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=matched"));
-        var matched = page.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetInt32() == lineId);
+        var page = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{Ba(_bankId)}/StatementLines?status=matched"));
+        var matched = page.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("id").GetString() == Bsl(lineId));
         Assert.True(!matched.TryGetProperty("matchedOwnerAction", out var action) || action.ValueKind == JsonValueKind.Null);
         Assert.True(!matched.TryGetProperty("matchedPartnerId", out var pid) || pid.ValueKind == JsonValueKind.Null);
 
-        var undo = await Send(HttpMethod.Post, $"StatementLines/{lineId}/UndoOwnerMovement", new { });
+        var undo = await Send(HttpMethod.Post, $"StatementLines/{Bsl(lineId)}/UndoOwnerMovement", new { });
         Assert.Equal(HttpStatusCode.BadRequest, undo.StatusCode);
         Assert.Equal("This line wasn't recorded as an owner drawing or contribution.",
             (await AuditTestHost.Json(undo)).GetProperty("message").GetString());
@@ -639,7 +653,7 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         var line2 = Line(-35, "Avery 2");
 
         var response = await Send(HttpMethod.Post, "StatementLines/BulkRecordOwnerMovement",
-            new { lineIds = new[] { line1, line2 }, partnerId });
+            new { lineIds = new[] { Bsl(line1), Bsl(line2) }, partnerId = Ptnr(partnerId) });
         await AssertOk(response);
 
         WithDb(db =>
@@ -654,24 +668,22 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
     public async Task PartnerMode_RecordOwnerMovement_ValidationErrors()
     {
         var line1 = Line(-20, "Sole prop check");
-        var soleProp = await Send(HttpMethod.Post, $"StatementLines/{line1}/RecordOwnerMovement", new { partnerId = 1, rememberRule = true });
-        Assert.Equal(HttpStatusCode.BadRequest, soleProp.StatusCode);
-        Assert.Equal("Partners aren't set up for this workspace.", (await AuditTestHost.Json(soleProp)).GetProperty("message").GetString());
+        var soleProp = await Send(HttpMethod.Post, $"StatementLines/{Bsl(line1)}/RecordOwnerMovement", new { partnerId = PublicIdGenerator.New("ptnr"), rememberRule = true });
+        Assert.Equal(HttpStatusCode.NotFound, soleProp.StatusCode);
         AssertNothingPosted(line1);
         WithDb(db => Assert.Empty(db.BankStatementDescriptionRules));
 
         var (archivedPartnerId, _, _) = SetupPartner("Archived", "1", partnerArchivedAt: DateTime.UtcNow);
         var (archivedAccountPartnerId, _, _) = SetupPartner("NoDrawings", "2", drawingsArchivedAt: DateTime.UtcNow);
 
-        var archivedRes = await Send(HttpMethod.Post, $"StatementLines/{line1}/RecordOwnerMovement", new { partnerId = archivedPartnerId, rememberRule = true });
+        var archivedRes = await Send(HttpMethod.Post, $"StatementLines/{Bsl(line1)}/RecordOwnerMovement", new { partnerId = Ptnr(archivedPartnerId), rememberRule = true });
         Assert.Equal(HttpStatusCode.BadRequest, archivedRes.StatusCode);
         Assert.Equal("Choose an active partner.", (await AuditTestHost.Json(archivedRes)).GetProperty("message").GetString());
 
-        var unknownRes = await Send(HttpMethod.Post, $"StatementLines/{line1}/RecordOwnerMovement", new { partnerId = 999999, rememberRule = true });
-        Assert.Equal(HttpStatusCode.BadRequest, unknownRes.StatusCode);
-        Assert.Equal("Choose an active partner.", (await AuditTestHost.Json(unknownRes)).GetProperty("message").GetString());
+        var unknownRes = await Send(HttpMethod.Post, $"StatementLines/{Bsl(line1)}/RecordOwnerMovement", new { partnerId = PublicIdGenerator.New("ptnr"), rememberRule = true });
+        Assert.Equal(HttpStatusCode.NotFound, unknownRes.StatusCode);
 
-        var archivedAcctRes = await Send(HttpMethod.Post, $"StatementLines/{line1}/RecordOwnerMovement", new { partnerId = archivedAccountPartnerId, rememberRule = true });
+        var archivedAcctRes = await Send(HttpMethod.Post, $"StatementLines/{Bsl(line1)}/RecordOwnerMovement", new { partnerId = Ptnr(archivedAccountPartnerId), rememberRule = true });
         Assert.Equal(HttpStatusCode.BadRequest, archivedAcctRes.StatusCode);
         Assert.Equal("Drawings – NoDrawings (30852) is missing, archived or can't be posted to.",
             (await AuditTestHost.Json(archivedAcctRes)).GetProperty("message").GetString());
@@ -713,23 +725,23 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         var archivedLine = Line(-15, "Archived draw");
         var expenseLine = Line(-25, "Avery expense");
 
-        var page = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{_bankId}/StatementLines?status=unmatched"));
+        var page = await AuditTestHost.Json(await Send(HttpMethod.Get, $"Accounts/{Ba(_bankId)}/StatementLines?status=unmatched"));
         var lines = page.GetProperty("lines").EnumerateArray().ToList();
 
-        var legacyDto = lines.Single(l => l.GetProperty("id").GetInt32() == legacyLine);
+        var legacyDto = lines.Single(l => l.GetProperty("id").GetString() == Bsl(legacyLine));
         Assert.Equal("drawing", legacyDto.GetProperty("suggestedOwnerAction").GetString());
         Assert.True(!legacyDto.TryGetProperty("suggestedPartnerId", out var lpid) || lpid.ValueKind == JsonValueKind.Null);
 
-        var archivedDto = lines.Single(l => l.GetProperty("id").GetInt32() == archivedLine);
+        var archivedDto = lines.Single(l => l.GetProperty("id").GetString() == Bsl(archivedLine));
         Assert.Equal("drawing", archivedDto.GetProperty("suggestedOwnerAction").GetString());
         Assert.True(!archivedDto.TryGetProperty("suggestedPartnerId", out var apid) || apid.ValueKind == JsonValueKind.Null);
 
         var expenseAccountId = 0;
         WithDb(db => expenseAccountId = db.Accounts.First(a => a.AccountClassId == (int)AccountClasses.Expense
             && !db.Accounts.Any(child => child.ParentAccountId == a.Id)).Id);
-        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{expenseLine}/RecordExpense", new
+        await AssertOk(await Send(HttpMethod.Post, $"StatementLines/{Bsl(expenseLine)}/RecordExpense", new
         {
-            expenseAccountId, newVendor = new { name = "Avery Vendor" }, rememberRule = true
+            expenseAccountId = Acct(expenseAccountId), newVendor = new { name = "Avery Vendor" }, rememberRule = true
         }));
         WithDb(db =>
         {
@@ -753,9 +765,9 @@ public sealed class StatementOwnerMovementHttpTests : IAsyncLifetime
         Assert.Equal(2, partners.Count);
         Assert.DoesNotContain(partners, p => p.GetProperty("name").GetString() == "Archived");
 
-        var avery = partners.Single(p => p.GetProperty("partnerId").GetInt32() == activeId);
+        var avery = partners.Single(p => p.GetProperty("partnerId").GetString() == Ptnr(activeId));
         Assert.Equal(JsonValueKind.Object, avery.GetProperty("drawing").ValueKind);
-        var blake = partners.Single(p => p.GetProperty("partnerId").GetInt32() == noDrawingsId);
+        var blake = partners.Single(p => p.GetProperty("partnerId").GetString() == Ptnr(noDrawingsId));
         Assert.Equal(JsonValueKind.Null, blake.GetProperty("drawing").ValueKind);
         Assert.Equal(JsonValueKind.Object, blake.GetProperty("contribution").ValueKind);
     }

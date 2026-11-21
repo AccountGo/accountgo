@@ -1,4 +1,5 @@
 /** Plain-word labels for the activity feed, record History and security log. Pure: no React, no locale lookups. */
+import { shortRef } from './shortRef';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 const FULL_MONTH_NAMES = [
@@ -200,6 +201,7 @@ export function formatAuditValue(entityType: string, field: string, value: unkno
   }
   if (typeof value === 'string') {
     if (value.startsWith('****')) return value;
+    if (PUBLIC_ID_VALUE.test(value)) return shortRef(value);
     return DATE_PREFIX.test(value) ? formatAuditDate(value) : value;
   }
   return JSON.stringify(value);
@@ -209,9 +211,11 @@ export function formatAuditValue(entityType: string, field: string, value: unkno
 // Change sentences
 // ---------------------------------------------------------------------------
 
+const PUBLIC_ID_VALUE = /^[a-z]{1,8}_[0-9a-z]{26}$/;
+
 export interface AuditChangeRow {
   entityType: string;
-  entityId?: number;
+  entityId?: string | null;
   action: string;
   /** `{ Field: [old, new] }` for Modified; `{ Field: value }` for Added/Deleted. */
   changes: unknown;
@@ -270,7 +274,7 @@ export function describeChange(row: AuditChangeRow, personal: boolean): string[]
     const sentences = [`${deleted ? 'Deleted' : 'Created'} ${withArticle(entityName)}`];
     for (const change of parsed) {
       if (row.entityType === 'BankTransaction' && change.field === 'BankId' && !isEmptyValue(change.newValue)) {
-        sentences.push(`Bank account #${change.newValue}`);
+        sentences.push(`Bank account ${shortRef(change.newValue as string)}`);
         continue;
       }
       if (!auditFieldLabel(row.entityType, change.field)) continue;
@@ -286,7 +290,7 @@ export function describeChange(row: AuditChangeRow, personal: boolean): string[]
 
   return parsed.map((change) => {
     if (row.action === 'Modified' && !change.isPair && (row.entityType === 'BankTransaction' || row.entityType === 'BankReconciliation')) {
-      if (change.field === 'BankId') return `Bank account #${change.newValue}`;
+      if (change.field === 'BankId') return `Bank account ${shortRef(change.newValue as string)}`;
       if (change.field === 'StatementEndDate') return `Statement ending ${formatAuditValue(row.entityType, change.field, change.newValue)}`;
     }
     if (row.entityType === 'BankTransaction' && change.field === 'VoidGeneralLedgerHeaderId'

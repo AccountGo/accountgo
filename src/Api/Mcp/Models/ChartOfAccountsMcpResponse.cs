@@ -15,7 +15,8 @@ namespace Api.Mcp.Models
 
     public class AccountMcpSummary
     {
-        public int Id { get; set; }
+        /// <summary>The account's public id, like <c>acct_…</c>.</summary>
+        public string? Id { get; set; }
         public string Code { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }

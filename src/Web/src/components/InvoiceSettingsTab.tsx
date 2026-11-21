@@ -196,7 +196,7 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
           <select
             id="payment-bank-select"
             value={settings.paymentBankId ?? ''}
-            onChange={(e) => setSettings((s) => ({ ...s, paymentBankId: e.target.value ? Number(e.target.value) : null }))}
+            onChange={(e) => setSettings((s) => ({ ...s, paymentBankId: e.target.value || null }))}
             disabled={disabled}
             className="w-full h-11 px-3 rounded-xl bg-[var(--bg-subtle)] text-sm text-[var(--text-main)] disabled:opacity-60"
           >

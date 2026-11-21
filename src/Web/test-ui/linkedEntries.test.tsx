@@ -21,12 +21,12 @@ vi.mock('react-router-dom', async () => {
 const accounts = {
   personalCurrency: 'USD',
   accounts: [
-    { id: 20, accountCode: '50000', accountName: 'Household spending', accountClassId: 5, isCash: false },
-    { id: 21, accountCode: '10100', accountName: 'Personal bank', accountClassId: 1, isCash: true },
+    { id: '20', accountCode: '50000', accountName: 'Household spending', accountClassId: 5, isCash: false },
+    { id: '21', accountCode: '10100', accountName: 'Personal bank', accountClassId: 1, isCash: true },
   ],
-  workExpenseAccounts: [{ id: 30, accountCode: '60100', accountName: 'Telephone', accountClassId: 5, isCash: false }],
+  workExpenseAccounts: [{ id: '30', accountCode: '60100', accountName: 'Telephone', accountClassId: 5, isCash: false }],
 };
-const line = (id: number, amount: number) => ({ id, bankId: 4, bankStatementImportId: 2, source: 1,
+const line = (id: number, amount: number) => ({ id: String(id), bankId: '4', bankStatementImportId: '2', source: 1,
   postedDate: '2026-11-05', amount, payee: 'Supplier', memo: 'Statement memo', isMatched: false, candidates: [], suggestedOwnerAction: amount < 0 ? 'drawing' as const : 'contribution' as const });
 
 function page() {
@@ -41,10 +41,10 @@ beforeEach(() => {
   outlet.currentOrg = { id: '1', name: 'Work', slug: 'work', entityType: 'SoleProprietor', currency: 'USD', linkedPersonalCompanyId: 2 as number | null };
   authFetch.mockImplementation(async (url: string) => {
     if (url.includes('/StatementLines?')) return new Response(JSON.stringify({ lines: [line(11, -48), line(12, 80)], totalCount: 2, page: 1, pageSize: 100 }), { status: 200 });
-    if (url.endsWith('/Banking/Accounts/4')) return new Response(JSON.stringify({ id: 4, name: 'Work bank', currencyCode: 'USD', isDefaultForReceipts: false, isDefaultForPayments: false, bookBalance: 0 }), { status: 200 });
+    if (url.endsWith('/Banking/Accounts/4')) return new Response(JSON.stringify({ id: '4', name: 'Work bank', currencyCode: 'USD', isDefaultForReceipts: false, isDefaultForPayments: false, bookBalance: 0 }), { status: 200 });
     if (url === '/api/Banking/StatementOwnerActions') return new Response(JSON.stringify({
-      drawing: { accountId: 31, accountCode: '30800', accountName: 'Drawings', label: 'Owner drawing' },
-      contribution: { accountId: 32, accountCode: '30100', accountName: 'Capital', label: 'Owner contribution' },
+      drawing: { accountId: '31', accountCode: '30800', accountName: 'Drawings', label: 'Owner drawing' },
+      contribution: { accountId: '32', accountCode: '30100', accountName: 'Capital', label: 'Owner contribution' },
     }), { status: 200 });
     if (url === '/api/linked-entries/accounts') return new Response(JSON.stringify(accounts), { status: 200 });
     return new Response('{}', { status: 200 });
@@ -90,11 +90,11 @@ describe('linked bank statement entries', () => {
   it('offers split amounts and submits the work and personal portions', async () => {
     authFetch.mockImplementation(async (url: string) => {
       if (url === '/api/linked-entries/accounts') return new Response(JSON.stringify(accounts), { status: 200 });
-      if (url === '/api/linked-entries') return new Response(JSON.stringify({ pair: { id: 1, state: 'PendingSource' } }), { status: 200 });
+      if (url === '/api/linked-entries') return new Response(JSON.stringify({ pair: { id: '1', state: 'PendingSource' } }), { status: 200 });
       return new Response('{}', { status: 200 });
     });
     const onSaved = vi.fn();
-    render(<LinkedEntryDialog line={line(11, -48)} workBankId={4} initialKind="Personal" workCurrency="USD" onClose={vi.fn()} onSaved={onSaved} />);
+    render(<LinkedEntryDialog line={line(11, -48)} workBankId="4" initialKind="Personal" workCurrency="USD" onClose={vi.fn()} onSaved={onSaved} />);
     fireEvent.click(await screen.findByLabelText('Split part of this purchase as a work expense'));
     fireEvent.change(screen.getByLabelText('Work expense category'), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Work amount'), { target: { value: '18' } });
@@ -102,6 +102,6 @@ describe('linked bank statement entries', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     const request = authFetch.mock.calls.find(([url]) => url === '/api/linked-entries')?.[1] as RequestInit;
     const body = JSON.parse(String(request.body));
-    expect(body).toMatchObject({ kind: 'Personal', amount: 48, statementLineId: 11, splitWorkExpenseAccountId: 30, splitWorkAmount: 18 });
+    expect(body).toMatchObject({ kind: 'Personal', amount: 48, statementLineId: '11', splitWorkExpenseAccountId: '30', splitWorkAmount: 18 });
   });
 });

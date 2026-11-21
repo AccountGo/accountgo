@@ -9,6 +9,7 @@ namespace Dto.Purchasing
     /// </summary>
     public class Supplier
     {
+        [PublicId("ven")]
         public int Id { get; set; }
         public string? Name { get; set; }
         public string? Email { get; set; }
@@ -18,8 +19,10 @@ namespace Dto.Purchasing
         public string? City { get; set; }
         public string? PostalCode { get; set; }
         public string? Country { get; set; }
+        [PublicId("term")]
         public int? PaymentTermId { get; set; }
         /// <summary>Default Bill To / payee attention contact; null uses the company party alone.</summary>
+        [PublicId("cont")]
         public int? BillToContactId { get; set; }
         /// <summary>Contact persons linked to this vendor. Populated on a single-vendor read.</summary>
         public List<ContactPersonDto> Contacts { get; set; } = new();

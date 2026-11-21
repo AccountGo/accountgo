@@ -152,6 +152,8 @@ namespace Api.Data.Schema
                 EnsureRecordChanges(connection);
                 EnsureAuditEvidenceIntegrity(connection);
                 EnsureYearEndCloseEvidence(connection);
+                // Last, so every table the steps above create already exists and gets its PublicId column.
+                EnsurePublicIds(connection, logger);
             }
             finally
             {
@@ -2513,6 +2515,93 @@ WHERE NOT EXISTS (
                 cmd.CommandText = SalesInvoiceNumberIndexSql;
                 cmd.ExecuteNonQuery();
             }
+
+        }
+
+        private static void EnsurePublicIds(DbConnection connection, ILogger? logger)
+        {
+            var addedColumns = 0;
+            foreach (var spec in Api.Data.PublicIdBackfillSql.ApiTables)
+            {
+                addedColumns += EnsurePublicIdForTable(connection, spec.TableName, spec.Prefix);
+            }
+            foreach (var spec in Api.Data.PublicIdBackfillSql.IdentityTables)
+            {
+                addedColumns += EnsurePublicIdForTable(connection, spec.TableName, spec.Prefix);
+            }
+            if (addedColumns > 0)
+            {
+                logger?.LogInformation("✓ Added PublicId column and filtered unique index on {Count} SQLite table(s).", addedColumns);
+            }
+        }
+
+        public static int EnsurePublicIdForTablePublic(DbConnection connection, string tableName, string prefix) =>
+            EnsurePublicIdForTable(connection, tableName, prefix);
+
+        private static int EnsurePublicIdForTable(DbConnection connection, string tableName, string prefix)
+        {
+            if (!TableExists(connection, tableName))
+                return 0;
+
+            var added = 0;
+            if (!ColumnExists(connection, tableName, "PublicId"))
+            {
+                using var alter = connection.CreateCommand();
+                alter.CommandText = $"ALTER TABLE \"{tableName}\" ADD COLUMN \"PublicId\" TEXT NOT NULL DEFAULT '';";
+                alter.ExecuteNonQuery();
+                added = 1;
+            }
+
+            // Nothing to repair: skip the write (and the AuditLog trigger swap) on the common startup path.
+            using (var probe = connection.CreateCommand())
+            {
+                probe.CommandText = $"SELECT 1 FROM \"{tableName}\" WHERE \"PublicId\" = '' LIMIT 1;";
+                if (probe.ExecuteScalar() is null)
+                {
+                    using var index = connection.CreateCommand();
+                    index.CommandText = $"CREATE UNIQUE INDEX IF NOT EXISTS \"IX_{tableName}_PublicId\" ON \"{tableName}\" (\"PublicId\") WHERE \"PublicId\" <> '';";
+                    index.ExecuteNonQuery();
+                    return added;
+                }
+            }
+
+            var hadAuditEvidenceTrigger = false;
+            if (string.Equals(tableName, "AuditLog", StringComparison.Ordinal))
+            {
+                using var checkTrig = connection.CreateCommand();
+                checkTrig.CommandText = "SELECT COUNT(1) FROM sqlite_master WHERE type = 'trigger' AND name = 'TR_AuditLog_Evidence_Update';";
+                hadAuditEvidenceTrigger = Convert.ToInt32(checkTrig.ExecuteScalar()) > 0;
+                if (hadAuditEvidenceTrigger)
+                {
+                    using var dropTrig = connection.CreateCommand();
+                    dropTrig.CommandText = "DROP TRIGGER \"TR_AuditLog_Evidence_Update\";";
+                    dropTrig.ExecuteNonQuery();
+                }
+            }
+
+            try
+            {
+                using var backfill = connection.CreateCommand();
+                backfill.CommandText = Api.Data.PublicIdBackfillSql.UpdateStatement(Api.Data.PublicIdSqlDialect.Sqlite, tableName, prefix);
+                backfill.ExecuteNonQuery();
+            }
+            finally
+            {
+                if (hadAuditEvidenceTrigger)
+                {
+                    using var restoreTrig = connection.CreateCommand();
+                    restoreTrig.CommandText = SqliteAuditEvidenceSql.UpdateTrigger;
+                    restoreTrig.ExecuteNonQuery();
+                }
+            }
+
+            using (var idx = connection.CreateCommand())
+            {
+                idx.CommandText = $"CREATE UNIQUE INDEX IF NOT EXISTS \"IX_{tableName}_PublicId\" ON \"{tableName}\" (\"PublicId\") WHERE \"PublicId\" <> '';";
+                idx.ExecuteNonQuery();
+            }
+
+            return added;
         }
 
         // D1 0008_invoice_number_unique.sql. A blank number means "not numbered yet"; NULLs never clash in a unique index.
@@ -2649,6 +2738,8 @@ WHERE NOT EXISTS (
                     logger?.LogInformation("✓ Removed SystemAdministrators role from the built-in demo and support accounts ({Count} records).", removed);
                 }
             }
+
+            Api.Data.PublicIdBackfillSql.RepairSqliteConnection(connection, tx);
         }
 
         private static bool TableExists(DbConnection connection, string tableName, DbTransaction? tx = null)

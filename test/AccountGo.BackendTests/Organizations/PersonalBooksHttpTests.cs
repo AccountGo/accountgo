@@ -83,10 +83,13 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         return _client.SendAsync(request);
     }
 
-    private Task<HttpResponseMessage> Personal(string slug = "personal-books", int? link = null) =>
+    private string WsPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Company>(_factory.Services, id);
+    private string MemPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_factory.Services, id);
+
+    private Task<HttpResponseMessage> Personal(string slug = "personal-books", int? link = null, string? rawLink = null) =>
         Send(HttpMethod.Post, "/api/organizations/personal", new
         {
-            name = "Personal books", slug, currency = "USD", linkWorkCompanyId = link,
+            name = "Personal books", slug, currency = "USD", linkWorkCompanyId = rawLink ?? (link.HasValue ? WsPub(link.Value) : null),
             booksStartDate = "2026-01-01", fiscalYearPattern = "Calendar"
         });
 
@@ -95,7 +98,7 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         using var response = await Send(HttpMethod.Post, "/api/organizations", new { name = slug, slug, currency = "USD" });
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return int.Parse(json.RootElement.GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+        return AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, json.RootElement.GetProperty("id").GetString()!);
     }
 
     [Theory]
@@ -309,23 +312,24 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         using var personal = await Personal();
         Assert.Equal(HttpStatusCode.Created, personal.StatusCode);
         using var json = JsonDocument.Parse(await personal.Content.ReadAsStringAsync());
-        var personalId = int.Parse(json.RootElement.GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+        var personalPub = json.RootElement.GetProperty("id").GetString()!;
+        var personalId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, personalPub);
         foreach (var id in new[] { otherId, personalId })
         {
-            using var denied = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = id });
+            using var denied = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = WsPub(id) });
             Assert.True(denied.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Conflict);
         }
-        using var linked = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = workId });
+        using var linked = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = WsPub(workId) });
         Assert.Equal(HttpStatusCode.NoContent, linked.StatusCode);
-        using var duplicate = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = workId });
+        using var duplicate = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = WsPub(workId) });
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
         Assert.Contains("work_workspace_already_linked", await duplicate.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         using var list = await Send(HttpMethod.Get, "/api/organizations");
         using var listing = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
-        var work = listing.RootElement.EnumerateArray().Single(r => r.GetProperty("id").GetString() == workId.ToString(CultureInfo.InvariantCulture));
-        Assert.Equal(personalId, work.GetProperty("linkedPersonalCompanyId").GetInt32());
+        var work = listing.RootElement.EnumerateArray().Single(r => r.GetProperty("id").GetString() == WsPub(workId));
+        Assert.Equal(personalPub, work.GetProperty("linkedPersonalCompanyId").GetString());
         Assert.False(work.GetProperty("canAddPersonalBooks").GetBoolean());
-        using var unlinked = await Send(HttpMethod.Delete, $"/api/organizations/personal/link/{workId}");
+        using var unlinked = await Send(HttpMethod.Delete, $"/api/organizations/personal/link/{WsPub(workId)}");
         Assert.Equal(HttpStatusCode.NoContent, unlinked.StatusCode);
         using var checkScope = _factory.Services.CreateScope();
         var check = checkScope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -355,7 +359,7 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
     {
         using var list = await Send(HttpMethod.Get, "/api/organizations");
         var listing = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
-        return listing.RootElement.EnumerateArray().Single(r => r.GetProperty("id").GetString() == id.ToString(CultureInfo.InvariantCulture));
+        return listing.RootElement.EnumerateArray().Single(r => r.GetProperty("id").GetString() == WsPub(id));
     }
 
     [Fact]
@@ -369,12 +373,12 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         Assert.True(before.GetProperty("isPersonalPurpose").GetBoolean());
         Assert.False((await Row(workId)).GetProperty("canUseAsPersonalBooks").GetBoolean());
 
-        using (var workAdopt = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{workId}"))
+        using (var workAdopt = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{WsPub(workId)}"))
         {
             Assert.Equal(HttpStatusCode.Conflict, workAdopt.StatusCode);
             Assert.Contains("personal_books_not_eligible", await workAdopt.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         }
-        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{legacyId}"))
+        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{WsPub(legacyId)}"))
             Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
 
         var after = await Row(legacyId);
@@ -384,13 +388,13 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         Assert.False(after.GetProperty("onPersonalBooksPlan").GetBoolean());
         Assert.Equal(planBefore, after.GetProperty("plan").GetString());
 
-        using (var again = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{legacyId}"))
+        using (var again = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{WsPub(legacyId)}"))
             Assert.Contains("personal_workspace_exists", await again.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         using (var created = await Personal())
             Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
-        using (var linked = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = workId }))
+        using (var linked = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = WsPub(workId) }))
             Assert.Equal(HttpStatusCode.NoContent, linked.StatusCode);
-        Assert.Equal(legacyId, (await Row(workId)).GetProperty("linkedPersonalCompanyId").GetInt32());
+        Assert.Equal(WsPub(legacyId), (await Row(workId)).GetProperty("linkedPersonalCompanyId").GetString());
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -454,7 +458,7 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         Assert.Equal("setup_correction_blocked", Convert(legacyId).Code);
         using (var personal = await Personal(link: legacyId))
             Assert.Equal(HttpStatusCode.Created, personal.StatusCode);
-        Assert.True((await Row(legacyId)).GetProperty("linkedPersonalCompanyId").GetInt32() > 0);
+        Assert.StartsWith("ws_", (await Row(legacyId)).GetProperty("linkedPersonalCompanyId").GetString()!);
     }
 
     [Fact]
@@ -466,10 +470,10 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         Assert.Equal("setup_correction_blocked", blocked.Code);
 
         var booksId = await CreateLegacyPersonal("linked-books");
-        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{booksId}"))
+        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{WsPub(booksId)}"))
             Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
         var workId = await CreateWork("linked-work");
-        using (var linked = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = workId }))
+        using (var linked = await Send(HttpMethod.Post, "/api/organizations/personal/link", new { workCompanyId = WsPub(workId) }))
             Assert.Equal(HttpStatusCode.NoContent, linked.StatusCode);
         var refused = Convert(booksId);
         Assert.False(refused.Applied);
@@ -482,7 +486,7 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
     {
         var oldId = await CreateLegacyPersonal("was-personal");
         await MakeIndividual(oldId);
-        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{oldId}"))
+        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{WsPub(oldId)}"))
             Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
 
         var result = Convert(oldId);
@@ -494,7 +498,7 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.Created, personal.StatusCode);
         var row = await Row(oldId);
         Assert.False(row.GetProperty("isPersonalBooks").GetBoolean());
-        Assert.True(row.GetProperty("linkedPersonalCompanyId").GetInt32() > 0);
+        Assert.StartsWith("ws_", row.GetProperty("linkedPersonalCompanyId").GetString()!);
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -518,12 +522,12 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
         Assert.False((await Row(notOwned)).GetProperty("canUseAsPersonalBooks").GetBoolean());
-        using (var denied = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{notOwned}"))
+        using (var denied = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{WsPub(notOwned)}"))
             Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
-        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{first}"))
+        using (var adopted = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{WsPub(first)}"))
             Assert.Equal(HttpStatusCode.NoContent, adopted.StatusCode);
         Assert.False((await Row(second)).GetProperty("canUseAsPersonalBooks").GetBoolean());
-        using var secondAdopt = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{second}");
+        using var secondAdopt = await Send(HttpMethod.Post, $"/api/organizations/personal/adopt/{WsPub(second)}");
         Assert.Equal(HttpStatusCode.Conflict, secondAdopt.StatusCode);
         Assert.Contains("personal_workspace_exists", await secondAdopt.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
@@ -531,8 +535,9 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
     [Fact]
     public async Task PersonalCreateWithInvalidLink_RollsBackCompany()
     {
-        using var response = await Personal(link: int.MaxValue);
-        Assert.True(response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Conflict);
+        using var response = await Personal(rawLink: PublicIdGenerator.New("ws"));
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden or HttpStatusCode.Conflict, $"Got {(int)response.StatusCode}: {body}");
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         db.SuppressTenantSecurityCheck = true;
@@ -564,7 +569,7 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
         using var created = await Personal(link: workId);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var json = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
-        var personalId = int.Parse(json.RootElement.GetProperty("id").GetString()!, CultureInfo.InvariantCulture);
+        var personalId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(_factory.Services, json.RootElement.GetProperty("id").GetString()!);
         var targetIds = new List<int>();
         using (var scope = _factory.Services.CreateScope())
         {
@@ -578,10 +583,10 @@ public sealed class PersonalBooksHttpTests : IAsyncLifetime
                 targetIds.Add(member.Id);
             }
         }
-        using var denied = await Send(HttpMethod.Post, "/api/organizations/current/transfer-ownership", new { memberId = targetIds[0] }, "personal-books");
+        using var denied = await Send(HttpMethod.Post, "/api/organizations/current/transfer-ownership", new { memberId = MemPub(targetIds[0]) }, "personal-books");
         Assert.Equal(HttpStatusCode.Conflict, denied.StatusCode);
         Assert.Contains("personal_workspace_not_transferable", await denied.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-        using var transferred = await Send(HttpMethod.Post, "/api/organizations/current/transfer-ownership", new { memberId = targetIds[1] }, "transfer-work");
+        using var transferred = await Send(HttpMethod.Post, "/api/organizations/current/transfer-ownership", new { memberId = MemPub(targetIds[1]) }, "transfer-work");
         Assert.True(transferred.StatusCode == HttpStatusCode.NoContent, await transferred.Content.ReadAsStringAsync());
         using var checkScope = _factory.Services.CreateScope();
         var check = checkScope.ServiceProvider.GetRequiredService<ApiDbContext>();

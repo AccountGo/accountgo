@@ -39,13 +39,13 @@ namespace AccountGo.BackendTests.Security
         {
             // path, least permitted role, unrelated role
             new object[] { "/api/Sales/Customers", SalesRep, PurchasingAgent },
-            new object[] { "/api/Sales/Customer?id=999999", SalesRep, PurchasingAgent },
+            new object[] { "/api/Sales/Customer?id=cus_00000000000000000000000001", SalesRep, PurchasingAgent },
             new object[] { "/api/Sales/Quotations", SalesRep, Auditor },
-            new object[] { "/api/Sales/Quotation?id=999999", SalesRep, Auditor },
+            new object[] { "/api/Sales/Quotation?id=quo_00000000000000000000000001", SalesRep, Auditor },
             new object[] { "/api/Sales/SalesReceipts", Accountant, SalesRep },
-            new object[] { "/api/Sales/SalesReceipt?id=999999", Accountant, SalesRep },
+            new object[] { "/api/Sales/SalesReceipt?id=rcpt_00000000000000000000000001", Accountant, SalesRep },
             new object[] { "/api/Financials/CashBanks", Auditor, SalesRep },
-            new object[] { "/api/Financials/Bank/999999", Auditor, SalesRep },
+            new object[] { "/api/Financials/Bank/ba_00000000000000000000000001", Auditor, SalesRep },
             new object[] { "/api/Financials/ExportAccounts?mode=snapshot", Auditor, SalesRep },
             new object[] { "/api/Financials/ExportAccounts?mode=template", Auditor, SalesRep },
             new object[] { "/api/Financials/ExportAccounts?mode=structure", Accountant, Auditor },
@@ -83,7 +83,7 @@ namespace AccountGo.BackendTests.Security
 
             var created = await _fixture.Send(HttpMethod.Post, "/api/Donors", Donor("Original"), manager.Token, ws.Slug);
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-            var donorId = (await AccessControlConformanceTests.Fixture.Json(created)).GetProperty("id").GetInt32();
+            var donorId = (await AccessControlConformanceTests.Fixture.Json(created)).GetProperty("id").GetString()!;
             var before = DonorSnapshot(ws.CompanyId);
 
             foreach (var actor in new[] { ws.Owner, unrelated })
@@ -95,9 +95,9 @@ namespace AccountGo.BackendTests.Security
                 await AssertDenied(HttpMethod.Delete, $"/api/Donors/{donorId}", null, actor.Token, ws.Slug);
                 await AssertDenied(HttpMethod.Get, "/api/Donations/DonationInvoices", null, actor.Token, ws.Slug);
                 await AssertDenied(HttpMethod.Get, "/api/Donations/DonationAccounts", null, actor.Token, ws.Slug);
-                await AssertDenied(HttpMethod.Post, "/api/Donations/CreateDonationInvoice", new { donorId, glAccountId = 1 }, actor.Token, ws.Slug);
-                await AssertDenied(HttpMethod.Post, "/api/Donations/UpdateDonationInvoice", new { id = 1, donorId, glAccountId = 1 }, actor.Token, ws.Slug);
-                await AssertDenied(HttpMethod.Delete, "/api/Donations/DeleteDonationInvoice?id=1", null, actor.Token, ws.Slug);
+                await AssertDenied(HttpMethod.Post, "/api/Donations/CreateDonationInvoice", new { donorId, glAccountId = "acct_00000000000000000000000001" }, actor.Token, ws.Slug);
+                await AssertDenied(HttpMethod.Post, "/api/Donations/UpdateDonationInvoice", new { id = "dinv_00000000000000000000000001", donorId, glAccountId = "acct_00000000000000000000000001" }, actor.Token, ws.Slug);
+                await AssertDenied(HttpMethod.Delete, "/api/Donations/DeleteDonationInvoice?id=dinv_00000000000000000000000001", null, actor.Token, ws.Slug);
             }
 
             Assert.Equal(before, DonorSnapshot(ws.CompanyId));
@@ -121,7 +121,7 @@ namespace AccountGo.BackendTests.Security
                 await AssertDenied(HttpMethod.Get, "/api/Donors", null, manager.Token, ws.Slug);
                 await AssertDenied(HttpMethod.Post, "/api/Donors", Donor("Blocked"), manager.Token, ws.Slug);
                 await AssertDenied(HttpMethod.Get, "/api/Donations/DonationInvoices", null, manager.Token, ws.Slug);
-                await AssertDenied(HttpMethod.Delete, "/api/Donations/DeleteDonationInvoice?id=1", null, manager.Token, ws.Slug);
+                await AssertDenied(HttpMethod.Delete, "/api/Donations/DeleteDonationInvoice?id=dinv_00000000000000000000000001", null, manager.Token, ws.Slug);
                 Assert.Equal(before, DonorSnapshot(ws.CompanyId));
             }
             finally
@@ -136,7 +136,7 @@ namespace AccountGo.BackendTests.Security
             var home = await CreateWorkspace("f3h");
             var homeManager = await AddMember(home, Accountant);
             var created = await _fixture.Send(HttpMethod.Post, "/api/Donors", Donor("Home"), homeManager.Token, home.Slug);
-            var donorId = (await AccessControlConformanceTests.Fixture.Json(created)).GetProperty("id").GetInt32();
+            var donorId = (await AccessControlConformanceTests.Fixture.Json(created)).GetProperty("id").GetString()!;
             var before = DonorSnapshot(home.CompanyId);
 
             var foreign = await CreateWorkspace("f3x");
@@ -154,22 +154,24 @@ namespace AccountGo.BackendTests.Security
             var manager = await AddMember(ws, Accountant);
             var unrelated = await AddMember(ws, Auditor);
             var (taxGroupId, itemTaxGroupId) = SeedTaxGroups(ws.CompanyId);
+            var taxGroupPub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<TaxGroup>(_fixture.Factory.Services, taxGroupId);
+            var itemTaxGroupPub = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<ItemTaxGroup>(_fixture.Factory.Services, itemTaxGroupId);
 
             foreach (var actor in new[] { ws.Owner, unrelated })
             {
-                await AssertDenied(HttpMethod.Delete, $"/api/Tax/deletetaxgroup?id={taxGroupId}", null, actor.Token, ws.Slug);
-                await AssertDenied(HttpMethod.Delete, $"/api/Tax/deleteitemtaxgroup?id={itemTaxGroupId}", null, actor.Token, ws.Slug);
+                await AssertDenied(HttpMethod.Delete, $"/api/Tax/deletetaxgroup?id={taxGroupPub}", null, actor.Token, ws.Slug);
+                await AssertDenied(HttpMethod.Delete, $"/api/Tax/deleteitemtaxgroup?id={itemTaxGroupPub}", null, actor.Token, ws.Slug);
             }
             Assert.Equal((true, true), TaxGroupsExist(ws.CompanyId, taxGroupId, itemTaxGroupId));
 
             var foreign = await CreateWorkspace("f3u");
             var foreignManager = await AddMember(foreign, Accountant);
-            Assert.NotEqual(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, $"/api/Tax/deletetaxgroup?id={taxGroupId}", token: foreignManager.Token, org: foreign.Slug)).StatusCode);
-            Assert.NotEqual(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, $"/api/Tax/deleteitemtaxgroup?id={itemTaxGroupId}", token: foreignManager.Token, org: foreign.Slug)).StatusCode);
+            Assert.NotEqual(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, $"/api/Tax/deletetaxgroup?id={taxGroupPub}", token: foreignManager.Token, org: foreign.Slug)).StatusCode);
+            Assert.NotEqual(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, $"/api/Tax/deleteitemtaxgroup?id={itemTaxGroupPub}", token: foreignManager.Token, org: foreign.Slug)).StatusCode);
             Assert.Equal((true, true), TaxGroupsExist(ws.CompanyId, taxGroupId, itemTaxGroupId));
 
-            Assert.Equal(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, $"/api/Tax/deletetaxgroup?id={taxGroupId}", token: manager.Token, org: ws.Slug)).StatusCode);
-            Assert.Equal(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, $"/api/Tax/deleteitemtaxgroup?id={itemTaxGroupId}", token: manager.Token, org: ws.Slug)).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, $"/api/Tax/deletetaxgroup?id={taxGroupPub}", token: manager.Token, org: ws.Slug)).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await _fixture.Send(HttpMethod.Delete, $"/api/Tax/deleteitemtaxgroup?id={itemTaxGroupPub}", token: manager.Token, org: ws.Slug)).StatusCode);
             Assert.Equal((false, false), TaxGroupsExist(ws.CompanyId, taxGroupId, itemTaxGroupId));
         }
 

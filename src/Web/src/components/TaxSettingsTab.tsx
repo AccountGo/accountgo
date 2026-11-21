@@ -5,23 +5,23 @@ import { ModalShell } from './ModalShell';
 import { TaxPeriodsCard } from './TaxPeriodsCard';
 
 interface TaxRow {
-  id: number;
+  id: string;
   taxCode: string;
   taxName: string;
   rate: number;
   isActive: boolean;
   isSystem: boolean;
-  salesAccountId: number | null;
+  salesAccountId: string | null;
   salesAccountCode: string | null;
   salesAccountName: string | null;
-  purchaseAccountId: number | null;
+  purchaseAccountId: string | null;
   purchaseAccountCode: string | null;
   purchaseAccountName: string | null;
   inUse: boolean;
 }
 
 interface AccountNode {
-  id: number;
+  id: string;
   accountCode: string;
   accountName: string;
   accountClassId: number;
@@ -31,13 +31,13 @@ interface AccountNode {
 }
 
 interface Draft {
-  id: number | null;
+  id: string | null;
   taxName: string;
   taxCode: string;
   rate: string;
   isActive: boolean;
-  salesAccountId: number | '';
-  purchaseAccountId: number | '';
+  salesAccountId: string | '';
+  purchaseAccountId: string | '';
 }
 
 const emptyDraft = (): Draft => ({
@@ -349,13 +349,13 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
             {hasFinancials && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-[var(--text-secondary)]">Sales tax account
-                  <select value={draft.salesAccountId} onChange={(event) => setDraft({ ...draft, salesAccountId: event.target.value ? Number(event.target.value) : '' })} className={`${fieldClass} mt-1`}>
+                  <select value={draft.salesAccountId} onChange={(event) => setDraft({ ...draft, salesAccountId: event.target.value })} className={`${fieldClass} mt-1`}>
                     <option value="">Default (20300)</option>
                     {salesAccounts.map((account) => <option key={account.id} value={account.id}>{account.accountCode} · {account.accountName}</option>)}
                   </select>
                 </label>
                 <label className="block text-xs font-semibold text-[var(--text-secondary)]">Purchase tax account
-                  <select value={draft.purchaseAccountId} onChange={(event) => setDraft({ ...draft, purchaseAccountId: event.target.value ? Number(event.target.value) : '' })} className={`${fieldClass} mt-1`}>
+                  <select value={draft.purchaseAccountId} onChange={(event) => setDraft({ ...draft, purchaseAccountId: event.target.value })} className={`${fieldClass} mt-1`}>
                     <option value="">Default (10160)</option>
                     {purchaseAccounts.map((account) => <option key={account.id} value={account.id}>{account.accountCode} · {account.accountName}</option>)}
                   </select>

@@ -25,8 +25,9 @@ namespace Api.Filters
     }
     /// <summary>Requires the workspace's plan to include the module, or with several keys, any one of them.</summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
-    public class RequireModuleAttribute : Attribute, IAsyncActionFilter
+    public class RequireModuleAttribute : Attribute, IAsyncActionFilter, IOrderedFilter
     {
+        public int Order => -4000;
         private readonly string[] _moduleKeys;
 
         public IReadOnlyList<string> ModuleKeys => _moduleKeys;
@@ -91,8 +92,9 @@ namespace Api.Filters
     }
 
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
-    public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
+    public class RequirePermissionAttribute : Attribute, IAsyncActionFilter, IOrderedFilter
     {
+        public int Order => -3500;
         private readonly string _permission;
 
         public string Permission => _permission;
@@ -211,6 +213,18 @@ namespace Api.Filters
             if (string.Equals(operationKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal) &&
                 tenantContext.CompanyId.HasValue)
             {
+                if (Api.PublicIds.PublicIdErrorRecorder.GetErrors(context.HttpContext).Count > 0)
+                {
+                    // The request names an id that is not in this workspace; treat it like a foreign resource (404), not a missing-context denial.
+                    return new AccessResourceContext
+                    {
+                        WorkspaceCompanyId = tenantContext.CompanyId.Value,
+                        ResourceCompanyId = -1,
+                        ResourceType = "JournalEntry",
+                        WorkflowState = "Draft",
+                    };
+                }
+
                 var companyId = tenantContext.CompanyId.Value;
                 var dto = context.ActionArguments.Values.OfType<Dto.Financial.JournalEntry>().FirstOrDefault();
                 var preparerIds = db != null && dto != null && dto.Id > 0
@@ -303,8 +317,9 @@ namespace Api.Filters
     }
 
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
-    public class RequireWorkspaceRoleAttribute : Attribute, IAsyncActionFilter
+    public class RequireWorkspaceRoleAttribute : Attribute, IAsyncActionFilter, IOrderedFilter
     {
+        public int Order => -4000;
         private readonly CompanyMemberRole _minRole;
 
         public CompanyMemberRole MinimumRole => _minRole;
@@ -376,8 +391,9 @@ namespace Api.Filters
     /// Enforces a cataloged operation policy from <see cref="AccessOperationCatalog"/> via <see cref="IAccessAuthorizationService"/>.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
-    public class RequireOperationAttribute : Attribute, IAsyncActionFilter
+    public class RequireOperationAttribute : Attribute, IAsyncActionFilter, IOrderedFilter
     {
+        public int Order => -3500;
         public string OperationKey { get; }
 
         public RequireOperationAttribute(string operationKey)

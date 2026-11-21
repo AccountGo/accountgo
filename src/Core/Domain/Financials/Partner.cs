@@ -6,8 +6,10 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Core.Domain.Financials;
 
-public sealed class Partner : BaseEntity, ICompanyOwned
+[PublicIdPrefix("ptnr")]
+public sealed class Partner : BaseEntity, ICompanyOwned, IHasPublicId
 {
+    public string PublicId { get; set; } = string.Empty;
     public int CompanyId { get; set; }
     [Required, StringLength(100)] public string Name { get; set; } = "";
     public int CapitalAccountId { get; set; }

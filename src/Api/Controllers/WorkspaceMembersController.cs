@@ -1,5 +1,6 @@
 #nullable disable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -172,10 +173,10 @@ namespace Api.Controllers
                 var profile = profiles.FirstOrDefault(u => string.Equals(u.EmailAddress, user?.Email, StringComparison.OrdinalIgnoreCase));
                 return new
                 {
-                    memberId = m.Id, userId = m.UserId, email = user?.Email,
+                    memberId = m.PublicId, userId = m.UserId, email = user?.Email,
                     firstName = profile?.Firstname ?? "", lastName = profile?.Lastname ?? "",
                     role = m.Role.ToString(), status = m.Status.ToString(), joinedAt = m.JoinedAt,
-                    securityRoles = m.SecurityRoles.Select(r => new { id = r.SecurityRoleId, name = r.SecurityRole.Name, displayName = r.SecurityRole.DisplayName })
+                    securityRoles = m.SecurityRoles.Select(r => new { id = r.SecurityRole.PublicId, name = r.SecurityRole.Name, displayName = r.SecurityRole.DisplayName })
                 };
             }));
         }
@@ -188,7 +189,7 @@ namespace Api.Controllers
             return Ok(_db.SecurityRoles.Where(r => !r.SysAdmin && r.Name != "SystemAdministrators")
                 .Select(r => new
                 {
-                    r.Id, r.Name, r.DisplayName,
+                    id = r.PublicId, r.Name, r.DisplayName,
                     permissions = r.Permissions.Select(p => p.SecurityPermission.Name).ToList(),
                     memberCount = _db.CompanyMemberSecurityRoles.Count(mr => mr.SecurityRoleId == r.Id
                         && mr.CompanyMember.CompanyId == companyId && mr.CompanyMember.Status == CompanyMemberStatus.Active)
@@ -199,6 +200,7 @@ namespace Api.Controllers
         public class UpdateMemberRequest
         {
             public string? Role { get; set; }
+            [PublicId("role")]
             public List<int>? SecurityRoleIds { get; set; }
             public string? ApprovedByUserId { get; set; }
             public string? ApprovalRequestId { get; set; }
@@ -210,11 +212,13 @@ namespace Api.Controllers
 
         public class CreateAccessApprovalRequest
         {
+            [PublicId("mem")]
             public int? TargetMemberId { get; set; }
             public string? TargetUserId { get; set; }
             public string? TargetEmail { get; set; }
             public string? OperationKey { get; set; }
             public string? ResourceId { get; set; }
+            [PublicId("role")]
             public List<int>? SecurityRoleIds { get; set; }
         }
 #nullable restore
@@ -233,11 +237,13 @@ namespace Api.Controllers
                 ? AccessOperationCatalog.WorkspaceMembersAssignFunctionalRoles
                 : request.OperationKey;
 
+            var resolvedResourceId = request.ResourceId;
             if (string.Equals(opKey, AccessOperationCatalog.FinancialsJournalPost, StringComparison.Ordinal))
             {
-                var journalProblem = ValidateJournalReviewApproval(companyId, request.ResourceId!);
+                var journalProblem = ValidateJournalReviewApproval(companyId, request.ResourceId!, out var resolvedJournalId);
                 if (journalProblem != null)
                     return journalProblem;
+                resolvedResourceId = resolvedJournalId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
 
             try
@@ -251,7 +257,7 @@ namespace Api.Controllers
                     request.TargetUserId,
                     request.TargetEmail,
                     request.SecurityRoleIds,
-                    request.ResourceId);
+                    resolvedResourceId);
 
                 await AuditEventAsync("approval.grant", "success", new
                 {
@@ -259,7 +265,7 @@ namespace Api.Controllers
                     operation = opKey,
                     targetMemberId = request.TargetMemberId,
                     targetUserId = request.TargetUserId,
-                    resourceId = request.ResourceId,
+                    resourceId = resolvedResourceId,
                     securityRoleIds = request.SecurityRoleIds,
                     expiresAt
                 });
@@ -281,15 +287,20 @@ namespace Api.Controllers
         /// A journal-post review approval must name an existing unposted draft, come from a reviewer who can
         /// actually post journals (permission + entitlement aware), and never from the entry's own preparer.
         /// </summary>
-        private IActionResult? ValidateJournalReviewApproval(int companyId, string resourceId)
+        private IActionResult? ValidateJournalReviewApproval(int companyId, string resourceId, out int journalId)
         {
-            if (!int.TryParse(resourceId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var journalId))
+            journalId = 0;
+            if (string.IsNullOrWhiteSpace(resourceId)
+                || !Core.Domain.PublicIdGenerator.TryParse(resourceId, out var prefix, out _)
+                || !string.Equals(prefix, "je", StringComparison.Ordinal))
                 return Problem(statusCode: 400, title: "Journal entry required", detail: "A journal review approval must reference the journal entry id.");
 
             var header = _db.JournalEntryHeaders.AsNoTracking()
-                .FirstOrDefault(h => h.CompanyId == companyId && h.Id == journalId);
+                .FirstOrDefault(h => h.CompanyId == companyId && h.PublicId == resourceId);
             if (header == null || header.Posted == true || header.GeneralLedgerHeaderId.HasValue)
                 return Problem(statusCode: 400, title: "Unposted journal draft required", detail: "Only an existing, unposted journal draft in this workspace can be approved for posting.");
+
+            journalId = header.Id;
 
             var isEligibleReviewer = ReviewerEligibility.GetEligibleReviewers(companyId)
                 .Any(r => string.Equals(r.UserId, UserId, StringComparison.Ordinal));
@@ -334,8 +345,8 @@ namespace Api.Controllers
         }
 
         [RequireWorkspaceRole(CompanyMemberRole.Admin)]
-        [HttpPatch("members/{memberId:int}")]
-        public IActionResult Update(int memberId, [FromBody] UpdateMemberRequest request)
+        [HttpPatch("members/{memberId}")]
+        public IActionResult Update([Dto.Common.PublicId("mem")] int memberId, [FromBody] UpdateMemberRequest request)
         {
             var companyId = _tenant.RequireCompanyId();
             var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
@@ -457,9 +468,9 @@ namespace Api.Controllers
             return updateResult;
         }
 
-        [HttpDelete("members/{memberId:int}")]
+        [HttpDelete("members/{memberId}")]
         public IActionResult Remove(
-            int memberId,
+            [Dto.Common.PublicId("mem")] int memberId,
             [FromQuery] bool confirmPolicyChangeToSingleActor = false,
             [FromQuery] long? expectedPolicyRevision = null)
         {
@@ -515,13 +526,16 @@ namespace Api.Controllers
 
         public class TransferRequest
         {
+            [PublicId("mem")]
             public int MemberId { get; set; }
         }
 
 #nullable enable
         public class CreateWorkspaceAccessRequestModel
         {
+            [PublicId("mem")]
             public int? TargetMemberId { get; set; }
+            [PublicId("role")]
             public List<int> SecurityRoleIds { get; set; } = new();
             public string? Reason { get; set; }
         }
@@ -533,6 +547,7 @@ namespace Api.Controllers
 
         public class SetupWorkspaceAccessModel
         {
+            [PublicId("role")]
             public List<int> SecurityRoleIds { get; set; } = new();
         }
 #nullable disable
@@ -749,32 +764,53 @@ namespace Api.Controllers
                 var canCancel = (callerUserId == r.RequesterUserId || callerMember.Role == CompanyMemberRole.Owner) &&
                                 effectiveStatus == AccessRequestStatus.Pending;
 
-                return new
-                {
-                    requestId = r.RequestId,
-                    requesterUserId = r.RequesterUserId,
-                    requesterEmail = userLookup.TryGetValue(r.RequesterUserId, out var reqEm) ? reqEm : r.RequesterUserId,
-                    targetMemberId = r.TargetMemberId,
-                    targetUserId = r.TargetUserId,
-                    targetEmail = userLookup.TryGetValue(r.TargetUserId, out var tgtEm) ? tgtEm : r.TargetUserId,
-                    requestedRoleIds = roleIds,
-                    requestedRoleNames = roleNames,
-                    reason = r.Reason,
-                    status = effectiveStatus.ToString(),
-                    approverUserId = r.ApproverUserId,
-                    approverEmail = !string.IsNullOrEmpty(r.ApproverUserId) && userLookup.TryGetValue(r.ApproverUserId, out var appEm) ? appEm : r.ApproverUserId,
-                    decisionReason = r.DecisionReason,
-                    createdAtUtc = r.CreatedAtUtc,
-                    expiresAtUtc = r.ExpiresAtUtc,
-                    decidedAtUtc = r.DecidedAtUtc,
-                    appliedAtUtc = r.AppliedAtUtc,
+                return new WorkspaceAccessRequestItemDto(
+                    r.RequestId,
+                    r.RequesterUserId,
+                    userLookup.TryGetValue(r.RequesterUserId, out var reqEm) ? reqEm : r.RequesterUserId,
+                    r.TargetMemberId,
+                    r.TargetUserId,
+                    userLookup.TryGetValue(r.TargetUserId, out var tgtEm) ? tgtEm : r.TargetUserId,
+                    roleIds,
+                    roleNames,
+                    r.Reason,
+                    effectiveStatus.ToString(),
+                    r.ApproverUserId,
+                    !string.IsNullOrEmpty(r.ApproverUserId) && userLookup.TryGetValue(r.ApproverUserId, out var appEm) ? appEm : r.ApproverUserId,
+                    r.DecisionReason,
+                    r.CreatedAtUtc,
+                    r.ExpiresAtUtc,
+                    r.DecidedAtUtc,
+                    r.AppliedAtUtc,
                     canApprove,
-                    canCancel
-                };
+                    canCancel);
             }).ToList();
 
             return Ok(dtos);
         }
+
+        private sealed record WorkspaceAccessRequestItemDto(
+            string RequestId,
+            string RequesterUserId,
+            string RequesterEmail,
+            [property: PublicId("mem")] int TargetMemberId,
+            string TargetUserId,
+            string TargetEmail,
+            [property: PublicId("role")] List<int> RequestedRoleIds,
+            List<string> RequestedRoleNames,
+            string Reason,
+            string Status,
+            string ApproverUserId,
+            string ApproverEmail,
+            string DecisionReason,
+            DateTime CreatedAtUtc,
+            DateTime ExpiresAtUtc,
+            DateTime? DecidedAtUtc,
+            DateTime? AppliedAtUtc,
+            bool CanApprove,
+            bool CanCancel);
+
+        private sealed record RolesAssignedResponse([property: PublicId("role")] List<int> RolesAssigned);
 
         [HttpPost("access-requests/{requestId}/approve")]
         public async System.Threading.Tasks.Task<IActionResult> ApproveAccessRequest(string requestId, [FromBody] ReviewWorkspaceAccessRequestModel model = null)
@@ -1128,7 +1164,7 @@ namespace Api.Controllers
                         newSecurityRoleIds = current.Union(additions).OrderBy(id => id).ToList()
                     };
                 }
-                return Ok(new { rolesAssigned = additions });
+                return Ok(new RolesAssignedResponse(additions));
             });
             if (result is OkObjectResult)
             {

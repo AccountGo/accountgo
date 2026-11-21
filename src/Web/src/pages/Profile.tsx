@@ -78,7 +78,7 @@ export const Profile: React.FC = () => {
   const [isLoadingPasskeys, setIsLoadingPasskeys] = useState(false);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
-  const [isDeletingPasskey, setIsDeletingPasskey] = useState<number | null>(null);
+  const [isDeletingPasskey, setIsDeletingPasskey] = useState<string | null>(null);
 
   // Recovery codes regeneration state
   const [isRegeneratingCodes, setIsRegeneratingCodes] = useState(false);
@@ -89,7 +89,7 @@ export const Profile: React.FC = () => {
   const [trustedDevices, setTrustedDevices] = useState<TrustedDevice[]>([]);
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
   const [devicesError, setDevicesError] = useState<string | null>(null);
-  const [isRevokingDevice, setIsRevokingDevice] = useState<number | null>(null);
+  const [isRevokingDevice, setIsRevokingDevice] = useState<string | null>(null);
   const [isRevokingAllDevices, setIsRevokingAllDevices] = useState(false);
 
   // Security capabilities (open-core gating)
@@ -214,7 +214,7 @@ export const Profile: React.FC = () => {
     };
   }, [loadSessions, loadMfaMethods, loadTrustedDevices, loadPasskeys, authFetch]);
 
-  const handleRevokeDevice = async (id: number) => {
+  const handleRevokeDevice = async (id: string) => {
     setIsRevokingDevice(id);
     try {
       const res = await authFetch(`/api/auth/mfa/devices/${id}`, { method: 'DELETE' });
@@ -298,7 +298,7 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const handleDeletePasskey = async (id: number) => {
+  const handleDeletePasskey = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this passkey?')) return;
     setIsDeletingPasskey(id);
     setPasskeyError(null);
@@ -562,7 +562,7 @@ export const Profile: React.FC = () => {
   };
 
   // Revoke single session
-  const handleRevokeSession = async (sessionId: number) => {
+  const handleRevokeSession = async (sessionId: string) => {
     try {
       const res = await authFetch(`/api/auth/sessions/${sessionId}`, {
         method: 'DELETE',

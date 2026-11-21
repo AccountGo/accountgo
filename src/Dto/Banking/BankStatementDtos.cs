@@ -3,6 +3,7 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Banking
@@ -154,6 +155,7 @@ namespace Dto.Banking
 
     public class BankStatementCommitResultDto
     {
+        [PublicId("bsi")]
         public int ImportId { get; set; }
         public int Imported { get; set; }
         public int Duplicates { get; set; }
@@ -179,7 +181,9 @@ namespace Dto.Banking
 
     public class BankStatementMatchCandidateDto
     {
+        [PublicId("gll")]
         public int GeneralLedgerLineId { get; set; }
+        [PublicId("gl")]
         public int GeneralLedgerHeaderId { get; set; }
         public DateTime Date { get; set; }
         public string? Description { get; set; }
@@ -191,13 +195,19 @@ namespace Dto.Banking
     {
         public string? MatchedOwnerAction { get; set; }
         public string? SuggestedOwnerAction { get; set; }
+        [PublicId("ptnr")]
         public int? MatchedPartnerId { get; set; }
         public string? MatchedPartnerName { get; set; }
+        [PublicId("ptnr")]
         public int? SuggestedPartnerId { get; set; }
         public string? SuggestedPartnerName { get; set; }
+        [PublicId("bill")]
         public int? DraftBillId { get; set; }
+        [PublicId("bsl")]
         public int Id { get; set; }
+        [PublicId("ba")]
         public int BankId { get; set; }
+        [PublicId("bsi")]
         public int BankStatementImportId { get; set; }
         public int Source { get; set; }
         public string? ExternalId { get; set; }
@@ -206,6 +216,7 @@ namespace Dto.Banking
         public string? Payee { get; set; }
         public string? Memo { get; set; }
         public string? Reference { get; set; }
+        [PublicId("gll")]
         public int? MatchedGeneralLedgerLineId { get; set; }
         public bool IsMatched { get; set; }
         public bool IsExcluded { get; set; }
@@ -249,6 +260,7 @@ namespace Dto.Banking
     public class MatchBankStatementLineRequest
     {
         /// <summary>When omitted the service auto-matches using the unique-candidate rule.</summary>
+        [PublicId("gll")]
         public int? GeneralLedgerLineId { get; set; }
     }
 
@@ -256,6 +268,7 @@ namespace Dto.Banking
     {
         /// <summary>1 MoneyIn, 2 MoneyOut, 4 Fee, 5 Interest, 6 Adjustment.</summary>
         public int Kind { get; set; }
+        [PublicId("acct")]
         public int? ContraAccountId { get; set; }
         public string? Memo { get; set; }
     }
@@ -266,7 +279,9 @@ namespace Dto.Banking
     /// </summary>
     public class WiseConversionImpactReportDto
     {
+        [PublicId("ws")]
         public int CompanyId { get; set; }
+        [PublicId("ba")]
         public int BankId { get; set; }
         public string? BankName { get; set; }
         public int SkippedInFile { get; set; }
@@ -278,11 +293,15 @@ namespace Dto.Banking
 
     public class WiseConversionImpactRowDto
     {
+        [PublicId("ws")]
         public int CompanyId { get; set; }
+        [PublicId("ba")]
         public int BankId { get; set; }
         public string? BankName { get; set; }
+        [PublicId("bsi")]
         public int ImportId { get; set; }
         public string? ImportFileName { get; set; }
+        [PublicId("bsl")]
         public int StatementLineId { get; set; }
         public string? ExternalId { get; set; }
         /// <summary>1-based record number in the file that was re-read. Null when the file has no row number.</summary>
@@ -292,7 +311,9 @@ namespace Dto.Banking
         public string MatchStatus { get; set; } = "unmatched";
         /// <summary>none | posted | reconciled | draft-bill</summary>
         public string PostingStatus { get; set; } = "none";
+        [PublicId("gll")]
         public int? MatchedGeneralLedgerLineId { get; set; }
+        [PublicId("rec")]
         public int? BankReconciliationId { get; set; }
     }
 }

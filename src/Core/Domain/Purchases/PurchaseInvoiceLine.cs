@@ -20,8 +20,10 @@ namespace Core.Domain.Purchases
     /// worked out from the line's tax when the bill is saved and stored, so the bill keeps the tax it was entered with.
     /// </summary>
     [Table("PurchaseInvoiceLine")]
-    public partial class PurchaseInvoiceLine : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("bl")]
+    public partial class PurchaseInvoiceLine : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int PurchaseInvoiceHeaderId { get; set; }
         public int ItemId { get; set; }

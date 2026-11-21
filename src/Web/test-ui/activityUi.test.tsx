@@ -117,7 +117,7 @@ function showPanel(personal = false) {
     <MemoryRouter>
       <Routes>
         <Route element={<Outlet context={context} />}>
-          <Route path="/" element={<RecordHistoryPanel entityType="SalesInvoiceHeader" entityId={10} open onClose={() => {}} personal={personal} />} />
+          <Route path="/" element={<RecordHistoryPanel entityType="SalesInvoiceHeader" entityId="10" open onClose={() => {}} personal={personal} />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -125,12 +125,12 @@ function showPanel(personal = false) {
 }
 
 const headerRow = {
-  id: 3, entityType: 'SalesInvoiceHeader', entityId: 10, action: 'Modified',
+  id: '3', entityType: 'SalesInvoiceHeader', entityId: '10', action: 'Modified',
   changes: { DueDate: ['2026-11-03T00:00:00', '2026-11-10T00:00:00'] },
   actorKind: 'user', actorName: 'Ana Cruz', correlationId: 'c1', occurredAt: '2026-11-03T08:00:00Z',
 };
 const lineRow = {
-  id: 2, entityType: 'SalesInvoiceLine', entityId: 31, parentEntityType: 'SalesInvoiceHeader', parentEntityId: 10, action: 'Modified',
+  id: '2', entityType: 'SalesInvoiceLine', entityId: '31', parentEntityType: 'SalesInvoiceHeader', parentEntityId: '10', action: 'Modified',
   changes: { Amount: [10, 20] }, actorKind: 'user', actorName: 'Ana Cruz', correlationId: 'c1', occurredAt: '2026-11-03T08:00:00Z',
 };
 
@@ -149,7 +149,7 @@ it('History panel pages with Load more', async () => {
   fetcher
     .mockImplementationOnce(async () => json({ items: [headerRow], nextCursor: 3 }))
     .mockImplementationOnce(async () => json({
-      items: [{ ...headerRow, id: 1, correlationId: 'c0', changes: { Notes: ['a', 'b'] } }], nextCursor: null,
+      items: [{ ...headerRow, id: '1', correlationId: 'c0', changes: { Notes: ['a', 'b'] } }], nextCursor: null,
     }));
   showPanel();
   fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
@@ -177,7 +177,7 @@ it('History panel in personal books uses personal wording', async () => {
     <MemoryRouter>
       <Routes>
         <Route element={<Outlet context={{ currentOrg: { slug: 'books' }, hasPermission: () => true }} />}>
-          <Route path="/" element={<RecordHistoryPanel entityType="JournalEntryHeader" entityId={4} open onClose={() => {}} personal />} />
+          <Route path="/" element={<RecordHistoryPanel entityType="JournalEntryHeader" entityId="4" open onClose={() => {}} personal />} />
         </Route>
       </Routes>
     </MemoryRouter>,

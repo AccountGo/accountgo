@@ -25,7 +25,7 @@ namespace Services.Banking
         BankBalanceCheckDto CheckBalance(int bankId, BankBalanceCheckRequest request);
         IReadOnlyList<BankAccountPickerItemDto> Picker(bool includeOtherCashAccounts);
         IReadOnlyList<UnassignedCashDto> GetCashHistory(bool includeCodes);
-        IReadOnlyList<object> EligiblePostingAccounts();
+        IReadOnlyList<EligiblePostingAccountDto> EligiblePostingAccounts();
         BankAccountDto Create(CreateBankAccountRequest request, bool includeFullNumbers);
         BankAccountDto Update(int id, UpdateBankAccountRequest request, bool includeFullNumbers);
         BankAccountDto Archive(int id, bool includeFullNumbers, bool confirmNonZeroBalance = false);

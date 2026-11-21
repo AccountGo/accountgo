@@ -8,7 +8,7 @@ import {
 import type { RoleItem } from '../src/types';
 
 function role(id: number, name: string, permissions: string[]): RoleItem {
-  return { id, name, displayName: name, permissions: permissions as unknown as RoleItem['permissions'] };
+  return { id: String(id), name, displayName: name, permissions: permissions as unknown as RoleItem['permissions'] };
 }
 
 const roles: RoleItem[] = [
@@ -21,7 +21,7 @@ const roles: RoleItem[] = [
 
 it('keeps the Full workspace access preset when the seeded managed profile name is used', () => {
   const presets = buildAccessPresets(roles, () => true);
-  expect(presets.find(preset => preset.key === 'full')?.roleIds).toEqual([1]);
+  expect(presets.find(preset => preset.key === 'full')?.roleIds).toEqual(['1']);
 });
 
 it('summarises the strongest level per area', () => {
@@ -36,7 +36,7 @@ it('summarises the strongest level per area', () => {
 it('builds presets only from seeded roles that exist and never invents a grant', () => {
   const presets = buildAccessPresets(roles.filter(item => item.name !== 'Auditor / Viewer'), () => true);
   expect(presets.map(preset => preset.key)).toEqual(['full', 'bookkeeper']);
-  expect(presets.find(preset => preset.key === 'bookkeeper')?.roleIds).toEqual([2, 3, 4]);
+  expect(presets.find(preset => preset.key === 'bookkeeper')?.roleIds).toEqual(['2', '3', '4']);
 });
 
 it('marks a preset unavailable when none of its areas are in the plan, and limited when only some are', () => {
@@ -50,6 +50,6 @@ it('marks a preset unavailable when none of its areas are in the plan, and limit
 it('matches the selection to a preset, custom, or nothing', () => {
   const presets = buildAccessPresets(roles, () => true);
   expect(matchPresetKey(presets, [])).toBe('');
-  expect(matchPresetKey(presets, [4, 3, 2])).toBe('bookkeeper');
-  expect(matchPresetKey(presets, [2])).toBe(CUSTOM_PRESET_KEY);
+  expect(matchPresetKey(presets, ['4', '3', '2'])).toBe('bookkeeper');
+  expect(matchPresetKey(presets, ['2'])).toBe(CUSTOM_PRESET_KEY);
 });

@@ -15,8 +15,10 @@ using System.Linq;
 namespace Core.Domain.Sales
 {
     [Table("Customer")]
-    public partial class Customer : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("cus")]
+    public partial class Customer : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public Customer()
         {
             SalesInvoices = new HashSet<SalesInvoiceHeader>();

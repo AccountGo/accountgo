@@ -21,9 +21,9 @@ export type RecurringOccurrenceStatus =
   | 'Superseded';
 
 export interface RecurringScheduleSummary {
-  id: number;
+  id: string;
   name: string;
-  customerId: number;
+  customerId: string;
   customerName?: string | null;
   customerArchived: boolean;
   status: RecurringScheduleStatus;
@@ -41,23 +41,23 @@ export interface RecurringScheduleSummary {
 }
 
 export interface RecurringScheduleLineView {
-  id: number;
-  itemId?: number | null;
+  id: string;
+  itemId?: string | null;
   itemNo?: string | null;
   description?: string | null;
   quantity: number;
   amount: number;
   discount: number;
   discountType: RecurringDiscountType;
-  taxId?: number | null;
-  accountId?: number | null;
+  taxId?: string | null;
+  accountId?: string | null;
   sortOrder: number;
 }
 
 export interface RecurringScheduleDetail {
-  id: number;
+  id: string;
   name: string;
-  customerId: number;
+  customerId: string;
   customerName?: string | null;
   customerArchived: boolean;
   status: RecurringScheduleStatus;
@@ -71,7 +71,7 @@ export interface RecurringScheduleDetail {
   occurrenceCount: number;
   action: RecurringAction;
   servicePeriodMode: RecurringServicePeriodMode;
-  paymentTermId?: number | null;
+  paymentTermId?: string | null;
   notes?: string | null;
   paymentInstructions?: string | null;
   needsAttention: boolean;
@@ -82,14 +82,14 @@ export interface RecurringScheduleDetail {
 }
 
 export interface RecurringOccurrenceView {
-  id: number;
-  recurringScheduleId: number;
+  id: string;
+  recurringScheduleId: string;
   scheduledRunDate: string;
   periodStart: string;
   periodEnd: string;
   documentDate: string;
   status: RecurringOccurrenceStatus;
-  salesInvoiceId?: number | null;
+  salesInvoiceId?: string | null;
   errorCode?: string | null;
   guardFailureReason?: string | null;
   skipReason?: string | null;
@@ -101,36 +101,36 @@ export interface RecurringOccurrenceView {
 
 /** A line as the editor edits it (form state). */
 export interface RecurringLineInput {
-  id?: number;
-  itemId?: number | null;
+  id?: string;
+  itemId?: string | null;
   description?: string;
   quantity: number;
   amount: number;
   discount: number;
   discountType: RecurringDiscountType;
-  taxId?: number | '';
-  accountId?: number | null;
+  taxId?: string | '';
+  accountId?: string | null;
   sortOrder?: number;
 }
 
 /** A line as sent to the API (matches RecurringScheduleLineInput; taxId is nullable, not ''). */
 export interface RecurringLinePayload {
-  id?: number;
-  itemId?: number | null;
+  id?: string;
+  itemId?: string | null;
   description?: string | null;
   quantity: number;
   amount: number;
   discount: number;
   discountType: RecurringDiscountType;
-  taxId?: number | null;
-  accountId?: number | null;
+  taxId?: string | null;
+  accountId?: string | null;
   sortOrder?: number;
 }
 
 /** Create/update payload (matches RecurringScheduleInput). */
 export interface RecurringScheduleInput {
-  id?: number;
-  customerId: number;
+  id?: string;
+  customerId: string;
   name: string;
   cadence: RecurringCadence;
   interval: number;
@@ -140,7 +140,7 @@ export interface RecurringScheduleInput {
   maxOccurrences?: number | null;
   action: RecurringAction;
   servicePeriodMode: RecurringServicePeriodMode;
-  paymentTermId?: number | null;
+  paymentTermId?: string | null;
   notes?: string | null;
   paymentInstructions?: string | null;
   lines: RecurringLinePayload[];

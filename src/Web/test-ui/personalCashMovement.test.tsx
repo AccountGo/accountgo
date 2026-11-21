@@ -29,7 +29,7 @@ it('personal reports show the cash movement register and totals without cash flo
 });
 
 it('cash movement export includes the reconciliation and protects spreadsheet cells', () => {
-  const csv = cashMovementCsv({ openingCash: 100, lines: [{ date: '2026-02-03', generalLedgerHeaderId: 1, description: '=formula', accountName: 'Bank', counterpartAccountName: 'Pay', moneyIn: 25, moneyOut: 0 }], totalIn: 25, totalOut: 0, closingCash: 125 });
+  const csv = cashMovementCsv({ openingCash: 100, lines: [{ date: '2026-02-03', generalLedgerHeaderId: '1', description: '=formula', accountName: 'Bank', counterpartAccountName: 'Pay', moneyIn: 25, moneyOut: 0 }], totalIn: 25, totalOut: 0, closingCash: 125 });
   expect(csv).toContain('Opening cash');
   expect(csv).toContain('Closing cash');
   expect(csv).toContain("'=formula");

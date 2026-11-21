@@ -1,4 +1,5 @@
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -68,7 +69,7 @@ namespace Dto.Security
     );
 
     public record UserSessionDto(
-        int Id,
+        [property: PublicId("sess")] int Id,
         System.DateTime CreatedAt,
         System.DateTime ExpiresAt,
         string? IpAddress,

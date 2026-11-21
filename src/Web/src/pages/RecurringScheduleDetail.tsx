@@ -115,7 +115,7 @@ export const RecurringScheduleDetailPage: React.FC = () => {
     act('resume', `/api/RecurringSchedules/${scheduleId}/resume`, undefined, 'Schedule resumed.');
   const doEnd = () =>
     act('end', `/api/RecurringSchedules/${scheduleId}/end`, { reason: reason.trim() || undefined }, 'Schedule ended.');
-  const retry = (occurrenceId: number) =>
+  const retry = (occurrenceId: string) =>
     act(`retry-${occurrenceId}`, `/api/RecurringSchedules/occurrences/${occurrenceId}/retry`, undefined, 'Retry done.');
 
   if (isLoading) {

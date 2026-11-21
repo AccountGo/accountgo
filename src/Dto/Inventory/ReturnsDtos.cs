@@ -3,34 +3,35 @@
 
 #nullable enable
 using System;
+using Dto.Common;
 using System.Collections.Generic;
 
 namespace Dto.Inventory
 {
     public sealed record CustomerReturnLineInputDto(
-        int SalesInvoiceLineId,
+        [property: PublicId("il")] int SalesInvoiceLineId,
         decimal Quantity,
         int Condition, // 1=Saleable, 2=Damaged, 3=ZeroValue
         decimal? RecoverableUnitCost = null);
 
     public sealed record PostCustomerReturnRequest(
-        int SalesInvoiceHeaderId,
-        int? CustomerCreditNoteId,
+        [property: PublicId("inv")] int SalesInvoiceHeaderId,
+        [property: PublicId("cn")] int? CustomerCreditNoteId,
         DateTime ReceiptDate,
         string? Notes,
         IReadOnlyList<CustomerReturnLineInputDto> Lines,
         string? IdempotencyKey = null);
 
     public sealed record SupplierReturnLineInputDto(
-        int? PurchaseReceiptLineId,
-        int? PurchaseInvoiceLineId,
-        int ItemId,
+        [property: PublicId("prcl")] int? PurchaseReceiptLineId,
+        [property: PublicId("bl")] int? PurchaseInvoiceLineId,
+        [property: PublicId("item")] int ItemId,
         decimal Quantity);
 
     public sealed record PostSupplierReturnDispatchRequest(
-        int VendorId,
-        int? PurchaseReceiptHeaderId,
-        int? PurchaseInvoiceHeaderId,
+        [property: PublicId("ven")] int VendorId,
+        [property: PublicId("prc")] int? PurchaseReceiptHeaderId,
+        [property: PublicId("bill")] int? PurchaseInvoiceHeaderId,
         DateTime DispatchDate,
         DateTime? ControlTransferDate,
         bool HasControlTransferred,
@@ -40,33 +41,33 @@ namespace Dto.Inventory
         string? IdempotencyKey = null);
 
     public sealed record MatchSupplierReturnCreditRequest(
-        int SupplierReturnDispatchId,
+        [property: PublicId("srd")] int SupplierReturnDispatchId,
         string VendorCreditNo,
         DateTime EffectiveDate,
         decimal NetCreditAmount,
-        int? TaxId,
+        [property: PublicId("tax")] int? TaxId,
         decimal? OverrideTaxAmount,
         string Reason,
         string? EvidenceReference,
         string? IdempotencyKey = null);
 
     public sealed record PostStockRebateRequest(
-        int VendorId,
-        int ItemId,
+        [property: PublicId("ven")] int VendorId,
+        [property: PublicId("item")] int ItemId,
         DateTime EffectiveDate,
         string VendorCreditNo,
         decimal OnHandValueReduction,
         decimal SoldCogsReduction,
-        int? TaxId,
+        [property: PublicId("tax")] int? TaxId,
         decimal? OverrideTaxAmount,
         string Reason,
         string EvidenceReference,
         string? IdempotencyKey = null);
 
     public sealed record CustomerReturnReceiptLineDto(
-        int Id,
-        int SalesInvoiceLineId,
-        int ItemId,
+        [property: PublicId("crrl")] int Id,
+        [property: PublicId("il")] int SalesInvoiceLineId,
+        [property: PublicId("item")] int ItemId,
         decimal Quantity,
         int Condition,
         decimal OriginalUnitCost,
@@ -74,34 +75,34 @@ namespace Dto.Inventory
         decimal TotalRestoredCost);
 
     public sealed record CustomerReturnReceiptDto(
-        int Id,
+        [property: PublicId("crr")] int Id,
         string? No,
-        int CustomerId,
-        int SalesInvoiceHeaderId,
-        int? CustomerCreditNoteId,
+        [property: PublicId("cus")] int CustomerId,
+        [property: PublicId("inv")] int SalesInvoiceHeaderId,
+        [property: PublicId("cn")] int? CustomerCreditNoteId,
         DateTime ReceiptDate,
         int Status,
-        int? GeneralLedgerHeaderId,
+        [property: PublicId("gl")] int? GeneralLedgerHeaderId,
         long Version,
         IReadOnlyList<CustomerReturnReceiptLineDto> Lines);
 
     public sealed record SupplierReturnDispatchLineDto(
-        int Id,
-        int ItemId,
+        [property: PublicId("srdl")] int Id,
+        [property: PublicId("item")] int ItemId,
         decimal Quantity,
         decimal CarryingUnitCost,
         decimal TotalCarryingCost);
 
     public sealed record SupplierReturnDispatchDto(
-        int Id,
+        [property: PublicId("srd")] int Id,
         string? No,
-        int VendorId,
+        [property: PublicId("ven")] int VendorId,
         DateTime DispatchDate,
         DateTime? ControlTransferDate,
         bool HasControlTransferred,
         int Status,
-        int? GeneralLedgerHeaderId,
-        int? SupplierCreditNoteId,
+        [property: PublicId("gl")] int? GeneralLedgerHeaderId,
+        [property: PublicId("scn")] int? SupplierCreditNoteId,
         decimal TotalCarryingCost,
         long Version,
         IReadOnlyList<SupplierReturnDispatchLineDto> Lines);

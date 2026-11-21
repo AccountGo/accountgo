@@ -8,7 +8,7 @@ import { PartyRole, partyRoles } from '../lib/partyRoles';
 export const PartyPickerDialog: React.FC<{
   role: PartyRole;
   parties: CustomerOption[];
-  selectedId?: number | null;
+  selectedId?: string | null;
   onPick: (party: CustomerOption) => void;
   /** Omitted when the user can't add clients or vendors. */
   onAddNew?: () => void;

@@ -3,12 +3,12 @@ import { useAuth } from '../auth/AuthContext';
 import type { BankStatementLine } from '../types/banking';
 import { MODAL_BODY_CLASS, MODAL_FOOTER_CLASS, MODAL_HEADER_CLASS, MODAL_SURFACE_CLASS, ModalShell } from './ModalShell';
 
-interface LinkedAccount { id: number; accountCode: string; accountName: string; accountClassId: number; isCash: boolean }
+interface LinkedAccount { id: string; accountCode: string; accountName: string; accountClassId: number; isCash: boolean }
 interface LinkedAccountsResponse { accounts: LinkedAccount[]; workExpenseAccounts: LinkedAccount[]; personalCurrency: string }
 
 export const LinkedEntryDialog: React.FC<{
   line: BankStatementLine;
-  workBankId: number;
+  workBankId: string;
   initialKind: 'Personal' | 'MoneyIn';
   workCurrency: string;
   onClose: () => void;
@@ -54,12 +54,12 @@ export const LinkedEntryDialog: React.FC<{
     try {
       const body: Record<string, unknown> = {
         kind, date: line.postedDate.slice(0, 10), amount, workBankAccountId: workBankId,
-        personalAccountId: Number(personalAccountId), statementLineId: line.id,
+        personalAccountId: personalAccountId, statementLineId: line.id,
         memo: line.memo || line.payee || undefined,
       };
       if (accounts && accounts.personalCurrency !== workCurrency) body.mirrorAmount = Number(mirrorAmount);
       if (split && kind === 'Personal') {
-        body.splitWorkExpenseAccountId = Number(workExpenseAccountId);
+        body.splitWorkExpenseAccountId = workExpenseAccountId;
         body.splitWorkAmount = Number(workAmount);
       }
       const response = await authFetch('/api/linked-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

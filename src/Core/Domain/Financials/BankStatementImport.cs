@@ -11,8 +11,10 @@ namespace Core.Domain.Financials
 {
     /// <summary>One committed statement file (CSV / OFX) for a bank account (Phase 3A).</summary>
     [Table("BankStatementImport")]
-    public partial class BankStatementImport : BaseEntity, ICompanyOwned
+    [PublicIdPrefix("bsi")]
+    public partial class BankStatementImport : BaseEntity, ICompanyOwned, IHasPublicId
     {
+        public string PublicId { get; set; } = string.Empty;
         public int CompanyId { get; set; }
         public int BankId { get; set; }
         public BankStatementSources Source { get; set; }
