@@ -11,6 +11,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-21
+
+Release notes: https://github.com/AccountGo/accountgo/releases/tag/v0.3.0
+
 ### Added
 
 - Customer credit notes, settlement applications, and dated application/credit reversals with historical aging, tax-period, and close-readiness integration (behind the per-workspace feature gate).
