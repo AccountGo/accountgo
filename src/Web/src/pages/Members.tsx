@@ -245,7 +245,7 @@ export const Members: React.FC = () => {
 
   // The alert sits at the top of the page while forms render far below it, so bring a new error into view.
   useEffect(() => {
-    if (error) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (error) errorRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
   }, [error]);
 
   useEffect(() => {
