@@ -1,6 +1,6 @@
 # Document capture implementation decisions
 
-Status: implementation record for the approved document-capture design. PDF parser selection is pending the architecture owner's decision.
+Status: implementation record for the approved document-capture design. Parser selection is approved conditionally by the architecture owner; implementation must stop and request a new decision if the pinned parser cannot meet the bounds below.
 
 ## Scope and invariants
 
@@ -31,6 +31,8 @@ The API and UI share explicit, versioned kind schemas. Proposed limits for imple
 | Extractor deadline | 20 seconds |
 | Image decode concurrency | 4 slots, 500 ms admission wait |
 
+PDF structure parsing is limited to 32 MiB aggregate decoded bytes, 8 MiB per decoded stream, 50,000 visited indirect objects, 1,000 page-tree visits, and depth 64. The PDF parse gate uses four slots and a 500 ms admission wait. Deadline checks must run in bounded input/filter/structure traversal code; no detached `Task.Run` timeout may leave CPU work running.
+
 The accept request body is capped at 256 KiB, link requests at 4 KiB, and assistant run-stream bodies at 16 KiB before proxy buffering. The existing 8 MiB + 64 KiB upload route cap applies only to capture uploads. MVC and worker checks both enforce the limits, including unknown-length and encoded-path requests.
 
 ## Persistence and serialization
@@ -46,10 +48,12 @@ The accept request body is capped at 256 KiB, link requests at 4 KiB, and assist
 - Resource-specific evidence reads use the existing authorization service: unlinked captures require the relevant module's capture-review read capability; linked evidence requires target read permission and target resource access on every metadata and byte path. Bank evidence additionally requires the existing sensitive banking permission. Assistant evidence is creator-only.
 - Company liveness is checked after tenant resolution and again in state-changing transactions. Cleanup commits `DeletedAt` first and is retried by a bounded purge worker.
 
-## PDF parser decision request
+## PDF parser decision and policy
 
-Candidate for review: `UglyToad.PdfPig` (Apache-2.0). The official repository documents the license and the release history shows active maintenance, including a stable 0.1.16 release with stack-depth and malformed-input fixes. The current NuGet profile also shows a newer prerelease, so the implementation would pin a stable release and avoid floating versions.
+Approved candidate: `UglyToad.PdfPig` 0.1.16, exact stable pin, Apache-2.0. The official repository and release history show active maintenance, including stack-depth and malformed-input fixes. No prerelease or floating version is permitted.
 
-Open safety question: public release notes and issues indicate decompression bounds have received fixes, but the current public API evidence does not establish a strict aggregate decoded-byte limit for every supported filter. The implementation must not rely on file size, page count, or `MaxStackDepth` alone as a decompression bound. Before adding this dependency, the owner must approve PdfPig only with a proven bounded filter/decode path and tests, or direct selection of another parser. No PDF dependency has been added.
+The parser is used for structure only: catalog, active page tree, and encryption metadata. It must never decode page content streams, fonts, or images. Reject `/Encrypt`. Enforce decoded-byte, indirect-object, page-tree, nesting-depth, and cooperative deadline caps in custom parser/filter hooks. Cycles, malformed structures, unsupported filters, exceptions, or any cap hit fail closed as malformed/unsupported input. Never use detached timeout tasks.
 
-Evidence: the repository describes PdfPig as Apache-2.0 licensed and publishes its releases at `https://github.com/UglyToad/PdfPig`; release notes for 0.1.15/0.1.16 mention malformed-input and recursion/decompression fixes. License and release history are not evidence of a hard application-level resource ceiling.
+Required adversarial fixtures cover Flate bombs in object and xref streams, cyclic/deep page trees, dishonest `/Count`, incremental page-tree replacement, unrelated `/Type /Page` text in a stream, encryption, 11 pages, truncation, and bounded peak time/memory. Verify the package and all transitive licenses before adding it. If its 0.1.16 filter-provider hook cannot enforce the aggregate bound, stop and ask the architecture owner rather than bypassing the constraint.
+
+Evidence: the repository describes PdfPig as Apache-2.0 licensed and publishes release history at `https://github.com/UglyToad/PdfPig`. The 0.1.16 release notes identify the public filter-provider hook and stack-depth/malformed-input fixes. These are evidence of the extension point and maintenance, not proof of our application-level ceilings; implementation tests must establish those ceilings.
