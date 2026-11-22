@@ -520,6 +520,41 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RunStream_OverlongValueWithSurrogatePair_TruncatesToValidUtf16WithEllipsis()
+    {
+        var fieldsJson = JsonSerializer.Serialize(new
+        {
+            fields = new[]
+            {
+                // Cut at index 999 lands directly inside the UTF-16 surrogate pair (high surrogate at 998, low at 999)
+                new { label = "Split", value = new string('a', 998) + "😀b" },
+                // 999 ASCII chars followed by an emoji (total 1001 UTF-16 code units)
+                new { label = "Trail", value = new string('b', 999) + "😀" },
+            },
+        });
+        var (_, pubId) = SeedCapture(_companyIdA, _ownerId, acceptedFieldsJson: fieldsJson);
+
+        var res = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = "Read", captureId = pubId }));
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.True(_anterHandler.Requests.TryDequeue(out var upstream));
+        using var bodyDoc = JsonDocument.Parse(upstream!.Body);
+        var sentMessage = bodyDoc.RootElement.GetProperty("message").GetString()!;
+
+        var splitLine = Assert.Single(sentMessage.Split('\n'), line => line.StartsWith("- Split: ", StringComparison.Ordinal)).TrimEnd('\r');
+        var splitValue = splitLine["- Split: ".Length..];
+        Assert.True(splitValue.Length <= AssistantAttachmentMessageBuilder.MaxValueLength);
+        Assert.EndsWith("…", splitValue, StringComparison.Ordinal);
+        Assert.DoesNotContain(splitValue, char.IsSurrogate);
+
+        var trailLine = Assert.Single(sentMessage.Split('\n'), line => line.StartsWith("- Trail: ", StringComparison.Ordinal)).TrimEnd('\r');
+        var trailValue = trailLine["- Trail: ".Length..];
+        Assert.Equal(AssistantAttachmentMessageBuilder.MaxValueLength, trailValue.Length);
+        Assert.EndsWith("…", trailValue, StringComparison.Ordinal);
+        Assert.DoesNotContain(trailValue, char.IsSurrogate);
+    }
+
+    [Fact]
     public async Task RunStream_PreservesAcceptedJsonAndBytes_OnSuccessNon2xxAndException_AndAllowsReuse()
     {
         var (id, pubId) = SeedCapture(_companyIdA, _ownerId);

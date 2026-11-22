@@ -231,10 +231,14 @@ public static partial class AssistantAttachmentMessageBuilder
         singleLine = DelimiterPhraseRegex().Replace(singleLine, "(redacted-delimiter)");
         singleLine = WhitespaceRunRegex().Replace(singleLine, " ").Trim();
 
-        // 3. Enforce per-field cap with an ellipsis marker before the 8,000-char combined check.
+        // 3. Enforce per-field cap with an ellipsis marker before the 8,000-char combined check,
+        // without splitting a UTF-16 surrogate pair.
         if (singleLine.Length > maxLength)
         {
-            singleLine = singleLine[..(maxLength - 1)].TrimEnd() + "…";
+            var cut = maxLength - 1;
+            if (cut > 0 && char.IsHighSurrogate(singleLine[cut - 1]))
+                cut--;
+            singleLine = singleLine[..cut].TrimEnd() + "…";
         }
 
         return singleLine;
