@@ -132,9 +132,9 @@ namespace Api.Data.Migrations.ApiDb
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentCaptureAttempts_CompanyId_ReservedAt",
+                name: "IX_DocumentCaptureAttempts_ReservedAt",
                 table: "DocumentCaptureAttempts",
-                columns: new[] { "CompanyId", "ReservedAt" });
+                column: "ReservedAt");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DocumentCaptureBlobs_CompanyId_CaptureId",
@@ -172,9 +172,10 @@ namespace Api.Data.Migrations.ApiDb
                 columns: new[] { "CompanyId", "SourceHash", "Kind", "SchemaVersion", "CreatedAt" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentCaptures_CompanyId_Status_ExpiresAt",
+                name: "IX_DocumentCaptures_ExpiresAt_Unaccepted",
                 table: "DocumentCaptures",
-                columns: new[] { "CompanyId", "Status", "ExpiresAt" });
+                column: "ExpiresAt",
+                filter: "[AcceptedAt] IS NULL AND [RejectedAt] IS NULL AND [BytesDeletedAt] IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DocumentCaptures_PublicId",

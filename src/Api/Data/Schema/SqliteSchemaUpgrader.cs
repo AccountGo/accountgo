@@ -853,7 +853,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 DocumentCapturePublicIdIndexSql,
                 DocumentCaptureIdempotencyIndexSql,
                 DocumentCaptureSourceHashIndexSql,
-                DocumentCaptureStatusExpiryIndexSql,
+                DocumentCaptureAbandonedExpiryIndexSql,
                 DocumentCaptureAttemptsGenerationIndexSql,
                 DocumentCaptureAttemptsReservationIndexSql,
                 DocumentCaptureLinksCaptureIndexSql,
@@ -862,6 +862,12 @@ WHERE ""DisabledModulesJson"" IS NULL
             {
                 using var command = connection.CreateCommand();
                 command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "DROP INDEX IF EXISTS \"IX_DocumentCaptures_CompanyId_Status_ExpiresAt\";";
                 command.ExecuteNonQuery();
             }
         }
@@ -953,17 +959,18 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptures_CompanyId_SourceHash_Kind_SchemaVersion_CreatedAt""
             ON ""DocumentCaptures"" (""CompanyId"", ""SourceHash"", ""Kind"", ""SchemaVersion"", ""CreatedAt"");";
 
-        private const string DocumentCaptureStatusExpiryIndexSql = @"
-            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptures_CompanyId_Status_ExpiresAt""
-            ON ""DocumentCaptures"" (""CompanyId"", ""Status"", ""ExpiresAt"");";
+        private const string DocumentCaptureAbandonedExpiryIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptures_ExpiresAt_Unaccepted""
+            ON ""DocumentCaptures"" (""ExpiresAt"")
+            WHERE ""AcceptedAt"" IS NULL AND ""RejectedAt"" IS NULL AND ""BytesDeletedAt"" IS NULL;";
 
         private const string DocumentCaptureAttemptsGenerationIndexSql = @"
             CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureAttempts_CompanyId_CaptureId_Generation""
             ON ""DocumentCaptureAttempts"" (""CompanyId"", ""CaptureId"", ""Generation"");";
 
         private const string DocumentCaptureAttemptsReservationIndexSql = @"
-            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureAttempts_CompanyId_ReservedAt""
-            ON ""DocumentCaptureAttempts"" (""CompanyId"", ""ReservedAt"");";
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureAttempts_ReservedAt""
+            ON ""DocumentCaptureAttempts"" (""ReservedAt"");";
 
         private const string DocumentCaptureLinksCaptureIndexSql = @"
             CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureLinks_CompanyId_CaptureId""

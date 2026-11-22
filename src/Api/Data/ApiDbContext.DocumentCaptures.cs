@@ -46,7 +46,9 @@ public partial class ApiDbContext
                 .IsUnique()
                 .HasFilter("[IdempotencyKey] IS NOT NULL");
             entity.HasIndex(capture => new { capture.CompanyId, capture.SourceHash, capture.Kind, capture.SchemaVersion, capture.CreatedAt });
-            entity.HasIndex(capture => new { capture.CompanyId, capture.Status, capture.ExpiresAt });
+            entity.HasIndex(capture => capture.ExpiresAt)
+                .HasDatabaseName("IX_DocumentCaptures_ExpiresAt_Unaccepted")
+                .HasFilter("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL");
         });
 
         builder.Entity<DocumentCaptureBlob>(entity =>
@@ -66,7 +68,8 @@ public partial class ApiDbContext
             entity.ToTable("DocumentCaptureAttempts");
             entity.HasKey(attempt => attempt.Id);
             entity.HasIndex(attempt => new { attempt.CompanyId, attempt.CaptureId, attempt.Generation }).IsUnique();
-            entity.HasIndex(attempt => new { attempt.CompanyId, attempt.ReservedAt });
+            entity.HasIndex(attempt => attempt.ReservedAt)
+                .HasDatabaseName("IX_DocumentCaptureAttempts_ReservedAt");
             entity.HasOne(attempt => attempt.Capture)
                 .WithMany(capture => capture.Attempts)
                 .HasForeignKey(attempt => new { attempt.CompanyId, attempt.CaptureId })

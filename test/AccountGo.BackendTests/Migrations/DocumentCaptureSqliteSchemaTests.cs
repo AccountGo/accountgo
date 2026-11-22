@@ -29,6 +29,14 @@ public sealed class DocumentCaptureSqliteSchemaTests
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureBlobs';"));
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureAttempts';"));
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureLinks';"));
+        var captureRetentionIndex = ScalarText(connection,
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptures_ExpiresAt_Unaccepted';");
+        Assert.Contains("ON \"DocumentCaptures\" (\"ExpiresAt\")", captureRetentionIndex, StringComparison.Ordinal);
+        Assert.Contains("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL", captureRetentionIndex, StringComparison.Ordinal);
+        Assert.Contains("ON \"DocumentCaptureAttempts\" (\"ReservedAt\")", ScalarText(connection,
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureAttempts_ReservedAt';"), StringComparison.Ordinal);
+        Assert.Equal(0, ScalarInt(connection,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptures_CompanyId_Status_ExpiresAt';"));
         Assert.All(new[] { "DocumentCaptures", "DocumentCaptureBlobs", "DocumentCaptureAttempts", "DocumentCaptureLinks" }, table =>
             Assert.DoesNotContain(table, SqliteSchemaUpgrader.TenantTables));
     }
@@ -45,5 +53,12 @@ public sealed class DocumentCaptureSqliteSchemaTests
         using var command = connection.CreateCommand();
         command.CommandText = sql;
         return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private static string ScalarText(SqliteConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return Convert.ToString(command.ExecuteScalar()) ?? string.Empty;
     }
 }
