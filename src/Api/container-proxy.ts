@@ -157,6 +157,12 @@ export function payloadTooLargeResponse(err: PayloadTooLargeError): Response {
 
 export const MAX_LOGO_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_LOGO_REQUEST_BYTES = 2 * 1024 * 1024 + 64 * 1024; // 2 MiB file + 64 KiB multipart overhead
+export const MAX_DOCUMENT_CAPTURE_FILE_BYTES = 8 * 1024 * 1024;
+export const MAX_DOCUMENT_CAPTURE_REQUEST_BYTES = MAX_DOCUMENT_CAPTURE_FILE_BYTES + 64 * 1024;
+export const MAX_DOCUMENT_CAPTURE_ACCEPT_BYTES = 256 * 1024;
+export const MAX_DOCUMENT_CAPTURE_LINK_BYTES = 4 * 1024;
+// An 8,000-character message can expand to 48 KiB when JSON escapes each UTF-16 code unit.
+export const MAX_ASSISTANT_RUN_STREAM_BODY_BYTES = 64 * 1024;
 
 export function canonicalizePath(pathname: string): string {
   let path = pathname.split(/[?#]/)[0];
@@ -184,6 +190,15 @@ export function isInvoiceLogoRoute(pathname: string): boolean {
   return raw === "/api/invoice-branding/logo" || canonical === "/api/invoice-branding/logo";
 }
 
+function canonicalSegments(pathname: string): string[] {
+  return canonicalizePath(pathname).split("/").filter(Boolean);
+}
+
+export function isDocumentCaptureUploadRoute(pathname: string): boolean {
+  const segments = canonicalSegments(pathname);
+  return segments.length === 2 && segments[0] === "api" && segments[1] === "document-captures";
+}
+
 const TURNSTILE_AUTH_ACTIONS: Record<string, string> = {
   "/api/auth/send-otp": "login",
   "/api/auth/signup": "signup",
@@ -208,6 +223,20 @@ export function maxRequestBodyBytesForRoute(pathname: string, method?: string): 
   }
   if (isInvoiceLogoRoute(pathname)) {
     return MAX_LOGO_REQUEST_BYTES;
+  }
+  const m = method?.toUpperCase();
+  const segments = canonicalSegments(pathname);
+  if (m === "POST" && isDocumentCaptureUploadRoute(pathname)) {
+    return MAX_DOCUMENT_CAPTURE_REQUEST_BYTES;
+  }
+  if (m === "POST" && segments[0] === "api" && segments[1] === "document-captures") {
+    const action = segments.at(-1);
+    if (action === "accept") return MAX_DOCUMENT_CAPTURE_ACCEPT_BYTES;
+    if (action === "link" || action === "links" || action === "reject") return MAX_DOCUMENT_CAPTURE_LINK_BYTES;
+  }
+  if (m === "POST" && segments.length === 4 && segments[0] === "api" && segments[1] === "ai"
+      && segments[2] === "chat" && segments[3] === "run-stream") {
+    return MAX_ASSISTANT_RUN_STREAM_BODY_BYTES;
   }
   return undefined;
 }

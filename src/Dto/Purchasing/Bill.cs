@@ -53,7 +53,15 @@ namespace Dto.Purchasing
         public DateTime? VoidedAt { get; set; }
         public string? VoidReason { get; set; }
         public bool ConfirmDuplicate { get; set; }
+        /// <summary>Optional document-capture review contexts bound to the current totals when saving or approving (max 10).</summary>
+        public List<Dto.DocumentCapture.CaptureReviewContext>? CaptureReviews { get; set; }
         public List<BillPayment> Payments { get; set; } = new();
+    }
+
+    /// <summary>Optional request body for <c>POST /api/Purchasing/ApproveBill</c> when approving a draft with linked captures.</summary>
+    public class ApproveBillRequest
+    {
+        public List<Dto.DocumentCapture.CaptureReviewContext>? CaptureReviews { get; set; }
     }
 
     public class BillLine

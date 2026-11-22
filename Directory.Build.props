@@ -11,6 +11,7 @@
     <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     <PackageLicenseUrl>https://www.gnu.org/licenses/agpl-3.0.html</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/AccountGo/accountgo</PackageProjectUrl>
+    <AccountGoSkiaSharpVersion>2.88.9</AccountGoSkiaSharpVersion>
     <RepositoryUrl>https://github.com/AccountGo/accountgo.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <DebugType>embedded</DebugType>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, ChevronsUpDown, Loader2, Package, Plus, Save, Trash2, Unlink, UserPlus, Users, X } from 'lucide-react';
+import { Link, useBlocker, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, CheckCircle2, ChevronsUpDown, ExternalLink, Loader2, Package, Plus, RefreshCw, Save, ScanLine, Trash2, Unlink, UserPlus, Users, X } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { PartyPickerDialog } from '../components/PartyPickerDialog';
 import { PartyFormDialog } from '../components/PartyFormDialog';
@@ -8,6 +8,21 @@ import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
 import { ItemFormDialog } from '../components/ItemFormDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { usePermissions } from '../components/Gating';
+import { DocumentCapturePanel } from '../components/document-capture/DocumentCapturePanel';
+import {
+  computeCaptureDiscrepancy,
+  describeCaptureError,
+  DocumentCaptureCapabilities,
+  DocumentCaptureView,
+  evaluateFinancialApplyGates,
+  findSuggestedVendor,
+  formatSignedCurrencyDifference,
+  isValidIsoDate,
+  MAX_REFERENCE_NO_LENGTH,
+  MAX_VENDOR_INVOICE_NO_LENGTH,
+  parseStrictDecimal,
+  VendorCaptureFields,
+} from '../components/document-capture/fields';
 import { Bill, BillAccount, CatalogItem, CustomerOption, ItemOption, PaymentTermOption, TenantContextType, Vendor } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
@@ -24,9 +39,11 @@ interface LineDraft {
   accountId: string | '';
   isStockItem: boolean;
   quantity: number;
-  amount: number;
+  amount: number | '';
   discount: number;
   taxId: string | '';
+  missingQuantityDefaulted?: boolean;
+  captureAmountWarning?: string;
 }
 
 const fieldClass =
@@ -89,9 +106,52 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const [pickerLine, setPickerLine] = useState<number | null>(null);
   const [newItemLine, setNewItemLine] = useState<number | null>(null);
 
+  // Document capture state (shared panel, reconciliation, vendor suggestion, draft merge, post-save link)
+  const [captureCapabilities, setCaptureCapabilities] = useState<DocumentCaptureCapabilities | null>(null);
+  const [showCapturePanel, setShowCapturePanel] = useState(false);
+  const [linkedCaptures, setLinkedCaptures] = useState<DocumentCaptureView[]>([]);
+  const [acceptedCapture, setAcceptedCapture] = useState<DocumentCaptureView | null>(null);
+  const [ambiguousCurrencyConfirmed, setAmbiguousCurrencyConfirmed] = useState(false);
+  const [suggestedVendor, setSuggestedVendor] = useState<CustomerOption | null>(null);
+  const [unmatchedVendorName, setUnmatchedVendorName] = useState<string | null>(null);
+  const [newVendorInitialName, setNewVendorInitialName] = useState<string | undefined>(undefined);
+  const [pendingDueDate, setPendingDueDate] = useState<string | null>(null);
+  const [pendingLineMerge, setPendingLineMerge] = useState<LineDraft[] | null>(null);
+  const [ackSnapshots, setAckSnapshots] = useState<
+    Record<string, { sourceGrandTotal: number | null; formTotal: number }>
+  >({});
+  const [serverReconciliation, setServerReconciliation] = useState<
+    Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }>
+  >({});
+  const [pendingLink, setPendingLink] = useState<{
+    captureId: string;
+    billId: string;
+    error: string;
+  } | null>(null);
+  const [retryingLink, setRetryingLink] = useState(false);
+
+  const captureAvailable = Boolean(
+    captureCapabilities?.enabled &&
+      captureCapabilities.providerAvailable &&
+      captureCapabilities.kinds.some((k) => k === 'expense-receipt' || k === 'purchase-invoice')
+  );
+
+  // Route-leave guard while an accepted capture has a failed/pending evidence link (G9).
+  const routeBlocker = useBlocker(Boolean(pendingLink));
+  useEffect(() => {
+    if (!pendingLink) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [pendingLink]);
+
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
   const formatCurrency = useCallback(
-    (val: number) => `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    (val: number) =>
+      `${val < 0 ? '-' : ''}${currencySymbol}${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     [currencySymbol]
   );
 
@@ -171,6 +231,12 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             setVendorInvoiceNo(bill.vendorInvoiceNo ?? '');
             setDate(bill.date.slice(0, 10));
             setDueDate(bill.dueDate?.slice(0, 10) ?? '');
+            // Load already-linked evidence for this draft so reconciliation and approval work in edit mode (G3).
+            const linkedRes = await authFetch(`/api/document-captures/linked/bill/${encodeURIComponent(bill.id)}`).catch(() => null);
+            if (!cancelled && linkedRes?.ok) {
+              const rawLinked = await linkedRes.json();
+              if (!cancelled) setLinkedCaptures(Array.isArray(rawLinked) ? rawLinked : []);
+            }
           } else {
             // A copy is a new bill: dated today, due on the same terms, without the vendor's number.
             const gap = bill.dueDate ? businessDaysBetween(bill.date.slice(0, 10), bill.dueDate.slice(0, 10)) : null;
@@ -228,6 +294,219 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, taxes]);
 
+  // Discover document-capture capabilities ONCE per workspace and pass down to DocumentCapturePanel (G10).
+  useEffect(() => {
+    let cancelled = false;
+    setCaptureCapabilities(null);
+    setShowCapturePanel(false);
+    setAcceptedCapture(null);
+    setSuggestedVendor(null);
+    setPendingDueDate(null);
+    setPendingLineMerge(null);
+    setAckSnapshots({});
+    setServerReconciliation({});
+    setPendingLink(null);
+    if (!purchasesWritable) return;
+    (async () => {
+      try {
+        const res = await authFetch('/api/document-captures/capabilities');
+        if (cancelled || !res.ok) return;
+        const caps: DocumentCaptureCapabilities = await res.json();
+        if (!cancelled) setCaptureCapabilities(caps);
+      } catch {
+        if (!cancelled) setCaptureCapabilities(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, orgSlug, purchasesWritable]);
+
+  // Clear server-reported total overrides whenever form lines/totals change.
+  useEffect(() => {
+    setServerReconciliation({});
+  }, [totals.total]);
+
+  const reviewedCaptures = useMemo<DocumentCaptureView[]>(() => {
+    const map = new Map<string, DocumentCaptureView>();
+    for (const c of linkedCaptures) map.set(c.id, c);
+    if (acceptedCapture && !pendingLineMerge) {
+      map.set(acceptedCapture.id, acceptedCapture);
+    }
+    return Array.from(map.values());
+  }, [linkedCaptures, acceptedCapture, pendingLineMerge]);
+
+  const getDiscrepancyForCapture = useCallback(
+    (capture: DocumentCaptureView) => {
+      const override = serverReconciliation[capture.id];
+      if (override) {
+        return {
+          sourceGrandTotal: override.sourceGrandTotal,
+          formTotal: override.formTotal,
+          difference: override.difference,
+          hasDiscrepancy: Math.abs(override.difference) > 0.005,
+        };
+      }
+      const fields = ((capture.acceptedFields ?? capture.fields) as VendorCaptureFields | null) ?? null;
+      return computeCaptureDiscrepancy(fields?.sourceTotals ?? null, totals.total);
+    },
+    [serverReconciliation, totals.total]
+  );
+
+  const isCaptureAcknowledged = useCallback(
+    (capture: DocumentCaptureView) => {
+      const disc = getDiscrepancyForCapture(capture);
+      const snap = ackSnapshots[capture.id];
+      return Boolean(
+        snap &&
+          snap.sourceGrandTotal === disc.sourceGrandTotal &&
+          snap.formTotal === disc.formTotal
+      );
+    },
+    [ackSnapshots, getDiscrepancyForCapture]
+  );
+
+  const mapCapturedLines = useCallback(
+    (fields: VendorCaptureFields): LineDraft[] => {
+      const sourceLines = fields.lines ?? [];
+      return sourceLines
+        .filter((l) => (l.description && l.description.trim() !== '') || (l.unitAmount && l.unitAmount.trim() !== '') || (l.sourceLineTotal && l.sourceLineTotal.trim() !== ''))
+        .map((l) => {
+          const parsedQty = parseStrictDecimal(l.quantity ?? null);
+          const qtyMissing = !l.quantity || l.quantity.trim() === '';
+          const qty = parsedQty.valid && parsedQty.numeric !== null && parsedQty.numeric > 0 ? parsedQty.numeric : 1;
+
+          const parsedAmt = parseStrictDecimal(l.unitAmount ?? null);
+          const hasValidAmount = Boolean(l.unitAmount && l.unitAmount.trim() !== '' && parsedAmt.valid && parsedAmt.numeric !== null);
+
+          const parsedDisc = parseStrictDecimal(l.discount ?? null);
+          const discount = parsedDisc.valid && parsedDisc.numeric !== null ? parsedDisc.numeric : 0;
+
+          return {
+            key: nextKey++,
+            id: '',
+            itemId: null,
+            description: (l.description ?? '').trim(),
+            accountId: defaultAccountId,
+            isStockItem: false,
+            quantity: qty,
+            amount: hasValidAmount ? parsedAmt.numeric! : '',
+            discount,
+            taxId: '',
+            missingQuantityDefaulted: Boolean(l.missingQuantityDefaulted || qtyMissing),
+            captureAmountWarning: hasValidAmount ? undefined : 'Enter a valid unit cost before saving.',
+          };
+        });
+    },
+    [defaultAccountId]
+  );
+
+  const hasPopulatedLines = useMemo(
+    () => lines.some((l) => l.itemId !== null || l.description.trim() !== '' || (l.amount !== '' && Number(l.amount) !== 0)),
+    [lines]
+  );
+
+  const applyCapturedMonetaryLines = useCallback(
+    (fields: VendorCaptureFields) => {
+      const mapped = mapCapturedLines(fields);
+      if (mapped.length === 0) return;
+      if (hasPopulatedLines) {
+        setPendingLineMerge(mapped);
+      } else {
+        setLines(mapped);
+        setPendingLineMerge(null);
+      }
+    },
+    [hasPopulatedLines, mapCapturedLines]
+  );
+
+  const handleCaptureAccepted = useCallback(
+    (canonical: DocumentCaptureView) => {
+      setAcceptedCapture(canonical);
+      setShowCapturePanel(false);
+      setAmbiguousCurrencyConfirmed(false);
+      setAckSnapshots((prev) => {
+        const next = { ...prev };
+        delete next[canonical.id];
+        return next;
+      });
+      setPendingLink(null);
+      setPendingDueDate(null);
+      setPendingLineMerge(null);
+
+      const fields = ((canonical.acceptedFields ?? canonical.fields) as VendorCaptureFields | null) ?? {};
+      const gates = evaluateFinancialApplyGates(canonical, currentOrg.currency, false);
+
+      // Exact-name vendor suggestion requires user confirmation and never creates a vendor.
+      const matched = findSuggestedVendor(fields.vendorName, vendors);
+      setSuggestedVendor(matched && matched.id !== vendorId ? matched : null);
+      const trimmedVendorName = typeof fields.vendorName === 'string' ? fields.vendorName.trim() : '';
+      setUnmatchedVendorName(!matched && trimmedVendorName && !vendorId ? trimmedVendorName : null);
+
+      if (!gates.canApplyNonMonetary) {
+        return;
+      }
+
+      if (fields.vendorInvoiceNo?.trim()) {
+        setVendorInvoiceNo(fields.vendorInvoiceNo.trim().slice(0, MAX_VENDOR_INVOICE_NO_LENGTH));
+      }
+      if (fields.referenceNo?.trim()) {
+        setReferenceNo(fields.referenceNo.trim().slice(0, MAX_REFERENCE_NO_LENGTH));
+      }
+      if (fields.date && isValidIsoDate(fields.date)) {
+        setDate(fields.date);
+      }
+      if (fields.dueDate && isValidIsoDate(fields.dueDate)) {
+        // Never silently replace an existing payment term.
+        if (paymentTermId === '') {
+          setDueDate(fields.dueDate);
+        } else {
+          setPendingDueDate(fields.dueDate);
+        }
+      }
+      if (fields.notes?.trim()) {
+        setNotes((prev) => (prev.trim() ? prev : fields.notes!.trim()));
+      }
+
+      if (gates.canApplyMonetary) {
+        applyCapturedMonetaryLines(fields);
+      }
+    },
+    [applyCapturedMonetaryLines, currentOrg.currency, paymentTermId, vendorId, vendors]
+  );
+
+  const linkCaptureToBill = useCallback(
+    async (captureId: string, savedBillId: string) => {
+      setRetryingLink(true);
+      try {
+        const linkRes = await authFetch(`/api/document-captures/${encodeURIComponent(captureId)}/links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetType: 'bill', targetId: savedBillId }),
+        });
+        if (!linkRes.ok) {
+          const body = await linkRes.json().catch(() => null);
+          const presentation = describeCaptureError(body?.code, linkRes.status);
+          setPendingLink({ captureId, billId: savedBillId, error: presentation.message });
+          return false;
+        }
+        setPendingLink(null);
+        navigate(`/org/${orgSlug}/purchases/${savedBillId}`);
+        return true;
+      } catch {
+        setPendingLink({
+          captureId,
+          billId: savedBillId,
+          error: 'Could not attach the source document right now. Retry attachment without saving the bill again.',
+        });
+        return false;
+      } finally {
+        setRetryingLink(false);
+      }
+    },
+    [authFetch, navigate, orgSlug]
+  );
+
   const handleSave = async (approve: boolean, confirmDuplicate = false) => {
     setError(null);
     if (!vendorId) {
@@ -236,6 +515,10 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
     }
     if (lines.length === 0 || lines.some((l) => !l.itemId && !l.description.trim())) {
       setError('Describe each line, or pick an item for it.');
+      return;
+    }
+    if (lines.some((l) => l.amount === '' || l.captureAmountWarning)) {
+      setError('Enter a valid unit cost for every line before saving.');
       return;
     }
     if (lines.some((l) => !(Number(l.quantity) > 0))) {
@@ -250,6 +533,10 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
       setError("A bill's total must be more than zero to approve it.");
       return;
     }
+    if (approve && reviewedCaptures.some((c) => getDiscrepancyForCapture(c).hasDiscrepancy && !isCaptureAcknowledged(c))) {
+      setError('The bill total differs from one or more captured source totals. Correct the lines or check each reconciliation acknowledgement before approving.');
+      return;
+    }
     const archived = firstArchivedTax(taxes, lines.map((line) => line.taxId));
     if (archived) {
       setError(archivedTaxMessage(archived.taxName));
@@ -258,6 +545,19 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
 
     setSaving(approve ? 'approve' : 'draft');
     try {
+      const captureReviews =
+        reviewedCaptures.length > 0
+          ? reviewedCaptures.map((c) => {
+              const disc = getDiscrepancyForCapture(c);
+              return {
+                captureId: c.id,
+                sourceGrandTotal: disc.sourceGrandTotal,
+                formTotal: disc.formTotal,
+                discrepancyAcknowledged: isCaptureAcknowledged(c),
+              };
+            })
+          : undefined;
+
       const res = await authFetch('/api/Purchasing/SaveBill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -272,6 +572,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           notes: notes.trim() || null,
           status: approve ? 'Open' : 'Draft',
           confirmDuplicate,
+          captureReviews,
           lines: lines.map((l) => ({
             id: l.id,
             itemId: l.itemId,
@@ -294,15 +595,50 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           setSaving(null);
           return;
         }
+        if (res.status === 409 && data?.code === 'DOCUMENT_REVIEW_REQUIRED') {
+          const nextOverrides: Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }> = {};
+          if (Array.isArray(data.discrepancies)) {
+            for (const d of data.discrepancies) {
+              if (d?.captureId && typeof d.sourceGrandTotal === 'number' && typeof d.formTotal === 'number') {
+                nextOverrides[d.captureId] = {
+                  sourceGrandTotal: d.sourceGrandTotal,
+                  formTotal: d.formTotal,
+                  difference: typeof d.difference === 'number' ? d.difference : d.formTotal - d.sourceGrandTotal,
+                };
+              }
+            }
+          } else if (data?.captureId && typeof data.sourceGrandTotal === 'number' && typeof data.formTotal === 'number') {
+            nextOverrides[data.captureId] = {
+              sourceGrandTotal: data.sourceGrandTotal,
+              formTotal: data.formTotal,
+              difference: typeof data.difference === 'number' ? data.difference : data.formTotal - data.sourceGrandTotal,
+            };
+          }
+          if (Object.keys(nextOverrides).length > 0) {
+            setServerReconciliation((prev) => ({ ...prev, ...nextOverrides }));
+          }
+          setError(data?.detail || 'The bill total differs from one or more captured source totals. Correct the bill or acknowledge the difference before approving.');
+          setSaving(null);
+          return;
+        }
         throw new Error(
           res.status === 403
             ? approve
               ? "You can save this bill as a draft, but approving bills takes the 'Post / Approve Bills' permission."
               : "You don't have permission to enter bills."
-            : data?.message || 'The bill could not be saved.'
+            : data?.message || data?.detail || 'The bill could not be saved.'
         );
       }
-      navigate(`/org/${orgSlug}/purchases/${(data as Bill).id}`);
+      const savedBill = data as Bill;
+      if (acceptedCapture && acceptedCapture.link?.targetId !== savedBill.id) {
+        const linked = await linkCaptureToBill(acceptedCapture.id, savedBill.id);
+        if (!linked) {
+          setSaving(null);
+          return;
+        }
+        return;
+      }
+      navigate(`/org/${orgSlug}/purchases/${savedBill.id}`);
     } catch (err: any) {
       setError(err.message);
       setSaving(null);
@@ -337,16 +673,360 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         actions={
           <>
             <HeaderButton label="Cancel" to={isEdit ? `/org/${orgSlug}/purchases/${billId}` : listPath} />
+            {purchasesWritable && captureAvailable && (
+              <HeaderButton
+                label={showCapturePanel ? 'Hide scan' : 'Scan receipt / bill'}
+                icon={ScanLine}
+                compact
+                disabled={!!saving}
+                onClick={() => setShowCapturePanel((prev) => !prev)}
+              />
+            )}
             {purchasesWritable && (
-              <HeaderButton label="Save draft" icon={Save} compact busy={saving === 'draft'} disabled={!!saving} onClick={() => handleSave(false)} />
+              <HeaderButton label="Save draft" icon={Save} compact busy={saving === 'draft'} disabled={!!saving || !!pendingLink} onClick={() => handleSave(false)} />
             )}
             {/* Approving takes its own permission; without it, bills are saved as drafts for someone else to approve. */}
             {canApprove && (
-              <HeaderButton label="Save & approve" icon={CheckCircle2} variant="primary" busy={saving === 'approve'} disabled={!!saving} onClick={() => handleSave(true)} />
+              <HeaderButton label="Save & approve" icon={CheckCircle2} variant="primary" busy={saving === 'approve'} disabled={!!saving || !!pendingLink} onClick={() => handleSave(true)} />
             )}
           </>
         }
       />
+
+      {showCapturePanel && purchasesWritable && (
+        <div className="mb-6">
+          <DocumentCapturePanel
+            kind={['expense-receipt', 'purchase-invoice']}
+            orgSlug={orgSlug}
+            orgCurrency={currentOrg.currency}
+            scopeKey={isEdit ? billId : 'new'}
+            capabilities={captureCapabilities}
+            disabled={!!saving}
+            onAccepted={handleCaptureAccepted}
+            onOpenLinkedRecord={(link) => {
+              if (link.targetType === 'bill') {
+                navigate(`/org/${orgSlug}/purchases/${link.targetId}`);
+              }
+            }}
+            onCancel={() => setShowCapturePanel(false)}
+          />
+        </div>
+      )}
+
+      {/* Pending evidence link recovery after a successful bill save — never repeats SaveBill */}
+      {pendingLink && (
+        <div role="alert" className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300 space-y-2">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <div className="font-semibold">Bill saved ({pendingLink.billId}), but attaching the source document failed.</div>
+              <p className="text-xs">{pendingLink.error}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pl-7">
+            <button
+              type="button"
+              disabled={retryingLink}
+              onClick={() => void linkCaptureToBill(pendingLink.captureId, pendingLink.billId)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${retryingLink ? 'animate-spin' : ''}`} />
+              Retry attach evidence
+            </button>
+            <Link
+              to={`/org/${orgSlug}/purchases/${pendingLink.billId}`}
+              className="inline-flex items-center gap-1 text-xs font-semibold underline"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Open saved bill
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor suggestion confirmation (exact-name match only, never auto-creates a vendor) */}
+      {suggestedVendor && (
+        <div role="status" className="mb-4 rounded-xl border border-[var(--brand-ring)]/40 bg-[var(--brand-subtle)]/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span>
+            Suggested vendor match from scan: <strong className="text-[var(--text-main)]">{suggestedVendor.name}</strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setVendorId(suggestedVendor.id);
+                setSuggestedVendor(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
+            >
+              Confirm vendor
+            </button>
+            <button
+              type="button"
+              onClick={() => setSuggestedVendor(null)}
+              className="px-2.5 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Unmatched vendor prompt: opens the existing New vendor dialog pre-filled (never auto-creates) */}
+      {unmatchedVendorName && !vendorId && canManageVendors && (
+        <div role="status" className="mb-4 rounded-xl border border-[var(--brand-ring)]/40 bg-[var(--brand-subtle)]/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span>
+            No existing vendor matches <strong className="text-[var(--text-main)]">{unmatchedVendorName}</strong>.
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setNewVendorInitialName(unmatchedVendorName);
+                setIsAddingVendor(true);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
+            >
+              Create vendor &ldquo;{unmatchedVendorName}&rdquo;
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnmatchedVendorName(null)}
+              className="px-2.5 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Explicit due-date / payment-term choice when a payment term was already selected */}
+      {pendingDueDate && (
+        <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
+          <span>
+            Captured due date is <strong>{pendingDueDate}</strong>, but this bill already uses payment terms. Keep existing terms or switch to the captured due date?
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentTermId('');
+                setDueDate(pendingDueDate);
+                setPendingDueDate(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+            >
+              Use captured due date
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingDueDate(null)}
+              className="px-2.5 py-1.5 font-semibold rounded-lg text-[var(--text-secondary)]"
+            >
+              Keep existing terms
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Explicit merge choice when applying captured lines to a populated draft */}
+      {pendingLineMerge && (
+        <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
+          <span>
+            This draft already has line items. Choose how to apply the {pendingLineMerge.length} captured line{pendingLineMerge.length === 1 ? '' : 's'}:
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPendingLineMerge(null)}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+            >
+              Keep existing lines
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLines((prev) => [...prev, ...pendingLineMerge]);
+                setPendingLineMerge(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+            >
+              Append captured lines
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLines(pendingLineMerge);
+                setPendingLineMerge(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-amber-600 text-white hover:opacity-90 transition"
+            >
+              Replace existing lines
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Persistent reconciliation, currency/class gate, and paid-receipt guidance card(s) for all linked/accepted captures */}
+      {reviewedCaptures.map((reviewCap) => {
+        const capFields = ((reviewCap.acceptedFields ?? reviewCap.fields) as VendorCaptureFields | null) ?? {};
+        const capGates = evaluateFinancialApplyGates(reviewCap, currentOrg.currency, ambiguousCurrencyConfirmed);
+        const capDisc = getDiscrepancyForCapture(reviewCap);
+        const capAcked = isCaptureAcknowledged(reviewCap);
+        return (
+          <section
+            key={reviewCap.id}
+            aria-label={`Captured document review ${reviewCap.id}`}
+            className="mb-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-sm space-y-3 text-xs"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-semibold text-sm text-[var(--text-main)]">
+                Captured source review ({reviewCap.id})
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+                <span>Source currency: <strong className="text-[var(--text-main)]">{capGates.sourceCurrency ?? currentOrg.currency ?? '—'}</strong></span>
+                <span>·</span>
+                <span>
+                  Price basis:{' '}
+                  <strong className="text-[var(--text-main)]">
+                    {capGates.priceBasis === 'inclusive'
+                      ? 'Tax-inclusive'
+                      : capGates.priceBasis === 'exclusive'
+                        ? 'Tax-exclusive'
+                        : 'Unknown'}
+                  </strong>
+                </span>
+              </div>
+            </div>
+
+            {capGates.reasons.length > 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5 text-amber-800 dark:text-amber-300">
+                {capGates.reasons.map((reason, idx) => (
+                  <p key={idx}>{reason}</p>
+                ))}
+                {capGates.unsupportedClass && (
+                  <p>
+                    <Link to={`/org/${orgSlug}/purchases/credits`} className="font-semibold underline">
+                      Go to Supplier Credits
+                    </Link>
+                  </p>
+                )}
+                {capGates.ambiguousCurrency && !ambiguousCurrencyConfirmed && capGates.canApplyNonMonetary && acceptedCapture?.id === reviewCap.id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAmbiguousCurrencyConfirmed(true);
+                      applyCapturedMonetaryLines(capFields);
+                    }}
+                    className="mt-1 px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+                  >
+                    Confirm amounts are in {currentOrg.currency || 'workspace currency'} and apply lines
+                  </button>
+                )}
+              </div>
+            )}
+
+            {capGates.priceBasis === 'inclusive' && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300">
+                Source amounts include tax. Adjust unit costs to tax-exclusive amounts before selecting a tax rate so tax is not added a second time.
+              </div>
+            )}
+
+            {(reviewCap.kind === 'expense-receipt' ||
+              capFields.paymentHints?.paymentStatus === 'paid' ||
+              capFields.paymentHints?.paymentStatus === 'partial') && (
+              <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-sky-900 dark:text-sky-200 space-y-1">
+                <div className="font-semibold">
+                  Receipt settlement notice
+                  {capFields.paymentHints?.paymentStatus
+                    ? ` (hint: ${capFields.paymentHints.paymentStatus}${capFields.paymentHints.amountPaid ? `, ${capFields.paymentHints.amountPaid}` : ''})`
+                    : ''}
+                </div>
+                <p>
+                  Approving this bill records what you owe and does not record a payment or settle it. If this receipt was already paid, record the payment via <strong>Pay bill</strong> after approving, or match the existing bank transaction in{' '}
+                  <Link to={`/org/${orgSlug}/banking`} className="underline font-semibold">
+                    Banking
+                  </Link>{' '}
+                  to avoid recording a duplicate expense.
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
+              <div>
+                <div className="text-[var(--text-muted)]">Source totals</div>
+                <div className="font-mono text-[var(--text-main)] mt-0.5">
+                  Subtotal: {capFields.sourceTotals?.subtotal ?? '—'} · Tax: {capFields.sourceTotals?.taxTotal ?? '—'}
+                </div>
+                {(capFields.sourceTotals?.discountTotal || capFields.sourceTotals?.additionalCharges) && (
+                  <div className="font-mono text-[var(--text-secondary)]">
+                    {capFields.sourceTotals.discountTotal ? `Discount: ${capFields.sourceTotals.discountTotal}` : ''}
+                    {capFields.sourceTotals.discountTotal && capFields.sourceTotals.additionalCharges ? ' · ' : ''}
+                    {capFields.sourceTotals.additionalCharges ? `Charges: ${capFields.sourceTotals.additionalCharges}` : ''}
+                  </div>
+                )}
+                <div className="font-mono font-semibold text-[var(--text-main)]">
+                  Source total: {capDisc.sourceGrandTotal !== null ? capDisc.sourceGrandTotal.toFixed(2) : (capFields.sourceTotals?.grandTotal ?? '—')}
+                </div>
+              </div>
+              <div>
+                <div className="text-[var(--text-muted)]">Current bill form</div>
+                <div className="font-mono text-[var(--text-main)] mt-0.5">
+                  Subtotal: {formatCurrency(totals.subtotal)} · Tax: {formatCurrency(totals.tax)}
+                </div>
+                <div className="font-mono font-semibold text-[var(--text-main)]">
+                  Form total: {formatCurrency(capDisc.formTotal)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[var(--text-muted)]">Difference</div>
+                <div
+                  className={`font-mono font-semibold mt-0.5 ${
+                    capDisc.hasDiscrepancy ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                  }`}
+                >
+                  {capDisc.difference === null
+                    ? 'No source total'
+                    : capDisc.hasDiscrepancy
+                      ? formatSignedCurrencyDifference(capDisc.difference, formatCurrency)
+                      : 'Matches source total'}
+                </div>
+              </div>
+            </div>
+
+            {capDisc.hasDiscrepancy && (
+              <label className="flex items-start gap-2.5 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-rose-700 dark:text-rose-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  aria-label={`Acknowledge difference for ${reviewCap.id}`}
+                  checked={capAcked}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setAckSnapshots((prev) => ({
+                        ...prev,
+                        [reviewCap.id]: {
+                          sourceGrandTotal: capDisc.sourceGrandTotal,
+                          formTotal: capDisc.formTotal,
+                        },
+                      }));
+                    } else {
+                      setAckSnapshots((prev) => {
+                        const next = { ...prev };
+                        delete next[reviewCap.id];
+                        return next;
+                      });
+                    }
+                  }}
+                  className="mt-0.5 rounded"
+                />
+                <span>
+                  I have reviewed the difference between the captured source total ({capDisc.sourceGrandTotal?.toFixed(2) ?? capFields.sourceTotals?.grandTotal}) and the current bill total ({formatCurrency(capDisc.formTotal)}) and acknowledge it for approval. (Saving a draft does not require acknowledgement; changing amounts resets this acknowledgement.)
+                </span>
+              </label>
+            )}
+          </section>
+        );
+      })}
 
       {error && (
         <div role="alert" className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl flex items-start gap-3">
@@ -623,9 +1303,14 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                           min="0"
                           step="any"
                           value={line.quantity}
-                          onChange={(e) => updateLine(idx, { quantity: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => updateLine(idx, { quantity: parseFloat(e.target.value) || 0, missingQuantityDefaulted: false })}
                           className={`${cellClass} text-right`}
                         />
+                        {line.missingQuantityDefaulted && (
+                          <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400 text-right">
+                            Defaulted to 1
+                          </p>
+                        )}
                       </td>
                       <td className="py-2.5 px-3">
                         <input
@@ -633,9 +1318,25 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                           aria-label={`Line ${idx + 1} unit cost`}
                           step="0.01"
                           value={line.amount}
-                          onChange={(e) => updateLine(idx, { amount: parseFloat(e.target.value) || 0 })}
-                          className={`${cellClass} text-right`}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              updateLine(idx, { amount: '', captureAmountWarning: 'Enter a valid unit cost before saving.' });
+                            } else {
+                              const parsed = parseFloat(raw);
+                              updateLine(idx, {
+                                amount: Number.isFinite(parsed) ? parsed : '',
+                                captureAmountWarning: Number.isFinite(parsed) ? undefined : 'Enter a valid unit cost before saving.',
+                              });
+                            }
+                          }}
+                          className={`${cellClass} text-right ${line.captureAmountWarning ? '!border-rose-500/60' : ''}`}
                         />
+                        {line.captureAmountWarning && (
+                          <p className="mt-0.5 text-[10px] text-rose-500 text-right">
+                            {line.captureAmountWarning}
+                          </p>
+                        )}
                       </td>
                       <td className="py-2.5 px-3">
                         <input
@@ -761,13 +1462,19 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
       {isAddingVendor && (
         <PartyFormDialog<Vendor>
           role="vendor"
+          initialName={newVendorInitialName}
           paymentTerms={paymentTerms}
-          onClose={() => setIsAddingVendor(false)}
+          onClose={() => {
+            setIsAddingVendor(false);
+            setNewVendorInitialName(undefined);
+          }}
           onSaved={(saved) => {
             const option: CustomerOption = { id: saved.id, name: saved.name, email: saved.email ?? undefined, phone: saved.phone ?? undefined, paymentTermId: saved.paymentTermId ?? undefined, archived: saved.archived };
             setVendors((prev) => [option, ...prev]);
             setVendorId(saved.id);
             if (saved.paymentTermId) applyTerm(saved.paymentTermId);
+            setUnmatchedVendorName(null);
+            setNewVendorInitialName(undefined);
             setIsAddingVendor(false);
           }}
         />
@@ -837,6 +1544,17 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             setNewItemLine(null);
           }}
           onClose={() => setNewItemLine(null)}
+        />
+      )}
+
+      {routeBlocker.state === 'blocked' && (
+        <ConfirmDialog
+          title="Leave without attaching source document?"
+          message="Your bill was saved, but the captured source document has not been attached yet. If you leave now, the evidence will remain unlinked."
+          confirmLabel="Leave without attaching"
+          destructive
+          onConfirm={() => routeBlocker.proceed?.()}
+          onCancel={() => routeBlocker.reset?.()}
         />
       )}
 

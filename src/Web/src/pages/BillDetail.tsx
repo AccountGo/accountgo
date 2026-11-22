@@ -13,6 +13,13 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
 import { useCapabilities } from '../lib/entitlements';
 import { BillStatementSources } from '../components/BillStatementSources';
+import { BillCaptureEvidence } from '../components/BillCaptureEvidence';
+import {
+  computeCaptureDiscrepancy,
+  DocumentCaptureView,
+  formatSignedCurrencyDifference,
+  VendorCaptureFields,
+} from '../components/document-capture/fields';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 
 /** One bill: who it is from, its lines and the accounts they are booked to, what is still owed, and its payments. */
@@ -51,10 +58,22 @@ export const BillDetail: React.FC = () => {
     | null
   >(null);
   const [isPaying, setIsPaying] = useState(false);
+  const [linkedCaptures, setLinkedCaptures] = useState<DocumentCaptureView[]>([]);
+  const [detailAckSnapshots, setDetailAckSnapshots] = useState<
+    Record<string, { sourceGrandTotal: number | null; formTotal: number }>
+  >({});
+  const [serverReconciliation, setServerReconciliation] = useState<
+    Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }>
+  >({});
+
+  const handleCapturesLoaded = useCallback((items: DocumentCaptureView[]) => {
+    setLinkedCaptures(items);
+  }, []);
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
   const formatCurrency = useCallback(
-    (val: number) => `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    (val: number) =>
+      `${val < 0 ? '-' : ''}${currencySymbol}${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     [currencySymbol]
   );
   const formatDate = (value?: string | null) =>
@@ -90,18 +109,76 @@ export const BillDetail: React.FC = () => {
 
   const act = async (kind: 'approve', path: string, done: string, confirmDuplicate = false) => {
     if (!bill) return;
+    const captureReviews = linkedCaptures.map((c) => {
+      const fields = (c.acceptedFields ?? {}) as VendorCaptureFields;
+      const override = serverReconciliation[c.id];
+      const disc = override
+        ? {
+            sourceGrandTotal: override.sourceGrandTotal,
+            formTotal: override.formTotal,
+            difference: override.difference,
+            hasDiscrepancy: Math.abs(override.difference) > 0.005,
+          }
+        : computeCaptureDiscrepancy(fields.sourceTotals ?? null, bill.total);
+      const snap = detailAckSnapshots[c.id];
+      const acknowledged = Boolean(
+        snap &&
+          snap.sourceGrandTotal === disc.sourceGrandTotal &&
+          snap.formTotal === disc.formTotal
+      );
+      return {
+        captureId: c.id,
+        sourceGrandTotal: disc.sourceGrandTotal,
+        formTotal: disc.formTotal,
+        discrepancyAcknowledged: acknowledged,
+      };
+    });
+
     setBusy(kind);
     setError(null);
     try {
       const url = `${path}?id=${bill.id}${confirmDuplicate ? '&confirmDuplicate=true' : ''}`;
-      const res = await authFetch(url, { method: 'POST' });
+      const res = await authFetch(url, {
+        method: 'POST',
+        ...(captureReviews.length > 0
+          ? {
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ captureReviews }),
+            }
+          : {}),
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         if (res.status === 409 && data?.code === 'possible_duplicate') {
           setDuplicateConfirmApprove(true);
           return;
         }
-        throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
+        if (res.status === 409 && data?.code === 'DOCUMENT_REVIEW_REQUIRED') {
+          const nextOverrides: Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }> = {};
+          if (Array.isArray(data.discrepancies)) {
+            for (const d of data.discrepancies) {
+              if (d?.captureId && typeof d.sourceGrandTotal === 'number' && typeof d.formTotal === 'number') {
+                nextOverrides[d.captureId] = {
+                  sourceGrandTotal: d.sourceGrandTotal,
+                  formTotal: d.formTotal,
+                  difference: typeof d.difference === 'number' ? d.difference : d.formTotal - d.sourceGrandTotal,
+                };
+              }
+            }
+          } else if (data?.captureId && typeof data.sourceGrandTotal === 'number' && typeof data.formTotal === 'number') {
+            nextOverrides[data.captureId] = {
+              sourceGrandTotal: data.sourceGrandTotal,
+              formTotal: data.formTotal,
+              difference: typeof data.difference === 'number' ? data.difference : data.formTotal - data.sourceGrandTotal,
+            };
+          }
+          if (Object.keys(nextOverrides).length > 0) {
+            setServerReconciliation((prev) => ({ ...prev, ...nextOverrides }));
+          }
+          setError(data?.detail || 'The bill total differs from one or more linked source documents. Acknowledge each difference before approving.');
+          return;
+        }
+        throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || data?.detail || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
       }
       setBill(data);
       setNotice(done);
@@ -486,6 +563,71 @@ export const BillDetail: React.FC = () => {
           <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-main)]">{bill.notes}</p>
         </section>
       )}
+
+      {isDraft && canApprove && (() => {
+        const discrepantCaptures = linkedCaptures
+          .map((c) => {
+            const f = (c.acceptedFields ?? {}) as VendorCaptureFields;
+            const override = serverReconciliation[c.id];
+            const disc = override
+              ? {
+                  sourceGrandTotal: override.sourceGrandTotal,
+                  formTotal: override.formTotal,
+                  difference: override.difference,
+                  hasDiscrepancy: Math.abs(override.difference) > 0.005,
+                }
+              : computeCaptureDiscrepancy(f.sourceTotals ?? null, bill.total);
+            return { capture: c, fields: f, disc };
+          })
+          .filter((item) => item.disc.hasDiscrepancy);
+
+        if (discrepantCaptures.length === 0) return null;
+
+        return (
+          <section aria-label="Reconciliation acknowledgement" className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-4 text-xs text-rose-700 dark:text-rose-300 space-y-2.5">
+            {discrepantCaptures.map(({ capture, fields, disc }) => {
+              const snap = detailAckSnapshots[capture.id];
+              const checked = Boolean(
+                snap &&
+                  snap.sourceGrandTotal === disc.sourceGrandTotal &&
+                  snap.formTotal === disc.formTotal
+              );
+              return (
+                <label key={capture.id} className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    aria-label={`Acknowledge difference for ${capture.id}`}
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setDetailAckSnapshots((prev) => ({
+                          ...prev,
+                          [capture.id]: {
+                            sourceGrandTotal: disc.sourceGrandTotal,
+                            formTotal: disc.formTotal,
+                          },
+                        }));
+                      } else {
+                        setDetailAckSnapshots((prev) => {
+                          const next = { ...prev };
+                          delete next[capture.id];
+                          return next;
+                        });
+                      }
+                    }}
+                    className="mt-0.5 rounded"
+                  />
+                  <span>
+                    Linked source document ({capture.id}) total is {disc.sourceGrandTotal?.toFixed(2) ?? fields.sourceTotals?.grandTotal}, while this draft bill total is {formatCurrency(disc.formTotal)} (difference {disc.difference !== null ? formatSignedCurrencyDifference(disc.difference, formatCurrency) : '—'}). I have reviewed this difference and acknowledge it for approval.
+                  </span>
+                </label>
+              );
+            })}
+          </section>
+        );
+      })()}
+
+      <BillCaptureEvidence billId={bill.id} onCapturesLoaded={handleCapturesLoaded} />
 
       {isPaying && (
         <PayBillDialog

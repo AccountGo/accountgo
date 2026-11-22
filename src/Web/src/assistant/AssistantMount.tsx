@@ -129,7 +129,7 @@ export function AssistantMount({
       <ChatSidepanelLayout
         isOpen={isOpen}
         onClose={close}
-        sidepanel={<AssistantSidepanel />}
+        sidepanel={<AssistantSidepanel orgSlug={orgKey} />}
         defaultWidth={panelLayout.defaultWidth}
         minWidth={panelLayout.minWidth}
         maxWidth={panelLayout.maxWidth}

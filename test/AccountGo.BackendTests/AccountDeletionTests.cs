@@ -210,6 +210,7 @@ namespace AccountGo.BackendTests
             var owner = await CreateUser(OwnerEmail);
             await CreateWorkspace(owner.Token, "Ws One", "ws-one");
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, "/api/organizations/current", new { confirmSlug = "ws-one" }, owner.Token)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Delete, "/api/organizations/current", new { confirmSlug = "ws-one" }, owner.Token)).StatusCode);
 
             Assert.Equal(HttpStatusCode.NoContent, (await Delete(owner.Token, OwnerEmail)).StatusCode);
             using var scope = _factory.Services.CreateScope();
@@ -217,6 +218,53 @@ namespace AccountGo.BackendTests
             Assert.NotNull(db.Companies.IgnoreQueryFilters().Single(c => c.Slug == "ws-one").DeletedAt);
             Assert.Empty(db.CompanyMembers.Where(m => m.UserId == owner.Id));
             Assert.NotNull(scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>().Users.Single(u => u.Id == owner.Id).DeletedAt);
+        }
+
+        [Fact]
+        public async Task WorkspaceDeleteRemainsCommittedWhenCaptureCleanupFailsAndWorkerCanRetry()
+        {
+            var owner = await CreateUser(OwnerEmail);
+            var companyId = await CreateWorkspace(owner.Token, "Ws One", "ws-one");
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                db.SuppressTenantSecurityCheck = true;
+                db.DocumentCaptures.Add(new Core.Domain.DocumentCapture
+                {
+                    CompanyId = companyId, PublicId = "cap_cleanup01", Kind = "purchase-invoice", SchemaVersion = 1,
+                    Status = "ready", SourceHash = new string('a', 64), ContentHash = new string('b', 64),
+                    NormalizationVersion = "image-normalization-v2", ContentType = "image/png", ByteCount = 3,
+                    PageCount = 1, RequestFingerprint = new string('c', 64), ExtractionGeneration = 1,
+                    CreatedBy = owner.Id, CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(30)
+                });
+                await db.SaveChangesAsync();
+                var captureId = await db.DocumentCaptures.IgnoreQueryFilters()
+                    .Where(item => item.PublicId == "cap_cleanup01").Select(item => item.Id).SingleAsync();
+                db.DocumentCaptureBlobs.Add(new Core.Domain.DocumentCaptureBlob
+                {
+                    CompanyId = companyId, CaptureId = captureId, DocumentBytes = [1, 2, 3]
+                });
+                await db.SaveChangesAsync();
+                await db.Database.ExecuteSqlRawAsync(
+                    "CREATE TRIGGER fail_capture_cleanup BEFORE DELETE ON DocumentCaptures BEGIN SELECT RAISE(ABORT, 'injected cleanup failure'); END;");
+            }
+
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, "/api/organizations/current",
+                new { confirmSlug = "ws-one" }, owner.Token)).StatusCode);
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                Assert.NotNull(await db.Companies.IgnoreQueryFilters().Where(item => item.Id == companyId)
+                    .Select(item => item.DeletedAt).SingleAsync());
+                Assert.Single(await db.DocumentCaptures.IgnoreQueryFilters().ToListAsync());
+                await db.Database.ExecuteSqlRawAsync("DROP TRIGGER fail_capture_cleanup;");
+                await scope.ServiceProvider.GetRequiredService<Api.DocumentCaptures.DocumentCaptureRetentionService>()
+                    .PurgeDeletedCompanyAsync(companyId, CancellationToken.None);
+                Assert.Empty(await db.DocumentCaptures.IgnoreQueryFilters().ToListAsync());
+                Assert.Empty(await db.DocumentCaptureBlobs.IgnoreQueryFilters().ToListAsync());
+            }
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Delete, "/api/organizations/current",
+                new { confirmSlug = "ws-one" }, owner.Token)).StatusCode);
         }
 
         [Fact]

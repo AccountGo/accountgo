@@ -463,6 +463,8 @@ namespace Api.Data
             if (Database.IsSqlite())
                 Postgres.PostgresModelConventions.UseDefaultSchema(builder);
 
+            ConfigureDocumentCaptureModel(builder);
+
             builder.Entity<RecordChange>(entity =>
             {
                 entity.ToTable("RecordChanges");

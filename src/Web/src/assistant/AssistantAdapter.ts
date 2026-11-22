@@ -64,9 +64,18 @@ type UpstreamSession = {
  */
 export class AssistantAdapter implements ChatAdapter {
   private pageContext: AssistantPageContext = {};
+  private pendingCaptureId: string | null = null;
 
   setPageContext(context: AssistantPageContext): void {
     this.pageContext = { ...context };
+  }
+
+  setPendingCaptureId(captureId: string | null): void {
+    this.pendingCaptureId = captureId && captureId.trim() ? captureId.trim() : null;
+  }
+
+  getPendingCaptureId(): string | null {
+    return this.pendingCaptureId;
   }
 
   async createSession(): Promise<string> {
@@ -156,7 +165,7 @@ export class AssistantAdapter implements ChatAdapter {
     );
 
     // Tenant ids are applied server-side from ITenantContext — do not send them here.
-    const body = buildRunStreamBody(payload.message, sessionId, contextVariables);
+    const body = buildRunStreamBody(payload.message, sessionId, contextVariables, this.pendingCaptureId);
 
     return assistantFetchStream('/api/ai/chat/run-stream', {
       method: 'POST',

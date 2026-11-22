@@ -4,6 +4,7 @@ import { AlertTriangle, Archive, FileUp, Loader2, Pencil, Plus, Scale, Star } fr
 import { PageHeader, HeaderButton, HeaderMenu } from '../components/PageHeader';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 import { BankAccountFormDialog } from '../components/BankAccountFormDialog';
+import { canAccessBankCapture } from '../components/document-capture/fields';
 import { BankTransactionDialog } from '../components/BankTransactionDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BalanceCheckDialog } from '../components/BalanceCheckDialog';
@@ -363,6 +364,8 @@ const BankRegisterPage: React.FC = () => {
         <BankAccountFormDialog
           account={account}
           hasFinancials={hasFinancials}
+          orgSlug={currentOrg.slug}
+          canScanBankDetails={canAccessBankCapture(hasPermission, hasModule)}
           onSaved={async () => {
             setEditOpen(false);
             await load();

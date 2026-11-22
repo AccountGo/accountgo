@@ -17,6 +17,7 @@ const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[v
 export function PartyFormDialog<T extends PartyBase>({
   role,
   party,
+  initialName,
   paymentTerms,
   onSaved,
   onClose,
@@ -24,13 +25,15 @@ export function PartyFormDialog<T extends PartyBase>({
   role: PartyRole;
   /** The client or vendor to edit; omitted to add one. */
   party?: T;
+  /** Optional pre-filled name when creating a new party (e.g. from a document scan); user still confirms. */
+  initialName?: string;
   paymentTerms: PaymentTermOption[];
   onSaved: (party: T) => void;
   onClose: () => void;
 }) {
   const { authFetch } = useAuth();
   const config = partyRoles[role];
-  const [name, setName] = useState(party?.name ?? '');
+  const [name, setName] = useState(party?.name ?? initialName ?? '');
   const [email, setEmail] = useState(party?.email ?? '');
   const [phone, setPhone] = useState(party?.phone ?? '');
   const [street, setStreet] = useState(party?.street ?? '');

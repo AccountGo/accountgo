@@ -242,6 +242,29 @@ public static class AccountGoApp
         builder.Services.AddHostedService<Api.Service.LinkedEntryIntegrityScanner>();
         builder.Services.Configure<Api.Options.AuditRetentionOptions>(
             builder.Configuration.GetSection(Api.Options.AuditRetentionOptions.SectionName));
+        builder.Services.AddOptions<Api.DocumentCaptures.DocumentCaptureOptions>()
+            .Bind(builder.Configuration.GetSection(Api.DocumentCaptures.DocumentCaptureOptions.SectionName))
+            .Validate(options =>
+            {
+                Api.DocumentCaptures.DocumentCaptureOptions.Validate(options, builder.Environment);
+                return true;
+            }, "Document capture options are invalid.")
+            .ValidateOnStart();
+        builder.Services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>().Value;
+            return string.Equals(options.Extractor, "Fake", StringComparison.OrdinalIgnoreCase)
+                ? new Api.DocumentCaptures.FakeDocumentFieldExtractor(
+                    serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>())
+                : new Api.DocumentCaptures.UnconfiguredDocumentFieldExtractor();
+        });
+        builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureAdmissionLock>();
+        builder.Services.AddScoped<Api.DocumentCaptures.IDocumentCaptureAdmissionLock>(serviceProvider =>
+            serviceProvider.GetRequiredService<Api.DocumentCaptures.DocumentCaptureAdmissionLock>());
+        builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureService>();
+        builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureRetentionService>();
+        builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCapturePdfWarmup>();
+        builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCaptureRetentionWorker>();
         builder.Services.AddHostedService<Api.Service.AuditRetentionWorker>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();

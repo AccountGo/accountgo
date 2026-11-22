@@ -12,6 +12,7 @@ namespace Api.Service.Ai
     public static class AnterRunStreamBody
     {
         public const int MaxMessageLength = 8_000;
+        public const int MaxRequestBodyBytes = 64 * 1024;
 
         private static readonly HashSet<string> ServerOwnedKeys = new(StringComparer.OrdinalIgnoreCase)
         {

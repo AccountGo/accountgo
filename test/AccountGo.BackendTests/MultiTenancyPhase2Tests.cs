@@ -647,7 +647,11 @@ namespace AccountGo.BackendTests
                 // Audit writes resolve membership ownership when the grant navigation is not loaded.
                 "RecordChangeInterceptor.cs",
                 // PublicIdResolver uses IgnoreQueryFilters only for outbound int->PublicId formatting of already-authorized entities and explicitly enforces tenant/user scope on all inbound PublicId->int resolution.
-                "PublicIdResolver.cs"
+                "PublicIdResolver.cs",
+                // Document capture admission and lifecycle paths bypass tenant filters only while holding the company lock and add explicit company/live-workspace predicates.
+                "DocumentCaptureService.cs",
+                // Retention and purge enumerate workspaces and capture rows with explicit company and lifecycle predicates.
+                "DocumentCaptureRetentionService.cs"
             };
 
             var solutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));

@@ -719,6 +719,266 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("CustomerContact");
                 });
 
+            modelBuilder.Entity("Core.Domain.DocumentCapture", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("AcceptedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("AcceptedFieldsJson")
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<long>("ByteCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("BytesDeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int?>("DetectedDocumentCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DetectedKind")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("ExtractingStartedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("ExtractionGeneration")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FieldsJson")
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<DateTime?>("FieldsWipedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("LeaseExpiresAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("NormalizationVersion")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("PageCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProviderName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProviderVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("RawText")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("RejectedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("WarningsJson")
+                        .HasMaxLength(16384)
+                        .HasColumnType("character varying(16384)");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("\"PublicId\" <> ''");
+
+                    b.HasIndex("CompanyId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
+                    b.HasIndex("CompanyId", "PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_DocumentCaptures_ExpiresAt_Unaccepted")
+                        .HasFilter("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL");
+
+                    b.HasIndex("CompanyId", "SourceHash", "Kind", "SchemaVersion", "CreatedAt");
+
+                    b.ToTable("DocumentCaptures", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentCaptureAttempt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CaptureId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Generation")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ReservedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReservedAt")
+                        .HasDatabaseName("IX_DocumentCaptureAttempts_ReservedAt");
+
+                    b.HasIndex("CompanyId", "CaptureId", "Generation")
+                        .IsUnique();
+
+                    b.ToTable("DocumentCaptureAttempts", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentCaptureBlob", b =>
+                {
+                    b.Property<int>("CaptureId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("DocumentBytes")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("CaptureId");
+
+                    b.HasIndex("CompanyId", "CaptureId")
+                        .IsUnique();
+
+                    b.ToTable("DocumentCaptureBlobs", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentCaptureLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CaptureId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("LinkedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("TargetId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "CaptureId")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "TargetType", "TargetId");
+
+                    b.ToTable("DocumentCaptureLinks", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.DocumentNumberSeries", b =>
                 {
                     b.Property<int>("Id")
@@ -7227,6 +7487,42 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("Core.Domain.DocumentCaptureAttempt", b =>
+                {
+                    b.HasOne("Core.Domain.DocumentCapture", "Capture")
+                        .WithMany("Attempts")
+                        .HasForeignKey("CompanyId", "CaptureId")
+                        .HasPrincipalKey("CompanyId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Capture");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentCaptureBlob", b =>
+                {
+                    b.HasOne("Core.Domain.DocumentCapture", "Capture")
+                        .WithOne("Blob")
+                        .HasForeignKey("Core.Domain.DocumentCaptureBlob", "CompanyId", "CaptureId")
+                        .HasPrincipalKey("Core.Domain.DocumentCapture", "CompanyId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Capture");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentCaptureLink", b =>
+                {
+                    b.HasOne("Core.Domain.DocumentCapture", "Capture")
+                        .WithMany("Links")
+                        .HasForeignKey("CompanyId", "CaptureId")
+                        .HasPrincipalKey("CompanyId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Capture");
+                });
+
             modelBuilder.Entity("Core.Domain.DocumentNumberSeries", b =>
                 {
                     b.HasOne("Core.Domain.Financials.FinancialYear", "FinancialYear")
@@ -9373,6 +9669,15 @@ namespace Api.Data.Migrations.Postgres.ApiDb
             modelBuilder.Entity("Core.Domain.CompanyMember", b =>
                 {
                     b.Navigation("SecurityRoles");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentCapture", b =>
+                {
+                    b.Navigation("Attempts");
+
+                    b.Navigation("Blob");
+
+                    b.Navigation("Links");
                 });
 
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>

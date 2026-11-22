@@ -53,4 +53,18 @@ test('buildRunStreamBody mirrors sessionId into contextVariables without organiz
   assert.equal(body.organizationId, undefined);
   assert.equal(body.contextVariables.sessionId, 'session_1');
   assert.equal(body.contextVariables.pageRoute, '/org/acme/dashboard');
+  assert.equal(body.captureId, undefined);
+});
+
+test('buildRunStreamBody includes optional public captureId string without bytes or field JSON', () => {
+  const body = buildRunStreamBody(
+    'Summarize attachment',
+    'session_2',
+    mergeAssistantContextVariables({ pageRoute: '/org/acme/dashboard' }, {}),
+    'cap_0123456789abcdefghjkmnpqrs',
+  );
+
+  assert.equal(body.captureId, 'cap_0123456789abcdefghjkmnpqrs');
+  assert.equal(body.fields, undefined);
+  assert.equal(body.bytes, undefined);
 });
