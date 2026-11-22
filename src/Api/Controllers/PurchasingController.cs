@@ -1046,24 +1046,36 @@ namespace Api.Controllers
             if (audit is null || acknowledgements.Count == 0)
                 return;
 
-            var actor = _tenantContext.UserId ?? GetUserNameFromRequestHeader();
-            var companyId = _tenantContext.RequireCompanyId();
-            foreach (var ack in acknowledgements)
+            try
             {
-                audit.LogEventAsync(
-                    "bill.capture_discrepancy.acknowledged",
-                    "success",
-                    actor,
-                    companyId,
-                    new
-                    {
-                        billId = billPublicId,
-                        captureId = ack.CapturePublicId,
-                        sourceGrandTotal = ack.SourceGrandTotal,
-                        formTotal = ack.FormTotal,
-                        difference = ack.Difference,
+                var actor = _tenantContext.UserId ?? GetUserNameFromRequestHeader();
+                var companyId = _tenantContext.RequireCompanyId();
+                foreach (var ack in acknowledgements)
+                {
+                    audit.LogEventAsync(
+                        "bill.capture_discrepancy.acknowledged",
+                        "success",
                         actor,
-                    }).GetAwaiter().GetResult();
+                        companyId,
+                        new
+                        {
+                            billId = billPublicId,
+                            captureId = ack.CapturePublicId,
+                            sourceGrandTotal = ack.SourceGrandTotal,
+                            formTotal = ack.FormTotal,
+                            difference = ack.Difference,
+                            actor,
+                        }).GetAwaiter().GetResult();
+                }
+            }
+            catch (Exception ex)
+            {
+                // Best effort: the approval is already committed, so an audit failure must never turn it into a 500.
+                _logger.LogWarning(
+                    ex,
+                    "Failed to record capture discrepancy acknowledgement audit events for bill {BillPublicId} (count={Count}).",
+                    billPublicId,
+                    acknowledgements.Count);
             }
         }
 

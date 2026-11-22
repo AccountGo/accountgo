@@ -398,17 +398,9 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
     }
 
     [Fact]
-    public async Task SaveBill_RejectsCrossCompany_WrongKind_Unaccepted_LinkedToOtherBill_DuplicateIds_AndNumericId()
+    public async Task SaveBill_RejectsCrossCompanyCaptureId_With404UnknownId()
     {
-        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Guard Vendor" });
-        var otherBill = await SaveBillOk(NewBill(vendor.Id, ("Other", 1m, 25m, null)));
-
-        var (bankCaptureId, _) = SeedCapture(kind: "bank", status: "accepted", acceptedFieldsJson: """{"name":"Main Checking"}""");
-        var (readyCaptureId, _) = SeedCapture(kind: "expense-receipt", status: "ready", acceptedFieldsJson: """{"date":"2026-11-10"}""");
-        var (linkedCaptureId, _) = SeedCapture(kind: "expense-receipt", status: "accepted", acceptedFieldsJson: """{"date":"2026-11-10"}""");
-        SeedCaptureLink(linkedCaptureId, otherBill.Id);
-
-        // Create a second company and seed a capture there for cross-company check.
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Cross Company Vendor" });
         int otherCompanyId = 0;
         WithDb(db =>
         {
@@ -423,65 +415,94 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
             acceptedFieldsJson: """{"date":"2026-11-10"}""",
             companyIdOverride: otherCompanyId);
 
-        // 1. Cross-company capture ID returns 404 unknown_id
-        using (var crossReq = new HttpRequestMessage(HttpMethod.Post, "/api/Purchasing/SaveBill"))
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/Purchasing/SaveBill");
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
+        req.Headers.Add("X-AccountGo-Org", _slug);
+        var payload = $$"""
         {
-            crossReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
-            crossReq.Headers.Add("X-AccountGo-Org", _slug);
-            var crossPayload = $$"""
-            {
-              "vendorId": "{{PubId<Vendor>(vendor.Id)}}",
-              "date": "2026-11-10",
-              "status": "Open",
-              "lines": [{ "description": "Item", "quantity": 1, "amount": 50 }],
-              "captureReviews": [{ "captureId": "{{otherCompanyCapPub}}", "discrepancyAcknowledged": true }]
-            }
-            """;
-            crossReq.Content = new StringContent(crossPayload, Encoding.UTF8, "application/json");
-            var crossRes = await _client.SendAsync(crossReq);
-            Assert.Equal(HttpStatusCode.NotFound, crossRes.StatusCode);
-            Assert.Contains("unknown_id", await crossRes.Content.ReadAsStringAsync());
+          "vendorId": "{{PubId<Vendor>(vendor.Id)}}",
+          "date": "2026-11-10",
+          "status": "Open",
+          "lines": [{ "description": "Item", "quantity": 1, "amount": 50 }],
+          "captureReviews": [{ "captureId": "{{otherCompanyCapPub}}", "discrepancyAcknowledged": true }]
         }
+        """;
+        req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+        var res = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
+        Assert.Contains("unknown_id", await res.Content.ReadAsStringAsync());
+    }
 
-        // 2. Non-bill kind returns 400
-        var wrongKind = NewBill(vendor.Id, ("Item", 1m, 50m, null));
-        wrongKind.Status = "Open";
-        wrongKind.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = bankCaptureId }];
-        var wrongKindRes = await SaveBill(wrongKind);
-        Assert.Equal(HttpStatusCode.BadRequest, wrongKindRes.StatusCode);
+    [Fact]
+    public async Task SaveBill_RejectsNonBillCaptureKind_With400DocumentReviewInvalid()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Kind Guard Vendor" });
+        var (bankCaptureId, _) = SeedCapture(kind: "bank", status: "accepted", acceptedFieldsJson: """{"name":"Main Checking"}""");
 
-        // 3. Unaccepted capture returns 409
-        var notAccepted = NewBill(vendor.Id, ("Item", 1m, 50m, null));
-        notAccepted.Status = "Open";
-        notAccepted.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = readyCaptureId }];
-        var notAcceptedRes = await SaveBill(notAccepted);
-        Assert.Equal(HttpStatusCode.Conflict, notAcceptedRes.StatusCode);
+        var bill = NewBill(vendor.Id, ("Item", 1m, 50m, null));
+        bill.Status = "Open";
+        bill.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = bankCaptureId }];
+        var res = await SaveBill(bill);
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Contains("DOCUMENT_REVIEW_INVALID", await res.Content.ReadAsStringAsync());
+    }
 
-        // 4. Capture linked to a different bill returns 409 DOCUMENT_LINK_CONFLICT
-        var linkedElsewhere = NewBill(vendor.Id, ("Item", 1m, 50m, null));
-        linkedElsewhere.Status = "Open";
-        linkedElsewhere.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = linkedCaptureId }];
-        var linkedElsewhereRes = await SaveBill(linkedElsewhere);
-        Assert.Equal(HttpStatusCode.Conflict, linkedElsewhereRes.StatusCode);
-        Assert.Contains("DOCUMENT_LINK_CONFLICT", await linkedElsewhereRes.Content.ReadAsStringAsync());
+    [Fact]
+    public async Task SaveBill_RejectsUnacceptedCapture_With409DocumentStateConflict()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "State Guard Vendor" });
+        var (readyCaptureId, _) = SeedCapture(kind: "expense-receipt", status: "ready", acceptedFieldsJson: """{"date":"2026-11-10"}""");
 
-        // 5. Duplicate capture IDs return 400
-        var (okCapId, _) = SeedCapture(kind: "expense-receipt", status: "accepted", acceptedFieldsJson: """{"date":"2026-11-10"}""");
-        var dupReviews = NewBill(vendor.Id, ("Item", 1m, 50m, null));
-        dupReviews.Status = "Open";
-        dupReviews.CaptureReviews =
+        var bill = NewBill(vendor.Id, ("Item", 1m, 50m, null));
+        bill.Status = "Open";
+        bill.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = readyCaptureId }];
+        var res = await SaveBill(bill);
+        Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
+        Assert.Contains("DOCUMENT_STATE_CONFLICT", await res.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SaveBill_RejectsCaptureLinkedToDifferentBill_With409DocumentLinkConflict()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Link Guard Vendor" });
+        var otherBill = await SaveBillOk(NewBill(vendor.Id, ("Other", 1m, 25m, null)));
+        var (linkedCaptureId, _) = SeedCapture(kind: "expense-receipt", status: "accepted", acceptedFieldsJson: """{"date":"2026-11-10"}""");
+        SeedCaptureLink(linkedCaptureId, otherBill.Id);
+
+        var bill = NewBill(vendor.Id, ("Item", 1m, 50m, null));
+        bill.Status = "Open";
+        bill.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = linkedCaptureId }];
+        var res = await SaveBill(bill);
+        Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
+        Assert.Contains("DOCUMENT_LINK_CONFLICT", await res.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SaveBill_RejectsDuplicateCaptureIdsInReviews_With400DocumentReviewInvalid()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Duplicate Guard Vendor" });
+        var (capId, _) = SeedCapture(kind: "expense-receipt", status: "accepted", acceptedFieldsJson: """{"date":"2026-11-10"}""");
+
+        var bill = NewBill(vendor.Id, ("Item", 1m, 50m, null));
+        bill.Status = "Open";
+        bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext { CaptureId = okCapId },
-            new Dto.Purchasing.CaptureReviewContext { CaptureId = okCapId },
+            new Dto.Purchasing.CaptureReviewContext { CaptureId = capId },
+            new Dto.Purchasing.CaptureReviewContext { CaptureId = capId },
         ];
-        var dupRes = await SaveBill(dupReviews);
-        Assert.Equal(HttpStatusCode.BadRequest, dupRes.StatusCode);
+        var res = await SaveBill(bill);
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Contains("DOCUMENT_REVIEW_INVALID", await res.Content.ReadAsStringAsync());
+    }
 
-        // 6. Raw numeric captureId fails shared public-ID validation with 400 invalid_id
-        using var numReq = new HttpRequestMessage(HttpMethod.Post, "/api/Purchasing/SaveBill");
-        numReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
-        numReq.Headers.Add("X-AccountGo-Org", _slug);
-        var numPayload = $$"""
+    [Fact]
+    public async Task SaveBill_RejectsNumericCaptureId_With400InvalidId()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Numeric Guard Vendor" });
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/Purchasing/SaveBill");
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
+        req.Headers.Add("X-AccountGo-Org", _slug);
+        var payload = $$"""
         {
           "vendorId": "{{PubId<Vendor>(vendor.Id)}}",
           "date": "2026-11-10",
@@ -490,9 +511,93 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
           "captureReviews": [{ "captureId": 123, "discrepancyAcknowledged": true }]
         }
         """;
-        numReq.Content = new StringContent(numPayload, Encoding.UTF8, "application/json");
-        var numericRes = await _client.SendAsync(numReq);
-        Assert.Equal(HttpStatusCode.BadRequest, numericRes.StatusCode);
-        Assert.Contains("invalid_id", await numericRes.Content.ReadAsStringAsync());
+        req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+        var res = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Contains("invalid_id", await res.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SaveBill_Approve_WhenAuditServiceThrows_StillReturns200OpenAndLogsSafeWarning()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Audit Throw Vendor" });
+        var (captureId, _) = SeedCapture(
+            acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"100.00","priceBasis":"exclusive"}}""");
+
+        var logSink = new CapturingLoggerProvider();
+        using var customFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.AddScoped<Api.Service.ISecurityAuditService, ThrowingSecurityAuditService>();
+                services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvider>(logSink);
+            });
+        });
+        using var client = customFactory.CreateClient();
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/Purchasing/SaveBill");
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
+        req.Headers.Add("X-AccountGo-Org", _slug);
+        var payload = $$"""
+        {
+          "vendorId": "{{PubId<Vendor>(vendor.Id)}}",
+          "date": "2026-11-10",
+          "status": "Open",
+          "lines": [{ "description": "Supplies", "quantity": 1, "amount": 135.42 }],
+          "captureReviews": [{
+            "captureId": "{{PubId<Core.Domain.DocumentCapture>(captureId)}}",
+            "sourceGrandTotal": 100.00,
+            "formTotal": 135.42,
+            "discrepancyAcknowledged": true
+          }]
+        }
+        """;
+        req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var res = await client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        var billPublicId = doc.RootElement.GetProperty("id").GetString();
+        Assert.True(doc.RootElement.GetProperty("approved").GetBoolean());
+        Assert.Equal("Open", doc.RootElement.GetProperty("status").GetString());
+
+        var warning = Assert.Single(logSink.Warnings, m => m.Contains("Failed to record capture discrepancy acknowledgement audit events"));
+        Assert.Contains(billPublicId!, warning);
+        Assert.Contains("count=1", warning);
+        Assert.DoesNotContain("135.42", warning);
+        Assert.DoesNotContain("100.00", warning);
+    }
+
+    private sealed class ThrowingSecurityAuditService : Api.Service.ISecurityAuditService
+    {
+        public Task LogEventAsync(string eventType, string? outcome, string? userId, int? companyId, object? metadata = null) =>
+            throw new InvalidOperationException("Simulated audit store outage.");
+
+        public Task LogEventAsync(string eventType, string? userId, int? companyId, string? ipAddress, string? userAgent, object? metadata = null) =>
+            throw new InvalidOperationException("Simulated audit store outage.");
+    }
+
+    private sealed class CapturingLoggerProvider : Microsoft.Extensions.Logging.ILoggerProvider
+    {
+        public System.Collections.Concurrent.ConcurrentBag<string> Warnings { get; } = new();
+        public Microsoft.Extensions.Logging.ILogger CreateLogger(string categoryName) => new CapturingLogger(Warnings);
+        public void Dispose() { }
+
+        private sealed class CapturingLogger(System.Collections.Concurrent.ConcurrentBag<string> warnings) : Microsoft.Extensions.Logging.ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => logLevel == Microsoft.Extensions.Logging.LogLevel.Warning;
+            public void Log<TState>(
+                Microsoft.Extensions.Logging.LogLevel logLevel,
+                Microsoft.Extensions.Logging.EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning)
+                    warnings.Add(formatter(state, exception));
+            }
+        }
     }
 }
