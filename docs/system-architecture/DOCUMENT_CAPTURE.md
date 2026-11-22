@@ -69,7 +69,7 @@ no application secrets through its environment. Logs omit document bytes,
 extracted text, and child stderr. The parent gives the worker 20 seconds,
 samples resident memory every 100 ms, and reads at most 256 KiB of output.
 It kills and reaps the process tree on cancellation or a limit breach.
-`DocumentCapture:Extractor:MaxWorkerMemoryMb` defaults to 1,024.
+`DocumentCapture:Extractor:MaxWorkerMemoryMb` defaults to 1,024 MiB.
 `DocumentCapture:Extractor:MaxConcurrency` defaults to 1 and accepts 1–4.
 Gate contention returns `429 DOCUMENT_DECODE_BUSY`, deadline expiry returns
 `503 DOCUMENT_BUSY` with `Retry-After: 1`, and excess memory or output returns
@@ -83,6 +83,26 @@ the existing storage, backup and rollout checks. Local OCR remains unsuitable
 for lite capacity.
 
 ### Measured resource envelope
+
+Local OCR development-host measurements used a macOS ARM64 worker with two
+intra-op threads. Across 65 synthetic single-page English images, each timed
+run started a fresh process and included model hash verification and loading.
+Other build and test processes were active on the host. Peak RSS is the
+largest child maximum resident set in each group.
+
+| CPU memory arena | Pages | Median seconds per page | p95 seconds per page | Peak RSS |
+|---|---:|---:|---:|---:|
+| On (default) | 65 | 3.194 | 8.142 | 248,053,760 bytes |
+| Off | 65 | 3.414 | 9.949 | 253,640,704 bytes |
+
+The English image evaluation matched vendor, date, and total on all 65 fixtures.
+The PDF text-layer evaluation matched all three fields on all 18 fixtures.
+These development-host results inform the staging measurements above.
+The worker publishes pinned PDFium 159.0.8152 through
+[`bblanchon.PDFium.Linux`](https://www.nuget.org/packages/bblanchon.PDFium.Linux/159.0.8152)
+for Linux x64 and ARM64 and
+[`bblanchon.PDFium.macOS`](https://www.nuget.org/packages/bblanchon.PDFium.macOS/159.0.8152)
+for local macOS development.
 
 `wrangler.jsonc` selects Cloudflare Container instance types `standard-1` for one pool and `lite` for the other. Cloudflare documents these as 4 GiB and 256 MiB respectively ([Limits and Instance Types](https://developers.cloudflare.com/containers/platform/limits/)). The Dockerfile also targets small-container operation. The following are development-host measurements, not production-container measurements:
 
